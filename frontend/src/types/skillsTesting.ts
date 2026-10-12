@@ -399,6 +399,11 @@ export interface SkillTest {
 }
 
 export interface SkillTestCreate {
+  /** Client-minted (the store mints one for every create), so a test started
+   *  with no signal has its id before the server sees it. */
+  id?: string | undefined;
+  /** Sent for a create queued offline: the sheet version that was scored. */
+  expected_template_version?: number | undefined;
   template_id: string;
   candidate_id: string;
   notes?: string | undefined;

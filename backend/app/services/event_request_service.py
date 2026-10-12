@@ -437,7 +437,7 @@ async def apply_default_assignee(
     default coordinator. The caller is expected to have flushed the request so
     the activity row has an id to point at.
     """
-    default_assignee = pipeline.get("default_assignee_id")
+    default_assignee: Optional[str] = pipeline.get("default_assignee_id")
     if not default_assignee:
         return None
     if not await db.scalar(
@@ -763,7 +763,8 @@ def get_outreach_roles(org: Optional[Organization]) -> list[dict[str, str]]:
     if org is None:
         return list(defaults)
     settings = (org.settings or {}).get("events", {})
-    return settings.get("outreach_roles", defaults)
+    items: list[dict[str, str]] = settings.get("outreach_roles", defaults)
+    return items
 
 
 def outreach_role_label(org: Optional[Organization], role: Optional[str]) -> str:
@@ -1495,7 +1496,8 @@ def resolve_confirmed_end(
     ):
         span = existing_event.end_datetime - existing_event.start_datetime
         if span > timedelta(0):
-            return start + span
+            moment: datetime = start + span
+            return moment
     return start + timedelta(minutes=event_duration_minutes(org))
 
 

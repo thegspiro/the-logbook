@@ -213,7 +213,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     )
     mfa_enrollment_required = mfa_required and not bool(user.mfa_enabled)
 
-    return CurrentUser(
+    current_user_dict: dict = CurrentUser(
         id=user.id,
         username=user.username,
         email=user.email,
@@ -238,6 +238,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         must_change_password=bool(user.must_change_password),
         bottom_nav_slots=normalize_bottom_nav_slots(user.bottom_nav_slots),
     ).model_dump(mode="json")
+    return current_user_dict
 
 
 @router.get("/branding")
@@ -745,8 +746,11 @@ async def register(
         must_change_password=False,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     # Create tokens
     access_token, refresh_token = await auth_service.create_user_tokens(
@@ -876,9 +880,18 @@ async def login(
         # flushed (not committed) and this handler then raises (rolling back the
         # session), commit when an alert actually fired so it persists — mirroring
         # authenticate_user's failed-attempt commit.
+        # When the attempted name matched a real account, attribute the alert
+        # to that account and its department: without it every login-page
+        # alert was stored org-less and no department's alert screen could
+        # ever show it (SEC2-28-7). An unknown name still has neither.
+        failure = auth_service.last_auth_failure
         try:
             alert = await security_monitor.detect_brute_force(
-                db, ip=login_ip, user_id=None, success=False
+                db,
+                ip=login_ip,
+                user_id=failure.user_id if failure else None,
+                organization_id=failure.organization_id if failure else None,
+                success=False,
             )
             if alert is not None:
                 await db.commit()
@@ -1640,7 +1653,7 @@ async def refresh_token(
             error_code=ErrorCode.SYS_DB_UNAVAILABLE,
         )
 
-    if not new_access_token:
+    if not new_access_token or not new_refresh_token:
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your session has expired. Please log in again.",

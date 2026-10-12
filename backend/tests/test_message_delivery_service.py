@@ -308,6 +308,8 @@ class TestEmailGoesOutInOneBatch:
                 delivered_at=None,
                 channel=channel,
                 user_id=user_id,
+                attempt_count=1,
+                next_attempt_at=None,
             )
             claimed.append(attempt)
             return attempt
@@ -362,7 +364,7 @@ class TestEmailGoesOutInOneBatch:
 
         await self._run(svc, people, _PartlyFailing)
 
-        assert [a.status for a in claimed] == ["delivered", "failed", "delivered"]
+        assert [a.status for a in claimed] == ["delivered", "retrying", "delivered"]
 
     async def test_a_raise_leaves_every_claim_retryable(self):
         class _Exploding:
@@ -377,7 +379,7 @@ class TestEmailGoesOutInOneBatch:
 
         await self._run(svc, people, _Exploding)
 
-        assert [a.status for a in claimed] == ["failed", "failed"]
+        assert [a.status for a in claimed] == ["retrying", "retrying"]
         assert all(a.delivered_at is None for a in claimed)
 
     async def test_a_short_results_list_is_not_read_as_delivered(self):
@@ -397,7 +399,7 @@ class TestEmailGoesOutInOneBatch:
 
         await self._run(svc, people, _Terse)
 
-        assert [a.status for a in claimed] == ["delivered", "failed", "failed"]
+        assert [a.status for a in claimed] == ["delivered", "retrying", "retrying"]
 
 
 class TestReportedFailuresAreNotRecordedAsDelivered:
@@ -412,7 +414,7 @@ class TestReportedFailuresAreNotRecordedAsDelivered:
     what this would silently drop.
     """
 
-    async def test_email_reporting_zero_sent_is_recorded_as_failed(self):
+    async def test_email_reporting_zero_sent_is_recorded_for_retry(self):
         db = _db()
         recipients = [_user("u1", email="nobody@fd.co")]
 
@@ -428,7 +430,12 @@ class TestReportedFailuresAreNotRecordedAsDelivered:
 
         async def _claim(message, user, channel):
             attempt = SimpleNamespace(
-                status="pending", error=None, delivered_at=None, channel=channel
+                status="pending",
+                error=None,
+                delivered_at=None,
+                channel=channel,
+                attempt_count=1,
+                next_attempt_at=None,
             )
             claimed.append(attempt)
             return attempt
@@ -441,10 +448,11 @@ class TestReportedFailuresAreNotRecordedAsDelivered:
             await svc._send_email(_msg(priority="urgent"), recipients, org=None)
 
         assert len(claimed) == 1
-        assert claimed[0].status == "failed"
+        assert claimed[0].status == "retrying"
+        assert claimed[0].next_attempt_at is not None
         assert claimed[0].delivered_at is None
 
-    async def test_sms_reporting_zero_sent_is_recorded_as_failed(self):
+    async def test_sms_reporting_zero_sent_is_recorded_for_retry(self):
         db = _db()
         recipients = [_user("u1", mobile="+15551234567")]
         svc = MessageDeliveryService(db)
@@ -452,7 +460,12 @@ class TestReportedFailuresAreNotRecordedAsDelivered:
 
         async def _claim(message, user, channel):
             attempt = SimpleNamespace(
-                status="pending", error=None, delivered_at=None, channel=channel
+                status="pending",
+                error=None,
+                delivered_at=None,
+                channel=channel,
+                attempt_count=1,
+                next_attempt_at=None,
             )
             claimed.append(attempt)
             return attempt
@@ -472,7 +485,8 @@ class TestReportedFailuresAreNotRecordedAsDelivered:
 
         fake_sms.send_bulk_sms.assert_awaited_once()
         assert len(claimed) == 1
-        assert claimed[0].status == "failed"
+        assert claimed[0].status == "retrying"
+        assert claimed[0].next_attempt_at is not None
         assert claimed[0].delivered_at is None
 
 
@@ -533,7 +547,12 @@ class TestSmsGating:
         async def _claim(message, user, channel):
             claimed.append(user)
             return SimpleNamespace(
-                status="pending", error=None, delivered_at=None, channel=channel
+                status="pending",
+                error=None,
+                delivered_at=None,
+                channel=channel,
+                attempt_count=1,
+                next_attempt_at=None,
             )
 
         svc._claim_delivery = _claim

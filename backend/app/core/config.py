@@ -7,6 +7,7 @@ with type validation and defaults.
 
 import ipaddress
 from functools import lru_cache
+from typing import get_args
 from urllib.parse import quote, urlsplit
 
 from loguru import logger
@@ -86,6 +87,24 @@ RETIRED_SETTINGS: dict[str, str] = {
         "nothing ever read it; a self-registered account is active at once, and "
         "REGISTRATION_ENABLED=false is how to keep registration closed"
     ),
+    # Retired 2026-10-08 (CI3-33-4): declared and documented, read by nothing.
+    "RATE_LIMIT_PER_MINUTE": (
+        "the per-scope limits are fixed in security_middleware.py; "
+        "RATE_LIMIT_DEFAULT is the tunable default"
+    ),
+    "DB_POOL_MIN": "only DB_POOL_MAX reaches the connection pool",
+    "STORAGE_TYPE": (
+        "uploads are always written to local disk under /app/uploads; there is "
+        "no S3, Azure or GCS backend"
+    ),
+    "UPLOAD_DIR": (
+        "every upload writer uses its own fixed path under /app/uploads; mount "
+        "the uploads volume there"
+    ),
+    "MAX_FILE_SIZE": (
+        "uploads are bounded by MAX_REQUEST_BODY_SIZE and by each feature's "
+        "own limit"
+    ),
 }
 
 
@@ -121,7 +140,6 @@ class Settings(BaseSettings):
     # Path to CA certificate for verifying MySQL server identity over TLS.
     # Required when DB_SSL=True for full MITM protection.
     DB_SSL_CA: str = ""
-    DB_POOL_MIN: int = 2
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
     DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
@@ -351,6 +369,19 @@ class Settings(BaseSettings):
     # this are treated as bot traffic. Ignored by Turnstile and hCaptcha.
     CAPTCHA_MIN_SCORE: float = 0.5
 
+    # Malware scanning of every uploaded file via a ClamAV daemon (clamd
+    # INSTREAM). On by default — every compose file runs the `clamav` service —
+    # and it FAILS CLOSED, like CAPTCHA: if clamd cannot be reached or does not
+    # answer in time the upload is refused, because accepting unscanned files
+    # during an outage is the state an attacker wants. Setting it false accepts
+    # files unscanned; startup, preflight and the admin screens then warn.
+    CLAMAV_ENABLED: bool = True
+    CLAMAV_HOST: str = "clamav"
+    CLAMAV_PORT: int = 3310
+    # Wall-clock budget for connect + stream + verdict, not a per-read timeout,
+    # so a clamd that trickles bytes cannot hold an upload request open.
+    CLAMAV_TIMEOUT_SECONDS: float = 30.0
+
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
     # that rotating SECRET_KEY does not invalidate existing vote signatures.
@@ -388,7 +419,6 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 60
     # Per-form/day ceiling on unauthenticated public form submissions (bounds
     # DB flooding and integration/email abuse from a distributed spam flood).
     # 0 disables the cap.
@@ -569,6 +599,19 @@ class Settings(BaseSettings):
                 "outgoing email will not open for a member reading away from "
                 "the station. Set FRONTEND_URL to the site's public address "
                 "if members reach it from outside."
+            )
+
+        # Non-blocking and in every environment, by the owner's decision: an
+        # operator may turn scanning off (a host too small for clamd), but it
+        # must never be a quiet state. The same notice is shown to
+        # administrators in the app (GET /system/notices).
+        if not self.CLAMAV_ENABLED:
+            warnings.append(
+                "WARNING: CLAMAV_ENABLED is false, so uploaded files — "
+                "documents, certificates, applicant files, attachments, images "
+                "and imports — are accepted WITHOUT a malware scan. Set "
+                "CLAMAV_ENABLED=true and run the clamav service as soon as the "
+                "host allows."
             )
 
         # --- Additional production/staging checks ---
@@ -756,6 +799,19 @@ class Settings(BaseSettings):
                     "Secure flag on auth cookies, use COOKIE_SECURE."
                 )
 
+        if self.MCP_OAUTH_ENABLED and self.mcp_oauth_origin() is None:
+            # A warning, not a refusal to boot: the feature fails closed (the
+            # authorization server answers 404 and the MCP endpoint keeps
+            # accepting service keys), so nothing is exposed by the mistake —
+            # but an operator who turned it on needs to be told it is off.
+            warnings.append(
+                "WARNING: MCP_OAUTH_ENABLED is True but MCP_OAUTH_ISSUER_URL "
+                f"is {self.MCP_OAUTH_ISSUER_URL!r}, which is not an https:// "
+                "origin with no path (http:// is accepted only for localhost). "
+                "The Claude (MCP) OAuth server stays off until it is set, e.g. "
+                "MCP_OAUTH_ISSUER_URL=https://logbook.yourdept.org"
+            )
+
         return warnings
 
     def validate_cors_config(self) -> list[str]:
@@ -860,6 +916,34 @@ class Settings(BaseSettings):
                         f"{name} is set but no longer has any effect ({why}). "
                         "Remove it from the environment."
                     )
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _empty_optional_string_means_unset(cls, data):
+        """Read an empty value for an optional string setting as unset (None).
+
+        The Compose files pass every setting through as ``${NAME:-}``, because
+        a mapping-form ``environment:`` block cannot omit a key, so an operator
+        who leaves one of these alone hands the app ``""`` rather than nothing.
+        For a ``str | None = None`` field that is not the default: code that
+        asks ``is None`` (or forwards the value to a client library) would
+        treat a blank API key, redirect URI or webhook as configured. Mapping
+        exactly ``""`` back to None makes an unconfigured stack behave as the
+        bare app does. Only fields typed ``str | None`` with a None default are
+        touched, and only the empty string, so a real value is never altered;
+        ``tests/test_compose_settings_passthrough.py`` holds the round trip.
+        """
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for name, field in cls.model_fields.items():
+            if (
+                data.get(name) == ""
+                and field.default is None
+                and set(get_args(field.annotation)) == {str, type(None)}
+            ):
+                data[name] = None
         return data
 
     @field_validator("COOKIE_SECURE", mode="before")
@@ -1157,14 +1241,10 @@ class Settings(BaseSettings):
     # ============================================
     # File Storage
     # ============================================
-    STORAGE_TYPE: str = "local"  # local, s3, azure, gcs
-    UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE: int = 52428800  # 50 MB
-
     # Hard ceiling on any request body, enforced at the ASGI edge before the
     # body is buffered into memory (memory-exhaustion DoS backstop, independent
-    # of nginx's client_max_body_size). Sized above MAX_FILE_SIZE to leave room
-    # for multipart-upload envelope overhead.
+    # of nginx's client_max_body_size). Sized above the largest per-feature
+    # upload limit to leave room for multipart-upload envelope overhead.
     MAX_REQUEST_BODY_SIZE: int = 62914560  # 60 MB
 
     # AWS S3
@@ -1279,6 +1359,25 @@ class Settings(BaseSettings):
     # matches an existing local user).
     AUTHENTIK_ALLOWED_DOMAINS: str = ""
 
+    # ============================================
+    # Claude (MCP) OAuth 2.1 authorization server
+    # ============================================
+    # Lets a member connect an MCP client (the claude.ai custom-connector
+    # dialog, Claude Desktop, Claude Code) with their own account instead of
+    # the department's service key. Off by default: an upgrade changes
+    # nothing until an operator turns it on here *and* a department turns it
+    # on under Integrations → Claude (MCP).
+    MCP_OAUTH_ENABLED: bool = False
+    # The site's public origin, e.g. https://logbook.yourdept.org — no path.
+    # The authorization server's issuer is <origin>/api/oauth and the
+    # protected resource is <origin>/api/mcp. Deliberately not derived from
+    # the Host header or from FRONTEND_URL (which a saved link domain can
+    # repoint at runtime): tokens are bound to this value, so it must be
+    # stable and must not be attacker-influenced. Must be https:// unless the
+    # host is loopback. With MCP_OAUTH_ENABLED on and this unset or invalid,
+    # the authorization server stays off and a startup warning says why.
+    MCP_OAUTH_ISSUER_URL: str = ""
+
     # Relative SPA paths the OAuth callback redirects to. Success lands on a
     # lightweight page that establishes the session; failure returns to login.
     OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
@@ -1294,6 +1393,35 @@ class Settings(BaseSettings):
     # https://app.example.org/api/v1/integrations/salesforce/oauth/callback
     # Leave unset to derive it from the incoming request's base URL.
     SALESFORCE_OAUTH_REDIRECT_URI: str | None = None
+
+    def mcp_oauth_origin(self) -> str | None:
+        """The validated public origin the MCP authorization server runs on.
+
+        ``None`` — the server is off — unless ``MCP_OAUTH_ENABLED`` is set and
+        ``MCP_OAUTH_ISSUER_URL`` is an absolute ``https://`` origin (or
+        ``http://`` on a loopback host, for development) with no path, query,
+        fragment or credentials. Failing closed here is what lets every
+        endpoint treat ``None`` as "this feature does not exist".
+        """
+        if not self.MCP_OAUTH_ENABLED:
+            return None
+        raw = (self.MCP_OAUTH_ISSUER_URL or "").strip().rstrip("/")
+        if not raw:
+            return None
+        parsed = urlsplit(raw)
+        if parsed.scheme not in ("https", "http") or not parsed.hostname:
+            return None
+        if parsed.path or parsed.query or parsed.fragment:
+            return None
+        if parsed.username or parsed.password:
+            return None
+        if parsed.scheme == "http" and parsed.hostname not in (
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        ):
+            return None
+        return f"{parsed.scheme}://{parsed.netloc}"
 
     def get_google_allowed_domains(self) -> set[str]:
         """Allowed Google email domains as a lowercased set (empty = any)."""

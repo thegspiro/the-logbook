@@ -75,6 +75,8 @@ class ErrorCode(str, Enum):
     UPLD_TOO_LARGE = "LB-UPLD-001"
     UPLD_TYPE_NOT_ALLOWED = "LB-UPLD-002"
     UPLD_VALIDATION_UNAVAILABLE = "LB-UPLD-003"
+    UPLD_MALWARE_DETECTED = "LB-UPLD-004"
+    UPLD_SCAN_UNAVAILABLE = "LB-UPLD-005"
 
     # --- Onboarding ------------------------------------------------------
     ONBD_ALREADY_COMPLETED = "LB-ONBD-001"
@@ -89,6 +91,7 @@ class ErrorCode(str, Enum):
     # --- Scheduling ------------------------------------------------------
     SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
     SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
+    SCHED_UNKNOWN_SEAT = "LB-SCHED-003"
 
 
 @dataclass(frozen=True)
@@ -443,6 +446,35 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "inspection dependency (libmagic) may be missing or failing.",
         ),
     ),
+    ErrorCode.UPLD_MALWARE_DETECTED: ErrorCodeInfo(
+        title="File rejected by malware scan",
+        description=(
+            "The department scans uploaded files with ClamAV and the scanner "
+            "identified this one as malicious. Nothing was stored, and the "
+            "rejection was recorded in the audit log with the signature name."
+        ),
+        resolution=(
+            "Do not retry with the same file. Obtain a fresh copy from its "
+            "source (re-download the certificate, or take a new photo).",
+            "If the file is believed clean, an administrator can find the "
+            "signature in the audit log (upload_malware_detected) and report "
+            "a false positive to ClamAV.",
+        ),
+    ),
+    ErrorCode.UPLD_SCAN_UNAVAILABLE: ErrorCodeInfo(
+        title="Malware scan unavailable",
+        description=(
+            "Malware scanning is enabled for this upload but the ClamAV "
+            "daemon could not be reached or did not answer in time, so the "
+            "file was refused rather than stored unscanned."
+        ),
+        resolution=(
+            "Retry in a few minutes.",
+            "If it persists, check the clamav container is running and "
+            "healthy (it can take several minutes to load signatures after "
+            "a restart) and that CLAMAV_HOST / CLAMAV_PORT point at it.",
+        ),
+    ),
     ErrorCode.ONBD_ALREADY_COMPLETED: ErrorCodeInfo(
         title="Onboarding already completed",
         description=(
@@ -530,6 +562,23 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "For a deliberate one-off, a duty officer can approve the request "
             "with the qualification override; the override is recorded on the "
             "request and in the audit log.",
+        ),
+    ),
+    ErrorCode.SCHED_UNKNOWN_SEAT: ErrorCodeInfo(
+        title="Seat is not on this shift",
+        description=(
+            "A member can only be placed in a seat the shift itself names. A "
+            "department's own seats (Scheduling → Position Names) are accepted "
+            "wherever a shift, template or apparatus carries them; this one is "
+            "not among the shift's seats, so there is nothing to put the member "
+            "in. Built-in seats on a shift that names no seats are unaffected."
+        ),
+        resolution=(
+            "Pick one of the seats the shift lists, or add the seat to the "
+            "shift (or to the template or apparatus it is built from) first.",
+            "For a standing shift, the seat must be a built-in seat or one the "
+            "department has defined under Position Names or on a template or "
+            "apparatus.",
         ),
     ),
 }

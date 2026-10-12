@@ -25,10 +25,12 @@ from app.schemas.event import (
     AttendancePetitionReject,
 )
 from app.services.event_attendance_petition_service import (
+    MAX_PETITION_WITHDRAWALS,
     MEMBER_UPDATE_CATEGORY,
     REVIEW_PROMPT_CATEGORY,
     EventAttendancePetitionService,
     PetitionNotFound,
+    can_withdraw,
 )
 from app.services.event_service import ATTENDANCE_LOCKED_PREFIX
 
@@ -482,3 +484,229 @@ class TestOwnStanding:
         assert petition is not None
         assert petition.id == submitted.id
         assert refusal is not None
+
+
+class TestWithdraw:
+    async def test_a_pending_request_is_removed_and_the_member_may_ask_again(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        first = await service.submit(event_id, member, _ask("Wrong event"))
+
+        member = await _load(db_session, dept["member"])
+        assert await service.withdraw(event_id, member) == first.id
+
+        member = await _load(db_session, dept["member"])
+        petition, refusal = await service.get_own(event_id, member)
+        assert petition is None
+        assert refusal is None
+        # The organizer's prompt is archived: nothing is left to review.
+        prompt = (
+            await _notices(db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY)
+        )[0]
+        await db_session.refresh(prompt)
+        assert prompt.read is True
+        assert prompt.expires_at is not None
+
+        member = await _load(db_session, dept["member"])
+        again = await service.submit(event_id, member, _ask("Phone died"))
+        assert again.status == AttendancePetitionStatus.PENDING
+
+    async def test_a_decided_request_cannot_be_withdrawn(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await service.submit(event_id, member, _ask())
+        organizer = await _load(db_session, dept["organizer"])
+        await service.reject(
+            event_id, petition.id, organizer, AttendancePetitionReject(review_note="No")
+        )
+
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(ValueError, match="already been decided"):
+            await service.withdraw(event_id, member)
+
+    async def test_without_a_request_there_is_nothing_to_withdraw(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+
+        with pytest.raises(PetitionNotFound):
+            await EventAttendancePetitionService(db_session).withdraw(event_id, member)
+
+    async def test_only_the_members_own_request_is_touched(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+        service = EventAttendancePetitionService(db_session)
+        theirs = await service.submit(event_id, member, _ask())
+
+        bystander = await _load(db_session, dept["bystander"])
+        with pytest.raises(PetitionNotFound):
+            await service.withdraw(event_id, bystander)
+
+        member = await _load(db_session, dept["member"])
+        petition, _ = await service.get_own(event_id, member)
+        assert petition is not None
+        assert petition.id == theirs.id
+
+
+class TestPendingAcrossEvents:
+    async def _ask_on(self, db_session, dept, event_id, user_key="member"):
+        member = await _load(db_session, dept[user_key])
+        return await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+    async def test_an_organizer_sees_their_events_oldest_first(self, db_session, dept):
+        first_event = await _event(db_session, dept["org"], dept["organizer"])
+        second_event = await _event(
+            db_session, dept["org"], dept["manager"], alternate=dept["organizer"]
+        )
+        someone_elses = await _event(db_session, dept["org"], dept["manager"])
+        older = await self._ask_on(db_session, dept, first_event)
+        newer = await self._ask_on(db_session, dept, second_event, "bystander")
+        await self._ask_on(db_session, dept, someone_elses)
+        # Both land in the same second otherwise; created_at has no fraction.
+        await db_session.execute(
+            text(
+                "UPDATE event_attendance_petitions SET created_at = :at WHERE id = :id"
+            ),
+            {"at": datetime.now(timezone.utc) - timedelta(hours=1), "id": older.id},
+        )
+        await db_session.flush()
+
+        organizer = await _load(db_session, dept["organizer"])
+        rows = await EventAttendancePetitionService(
+            db_session
+        ).list_pending_for_reviewer(organizer)
+
+        # Organizer of the first, alternate on the second, nothing else.
+        assert [petition.id for petition, _ in rows] == [older.id, newer.id]
+        assert [event.id for _, event in rows] == [first_event, second_event]
+
+    async def test_decided_requests_drop_off(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        petition = await self._ask_on(db_session, dept, event_id)
+        organizer = await _load(db_session, dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await service.reject(
+            event_id, petition.id, organizer, AttendancePetitionReject(review_note="No")
+        )
+
+        organizer = await _load(db_session, dept["organizer"])
+        assert await service.list_pending_for_reviewer(organizer) == []
+
+    async def test_a_manager_may_widen_to_the_whole_department(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        petition = await self._ask_on(db_session, dept, event_id)
+        other_org = await _org(db_session)
+        await _event(db_session, other_org, None)
+        manager = await _load(db_session, dept["manager"])
+        service = EventAttendancePetitionService(db_session)
+
+        assert await service.list_pending_for_reviewer(manager) == []
+        rows = await service.list_pending_for_reviewer(manager, include_all=True)
+        assert [p.id for p, _ in rows] == [petition.id]
+
+    async def test_everyone_else_may_not_widen_it(self, db_session, dept):
+        organizer = await _load(db_session, dept["organizer"])
+
+        with pytest.raises(PermissionError):
+            await EventAttendancePetitionService(db_session).list_pending_for_reviewer(
+                organizer, include_all=True
+            )
+
+    async def test_your_own_request_is_never_listed(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        await self._ask_on(db_session, dept, event_id, "manager")
+
+        manager = await _load(db_session, dept["manager"])
+        rows = await EventAttendancePetitionService(
+            db_session
+        ).list_pending_for_reviewer(manager, include_all=True)
+        assert rows == []
+
+
+class TestWithdrawalLimit:
+    async def _cycle(self, service, db_session, dept, event_id, times):
+        """Withdraw and ask again *times* times; returns the live request."""
+        member = await _load(db_session, dept["member"])
+        petition = await service.submit(event_id, member, _ask())
+        for n in range(times):
+            member = await _load(db_session, dept["member"])
+            await service.withdraw(event_id, member)
+            member = await _load(db_session, dept["member"])
+            petition = await service.submit(event_id, member, _ask(f"Try {n + 2}"))
+        return petition
+
+    async def test_the_third_request_is_final(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await self._cycle(
+            service, db_session, dept, event_id, MAX_PETITION_WITHDRAWALS
+        )
+
+        assert petition.withdrawal_count == MAX_PETITION_WITHDRAWALS
+        assert petition.reason == f"Try {MAX_PETITION_WITHDRAWALS + 1}"
+        assert can_withdraw(petition) is False
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(ValueError, match="waits for the organizer"):
+            await service.withdraw(event_id, member)
+
+    async def test_below_the_limit_withdrawing_is_still_offered(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        petition = await self._cycle(service, db_session, dept, event_id, 1)
+
+        assert petition.withdrawal_count == 1
+        assert can_withdraw(petition) is True
+
+    async def test_asking_again_reuses_the_request_and_prompts_the_organizer(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        first = await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+        member = await _load(db_session, dept["member"])
+        again = await service.submit(event_id, member, _ask("Corrected"))
+
+        assert again.id == first.id
+        assert again.status == AttendancePetitionStatus.PENDING
+        prompts = await _notices(db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY)
+        # The first prompt was archived on withdrawal; the second is live.
+        assert len(prompts) == 2
+
+    async def test_reviewers_never_see_a_withdrawn_request(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        petition = await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+
+        organizer = await _load(db_session, dept["organizer"])
+        assert await service.list_for_event(event_id, organizer) == []
+        assert await service.list_pending_for_reviewer(organizer) == []
+        organizer = await _load(db_session, dept["organizer"])
+        with pytest.raises(ValueError, match="was withdrawn"):
+            await service.approve(event_id, petition.id, organizer, TestDecide._times())
+
+    async def test_a_withdrawn_request_cannot_be_withdrawn_again(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        member = await _load(db_session, dept["member"])
+        await service.submit(event_id, member, _ask())
+        member = await _load(db_session, dept["member"])
+        await service.withdraw(event_id, member)
+
+        member = await _load(db_session, dept["member"])
+        with pytest.raises(PetitionNotFound):
+            await service.withdraw(event_id, member)

@@ -502,7 +502,7 @@ class TestVoidManualBallotBatchLocksElectionFirst:
         (and, via the old join, the election) first is the reverse order,
         which can deadlock against a concurrent delete."""
         service = _make_void_service()
-        election = SimpleNamespace(id="election-1")
+        election = SimpleNamespace(id="election-1", status="open")
         batch = SimpleNamespace(id="batch-1", status="pending")
         vote = SimpleNamespace(
             id="vote-1", deleted_at=None, deleted_by=None, deletion_reason=None

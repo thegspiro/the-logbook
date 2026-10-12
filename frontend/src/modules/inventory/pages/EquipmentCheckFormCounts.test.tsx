@@ -7,7 +7,7 @@ import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../../test/utils';
+import { nth, renderWithRouter } from '../../../test/utils';
 
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
@@ -51,7 +51,7 @@ vi.mock('../../../utils/offlineQueue', () => ({
   pendingCount: vi.fn().mockResolvedValue(0),
 }));
 
-const mockCheckPermission = vi.fn(() => true);
+const mockCheckPermission = vi.fn<(permission: string) => boolean>(() => true);
 // The drain asks each entry's owner against the signed-in member before
 // sending it. Every entry these tests queue is the member's own; who may send
 // what is covered against a real queue in offlineQueueOwnership.test.ts.
@@ -59,7 +59,7 @@ vi.mock('../../../utils/offlineQueueOwner', () => ({ isOwnedByCurrentMember: () 
 
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: (...a: unknown[]) => mockCheckPermission(...a) as unknown,
+    checkPermission: (permission: string) => mockCheckPermission(permission),
   }),
 }));
 
@@ -212,7 +212,11 @@ describe('EquipmentCheckForm quantity seeding', () => {
 
   const render = (itemOverrides = {}, onComplete?: () => void) =>
     renderWithRouter(
-      <EquipmentCheckForm shiftId="shift-1" template={template(itemOverrides) as never} onComplete={onComplete} />
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template(itemOverrides) as never}
+        {...(onComplete ? { onComplete } : {})}
+      />
     );
 
   const completeWithPhoto = async (fileName = 'gauze.jpg') => {
@@ -421,8 +425,9 @@ describe('EquipmentCheckForm quantity seeding', () => {
   it('does not submit caption rows as unchecked items', async () => {
     const user = userEvent.setup();
     const templateWithCaption = template({ quantityOnTruck: 4 });
-    templateWithCaption.compartments[0].items.push({
-      ...templateWithCaption.compartments[0].items[0],
+    const compartment = nth(templateWithCaption.compartments, 0);
+    compartment.items.push({
+      ...nth(compartment.items, 0),
       id: 'ti-caption',
       name: 'Confirm the seal is intact before continuing.',
       sortOrder: 1,
@@ -434,7 +439,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
 
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
-    const payload = mockSubmitCheck.mock.calls[0][1] as {
+    const payload = mockSubmitCheck.mock.calls[0]?.[1] as {
       items: Array<{ template_item_id: string }>;
     };
     expect(payload.items).toHaveLength(1);
@@ -444,8 +449,9 @@ describe('EquipmentCheckForm quantity seeding', () => {
   it('does not queue text instruction rows after a transport failure', async () => {
     const user = userEvent.setup();
     const templateWithInstruction = template({ quantityOnTruck: 4 });
-    templateWithInstruction.compartments[0].items.push({
-      ...templateWithInstruction.compartments[0].items[0],
+    const compartment = nth(templateWithInstruction.compartments, 0);
+    compartment.items.push({
+      ...nth(compartment.items, 0),
       id: 'ti-instruction',
       name: 'Inspect the package seal before recording the count.',
       sortOrder: 1,
@@ -458,7 +464,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
 
     await waitFor(() => expect(mockEnqueueCheck).toHaveBeenCalledOnce());
-    const queuedPayload = mockEnqueueCheck.mock.calls[0][1] as {
+    const queuedPayload = mockEnqueueCheck.mock.calls[0]?.[1] as {
       items: Array<{ template_item_id: string }>;
     };
     expect(queuedPayload.items).toHaveLength(1);
@@ -691,7 +697,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
-    const submitted = mockSubmitCheck.mock.calls[0][1] as {
+    const submitted = mockSubmitCheck.mock.calls[0]?.[1] as {
       items: Array<{ status: string; is_expired: boolean }>;
     };
     expect(submitted.items[0]).toMatchObject({ status: 'fail', is_expired: true });
@@ -810,7 +816,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // stock on the shelf and nothing to do but find an officer.
     it('is reachable by a crew member who can only submit checks', async () => {
       const user = userEvent.setup();
-      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+      mockCheckPermission.mockImplementation((p) => p === 'inventory.check_submit');
       mockSwapItemLot.mockResolvedValue(freshResult);
       await openSwapDialog(user);
 
@@ -821,7 +827,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     });
 
     it('stays out of reach for a member who can only read checks', async () => {
-      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_view');
+      mockCheckPermission.mockImplementation((p) => p === 'inventory.check_view');
       render(expiredItem);
 
       expect(await screen.findByRole('button', { name: /^Swap$/ })).toBeDisabled();
@@ -876,7 +882,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
  */
 describe('who the accordion offers a swap to', () => {
   /** Below manage: holds check_submit and nothing above it. */
-  const asSubmitter = () => mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+  const asSubmitter = () => mockCheckPermission.mockImplementation((p) => p === 'inventory.check_submit');
 
   beforeEach(() => {
     vi.clearAllMocks();

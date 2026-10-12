@@ -108,7 +108,9 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List events")
+    @logbook_tool(
+        server, title="List events", permissions=("events.view", "events.manage")
+    )
     async def list_events(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -142,7 +144,9 @@ def register(server: Any) -> None:
         items = [_event(row["event"], row) for row in rows]
         return page(items, None, limit, offset)
 
-    @logbook_tool(server, title="Get event")
+    @logbook_tool(
+        server, title="Get event", permissions=("events.view", "events.manage")
+    )
     async def get_event(
         db: AsyncSession, principal: McpPrincipal, event_id: str
     ) -> dict:
@@ -158,7 +162,11 @@ def register(server: Any) -> None:
             raise ValueError("Event not found")
         return _event(event)
 
-    @logbook_tool(server, title="Read event description")
+    @logbook_tool(
+        server,
+        title="Read event description",
+        permissions=("events.view", "events.manage"),
+    )
     async def get_event_description(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -181,7 +189,11 @@ def register(server: Any) -> None:
         body.update({"event_id": event.id, "title": event.title, "field": field})
         return body
 
-    @logbook_tool(server, title="List event attendees")
+    @logbook_tool(
+        server,
+        title="List event attendees",
+        permissions=("events.view", "events.manage"),
+    )
     async def list_event_attendees(
         db: AsyncSession,
         principal: McpPrincipal,

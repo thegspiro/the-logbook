@@ -264,7 +264,7 @@ class TestTokenLockRepopulatesExisting:
 class TestVoidManualBallotBatchLocking:
     async def test_batch_and_votes_selects_are_locking(self):
         service = _make_service()
-        election = SimpleNamespace(id="election-1")
+        election = SimpleNamespace(id="election-1", status="open")
         batch = SimpleNamespace(id="batch-1", status="pending")
         vote = SimpleNamespace(
             id="vote-1",

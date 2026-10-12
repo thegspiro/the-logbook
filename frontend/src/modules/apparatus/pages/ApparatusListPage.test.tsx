@@ -121,8 +121,47 @@ describe('ApparatusListPage row actions', () => {
     renderWithRouter(<ApparatusListPage />);
     expect(await screen.findByRole('button', { name: 'Print label for E-2' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit U-9' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'View E-2' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'View E-2' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View Details' })).not.toBeInTheDocument();
+  });
+
+  // The wrench was a second "View E-2" that opened the overview, and a row
+  // "Archive" button opened the same page without archiving anything.
+  it('opens the maintenance tab from the wrench', async () => {
+    renderWithRouter(<ApparatusListPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Maintenance for E-2' }));
+    expect(window.location.pathname).toBe('/apparatus/a-1');
+    expect(window.location.search).toBe('?tab=maintenance');
+  });
+
+  it('offers no row Archive button, since archiving needs the form on the apparatus page', async () => {
+    renderWithRouter(<ApparatusListPage />);
+    await screen.findByRole('button', { name: 'View E-2' });
+    expect(screen.queryByRole('button', { name: /archive/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ApparatusListPage empty fleet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    grantedPermissions = new Set(['apparatus.create']);
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+    store.apparatusList = [];
+  });
+
+  it('explains what an apparatus record is for on a fresh install', () => {
+    renderWithRouter(<ApparatusListPage />);
+    expect(screen.getByRole('heading', { name: 'No apparatus yet' })).toBeInTheDocument();
+    expect(screen.getByText(/Add each vehicle your department runs/)).toBeInTheDocument();
+  });
+
+  it('reads as a search miss, not a first run, while a search is applied', async () => {
+    renderWithRouter(<ApparatusListPage />);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search by unit number, name, or VIN' }), 'zz');
+    expect(screen.getByRole('heading', { name: 'No Apparatus Found' })).toBeInTheDocument();
+    expect(screen.getByText(/No apparatus match your search or filters/)).toBeInTheDocument();
+    expect(screen.queryByText(/Add each vehicle your department runs/)).not.toBeInTheDocument();
   });
 });
 

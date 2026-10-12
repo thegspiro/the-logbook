@@ -16,6 +16,7 @@ import asyncio
 from time import monotonic
 
 from loguru import logger
+from redis.asyncio.client import PubSub
 
 from app.core.cache import cache_manager
 
@@ -47,13 +48,14 @@ class LinkDomainListener:
     """Per-worker subscriber that keeps FRONTEND_URL in step with the saved value."""
 
     def __init__(self) -> None:
-        self._pubsub = None
+        self._pubsub: PubSub | None = None
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         if cache_manager.is_connected and cache_manager.redis_client:
-            self._pubsub = cache_manager.redis_client.pubsub()
-            await self._pubsub.subscribe(LINK_DOMAIN_INVALIDATION_CHANNEL)
+            pubsub = cache_manager.redis_client.pubsub()
+            self._pubsub = pubsub
+            await pubsub.subscribe(LINK_DOMAIN_INVALIDATION_CHANNEL)
         else:
             logger.info(
                 "Link domain listener running without Redis; a changed email "

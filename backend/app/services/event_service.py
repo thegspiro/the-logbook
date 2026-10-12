@@ -257,7 +257,7 @@ def attendance_is_settled(event: Event, now: datetime) -> bool:
     if attendance_is_finalized(event):
         return True
 
-    effective_end = event.actual_end_time or event.end_datetime
+    effective_end: Optional[datetime] = event.actual_end_time or event.end_datetime
     if effective_end is None:
         return False
     if effective_end.tzinfo is None:
@@ -444,7 +444,7 @@ class EventService:
         )
 
         self.db.add(event)
-        if training is not None:
+        if training is not None and training_details is not None:
             # One commit for both, so an event is never left behind without
             # the details the officer picked for it.
             await self.db.flush()
@@ -473,7 +473,7 @@ class EventService:
         organization_id: UUID,
         user_id: Optional[UUID] = None,
         load_rsvps: bool = True,
-    ) -> Optional[Tuple[Event, Optional[EventRSVP]]]:
+    ) -> Tuple[Optional[Event], Optional[EventRSVP]]:
         """
         Get an event by ID
 
@@ -930,7 +930,7 @@ class EventService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -953,30 +953,25 @@ class EventService:
         # title of last month's drill is housekeeping. What it refuses is a
         # change to the clock or the check-in rules the credited durations were
         # derived from, which would leave the event disagreeing with the hours
-        # already in the ledger.
+        # already in the ledger. A change, not a mention: the edit form resends
+        # every field it shows, so refusing a field for being present refused
+        # every save of a finalized event, title fixes included.
         if attendance_is_finalized(event):
-            locked = changed_attendance_fields(event, update_data)
-            if locked:
+            changed = changed_attendance_fields(event, update_data)
+            if changed:
                 raise ValueError(
-                    attendance_locked_error("changing " + ", ".join(sorted(locked)))
+                    attendance_locked_error("changing " + ", ".join(sorted(changed)))
                 )
+            # The rest restate what is stored. Dropping them means a closed
+            # event's locked columns are never written at all, not even with an
+            # equal value in a different representation.
+            for field in ATTENDANCE_SENSITIVE_UPDATE_FIELDS.intersection(update_data):
+                del update_data[field]
 
-        # custom_fields is a whole-column replacement, and it carries the
-        # lifecycle markers as well as whatever the organizer typed. A client
-        # that PATCHes it without them would strip attendance_finalized while
-        # the column keeps the event locked — and the post-event validation
-        # task, which reads only the marker, would then nag about an event
-        # nobody can edit. Carry the lifecycle keys across any replacement.
         if "custom_fields" in update_data:
-            preserved = {
-                key: value
-                for key, value in (event.custom_fields or {}).items()
-                if key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
-            }
-            if preserved:
-                incoming = dict(update_data["custom_fields"] or {})
-                incoming.update(preserved)
-                update_data["custom_fields"] = incoming
+            update_data["custom_fields"] = self._with_own_lifecycle_markers(
+                event, update_data["custom_fields"]
+            )
 
         # Validate dates if being updated
         start_dt = update_data.get("start_datetime", event.start_datetime)
@@ -1059,7 +1054,7 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -1147,7 +1142,14 @@ class EventService:
                 timing.get("start_datetime") or anchor.start_datetime, tz
             )
             new_end = _wall_time(timing.get("end_datetime") or anchor.end_datetime, tz)
-            if new_end <= new_start:
+            # Only a sent time is checked. Wall time drops the fold, so a stored
+            # pair spanning the hour the clocks fall back reads as zero length,
+            # and a finalized event's edit page sends no times at all — checking
+            # the stored pair refused its title fix whenever an RSVP deadline,
+            # the one timing field it does send, came along.
+            if ("start_datetime" in timing or "end_datetime" in timing) and (
+                new_end <= new_start
+            ):
                 raise ValueError("End date/time must be after start date/time")
             shift = new_start - _wall_time(anchor.start_datetime, tz)
             length = new_end - new_start
@@ -1219,6 +1221,8 @@ class EventService:
             was_training = self.event_credits_training(event)
             old_title = event.title
             for field, value in update_data.items():
+                if field == "custom_fields":
+                    value = self._with_own_lifecycle_markers(event, value)
                 setattr(event, field, value)
             follow_up = await self._follow_training_changes(
                 event, was_training, old_title, organization_id
@@ -1275,7 +1279,7 @@ class EventService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        event = result.scalar_one_or_none()
+        event: Optional[Event] = result.scalar_one_or_none()
 
         if not event:
             return None
@@ -2112,7 +2116,7 @@ class EventService:
             .limit(1)
             .with_for_update()
         )
-        waitlisted_rsvp = result.scalar_one_or_none()
+        waitlisted_rsvp: Optional[EventRSVP] = result.scalar_one_or_none()
 
         if not waitlisted_rsvp:
             return None
@@ -3212,7 +3216,7 @@ class EventService:
         # releases the row lock. _record_attendance_finalized re-stamps (a
         # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
-        if credit is not None:
+        if training is not None and credit is not None:
             await training.after_event_attendance_recorded(
                 credit, organization_id, finalized_by, can_manage_training
             )
@@ -3677,6 +3681,37 @@ class EventService:
             return None
         return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
 
+    @staticmethod
+    def _with_own_lifecycle_markers(
+        event: Event, incoming: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """A ``custom_fields`` replacement carrying this row's own lifecycle
+        markers and nobody else's.
+
+        The column is replaced whole, but the markers belong to the row they
+        were written on. Dropping them would strip ``attendance_finalized``
+        while the column keeps the event locked, and the post-event validation
+        task, which reads only the marker, would nag about an event nobody can
+        edit. Copying them in is worse: the edit form echoes what it loaded,
+        and a series save writes the anchor's onto every occurrence, so an open
+        event would be locked through the legacy marker with no Reopen offered,
+        because the event page reads the column.
+        """
+        own = {
+            key: copy.deepcopy(value)
+            for key, value in (event.custom_fields or {}).items()
+            if key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
+        }
+        if incoming is None and not own:
+            return None
+        merged = {
+            key: copy.deepcopy(value)
+            for key, value in (incoming or {}).items()
+            if key not in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
+        }
+        merged.update(own)
+        return merged
+
     @classmethod
     def _minutes_before_start(cls, event: Event, moment: datetime) -> Optional[int]:
         """Whole minutes between ``moment`` and the event's scheduled start.
@@ -3704,7 +3739,8 @@ class EventService:
         this to tell a member their attendance will be recorded (pitfall #29),
         so the two cannot disagree.
         """
-        return event.event_type == EventType.TRAINING
+        flag: bool = event.event_type == EventType.TRAINING
+        return flag
 
     @classmethod
     def effective_end(cls, event: Event) -> Optional[datetime]:
@@ -4297,7 +4333,7 @@ class EventService:
         eligible_members_result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active.is_(True))
+            .where(User.is_active)
         )
         total_eligible_members = eligible_members_result.scalar() or 0
 
@@ -4317,8 +4353,8 @@ class EventService:
         # list: it is the whole point of the panel above it, and a manager who
         # can only see the ten most recent taps cannot act on the one from an
         # hour ago that is still wrong.
-        recent_check_ins = []
-        early_check_ins = []
+        recent_check_ins: List[Dict[str, Any]] = []
+        early_check_ins: List[Dict[str, Any]] = []
         for rsvp, user in rsvps_with_users:
             if not (rsvp.checked_in and rsvp.checked_in_at):
                 continue
@@ -4450,7 +4486,8 @@ class EventService:
             .where(EventTemplate.id == str(template_id))
             .where(EventTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        event_template: Optional[EventTemplate] = result.scalar_one_or_none()
+        return event_template
 
     async def update_template(
         self,
@@ -4845,7 +4882,7 @@ class EventService:
             self.db.add(child_event)
             created_events.append(child_event)
 
-        if training is not None:
+        if training is not None and training_details is not None:
             await self.db.flush()
             for occurrence in created_events:
                 self.db.add(
@@ -5076,7 +5113,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
+                User.is_active,
             )
         )
         all_member_ids = [str(row[0]) for row in members_result.all()]
@@ -5339,7 +5376,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
+                User.is_active,
             )
         )
         all_member_ids = {str(row[0]) for row in members_result.all()}

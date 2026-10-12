@@ -85,7 +85,9 @@ def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
     while the component test asserted it against a payload the API never
     produced.
     """
-    response = TrainingRequirementEnhancedResponse.model_validate(requirement)
+    response: TrainingRequirementEnhancedResponse = (
+        TrainingRequirementEnhancedResponse.model_validate(requirement)
+    )
     redacted = [
         (
             item
@@ -96,12 +98,17 @@ def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
         )
         for item in (response.checklist_items or [])
     ]
-    return response.model_copy(update={"checklist_items": redacted})
+    member_view: TrainingRequirementEnhancedResponse = response.model_copy(
+        update={"checklist_items": redacted}
+    )
+    return member_view
 
 
 def _member_progress(progress) -> RequirementProgressResponse:
     """Return progress without officer-only checklist identifiers."""
-    response = RequirementProgressResponse.model_validate(progress)
+    response: RequirementProgressResponse = RequirementProgressResponse.model_validate(
+        progress
+    )
     requirement = response.requirement
     if requirement is None:
         return response
@@ -132,19 +139,23 @@ def _member_progress(progress) -> RequirementProgressResponse:
             for item_id in notes["checklist_claimed"]
             if str(item_id) in claimable_ids
         ]
-    return response.model_copy(
+    member_view: RequirementProgressResponse = response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
     )
+    return member_view
 
 
 def _member_program_requirement(program_requirement) -> ProgramRequirementResponse:
     """Return a program-requirement link without officer-only checklist steps."""
-    response = ProgramRequirementResponse.model_validate(program_requirement)
+    response: ProgramRequirementResponse = ProgramRequirementResponse.model_validate(
+        program_requirement
+    )
     if response.requirement is None:
         return response
-    return response.model_copy(
+    member_view: ProgramRequirementResponse = response.model_copy(
         update={"requirement": _member_requirement(response.requirement)}
     )
+    return member_view
 
 
 # Registry JSON files, resolved relative to the app package (…/backend/app/data)
@@ -479,8 +490,11 @@ async def create_training_program(
         created_by=current_user.id,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or program is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -526,9 +540,12 @@ async def build_training_program(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or program is None:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -605,9 +622,12 @@ async def instantiate_sample_template(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or program is None:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1070,8 +1090,11 @@ async def update_program_requirement(
         updates=updates,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or program_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     if str(program_requirement.program_id) != str(program_id):
         raise HTTPException(
@@ -1375,6 +1398,14 @@ async def get_my_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    # A linked requirement reads the compliance result (W26-1); bring the
+    # percentages up to it before they are shown.
+    if await service.refresh_linked_progress(list(enrollments)):
+        enrollments = await service.get_member_enrollments(
+            user_id=current_user.id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return enrollments
 
@@ -1401,6 +1432,12 @@ async def get_user_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    if await service.refresh_linked_progress(list(enrollments)):
+        enrollments = await service.get_member_enrollments(
+            user_id=user_id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return enrollments
 
@@ -1465,6 +1502,21 @@ async def get_enrollment_progress(
         )
         if refreshed is not None:
             enrollment = refreshed
+
+    # A linked department requirement reads the member's compliance result
+    # rather than a tally started at enrollment (W26-1). Brought up to date
+    # here, after the permission check, so the page, the percentage and the
+    # phase all show what the compliance screens show today.
+    if await service.refresh_linked_progress([enrollment]):
+        refreshed = await service.get_enrollment_by_id(
+            enrollment_id=enrollment_id,
+            organization_id=current_user.organization_id,
+        )
+        if refreshed is not None:
+            enrollment = refreshed
+    await service.mark_linked_rows(
+        enrollment.program_id, list(enrollment.requirement_progress)
+    )
 
     # Calculate time remaining
     time_remaining_days = None
@@ -1572,6 +1624,12 @@ async def get_program_enrollments(
         organization_id=current_user.organization_id,
         status=status,
     )
+    if await service.refresh_linked_progress([enrollment for enrollment, _ in rows]):
+        rows = await service.get_program_enrollments(
+            program_id=program_id,
+            organization_id=current_user.organization_id,
+            status=status,
+        )
 
     return [
         ProgramEnrollmentWithUserResponse(
@@ -1613,8 +1671,11 @@ async def advance_enrollment_phase(
         force=force,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1697,8 +1758,11 @@ async def reset_requirement_progress(
         progress_id=progress_id,
         organization_id=current_user.organization_id,
     )
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or progress is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1737,8 +1801,11 @@ async def reset_enrollment_progress(
         enrollment_id=enrollment_id,
         organization_id=current_user.organization_id,
     )
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1782,8 +1849,11 @@ async def reopen_enrollment(
     )
     if error == "Enrollment not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1838,8 +1908,11 @@ async def withdraw_enrollment(
     )
     if error == "Enrollment not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-    if error:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -1992,8 +2065,11 @@ async def duplicate_program(
         increment_version=increment_version,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or new_program is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     await log_audit_event(
         db=db,
@@ -2044,6 +2120,11 @@ async def export_program(
 @router.post("/programs/import")
 async def import_program(
     payload: dict,
+    dry_run: bool = Query(
+        False,
+        description="Validate the file and report what it would create, "
+        "without creating anything",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -2053,6 +2134,9 @@ async def import_program(
     Creates the program, all phases, milestones, and any requirements
     that don't already exist (matched by name + source). Requirements
     that already exist in the department are reused.
+
+    With ``dry_run=true`` nothing is created: the response carries the
+    summary the officer confirms before importing for real.
 
     **Requires permission: training.manage**
     """
@@ -2064,18 +2148,23 @@ async def import_program(
 
     service = TrainingProgramService(db)
     try:
-        program = await service.import_program_from_json(
+        result = await service.import_program_from_json(
             payload,
             current_user.organization_id,
             current_user.id,
+            dry_run=dry_run,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    program = result.program
+    if program is None:
+        return {"success": True, "dry_run": True, "summary": result.summary}
+
     await log_audit_event(
         db,
         event_type="training.program.imported",
-        resource="training",
+        event_category="training",
         severity="info",
         event_data={
             "program_id": str(program.id),
@@ -2088,8 +2177,10 @@ async def import_program(
 
     return {
         "success": True,
+        "dry_run": False,
         "program_id": str(program.id),
         "program_name": program.name,
+        "summary": result.summary,
         "message": f"Program '{program.name}' imported successfully",
     }
 

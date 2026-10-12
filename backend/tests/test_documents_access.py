@@ -48,12 +48,27 @@ from app.schemas.documents import (
     DocumentFolderUpdate,
     DocumentUpdate,
 )
+from app.services import file_storage_service
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
     _get_user_role_slugs,
-    _is_leadership,
+    _is_full_admin,
 )
+
+
+async def _general_root(db_session, org_id) -> DocumentFolder:
+    """The org's General Documents root, made here so a stand-in caller
+    (not a users row) never has to create it."""
+    general = DocumentFolder(
+        organization_id=org_id,
+        name="General Documents",
+        slug="general",
+        is_system=True,
+    )
+    db_session.add(general)
+    await db_session.flush()
+    return general
 
 
 def _user(uid="u1", roles=None, rank=None):
@@ -113,19 +128,23 @@ class TestHelpers:
         user = _user(roles=[([], "chief"), ([], "secretary")])
         assert _get_user_role_slugs(user) == {"chief", "secretary"}
 
-    async def test_is_leadership(self):
-        assert _is_leadership({"documents.manage"}) is True
-        assert _is_leadership({"members.manage"}) is True
-        assert _is_leadership({"*"}) is True
-        assert _is_leadership({"events.view"}) is False
+    async def test_only_the_wildcard_is_a_full_admin(self):
+        assert _is_full_admin({"*"}) is True
+        assert _is_full_admin({"documents.manage"}) is False
+        assert _is_full_admin({"members.manage"}) is False
+        assert _is_full_admin({"documents.*"}) is False
 
 
 class TestCanAccessFolder:
-    async def test_leadership_sees_everything(self):
+    async def test_library_managers_see_leadership_folders(self):
         user = _user(roles=[(["documents.manage"], "chief")])
-        # Even a leadership-only folder is visible to leadership.
         folder = _folder(FolderVisibility.LEADERSHIP)
         assert await _svc().can_access_folder(folder, "org-1", user) is True
+
+    async def test_members_manage_no_longer_opens_leadership_folders(self):
+        user = _user(roles=[(["members.manage"], "captain")])
+        folder = _folder(FolderVisibility.LEADERSHIP)
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
     async def test_leadership_visibility_blocks_non_leadership(self):
         user = _user(roles=[(["events.view"], "ff")])
@@ -611,10 +630,13 @@ class TestDocumentsSummaryAccess:
                 _user(roles=[(["facilities.view_sensitive"], "facility-reader")]),
                 (3, 2, 55, 3),
             ),
+            # The library manager sees the leadership-only folder and what is
+            # under it, and nothing a role, an owner or a module gates.
             (
                 _user(roles=[(["documents.manage"], "leadership")]),
-                (6, 5, 175, 5),
+                (4, 3, 125, 4),
             ),
+            (_user(roles=[(["*"], "admin")]), (7, 6, 215, 6)),
         ]
 
         service = DocumentsService(db_session)
@@ -990,15 +1012,15 @@ class TestDownloadDocument:
     at all. ``download_document`` must apply the same folder ACL
     ``get_document`` does, must never serve a document with no (or a
     tampered) file on disk, and must confine a resolved path to the
-    *caller's own org* subdirectory -- not the shared ``UPLOAD_DIR`` root
+    *caller's own org* subdirectory -- not the shared uploads root
     (ported from #1827, DOC-24 finding).
 
-    Files are written under ``UPLOAD_DIR/<organization_id>``, matching how
-    ``upload_document`` actually lays them out on disk (see its own
-    ``org_dir = os.path.join(UPLOAD_DIR, str(current_user.organization_id))``)
-    -- the containment check is scoped to that per-org subdirectory, not the
-    shared root, so a fixture that wrote straight into ``tmp_path`` would
-    pass a check real uploads could never satisfy.
+    Files are written under ``<UPLOADS_ROOT>/<organization_id>/documents/``,
+    matching how ``upload_document`` actually lays them out on disk
+    (``FileStorageService`` with ``StorageArea.DOCUMENTS``) -- the containment
+    check is scoped to that per-org area, not the shared root, so a fixture
+    that wrote straight into ``tmp_path`` would pass a check real uploads
+    could never satisfy.
     """
 
     async def _org_and_folder(self, db_session, slug, **folder_kwargs):
@@ -1011,7 +1033,7 @@ class TestDownloadDocument:
         return org, folder
 
     def _stored_file(self, upload_dir, org, name="stored.pdf"):
-        org_dir = upload_dir / str(org.id)
+        org_dir = upload_dir / str(org.id) / "documents"
         org_dir.mkdir(parents=True, exist_ok=True)
         file_path = org_dir / name
         file_path.write_bytes(b"%PDF-1.4 test")
@@ -1026,7 +1048,7 @@ class TestDownloadDocument:
     async def test_accessible_document_downloads(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-1")
         file_path = self._stored_file(tmp_path, org)
         document = Document(
@@ -1050,7 +1072,7 @@ class TestDownloadDocument:
     ):
         # Matches get_document: existence of a restricted document is never
         # confirmed to a caller who cannot see it.
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(
             db_session, "fcvfd-dl-2", visibility=FolderVisibility.LEADERSHIP
         )
@@ -1078,7 +1100,7 @@ class TestDownloadDocument:
         # A published-minutes/property-return style document carries
         # content_html and no file_path at all -- there is nothing to
         # download, ever, for this row (matches Document.has_file == False).
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-3")
         document = Document(
             organization_id=org.id,
@@ -1100,9 +1122,9 @@ class TestDownloadDocument:
     async def test_missing_file_on_disk_is_a_404(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-4")
-        org_dir = tmp_path / str(org.id)
+        org_dir = tmp_path / str(org.id) / "documents"
         org_dir.mkdir(parents=True, exist_ok=True)
         document = Document(
             organization_id=org.id,
@@ -1124,14 +1146,12 @@ class TestDownloadDocument:
     async def test_path_outside_upload_dir_is_rejected(
         self, db_session, tmp_path, monkeypatch
     ):
-        # Defence-in-depth: a tampered file_path outside UPLOAD_DIR entirely
+        # Defence-in-depth: a tampered file_path outside the uploads root
         # must not be served even if the row and the file both genuinely
         # exist.
         upload_dir = tmp_path / "uploads"
         upload_dir.mkdir()
-        monkeypatch.setattr(
-            "app.api.v1.endpoints.documents.UPLOAD_DIR", str(upload_dir)
-        )
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(upload_dir))
         outside_file = tmp_path / "outside.pdf"
         outside_file.write_bytes(b"%PDF-1.4 test")
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-5")
@@ -1156,11 +1176,11 @@ class TestDownloadDocument:
         self, db_session, tmp_path, monkeypatch
     ):
         # DOC-24 (Codex finding on #1827): every org's files live under the
-        # same UPLOAD_DIR root, so a root-level containment check would
+        # same uploads root, so a root-level containment check would
         # accept a tampered file_path pointing at a *different* org's own
         # subdirectory and leak that org's document. Containment must be
         # scoped to the caller's own org subdirectory.
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-6")
         other_org, _ = await self._org_and_folder(db_session, "fcvfd-dl-7")
         other_orgs_file = self._stored_file(tmp_path, other_org, name="theirs.pdf")
@@ -1272,15 +1292,17 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
         )
         assert result.scalar_one_or_none() is not None
 
-    async def test_caller_with_the_folders_own_permission_can_still_unfile_it(
+    async def test_caller_with_the_folders_own_permission_can_still_move_it_out(
         self, db_session
     ):
         # Positive control: the fix must not block a caller who genuinely
-        # holds the folder's required permission.
+        # holds the folder's required permission. Moving "out" (folder_id:
+        # null) files the document into General Documents, never unfiled.
         org, folder, document = await self._org_and_sensitive_document(
             db_session, "fcvfd-acl-3"
         )
         caller = self._caller(org.id, facilities_permission=True)
+        general = await _general_root(db_session, org.id)
 
         result = await update_document(
             document.id,
@@ -1288,7 +1310,7 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
             db=db_session,
             current_user=caller,
         )
-        assert result.folder_id is None
+        assert str(result.folder_id) == str(general.id)
 
     async def test_caller_with_the_folders_own_permission_can_still_delete_it(
         self, db_session
@@ -2199,11 +2221,14 @@ class TestFolderWriteTierPermission:
         )
         assert result.scalar_one_or_none() is not None
 
-    async def test_write_permission_can_unfile_and_delete_a_document(self, db_session):
+    async def test_write_permission_can_move_out_and_delete_a_document(
+        self, db_session
+    ):
         org, _root, _other, document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-3"
         )
         caller = self._write_capable_caller(org.id)
+        general = await _general_root(db_session, org.id)
 
         result = await update_document(
             document.id,
@@ -2211,7 +2236,8 @@ class TestFolderWriteTierPermission:
             db=db_session,
             current_user=caller,
         )
-        assert result.folder_id is None
+        # folder_id: null means General Documents, a real folder, not unfiled.
+        assert str(result.folder_id) == str(general.id)
 
     async def test_view_sensitive_alone_cannot_rename_the_folder(self, db_session):
         org, root, _other, _document = await self._org_with_sensitive_tree(
@@ -2323,7 +2349,7 @@ class TestFolderWriteTierPermission:
         caller (``documents.manage`` + ``facilities.view_sensitive``, no
         facilities write grant) could still upload straight into a sensitive
         facility folder."""
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, root, _other, _document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-10"
         )
@@ -2345,7 +2371,7 @@ class TestFolderWriteTierPermission:
     async def test_write_permission_can_upload_into_the_folder(
         self, db_session, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
         org, root, _other, _document = await self._org_with_sensitive_tree(
             db_session, "fcvfd-wt-11"
         )
@@ -2874,13 +2900,9 @@ class TestUpdateFolderRefusesReparentingSystemFolder:
         await db_session.refresh(system_root)
         assert system_root.parent_id is None
 
-    async def test_renaming_a_system_folder_without_touching_parent_id_still_works(
-        self, db_session
-    ):
-        # Positive control: the new check keys off `"parent_id" in
-        # update_data`, not `is_system` alone -- a rename or other field
-        # update on a system folder that doesn't touch parent_id must not be
-        # blocked.
+    async def test_renaming_a_system_folder_is_refused(self, db_session):
+        # W53-4 (owner decision, 2026-10-08): a system folder cannot be
+        # renamed, moved or deleted. This test used to pin the opposite.
         org, system_root, _ordinary = (
             await self._org_with_system_folder_and_ordinary_folder(
                 db_session, "fcvfd-reparent-system-2"
@@ -2888,13 +2910,40 @@ class TestUpdateFolderRefusesReparentingSystemFolder:
         )
         caller = self._caller(org.id)
 
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                system_root.id,
+                DocumentFolderUpdate(name="Member Files (Renamed)"),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 400
+        await db_session.refresh(system_root)
+        assert system_root.name == "Member Files"
+
+    async def test_a_system_folders_other_fields_still_save(self, db_session):
+        # Positive control: only the name and the location are fixed. Its
+        # description and who may open it are the department's to set, and a
+        # form that re-sends the unchanged name is not a rename.
+        org, system_root, _ordinary = (
+            await self._org_with_system_folder_and_ordinary_folder(
+                db_session, "fcvfd-reparent-system-2b"
+            )
+        )
+        caller = self._caller(org.id)
+
         result = await update_folder(
             system_root.id,
-            DocumentFolderUpdate(name="Member Files (Renamed)"),
+            DocumentFolderUpdate(
+                name="Member Files",
+                description="Per-member records",
+                visibility="leadership",
+            ),
             db=db_session,
             current_user=caller,
         )
-        assert result.name == "Member Files (Renamed)"
+        assert result.description == "Per-member records"
+        assert result.visibility.value == "leadership"
 
     async def test_a_non_system_folder_can_still_be_reparented_normally(
         self, db_session

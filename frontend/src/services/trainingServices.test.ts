@@ -170,8 +170,32 @@ describe('trainingService', () => {
 
       const result = await trainingService.updateRecord('r1', updates);
 
-      expect(mockPatch).toHaveBeenCalledWith('/training/records/r1', updates);
+      expect(mockPatch).toHaveBeenCalledWith('/training/records/r1', updates, { params: undefined });
       expect(result).toEqual(updated);
+    });
+
+    it('sends the note to the member as the reason', async () => {
+      mockPatch.mockResolvedValueOnce({ data: { id: 'r1' } });
+
+      await trainingService.updateRecord('r1', { hours_completed: 4 }, 'Provider credits 4 hours');
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        '/training/records/r1',
+        { hours_completed: 4 },
+        { params: { reason: 'Provider credits 4 hours' } }
+      );
+    });
+  });
+
+  describe('voidRecord', () => {
+    it('should DELETE /training/records/:id with the reason', async () => {
+      mockDelete.mockResolvedValueOnce({ data: undefined });
+
+      await trainingService.voidRecord('r1', 'Completed by another member');
+
+      expect(mockDelete).toHaveBeenCalledWith('/training/records/r1', {
+        params: { reason: 'Completed by another member' },
+      });
     });
   });
 

@@ -25,6 +25,7 @@ from app.schemas.training_submission import (
     ATTACHMENT_RETENTION_MIN_DAYS,
     SelfReportConfigUpdate,
 )
+from app.services import file_storage_service
 from app.services.scheduled_tasks import (
     SCHEDULE,
     TASK_INTERVALS_SECONDS,
@@ -40,9 +41,7 @@ NOW = datetime.now(timezone.utc)
 
 @pytest.fixture
 def upload_root(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-    )
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
     return tmp_path
 
 
@@ -71,8 +70,16 @@ async def _org_and_member(db_session) -> tuple[str, str]:
     return org_id, user_id
 
 
-def _stored_file(root, org_id: str, name: str | None = None) -> dict:
-    directory = root / org_id
+def _stored_file(
+    root, org_id: str, name: str | None = None, legacy: bool = False
+) -> dict:
+    """A certificate in the org's self-reports area — or, with *legacy*, in
+    the pre-org-first ``training_attachments/self_reported_submissions/<org>/``
+    tree, which is still swept until scripts/relocate_uploads.py moves it."""
+    if legacy:
+        directory = root / "training_attachments" / "self_reported_submissions" / org_id
+    else:
+        directory = root / org_id / "self-reports" / uuid.uuid4().hex
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / (name or f"{uuid.uuid4().hex}.pdf")
     path.write_bytes(b"%PDF-1.4 certificate")
@@ -211,14 +218,34 @@ class TestSweep:
         assert os.path.exists(no_config_file["file_path"])
         assert os.path.exists(null_file["file_path"])
 
-    async def test_never_deletes_another_organizations_file(
+    async def test_an_expired_file_in_the_legacy_tree_is_deleted(
         self, db_session, upload_root
+    ):
+        org_id, user_id = await _org_and_member(db_session)
+        await _set_retention(db_session, org_id, ATTACHMENT_RETENTION_MIN_DAYS)
+        legacy = _stored_file(upload_root, org_id, legacy=True)
+        submission = _submission(
+            org_id, user_id, [legacy], SubmissionStatus.APPROVED, 400
+        )
+        db_session.add(submission)
+        await db_session.flush()
+
+        result = await SelfReportAttachmentRetention(db_session).sweep()
+
+        assert result["files_deleted"] == 1
+        assert not os.path.exists(legacy["file_path"])
+        await db_session.refresh(submission)
+        assert submission.attachments == []
+
+    @pytest.mark.parametrize("legacy", [False, True])
+    async def test_never_deletes_another_organizations_file(
+        self, db_session, upload_root, legacy
     ):
         org_id, user_id = await _org_and_member(db_session)
         await _set_retention(db_session, org_id, ATTACHMENT_RETENTION_MIN_DAYS)
         victim_org, _ = await _org_and_member(db_session)
         # file_path is client-writable through the submission schemas.
-        foreign = _stored_file(upload_root, victim_org)
+        foreign = _stored_file(upload_root, victim_org, legacy=legacy)
         forged = _submission(org_id, user_id, [foreign], SubmissionStatus.APPROVED, 400)
         db_session.add(forged)
         await db_session.flush()

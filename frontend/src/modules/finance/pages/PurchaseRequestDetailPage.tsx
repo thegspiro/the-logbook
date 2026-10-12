@@ -23,8 +23,10 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { purchaseRequestService } from '../services/api';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { ReceiptControl } from '../components/ReceiptControl';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -198,6 +200,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
     fetchPurchaseRequest,
     submitPurchaseRequest,
   } = useFinanceStore();
+  const access = useFinanceRequestAccess();
 
   useEffect(() => {
     if (id) {
@@ -296,12 +299,28 @@ const PurchaseRequestDetailPage: React.FC = () => {
     );
   }
 
-  const canEdit = pr.status === PurchaseRequestStatus.DRAFT;
-  const canSubmit = pr.status === PurchaseRequestStatus.DRAFT;
-  const canMarkOrdered = pr.status === PurchaseRequestStatus.APPROVED;
-  const canMarkReceived = pr.status === PurchaseRequestStatus.ORDERED;
-  const canMarkPaid = pr.status === PurchaseRequestStatus.RECEIVED;
-  const canCancel = pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED;
+  // Each button is offered only to someone the endpoint behind it will
+  // accept: the requester's own actions to the requester (or the finance
+  // office), the order/receive/pay steps to finance.manage alone.
+  const isRequester = access.canActAsRequester(pr.requestedBy);
+  const isDraft = pr.status === PurchaseRequestStatus.DRAFT;
+  const canEdit = isDraft && isRequester;
+  const canSubmit = isDraft && isRequester;
+  const canMarkOrdered = access.canManage && pr.status === PurchaseRequestStatus.APPROVED;
+  const canMarkReceived = access.canManage && pr.status === PurchaseRequestStatus.ORDERED;
+  const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED;
+  // A requester may withdraw only a draft; past that it is the finance
+  // office's to cancel (FinanceService.cancel_purchase_request).
+  const canCancel = access.canManage
+    ? pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED
+    : isDraft && isRequester;
+  // Mirrors _PR_RECEIPT_CLOSED / _PR_RECEIPT_CLOSED_TO_REQUESTER in
+  // backend/app/api/v1/endpoints/finance.py.
+  const receiptClosed =
+    pr.status === PurchaseRequestStatus.DENIED ||
+    pr.status === PurchaseRequestStatus.CANCELLED ||
+    (!access.canManage && pr.status === PurchaseRequestStatus.PAID);
+  const canAttachReceipt = isRequester && !receiptClosed;
 
   return (
     <div className="space-y-6">
@@ -447,6 +466,28 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
             </div>
           )}
+          {pr.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.qbExportedAt, tz)}</p>
+            </div>
+          )}
+          {(canAttachReceipt || pr.receiptFileUrl || pr.receiptUrl) && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Receipt</p>
+              <ReceiptControl
+                subject={pr.title}
+                receiptFileUrl={pr.receiptFileUrl}
+                receiptUrl={pr.receiptUrl}
+                canAttach={canAttachReceipt}
+                onUpload={async (file) => {
+                  await purchaseRequestService.uploadReceipt(pr.id, file);
+                  await fetchPurchaseRequest(pr.id);
+                }}
+                onDownload={() => purchaseRequestService.downloadReceipt(pr.id)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -471,6 +512,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
         entityId={pr.id}
         status={pr.status}
         approvalStepCount={pr.approvalSteps.length}
+        awaitingSecondApproval={pr.awaitingSecondApproval}
+        firstApprovedBy={pr.firstApprovedBy}
         requesterId={pr.requestedBy}
         onDecided={() => void fetchPurchaseRequest(pr.id)}
       />

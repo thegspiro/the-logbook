@@ -399,6 +399,21 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Printer registration, status read-back, and the published flag tables both parsers decode
     - The SSRF boundary: port allowlist, blocked address classes, and resolve-once-connect-to-literal
 
+35. **[APPARATUS_MODULE.md](./APPARATUS_MODULE.md)**
+    - The vehicle register: identity, configurable types and statuses, custom fields, photos, documents, and an archive for previously-owned apparatus
+    - Maintenance records and the due/overdue view, components and their note log, equipment, fuel logs, NFPA compliance, service providers
+    - EVOC driver gating: the cumulative certification ladder, how scheduling asks whether a member may drive a given apparatus on a given shift's date, and the driver-exception request/approve/revoke workflow
+    - Why archive beats delete — a hard-deleted apparatus leaves `shifts.apparatus_id` dangling and silently stops the EVOC gate (AP2-4)
+    - Serializes **camelCase**, unlike inventory next door
+
+36. **[INVENTORY_MODULE.md](./INVENTORY_MODULE.md)**
+    - The largest module in the repo: 148 routes plus a WebSocket, 35 tables, 31 enums
+    - The canonical quartermaster vocabulary — assignment, temporary loan, issuance, return, check-in, transfer, distribution — and the two tracking models behind it
+    - Why the lot ledger, not the `quantity` column, is authoritative for a lot-tracked item
+    - Issuance allowances, departure clearance, write-offs, reordering, NFPA gear compliance, kits, NFC, kiosk, impact planner
+    - The twelve authentication-only routes and how each is self-scoped in code, since `inventory.view` is baseline and cannot gate a per-member read
+    - Serializes **snake_case**, unlike apparatus next door
+
 ---
 
 ### 🗄️ Database Schema
@@ -460,6 +475,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 Point-in-time reviews and active plans — useful history and open decisions, not
 evergreen reference:
 
+- **[FEATURE_DOC_COVERAGE.md](./FEATURE_DOC_COVERAGE.md)** — which of the 36 reviewed features have documentation, where it lives, and the six with none; plus the convention to follow when writing one
 - **[review-log.md](./review-log.md)** — ongoing rotating codebase review log (security, incomplete sections, documentation gaps)
 - **[RELEASE_CANDIDATE_PLAN.md](./RELEASE_CANDIDATE_PLAN.md)** — path from `main` to a tagged 1.0.0-rc.1, with per-item status
 - **[DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md](./DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md)** — design proposal for structure-only department template export/import (no implementation yet)
@@ -626,6 +642,15 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Meeting minutes / templates                   | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)                                                                                                 |
 | Document management / folders                 | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module)                                                                                |
 | Department messages / announcements           | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md)                                                                                                   |
+| Apparatus / fleet register                    | [APPARATUS_MODULE.md](./APPARATUS_MODULE.md)                                                                                                             |
+| Apparatus maintenance / service reports       | [APPARATUS_MODULE.md](./APPARATUS_MODULE.md#maintenance)                                                                                                 |
+| EVOC levels / who may drive an apparatus      | [APPARATUS_MODULE.md](./APPARATUS_MODULE.md#evoc-driver-eligibility)                                                                                     |
+| Driver exceptions (parade, mutual aid)        | [APPARATUS_MODULE.md](./APPARATUS_MODULE.md#driver-exception-workflow)                                                                                   |
+| Inventory / quartermaster records             | [INVENTORY_MODULE.md](./INVENTORY_MODULE.md)                                                                                                             |
+| Assignment vs issuance vs checkout            | [INVENTORY_MODULE.md](./INVENTORY_MODULE.md#terminology)                                                                                                 |
+| Pool stock / lots / why a count reads zero    | [INVENTORY_MODULE.md](./INVENTORY_MODULE.md#quantity-columns-and-which-one-is-authoritative)                                                             |
+| Departure clearance / unreturned gear         | [INVENTORY_MODULE.md](./INVENTORY_MODULE.md#departure-clearance)                                                                                         |
+| Who can see a colleague's gear                | [INVENTORY_MODULE.md](./INVENTORY_MODULE.md#why-inventoryview-cannot-gate-a-per-member-read)                                                             |
 | Department store / merch orders               | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md)                                                                                                           |
 | Store payment buttons (Venmo/Cash App/Zelle)  | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#payments)                                                                                                  |
 | Store emails: switches, previews, test sends  | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#notifications)                                                                                             |

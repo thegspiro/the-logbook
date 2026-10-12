@@ -40,6 +40,7 @@ describe('flattenRun', () => {
         otherMarks: {
           '/events/admin': [
             {
+              markId: 'm2',
               userId: 'u2',
               testerName: 'Firefighter Jones',
               testedAs: ['firefighter'],
@@ -112,6 +113,7 @@ describe('buildPermissionMatrixCsv', () => {
         otherMarks: {
           '/events/admin': [
             {
+              markId: 'm2',
               userId: 'u2',
               testerName: 'Firefighter Jones',
               testedAs: ['firefighter'],
@@ -146,7 +148,9 @@ describe('the matrix keys columns by account', () => {
       context({
         results: { '/events/admin': { status: 'pass' } },
         otherMarks: {
-          '/events/admin': [{ userId: 'u2', testerName: 'Ivy Manager', testedAs: ['firefighter'], status: 'blocked' }],
+          '/events/admin': [
+            { markId: 'm2', userId: 'u2', testerName: 'Ivy Manager', testedAs: ['firefighter'], status: 'blocked' },
+          ],
         },
         viewerId: 'u1',
         viewerName: 'Ivy Manager',

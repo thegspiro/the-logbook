@@ -90,10 +90,11 @@ describe('exportReportAsCsv', () => {
     Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, writable: true });
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, writable: true });
 
-    let capturedLink: HTMLAnchorElement | null = null;
+    const captured: HTMLAnchorElement[] = [];
     vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
-      capturedLink = node as HTMLAnchorElement;
-      capturedLink.click = vi.fn();
+      const link = node as HTMLAnchorElement;
+      link.click = vi.fn();
+      captured.push(link);
       return node;
     });
     vi.spyOn(document.body, 'removeChild').mockImplementation((node) => node);
@@ -101,7 +102,8 @@ describe('exportReportAsCsv', () => {
     const rows = [{ name: 'Test', value: 1 }];
     exportReportAsCsv('My Report', rows);
 
-    expect(capturedLink).not.toBeNull();
-    expect((capturedLink as HTMLAnchorElement).download).toMatch(/^my_report_\d{4}-\d{2}-\d{2}\.csv$/);
+    const capturedLink = captured[captured.length - 1];
+    expect(capturedLink).toBeDefined();
+    expect(capturedLink?.download).toMatch(/^my_report_\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });

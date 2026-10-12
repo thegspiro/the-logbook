@@ -132,12 +132,24 @@ export interface AttendancePetition {
   created_at: string;
 }
 
+/** A pending request with the event it is about, for the cross-event list. */
+export interface PendingAttendancePetition extends AttendancePetition {
+  event_title: string;
+  event_start_datetime: string;
+  event_end_datetime: string;
+  event_actual_start_time?: string | null;
+  event_actual_end_time?: string | null;
+  attendance_finalized: boolean;
+}
+
 /** The caller's own request, and whether the server would accept one now.
  * `can_request` is the server's decision; the screen does not re-derive it. */
 export interface MyAttendancePetition {
   petition: AttendancePetition | null;
   can_request: boolean;
   unavailable_reason?: string | null;
+  /** False once the request has been withdrawn the maximum number of times. */
+  can_withdraw?: boolean;
 }
 
 export interface AttendancePetitionCreate {
@@ -175,6 +187,25 @@ export interface EventAttendee {
   user_id: string;
   user_name?: string | null;
   status: RSVPStatus;
+}
+
+/** A guest — someone who is not a member — signed in at an event
+ * (`GET /events/{id}/external-attendees`, events.manage). Snake_case, as the
+ * events endpoints serve it. Guests are not RSVPs and are not counted in
+ * member attendance. */
+export interface ExternalAttendee {
+  id: string;
+  event_id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  organization_name?: string | null;
+  checked_in: boolean;
+  checked_in_at?: string | null;
+  source?: string | null;
+  notes?: string | null;
+  prospect_id?: string | null;
+  created_at: string;
 }
 
 export interface EventListItem {

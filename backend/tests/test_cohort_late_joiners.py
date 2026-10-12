@@ -28,6 +28,7 @@ from app.models.training import (
 )
 from app.schemas.course_cohort import CohortMakeupCreate
 from app.services.course_cohort_service import CourseCohortService
+from app.services.separation_of_duties import SeparationOfDutiesError
 
 pytestmark = [pytest.mark.integration]
 
@@ -231,6 +232,28 @@ class TestCreditingAMissedClass:
             await CourseCohortService(db_session).credit_missed_class(
                 s["cohort"].id, s["late"], upcoming.id, s["org"], s["officer"]
             )
+
+    async def test_an_officer_cannot_credit_their_own_missed_class(
+        self, db_session, cohort_setup
+    ):
+        """TRX7-1: credit_missed_class writes a COMPLETED record on the
+        officer's sign-off alone, the same shape as a submission approval, so
+        an officer who is also a late-joining cohort member must not be able
+        to credit themselves."""
+        s = cohort_setup
+        first = s["classes"][0]
+        with pytest.raises(SeparationOfDutiesError, match="cannot credit"):
+            await CourseCohortService(db_session).credit_missed_class(
+                s["cohort"].id, s["late"], first.id, s["org"], s["late"]
+            )
+
+        # Refused before any record is written, not merely before the
+        # decision row.
+        assert (
+            await db_session.execute(
+                select(TrainingRecord).where(TrainingRecord.user_id == str(s["late"]))
+            )
+        ).scalar_one_or_none() is None
 
 
 class TestSchedulingAMakeup:

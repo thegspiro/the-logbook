@@ -113,7 +113,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add several items" size="lg" footer={footer}>
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <div>
           <label className="form-label" htmlFor="bulk-add-list">
             One item per line
@@ -173,7 +173,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
         {parsed.length > 0 && (
           <div className="border-theme-surface-border max-h-40 overflow-auto rounded-lg border">
             <table className="w-full text-sm">
-              <thead className="bg-theme-surface-secondary sticky top-0">
+              <thead className="bg-theme-surface-modal sticky top-0">
                 <tr>
                   <th scope="col" className="text-theme-text-secondary px-3 py-1.5 text-left text-xs">
                     Name

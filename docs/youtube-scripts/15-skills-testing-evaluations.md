@@ -323,18 +323,31 @@ validation", score and result columns blank.]**
 
 ### VALIDATING ONE (10:00 – 11:00)
 
-**[SCREEN: Officer account. The Skills Testing summary tiles — "Needs
-Validation" sitting where "Pass Rate" usually is. Tap it; the Tests tab opens
-filtered to Needs Validation.]**
+**[SCREEN: Officer account, Templates tab. The summary cards — "Needs
+Validation" beside "Pass Rate". Tap it; Test Records opens filtered to Needs
+Validation.]**
 
-> "Officer side. While results are waiting on you, a **Needs Validation** tile
-> takes the Pass Rate's place on the summary, and tapping it opens the Tests tab
-> already filtered to them — so you're not hunting."
+> "Officer side. A **Needs Validation** card sits beside Pass Rate on the
+> Templates tab — always, even when it reads zero, so an empty queue is something
+> you can see at a glance — and tapping it opens Test Records already filtered
+> to them. So you're not hunting."
+
+**[PRODUCTION NOTE — 2026-10-06. Rewritten. The previous take said the tile
+replaces Pass Rate and appears only while something is waiting. Officers
+(training.manage) now always see it, zero included, next to Pass Rate; members
+still see the four cards they did. The deep link opens the records undated so
+the list matches the card's count. Re-record this [SCREEN].]**
 
 > "And while we're on those tiles: a department with no validated test yet sees
 > a dash under **Avg Score**, and under **Pass Rate** once nothing is waiting on
 > you, not zero percent.
 > There's no figure yet, and zero would say everybody failed."
+
+**[PRODUCTION NOTE — 2026-10-06. The Test Records list is now paged and
+searched on the server (template, candidate or examiner name), carries a date
+range that opens on the last twelve months, and its CSV Export needs a range of
+at most 366 days — the button is disabled with a reason otherwise. My Results
+pages too. Add one line if you demonstrate export; Script 16 carries the beat.]**
 
 **[SCREEN: Open a pending result. The full scorecard — every criterion, the
 notes, the elapsed time.]**

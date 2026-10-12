@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import ValidationError
 
-from app.models.finance import ApprovalEntityType, DuesStatus
+from app.models.finance import ApprovalEntityType, DuesStatus, ExportLog
 from app.schemas.finance import BudgetCreate, MemberDuesPayment
 from app.services.finance_service import FinanceService, _apply_payment_totals
 
@@ -105,8 +105,10 @@ async def test_dues_summary_totals_use_decimal() -> None:
 async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     paid_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
     purchase = SimpleNamespace(
+        id="p",
         paid_at=paid_at,
         request_number="PR-1",
+        budget_id="b",
         vendor="Vendor",
         title="Exact decimal",
         actual_amount=Decimal("0.30"),
@@ -118,18 +120,26 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     empty.scalars.return_value = []
     db = AsyncMock()
     db.add = MagicMock()
-    # Three counts (purchase requests, check requests, expense lines) precede
-    # the stream; the stream then resolves the org's timezone, pages
-    # purchases, then check requests.
-    db.scalar.side_effect = [1, 0, 0]
+    # Four counts (purchase requests, check requests, expense lines, voided
+    # checks) precede the stream; the stream then resolves the org's
+    # timezone and pages the one purchase.
+    db.scalar.side_effect = [1, 0, 0, 0]
     org = MagicMock()
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
-    db.execute.side_effect = [org, purchases, empty]
+    db.execute.side_effect = [org, purchases]
 
-    stream = await FinanceService(db).generate_export("org", "user", paid_at, paid_at)
+    service = FinanceService(db)
+    # Account resolution has its own database-backed tests.
+    service._resolve_export_accounts = AsyncMock(
+        return_value={"b": ("Supplies", "Checking")}
+    )
+    # The in-progress guard and the stamping have their own database tests.
+    log = ExportLog(id="log", status="pending", record_count=0)
+    service._begin_export = AsyncMock(return_value=log)
+    service._stamp_exported = AsyncMock()
+    stream = await service.generate_export("org", "user", paid_at, paid_at)
     contents = "".join([chunk async for chunk in stream])
     rows = list(csv.reader(io.StringIO(contents)))
 
-    log = db.add.call_args[0][0]
     assert log.record_count == 1
-    assert rows[1][6] == "0.30"
+    assert (rows[1][4], rows[2][5]) == ("0.30", "0.30")

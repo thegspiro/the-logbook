@@ -37,6 +37,8 @@ from app.models.training import (
     TrainingRecord,
     TrainingSubmission,
 )
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 
 # A submission is only swept once its decision is final; draft, pending and
 # revision-requested submissions are still the member's to change, and their
@@ -46,35 +48,19 @@ DECIDED_STATUSES = (SubmissionStatus.APPROVED, SubmissionStatus.REJECTED)
 _BATCH_SIZE = 200
 
 
-def submission_attachment_root() -> str:
-    """Where self-report certificates are stored, resolved at call time.
+def _org_confined_path(attachment: Any, organization_id: str) -> str | None:
+    """Real path of an attachment stored in this organization's self-reports.
 
-    The constant lives with the upload route; reading it lazily keeps this
-    service importable without the API layer and lets a test point it at a
-    temporary directory.
-    """
-    from app.api.v1.endpoints import training_submissions
-
-    return training_submissions.SUBMISSION_ATTACHMENT_DIR
-
-
-def _org_confined_path(attachment: Any, org_root: str) -> str | None:
-    """Real path of an attachment stored under this organization's directory.
-
-    ``file_path`` is client-writable through the submission schemas, so a
-    path is trusted only if it resolves inside the organization's own upload
-    directory. Anything else (another organization's file, a URL, a legacy
-    reference) is neither deleted nor removed from the row.
+    ``file_path`` round-trips through a JSON column, so a path is trusted only
+    if it resolves inside the organization's own self-report storage (current
+    or legacy layout). Anything else (another organization's file, a URL, a
+    legacy reference) is neither deleted nor removed from the row.
     """
     if not isinstance(attachment, dict):
         return None
-    file_path = attachment.get("file_path")
-    if not isinstance(file_path, str) or not file_path:
-        return None
-    real_path = os.path.realpath(file_path)
-    if not real_path.startswith(org_root + os.sep):
-        return None
-    return real_path
+    return file_storage.resolve(
+        attachment.get("file_path"), organization_id, StorageArea.SELF_REPORTS
+    )
 
 
 def _unlink(path: str) -> bool:
@@ -96,7 +82,6 @@ class SelfReportAttachmentRetention:
     async def sweep(self, now: datetime | None = None) -> dict[str, Any]:
         """Apply every opted-in organization's retention period."""
         now = now or datetime.now(timezone.utc)
-        root = os.path.realpath(submission_attachment_root())
         results: dict[str, Any] = {
             "orgs_processed": 0,
             "files_deleted": 0,
@@ -119,9 +104,7 @@ class SelfReportAttachmentRetention:
 
         for org_id, days in policies:
             try:
-                org_result = await self._sweep_org(
-                    org_id, now - timedelta(days=days), root
-                )
+                org_result = await self._sweep_org(org_id, now - timedelta(days=days))
                 if org_result["files_deleted"] or org_result["submissions"]:
                     await log_audit_event(
                         db=self.db,
@@ -155,10 +138,7 @@ class SelfReportAttachmentRetention:
             )
         return results
 
-    async def _sweep_org(
-        self, org_id: str, cutoff: datetime, root: str
-    ) -> dict[str, Any]:
-        org_root = os.path.join(root, org_id)
+    async def _sweep_org(self, org_id: str, cutoff: datetime) -> dict[str, Any]:
         files_deleted = 0
         submissions: list[str] = []
         records: set[str] = set()
@@ -192,7 +172,7 @@ class SelfReportAttachmentRetention:
             if not batch:
                 break
             for submission in batch:
-                removed = await self._expire_submission_files(submission, org_root)
+                removed = await self._expire_submission_files(submission, org_id)
                 if removed:
                     files_deleted += len(removed)
                     submissions.append(str(submission.id))
@@ -208,7 +188,7 @@ class SelfReportAttachmentRetention:
         }
 
     async def _expire_submission_files(
-        self, submission: TrainingSubmission, org_root: str
+        self, submission: TrainingSubmission, org_id: str
     ) -> set[str]:
         """Delete this submission's stored files; return the paths now gone."""
         attachments = submission.attachments
@@ -217,7 +197,7 @@ class SelfReportAttachmentRetention:
         removed: set[str] = set()
         kept: list[Any] = []
         for attachment in attachments:
-            path = _org_confined_path(attachment, org_root)
+            path = _org_confined_path(attachment, org_id)
             if path is not None and await asyncio.to_thread(_unlink, path):
                 removed.add(path)
                 continue

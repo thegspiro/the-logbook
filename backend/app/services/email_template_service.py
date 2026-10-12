@@ -412,6 +412,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "admin_contact_email",
             "description": "Election administrator's email address",
         },
+        {
+            "name": "ballot_link_notice_html",
+            "description": (
+                "The card under the ballot saying whose ballot the link opens: "
+                "the voter's own, or the delegating member's when their proxy "
+                "holder is copied, naming both"
+            ),
+        },
+        {
+            "name": "ballot_link_notice_text",
+            "description": "The same notice as one plain-text line",
+        },
     ],
     "cert_expiration": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -598,6 +610,69 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "suggestion_url",
             "description": "Link to the submission in the Review tab",
         },
+    ],
+    "external_course_match": [
+        {"name": "recipient_name", "description": "Training officer's name"},
+        {
+            "name": "provider_name",
+            "description": "The training provider the courses came from",
+        },
+        {
+            "name": "course_count",
+            "description": "How many new courses the email lists",
+        },
+        {
+            "name": "courses_html",
+            "description": (
+                "Each new course with its provider Course ID, the library "
+                "course it looks like, and how many members completed it"
+            ),
+        },
+        {
+            "name": "courses_text",
+            "description": "Plain-text version of the course list",
+        },
+        {
+            "name": "mappings_url",
+            "description": "Link to the integrations screen, where courses are mapped",
+        },
+    ],
+    "training_record_voided": [
+        {"name": "member_name", "description": "The member whose record was voided"},
+        {"name": "course_name", "description": "The training the record was for"},
+        {"name": "officer_name", "description": "The officer who voided it"},
+        {"name": "void_reason", "description": "The officer's reason for the void"},
+        {
+            "name": "details_html",
+            "description": "Panel with the record's date and hours",
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the details panel",
+        },
+        {"name": "training_url", "description": "Link to My Training"},
+    ],
+    "training_record_changed": [
+        {"name": "member_name", "description": "The member whose record changed"},
+        {"name": "course_name", "description": "The training the record is for"},
+        {"name": "officer_name", "description": "The officer who edited it"},
+        {
+            "name": "details_html",
+            "description": "Panel listing each changed value, before and after",
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the changes panel",
+        },
+        {
+            "name": "notes_html",
+            "description": "The officer's note as a paragraph, empty if none",
+        },
+        {
+            "name": "change_note",
+            "description": "The officer's note as plain text, empty if none",
+        },
+        {"name": "training_url", "description": "Link to My Training"},
     ],
     "equipment_request_update": [
         {"name": "member_name", "description": "Requesting member's name"},
@@ -866,6 +941,14 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
             "admin_contact_name": "FCVFD Secretary",
             "admin_contact_email": "secretary@samplefd.org",
+            "ballot_link_notice_html": (
+                '    <div class="callout-info"><p class="callout-title-info">'
+                "This link is yours alone</p>"
+                '<p class="callout-text-info">It opens your ballot. Don\'t '
+                "forward this email: anyone with the link can vote as you."
+                "</p></div>"
+            ),
+            "ballot_link_notice_text": "(This link opens your ballot.)",
         }
     ),
     "member_dropped": _sample(
@@ -1175,6 +1258,71 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "suggestion_url": "https://example.org/suggestions?tab=review&id=sample",
         }
     ),
+    "external_course_match": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "provider_name": "Target Solutions",
+            "course_count": "1",
+            "courses_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact" colspan="2">'
+                '<p class="fact-label">CAPCE HIPAA Awareness (4123987)</p>'
+                '<p class="fact-value">Looks like HIPAA Awareness '
+                "&middot; 3 members completed it</p></td></tr></table>"
+            ),
+            "courses_text": (
+                "- CAPCE HIPAA Awareness (4123987): looks like HIPAA Awareness;"
+                " 3 members completed it"
+            ),
+            "mappings_url": (
+                "https://example.org/training/admin?page=setup&tab=integrations"
+            ),
+        }
+    ),
+    "training_record_voided": _sample(
+        {
+            "member_name": "John Doe",
+            "course_name": "HIPAA Privacy & Security Awareness",
+            "officer_name": "Captain Maria Lopez",
+            "void_reason": (
+                "The course was completed by someone other than the member."
+            ),
+            "details_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact">'
+                '<p class="fact-label">Completed</p>'
+                '<p class="fact-value">March 04, 2026</p></td>'
+                '<td class="fact"><p class="fact-label">Hours</p>'
+                '<p class="fact-value">1</p></td></tr></table>'
+            ),
+            "details_text": "Completed: March 04, 2026\nHours: 1",
+            "training_url": "https://example.org/training/my-training",
+        }
+    ),
+    "training_record_changed": _sample(
+        {
+            "member_name": "John Doe",
+            "course_name": "Hazmat Operations Refresher",
+            "officer_name": "Captain Maria Lopez",
+            "details_html": (
+                '<table class="facts" role="presentation" cellpadding="0" '
+                'cellspacing="0"><tr><td class="fact" colspan="2">'
+                '<p class="fact-label">Hours</p>'
+                '<p class="fact-value">8 &rarr; 4</p></td></tr></table>'
+            ),
+            "details_text": "Hours: 8 -> 4",
+            "notes_html": (
+                '<p style="white-space:pre-line;"><strong>From the training '
+                "officer:</strong> The provider credits this course at 4 "
+                "hours.</p>"
+            ),
+            "change_note": (
+                "From the training officer: The provider credits this course "
+                "at 4 hours."
+            ),
+            "training_url": "https://example.org/training/my-training",
+        }
+    ),
     "equipment_request_update": _sample(
         {
             "member_name": "John Doe",
@@ -1350,6 +1498,9 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_withdrawn": {"applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
+    "external_course_match": {"recipient_name": "full"},
+    "training_record_voided": {"member_name": "full"},
+    "training_record_changed": {"member_name": "full"},
     "shift_assignment": {"recipient_name": "full"},
     "shift_reminder": {"recipient_name": "first"},
     "storefront_order_confirmation": {
@@ -1453,6 +1604,8 @@ TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
     "storefront_window_closing": {"window_extra_html": 2},
     "storefront_window_closed": {"window_extra_html": 30},
     "storefront_vendor_order_placed": {"window_extra_html": 30},
+    # The completion date of the record that was voided.
+    "training_record_voided": {"details_html": -30, "details_text": -30},
 }
 
 _PROSE_DATE = re.compile(
@@ -2325,6 +2478,109 @@ DEFAULT_EQUIPMENT_REQUEST_UPDATE_SUBJECT = (
     "Your equipment request was {{status_label}}: {{item_name}}"
 )
 
+# Sent to training officers when a sync or upload brings in a provider course
+# that looks like one already in the library — typically a new version of a
+# course a requirement depends on. Until it is mapped, members who took the
+# new version read as not current, so the email says what to map and where.
+DEFAULT_EXTERNAL_COURSE_MATCH_HTML = build_shell(
+    "New Course Version to Map",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{provider_name}} sent {{course_count}} course(s) the Logbook has not
+        seen before that look like courses already in your library. Members
+        who completed them are not credited toward the library course until
+        each one is mapped.</p>
+        {{courses_html}}
+        <p>Mapping a course credits the members who already completed it.</p>
+""" + action("{{mappings_url}}", "Map Courses"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_EXTERNAL_COURSE_MATCH_TEXT = """New Course Version to Map
+
+Hello {{recipient_name}},
+
+{{provider_name}} sent {{course_count}} course(s) the Logbook has not seen
+before that look like courses already in your library. Members who completed
+them are not credited toward the library course until each one is mapped.
+
+{{courses_text}}
+
+Mapping a course credits the members who already completed it.
+
+Map courses: {{mappings_url}}
+
+{{footer_text}}"""
+
+DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT = "New {{provider_name}} course version to map"
+
+# Sent to a member when an officer voids one of their training records — a
+# completion entered in error, or one the member cheated on. The record stays
+# in their history marked voided; the email says why, because a member who
+# only sees credit disappear has no way to question it.
+DEFAULT_TRAINING_RECORD_VOIDED_HTML = build_shell(
+    "Training Record Voided",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{officer_name}} voided your training record for {{course_name}}.
+        It no longer counts toward your hours or requirements, and it stays
+        in your training history marked as voided.</p>
+        {{details_html}}
+        <p style="white-space:pre-line;"><strong>Reason:</strong> {{void_reason}}</p>
+        <p>If you think this is a mistake, contact your training officer.</p>
+""" + action("{{training_url}}", "View My Training"),
+    accent=ACCENT_AMBER,
+    chip="Training",
+)
+
+DEFAULT_TRAINING_RECORD_VOIDED_TEXT = """Training Record Voided
+
+Hello {{member_name}},
+
+{{officer_name}} voided your training record for {{course_name}}. It no longer
+counts toward your hours or requirements, and it stays in your training
+history marked as voided.
+
+{{details_text}}
+
+Reason: {{void_reason}}
+
+If you think this is a mistake, contact your training officer.
+
+View your training: {{training_url}}
+
+{{footer_text}}"""
+
+DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT = "Training record voided: {{course_name}}"
+
+# Sent to a member when an officer edits one of their training records, with
+# each changed value before and after — the same notice a self-reported
+# submission approved with changes gives.
+DEFAULT_TRAINING_RECORD_CHANGED_HTML = build_shell(
+    "Training Record Updated",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{officer_name}} updated your training record for {{course_name}}.</p>
+        {{details_html}}
+        {{notes_html}}
+""" + action("{{training_url}}", "View My Training"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_TRAINING_RECORD_CHANGED_TEXT = """Training Record Updated
+
+Hello {{member_name}},
+
+{{officer_name}} updated your training record for {{course_name}}.
+
+{{details_text}}
+{{change_note}}
+
+View your training: {{training_url}}
+
+{{footer_text}}"""
+
+DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT = "Training record updated: {{course_name}}"
+
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
     "{{election_title}}",
@@ -2350,15 +2606,22 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
     chip="Ballot open",
     subtitle="Voting closes {{voting_closes}}",
     tab_note="Closes {{voting_closes}}",
-    # The link opens a ballot page keyed by its token; it never creates a
-    # session, so it must not be described as signing anyone in (W50-68).
-    after=callout(
-        "info",
-        "This link is yours alone",
-        "It opens your ballot. Don't forward this email: "
-        "anyone with the link can vote as you.",
-    ),
+    # The card under the body is filled by the sender: the voter's own
+    # "This link is yours alone", or, when the ballot is Cc'd to a proxy
+    # holder, a notice naming both members, because the holder's copy must
+    # not tell them the link is someone else's alone (W50-23).
+    after="{{ballot_link_notice_html}}",
 )
+
+# The link opens a ballot page keyed by its token; it never creates a
+# session, so it must not be described as signing anyone in (W50-68).
+BALLOT_LINK_OWN_NOTICE_HTML = callout(
+    "info",
+    "This link is yours alone",
+    "It opens your ballot. Don't forward this email: "
+    "anyone with the link can vote as you.",
+)
+BALLOT_LINK_OWN_NOTICE_TEXT = "(This link opens your ballot.)"
 
 DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
 
@@ -2376,7 +2639,7 @@ Your Ballot Items:
 {{custom_message}}
 
 Vote here: {{ballot_url}}
-(This link opens your ballot.)
+{{ballot_link_notice_text}}
 
 If you have any questions, please contact your election administrator:
 {{admin_contact_name}} ({{admin_contact_email}})
@@ -2904,6 +3167,35 @@ def build_items_list_text(
     return "\n".join(lines)
 
 
+_FOOTER_HTML_TOKEN = re.compile(r"\{\{\s*footer_html\s*\}\}")
+_FOOTER_TEXT_TOKEN = re.compile(r"\{\{\s*footer_text\s*\}\}")
+# The tail of the shell build_shell writes: the card's closing </div>, then
+# Outlook's conditional table close. A legacy shell body that lost its
+# {{footer_html}} line still ends this way, and the footer belongs inside it.
+_CARD_TAIL = re.compile(
+    r"</div>\s*(?:<!--\[if mso\]>.*?<!\[endif\]-->\s*)?\Z", re.DOTALL | re.IGNORECASE
+)
+
+
+def _append_footer_html(html_body: str, footer_html: str) -> str:
+    """Close a body that never asked for its footer with the chosen one.
+
+    The owner's decision on the "Closes with" selector: it always takes
+    effect. A body without ``{{footer_html}}`` — customised, or seeded before
+    the footer library — used to mail with no footer at all, whatever the
+    selector said. The footer goes inside the card when the body ends with
+    the shell's card, and after the body otherwise.
+    """
+    if not footer_html.strip():
+        return html_body
+    tail = _CARD_TAIL.search(html_body)
+    if tail:
+        return (
+            html_body[: tail.start()] + footer_html + "\n" + html_body[tail.start() :]
+        )
+    return html_body.rstrip() + "\n" + footer_html
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -2930,7 +3222,8 @@ class EmailTemplateService:
             .options(selectinload(EmailTemplate.attachments))
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
+        return email_template
 
     async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
         """List all templates for an organization.
@@ -3120,7 +3413,7 @@ class EmailTemplateService:
             )
             .options(selectinload(EmailTemplate.attachments))
         )
-        template = result.scalar_one_or_none()
+        template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
 
@@ -3197,7 +3490,7 @@ class EmailTemplateService:
             )
             .options(selectinload(EmailTemplate.attachments))
         )
-        template = result.scalar_one_or_none()
+        template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
 
@@ -3351,11 +3644,23 @@ class EmailTemplateService:
         # Only html_body is.
         subject = self._replace_variables(template.subject, ctx, escape_html=False)
         html_body = self._replace_variables(template.html_body, ctx)
+        # A footer names its department, so with no organization to resolve
+        # it against there is nothing honest to append.
+        append_footer = organization is not None
+        if append_footer and not _FOOTER_HTML_TOKEN.search(template.html_body or ""):
+            html_body = _append_footer_html(html_body, str(ctx.get("footer_html", "")))
         text_body = None
         if template.text_body:
             text_body = self._replace_variables(
                 template.text_body, ctx, escape_html=False
             )
+            footer_text = str(ctx.get("footer_text", "")).strip()
+            if (
+                append_footer
+                and footer_text
+                and not _FOOTER_TEXT_TOKEN.search(template.text_body)
+            ):
+                text_body = text_body.rstrip() + "\n\n" + footer_text
 
         # Always the built-in stylesheet. A template's own css_styles is not
         # consulted: every email is in the one house design, and the stored
@@ -3642,8 +3947,12 @@ class EmailTemplateService:
         "skipped_voters_html",
         "custom_message_html",
         "meeting_date_html",
+        "ballot_link_notice_html",
         "footer_html",
         "details_html",
+        # Built by external_course_mapping._course_lines, which escapes every
+        # course name and id it inserts.
+        "courses_html",
         "message_html",
         "notes_html",
         "apparatus_html",
@@ -3974,6 +4283,40 @@ class EmailTemplateService:
                 "Sent to a member when the quartermaster approves, declines "
                 "or issues their equipment request, with the quartermaster's "
                 "note if one was left."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EXTERNAL_COURSE_MATCH,
+            "name": "New Course Version to Map",
+            "subject": DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            "html": DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            "text": DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+            "description": (
+                "Sent to training officers when a training provider sends a "
+                "course that looks like one already in the library, so it can "
+                "be mapped and members who completed it credited."
+            ),
+        },
+        {
+            "type": EmailTemplateType.TRAINING_RECORD_VOIDED,
+            "name": "Training Record Voided",
+            "subject": DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+            "html": DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+            "text": DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+            "description": (
+                "Sent to a member when a training officer voids one of their "
+                "training records, with the officer's reason."
+            ),
+        },
+        {
+            "type": EmailTemplateType.TRAINING_RECORD_CHANGED,
+            "name": "Training Record Updated",
+            "subject": DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+            "html": DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+            "text": DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            "description": (
+                "Sent to a member when a training officer edits one of their "
+                "training records, listing each value that changed."
             ),
         },
         {

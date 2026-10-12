@@ -1,0 +1,1719 @@
+"""Planning next year: start from last year, the request deadline, requests.
+
+Owner decisions (2026-10-08): a line is owned by a position (its own, else
+its category's — ``finance_budget_ownership``); owners propose next year's
+amounts for a **draft** fiscal year; the Treasurer (``finance.manage``)
+approves as asked, adjusts with a note, or declines; the Treasurer sets a
+request deadline per draft year.
+
+Pinned here:
+
+* ``requests_open`` — draft and unlocked, and today (the org's) on or before
+  the deadline — including the department-timezone day boundary;
+* "Start from last year" copies category, station, the line's own owner and
+  notes, carries the current budget forward, starts spent at zero, skips a
+  category and station already in the draft (a re-run copies nothing), takes
+  only a draft target, and is 404 for another department's year; audited;
+* the deadline is set and cleared only on a draft year, is reported on the
+  fiscal-year responses, and closes requests to owners but not to the
+  Treasurer;
+* requests: an owner via the line's own owner and via category inheritance,
+  a proposed new line for a held position, non-holders refused, foreign keys
+  from another department refused, one live request per line (409), the
+  draft/submitted/withdraw/delete transitions, the three decisions and their
+  note rules, an approval writing the line (or creating it for a proposal),
+  re-deciding while draft and not once active, own-only visibility (404),
+  ``my-lines``, and the active year's comparison figures.
+"""
+
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
+
+import pytest
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.endpoints import finance as finance_endpoints
+from app.models.finance import (
+    Budget,
+    BudgetAmendment,
+    BudgetAmendmentStatus,
+    BudgetCategory,
+    CheckRequest,
+    CheckRequestStatus,
+    ExpenseReport,
+    ExpenseReportStatus,
+    FiscalYear,
+    FiscalYearStatus,
+    PurchaseRequest,
+    PurchaseRequestStatus,
+)
+from app.services.finance_budget_request_service import (
+    FinanceBudgetRequestService,
+    requests_open,
+)
+from app.services.finance_service import FinanceService
+from tests.test_finance_budget_owners import (
+    _client,
+    _org,
+    _position,
+    _station,
+    _user,
+    _year,
+)
+
+# ============================================
+# The rule itself, no database
+# ============================================
+
+
+@pytest.mark.unit
+class TestRequestsOpenRule:
+    today = date(2026, 10, 8)
+
+    def test_a_draft_year_without_a_deadline_is_open(self):
+        assert requests_open(FiscalYearStatus.DRAFT, False, None, self.today)
+
+    def test_the_deadline_day_itself_is_still_open(self):
+        assert requests_open("draft", False, self.today, self.today)
+
+    def test_the_day_after_the_deadline_is_closed(self):
+        assert not requests_open(
+            "draft", False, self.today - timedelta(days=1), self.today
+        )
+
+    def test_active_closed_and_locked_years_are_never_open(self):
+        assert not requests_open("active", False, None, self.today)
+        assert not requests_open(FiscalYearStatus.CLOSED, False, None, self.today)
+        assert not requests_open("draft", True, None, self.today)
+
+
+# ============================================
+# Fixtures
+# ============================================
+
+
+async def _org_in(db: AsyncSession, label: str, tz: str) -> str:
+    org_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+            "VALUES (:id, :name, 'fire_department', :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": f"{label} Dept",
+            "slug": f"{label}-{org_id[:8]}",
+            "tz": tz,
+        },
+    )
+    return org_id
+
+
+@pytest.fixture
+def audit(monkeypatch):
+    recorder = AsyncMock()
+    monkeypatch.setattr(finance_endpoints, "log_audit_event", recorder)
+    return recorder
+
+
+def _audited(audit) -> list:
+    return [call.kwargs["event_type"] for call in audit.await_args_list]
+
+
+@pytest.fixture
+async def dept(db_session: AsyncSession):
+    org_id = await _org(db_session, "plan")
+    other_org = await _org(db_session, "else")
+
+    treasurer_pos = await _position(
+        db_session, org_id, "Treasurer", ["finance.view", "finance.manage"]
+    )
+    training_officer = await _position(
+        db_session, org_id, "Training Officer", ["finance.request"]
+    )
+    chief = await _position(db_session, org_id, "Chief", ["finance.request"])
+    firefighter = await _position(
+        db_session, org_id, "Firefighter", ["finance.request"]
+    )
+    foreign_pos = await _position(db_session, other_org, "Their Chief", [])
+    foreign_admin = await _position(
+        db_session, other_org, "Their Treasurer", ["finance.*"]
+    )
+
+    people = {
+        "treasurer": await _user(db_session, org_id, "treasurer", [treasurer_pos]),
+        "trainer": await _user(db_session, org_id, "trainer", [training_officer]),
+        "chief": await _user(db_session, org_id, "chief", [chief]),
+        "member": await _user(db_session, org_id, "alice", [firefighter]),
+        "outsider_admin": await _user(
+            db_session, other_org, "their-treasurer", [foreign_admin]
+        ),
+    }
+    treasurer_id = people["treasurer"].id
+
+    active = _year(org_id, "FY2026", FiscalYearStatus.ACTIVE, treasurer_id, 2026)
+    draft = _year(org_id, "FY2027", FiscalYearStatus.DRAFT, treasurer_id, 2027)
+    empty_draft = _year(org_id, "FY2028", FiscalYearStatus.DRAFT, treasurer_id, 2028)
+    closed = _year(org_id, "FY2025", FiscalYearStatus.CLOSED, treasurer_id, 2025)
+    foreign_year = _year(
+        other_org, "Their FY2027", FiscalYearStatus.DRAFT, treasurer_id, 2027
+    )
+    training = BudgetCategory(
+        organization_id=org_id, name="Training", owner_position_id=training_officer
+    )
+    gear = BudgetCategory(organization_id=org_id, name="Gear")
+    foreign_category = BudgetCategory(organization_id=other_org, name="Theirs")
+    db_session.add_all(
+        [active, draft, empty_draft, closed, foreign_year]
+        + [training, gear, foreign_category]
+    )
+    await db_session.flush()
+    station = await _station(db_session, org_id, "Station 2")
+    foreign_station = await _station(db_session, other_org, "Their Station")
+
+    def line(fy, category, amount, org=org_id, **kw):
+        return Budget(
+            organization_id=org,
+            fiscal_year_id=fy.id,
+            category_id=category.id,
+            amount_budgeted=Decimal(amount),
+            created_by=treasurer_id,
+            **kw,
+        )
+
+    lines = {
+        # This year (active): what next year's requests are compared with.
+        "training": line(
+            active,
+            training,
+            "2000.00",
+            amount_spent=Decimal("500.00"),
+            amount_encumbered=Decimal("100.00"),
+            notes="Fire academy seats",
+        ),
+        "training_chief": line(
+            active,
+            training,
+            "300.00",
+            owner_position_id=chief,
+            station_id=station,
+            notes="Officer school",
+        ),
+        "gear": line(active, gear, "5000.00", amount_spent=Decimal("1200.00")),
+        # Next year (draft): the lines requests are made against.
+        "training_next": line(draft, training, "0.00"),
+        "chief_next": line(draft, training, "0.00", owner_position_id=chief),
+        "gear_next": line(draft, gear, "0.00"),
+        # The second draft already has gear; start-from must skip it.
+        "gear_2028": line(empty_draft, gear, "100.00"),
+        "foreign": line(foreign_year, foreign_category, "10.00", org=other_org),
+    }
+    # chief_next is Training at Station 2, so its "this year" is
+    # training_chief; give it the station.
+    lines["chief_next"].station_id = station
+    db_session.add_all(lines.values())
+    await db_session.flush()
+    # The gear line was amended up to 5000: the copy carries the current
+    # budget, the amendment itself stays behind.
+    db_session.add(
+        BudgetAmendment(
+            organization_id=org_id,
+            budget_id=lines["gear"].id,
+            amount=Decimal("1000.00"),
+            reason="Turnout gear",
+            approved_by="Board",
+            approved_on=date(2026, 3, 1),
+            created_by=treasurer_id,
+            status=BudgetAmendmentStatus.CONFIRMED,
+        )
+    )
+    await db_session.flush()
+    return {
+        "org_id": org_id,
+        "other_org": other_org,
+        "active": active.id,
+        "draft": draft.id,
+        "empty_draft": empty_draft.id,
+        "closed": closed.id,
+        "foreign_year": foreign_year.id,
+        "training_cat": training.id,
+        "gear_cat": gear.id,
+        "foreign_cat": foreign_category.id,
+        "station": station,
+        "foreign_station": foreign_station,
+        "chief_pos": chief,
+        "training_pos": training_officer,
+        "foreign_pos": foreign_pos,
+        "lines": {k: v.id for k, v in lines.items()},
+        **people,
+    }
+
+
+async def _call(db, user, method, path, json=None):
+    async with _client(db, user) as client:
+        return await client.request(method, path, json=json)
+
+
+async def _create(db, user, body):
+    return await _call(db, user, "POST", "/finance/budget-requests", body)
+
+
+def _line_body(dept, line, amount="2400.00", **extra):
+    return {
+        "fiscalYearId": dept["draft"],
+        "budgetId": dept["lines"][line],
+        "requestedAmount": amount,
+        "justification": "Two more academy seats",
+        **extra,
+    }
+
+
+async def _submitted(db, dept, user="trainer", line="training_next", amount="2400.00"):
+    created = await _create(db, dept[user], _line_body(dept, line, amount))
+    assert created.status_code == 201, created.text
+    request_id = created.json()["id"]
+    resp = await _call(
+        db, dept[user], "POST", f"/finance/budget-requests/{request_id}/submit"
+    )
+    assert resp.status_code == 200, resp.text
+    return request_id
+
+
+async def _set_deadline(db, dept, deadline):
+    resp = await _call(
+        db,
+        dept["treasurer"],
+        "PUT",
+        f"/finance/fiscal-years/{dept['draft']}",
+        {"requestDeadline": deadline.isoformat() if deadline else None},
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _line(db, line_id) -> Budget:
+    result = await db.execute(select(Budget).where(Budget.id == line_id))
+    line = result.scalar_one()
+    await db.refresh(line)
+    return line
+
+
+# ============================================
+# Start from last year
+# ============================================
+
+
+@pytest.mark.integration
+class TestStartFromLastYear:
+    async def test_copies_lines_and_skips_what_is_there(self, db_session, dept, audit):
+        target = dept["empty_draft"]
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/fiscal-years/{target}/start-from/{dept['active']}",
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"created": 2, "skipped": 1}
+        assert _audited(audit) == ["finance.fiscal_year_started_from"]
+
+        result = await db_session.execute(
+            select(Budget).where(Budget.fiscal_year_id == target)
+        )
+        copies = {(b.category_id, b.station_id): b for b in result.scalars().all()}
+        assert len(copies) == 3
+        inherited = copies[(dept["training_cat"], None)]
+        # The category's owner reaches the copy through the category; only a
+        # line's own owner is copied onto the line.
+        assert inherited.owner_position_id is None
+        assert inherited.amount_budgeted == Decimal("2000.00")
+        assert inherited.amount_spent == Decimal("0")
+        assert inherited.amount_encumbered == Decimal("0")
+        assert inherited.notes == "Fire academy seats"
+        own = copies[(dept["training_cat"], dept["station"])]
+        assert own.owner_position_id == dept["chief_pos"]
+        assert own.amount_budgeted == Decimal("300.00")
+        assert own.notes == "Officer school"
+        # Skipped, untouched: the draft's own gear line keeps its amount.
+        assert copies[(dept["gear_cat"], None)].amount_budgeted == Decimal("100.00")
+        amendments = await db_session.execute(
+            select(BudgetAmendment).where(
+                BudgetAmendment.budget_id.in_([b.id for b in copies.values()])
+            )
+        )
+        assert amendments.scalars().all() == []
+
+    async def test_the_amended_amount_is_carried_forward(self, db_session, dept):
+        target = dept["empty_draft"]
+        gear_2028 = await db_session.get(Budget, dept["lines"]["gear_2028"])
+        await db_session.delete(gear_2028)
+        await db_session.flush()
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/fiscal-years/{target}/start-from/{dept['active']}",
+        )
+        assert resp.json() == {"created": 3, "skipped": 0}
+        result = await db_session.execute(
+            select(Budget).where(
+                Budget.fiscal_year_id == target,
+                Budget.category_id == dept["gear_cat"],
+            )
+        )
+        assert result.scalar_one().amount_budgeted == Decimal("5000.00")
+
+    async def test_a_second_run_copies_nothing(self, db_session, dept):
+        path = (
+            f"/finance/fiscal-years/{dept['empty_draft']}/start-from/{dept['active']}"
+        )
+        await _call(db_session, dept["treasurer"], "POST", path)
+        again = await _call(db_session, dept["treasurer"], "POST", path)
+        assert again.status_code == 200
+        assert again.json() == {"created": 0, "skipped": 3}
+
+    async def test_only_into_a_draft_year(self, db_session, dept):
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/fiscal-years/{dept['active']}/start-from/{dept['closed']}",
+        )
+        assert resp.status_code == 400
+        assert "draft" in resp.json()["detail"]
+
+    async def test_not_from_itself(self, db_session, dept):
+        path = f"/finance/fiscal-years/{dept['draft']}/start-from/{dept['draft']}"
+        resp = await _call(db_session, dept["treasurer"], "POST", path)
+        assert resp.status_code == 400
+
+    async def test_another_departments_year_is_404(self, db_session, dept, audit):
+        for path in (
+            f"/finance/fiscal-years/{dept['empty_draft']}/start-from/"
+            f"{dept['foreign_year']}",
+            f"/finance/fiscal-years/{dept['foreign_year']}/start-from/"
+            f"{dept['active']}",
+        ):
+            resp = await _call(db_session, dept["treasurer"], "POST", path)
+            assert resp.status_code == 404, path
+        audit.assert_not_called()
+
+    async def test_needs_finance_manage(self, db_session, dept):
+        path = (
+            f"/finance/fiscal-years/{dept['empty_draft']}/start-from/{dept['active']}"
+        )
+        resp = await _call(db_session, dept["trainer"], "POST", path)
+        assert resp.status_code == 403
+
+
+# ============================================
+# The request deadline
+# ============================================
+
+
+@pytest.mark.integration
+class TestRequestDeadline:
+    async def test_set_and_clear_on_a_draft_year(self, db_session, dept, audit):
+        body = await _set_deadline(db_session, dept, date(2099, 11, 1))
+        assert body["requestDeadline"] == "2099-11-01"
+        assert body["requestsOpen"] is True
+        cleared = await _set_deadline(db_session, dept, None)
+        assert cleared["requestDeadline"] is None
+        assert cleared["requestsOpen"] is True
+        assert _audited(audit) == ["finance.fiscal_year_request_deadline_set"] * 2
+
+    async def test_a_passed_deadline_closes_requests(self, db_session, dept):
+        await _set_deadline(db_session, dept, date(2020, 1, 1))
+        years = await _call(
+            db_session, dept["treasurer"], "GET", "/finance/fiscal-years"
+        )
+        by_id = {y["id"]: y for y in years.json()}
+        assert by_id[dept["draft"]]["requestsOpen"] is False
+        assert by_id[dept["empty_draft"]]["requestsOpen"] is True
+        assert by_id[dept["active"]]["requestsOpen"] is False
+        options = await _call(
+            db_session, dept["member"], "GET", "/finance/fiscal-years/options"
+        )
+        option = next(o for o in options.json() if o["id"] == dept["draft"])
+        assert option["requestDeadline"] == "2020-01-01"
+        assert option["requestsOpen"] is False
+
+    async def test_only_a_draft_year_takes_a_deadline(self, db_session, dept):
+        path = f"/finance/fiscal-years/{dept['active']}"
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "PUT",
+            path,
+            {"requestDeadline": "2026-12-01"},
+        )
+        assert resp.status_code == 400
+        assert "draft" in resp.json()["detail"]
+        # Sending the unchanged (empty) value with an edit is not a change.
+        ok = await _call(
+            db_session,
+            dept["treasurer"],
+            "PUT",
+            path,
+            {"name": "FY2026 (current)", "requestDeadline": None},
+        )
+        assert ok.status_code == 200, ok.text
+
+    async def test_the_deadline_is_read_on_the_departments_calendar(self, db_session):
+        # Pago Pago (UTC-11) and Kiritimati (UTC+14) are always on different
+        # calendar days, so a deadline of Pago Pago's today is open there and
+        # passed in Kiritimati. Whatever the UTC date, one of the two answers
+        # differs from what a UTC "today" would give.
+        west = await _org_in(db_session, "west", "Pacific/Pago_Pago")
+        east = await _org_in(db_session, "east", "Pacific/Kiritimati")
+        deadline = datetime.now(ZoneInfo("Pacific/Pago_Pago")).date()
+        service = FinanceBudgetRequestService(db_session)
+        for org_id, expected in ((west, True), (east, False)):
+            fy = FiscalYear(
+                organization_id=org_id,
+                name="Next",
+                start_date=datetime(2027, 1, 1),
+                end_date=datetime(2027, 12, 31),
+                status=FiscalYearStatus.DRAFT,
+                request_deadline=deadline,
+                created_by=str(uuid.uuid4()),
+            )
+            (row,) = await service.fiscal_year_rows([fy], org_id)
+            assert row["requests_open"] is expected, org_id
+
+    async def test_owners_are_closed_out_the_treasurer_is_not(self, db_session, dept):
+        await _set_deadline(db_session, dept, date(2020, 1, 1))
+        refused = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        assert refused.status_code == 400
+        assert refused.json()["detail"] == "The request deadline for FY2027 has passed."
+        made = await _create(
+            db_session, dept["treasurer"], _line_body(dept, "training_next")
+        )
+        assert made.status_code == 201, made.text
+
+    async def test_the_deadline_day_is_still_open(self, db_session, dept):
+        # The fixture's department keeps UTC, so its today is UTC's.
+        await _set_deadline(db_session, dept, datetime.now(timezone.utc).date())
+        made = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        assert made.status_code == 201, made.text
+
+    async def test_owner_changes_close_with_the_deadline(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        await _set_deadline(db_session, dept, date(2020, 1, 1))
+        path = f"/finance/budget-requests/{request_id}"
+        for method, suffix, body in (
+            ("PUT", "", {"requestedAmount": "1.00"}),
+            ("POST", "/withdraw", None),
+        ):
+            resp = await _call(db_session, dept["trainer"], method, path + suffix, body)
+            assert resp.status_code == 400
+            assert "deadline" in resp.json()["detail"]
+        manager = await _call(
+            db_session, dept["treasurer"], "PUT", path, {"requestedAmount": "1.00"}
+        )
+        assert manager.status_code == 200
+
+
+# ============================================
+# Making a request
+# ============================================
+
+
+@pytest.mark.integration
+class TestMakingARequest:
+    async def test_the_category_owner_requests_for_an_inherited_line(
+        self, db_session, dept, audit
+    ):
+        resp = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["status"] == "draft"
+        assert body["lineLabel"] == "Training"
+        assert body["isProposedLine"] is False
+        assert body["ownerPositionName"] == "Training Officer"
+        assert Decimal(body["requestedAmount"]) == Decimal("2400.00")
+        assert body["fiscalYearName"] == "FY2027"
+        # "This year", seen from the draft: the active FY2026 Training line.
+        assert body["lastYearFiscalYearName"] == "FY2026"
+        assert Decimal(body["lastYearBudgeted"]) == Decimal("2000.00")
+        assert Decimal(body["lastYearSpent"]) == Decimal("500.00")
+        assert _audited(audit) == ["finance.budget_request_created"]
+
+    async def test_a_lines_own_owner_overrides_the_category(self, db_session, dept):
+        resp = await _create(
+            db_session, dept["chief"], _line_body(dept, "chief_next", "350.00")
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["lineLabel"] == "Training · Station 2"
+        assert body["ownerPositionName"] == "Chief"
+        assert Decimal(body["lastYearBudgeted"]) == Decimal("300.00")
+        refused = await _create(
+            db_session, dept["trainer"], _line_body(dept, "chief_next")
+        )
+        assert refused.status_code == 403
+
+    async def test_a_non_owner_is_refused(self, db_session, dept):
+        resp = await _create(
+            db_session, dept["member"], _line_body(dept, "training_next")
+        )
+        assert resp.status_code == 403
+
+    async def test_a_line_with_no_last_year_has_no_comparison(self, db_session, dept):
+        resp = await _create(
+            db_session, dept["treasurer"], _line_body(dept, "gear_next")
+        )
+        body = resp.json()
+        # Gear with no station exists this year: 5000 budgeted, 1200 spent.
+        assert Decimal(body["lastYearBudgeted"]) == Decimal("5000.00")
+        proposal = await _create(
+            db_session,
+            dept["treasurer"],
+            {
+                "fiscalYearId": dept["draft"],
+                "categoryId": dept["gear_cat"],
+                "stationId": dept["station"],
+                "requestedAmount": "10.00",
+                "justification": "New station kit",
+            },
+        )
+        assert proposal.status_code == 201, proposal.text
+        assert proposal.json()["lastYearBudgeted"] is None
+        assert proposal.json()["lastYearSpent"] is None
+
+    async def test_propose_a_new_line_for_a_held_position(self, db_session, dept):
+        body = {
+            "fiscalYearId": dept["draft"],
+            "categoryId": dept["gear_cat"],
+            "stationId": dept["station"],
+            "ownerPositionId": dept["chief_pos"],
+            "requestedAmount": "800.00",
+            "justification": "Station 2 needs its own gear line",
+        }
+        resp = await _create(db_session, dept["chief"], body)
+        assert resp.status_code == 201, resp.text
+        made = resp.json()
+        assert made["isProposedLine"] is True
+        assert made["budgetId"] is None
+        assert made["lineLabel"] == "Gear · Station 2"
+        assert made["ownerPositionName"] == "Chief"
+        # Somebody who does not hold the position cannot propose for it.
+        refused = await _create(db_session, dept["member"], body)
+        assert refused.status_code == 403
+        # Nor without naming one.
+        unnamed = await _create(
+            db_session,
+            dept["member"],
+            {**body, "ownerPositionId": None, "stationId": None},
+        )
+        assert unnamed.status_code == 400
+
+    async def test_a_proposal_for_an_existing_line_is_refused(self, db_session, dept):
+        resp = await _create(
+            db_session,
+            dept["treasurer"],
+            {
+                "fiscalYearId": dept["draft"],
+                "categoryId": dept["gear_cat"],
+                "requestedAmount": "1.00",
+                "justification": "Gear",
+            },
+        )
+        assert resp.status_code == 409
+
+    @pytest.mark.parametrize(
+        "override",
+        [
+            {"categoryId": "foreign_cat"},
+            {"stationId": "foreign_station"},
+            {"ownerPositionId": "foreign_pos"},
+            {"fiscalYearId": "foreign_year"},
+        ],
+    )
+    async def test_another_departments_keys_are_refused(
+        self, db_session, dept, override
+    ):
+        body = {
+            "fiscalYearId": dept["draft"],
+            "categoryId": dept["training_cat"],
+            "stationId": dept["station"],
+            "ownerPositionId": dept["chief_pos"],
+            "requestedAmount": "1.00",
+            "justification": "x",
+        }
+        body.update({k: dept[v] for k, v in override.items()})
+        resp = await _create(db_session, dept["treasurer"], body)
+        assert resp.status_code == 400, resp.text
+
+    async def test_another_departments_line_is_refused(self, db_session, dept):
+        body = _line_body(dept, "training_next")
+        body["budgetId"] = dept["lines"]["foreign"]
+        resp = await _create(db_session, dept["treasurer"], body)
+        assert resp.status_code == 400
+
+    async def test_only_for_a_draft_year(self, db_session, dept):
+        body = _line_body(dept, "training")
+        body["fiscalYearId"] = dept["active"]
+        resp = await _create(db_session, dept["treasurer"], body)
+        assert resp.status_code == 400
+        assert "draft" in resp.json()["detail"]
+
+    async def test_one_live_request_per_line(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        again = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        assert again.status_code == 409
+        await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/budget-requests/{request_id}/decide",
+            {"decision": "decline", "decisionNote": "Hold flat"},
+        )
+        after = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        assert after.status_code == 201, after.text
+
+
+# ============================================
+# The owner's lifecycle
+# ============================================
+
+
+@pytest.mark.integration
+class TestOwnerLifecycle:
+    async def test_edit_submit_withdraw_delete(self, db_session, dept, audit):
+        created = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        path = f"/finance/budget-requests/{created.json()['id']}"
+        trainer = dept["trainer"]
+
+        edited = await _call(
+            db_session,
+            trainer,
+            "PUT",
+            path,
+            {"requestedAmount": "2500.00", "justification": "Three seats"},
+        )
+        assert edited.status_code == 200
+        assert Decimal(edited.json()["requestedAmount"]) == Decimal("2500.00")
+
+        submitted = await _call(db_session, trainer, "POST", f"{path}/submit")
+        assert submitted.json()["status"] == "submitted"
+        assert submitted.json()["submittedByName"] == "trainer Test"
+        assert submitted.json()["submittedAt"]
+        assert (
+            await _call(db_session, trainer, "POST", f"{path}/submit")
+        ).status_code == 400
+        # A submitted request is not deleted; it is withdrawn first.
+        assert (await _call(db_session, trainer, "DELETE", path)).status_code == 400
+
+        withdrawn = await _call(db_session, trainer, "POST", f"{path}/withdraw")
+        assert withdrawn.json()["status"] == "draft"
+        assert (
+            await _call(db_session, trainer, "POST", f"{path}/withdraw")
+        ).status_code == 400
+
+        assert (await _call(db_session, trainer, "DELETE", path)).status_code == 204
+        assert (await _call(db_session, trainer, "GET", path)).status_code == 404
+        assert _audited(audit) == [
+            "finance.budget_request_created",
+            "finance.budget_request_submitted",
+        ]
+
+    async def test_a_decided_request_is_no_longer_the_owners(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        path = f"/finance/budget-requests/{request_id}"
+        await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"{path}/decide",
+            {"decision": "approve"},
+        )
+        for method, suffix, body in (
+            ("PUT", "", {"requestedAmount": "1.00"}),
+            ("POST", "/withdraw", None),
+            ("DELETE", "", None),
+        ):
+            resp = await _call(db_session, dept["trainer"], method, path + suffix, body)
+            assert resp.status_code == 400, (method, suffix)
+
+    async def test_blank_justification_is_refused(self, db_session, dept):
+        resp = await _create(
+            db_session,
+            dept["trainer"],
+            _line_body(dept, "training_next", justification="   "),
+        )
+        assert resp.status_code == 422
+
+
+# ============================================
+# The Treasurer's decision
+# ============================================
+
+
+@pytest.mark.integration
+class TestDecision:
+    async def _decide(self, db, dept, request_id, body, user="treasurer"):
+        return await _call(
+            db,
+            dept[user],
+            "POST",
+            f"/finance/budget-requests/{request_id}/decide",
+            body,
+        )
+
+    async def test_approve_writes_the_requested_amount(self, db_session, dept, audit):
+        request_id = await _submitted(db_session, dept)
+        resp = await self._decide(db_session, dept, request_id, {"decision": "approve"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "approved"
+        assert Decimal(body["approvedAmount"]) == Decimal("2400.00")
+        assert body["decidedByName"] == "treasurer Test"
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("2400.00")
+        assert "finance.budget_request_decided" in _audited(audit)
+
+    async def test_adjust_needs_an_amount_and_a_note(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        for body in (
+            {"decision": "adjust", "approvedAmount": "2000.00"},
+            {"decision": "adjust", "decisionNote": "Too much"},
+            {"decision": "adjust", "approvedAmount": "2000.00", "decisionNote": " "},
+        ):
+            resp = await self._decide(db_session, dept, request_id, body)
+            assert resp.status_code == 422, body
+        resp = await self._decide(
+            db_session,
+            dept,
+            request_id,
+            {
+                "decision": "adjust",
+                "approvedAmount": "2000.00",
+                "decisionNote": "Hold at this year's level",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "adjusted"
+        assert resp.json()["decisionNote"] == "Hold at this year's level"
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("2000.00")
+
+    async def test_decline_needs_a_note_and_leaves_the_line(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        refused = await self._decide(
+            db_session, dept, request_id, {"decision": "decline"}
+        )
+        assert refused.status_code == 422
+        resp = await self._decide(
+            db_session,
+            dept,
+            request_id,
+            {"decision": "decline", "decisionNote": "No growth this year"},
+        )
+        assert resp.json()["status"] == "declined"
+        assert resp.json()["approvedAmount"] is None
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("0.00")
+
+    async def test_only_finance_manage_decides(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        resp = await self._decide(
+            db_session, dept, request_id, {"decision": "approve"}, user="trainer"
+        )
+        assert resp.status_code == 403
+
+    async def test_a_draft_is_not_decided(self, db_session, dept):
+        created = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        resp = await self._decide(
+            db_session, dept, created.json()["id"], {"decision": "approve"}
+        )
+        assert resp.status_code == 400
+
+    async def test_approving_a_proposal_creates_the_line(self, db_session, dept):
+        created = await _create(
+            db_session,
+            dept["chief"],
+            {
+                "fiscalYearId": dept["draft"],
+                "categoryId": dept["gear_cat"],
+                "stationId": dept["station"],
+                "ownerPositionId": dept["chief_pos"],
+                "requestedAmount": "800.00",
+                "justification": "Station 2 gear",
+            },
+        )
+        request_id = created.json()["id"]
+        await _call(
+            db_session,
+            dept["chief"],
+            "POST",
+            f"/finance/budget-requests/{request_id}/submit",
+        )
+        resp = await self._decide(db_session, dept, request_id, {"decision": "approve"})
+        assert resp.status_code == 200, resp.text
+        budget_id = resp.json()["budgetId"]
+        assert budget_id
+        line = await _line(db_session, budget_id)
+        assert line.fiscal_year_id == dept["draft"]
+        assert line.category_id == dept["gear_cat"]
+        assert line.station_id == dept["station"]
+        assert line.owner_position_id == dept["chief_pos"]
+        assert line.amount_budgeted == Decimal("800.00")
+        # The new line is the chief's: it shows in their lines for the year.
+        mine = await _call(
+            db_session,
+            dept["chief"],
+            "GET",
+            f"/finance/budget-requests/my-lines?fiscal_year_id={dept['draft']}",
+        )
+        assert budget_id in [row["budget"]["id"] for row in mine.json()["lines"]]
+
+    async def test_a_decision_changes_while_the_year_is_draft(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        await self._decide(db_session, dept, request_id, {"decision": "approve"})
+        resp = await self._decide(
+            db_session,
+            dept,
+            request_id,
+            {"decision": "adjust", "approvedAmount": "2200.00", "decisionNote": "Trim"},
+        )
+        assert resp.status_code == 200
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("2200.00")
+
+    async def test_decisions_are_final_once_the_year_is_active(
+        self, db_session, dept, monkeypatch
+    ):
+        request_id = await _submitted(db_session, dept)
+        await self._decide(db_session, dept, request_id, {"decision": "approve"})
+        for stage in ("leadership_review", "board_review"):
+            moved = await _call(
+                db_session,
+                dept["treasurer"],
+                "POST",
+                f"/finance/fiscal-years/{dept['draft']}/planning-stage",
+                {"stage": stage},
+            )
+            assert moved.status_code == 200, moved.text
+        activated = await _adopt_and_start(db_session, dept, monkeypatch)
+        assert activated.status_code == 200, activated.text
+        resp = await self._decide(
+            db_session,
+            dept,
+            request_id,
+            {"decision": "decline", "decisionNote": "Changed my mind"},
+        )
+        assert resp.status_code == 400
+        assert "no longer a draft" in resp.json()["detail"]
+
+    async def test_an_amount_below_what_is_spent_is_refused(self, db_session, dept):
+        line = await _line(db_session, dept["lines"]["training_next"])
+        line.amount_budgeted = Decimal("100.00")
+        line.amount_encumbered = Decimal("50.00")
+        await db_session.flush()
+        request_id = await _submitted(db_session, dept, amount="40.00")
+        resp = await self._decide(db_session, dept, request_id, {"decision": "approve"})
+        assert resp.status_code == 409
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("100.00")
+
+    async def test_reviving_a_declined_request_keeps_one_live(self, db_session, dept):
+        first = await _submitted(db_session, dept)
+        await self._decide(
+            db_session, dept, first, {"decision": "decline", "decisionNote": "No"}
+        )
+        await _submitted(db_session, dept)
+        resp = await self._decide(db_session, dept, first, {"decision": "approve"})
+        assert resp.status_code == 409
+
+
+# ============================================
+# Who sees what
+# ============================================
+
+
+@pytest.mark.integration
+class TestVisibility:
+    async def test_own_only_and_404_for_the_rest(self, db_session, dept):
+        trainers = await _submitted(db_session, dept)
+        chiefs = await _submitted(
+            db_session, dept, user="chief", line="chief_next", amount="350.00"
+        )
+
+        def ids(resp):
+            return {row["id"] for row in resp.json()}
+
+        listing = "/finance/budget-requests"
+        assert ids(await _call(db_session, dept["trainer"], "GET", listing)) == {
+            trainers
+        }
+        assert ids(await _call(db_session, dept["chief"], "GET", listing)) == {chiefs}
+        assert ids(await _call(db_session, dept["member"], "GET", listing)) == set()
+        assert ids(await _call(db_session, dept["treasurer"], "GET", listing)) == {
+            trainers,
+            chiefs,
+        }
+        assert (
+            ids(await _call(db_session, dept["outsider_admin"], "GET", listing))
+            == set()
+        )
+
+        for user, request_id in (
+            ("member", trainers),
+            ("trainer", chiefs),
+            ("outsider_admin", trainers),
+        ):
+            resp = await _call(db_session, dept[user], "GET", f"{listing}/{request_id}")
+            assert resp.status_code == 404, user
+            # Nor can they act on it.
+            resp = await _call(
+                db_session, dept[user], "POST", f"{listing}/{request_id}/withdraw"
+            )
+            assert resp.status_code == 404, user
+
+    async def test_filters_by_year_and_status(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        base = "/finance/budget-requests"
+        treasurer = dept["treasurer"]
+        submitted = await _call(
+            db_session, treasurer, "GET", f"{base}?status=submitted"
+        )
+        assert [r["id"] for r in submitted.json()] == [request_id]
+        drafts = await _call(db_session, treasurer, "GET", f"{base}?status=draft")
+        assert drafts.json() == []
+        other = await _call(
+            db_session, treasurer, "GET", f"{base}?fiscal_year_id={dept['empty_draft']}"
+        )
+        assert other.json() == []
+        bad = await _call(db_session, treasurer, "GET", f"{base}?status=bogus")
+        assert bad.status_code == 400
+
+    async def test_my_lines(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        path = f"/finance/budget-requests/my-lines?fiscal_year_id={dept['draft']}"
+        resp = await _call(db_session, dept["trainer"], "GET", path)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["fiscalYear"]["id"] == dept["draft"]
+        assert body["fiscalYear"]["requestsOpen"] is True
+        assert [row["budget"]["id"] for row in body["lines"]] == [
+            dept["lines"]["training_next"]
+        ]
+        row = body["lines"][0]
+        assert row["request"]["id"] == request_id
+        assert Decimal(row["lastYearBudgeted"]) == Decimal("2000.00")
+        assert Decimal(row["lastYearSpent"]) == Decimal("500.00")
+        assert row["lastYearFiscalYearName"] == "FY2026"
+
+        nothing = await _call(db_session, dept["member"], "GET", path)
+        assert nothing.json()["lines"] == []
+        foreign = await _call(
+            db_session,
+            dept["trainer"],
+            "GET",
+            f"/finance/budget-requests/my-lines?fiscal_year_id={dept['foreign_year']}",
+        )
+        assert foreign.status_code == 404
+
+
+# ============================================
+# Planning stages, leadership review and adoption
+# ============================================
+
+
+@pytest.mark.unit
+class TestRequestsOpenHonoursTheStage:
+    today = date(2026, 10, 8)
+
+    def test_a_year_without_a_stage_still_takes_requests(self):
+        assert requests_open("draft", False, None, self.today, None)
+
+    def test_review_stages_are_closed_whatever_the_deadline(self):
+        for stage in ("leadership_review", "board_review"):
+            assert not requests_open("draft", False, None, self.today, stage)
+
+
+async def _stage(db, dept, stage, user="treasurer"):
+    return await _call(
+        db,
+        dept[user],
+        "POST",
+        f"/finance/fiscal-years/{dept['draft']}/planning-stage",
+        {"stage": stage},
+    )
+
+
+async def _reviewer(db, dept, name="president", extra=()):
+    position = await _position(
+        db,
+        dept["org_id"],
+        f"Reviewer {name}",
+        ["finance.request", "finance.budget_review", *extra],
+    )
+    return await _user(db, dept["org_id"], name, [position])
+
+
+async def _approved(db, dept, line="training_next", user="trainer", amount="2400.00"):
+    request_id = await _submitted(db, dept, user=user, line=line, amount=amount)
+    resp = await _call(
+        db,
+        dept["treasurer"],
+        "POST",
+        f"/finance/budget-requests/{request_id}/decide",
+        {"decision": "approve"},
+    )
+    assert resp.status_code == 200, resp.text
+    return request_id
+
+
+async def _review(db, user, request_id, amount="2000.00", note="Chief's priorities"):
+    async with _client(db, user) as client:
+        return await client.post(
+            f"/finance/budget-requests/{request_id}/review",
+            json={"amount": amount, "note": note},
+        )
+
+
+@pytest.mark.integration
+class TestPlanningStages:
+    async def test_a_draft_moves_one_stage_at_a_time(self, db_session, dept, audit):
+        skipped = await _stage(db_session, dept, "board_review")
+        assert skipped.status_code == 400
+        assert "one stage at a time" in skipped.json()["detail"]
+
+        forward = await _stage(db_session, dept, "leadership_review")
+        assert forward.status_code == 200, forward.text
+        assert forward.json()["planningStage"] == "leadership_review"
+        assert forward.json()["requestsOpen"] is False
+        assert "finance.fiscal_year_stage_changed" in _audited(audit)
+
+        again = await _stage(db_session, dept, "leadership_review")
+        assert again.status_code == 400
+
+        back = await _stage(db_session, dept, "requests")
+        assert back.status_code == 200
+        assert back.json()["requestsOpen"] is True
+
+    async def test_only_a_draft_has_stages(self, db_session, dept):
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/fiscal-years/{dept['active']}/planning-stage",
+            {"stage": "leadership_review"},
+        )
+        assert resp.status_code == 400
+
+    async def test_an_unknown_stage_is_refused(self, db_session, dept):
+        assert (await _stage(db_session, dept, "adopted")).status_code == 422
+
+    async def test_only_the_treasurer_moves_it(self, db_session, dept):
+        assert (
+            await _stage(db_session, dept, "leadership_review", "trainer")
+        ).status_code == 403
+
+    async def test_another_departments_year_is_404(self, db_session, dept):
+        resp = await _call(
+            db_session,
+            dept["outsider_admin"],
+            "POST",
+            f"/finance/fiscal-years/{dept['draft']}/planning-stage",
+            {"stage": "leadership_review"},
+        )
+        assert resp.status_code == 404
+
+    async def test_review_closes_the_year_to_owners_and_the_treasurer(
+        self, db_session, dept
+    ):
+        request_id = await _submitted(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+
+        new = await _create(db_session, dept["chief"], _line_body(dept, "chief_next"))
+        assert new.status_code == 400
+        assert "leadership review" in new.json()["detail"]
+        edit = await _call(
+            db_session,
+            dept["trainer"],
+            "PUT",
+            f"/finance/budget-requests/{request_id}",
+            {"requestedAmount": "9.00"},
+        )
+        assert edit.status_code == 400
+        decide = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/budget-requests/{request_id}/decide",
+            {"decision": "approve"},
+        )
+        assert decide.status_code == 400
+        assert "leadership review" in decide.json()["detail"]
+
+    async def test_reminders_stop_once_the_year_is_under_review(
+        self, db_session, dept, monkeypatch
+    ):
+        from app.models.user import Organization
+        from app.services import finance_budget_request_notifications as notices
+
+        sent = AsyncMock(return_value=[])
+        monkeypatch.setattr(notices, "_send", sent)
+        org = await db_session.get(Organization, dept["org_id"])
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        fy.request_deadline = notices.org_today(org) + timedelta(days=1)
+        await db_session.flush()
+
+        await notices.send_deadline_reminders(db_session, org)
+        assert sent.await_count > 0, "the control run should remind someone"
+
+        sent.reset_mock()
+        await _stage(db_session, dept, "leadership_review")
+        fy.request_deadline = notices.org_today(org)
+        await db_session.flush()
+        await notices.send_deadline_reminders(db_session, org)
+        sent.assert_not_awaited()
+
+
+@pytest.mark.integration
+class TestLeadershipReview:
+    async def test_a_reviewer_changes_a_decided_amount(self, db_session, dept, audit):
+        reviewer = await _reviewer(db_session, dept)
+        request_id = await _approved(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+
+        resp = await _review(db_session, reviewer, request_id)
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["approvedAmount"] == "2400.00"
+        assert body["reviewAmount"] == "2000.00"
+        assert body["reviewNote"] == "Chief's priorities"
+        assert body["reviewedByName"]
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("2000.00")
+        assert "finance.budget_request_reviewed" in _audited(audit)
+
+    async def test_only_during_leadership_review(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        request_id = await _approved(db_session, dept)
+
+        early = await _review(db_session, reviewer, request_id)
+        assert early.status_code == 400
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        late = await _review(db_session, reviewer, request_id)
+        assert late.status_code == 400
+
+    async def test_only_a_request_the_treasurer_approved(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        undecided = await _submitted(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+
+        resp = await _review(db_session, reviewer, undecided)
+        assert resp.status_code == 400
+        assert "approved or adjusted" in resp.json()["detail"]
+
+    async def test_not_a_line_the_reviewer_owns(self, db_session, dept):
+        # The Chief owns chief_next; holding the review grant does not let
+        # them set their own line's amount.
+        chief_reviewer = await _position(
+            db_session, dept["org_id"], "Chief reviewer", ["finance.budget_review"]
+        )
+        await db_session.execute(
+            text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+            {"u": dept["chief"].id, "p": chief_reviewer},
+        )
+        await db_session.refresh(dept["chief"], ["positions"])
+        request_id = await _approved(db_session, dept, line="chief_next", user="chief")
+        await _stage(db_session, dept, "leadership_review")
+
+        resp = await _review(db_session, dept["chief"], request_id)
+
+        assert resp.status_code == 403
+        line = await _line(db_session, dept["lines"]["chief_next"])
+        assert line.amount_budgeted == Decimal("2400.00")
+
+    async def test_the_grant_is_required(self, db_session, dept):
+        request_id = await _approved(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+        assert (
+            await _review(db_session, dept["member"], request_id)
+        ).status_code == 403
+        assert (
+            await _review(db_session, dept["treasurer"], request_id)
+        ).status_code == 403
+
+    async def test_a_note_is_required(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        request_id = await _approved(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+        assert (
+            await _review(db_session, reviewer, request_id, note="  ")
+        ).status_code == 422
+
+    async def test_not_below_what_the_line_has_spent(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        request_id = await _approved(db_session, dept)
+        line = await _line(db_session, dept["lines"]["training_next"])
+        line.amount_encumbered = Decimal("500.00")
+        await db_session.flush()
+        await _stage(db_session, dept, "leadership_review")
+
+        assert (
+            await _review(db_session, reviewer, request_id, amount="100.00")
+        ).status_code == 409
+
+    async def test_a_reviewer_reads_every_request(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        await _submitted(db_session, dept)
+        async with _client(db_session, reviewer) as client:
+            resp = await client.get(
+                "/finance/budget-requests", params={"fiscal_year_id": dept["draft"]}
+            )
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    async def test_a_new_treasurer_decision_replaces_the_review(self, db_session, dept):
+        reviewer = await _reviewer(db_session, dept)
+        request_id = await _approved(db_session, dept)
+        await _stage(db_session, dept, "leadership_review")
+        await _review(db_session, reviewer, request_id)
+        await _stage(db_session, dept, "requests")
+
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "POST",
+            f"/finance/budget-requests/{request_id}/decide",
+            {"decision": "adjust", "approvedAmount": "2200.00", "decisionNote": "Met"},
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["reviewAmount"] is None
+        line = await _line(db_session, dept["lines"]["training_next"])
+        assert line.amount_budgeted == Decimal("2200.00")
+
+
+_ADOPTION = {"adoptedOn": "2026-01-05", "adoptionReference": "Motion 2026-01"}
+
+
+async def _year_action(db, dept, action, body=None, year="draft", method="POST"):
+    return await _call(
+        db,
+        dept["treasurer"],
+        method,
+        f"/finance/fiscal-years/{dept[year]}/{action}",
+        body,
+    )
+
+
+def _today_is(monkeypatch, day: date) -> None:
+    """Move the department's calendar for both services that read it."""
+    from app.services import finance_budget_request_service as requests_module
+    from app.services import finance_service as finance_module
+
+    async def today(db, org_id):
+        return day
+
+    monkeypatch.setattr(finance_module, "resolve_org_today", today)
+    monkeypatch.setattr(requests_module, "resolve_org_today", today)
+
+
+async def _adopt_and_start(db, dept, monkeypatch):
+    """Adopt FY2027, close FY2026, and start FY2027 on its first day."""
+    for stage in ("leadership_review", "board_review"):
+        if (await _stage(db, dept, stage)).status_code != 200:
+            break
+    adopted = await _year_action(db, dept, "adopt", _ADOPTION)
+    assert adopted.status_code == 200, adopted.text
+    closing = await _year_action(db, dept, "begin-close", year="active")
+    assert closing.status_code == 200, closing.text
+    _today_is(monkeypatch, date(2027, 1, 1))
+    return await _year_action(db, dept, "activate")
+
+
+@pytest.mark.integration
+class TestAdoption:
+    @pytest.fixture
+    def started(self, monkeypatch):
+        recorder = AsyncMock(return_value=0)
+        monkeypatch.setattr(finance_endpoints, "notify_budget_adopted", recorder)
+        return recorder
+
+    async def test_a_draft_is_adopted_only_from_board_review(
+        self, db_session, dept, started
+    ):
+        resp = await _year_action(db_session, dept, "adopt", _ADOPTION)
+        assert resp.status_code == 400
+        assert "board review" in resp.json()["detail"]
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        assert fy.adopted_on is None
+
+    async def test_the_boards_vote_must_be_recorded(self, db_session, dept):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+
+        assert (await _year_action(db_session, dept, "adopt")).status_code == 422
+        missing = await _year_action(
+            db_session, dept, "adopt", {"adoptedOn": "2026-01-05"}
+        )
+        assert missing.status_code == 422
+        blank = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptionReference": "  "}
+        )
+        assert blank.status_code == 422
+        future = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptedOn": "2999-01-01"}
+        )
+        assert future.status_code == 400
+        assert "future" in future.json()["detail"]
+
+    async def test_adoption_is_recorded_and_the_year_waits_to_start(
+        self, db_session, dept, started, audit
+    ):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+
+        resp = await _year_action(
+            db_session, dept, "adopt", {**_ADOPTION, "adoptionNotes": "Passed 5-0"}
+        )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "draft"
+        assert body["planningStage"] == "adopted"
+        assert body["adoptedOn"] == "2026-01-05"
+        assert body["adoptionReference"] == "Motion 2026-01"
+        assert body["adoptionNotes"] == "Passed 5-0"
+        assert body["adoptionRecordedBy"] == dept["treasurer"].id
+        assert "finance.budget_adopted" in _audited(audit)
+        # Nobody can spend from it yet, so nobody is told.
+        started.assert_not_awaited()
+        back = await _stage(db_session, dept, "board_review")
+        assert back.status_code == 400
+        assert "adopted by the board" in back.json()["detail"]
+
+    async def test_an_unadopted_draft_cannot_be_started(
+        self, db_session, dept, started
+    ):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        resp = await _year_action(db_session, dept, "activate")
+        assert resp.status_code == 400
+        assert "has not been adopted" in resp.json()["detail"]
+        started.assert_not_awaited()
+
+    async def test_a_year_starts_on_its_start_date(self, db_session, dept, started):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        await _year_action(db_session, dept, "adopt", _ADOPTION)
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        resp = await _year_action(db_session, dept, "activate")
+
+        # FY2027 begins January 1, 2027; the department's today is earlier.
+        assert resp.status_code == 400
+        assert "starts on January 1, 2027" in resp.json()["detail"]
+        started.assert_not_awaited()
+
+    async def test_starting_waits_for_the_current_years_close(
+        self, db_session, dept, started, monkeypatch
+    ):
+        await _stage(db_session, dept, "leadership_review")
+        await _stage(db_session, dept, "board_review")
+        await _year_action(db_session, dept, "adopt", _ADOPTION)
+        _today_is(monkeypatch, date(2027, 1, 1))
+
+        resp = await _year_action(db_session, dept, "activate")
+
+        assert resp.status_code == 400
+        assert "FY2026 is still the active fiscal year" in resp.json()["detail"]
+        fy = await db_session.get(FiscalYear, dept["active"])
+        assert fy.status == FiscalYearStatus.ACTIVE
+
+    async def test_starting_an_adopted_year_tells_the_owners(
+        self, db_session, dept, started, audit, monkeypatch
+    ):
+        resp = await _adopt_and_start(db_session, dept, monkeypatch)
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "active"
+        assert body["planningStage"] is None
+        assert body["adoptedOn"] == "2026-01-05"
+        assert "finance.fiscal_year_started" in _audited(audit)
+        started.assert_awaited_once()
+        assert started.await_args.args[1:] == (dept["org_id"], dept["draft"])
+
+    async def test_reopening_a_closed_year_needs_no_vote(
+        self, db_session, dept, started, audit
+    ):
+        refused = await _year_action(db_session, dept, "activate", year="closed")
+        assert refused.status_code == 400
+        assert "FY2026 is still the active" in refused.json()["detail"]
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        resp = await _year_action(db_session, dept, "activate", year="closed")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["adoptedOn"] is None
+        assert resp.json()["closingStartedAt"] is None
+        assert "finance.fiscal_year_reopened" in _audited(audit)
+        started.assert_not_awaited()
+
+    async def test_a_draft_cannot_be_locked(self, db_session, dept):
+        resp = await _year_action(
+            db_session, dept, "lock", {"notes": "Reconciled to the bank"}
+        )
+        assert resp.status_code == 400
+        assert "year-end close has begun" in resp.json()["detail"]
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        assert fy.is_locked is False
+
+
+@pytest.mark.integration
+class TestAdoptionEmail:
+    async def test_each_owner_is_sent_their_own_lines(
+        self, db_session, dept, monkeypatch
+    ):
+        from app.services import finance_budget_request_notifications as notices
+
+        sent = AsyncMock(side_effect=lambda db, org, users, **kw: list(users))
+        monkeypatch.setattr(notices, "_send", sent)
+        for key, amount in (("training_next", "2400.00"), ("chief_next", "300.00")):
+            line = await _line(db_session, dept["lines"][key])
+            line.amount_budgeted = Decimal(amount)
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        fy.adopted_on = date(2026, 1, 5)
+        await db_session.flush()
+
+        count = await notices.notify_budget_adopted(
+            db_session, dept["org_id"], dept["draft"]
+        )
+
+        by_user = {
+            call.args[2][0].id: call.kwargs["text_body"]
+            for call in sent.await_args_list
+        }
+        assert count == len(by_user) == 2
+        # The Training Officer owns Training through the category; the Chief
+        # owns the Station 2 line outright and nothing else.
+        assert "Training: $2,400.00" in by_user[dept["trainer"].id]
+        assert "Station 2: $300.00" in by_user[dept["chief"].id]
+        assert "$2,400.00" not in by_user[dept["chief"].id]
+        assert "January 5, 2026" in by_user[dept["trainer"].id]
+
+
+# ============================================
+# Year-end close and the lock sign-off
+# ============================================
+
+
+def _purchase(dept, number, status, year="active"):
+    return PurchaseRequest(
+        organization_id=dept["org_id"],
+        fiscal_year_id=dept[year],
+        request_number=number,
+        title=f"Purchase {number}",
+        estimated_amount=Decimal("250.00"),
+        requested_by=dept["treasurer"].id,
+        status=status,
+    )
+
+
+@pytest.mark.integration
+class TestYearEndClose:
+    async def test_only_the_active_year_begins_its_close(self, db_session, dept, audit):
+        draft = await _year_action(db_session, dept, "begin-close")
+        assert draft.status_code == 400
+        assert "not the active fiscal year" in draft.json()["detail"]
+
+        resp = await _year_action(db_session, dept, "begin-close", year="active")
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "closed"
+        assert body["isLocked"] is False
+        assert body["closingStartedAt"] is not None
+        assert "finance.fiscal_year_close_begun" in _audited(audit)
+        foreign = await _year_action(
+            db_session, dept, "begin-close", year="foreign_year"
+        )
+        assert foreign.status_code == 404
+
+    async def test_the_close_is_due_after_the_end_date(
+        self, db_session, dept, monkeypatch
+    ):
+        path = f"/finance/fiscal-years/{dept['active']}"
+        _today_is(monkeypatch, date(2026, 12, 31))
+        last_day = await _call(db_session, dept["treasurer"], "GET", path)
+        assert last_day.json()["closeDue"] is False
+
+        _today_is(monkeypatch, date(2027, 1, 1))
+        after = await _call(db_session, dept["treasurer"], "GET", path)
+        assert after.json()["closeDue"] is True
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        closing = await _call(db_session, dept["treasurer"], "GET", path)
+        assert closing.json()["closeDue"] is False
+
+    async def test_a_closing_year_takes_nothing_new(self, db_session, dept):
+        service = FinanceService(db_session)
+        draft = _purchase(dept, "PR-CLOSE-1", PurchaseRequestStatus.DRAFT)
+        db_session.add(draft)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.create_purchase_request(
+                dept["org_id"],
+                dept["treasurer"].id,
+                fiscal_year_id=dept["active"],
+                title="Hose",
+                estimated_amount=Decimal("90.00"),
+            )
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.submit_purchase_request(draft.id, dept["org_id"])
+        with pytest.raises(ValueError, match="closing for year-end"):
+            await service.create_check_request(
+                dept["org_id"],
+                dept["treasurer"].id,
+                fiscal_year_id=dept["active"],
+                payee_name="Hose Co",
+                amount=Decimal("90.00"),
+            )
+
+    async def test_a_closing_year_finishes_what_was_submitted(self, db_session, dept):
+        submitted = _purchase(dept, "PR-CLOSE-2", PurchaseRequestStatus.SUBMITTED)
+        db_session.add(submitted)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+
+        cancelled = await FinanceService(db_session).cancel_purchase_request(
+            submitted.id, dept["org_id"]
+        )
+
+        assert cancelled.status == PurchaseRequestStatus.CANCELLED
+
+    async def test_open_items_are_listed(self, db_session, dept):
+        db_session.add_all(
+            [
+                _purchase(dept, "PR-OPEN-1", PurchaseRequestStatus.ORDERED),
+                _purchase(dept, "PR-DRAFT-1", PurchaseRequestStatus.DRAFT),
+                _purchase(dept, "PR-PAID-1", PurchaseRequestStatus.PAID),
+                _purchase(
+                    dept, "PR-ELSEWHERE", PurchaseRequestStatus.SUBMITTED, "closed"
+                ),
+                ExpenseReport(
+                    organization_id=dept["org_id"],
+                    fiscal_year_id=dept["active"],
+                    report_number="ER-OPEN-1",
+                    title="Boots",
+                    total_amount=Decimal("120.00"),
+                    submitted_by=dept["treasurer"].id,
+                    status=ExpenseReportStatus.APPROVED,
+                ),
+                CheckRequest(
+                    organization_id=dept["org_id"],
+                    fiscal_year_id=dept["active"],
+                    request_number="CR-OPEN-1",
+                    payee_name="Hose Co",
+                    amount=Decimal("90.00"),
+                    requested_by=dept["treasurer"].id,
+                    status=CheckRequestStatus.PENDING_APPROVAL,
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        resp = await _year_action(
+            db_session, dept, "open-items", year="active", method="GET"
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert [(i["kind"], i["number"], i["status"]) for i in resp.json()] == [
+            ("purchase_request", "PR-OPEN-1", "ordered"),
+            ("expense_report", "ER-OPEN-1", "approved"),
+            ("check_request", "CR-OPEN-1", "pending_approval"),
+        ]
+        assert resp.json()[1]["description"] == "Boots"
+        foreign = await _year_action(
+            db_session, dept, "open-items", year="foreign_year", method="GET"
+        )
+        assert foreign.status_code == 404
+
+    async def test_the_lock_waits_until_nothing_is_open(self, db_session, dept, audit):
+        open_item = _purchase(dept, "PR-LOCK-1", PurchaseRequestStatus.APPROVED)
+        db_session.add(open_item)
+        await db_session.flush()
+        body = {"notes": "Reconciled to the June bank statement"}
+
+        active = await _year_action(db_session, dept, "lock", body, year="active")
+        assert active.status_code == 400
+        assert "year-end close has begun" in active.json()["detail"]
+
+        await _year_action(db_session, dept, "begin-close", year="active")
+        refused = await _year_action(db_session, dept, "lock", body, year="active")
+        assert refused.status_code == 400
+        assert "1 open item: PR-LOCK-1" in refused.json()["detail"]
+
+        await FinanceService(db_session).cancel_purchase_request(
+            open_item.id, dept["org_id"]
+        )
+        resp = await _year_action(db_session, dept, "lock", body, year="active")
+
+        assert resp.status_code == 200, resp.text
+        locked = resp.json()
+        assert locked["isLocked"] is True
+        assert locked["lockedBy"] == dept["treasurer"].id
+        assert locked["lockedAt"] is not None
+        assert locked["lockNotes"] == body["notes"]
+        assert "finance.fiscal_year_locked" in _audited(audit)
+
+    async def test_the_sign_off_needs_notes(self, db_session, dept):
+        await _year_action(db_session, dept, "begin-close", year="active")
+        for body in (None, {}, {"notes": "   "}):
+            resp = await _year_action(db_session, dept, "lock", body, year="active")
+            assert resp.status_code == 422
+        fy = await db_session.get(FiscalYear, dept["active"])
+        assert fy.is_locked is False
+
+    async def test_a_locked_year_changes_no_more(self, db_session, dept):
+        draft = _purchase(dept, "PR-LOCKED-1", PurchaseRequestStatus.DRAFT)
+        db_session.add(draft)
+        await db_session.flush()
+        await _year_action(db_session, dept, "begin-close", year="active")
+        locked = await _year_action(
+            db_session, dept, "lock", {"notes": "Reconciled"}, year="active"
+        )
+        assert locked.status_code == 200, locked.text
+
+        with pytest.raises(ValueError, match="FY2026 is locked"):
+            await FinanceService(db_session).cancel_purchase_request(
+                draft.id, dept["org_id"]
+            )
+        reopen = await _year_action(db_session, dept, "activate", year="active")
+        assert reopen.status_code == 400
+        assert "locked and cannot be reopened" in reopen.json()["detail"]
+        again = await _year_action(
+            db_session, dept, "lock", {"notes": "Again"}, year="active"
+        )
+        assert again.status_code == 400
+        assert "already locked" in again.json()["detail"]

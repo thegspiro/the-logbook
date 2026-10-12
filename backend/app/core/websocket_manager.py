@@ -12,6 +12,7 @@ from typing import Dict, Optional, Set
 
 from fastapi import WebSocket
 from loguru import logger
+from redis.asyncio.client import PubSub
 
 from app.core.cache import cache_manager
 
@@ -31,7 +32,7 @@ class ConnectionManager:
 
     def __init__(self):
         self._connections: Dict[str, Set[WebSocket]] = {}
-        self._pubsub = None
+        self._pubsub: Optional[PubSub] = None
         self._listener_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket, organization_id: str) -> bool:
@@ -139,8 +140,9 @@ class ConnectionManager:
             return
 
         try:
-            self._pubsub = cache_manager.redis_client.pubsub()
-            await self._pubsub.psubscribe("inventory_events:*")
+            pubsub = cache_manager.redis_client.pubsub()
+            self._pubsub = pubsub
+            await pubsub.psubscribe("inventory_events:*")
             self._listener_task = asyncio.create_task(self._listen())
             logger.info("WebSocket Redis pub/sub listener started")
         except Exception as e:
@@ -150,8 +152,11 @@ class ConnectionManager:
         """Background task that reads from Redis pub/sub and broadcasts."""
         last_cleanup = time.monotonic()
         try:
+            pubsub = self._pubsub
+            if pubsub is None:
+                raise RuntimeError("listener started before subscribing")
             while True:
-                message = await self._pubsub.get_message(
+                message = await pubsub.get_message(
                     ignore_subscribe_messages=True,
                     timeout=1.0,
                 )

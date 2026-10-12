@@ -1,6 +1,121 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 6 (2026-10-07) — tiny real delta (preferred-name rollout), 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup:** the dedicated `/loop 30m /security-review` session had
+merged PR #2984 (Feature 25, Messaging & notifications, pass 6) over an hour
+earlier with no new `claude/security-review-*` branch or PR opened for
+Feature 26 (Forms). Confirmed via `list_pull_requests` (state=open) that no
+such PR existed before this pass started.
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-5) before touching code. File sizes since pass 5: `endpoints/forms.py` 784 L
+(unchanged), `public/forms.py` 236 L (unchanged, confirmed byte-identical via
+`git diff`), `forms_service.py` 3,308 L → 3,317 L (+9), `models/forms.py`
+347 L (unchanged), `schemas/forms.py` 427 L → 430 L (+3). `git diff` against
+pass 5's merge commit (`e2ff2d544`) on these five files, rather than the
+commit-list proxy prior passes sometimes used, shows the **entire** real
+delta is three hunks from one feature, "Let members go by a preferred name
+on everyday screens" (`f92fbd927`):
+
+- `forms_service.py`'s `search_members` (the `member_lookup` field-type
+  lookup) now also matches `User.preferred_name` and
+  `CONCAT(preferred_name, ' ', last_name)`, and returns `preferred_name`/
+  `display_name` alongside the existing `full_name` in each result. Both new
+  `.ilike()` calls use the same `search_term = like_pattern(query)` with
+  `escape=LIKE_ESCAPE_CHAR` as the four pre-existing matchers — no new
+  unescaped LIKE surface. The query itself is unchanged: still
+  `organization_id`-filtered, still `UserStatus.ACTIVE`-filtered, still
+  capped at `limit`. `preferred_name`/`display_name` carry no more exposure
+  than the `first_name`/`last_name` already returned in the same dict.
+- `endpoints/forms.py`'s `list_submissions` now falls back to
+  `submission.submitter.display_name` (was `full_name`) when a signed-in
+  member's `FormSubmission.submitter_name` is empty. **Checked against
+  CLAUDE.md's preferred-name rule that "records of note" (signed forms and
+  consents, among others) keep the legal name, not the preferred one** —
+  this module's `FormCategory` enum (`models/forms.py:44-51`) is
+  `safety`/`operations`/`administration`/`training`/`other`, with no
+  legal/consent category, and this call site is a computed display label on
+  an admin-only (`forms.manage`) submissions-list response, not a value
+  written to `FormSubmission` or read back anywhere as a system-of-record
+  name. It is the same "everyday screen" shape the preferred-name feature
+  targets, not the signed-consent shape the rule carves out. No finding.
+- `schemas/forms.py`'s `MemberLookupResult` gained the two new optional
+  fields the service now populates, with a one-line comment distinguishing
+  `full_name` (legal) from `display_name` (preferred) — matches the
+  response, no schema/response drift.
+
+No other commit since pass 5 touches any of the five scope files or
+`frontend/src/modules/forms`/`frontend/src/components/forms` (confirmed by
+`git log --since=<pass-5-merge>` on each path); three unrelated commits
+("Fit the card-grid pages to mouse desktops", "Fix tablet layout problems
+found auditing the card-grid pages") each touch one line of
+`FormBuilder.tsx` — both are the `pointer-fine:`/`group-focus-within:`
+hover-reveal CSS class sweep (Pitfall #17's sibling rule), not a logic or
+data change.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **Route inventory** — 21 `endpoints/forms.py` routes (not 22 — see
+  correction below), each enumerated against its `Depends`: 19 carry
+  `require_permission("forms.view")` or `require_permission("forms.manage")`;
+  `submit_form` and `GET /member-lookup` carry bare `get_current_user` by
+  design (any authenticated org member). Both `public/forms.py` routes
+  remain unauthenticated behind slug regex + rate limiting + honeypot +
+  CAPTCHA. No new route.
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`
+  before every cross-module integration write) — re-read
+  `_process_equipment_assignment`, `_process_event_registration`; unchanged.
+- **FORM-3/FORM-6** (`MULTISELECT` option-membership validation;
+  `_is_empty_value`) — unchanged.
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions`
+  enforcement, cross-org 404) — unchanged in `public/forms.py`.
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path) — spot-checked via grep (22 call sites, same
+  count as pass 5); no bare `str(e)` reintroduced.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/
+  `update_integration`) — all three call sites unchanged.
+- **FORM-10** (duplicate-submission check is a locking read,
+  `.with_for_update()`) — unchanged.
+- **FORM-12** (`get_submission_by_id`/`delete_submission`/
+  `reprocess_submission_integrations` still ignore the `form_id` path
+  segment) — re-read all three; still flagged, not a security boundary,
+  unchanged reasoning.
+- **BXC-1** (closed by W60's same-form/cycle check, per pass 5) — re-read
+  `_condition_error`/`_visible_field_ids`/`_condition_matches`; still closed,
+  nothing regressed.
+- **Tenant isolation** — every by-id read/update/delete still filters
+  `organization_id` or resolves through an org-scoped parent; the two new
+  `search_members` matchers introduce no new client-supplied id.
+- **LIKE escaping** — `get_forms`/`search_members`, including the two new
+  matchers above, all use `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`.
+- **JSON column mutation (Pitfall #12)** — unchanged; no new JSON-column
+  write this pass.
+- **CSV export (Pitfall #15)** — n/a, unchanged (grepped, zero matches).
+
+**Correction (route count):** passes 1-5 all stated "22 `endpoints/forms.py`
+routes." A direct count of `^@router\.` decorators in the current file (784
+L, confirmed unchanged across all six passes) gives **21**. Since the file
+is byte-identical back to pass 1, this was a miscount carried forward
+through five prior passes, not a regression or a route that was removed —
+corrected here rather than re-asserted.
+
+### Completion gate (pass 6)
+
+| Check                                             | Result                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                |
+| `black --check app/ tests/ alembic/`              | ✅ clean, 2027 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (isort 9.0.2)                                         |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — 538 revisions, single head, no migration this pass |
+| `pytest tests/ -q -k form`                        | ✅ 656 passed, 1 skipped (pywebpush, environment-only)         |
+| `npm run typecheck`                               | ✅ 0 errors                                                    |
+| `npm run lint`                                    | ✅ exit 0, no warnings                                         |
 
 ---
 

@@ -24,12 +24,13 @@ sees it.
 2. [Permissions and roles](#permissions-and-roles)
 3. [Pages](#pages)
 4. [The domain boundary](#the-domain-boundary)
-5. [Lots and on-hand](#lots-and-on-hand)
-6. [Alerts](#alerts)
-7. [API reference](#api-reference)
-8. [Data model](#data-model)
-9. [Migrations](#migrations)
-10. [Edge cases](#edge-cases)
+5. [Linking checklist items](#linking-checklist-items)
+6. [Lots and on-hand](#lots-and-on-hand)
+7. [Alerts](#alerts)
+8. [API reference](#api-reference)
+9. [Data model](#data-model)
+10. [Migrations](#migrations)
+11. [Edge cases](#edge-cases)
 
 ---
 
@@ -163,6 +164,42 @@ so the quartermaster's catalog does not fill with saline.
 
 ---
 
+## Linking checklist items
+
+_(2026-10-11)_ An equipment check position tracks expiry, lots and restock only
+through its `inventory_item_id`. The template builder used to search the gear
+list alone — which excludes medical stock — and its "create in inventory" filed
+the new row with no category, which made it gear. A rig's gauze either stayed a
+free-text line or became a second catalog row the supply officer never saw.
+
+The builder's quick-add bar and its **Linked Inventory Item** picker now:
+
+- **Search both halves of the catalog**, medical first, with medical results
+  badged. Each half is searched only when the viewer can read it
+  (`inventory.view` for gear; `inventory.view_medical` or `inventory.view` for
+  medical) and, for medical, only when the module is enabled — so a
+  medical-only EMS Supply Officer is not refused on every keystroke.
+- **Offer "Create in Medical Supplies"** to holders of `inventory.manage_medical`
+  or `inventory.manage`. The officer picks a medical category (preselected when
+  there is only one), and `POST /items/create-if-absent` files and links the
+  row in one request.
+- **Withhold every create when a half of the search failed.** A partial answer
+  cannot prove the name is free.
+
+`create-if-absent` dedups pool rows by normalized name across the **whole**
+catalog, as the gear route does. A match in the medical domain is handed back
+with `created: false`. A match filed as gear is refused with **409** rather
+than linked — the officer asked for medical stock — and the response does not
+describe the gear row. The quartermaster moves it into a medical category if
+that is where it belongs.
+
+After a bulk paste into a saved compartment, the builder offers **Match to
+catalog**, opening the existing match tool, whose fuzzy matching already spans
+medical stock. The template-level "_n_ of _m_ items linked" line remains the
+standing warning; linking is never required to save.
+
+---
+
 ## Lots and on-hand
 
 Medical supplies use the same dated-lot machinery as other consumables
@@ -183,13 +220,13 @@ Medical supplies use the same dated-lot machinery as other consumables
   were still listed as expiring stock, counted in the medical summary, and
   mailed in the supply-expiry alert — for an item nobody could issue.
 
-> **Open: the dashboard's Low stock disagrees with this page** _(W47-6)_. The
-> main dashboard's low-stock widget sums each category's `quantity` column,
-> which a lot-stocked item leaves at 0, so a category of lot-stocked supplies
-> reads as empty whatever its lots hold; and it counts medical categories that
-> the gear list it links to excludes. Medical Supplies' own **Low stock** tile
-> counts from item reorder points and is right. Recorded in
-> [KNOWN_LIMITATIONS](./KNOWN_LIMITATIONS.md).
+> **The dashboard's Low stock reads lots and leaves medical out** _(W47-6,
+> fixed 2026-10-11)_. The main dashboard's low-stock widget summed each
+> category's `quantity` column, which a lot-stocked item leaves at 0, and
+> counted medical categories the gear list it links to excludes. It now reads a
+> lot-stocked item from its in-date lots and leaves medical categories out;
+> Medical Supplies' own **Low stock** tile, counted from item reorder points, is
+> the medical figure.
 
 > **"On hand" is not editable on a lot-stocked item** _(fixed 2026-08-17)_. The
 > field writes `quantity`, but a lot-stocked item's count comes from its lots —
@@ -199,6 +236,20 @@ Medical supplies use the same dated-lot machinery as other consumables
 > delivery**, and `quantity` is left out of the payload entirely rather than
 > sent as a null that would clear a column nothing shows.
 
+### The medical domain is re-checked under each write's lock _(2026-10-05, MSUP-25)_
+
+Five medical-supplies writes (item update, lot add, delivery receipt, lot update,
+lot delete) checked domain membership in a preflight and then called a general
+mutation, so a category reclassification landing in between let a medical-only
+manager edit an item outside their domain. `_items_in_domain_locked` now locks
+the item rows in id order and reads their categories with a locking read; each
+mutation takes `required_item_types` and the medical routes pass
+`MEDICAL_ITEM_TYPES`. A miss reads as the route's existing 404, and a delivery
+with one such line receives nothing. Callers passing no domain are unchanged.
+Completing maintenance with condition `RETIRED` is refused on both maintenance
+paths (retirement goes through `retire_item`, with its lock, blockers and audit
+event), and the maintenance form no longer offers it.
+
 ---
 
 ## Alerts
@@ -206,6 +257,49 @@ Medical supplies use the same dated-lot machinery as other consumables
 Low-stock and expiring-supply alerts reach both domains; **NFPA retirement
 stays with the gear officer**, since it is structural PPE and has no medical
 analogue.
+
+**What the emails now say** _(2026-10-05)_. The weekly supply alert lists more
+than expiring items: it also lists items a crew reported used or pulled, and
+counted positions below their target, which have no date to expire by. The
+email is titled **Supplies to Replace**; the subject, opening line and plain-text
+body share one summary that counts each kind separately and names only the kinds
+present ("1 expiring on apparatus, 2 to restock on apparatus, 1 stock lot
+expiring"). The deployed tables' former **Expires** column is **Status**: an
+expiring row shows its date and days left, a reported row shows "Restock
+reported" with the crew's note, a short row shows "Short — 2 of 4 aboard". A
+reported item whose own date is months away is no longer counted as expiring.
+The low-stock alert says "at or below reorder point" (the query includes items
+sitting exactly at it), and the NFPA retirement alert says "approaching or past"
+and gives the past-due count. The low-stock and NFPA emails put the category and
+the serial number or asset tag on a grey line under the item name so the table
+fits a phone.
+
+**Raised by the checks themselves** _(2026-10-11)_. Two signals no longer wait
+for someone to act on a report:
+
+- **A short count raises a restock report.** When a shift, standalone or
+  completed check counts a position below its required (or expected) quantity,
+  the position is flagged for restock with the note "Counted 2 of 4 on an
+  equipment check", attributed to whoever submitted. This is the same flag
+  "report used" sets, so it appears on the supply overview and in the weekly
+  email. A report already standing is left as it is; a full recount still
+  clears it.
+- **A lot swap that leaves the shelf at its reorder point files a reorder
+  request.** Shelf stock is read exactly as the low-stock alert reads it
+  (`InventoryService.ready_on_hand`: in-date lots for lot-stocked items), and
+  the threshold is the same "at or below". The request asks for enough to
+  bring ready stock back to **twice the reorder point**, is `high` urgency when
+  the shelf is empty and `normal` otherwise, and is skipped while the item has
+  any request pending, approved, ordered or partially received. It lands in the
+  quartermaster's reorder queue, and an email goes to the same audiences as the
+  low-stock alert, so an EMS Supply Officer hears about medical items only.
+
+`AutoReorderService` runs **after the swap commits, in a session of its own**.
+Inside the swap it would take the item lock after the lot lock — the reverse of
+`add_lot` — and risk InnoDB aborting a crew's swap as a deadlock victim; and a
+rollback in the request's session would expire the endpoint's loaded objects. A
+failure there is logged and never fails the swap; the daily low-stock alert
+still covers the item.
 
 Recipients are grouped by the domains they may actually see:
 
@@ -263,10 +357,12 @@ permission **or** the broad equivalent.
 | `GET`    | `/items`                    | view       |
 | `GET`    | `/items/{item_id}`          | view       |
 | `POST`   | `/items`                    | manage     |
+| `POST`   | `/items/create-if-absent`   | manage     |
 | `PATCH`  | `/items/{item_id}`          | manage     |
+| `POST`   | `/items/{item_id}/retire`   | manage     |
 | `GET`    | `/items/{item_id}/lots`     | view       |
 | `POST`   | `/items/{item_id}/lots`     | manage     |
-| `POST`   | `/receive`                  | manage     |
+| `POST`   | `/lots/bulk`                | manage     |
 | `PATCH`  | `/lots/{lot_id}`            | manage     |
 | `DELETE` | `/lots/{lot_id}`            | manage     |
 | `GET`    | `/lots/expiring`            | view       |

@@ -51,6 +51,8 @@ import type {
   ComplianceSummary,
   ExternalCategoryMapping,
   ExternalCategoryMappingUpdate,
+  ExternalCourseMapping,
+  ExternalCourseMappingUpdate,
   ExternalTrainingImport,
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
@@ -81,6 +83,8 @@ import type {
   ProgramWithDetails,
   SampleTemplateSummary,
   RegistryImportResult,
+  ProgramImportPreview,
+  ProgramImportResult,
   RegistryInfo,
   RegistryRequirementPreview,
   RequirementProgress,
@@ -88,6 +92,7 @@ import type {
   RequirementProgressUpdate,
   SyncRequest,
   SyncResponse,
+  ReportUploadResponse,
   TestConnectionResponse,
   TrainingCategory,
   TrainingCategoryCreate,
@@ -285,11 +290,22 @@ export const trainingService = {
   },
 
   /**
-   * Update a training record
+   * Update a training record. The member is told what changed; `reason`, when
+   * given, is included in that notice.
    */
-  async updateRecord(recordId: string, updates: TrainingRecordUpdate): Promise<TrainingRecord> {
-    const response = await api.patch<TrainingRecord>(`/training/records/${recordId}`, updates);
+  async updateRecord(recordId: string, updates: TrainingRecordUpdate, reason?: string): Promise<TrainingRecord> {
+    const response = await api.patch<TrainingRecord>(`/training/records/${recordId}`, updates, {
+      params: reason ? { reason } : undefined,
+    });
     return response.data;
+  },
+
+  /**
+   * Void a training record: it stops counting but stays in the member's
+   * history, marked voided. The reason is required and is shown to the member.
+   */
+  async voidRecord(recordId: string, reason: string): Promise<void> {
+    await api.delete(`/training/records/${recordId}`, { params: { reason } });
   },
 
   /**
@@ -517,6 +533,48 @@ export const externalTrainingService = {
    */
   async triggerSync(providerId: string, request: SyncRequest): Promise<SyncResponse> {
     const response = await api.post<SyncResponse>(`/training/external/providers/${providerId}/sync`, request);
+    return response.data;
+  },
+
+  /**
+   * Upload a Target Solutions completions report (CSV) by hand. Completions
+   * are keyed by Transcript ID, so one already synced is never added twice.
+   */
+  async uploadReport(providerId: string, file: File): Promise<ReportUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<ReportUploadResponse>(
+      `/training/external/providers/${providerId}/upload-report`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get a provider's course ids, the library course each maps to, and a
+   * suggestion for the unmapped ones
+   */
+  async getCourseMappings(providerId: string): Promise<ExternalCourseMapping[]> {
+    const response = await api.get<ExternalCourseMapping[]>(
+      `/training/external/providers/${providerId}/course-mappings`
+    );
+    return response.data;
+  },
+
+  /**
+   * Map a provider course to a library course (null unmaps). Training records
+   * already imported from the course move with it.
+   */
+  async updateCourseMapping(
+    providerId: string,
+    mappingId: string,
+    updates: ExternalCourseMappingUpdate
+  ): Promise<ExternalCourseMapping> {
+    const response = await api.patch<ExternalCourseMapping>(
+      `/training/external/providers/${providerId}/course-mappings/${mappingId}`,
+      updates
+    );
     return response.data;
   },
 
@@ -1037,13 +1095,19 @@ export const trainingProgramService = {
     return response.data;
   },
 
-  async importProgram(
-    data: Record<string, unknown>
-  ): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
-    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>(
-      '/training/programs/programs/import',
-      data
-    );
+  /**
+   * Validate an exported program file and report what importing it would
+   * create, without creating anything.
+   */
+  async previewProgramImport(data: Record<string, unknown>): Promise<ProgramImportPreview> {
+    const response = await api.post<ProgramImportPreview>('/training/programs/programs/import', data, {
+      params: { dry_run: true },
+    });
+    return response.data;
+  },
+
+  async importProgram(data: Record<string, unknown>): Promise<ProgramImportResult> {
+    const response = await api.post<ProgramImportResult>('/training/programs/programs/import', data);
     return response.data;
   },
 
@@ -1660,6 +1724,16 @@ export const recertificationService = {
 // ==================== Competency Services ====================
 
 export const competencyService = {
+  /** Every active member's stored levels, for the department heat-map. */
+  async getDepartmentCompetencies(): Promise<import('../types/training').CompetencyHeatmap> {
+    const response = await api.get<import('../types/training').CompetencyHeatmap>('/training/competency/department');
+    return {
+      members: asArray(response.data.members),
+      skills: asArray(response.data.skills),
+      competencies: asArray(response.data.competencies),
+    };
+  },
+
   async getMatrices(position?: string): Promise<import('../types/training').CompetencyMatrix[]> {
     const response = await api.get<import('../types/training').CompetencyMatrix[]>('/training/competency/matrices', {
       params: position ? { position } : undefined,

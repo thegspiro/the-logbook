@@ -327,7 +327,17 @@ WHERE. That matters for an outer join: a row pointing out-of-org now yields
 disappearing from the syllabus or rendering another department's catalog entry.
 Behaviour is identical for all currently-storable data.
 
-### CC-2 — MED — Room booking is implemented but unreachable from the UI — 🚩 FLAGGED
+### CC-2 — MED — Room booking is implemented but unreachable from the UI — ✅ RESOLVED (2026-10-06)
+
+**Resolution:** owner decision — a per-cohort room with a per-class override.
+The wizard's Schedule step picks the cohort's room and its Preview step can move
+any class to another room (re-previewing immediately); the syllabus builder
+sets a class's own room. `preview_schedule` now accepts `location_id` and the
+per-class `classes` overrides, validates each location in-org, and resolves the
+room through `_class_location` — the same helper `create_cohort` uses — so the
+clash it reports is on the room the class will book. Covered by
+`tests/test_cohort_location_picker.py`, `CohortWizard.test.tsx` and
+`CourseSyllabusBuilder.test.tsx`. The finding as originally recorded follows.
 
 **What:** `location_id` is a fully-built backend capability with **no UI that
 sets it**. `grep -rn "location_id" src/pages/training/ src/components/training/`

@@ -1425,7 +1425,10 @@ class TestW50VoidedReceiptAndTokenAudit(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         """A voided vote's receipt must not read as a bogus receipt."""
-        from app.api.v1.endpoints.elections import verify_vote_receipt
+        from app.api.v1.endpoints.elections import (
+            VoteReceiptVerifyRequest,
+            verify_vote_receipt_post,
+        )
 
         data = setup_ballot_election
         _, raw_token = await self._issue_token(db_session, data)
@@ -1446,9 +1449,9 @@ class TestW50VoidedReceiptAndTokenAudit(TestTokenBallotSetup):
         )
         assert voided is not None
 
-        verdict = await verify_vote_receipt(
+        verdict = await verify_vote_receipt_post(
             election_id=uuid.UUID(data["election_id"]),
-            receipt=receipt,
+            payload=VoteReceiptVerifyRequest(receipt=receipt),
             db=db_session,
             _rate=None,
         )
@@ -1461,9 +1464,9 @@ class TestW50VoidedReceiptAndTokenAudit(TestTokenBallotSetup):
         assert "voided by an officer" in verdict["message"]
 
         # The other vote of the same ballot is untouched.
-        other = await verify_vote_receipt(
+        other = await verify_vote_receipt_post(
             election_id=uuid.UUID(data["election_id"]),
-            receipt=result["receipt_hashes"][1],
+            payload=VoteReceiptVerifyRequest(receipt=result["receipt_hashes"][1]),
             db=db_session,
             _rate=None,
         )

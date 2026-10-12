@@ -112,13 +112,16 @@ describe('election panels', () => {
     expect(await screen.findByText(/does not let them vote/)).toBeInTheDocument();
   });
 
-  it('says when a closed election will show its results', async () => {
+  it('no longer promises results at the scheduled end of a closed election', async () => {
+    // Closing releases results (W50-10, W50-22); a refusal is shown as the
+    // server words it, never as a wait for a date that no longer gates them.
     mocks.getResults.mockRejectedValue({
       isAxiosError: true,
       message: 'Request failed',
       response: { status: 403, data: { detail: 'Results not available yet' } },
     });
     renderWithRouter(<ElectionResults electionId="e-1" election={election({ status: 'closed' })} />);
-    expect(await screen.findByText(/Results will be available after the scheduled end/)).toBeInTheDocument();
+    expect(await screen.findByText(/Results not available yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/after the scheduled end/)).not.toBeInTheDocument();
   });
 });

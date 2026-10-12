@@ -4,7 +4,7 @@
  * Form for creating new check requests.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import type { CheckRequest } from '../types';
 
 const checkRequestSchema = z.object({
@@ -36,8 +36,7 @@ const errorClass = 'mt-1 text-xs text-red-600';
 
 const CheckRequestFormPage: React.FC = () => {
   const navigate = useNavigate();
-  const { fiscalYears, budgets, budgetCategories, isLoading, fetchFiscalYears, fetchBudgets, createCheckRequest } =
-    useFinanceStore();
+  const { createCheckRequest } = useFinanceStore();
 
   const {
     register,
@@ -48,25 +47,10 @@ const CheckRequestFormPage: React.FC = () => {
     resolver: zodResolver(checkRequestSchema),
   });
 
+  // Fiscal years and the chosen year's budget lines come from the narrow
+  // options endpoints, which a member holding only finance.request can read.
   const fiscalYearId = watch('fiscalYearId');
-
-  useEffect(() => {
-    void fetchFiscalYears();
-  }, [fetchFiscalYears]);
-
-  useEffect(() => {
-    if (fiscalYearId) {
-      void fetchBudgets({ fiscalYearId });
-    }
-  }, [fiscalYearId, fetchBudgets]);
-
-  const categoryMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const cat of budgetCategories) {
-      map.set(cat.id, cat.name);
-    }
-    return map;
-  }, [budgetCategories]);
+  const { fiscalYears, budgetOptions, fiscalYearsLoaded } = useRequestFormOptions(fiscalYearId);
 
   const onSubmit = async (data: CheckRequestFormData) => {
     try {
@@ -87,7 +71,7 @@ const CheckRequestFormPage: React.FC = () => {
     }
   };
 
-  if (isLoading && fiscalYears.length === 0) {
+  if (!fiscalYearsLoaded) {
     return (
       <div className="space-y-6">
         <Breadcrumbs />
@@ -163,11 +147,9 @@ const CheckRequestFormPage: React.FC = () => {
             </label>
             <select id="budgetId" {...register('budgetId')} className={selectClass}>
               <option value="">No budget linked</option>
-              {budgets.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered))}{' '}
-                  remaining
+              {budgetOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {budgetOptionLabel(option)}
                 </option>
               ))}
             </select>

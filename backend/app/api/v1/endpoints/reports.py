@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
+from app.api.prospect_privacy import get_hidden_prospect_ids
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.analytics import SavedReport
@@ -109,6 +110,7 @@ async def generate_report(
     request: ReportRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("reports.view")),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Generate a report"""
     _enforce_report_pii_permission(current_user, request.report_type)
@@ -119,6 +121,7 @@ async def generate_report(
         start_date=request.start_date,
         end_date=request.end_date,
         filters=request.filters,
+        hidden_prospect_ids=hidden_prospect_ids,
     )
 
     if "error" in report:
@@ -293,6 +296,7 @@ async def run_saved_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("reports.view")),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Run a saved report immediately and return the results"""
     result = await db.execute(
@@ -313,6 +317,7 @@ async def run_saved_report(
         start_date=filters.get("start_date"),
         end_date=filters.get("end_date"),
         filters=filters,
+        hidden_prospect_ids=hidden_prospect_ids,
     )
 
     if "error" in report_data:

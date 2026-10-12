@@ -6,12 +6,14 @@ assignments, checkouts, and maintenance records.
 """
 
 import enum
+from datetime import date, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
-    Column,
     Date,
     DateTime,
     Enum,
@@ -26,13 +28,17 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
 from app.models.nfc_tag import NfcCredentialType
 from app.utils.label_renderer import printable_label_value
+
+if TYPE_CHECKING:
+    from app.models.location import Location
+    from app.models.user import User
 
 
 def _enum_values(enum_cls):
@@ -271,57 +277,65 @@ class InventoryVendor(Base):
 
     __tablename__ = "inventory_vendors"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Identity
-    name = Column(String(255), nullable=False)
-    account_number = Column(String(100))  # Our account number with this vendor
-    website = Column(String(255))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_number: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Our account number with this vendor
+    website: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Company-level contact details
-    phone = Column(String(50))
-    email = Column(String(255))
-    fax = Column(String(50))
+    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    fax: Mapped[Optional[str]] = mapped_column(String(50))
 
     # Address
-    address_line1 = Column(String(255))
-    address_line2 = Column(String(255))
-    city = Column(String(100))
-    state = Column(String(100))
-    postal_code = Column(String(20))
-    country = Column(String(100))
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255))
+    address_line2: Mapped[Optional[str]] = mapped_column(String(255))
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    state: Mapped[Optional[str]] = mapped_column(String(100))
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20))
+    country: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Ordering details
-    payment_terms = Column(String(100))  # e.g. "Net 30", "Credit card on order"
-    notes = Column(Text)
+    payment_terms: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # e.g. "Net 30", "Credit card on order"
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Preferred vendors sort first in pickers — departments usually have one or
     # two shops they buy from and a long tail of one-off suppliers.
-    is_preferred = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_preferred: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Deactivated rather than deleted: items and reorder requests keep pointing
     # at a vendor the department no longer buys from, so its purchase history
     # stays readable.
-    is_active = Column(
+    is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1", index=True
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
-    contacts = relationship(
+    contacts: Mapped[list["InventoryVendorContact"]] = relationship(
         "InventoryVendorContact",
         back_populates="vendor",
         cascade="all, delete-orphan",
@@ -353,35 +367,43 @@ class InventoryVendorContact(Base):
 
     __tablename__ = "inventory_vendor_contacts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    vendor_id = Column(
+    vendor_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_vendors.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    name = Column(String(255), nullable=False)
-    title = Column(String(150))  # e.g. "Account Manager", "Service Coordinator"
-    email = Column(String(255))
-    phone = Column(String(50))
-    phone_extension = Column(String(20))
-    notes = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(
+        String(150)
+    )  # e.g. "Account Manager", "Service Coordinator"
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    phone_extension: Mapped[Optional[str]] = mapped_column(String(20))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # The contact shown on the vendor card and pre-filled on a reorder.
-    is_primary = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    vendor = relationship("InventoryVendor", back_populates="contacts")
+    vendor: Mapped["InventoryVendor"] = relationship(
+        "InventoryVendor", back_populates="contacts"
+    )
 
     __table_args__ = (
         Index(
@@ -404,62 +426,78 @@ class InventoryCategory(Base):
 
     __tablename__ = "inventory_categories"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Category Information
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    item_type = Column(Enum(ItemType, values_callable=_enum_values), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    item_type: Mapped[ItemType] = mapped_column(
+        Enum(ItemType, values_callable=_enum_values), nullable=False
+    )
 
     # Organization
-    parent_category_id = Column(
+    parent_category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Settings
-    requires_assignment = Column(Boolean, default=False)  # Must be assigned to member
-    requires_serial_number = Column(Boolean, default=False)
-    requires_maintenance = Column(Boolean, default=False)
-    low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
+    requires_assignment: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )  # Must be assigned to member
+    requires_serial_number: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )
+    requires_maintenance: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    low_stock_threshold: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # Alert when quantity falls below this
     # Self-service kiosk (NFC phase 4b): members may check items in this
     # category out themselves. Off unless a quartermaster turns it on.
-    allow_self_checkout = Column(
+    allow_self_checkout: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
     # Days a kiosk loan runs before it is due back (and so can go overdue).
     # Null: kiosk loans from this category have no due date.
-    self_checkout_loan_days = Column(Integer, nullable=True)
-    nfpa_tracking_enabled = Column(
+    self_checkout_loan_days: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    nfpa_tracking_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )  # Enable NFPA 1851/1852 lifecycle tracking for this category
 
     # Extra data
-    extra_data = Column(JSON)  # Additional category-specific data
+    extra_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Additional category-specific data
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    items = relationship(
+    items: Mapped[list["InventoryItem"]] = relationship(
         "InventoryItem",
         back_populates="category",
         foreign_keys="InventoryItem.category_id",
     )
-    parent_category = relationship(
+    parent_category: Mapped[Optional["InventoryCategory"]] = relationship(
         "InventoryCategory", remote_side=[id], foreign_keys=[parent_category_id]
     )
 
@@ -479,13 +517,13 @@ class InventoryItem(Base):
 
     __tablename__ = "inventory_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
@@ -493,46 +531,48 @@ class InventoryItem(Base):
     )
 
     # Basic Information
-    name = Column(String(255), nullable=False, index=True)
-    description = Column(Text)
-    manufacturer = Column(String(255))
-    model_number = Column(String(255))
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    manufacturer: Mapped[Optional[str]] = mapped_column(String(255))
+    model_number: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Identification
-    serial_number = Column(String(255), index=True)
-    asset_tag = Column(String(255), index=True)
-    barcode = Column(String(255), index=True)
+    serial_number: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    asset_tag: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    barcode: Mapped[Optional[str]] = mapped_column(String(255), index=True)
 
     # Purchase Information
-    purchase_date = Column(Date)
-    purchase_price = Column(Numeric(10, 2))
-    purchase_order = Column(String(255))
+    purchase_date: Mapped[Optional[date]] = mapped_column(Date)
+    purchase_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    purchase_order: Mapped[Optional[str]] = mapped_column(String(255))
     # Legacy free-text vendor name. Kept because CSV imports still carry it and
     # historical rows were never linked; `vendor_id` is the canonical link and
     # wins wherever both are set.
-    vendor = Column(String(255))
-    vendor_id = Column(
+    vendor: Mapped[Optional[str]] = mapped_column(String(255))
+    vendor_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_vendors.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    warranty_expiration = Column(Date)
+    warranty_expiration: Mapped[Optional[date]] = mapped_column(Date)
 
     # Depreciation
-    expected_lifetime_years = Column(Integer)
-    current_value = Column(Numeric(10, 2))
-    replacement_cost = Column(
+    expected_lifetime_years: Mapped[Optional[int]] = mapped_column(Integer)
+    current_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    replacement_cost: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2)
     )  # Cost to charge member for lost/damaged item
 
     # Physical Details
-    size = Column(String(50))  # Small, Medium, Large, or specific measurements
-    standard_size = Column(
+    size: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Small, Medium, Large, or specific measurements
+    standard_size: Mapped[Optional[StandardSize]] = mapped_column(
         Enum(StandardSize, values_callable=_enum_values),
         nullable=True,
     )  # Controlled vocabulary for sizes when applicable
-    color = Column(String(50))
+    color: Mapped[Optional[str]] = mapped_column(String(50))
     # The ten GarmentStyle values are four orthogonal descriptors (sleeve, fit,
     # neckline, closure), so one garment carries several of them: a men's
     # long-sleeve polo is one item, not three. ``style_attributes`` holds the
@@ -543,53 +583,55 @@ class InventoryItem(Base):
     # ``style`` is kept in step with the list rather than deprecated: filters,
     # badges and the requestable catalog all read it, and a single value is
     # still the right answer to "what kind of shirt is this".
-    style = Column(
+    style: Mapped[Optional[GarmentStyle]] = mapped_column(
         Enum(GarmentStyle, values_callable=_enum_values),
         nullable=True,
     )  # Primary garment style, derived from style_attributes
     # Plain JSON is safe here only because the list is always REPLACED
     # wholesale by the normalizer. Code that ever edits it element-wise needs
     # flag_modified(), or SQLAlchemy skips the UPDATE (CLAUDE.md pitfall #12).
-    style_attributes = Column(JSON, nullable=True)
-    weight = Column(Float)  # Weight in pounds or kg
+    style_attributes: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    weight: Mapped[Optional[float]] = mapped_column(Float)  # Weight in pounds or kg
 
     # Location
-    location_id = Column(
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )  # Room reference
-    storage_location = Column(
+    storage_location: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # Free-text storage area (legacy, e.g., Shelf B-3)
-    storage_area_id = Column(
+    storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )  # Structured storage area
-    station = Column(String(100))  # Which station it's assigned to
+    station: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Which station it's assigned to
 
     # Condition & Status
-    condition = Column(
+    condition: Mapped[ItemCondition] = mapped_column(
         Enum(ItemCondition, values_callable=_enum_values),
         default=ItemCondition.GOOD,
         nullable=False,
         index=True,
         server_default="good",
     )
-    status = Column(
+    status: Mapped[ItemStatus] = mapped_column(
         Enum(ItemStatus, values_callable=_enum_values),
         default=ItemStatus.AVAILABLE,
         nullable=False,
         index=True,
         server_default="available",
     )
-    status_notes = Column(Text)
+    status_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Tracking mode: "individual" (serial-numbered, 1:1 assignment) or "pool" (quantity-tracked, issue/return)
-    tracking_type = Column(
+    tracking_type: Mapped[TrackingType] = mapped_column(
         Enum(TrackingType, values_callable=_enum_values),
         default=TrackingType.INDIVIDUAL,
         nullable=False,
@@ -598,87 +640,115 @@ class InventoryItem(Base):
 
     # Variant grouping — links pool items that are size/color/style variants
     # of the same logical product (e.g., "Dept T-Shirt" in S/M/L/XL x Blue/Red)
-    variant_group_id = Column(
+    variant_group_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("item_variant_groups.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Quantity (for pool items)
-    quantity = Column(Integer, default=1)  # On-hand / available count
-    quantity_issued = Column(Integer, default=0)  # Currently issued to members
-    unit_of_measure = Column(String(50))  # "each", "pair", "box", etc.
-    reorder_point = Column(Integer, nullable=True)  # Alert when quantity <= this value
+    quantity: Mapped[Optional[int]] = mapped_column(
+        Integer, default=1
+    )  # On-hand / available count
+    quantity_issued: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )  # Currently issued to members
+    unit_of_measure: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # "each", "pair", "box", etc.
+    reorder_point: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Alert when quantity <= this value
 
     # Maintenance
-    last_inspection_date = Column(Date)
-    next_inspection_due = Column(Date)
-    inspection_interval_days = Column(Integer)  # How often to inspect
+    last_inspection_date: Mapped[Optional[date]] = mapped_column(Date)
+    next_inspection_due: Mapped[Optional[date]] = mapped_column(Date)
+    inspection_interval_days: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )  # How often to inspect
 
     # Assignment (current assignment if any)
-    assigned_to_user_id = Column(
+    assigned_to_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    assigned_date = Column(DateTime(timezone=True))
+    assigned_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Rank restriction — only members at or above this rank (sort_order <= value)
     # can request this item.  NULL means no restriction (available to all).
-    min_rank_order = Column(Integer, nullable=True)
+    min_rank_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Position restriction — only members holding one of these corporate
     # positions (by slug) can request this item.  NULL / empty = no restriction.
-    restricted_to_positions = Column(
+    restricted_to_positions: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # e.g. ["president", "safety_officer"]
 
     # Additional Data
-    notes = Column(Text)
-    custom_fields = Column(JSON)  # Organization-specific fields
-    attachments = Column(JSON)  # Links to photos, manuals, etc.
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Organization-specific fields
+    attachments: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Links to photos, manuals, etc.
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # When a quartermaster confirmed a barcode label was printed for this item,
     # and who. Null means the item still needs one. Cleared automatically when
     # the value a label encodes changes (see _clear_stale_label_mark below),
     # because the label on the shelf then no longer scans to this item.
-    label_printed_at = Column(DateTime(timezone=True), nullable=True, index=True)
-    label_printed_by = Column(
+    label_printed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    label_printed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    category = relationship(
+    category: Mapped[Optional["InventoryCategory"]] = relationship(
         "InventoryCategory", back_populates="items", foreign_keys=[category_id]
     )
-    location = relationship("Location", foreign_keys=[location_id])
-    storage_area = relationship("StorageArea", foreign_keys=[storage_area_id])
-    vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
-    assigned_to_user = relationship("User", foreign_keys=[assigned_to_user_id])
-    checkout_records = relationship(
+    location: Mapped[Optional["Location"]] = relationship(
+        "Location", foreign_keys=[location_id]
+    )
+    storage_area: Mapped[Optional["StorageArea"]] = relationship(
+        "StorageArea", foreign_keys=[storage_area_id]
+    )
+    vendor_record: Mapped[Optional["InventoryVendor"]] = relationship(
+        "InventoryVendor", foreign_keys=[vendor_id]
+    )
+    assigned_to_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[assigned_to_user_id]
+    )
+    checkout_records: Mapped[list["CheckOutRecord"]] = relationship(
         "CheckOutRecord", back_populates="item", cascade="all, delete-orphan"
     )
-    maintenance_records = relationship(
+    maintenance_records: Mapped[list["MaintenanceRecord"]] = relationship(
         "MaintenanceRecord", back_populates="item", cascade="all, delete-orphan"
     )
-    assignment_history = relationship(
+    assignment_history: Mapped[list["ItemAssignment"]] = relationship(
         "ItemAssignment", back_populates="item", cascade="all, delete-orphan"
     )
-    issuance_records = relationship(
+    issuance_records: Mapped[list["ItemIssuance"]] = relationship(
         "ItemIssuance", back_populates="item", cascade="all, delete-orphan"
     )
-    variant_group = relationship(
+    variant_group: Mapped[Optional["ItemVariantGroup"]] = relationship(
         "ItemVariantGroup", back_populates="items", foreign_keys=[variant_group_id]
     )
-    lots = relationship(
+    lots: Mapped[list["InventoryLot"]] = relationship(
         "InventoryLot", back_populates="item", cascade="all, delete-orphan"
     )
 
@@ -721,7 +791,8 @@ def _clear_stale_label_mark(_mapper, _connection, target: "InventoryItem") -> No
     if not changed:
         return
 
-    old_values = []
+    old_values: List[Any] = []
+    old_values_known = True
     for field in _LABEL_VALUE_FIELDS:
         history = state.attrs[field].history
         if field not in changed:
@@ -733,13 +804,13 @@ def _clear_stale_label_mark(_mapper, _connection, target: "InventoryItem") -> No
             # blind), so the label's value cannot be proven unchanged. Clearing
             # only returns the item to the worklist; keeping the mark could
             # hide an item whose label no longer scans.
-            old_values = None
+            old_values_known = False
             break
 
     new_value = printable_label_value(
         target.barcode, target.asset_tag, target.serial_number
     )
-    if old_values is not None and printable_label_value(*old_values) == new_value:
+    if old_values_known and printable_label_value(*old_values) == new_value:
         return
     target.label_printed_at = None
     target.label_printed_by = None
@@ -761,38 +832,40 @@ class InventoryLot(Base):
 
     __tablename__ = "inventory_lots"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    inventory_item_id = Column(
+    inventory_item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    lot_number = Column(String(100), nullable=True)
-    expiration_date = Column(Date, nullable=True)
-    quantity = Column(
+    lot_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    quantity: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, server_default="0"
     )  # ready units on hand
-    received_date = Column(Date, nullable=True)
-    storage_location = Column(String(255), nullable=True)
-    unit_cost = Column(Numeric(10, 2), nullable=True)
-    notes = Column(Text, nullable=True)
+    received_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    storage_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    unit_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    item = relationship("InventoryItem", back_populates="lots")
+    item: Mapped["InventoryItem"] = relationship("InventoryItem", back_populates="lots")
 
     __table_args__ = (
         # organization_id and inventory_item_id are already single-column
@@ -817,26 +890,26 @@ class ItemAssignment(Base):
 
     __tablename__ = "item_assignments"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Assignment Details
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    assignment_type = Column(
+    assignment_type: Mapped[AssignmentType] = mapped_column(
         Enum(AssignmentType, values_callable=_enum_values),
         default=AssignmentType.PERMANENT,
         nullable=False,
@@ -844,33 +917,43 @@ class ItemAssignment(Base):
     )
 
     # Dates
-    assigned_date = Column(
+    assigned_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    returned_date = Column(DateTime(timezone=True))
-    expected_return_date = Column(DateTime(timezone=True))
+    returned_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    expected_return_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Assignment Info
-    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    assignment_reason = Column(Text)
-    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    return_notes = Column(Text)
+    assigned_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    returned_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    assignment_reason: Mapped[Optional[str]] = mapped_column(Text)
+    return_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    return_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_active = Column(Boolean, default=True, index=True)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    item = relationship(
+    item: Mapped["InventoryItem"] = relationship(
         "InventoryItem", back_populates="assignment_history", foreign_keys=[item_id]
     )
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("idx_item_assignments_org_item", "organization_id", "item_id"),
@@ -892,21 +975,21 @@ class ItemIssuance(Base):
 
     __tablename__ = "item_issuances"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Which pool item and who received the issuance
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -914,28 +997,38 @@ class ItemIssuance(Base):
     )
 
     # How many units were issued (usually 1)
-    quantity_issued = Column(Integer, nullable=False, default=1, server_default="1")
+    quantity_issued: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Dates
-    issued_at = Column(
+    issued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    returned_at = Column(DateTime(timezone=True))
+    returned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Audit trail
-    issued_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    returned_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    issued_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    returned_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Context
-    issue_reason = Column(Text)
-    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    return_notes = Column(Text)
+    issue_reason: Mapped[Optional[str]] = mapped_column(Text)
+    return_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    return_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_returned = Column(Boolean, default=False, index=True)
+    is_returned: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, index=True
+    )
 
     # Cost snapshot — records replacement_cost at the time of issuance
-    unit_cost_at_issuance = Column(Numeric(10, 2))
+    unit_cost_at_issuance: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
 
     # {lot_id: units still owed back to that lot}, for an issuance drawn from
     # the lot ledger. A lot-stocked item's `quantity` column is consulted by
@@ -943,27 +1036,33 @@ class ItemIssuance(Base):
     # go back to the lots it came out of. NULL for an issuance taken from the
     # column ledger, and for every row written before this column existed —
     # both of which still return to `quantity`, which is right for them.
-    lot_allocations = Column(JSON, nullable=True)
+    lot_allocations: Mapped[Optional[dict[str, int]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Cost recovery for lost/damaged items
-    charge_status = Column(
+    charge_status: Mapped[Optional[ChargeStatus]] = mapped_column(
         Enum(ChargeStatus, values_callable=_enum_values),
         default=ChargeStatus.NONE,
         server_default="none",
     )
-    charge_amount = Column(Numeric(10, 2))  # Amount charged to member
+    charge_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2)
+    )  # Amount charged to member
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    item = relationship(
+    item: Mapped["InventoryItem"] = relationship(
         "InventoryItem", back_populates="issuance_records", foreign_keys=[item_id]
     )
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("idx_item_issuances_org_item", "organization_id", "item_id"),
@@ -982,15 +1081,15 @@ class IssuanceAllowance(Base):
 
     __tablename__ = "issuance_allowances"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What category this allowance applies to
-    category_id = Column(
+    category_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="CASCADE"),
         nullable=False,
@@ -998,22 +1097,34 @@ class IssuanceAllowance(Base):
     )
 
     # Who this applies to — NULL means all members
-    role_id = Column(String(36), ForeignKey("positions.id", ondelete="CASCADE"))
+    role_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("positions.id", ondelete="CASCADE")
+    )
 
     # Limits
-    max_quantity = Column(Integer, nullable=False)  # Max units per period
-    period_type = Column(String(20), default="annual")  # "annual", "career", "one_time"
-    is_active = Column(Boolean, default=True)
+    max_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # Max units per period
+    period_type: Mapped[Optional[str]] = mapped_column(
+        String(20), default="annual"
+    )  # "annual", "career", "one_time"
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    category = relationship("InventoryCategory", foreign_keys=[category_id])
+    category: Mapped["InventoryCategory"] = relationship(
+        "InventoryCategory", foreign_keys=[category_id]
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -1035,21 +1146,21 @@ class CheckOutRecord(Base):
 
     __tablename__ = "checkout_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Checkout Details
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -1057,41 +1168,55 @@ class CheckOutRecord(Base):
     )
 
     # Dates & Times
-    checked_out_at = Column(
+    checked_out_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    expected_return_at = Column(DateTime(timezone=True))
-    checked_in_at = Column(DateTime(timezone=True), index=True)
+    expected_return_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
 
     # Checkout Info
-    checked_out_by = Column(
+    checked_out_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # Who approved/logged the checkout
-    checked_in_by = Column(
+    checked_in_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # Who logged the return
-    checkout_reason = Column(Text)
+    checkout_reason: Mapped[Optional[str]] = mapped_column(Text)
 
     # Return Condition
-    checkout_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    damage_notes = Column(Text)
+    checkout_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    return_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    damage_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_returned = Column(Boolean, default=False, index=True)
-    is_overdue = Column(Boolean, default=False, index=True)
+    is_returned: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, index=True
+    )
+    is_overdue: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, index=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    item = relationship(
+    item: Mapped["InventoryItem"] = relationship(
         "InventoryItem", back_populates="checkout_records", foreign_keys=[item_id]
     )
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("idx_checkout_records_org_item", "organization_id", "item_id"),
@@ -1115,66 +1240,88 @@ class MaintenanceRecord(Base):
 
     __tablename__ = "maintenance_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Maintenance Details
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    maintenance_type = Column(
+    maintenance_type: Mapped[MaintenanceType] = mapped_column(
         Enum(MaintenanceType, values_callable=_enum_values),
         nullable=False,
     )
 
     # Dates
-    scheduled_date = Column(Date, index=True)
-    completed_date = Column(Date, index=True)
-    next_due_date = Column(Date, index=True)
+    scheduled_date: Mapped[Optional[date]] = mapped_column(Date, index=True)
+    completed_date: Mapped[Optional[date]] = mapped_column(Date, index=True)
+    next_due_date: Mapped[Optional[date]] = mapped_column(Date, index=True)
 
     # Details
-    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    vendor_name = Column(String(255))  # If serviced by external vendor
-    cost = Column(Numeric(10, 2))
+    performed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    vendor_name: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # If serviced by external vendor
+    cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
 
     # Condition Assessment
-    condition_before = Column(Enum(ItemCondition, values_callable=_enum_values))
-    condition_after = Column(Enum(ItemCondition, values_callable=_enum_values))
+    condition_before: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    condition_after: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
 
     # Work Performed
-    description = Column(Text)
-    parts_replaced = Column(JSON)  # List of parts that were replaced
-    parts_cost = Column(Numeric(10, 2))
-    labor_hours = Column(Float)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    parts_replaced: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of parts that were replaced
+    parts_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    labor_hours: Mapped[Optional[float]] = mapped_column(Float)
 
     # Results
-    passed = Column(Boolean)  # For inspections
-    notes = Column(Text)
-    issues_found = Column(JSON)  # List of issues discovered
-    attachments = Column(JSON)  # Photos, service reports, etc.
+    passed: Mapped[Optional[bool]] = mapped_column(Boolean)  # For inspections
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    issues_found: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of issues discovered
+    attachments: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # Photos, service reports, etc.
 
     # Status
-    is_completed = Column(Boolean, default=False, index=True)
+    is_completed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, index=True
+    )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    item = relationship(
+    item: Mapped["InventoryItem"] = relationship(
         "InventoryItem", back_populates="maintenance_records", foreign_keys=[item_id]
     )
-    technician = relationship("User", foreign_keys=[performed_by])
+    technician: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[performed_by]
+    )
 
     __table_args__ = (
         Index("idx_maintenance_records_org_item", "organization_id", "item_id"),
@@ -1221,16 +1368,16 @@ class DepartureClearance(Base):
 
     __tablename__ = "departure_clearances"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     # Clearance status
-    status = Column(
+    status: Mapped[ClearanceStatus] = mapped_column(
         Enum(ClearanceStatus, values_callable=_enum_values),
         default=ClearanceStatus.INITIATED,
         nullable=False,
@@ -1238,41 +1385,61 @@ class DepartureClearance(Base):
     )
 
     # Summary counts (denormalized for quick dashboard reads)
-    total_items = Column(Integer, nullable=False, default=0, server_default="0")
-    items_cleared = Column(Integer, nullable=False, default=0, server_default="0")
-    items_outstanding = Column(Integer, nullable=False, default=0, server_default="0")
-    total_value = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
-    value_outstanding = Column(
+    total_items: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    items_cleared: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    items_outstanding: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    total_value: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
+    value_outstanding: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0, server_default="0"
     )
 
     # Dates
-    initiated_at = Column(DateTime(timezone=True), server_default=func.now())
-    completed_at = Column(DateTime(timezone=True))
-    return_deadline = Column(DateTime(timezone=True))
+    initiated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    return_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Who initiated and who signed off
-    initiated_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    completed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    initiated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    completed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Notes / context
-    departure_type = Column(
+    departure_type: Mapped[Optional[DepartureType]] = mapped_column(
         Enum(DepartureType, values_callable=_enum_values),
         nullable=True,
     )
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    initiated_by_user = relationship("User", foreign_keys=[initiated_by])
-    completed_by_user = relationship("User", foreign_keys=[completed_by])
-    line_items = relationship(
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    initiated_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[initiated_by]
+    )
+    completed_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[completed_by]
+    )
+    line_items: Mapped[list["DepartureClearanceItem"]] = relationship(
         "DepartureClearanceItem",
         back_populates="clearance",
         cascade="all, delete-orphan",
@@ -1295,58 +1462,70 @@ class DepartureClearanceItem(Base):
 
     __tablename__ = "departure_clearance_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    clearance_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    clearance_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("departure_clearances.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # What type of record this line refers to
-    source_type = Column(
+    source_type: Mapped[str] = mapped_column(
         String(20), nullable=False
     )  # "assignment", "checkout", "issuance"
-    source_id = Column(
+    source_id: Mapped[str] = mapped_column(
         String(36), nullable=False
     )  # ID of the ItemAssignment / CheckOutRecord / ItemIssuance
 
     # Snapshot of item info at clearance creation (so it remains readable even if item is later retired)
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
     )
-    item_name = Column(String(255), nullable=False)
-    item_serial_number = Column(String(255))
-    item_asset_tag = Column(String(255))
-    item_value = Column(Numeric(10, 2))
-    quantity = Column(Integer, nullable=False, default=1, server_default="1")
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    item_serial_number: Mapped[Optional[str]] = mapped_column(String(255))
+    item_asset_tag: Mapped[Optional[str]] = mapped_column(String(255))
+    item_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Resolution
-    disposition = Column(
+    disposition: Mapped[ClearanceLineDisposition] = mapped_column(
         Enum(ClearanceLineDisposition, values_callable=_enum_values),
         default=ClearanceLineDisposition.PENDING,
         nullable=False,
         server_default="pending",
     )
-    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    resolved_at = Column(DateTime(timezone=True))
-    resolved_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    resolution_notes = Column(Text)
+    return_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    clearance = relationship(
+    clearance: Mapped["DepartureClearance"] = relationship(
         "DepartureClearance", back_populates="line_items", foreign_keys=[clearance_id]
     )
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    resolved_by_user = relationship("User", foreign_keys=[resolved_by])
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    resolved_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[resolved_by]
+    )
 
     __table_args__ = (
         Index("idx_clearance_item_disposition", "clearance_id", "disposition"),
@@ -1377,49 +1556,59 @@ class InventoryNotificationQueue(Base):
 
     __tablename__ = "inventory_notification_queue"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     # What happened
-    action_type = Column(
+    action_type: Mapped[InventoryActionType] = mapped_column(
         Enum(InventoryActionType, values_callable=_enum_values),
         nullable=False,
     )
 
     # Item snapshot (readable even if item is later retired)
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
     )
-    item_name = Column(String(255), nullable=False)
-    item_serial_number = Column(String(255))
-    item_asset_tag = Column(String(255))
-    quantity = Column(Integer, nullable=False, default=1, server_default="1")
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    item_serial_number: Mapped[Optional[str]] = mapped_column(String(255))
+    item_asset_tag: Mapped[Optional[str]] = mapped_column(String(255))
+    quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Who performed the action
-    performed_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    performed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Processing state
-    processed = Column(Boolean, default=False, nullable=False, server_default="0")
-    processed_at = Column(DateTime(timezone=True))
+    processed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # Circuit-breaker fields: track delivery attempts so a persistently
     # failing email destination (e.g. expired SMTP creds) eventually stops
     # retrying instead of looping forever and spamming the logs.
-    attempt_count = Column(Integer, nullable=False, default=0, server_default="0")
-    last_attempt_at = Column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    item = relationship("InventoryItem", foreign_keys=[item_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
 
     __table_args__ = (
         Index("idx_inv_notif_queue_pending", "processed", "created_at"),
@@ -1435,25 +1624,37 @@ class PropertyReturnReminder(Base):
 
     __tablename__ = "property_return_reminders"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    reminder_type = Column(String(20), nullable=False)  # "30_day" or "90_day"
-    items_outstanding = Column(Integer, nullable=False, default=0, server_default="0")
-    total_value_outstanding = Column(
+    reminder_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # "30_day" or "90_day"
+    items_outstanding: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    total_value_outstanding: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0, server_default="0"
     )
-    sent_to_member = Column(Boolean, nullable=False, default=True, server_default="1")
-    sent_to_admin = Column(Boolean, nullable=False, default=True, server_default="1")
-    sent_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    sent_to_member: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    sent_to_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("idx_prop_reminder_org_user", "organization_id", "user_id"),
@@ -1500,88 +1701,104 @@ class EquipmentRequest(Base):
 
     __tablename__ = "equipment_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Requester
-    requester_id = Column(
+    requester_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What they're requesting
-    item_name = Column(String(255), nullable=False)  # Description of what's needed
-    item_id = Column(
+    item_name: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # Description of what's needed
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
     )  # Specific item (optional)
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )  # Category (optional)
-    quantity = Column(Integer, nullable=False, default=1, server_default="1")
-    request_type = Column(
+    quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    request_type: Mapped[RequestType] = mapped_column(
         Enum(RequestType, values_callable=_enum_values),
         nullable=False,
         default=RequestType.CHECKOUT,
     )
     # The member's intent is deliberately separate from the transaction the
     # quartermaster ultimately chooses to satisfy the request.
-    requested_duration = Column(String(20), nullable=False, default="temporary")
+    requested_duration: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="temporary"
+    )
     # The size the member asked for, kept apart from ``item_id`` on purpose: a
     # member may need a size the department does not stock, and the request is
     # how the quartermaster learns that. ``item_id`` is NULL in exactly that
     # case, so this column is the only record of what was actually wanted.
-    requested_size = Column(String(50), nullable=True)
-    priority = Column(
+    requested_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    priority: Mapped[RequestPriority] = mapped_column(
         Enum(RequestPriority, values_callable=_enum_values),
         nullable=False,
         default=RequestPriority.NORMAL,
     )
-    reason = Column(Text)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
 
     # Review
-    status = Column(
+    status: Mapped[RequestStatus] = mapped_column(
         Enum(RequestStatus, values_callable=_enum_values),
         nullable=False,
         default=RequestStatus.PENDING,
         index=True,
     )
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True))
-    review_notes = Column(Text)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Fulfillment — set when an approved request is turned into an actual
     # issuance/checkout/assignment, linking the request back to the record
     # that satisfied it.
-    fulfilled_by = Column(
+    fulfilled_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    fulfilled_at = Column(DateTime(timezone=True))
+    fulfilled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     # One of: "issuance", "checkout", "assignment"
-    fulfillment_type = Column(String(20))
+    fulfillment_type: Mapped[Optional[str]] = mapped_column(String(20))
     # ID of the ItemIssuance / CheckOutRecord / ItemAssignment created
-    fulfillment_reference_id = Column(String(36))
+    fulfillment_reference_id: Mapped[Optional[str]] = mapped_column(String(36))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    requester = relationship("User", foreign_keys=[requester_id])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
-    fulfiller = relationship("User", foreign_keys=[fulfilled_by])
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    category = relationship("InventoryCategory", foreign_keys=[category_id])
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[reviewed_by]
+    )
+    fulfiller: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[fulfilled_by]
+    )
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    category: Mapped[Optional["InventoryCategory"]] = relationship(
+        "InventoryCategory", foreign_keys=[category_id]
+    )
 
     __table_args__ = (
         Index("idx_equip_requests_org_status", "organization_id", "status"),
@@ -1626,72 +1843,82 @@ class StorageArea(Base):
 
     __tablename__ = "storage_areas"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Name and label (e.g., "Rack A", "Shelf 3", "Box 12")
-    name = Column(String(255), nullable=False)
-    label = Column(String(100))  # Short label/number for quick reference
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(
+        String(100)
+    )  # Short label/number for quick reference
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Type of storage location
-    storage_type = Column(
+    storage_type: Mapped[StorageLocationType] = mapped_column(
         Enum(StorageLocationType, values_callable=_enum_values),
         nullable=False,
     )
 
     # Hierarchy: parent storage area (e.g., shelf's parent = rack)
-    parent_id = Column(String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"))
+    parent_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("storage_areas.id", ondelete="CASCADE")
+    )
 
     # Room/location this storage area belongs to (top-level only; children inherit)
-    location_id = Column(
+    location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Optional: barcode or QR code for scanning
-    barcode = Column(String(255))
+    barcode: Mapped[Optional[str]] = mapped_column(String(255))
 
     # How often this area should be audited by NFC tap (NFC phase 4). Null:
     # not on a schedule. Due dates are computed from the latest saved audit
     # in inventory_nfc_audits, not stored, so they cannot drift from it.
-    audit_frequency = Column(
+    audit_frequency: Mapped[Optional[InventoryAuditFrequency]] = mapped_column(
         Enum(InventoryAuditFrequency, values_callable=_enum_values),
         nullable=True,
     )
 
     # Ordering within parent
-    sort_order = Column(Integer, default=0)
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Status
-    is_active = Column(Boolean, default=True, index=True)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    parent = relationship(
+    parent: Mapped[Optional["StorageArea"]] = relationship(
         "StorageArea",
         remote_side=[id],
         foreign_keys=[parent_id],
         back_populates="children",
     )
-    children = relationship(
+    children: Mapped[list["StorageArea"]] = relationship(
         "StorageArea",
         foreign_keys=[parent_id],
         cascade="all, delete-orphan",
         back_populates="parent",
     )
-    location = relationship("Location", foreign_keys=[location_id])
+    location: Mapped[Optional["Location"]] = relationship(
+        "Location", foreign_keys=[location_id]
+    )
 
     __table_args__ = (
         Index("idx_storage_areas_org", "organization_id"),
@@ -1721,32 +1948,32 @@ class WriteOffRequest(Base):
 
     __tablename__ = "inventory_write_offs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # The item being written off
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
     )
-    item_name = Column(String(255), nullable=False)
-    item_serial_number = Column(String(255))
-    item_asset_tag = Column(String(255))
-    item_value = Column(Numeric(10, 2))
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    item_serial_number: Mapped[Optional[str]] = mapped_column(String(255))
+    item_asset_tag: Mapped[Optional[str]] = mapped_column(String(255))
+    item_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
 
     # Reason / justification
-    reason = Column(
+    reason: Mapped[WriteOffReason] = mapped_column(
         Enum(WriteOffReason, values_callable=_enum_values),
         nullable=False,
         default=WriteOffReason.LOST,
     )
-    description = Column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Approval status
-    status = Column(
+    status: Mapped[WriteOffStatus] = mapped_column(
         Enum(WriteOffStatus, values_callable=_enum_values),
         nullable=False,
         default=WriteOffStatus.PENDING,
@@ -1755,34 +1982,42 @@ class WriteOffRequest(Base):
     )
 
     # Who requested and who reviewed
-    requested_by = Column(
+    requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True))
-    review_notes = Column(Text)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Optional link to departure clearance
-    clearance_id = Column(
+    clearance_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("departure_clearances.id", ondelete="SET NULL"),
         nullable=True,
     )
-    clearance_item_id = Column(String(36))
+    clearance_item_id: Mapped[Optional[str]] = mapped_column(String(36))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    requester = relationship("User", foreign_keys=[requested_by])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
-    clearance = relationship("DepartureClearance", foreign_keys=[clearance_id])
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requested_by])
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[reviewed_by]
+    )
+    clearance: Mapped[Optional["DepartureClearance"]] = relationship(
+        "DepartureClearance", foreign_keys=[clearance_id]
+    )
 
     __table_args__ = (
         Index("idx_write_off_org_status", "organization_id", "status"),
@@ -1806,56 +2041,70 @@ class NFPAItemCompliance(Base):
 
     __tablename__ = "nfpa_item_compliance"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    item_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # NFPA 1851 §10.1.2 — Lifecycle Dates
-    manufacture_date = Column(Date, nullable=True)
-    first_in_service_date = Column(Date, nullable=True)
-    expected_retirement_date = Column(Date, nullable=True)
-    retirement_reason = Column(String(255), nullable=True)
-    is_retired_by_age = Column(Boolean, default=False)
+    manufacture_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    first_in_service_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expected_retirement_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    retirement_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_retired_by_age: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Ensemble tracking — group coat + pants + helmet + gloves + boots
-    ensemble_id = Column(String(36), nullable=True, index=True)
-    ensemble_role = Column(
+    ensemble_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    ensemble_role: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )  # "coat", "pants", "helmet", "gloves", "boots", "hood"
 
     # SCBA-specific (NFPA 1852)
-    cylinder_manufacture_date = Column(Date, nullable=True)
-    cylinder_expiration_date = Column(Date, nullable=True)
-    hydrostatic_test_date = Column(Date, nullable=True)
-    hydrostatic_test_due = Column(Date, nullable=True)
-    flow_test_date = Column(Date, nullable=True)
-    flow_test_due = Column(Date, nullable=True)
+    cylinder_manufacture_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    cylinder_expiration_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    hydrostatic_test_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    hydrostatic_test_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    flow_test_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    flow_test_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Last known contamination level
-    contamination_level = Column(
+    contamination_level: Mapped[Optional[ContaminationLevel]] = mapped_column(
         Enum(ContaminationLevel, values_callable=_enum_values),
         default=ContaminationLevel.NONE,
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    item = relationship("InventoryItem", foreign_keys=[item_id])
+    item: Mapped["InventoryItem"] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
 
     __table_args__ = (
         Index("idx_nfpa_compliance_ensemble", "organization_id", "ensemble_id"),
@@ -1879,60 +2128,68 @@ class NFPAInspectionDetail(Base):
 
     __tablename__ = "nfpa_inspection_details"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    maintenance_record_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    maintenance_record_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("maintenance_records.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # NFPA 1851 inspection level
-    inspection_level = Column(
+    inspection_level: Mapped[NFPAInspectionLevel] = mapped_column(
         Enum(NFPAInspectionLevel, values_callable=_enum_values),
         nullable=False,
     )
 
     # Structured pass/fail assessments (NFPA 1851 Ch. 6-8)
-    thermal_damage = Column(Boolean, nullable=True)  # True = passed
-    moisture_barrier = Column(Boolean, nullable=True)
-    seam_integrity = Column(Boolean, nullable=True)
-    reflective_trim = Column(Boolean, nullable=True)
-    closure_systems = Column(Boolean, nullable=True)  # Zippers, hooks, snaps
-    liner_integrity = Column(Boolean, nullable=True)
+    thermal_damage: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )  # True = passed
+    moisture_barrier: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    seam_integrity: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    reflective_trim: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    closure_systems: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )  # Zippers, hooks, snaps
+    liner_integrity: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Contamination assessment
-    contamination_level = Column(
+    contamination_level: Mapped[Optional[ContaminationLevel]] = mapped_column(
         Enum(ContaminationLevel, values_callable=_enum_values),
         nullable=True,
     )
 
     # SCBA-specific inspection fields
-    facepiece_seal = Column(Boolean, nullable=True)
-    regulator_function = Column(Boolean, nullable=True)
-    cylinder_pressure = Column(Float, nullable=True)  # psi at inspection
-    low_air_alarm = Column(Boolean, nullable=True)
+    facepiece_seal: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    regulator_function: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    cylinder_pressure: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )  # psi at inspection
+    low_air_alarm: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Overall recommendation
-    recommendation = Column(
+    recommendation: Mapped[Optional[NFPARecommendation]] = mapped_column(
         Enum(NFPARecommendation, values_callable=_enum_values),
         nullable=True,
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    maintenance_record = relationship(
+    maintenance_record: Mapped["MaintenanceRecord"] = relationship(
         "MaintenanceRecord", foreign_keys=[maintenance_record_id]
     )
 
@@ -1952,49 +2209,57 @@ class NFPAExposureRecord(Base):
 
     __tablename__ = "nfpa_exposure_records"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    item_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Exposure details
-    exposure_type = Column(
+    exposure_type: Mapped[ExposureType] = mapped_column(
         Enum(ExposureType, values_callable=_enum_values),
         nullable=False,
     )
-    exposure_date = Column(Date, nullable=False)
-    incident_number = Column(String(100), nullable=True)  # CAD / incident reference
-    description = Column(Text, nullable=True)
+    exposure_date: Mapped[date] = mapped_column(Date, nullable=False)
+    incident_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # CAD / incident reference
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Decontamination status
-    decon_required = Column(Boolean, default=False)
-    decon_completed = Column(Boolean, default=False)
-    decon_completed_date = Column(Date, nullable=True)
-    decon_method = Column(String(255), nullable=True)
+    decon_required: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    decon_completed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    decon_completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    decon_method: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Who was using the item during exposure
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    user = relationship("User", foreign_keys=[user_id])
+    item: Mapped["InventoryItem"] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("idx_nfpa_exposure_org_item", "organization_id", "item_id"),
@@ -2031,84 +2296,94 @@ class ReturnRequest(Base):
 
     __tablename__ = "return_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Who is requesting the return
-    requester_id = Column(
+    requester_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What they want to return
-    return_type = Column(
+    return_type: Mapped[ReturnRequestType] = mapped_column(
         Enum(ReturnRequestType, values_callable=_enum_values),
         nullable=False,
     )
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
-    item_name = Column(String(255), nullable=False)  # Snapshot for display
+    item_name: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # Snapshot for display
 
     # Link to specific record being returned
-    assignment_id = Column(
+    assignment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("item_assignments.id", ondelete="SET NULL"),
         nullable=True,
     )
-    issuance_id = Column(
+    issuance_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("item_issuances.id", ondelete="SET NULL"), nullable=True
     )
-    checkout_id = Column(
+    checkout_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("checkout_records.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Member-reported details
-    quantity_returning = Column(Integer, nullable=False, default=1)
-    reported_condition = Column(
+    quantity_returning: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reported_condition: Mapped[ItemCondition] = mapped_column(
         Enum(ItemCondition, values_callable=_enum_values),
         nullable=False,
         default=ItemCondition.GOOD,
     )
-    member_notes = Column(Text)
+    member_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Review
-    status = Column(
+    status: Mapped[ReturnRequestStatus] = mapped_column(
         Enum(ReturnRequestStatus, values_callable=_enum_values),
         nullable=False,
         default=ReturnRequestStatus.REQUESTED,
         index=True,
     )
-    reviewed_by = Column(
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    reviewed_at = Column(DateTime(timezone=True))
-    review_notes = Column(Text)
-    observed_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
-    verified_identifier = Column(String(255))
-    received_quantity = Column(Integer)
-    follow_up_type = Column(String(32))
-    follow_up_id = Column(String(36))
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[Optional[str]] = mapped_column(Text)
+    observed_condition: Mapped[Optional[ItemCondition]] = mapped_column(
+        Enum(ItemCondition, values_callable=_enum_values)
+    )
+    verified_identifier: Mapped[Optional[str]] = mapped_column(String(255))
+    received_quantity: Mapped[Optional[int]] = mapped_column(Integer)
+    follow_up_type: Mapped[Optional[str]] = mapped_column(String(32))
+    follow_up_id: Mapped[Optional[str]] = mapped_column(String(36))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    requester = relationship("User", foreign_keys=[requester_id])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
-    item = relationship("InventoryItem", foreign_keys=[item_id])
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[reviewed_by]
+    )
+    item: Mapped["InventoryItem"] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
 
     __table_args__ = (
         Index("idx_return_requests_org_status", "organization_id", "status"),
@@ -2145,85 +2420,105 @@ class ReorderRequest(Base):
 
     __tablename__ = "reorder_requests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What to reorder
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    item_name = Column(String(255), nullable=False)
-    quantity_requested = Column(Integer, nullable=False, default=1, server_default="1")
-    quantity_received = Column(Integer, nullable=False, default=0, server_default="0")
-    version = Column(Integer, nullable=False, default=1, server_default="1")
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity_requested: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    quantity_received: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Vendor / ordering details. `vendor` / `vendor_contact` are the legacy
     # free-text fields; `vendor_id` links the request to a tracked vendor and
     # wins for display wherever both are set.
-    vendor = Column(String(255))
-    vendor_contact = Column(String(255))
-    vendor_id = Column(
+    vendor: Mapped[Optional[str]] = mapped_column(String(255))
+    vendor_contact: Mapped[Optional[str]] = mapped_column(String(255))
+    vendor_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_vendors.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    estimated_unit_cost = Column(Numeric(10, 2))
-    actual_unit_cost = Column(Numeric(10, 2))
-    purchase_order_number = Column(String(255))
-    expected_delivery_date = Column(Date)
+    estimated_unit_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    actual_unit_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    purchase_order_number: Mapped[Optional[str]] = mapped_column(String(255))
+    expected_delivery_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Status workflow
-    status = Column(
+    status: Mapped[ReorderStatus] = mapped_column(
         Enum(ReorderStatus, values_callable=_enum_values),
         nullable=False,
         default=ReorderStatus.PENDING,
         index=True,
         server_default="pending",
     )
-    urgency = Column(
+    urgency: Mapped[ReorderUrgency] = mapped_column(
         Enum(ReorderUrgency, values_callable=_enum_values),
         nullable=False,
         default=ReorderUrgency.NORMAL,
         server_default="normal",
     )
-    notes = Column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Audit trail
-    requested_by = Column(
+    requested_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    approved_at = Column(DateTime(timezone=True))
-    ordered_at = Column(DateTime(timezone=True))
-    received_at = Column(DateTime(timezone=True))
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    ordered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    category = relationship("InventoryCategory", foreign_keys=[category_id])
-    requester = relationship("User", foreign_keys=[requested_by])
-    approver = relationship("User", foreign_keys=[approved_by])
-    vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
-    receipts = relationship("ReorderReceipt", back_populates="reorder_request")
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    category: Mapped[Optional["InventoryCategory"]] = relationship(
+        "InventoryCategory", foreign_keys=[category_id]
+    )
+    requester: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[requested_by]
+    )
+    approver: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[approved_by]
+    )
+    vendor_record: Mapped[Optional["InventoryVendor"]] = relationship(
+        "InventoryVendor", foreign_keys=[vendor_id]
+    )
+    receipts: Mapped[list["ReorderReceipt"]] = relationship(
+        "ReorderReceipt", back_populates="reorder_request"
+    )
 
     __table_args__ = (
         Index("idx_reorder_org_status", "organization_id", "status"),
@@ -2235,29 +2530,31 @@ class ReorderReceipt(Base):
     """Immutable receipt history; one client receipt key may affect stock once."""
 
     __tablename__ = "reorder_receipts"
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    reorder_request_id = Column(
+    reorder_request_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("reorder_requests.id", ondelete="CASCADE"),
         nullable=False,
     )
-    inventory_lot_id = Column(
+    inventory_lot_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("inventory_lots.id", ondelete="RESTRICT"), nullable=False
     )
-    idempotency_key = Column(String(100), nullable=False)
-    quantity = Column(Integer, nullable=False)
-    unit_cost = Column(Numeric(10, 2), nullable=True)
-    storage_location = Column(String(255), nullable=True)
-    received_by = Column(
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    storage_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    received_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    received_at = Column(
+    received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    reorder_request = relationship("ReorderRequest", back_populates="receipts")
+    reorder_request: Mapped["ReorderRequest"] = relationship(
+        "ReorderRequest", back_populates="receipts"
+    )
     __table_args__ = (
         UniqueConstraint(
             "reorder_request_id", "idempotency_key", name="uq_reorder_receipt_key"
@@ -2285,44 +2582,52 @@ class ItemVariantGroup(Base):
 
     __tablename__ = "item_variant_groups"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Display info
-    name = Column(String(255), nullable=False)  # e.g. "Dept Polo Shirt"
-    description = Column(Text)
-    category_id = Column(
+    name: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # e.g. "Dept Polo Shirt"
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Optional base attributes that apply to all variants
-    base_price = Column(Numeric(10, 2))
-    base_replacement_cost = Column(Numeric(10, 2))
-    unit_of_measure = Column(String(50))
+    base_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    base_replacement_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    unit_of_measure: Mapped[Optional[str]] = mapped_column(String(50))
 
     # Status
-    active = Column(Boolean, default=True, index=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    items = relationship(
+    items: Mapped[list["InventoryItem"]] = relationship(
         "InventoryItem",
         back_populates="variant_group",
         foreign_keys="InventoryItem.variant_group_id",
     )
-    category = relationship("InventoryCategory", foreign_keys=[category_id])
+    category: Mapped[Optional["InventoryCategory"]] = relationship(
+        "InventoryCategory", foreign_keys=[category_id]
+    )
 
     __table_args__ = (
         Index("idx_variant_groups_org_active", "organization_id", "active"),
@@ -2343,28 +2648,28 @@ class InventoryLabelPrint(Base):
 
     __tablename__ = "inventory_label_prints"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
-    printed_by = Column(
+    printed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    printed_at = Column(
+    printed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # The value the label encoded, so a later reprint after a barcode change
     # shows which code each label carried.
-    label_value = Column(String(255), nullable=True)
+    label_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    printer = relationship("User", foreign_keys=[printed_by])
+    printer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[printed_by])
 
     __table_args__ = (
         Index("idx_label_prints_item_printed", "item_id", "printed_at"),
@@ -2389,32 +2694,38 @@ class InventoryItemPin(Base):
 
     __tablename__ = "inventory_item_pins"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    position = Column(Integer, nullable=False, default=0, server_default="0")
+    position: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    user = relationship("User", foreign_keys=[user_id])
+    item: Mapped["InventoryItem"] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         # One pin per member per item. Also what makes the outer join in
@@ -2440,32 +2751,38 @@ class EquipmentKit(Base):
 
     __tablename__ = "equipment_kits"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Who this kit is for (optional role/rank restriction)
-    restricted_to_roles = Column(JSON, nullable=True)  # e.g. ["firefighter"]
-    min_rank_order = Column(Integer, nullable=True)
+    restricted_to_roles: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # e.g. ["firefighter"]
+    min_rank_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Status
-    active = Column(Boolean, default=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    line_items = relationship(
+    line_items: Mapped[list["EquipmentKitItem"]] = relationship(
         "EquipmentKitItem",
         back_populates="kit",
         cascade="all, delete-orphan",
@@ -2482,43 +2799,53 @@ class EquipmentKitItem(Base):
 
     __tablename__ = "equipment_kit_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    kit_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    kit_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("equipment_kits.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # What to include — either a specific item or a category (for pool items)
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    category_id = Column(
+    category_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )
-    item_name = Column(String(255), nullable=False)  # Display name
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)  # Display name
 
     # How many to include
-    quantity = Column(Integer, nullable=False, default=1, server_default="1")
+    quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     # Whether the member picks a size variant (for pool items with variants)
-    size_selectable = Column(Boolean, default=False)
+    size_selectable: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Optional lines may be skipped when the catalog item is unavailable or
     # cannot be issued; required lines still fail the kit operation.
-    optional = Column(Boolean, nullable=False, default=False, server_default="0")
+    optional: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Sort order within the kit
-    sort_order = Column(Integer, default=0)
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Relationships
-    kit = relationship("EquipmentKit", back_populates="line_items")
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    category = relationship("InventoryCategory", foreign_keys=[category_id])
+    kit: Mapped["EquipmentKit"] = relationship(
+        "EquipmentKit", back_populates="line_items"
+    )
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    category: Mapped[Optional["InventoryCategory"]] = relationship(
+        "InventoryCategory", foreign_keys=[category_id]
+    )
 
     __table_args__ = (Index("idx_kit_items_kit", "kit_id"),)
 
@@ -2533,62 +2860,68 @@ class MemberSizePreferences(Base):
 
     __tablename__ = "member_size_preferences"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Shirt / top sizes
-    shirt_size = Column(String(20))
+    shirt_size: Mapped[Optional[str]] = mapped_column(String(20))
     # DEPRECATED, and kept only to preserve the values already stored. It held
     # one value spanning four orthogonal axes, so recording "Women's" silently
     # also meant "no sleeve preference", and nothing ever read it — a switch
     # wired to nothing (CLAUDE.md pitfall #19). `garment_fit` replaces it.
     # Dropping the column is a breaking response-schema change and needs its own
     # deprecation window.
-    shirt_style = Column(String(30))
+    shirt_style: Mapped[Optional[str]] = mapped_column(String(30))
     # The cut a member wears, across every garment — the one style axis that is
     # a property of the person rather than of what the department stocks. Read
     # by the requestable catalog to preselect the right variant.
-    garment_fit = Column(String(20))
+    garment_fit: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Pants / bottom sizes
-    pant_waist = Column(String(10))
-    pant_inseam = Column(String(10))
+    pant_waist: Mapped[Optional[str]] = mapped_column(String(10))
+    pant_inseam: Mapped[Optional[str]] = mapped_column(String(10))
 
     # Outerwear
-    jacket_size = Column(String(20))
+    jacket_size: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Footwear
-    boot_size = Column(String(10))
-    boot_width = Column(String(10))  # regular, wide, extra-wide
+    boot_size: Mapped[Optional[str]] = mapped_column(String(10))
+    boot_width: Mapped[Optional[str]] = mapped_column(
+        String(10)
+    )  # regular, wide, extra-wide
 
     # Gloves
-    glove_size = Column(String(10))
+    glove_size: Mapped[Optional[str]] = mapped_column(String(10))
 
     # Headwear
-    hat_size = Column(String(10))
+    hat_size: Mapped[Optional[str]] = mapped_column(String(10))
 
     # Generic / other
-    custom_sizes = Column(JSON)  # Flexible key-value for org-specific needs
+    custom_sizes: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Flexible key-value for org-specific needs
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (Index("idx_member_sizes_org", "organization_id"),)
 
@@ -2603,23 +2936,25 @@ class InventoryImpactPlan(Base):
 
     __tablename__ = "inventory_impact_plans"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
     # The ImpactPlannerRequest filter set (statuses, ranks, size_field, ...),
     # stored JSON-encoded (UUID values as strings).
-    filters = Column(JSON, nullable=False, default=dict)
+    filters: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -2669,20 +3004,20 @@ class InventoryNfcTag(Base):
 
     __tablename__ = "inventory_nfc_tags"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
-    storage_area_id = Column(
+    storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="CASCADE"),
         nullable=True,
@@ -2693,7 +3028,7 @@ class InventoryNfcTag(Base):
     # (Pitfall #14a, shape b). CASCADE: replacing a template's compartments
     # wholesale (a preset or an import) recreates them with new ids, and the
     # tags on the old ones go with them.
-    check_compartment_id = Column(
+    check_compartment_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
         nullable=True,
@@ -2702,11 +3037,11 @@ class InventoryNfcTag(Base):
 
     # Peppered SHA-256 of the normalized identifier (the chip serial, or the
     # code written onto the tag). See services/nfc_tag_service.hash_tag_uid.
-    uid_hash = Column(String(64), nullable=False)
+    uid_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     # Last four characters, so two tags on one item can be told apart.
-    uid_preview = Column(String(8), nullable=False)
+    uid_preview: Mapped[str] = mapped_column(String(8), nullable=False)
 
-    credential_type = Column(
+    credential_type: Mapped[NfcCredentialType] = mapped_column(
         Enum(NfcCredentialType, values_callable=_enum_values),
         nullable=False,
         default=NfcCredentialType.SERIAL,
@@ -2714,33 +3049,37 @@ class InventoryNfcTag(Base):
     )
 
     # Where on the item the tag is ("Inside left cuff", "Case lid").
-    label = Column(String(100), nullable=True)
+    label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    status = Column(
+    status: Mapped[InventoryNfcTagStatus] = mapped_column(
         Enum(InventoryNfcTagStatus, values_callable=_enum_values),
         nullable=False,
         default=InventoryNfcTagStatus.ACTIVE,
         server_default=InventoryNfcTagStatus.ACTIVE.value,
     )
 
-    linked_by = Column(
+    linked_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    linked_at = Column(
+    linked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    item = relationship("InventoryItem", foreign_keys=[item_id])
-    storage_area = relationship("StorageArea", foreign_keys=[storage_area_id])
+    item: Mapped[Optional["InventoryItem"]] = relationship(
+        "InventoryItem", foreign_keys=[item_id]
+    )
+    storage_area: Mapped[Optional["StorageArea"]] = relationship(
+        "StorageArea", foreign_keys=[storage_area_id]
+    )
 
     __table_args__ = (
         # Per organization: a tag registered in one department must not be
@@ -2789,41 +3128,41 @@ class InventoryNfcScan(Base):
 
     __tablename__ = "inventory_nfc_scans"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    item_id = Column(
+    item_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
-    tag_id = Column(
+    tag_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_nfc_tags.id", ondelete="SET NULL"),
         nullable=True,
     )
-    action = Column(
+    action: Mapped[InventoryNfcScanAction] = mapped_column(
         Enum(InventoryNfcScanAction, values_callable=_enum_values),
         nullable=False,
     )
     # Where the item was put (PUT_AWAY), and where it was before.
-    storage_area_id = Column(
+    storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="SET NULL"),
         nullable=True,
     )
-    from_storage_area_id = Column(
+    from_storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("storage_areas.id", ondelete="SET NULL"),
         nullable=True,
     )
-    scanned_by = Column(
+    scanned_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    scanned_at = Column(
+    scanned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
@@ -2861,40 +3200,52 @@ class InventoryNfcAudit(Base):
 
     __tablename__ = "inventory_nfc_audits"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    storage_area_id = Column(
+    storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
     )
-    storage_area_name = Column(String(255), nullable=False)
+    storage_area_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    expected_count = Column(Integer, nullable=False, default=0, server_default="0")
-    found_count = Column(Integer, nullable=False, default=0, server_default="0")
-    missing_count = Column(Integer, nullable=False, default=0, server_default="0")
-    unexpected_count = Column(Integer, nullable=False, default=0, server_default="0")
+    expected_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    found_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    missing_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    unexpected_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
-    audited_by = Column(
+    audited_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    audited_at = Column(
+    audited_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # Set when the quartermaster confirmed moving the unexpected items.
-    applied_by = Column(
+    applied_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    applied_at = Column(DateTime(timezone=True), nullable=True)
+    applied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Set by an audit finished offline and sent later from the phone's queue.
     # A sync whose response was lost is retried with the same id, and the
     # unique constraint turns that retry into the audit already saved rather
     # than a second one.
-    client_submission_id = Column(String(64), nullable=True)
+    client_submission_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
 
-    items = relationship(
+    items: Mapped[list["InventoryNfcAuditItem"]] = relationship(
         "InventoryNfcAuditItem",
         back_populates="audit",
         cascade="all, delete-orphan",
@@ -2920,8 +3271,8 @@ class InventoryNfcAuditItem(Base):
 
     __tablename__ = "inventory_nfc_audit_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    audit_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    audit_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("inventory_nfc_audits.id", ondelete="CASCADE"),
         nullable=False,
@@ -2929,33 +3280,39 @@ class InventoryNfcAuditItem(Base):
     )
     # Denormalized from the audit so every read is org-scoped without a join
     # (CLAUDE.md pitfall #14).
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    item_id = Column(
+    item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("inventory_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    item_name = Column(String(255), nullable=False)
-    result = Column(
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    result: Mapped[InventoryNfcAuditResult] = mapped_column(
         Enum(InventoryNfcAuditResult, values_callable=_enum_values),
         nullable=False,
     )
     # For an unexpected item: where the system had it when the audit ran.
-    recorded_storage_area_id = Column(
+    recorded_storage_area_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True
     )
-    recorded_storage_area_name = Column(String(255), nullable=True)
+    recorded_storage_area_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
     # True once the confirm step moved this unexpected item onto the shelf.
-    moved = Column(Boolean, nullable=False, default=False, server_default="0")
-    created_at = Column(
+    moved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    audit = relationship("InventoryNfcAudit", back_populates="items")
+    audit: Mapped["InventoryNfcAudit"] = relationship(
+        "InventoryNfcAudit", back_populates="items"
+    )
 
     __table_args__ = (
         # An item's audit history: every shelf it was found on, or missing from.
@@ -2974,15 +3331,21 @@ class InventoryNfcAuditDigest(Base):
 
     __tablename__ = "inventory_nfc_audit_digests"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sent_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    overdue_count = Column(Integer, nullable=False, default=0, server_default="0")
-    recipient_count = Column(Integer, nullable=False, default=0, server_default="0")
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    overdue_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    recipient_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     __table_args__ = (
         Index("idx_inventory_nfc_audit_digest_org_sent", "organization_id", "sent_at"),

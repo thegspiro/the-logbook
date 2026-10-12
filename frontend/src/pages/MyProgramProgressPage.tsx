@@ -99,6 +99,11 @@ const RequirementRow: React.FC<{
               </span>
             )}
           </div>
+          {record.reads_compliance && record.status !== 'waived' && (
+            <p className="text-theme-text-muted mt-0.5 text-xs">
+              Counted from your training record, the same figure as under Training Requirements.
+            </p>
+          )}
           {showBar && (
             <div className="bg-theme-surface mt-1.5 h-1 w-full rounded-full" aria-hidden="true">
               <div
@@ -116,7 +121,7 @@ const RequirementRow: React.FC<{
                 const stepDone = doneIds.includes(item.id);
                 return (
                   <li key={item.id} className="flex items-start gap-1.5 text-xs">
-                    {item.member_can_complete && !stepDone ? (
+                    {item.member_can_complete && !stepDone && !record.reads_compliance ? (
                       <input
                         type="checkbox"
                         checked={claimedIds.includes(item.id)}

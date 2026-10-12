@@ -81,7 +81,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
     <div>
       <div className={`overflow-x-auto overflow-y-auto`} style={{ maxHeight }}>
         <table className="w-full text-left text-sm">
-          <thead className="text-theme-text-muted bg-theme-surface-secondary sticky top-0 z-10 text-xs uppercase">
+          <thead className="text-theme-text-muted surface-secondary-opaque sticky top-0 z-10 text-xs uppercase">
             <tr>
               {columns.map((col) => (
                 <th

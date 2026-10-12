@@ -66,6 +66,7 @@ vi.mock('react-hot-toast', () => ({
 import toast from 'react-hot-toast';
 import ItemDetailPage from './ItemDetailPage';
 import { formatDate } from '../../../utils/dateFormatting';
+import { withoutKeys } from '../../../test/withoutKeys';
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -174,7 +175,7 @@ describe('ItemDetailPage', () => {
     };
 
     it('says the old label no longer scans when the backend cleared the mark', async () => {
-      await editAndSave({ ...labelled, barcode: 'INV-2', label_printed_at: undefined });
+      await editAndSave(withoutKeys({ ...labelled, barcode: 'INV-2' }, 'label_printed_at'));
 
       expect(await screen.findByText(/no longer scans to it/)).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Print label' })).toHaveAttribute(

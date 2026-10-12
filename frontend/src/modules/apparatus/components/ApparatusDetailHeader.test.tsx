@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { Apparatus } from '../types';
+import type { Apparatus, ApparatusStatus } from '../types';
 
 let grantedPermissions = new Set<string>();
 
@@ -142,5 +142,89 @@ describe('ApparatusDetailHeader archive action', () => {
     await waitFor(() =>
       expect(mockArchiveApparatus).toHaveBeenCalledWith('apparatus-1', { disposalMethod: 'scrapped' })
     );
+  });
+});
+
+// A failed equipment check puts "Deficiency" on the rig, but the failure itself
+// is only on Check reports, and logging the repair does not clear the badge.
+// The page said none of that, so a chief saw the badge and a dead end.
+describe('ApparatusDetailHeader deficiency and status reason', () => {
+  beforeEach(() => {
+    grantedPermissions = new Set();
+  });
+
+  const deficient = {
+    ...apparatus,
+    hasDeficiency: true,
+    deficiencySince: '2026-08-14T12:00:00Z',
+  } as Apparatus;
+
+  it('explains what the Deficiency badge means and how it clears', () => {
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={deficient} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    expect(screen.getByText(/An equipment check on this apparatus found a problem/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/clears when the next check passes; logging a repair does not clear it/)
+    ).toBeInTheDocument();
+  });
+
+  it('links someone who can view checks to the failure, from the day it was found', () => {
+    grantedPermissions.add('inventory.check_view');
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={deficient} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    const link = screen.getByRole('link', { name: /See what was found/ });
+    expect(link.getAttribute('href')).toMatch(
+      /^\/inventory\/admin\/checklists\/reports\?tab=failures&from=2026-08-1[34]$/
+    );
+  });
+
+  it('offers no link to someone the reports page would refuse', () => {
+    grantedPermissions.add('apparatus.view');
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={deficient} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    expect(screen.queryByRole('link', { name: /See what was found/ })).not.toBeInTheDocument();
+  });
+
+  it('says nothing about deficiencies on a rig that has none', () => {
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={apparatus} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    expect(screen.queryByText(/found a problem/)).not.toBeInTheDocument();
+  });
+
+  const outOfService: ApparatusStatus = {
+    id: 'st-oos',
+    organizationId: null,
+    name: 'Out of Service',
+    code: 'out_of_service',
+    description: null,
+    isSystem: true,
+    defaultStatus: 'out_of_service',
+    isAvailable: false,
+    isOperational: false,
+    requiresReason: true,
+    isArchivedStatus: false,
+    color: null,
+    icon: null,
+    sortOrder: 2,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  it('shows why the rig has its status', () => {
+    renderWithRouter(
+      <ApparatusDetailHeader
+        currentApparatus={{ ...apparatus, statusReason: 'Pump seal leaking' }}
+        status={outOfService}
+        id={apparatus.id}
+        isArchived={false}
+      />
+    );
+    expect(screen.getByText('Out of Service:')).toBeInTheDocument();
+    expect(screen.getByText(/Pump seal leaking/)).toBeInTheDocument();
   });
 });

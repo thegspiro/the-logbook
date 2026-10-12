@@ -10,7 +10,7 @@ The Prospective Members module provides a complete applicant tracking system for
 
 - **Configurable Pipeline**: Drag-and-drop stage builder with twelve stage types (form submission, document upload, election/vote, manual approval, meeting, status-page toggle, automated email, reference check, checklist, interview requirement, multi-signer approval, and medical screening)
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
-- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides and two-phase warnings. The auto-purge setting is stored but **not wired** (see [Auto-Purge](#auto-purge)); inactive applications are purged by hand
+- **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides and two-phase warnings, and an optional daily auto-purge of applications inactive past a grace period (see [Auto-Purge](#auto-purge))
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
 - **Withdraw / Archive**: A coordinator, or since 2026-09-24 the applicant from their status page, can withdraw; withdrawn applications are kept and reactivatable
 - **Election Package Integration**: The server creates an election package whenever an applicant enters an election_vote stage, by any route (2026-09-30), bundling applicant data for the secretary to build a ballot; no package, no advance past the vote
@@ -216,7 +216,7 @@ Normal ──(warning threshold)──> Warning ──(timeout reached)──> I
 1. **Normal**: Applicant has recent activity within the timeout window
 2. **Warning**: Applicant's idle time has passed the warning threshold percentage (default 80%)
 3. **Inactive**: Applicant's idle time has exceeded the timeout — automatically deactivated
-4. **Purged**: _Designed, not wired._ The intent is that inactive applicants are permanently deleted after the purge period, but no scheduled task reads `auto_purge_enabled` — see [Auto-Purge](#auto-purge)
+4. **Purged**: With Auto-Purge on, an application inactive for at least the purge period is permanently deleted by the daily `membership_auto_purge` task — see [Auto-Purge](#auto-purge)
 
 ### Configuration
 
@@ -230,7 +230,7 @@ Pipeline-level inactivity settings are configured on the Pipeline Settings page:
 | Notify Coordinator        | true               | Send notification to coordinator when applicant approaches timeout |
 | Notify Applicant          | false              | Send notification to applicant when approaching timeout            |
 | Auto-Purge Enabled        | false              | Automatically purge inactive applicants after a period             |
-| Purge Days After Inactive | 365                | Days after deactivation before auto-purge                          |
+| Purge Days After Inactive | 365                | Days after deactivation before auto-purge (clamped to 30–1095)     |
 
 ### Per-Stage Overrides
 
@@ -274,12 +274,39 @@ Helper function: `getEffectiveTimeoutDays(config)` returns the computed timeout 
 
 ### Auto-Purge
 
-> **Not wired** _(recorded 2026-09-30)_. The settings page stores
-> `auto_purge_enabled` and `purge_days_after_inactive`, but no scheduled task
-> reads them, so nothing is purged automatically (CLAUDE.md pitfall #19).
-> Wiring it needs `deactivated_at` (stored since `77d4aa7798dd`) and a decision
-> on notifying coordinators first. See `docs/KNOWN_LIMITATIONS.md` → "Prospective
-> Members — Purge Is Manual; Auto-Purge Is Not Wired".
+**Auto-purge** _(wired 2026-10-09)_ — the daily `membership_auto_purge` task
+calls `MembershipPipelineService.auto_purge_inactive_prospects` per
+organization. For each pipeline whose `inactivity_config` has
+`auto_purge_enabled: true` (exactly `true`; anything else is off) and a numeric
+`purge_days_after_inactive` (clamped to 30–1095; missing or non-numeric skips
+the pipeline), it deletes the `inactive` applications whose `inactive_since` is
+at least that many days before now (UTC). The delete is the manual purge's own
+`_delete_inactive_prospects` — same status filter, row lock and file removal —
+run in a savepoint per pipeline, so a pipeline that fails is rolled back and
+reported without stopping the others. Each pipeline that purged anything writes
+a `membership_pipeline.prospects_purged` audit event with `trigger:
+"auto_purge"`, the threshold, the cut-off and the purged ids, in the same
+transaction as the delete.
+
+Before purging, the same run calls `warn_upcoming_auto_purges`: it emails the
+coordinators (the withdrawal notice's recipients, through `recipients_for`
+with `EmailKind.MEMBERSHIP_ADMIN`) one list of the applications whose purge
+falls within `AUTO_PURGE_WARNING_DAYS` (7), using the same clamped period and
+`inactive_since` clock, and logs `auto_purge_warning_sent` per application only
+when the send succeeded. An entry dated on or after the current
+`inactive_since` suppresses a repeat, so each inactive spell is warned once. A
+failed warning is reported through the task's error log after the purge has
+run; it never holds the purge up (owner decision 2026-10-08).
+
+`inactive_since` is the purge clock, distinct from the historical
+`deactivated_at` the drawer shows: it is set on every entry into `inactive`
+(`_stamp_lifecycle` for single, bulk and generic-update status changes, and
+inline in the inactivity sweep) and cleared on every exit, including transfer.
+Migration `feecd81eef2d` set it to the migration's run time for applications
+already inactive, so nothing already inactive is purged until a full grace
+period after the upgrade. A NULL `inactive_since` is never purged. See
+`docs/KNOWN_LIMITATIONS.md` → "Prospective Members — Purge Scope and
+Auto-Purge".
 
 **Manual purge** — **Purge Selected** on the Inactive Applications tab →
 `POST /prospective-members/pipelines/{pipeline_id}/purge-inactive`
@@ -293,8 +320,6 @@ finish); writes an audit event with the count and the requested ids, no
 applicant details; and returns the number actually deleted. The store rethrows
 failures and the page toasts the server's count, saying when fewer were deleted
 than selected.
-
-The design intent for auto-purge, once wired:
 
 **Security rationale:**
 
@@ -438,6 +463,8 @@ When an applicant reaches the final pipeline stage and is approved, the coordina
 **Identifier collisions** _(2026-09-29, #2845 / #2823)_. The username, email and department-email checks count deactivated rows, as the unique indexes do; generated usernames and department emails step past a deactivated one. A typed `membership_id` that belonged to a former member is refused unless it goes back to that member.
 
 On success the system creates the member record, applies class/status/role, sets the applicant to `converted`, links `converted_to_member_id`, and records the conversion.
+
+**Automatic Transfer to Membership** _(2026-10-05)_. `MembershipPipeline.auto_transfer_on_approval` decides whether completing the final stage converts the applicant without a coordinator clicking Convert. The backend always accepted and returned it, but the frontend `Pipeline` type dropped it and nothing sent it, so a department could neither turn it on nor see which way it was set (CLAUDE.md pitfall #19, mirrored). It is now carried on `Pipeline`, `PipelineCreate` and `PipelineUpdate`, mapped from the response, and sent only when given, so an update that does not mention it leaves it alone. **Pipeline Settings** has an **Automatic Transfer to Membership** card with the checkbox "Make applicants members automatically when they complete the final stage". When on: a recorded vote or sign-off on the final stage creates the member (account created and, where email is set up, a welcome email sent, as if Convert had been used); **skipping the final stage never converts anyone**; every Required stage must be complete first. When off, applicants who finish wait for a coordinator.
 
 ---
 
@@ -799,6 +826,14 @@ again unnoticed.
 | An id from another organization                     | Same — "not found", never an existence oracle                                                                                                                                                                                                            |
 | A `reason` on `bulk-status`                         | Recorded in the **activity log**. It deliberately does **not** touch the `notes` column — the old client-side path sent it through the update endpoint as `notes`, so a bulk rejection silently overwrote the coordinator notes on every selected record |
 | More than 200 ids                                   | `422` from Pydantic's `max_length`                                                                                                                                                                                                                       |
+
+### Checklist Stages Advance With Their Ticks _(2026-10-05)_
+
+A checklist stage with items configured could not be passed: `_validate_step_completion` refuses until `completed_items` covers the items, and nothing in the app ever sent that key (the drawer only read it back, "No checklist data recorded yet"). `POST /prospects/{id}/advance` now accepts an optional `completed_items` list (at most 200 items, each at most 255 characters), which `advance_prospect` passes to `complete_step` as the `action_result` the validator grades. The applicant drawer renders the stage's configured items as checkboxes, seeded from any ticks already stored for the stage, shows "N of M items done", and holds the ticks per applicant and stage so a refetch keeps them; Advance sends them for a checklist stage only. **Dragging a card on the board sends no ticks**, so a checklist stage with items is advanced from the drawer. Skip is unchanged.
+
+### Stale In-Progress Stage Rows Are Reset _(2026-10-05)_
+
+Before `regress_prospect` was fixed, moving an applicant back a stage left the stage they vacated marked `in_progress`. Those rows survive in long-lived databases, and the drawer draws a chip for every non-pending row, so an applicant could show stages they had not reached. Migration `99b16109d44c` resets a row to `pending` (no completion stamp, as `regress_prospect` writes today) only when it is `in_progress`, its step is in the same pipeline as the applicant's current step, and that step sorts after the current one. The current stage, every stage behind it, other pipelines and prospects with no current stage are untouched. It is idempotent, skips a database without the tables, logs how many rows it reset, and its downgrade does nothing.
 
 ### Advance Reports What Actually Happened
 

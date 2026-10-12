@@ -6,12 +6,13 @@ must be met for a member to be considered "compliant", including
 thresholds, role-based profiles, and report scheduling.
 """
 
+from datetime import datetime
 from enum import Enum as PyEnum
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -21,10 +22,13 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.user import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import Organization
 
 
 class ComplianceThresholdType(str, PyEnum):
@@ -61,8 +65,8 @@ class ComplianceConfig(Base):
 
     __tablename__ = "compliance_configs"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -70,20 +74,20 @@ class ComplianceConfig(Base):
     )
 
     # -- Threshold settings --
-    threshold_type = Column(
+    threshold_type: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
         default=ComplianceThresholdType.PERCENTAGE.value,
         server_default="percentage",
     )
-    compliant_threshold = Column(
+    compliant_threshold: Mapped[float] = mapped_column(
         Float,
         nullable=False,
         default=100.0,
         comment="Min % of requirements met to be compliant",
         server_default="100.0",
     )
-    at_risk_threshold = Column(
+    at_risk_threshold: Mapped[float] = mapped_column(
         Float,
         nullable=False,
         default=75.0,
@@ -92,7 +96,7 @@ class ComplianceConfig(Base):
     )
 
     # -- Grace period --
-    grace_period_days = Column(
+    grace_period_days: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=0,
@@ -101,7 +105,7 @@ class ComplianceConfig(Base):
     )
 
     # -- Evaluation period boundary --
-    include_current_month = Column(
+    include_current_month: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=True,
@@ -114,18 +118,18 @@ class ComplianceConfig(Base):
     )
 
     # -- Report scheduling --
-    auto_report_frequency = Column(
+    auto_report_frequency: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=ReportFrequency.NONE.value,
         server_default="none",
     )
-    report_email_recipients = Column(
+    report_email_recipients: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="List of email addresses to receive reports",
     )
-    report_day_of_month = Column(
+    report_day_of_month: Mapped[Optional[int]] = mapped_column(
         Integer,
         nullable=True,
         default=1,
@@ -133,10 +137,10 @@ class ComplianceConfig(Base):
     )
 
     # -- Notification settings --
-    notify_non_compliant_members = Column(
+    notify_non_compliant_members: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    notify_days_before_deadline = Column(
+    notify_days_before_deadline: Mapped[Optional[list[int]]] = mapped_column(
         JSON,
         nullable=True,
         default=lambda: [30, 14, 7],
@@ -144,26 +148,28 @@ class ComplianceConfig(Base):
     )
 
     # -- Metadata --
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Relationships
-    organization = relationship("Organization", backref="compliance_config")
-    profiles = relationship(
+    organization: Mapped["Organization"] = relationship(
+        "Organization", backref="compliance_config"
+    )
+    profiles: Mapped[list["ComplianceProfile"]] = relationship(
         "ComplianceProfile",
         back_populates="config",
         cascade="all, delete-orphan",
@@ -179,46 +185,50 @@ class ComplianceProfile(Base):
 
     __tablename__ = "compliance_profiles"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    config_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    config_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("compliance_configs.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    name = Column(String(100), nullable=False)
-    description = Column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # -- Applicability --
-    membership_types = Column(
+    membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Membership types this profile applies to",
     )
-    role_ids = Column(
+    role_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Role IDs this profile applies to",
     )
 
     # -- Override thresholds (null = use org default) --
-    compliant_threshold_override = Column(Float, nullable=True)
-    at_risk_threshold_override = Column(Float, nullable=True)
+    compliant_threshold_override: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    at_risk_threshold_override: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
 
     # -- Required training requirements --
-    required_requirement_ids = Column(
+    required_requirement_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Training requirement IDs that MUST be met",
     )
-    optional_requirement_ids = Column(
+    optional_requirement_ids: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Training requirement IDs that are tracked but optional",
     )
 
     # -- Admin hours requirements --
-    admin_hours_requirements = Column(
+    admin_hours_requirements: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSON,
         nullable=True,
         comment=(
@@ -227,8 +237,10 @@ class ComplianceProfile(Base):
         ),
     )
 
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    priority = Column(
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    priority: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=0,
@@ -236,19 +248,21 @@ class ComplianceProfile(Base):
         server_default="0",
     )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
 
-    config = relationship("ComplianceConfig", back_populates="profiles")
+    config: Mapped["ComplianceConfig"] = relationship(
+        "ComplianceConfig", back_populates="profiles"
+    )
 
 
 class ComplianceReport(Base):
@@ -260,29 +274,31 @@ class ComplianceReport(Base):
 
     __tablename__ = "compliance_reports"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # -- Report metadata --
-    report_type = Column(
+    report_type: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         comment="monthly, annual, or yearly ('yearly' is an alias of 'annual')",
     )
-    period_label = Column(
+    period_label: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         comment="e.g., 'March 2026' or '2025'",
     )
-    period_year = Column(Integer, nullable=False)
-    period_month = Column(Integer, nullable=True, comment="1-12 for monthly")
+    period_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    period_month: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="1-12 for monthly"
+    )
 
     # -- Status --
-    status = Column(
+    status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=ReportStatus.PENDING.value,
@@ -290,40 +306,44 @@ class ComplianceReport(Base):
     )
 
     # -- Report data (JSON snapshot) --
-    report_data = Column(
+    report_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Full report snapshot",
     )
-    summary = Column(
+    summary: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Executive summary metrics",
     )
 
     # -- Distribution --
-    emailed_to = Column(
+    emailed_to: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,
         comment="Email addresses report was sent to",
     )
-    emailed_at = Column(DateTime(timezone=True), nullable=True)
+    emailed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # -- Generation metadata --
-    generated_by = Column(
+    generated_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         comment="User ID or null for auto-generated",
     )
-    generated_at = Column(
+    generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-    generation_duration_ms = Column(Integer, nullable=True)
+    generation_duration_ms: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
 
-    error_message = Column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         # Reports are listed per organization for a given reporting period.

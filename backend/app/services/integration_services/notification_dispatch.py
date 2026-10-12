@@ -18,9 +18,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
+from app.services.integration_health import record_integration_run
 
 # integration_type values that are chat/messaging platforms.
 MESSAGING_TYPES = ("slack", "discord", "microsoft-teams")
+
+# Stored when a platform refused a message without raising — its sender
+# returns False and logs; the response body is never kept.
+_NOT_ACCEPTED = "The platform did not accept the message."
 
 # Non-empty Discord content per kind (Discord rejects a fully empty message).
 _DISCORD_CONTENT = {
@@ -188,13 +193,25 @@ async def dispatch_chat_notifications(
     """
     sent = 0
     for integration in await _enabled_messaging_integrations(db, organization_id):
+        delivered = False
+        error: Exception | str = _NOT_ACCEPTED
         try:
-            if await send_integration_notification(integration, kind, payload):
-                sent += 1
+            delivered = await send_integration_notification(integration, kind, payload)
         except Exception as exc:
+            error = exc
             logger.warning(
                 "Chat notification to {} failed: {}", integration.integration_type, exc
             )
+        if delivered:
+            sent += 1
+        await record_integration_run(
+            db,
+            integration,
+            operation="chat_notification",
+            trigger="event",
+            success=delivered,
+            error=None if delivered else error,
+        )
     return sent
 
 
@@ -211,13 +228,25 @@ async def dispatch_chat_summary(
     """
     sent = 0
     for integration in await _enabled_messaging_integrations(db, organization_id):
+        delivered = False
+        error: Exception | str = _NOT_ACCEPTED
         try:
-            if await send_integration_summary(integration, title, message):
-                sent += 1
+            delivered = await send_integration_summary(integration, title, message)
         except Exception as exc:
+            error = exc
             logger.warning(
                 "Chat summary to {} failed: {}", integration.integration_type, exc
             )
+        if delivered:
+            sent += 1
+        await record_integration_run(
+            db,
+            integration,
+            operation="chat_notification",
+            trigger="event",
+            success=delivered,
+            error=None if delivered else error,
+        )
     return sent
 
 
@@ -235,6 +264,8 @@ async def notify_entity_created(
     try:
         async with async_session_factory() as db:
             await dispatch_chat_notifications(db, organization_id, kind, payload)
+            # Persists the delivery outcomes recorded on each integration.
+            await db.commit()
     except Exception as exc:
         logger.warning("Background chat notification failed: {}", exc)
 
@@ -250,5 +281,6 @@ async def notify_summary(organization_id: str, title: str, message: str) -> None
     try:
         async with async_session_factory() as db:
             await dispatch_chat_summary(db, organization_id, title, message)
+            await db.commit()
     except Exception as exc:
         logger.warning("Background chat summary failed: {}", exc)

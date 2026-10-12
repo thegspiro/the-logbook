@@ -7,11 +7,9 @@ step progression, and transfer to full membership.
 
 import asyncio
 import os
-import uuid as uuid_lib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-import magic
 from fastapi import (
     APIRouter,
     Depends,
@@ -23,10 +21,9 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -46,7 +43,6 @@ from app.api.v1.endpoints.users import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
@@ -98,8 +94,17 @@ from app.schemas.membership_pipeline import (
     TransferProspectRequest,
     TransferProspectResponse,
 )
+from app.services import membership_pipeline_service
 from app.services.email_service import welcome_email_can_send
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
+    stored_file_response,
+)
 from app.services.membership_pipeline_service import MembershipPipelineService
+from app.utils import download_names
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 # Applied router-wide, not per route: every endpoint that takes a
 # {prospect_id} path parameter — including ones added later — must refuse to
@@ -108,13 +113,21 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
 
 
+# The widget shows a glance, not the queue: the most recent applicants, with a
+# "View all" link (queue_url) to the full list (owner decision, MP-08).
+PIPELINE_WIDGET_DETAIL_LIMIT = 10
+
+
 class PipelineWidgetResponse(BaseModel):
     """Privacy-preserving dashboard summary; never a substitute for the queue."""
 
     total: int
     by_status: dict[str, int]
     aging: dict[str, int]
+    # At most PIPELINE_WIDGET_DETAIL_LIMIT entries, most recently created
+    # first. ``details_truncated`` says more exist behind ``queue_url``.
     details: list[dict[str, str]] | None = None
+    details_truncated: bool = False
     queue_url: str = "/prospective-members?status=active"
 
 
@@ -134,40 +147,77 @@ async def pipeline_widget_summary(
     """
     from app.models.membership_pipeline import ProspectiveMember
 
-    now = datetime.now(timezone.utc)
-    prospect_query = select(ProspectiveMember).where(
-        ProspectiveMember.organization_id == current_user.organization_id
-    )
+    # Counted in SQL: loading every prospect row (PII columns included) to
+    # count them scaled with the department's whole applicant history.
+    scope = [ProspectiveMember.organization_id == current_user.organization_id]
     if hidden_prospect_ids:
-        prospect_query = prospect_query.where(
-            ProspectiveMember.id.notin_(hidden_prospect_ids)
-        )
-    rows = (await db.execute(prospect_query)).scalars().all()
+        scope.append(ProspectiveMember.id.notin_(hidden_prospect_ids))
+
     by_status: dict[str, int] = {}
-    aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
-    for prospect in rows:
-        status_value = getattr(prospect.status, "value", prospect.status)
-        by_status[str(status_value)] = by_status.get(str(status_value), 0) + 1
-        created = prospect.created_at
-        if created and created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        age = (now - (created or now)).days
-        aging[
-            "0_7_days" if age <= 7 else "8_30_days" if age <= 30 else "31_plus_days"
-        ] += 1
+    status_rows = await db.execute(
+        select(ProspectiveMember.status, func.count(ProspectiveMember.id))
+        .where(*scope)
+        .group_by(ProspectiveMember.status)
+    )
+    for status_value, count in status_rows.all():
+        key = str(getattr(status_value, "value", status_value))
+        by_status[key] = by_status.get(key, 0) + int(count)
+    total = sum(by_status.values())
+
+    # Buckets match the whole-days age the Python version computed:
+    # ``(now - created).days <= 7`` is ``created > now - 8 days``, and
+    # ``<= 30`` is ``created > now - 31 days``. A missing created_at counted
+    # as age 0, so it stays in the newest bucket.
+    now = datetime.now(timezone.utc)
+    created = ProspectiveMember.created_at
+    newest = or_(created.is_(None), created > now - timedelta(days=8))
+    middle = and_(
+        created <= now - timedelta(days=8), created > now - timedelta(days=31)
+    )
+    aging_row = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((newest, 1), else_=0)), 0),
+                func.coalesce(func.sum(case((middle, 1), else_=0)), 0),
+            ).where(*scope)
+        )
+    ).one()
+    week, month = int(aging_row[0]), int(aging_row[1])
+    aging = {
+        "0_7_days": week,
+        "8_30_days": month,
+        "31_plus_days": total - week - month,
+    }
+
     can_detail = user_has_permission(current_user, "prospective_members.manage")
     details = None
     if can_detail:
+        # Only the columns the widget shows, most recent first, capped.
+        detail_rows = await db.execute(
+            select(
+                ProspectiveMember.id,
+                ProspectiveMember.first_name,
+                ProspectiveMember.last_name,
+                ProspectiveMember.status,
+            )
+            .where(*scope)
+            .order_by(ProspectiveMember.created_at.desc(), ProspectiveMember.id.desc())
+            .limit(PIPELINE_WIDGET_DETAIL_LIMIT)
+        )
         details = [
             {
-                "id": str(p.id),
-                "name": p.full_name,
-                "status": str(getattr(p.status, "value", p.status)),
+                "id": str(row_id),
+                "name": f"{first or ''} {last or ''}".strip(),
+                "status": str(getattr(status_value, "value", status_value)),
             }
-            for p in rows
+            for row_id, first, last, status_value in detail_rows.all()
         ]
     return PipelineWidgetResponse(
-        total=len(rows), by_status=by_status, aging=aging, details=details
+        total=total,
+        by_status=by_status,
+        aging=aging,
+        details=details,
+        details_truncated=details is not None and total > len(details),
     )
 
 
@@ -201,10 +251,10 @@ async def list_pipelines(
                 id=p.id,
                 name=p.name,
                 description=p.description,
-                is_template=p.is_template,
-                is_default=p.is_default,
-                is_active=p.is_active if hasattr(p, "is_active") else True,
-                auto_transfer_on_approval=p.auto_transfer_on_approval,
+                is_template=bool(p.is_template),
+                is_default=bool(p.is_default),
+                is_active=bool(p.is_active),
+                auto_transfer_on_approval=bool(p.auto_transfer_on_approval),
                 step_count=len(p.steps) if p.steps else 0,
                 prospect_count=getattr(p, "prospect_count", 0),
                 created_at=p.created_at,
@@ -1387,7 +1437,7 @@ async def skip_step(
 @router.post("/prospects/{prospect_id}/advance", response_model=ProspectResponse)
 async def advance_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1637,7 +1687,7 @@ async def bulk_set_prospect_status(
 @router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)
 async def regress_prospect(
     prospect_id: UUID,
-    data: AdvanceProspectRequest = None,
+    data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1920,20 +1970,23 @@ async def get_prospect_activity(
 # Files are stored under {org_id}/{prospect_id}/ within the uploads volume
 # (mounted at /app/uploads in docker-compose), mirroring the event-attachments
 # layout so storage is grouped per individual and walkable per organization.
-PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
-MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
-
-# Allowed document types mapped to their canonical extension. The MIME type is
-# validated via magic bytes (not the HTTP Content-Type header) to prevent
-# content-type spoofing.
-PROSPECT_DOCUMENT_MIME_EXTENSIONS = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/gif": ".gif",
-    "application/msword": ".doc",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-}
+# Validated, malware-scanned and stored by FileStorageService; the service
+# confines every later read and delete to the organization's applicant area.
+PROSPECT_DOCUMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+    },
+    # Matches the frontend limit.
+    max_bytes=50 * 1024 * 1024,
+    description="PDF, Word, JPEG, PNG, GIF",
+)
 
 
 def _remove_prospect_document_file(path: str) -> None:
@@ -1992,51 +2045,19 @@ async def add_prospect_document(
 
     **Requires permission: members.manage or prospective_members.manage**
     """
-    content = await file.read()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty."
-        )
-    if len(content) > MAX_PROSPECT_DOCUMENT_SIZE:
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size is 50MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    # Validate the real content via magic bytes, not the client-supplied type.
-    detected_mime = magic.from_buffer(content[:2048], mime=True)
-    ext = PROSPECT_DOCUMENT_MIME_EXTENSIONS.get(detected_mime)
-    if ext is None:
-        logger.warning(
-            f"Prospect document rejected: detected MIME '{detected_mime}' "
-            f"(claimed: '{file.content_type}') for file '{file.filename}'"
-        )
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"File type not allowed. Detected type: {detected_mime}. "
-                "Allowed: PDF, Word, JPEG, PNG, GIF."
-            ),
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Scope storage by org then prospect (mirrors event-attachments) so each
-    # individual's files are grouped and the whole org is walkable for
-    # accounting, export, or purge. Random UUID filename with a MIME-derived
-    # extension (never the user-supplied name) avoids collisions and
-    # double-extension attacks (e.g. resume.pdf.exe).
-    prospect_dir = os.path.join(
-        PROSPECT_DOCUMENT_DIR, str(current_user.organization_id), str(prospect_id)
+    # Grouped per applicant under the organization (``<org>/applicants/
+    # <prospect_id>/``) so each individual's files can be found, exported or
+    # purged together.
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.APPLICANTS,
+        rules=PROSPECT_DOCUMENT_RULES,
+        user=current_user,
+        record_id=prospect_id,
+        upload_kind="applicant_document",
     )
-    await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
-    stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as fh:
-            fh.write(data)
-
-    await asyncio.to_thread(_write_file, stored_path, content)
+    stored_path = stored.path
 
     service = MembershipPipelineService(db)
     try:
@@ -2044,10 +2065,10 @@ async def add_prospect_document(
             prospect_id=str(prospect_id),
             organization_id=current_user.organization_id,
             document_type=document_type,
-            file_name=file.filename or os.path.basename(stored_path),
+            file_name=stored.original_name,
             file_path=stored_path,
-            file_size=len(content),
-            mime_type=detected_mime,
+            file_size=stored.size,
+            mime_type=stored.mime_type,
             step_id=str(step_id) if step_id else None,
             uploaded_by=current_user.id,
         )
@@ -2091,17 +2112,18 @@ async def download_prospect_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
 
-    # Defence-in-depth: ensure the stored path resolves inside the uploads
-    # directory before serving it, in case the DB value is ever tampered with.
-    resolved_path = os.path.realpath(doc.file_path)
-    allowed_base = os.path.realpath(PROSPECT_DOCUMENT_DIR)
-    if (
-        not resolved_path.startswith(allowed_base + os.sep)
-        and resolved_path != allowed_base
-    ):
+    # Defence-in-depth: ensure the stored path resolves inside *this
+    # organization's* applicant-document subtree before serving it, in case
+    # the DB value is ever tampered with. The shared root is not a boundary:
+    # every organization's applicants are stored beneath it.
+    resolved_path = membership_pipeline_service.prospect_document_path(
+        doc.file_path, current_user.organization_id
+    )
+    if resolved_path is None:
         logger.warning(
-            f"Path traversal attempt blocked for prospect document {document_id}: "
-            f"{doc.file_path} resolved to {resolved_path}"
+            f"Blocked out-of-org prospect document read for {document_id}: "
+            f"{doc.file_path} is outside the storage of org "
+            f"{current_user.organization_id}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
@@ -2113,9 +2135,23 @@ async def download_prospect_document(
             detail="Document file not found on disk",
         )
 
-    return FileResponse(
+    prospect = await service.get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+    extension = download_names.stored_extension(resolved_path)
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    return stored_file_response(
         path=resolved_path,
-        filename=doc.file_name or "download",
+        filename=download_names.descriptive_filename(
+            download_names.local_day(doc.created_at, tz),
+            download_names.member_name_part(
+                getattr(prospect, "first_name", None),
+                getattr(prospect, "last_name", None),
+            ),
+            doc.document_type,
+            extension=extension,
+            fallback=download_names.original_stem(doc.file_name) or "document",
+        ),
         media_type=doc.mime_type or "application/octet-stream",
     )
 

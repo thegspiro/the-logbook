@@ -354,7 +354,8 @@ class FacilitiesService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        facility_type: Optional[FacilityType] = result.scalar_one_or_none()
+        return facility_type
 
     async def create_facility_type(
         self,
@@ -506,7 +507,8 @@ class FacilitiesService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        facility_status: Optional[FacilityStatus] = result.scalar_one_or_none()
+        return facility_status
 
     async def create_facility_status(
         self,
@@ -834,7 +836,8 @@ class FacilitiesService:
             )
 
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        facility: Optional[Facility] = result.scalar_one_or_none()
+        return facility
 
     async def create_facility(
         self,
@@ -872,7 +875,7 @@ class FacilitiesService:
                 raise ValueError("Invalid facility status")
 
         facility_dict = facility_data.model_dump()
-        extra = {}
+        extra: dict[str, datetime | str] = {}
 
         # Auto-assign "Fire Station" type if none provided
         if not facility_dict.get("facility_type_id"):
@@ -1105,7 +1108,7 @@ class FacilitiesService:
             .where(FacilityPhoto.id == photo_id)
             .where(FacilityPhoto.organization_id == str(organization_id))
         )
-        photo = result.scalar_one_or_none()
+        photo: Optional[FacilityPhoto] = result.scalar_one_or_none()
         if not photo:
             return None
 
@@ -1216,7 +1219,7 @@ class FacilitiesService:
             .where(FacilityDocument.id == document_id)
             .where(FacilityDocument.organization_id == str(organization_id))
         )
-        document = result.scalar_one_or_none()
+        document: Optional[FacilityDocument] = result.scalar_one_or_none()
         if not document:
             return None
 
@@ -1296,7 +1299,10 @@ class FacilitiesService:
                 )
             )
         )
-        return result.scalar_one_or_none()
+        facility_maintenance_type: Optional[FacilityMaintenanceType] = (
+            result.scalar_one_or_none()
+        )
+        return facility_maintenance_type
 
     async def create_maintenance_type(
         self,
@@ -1453,7 +1459,10 @@ class FacilitiesService:
             .where(FacilityMaintenance.organization_id == str(organization_id))
             .options(selectinload(FacilityMaintenance.maintenance_type))
         )
-        return result.scalar_one_or_none()
+        facility_maintenance: Optional[FacilityMaintenance] = (
+            result.scalar_one_or_none()
+        )
+        return facility_maintenance
 
     async def create_maintenance_record(
         self,
@@ -1640,7 +1649,8 @@ class FacilitiesService:
             .where(FacilitySystem.id == system_id)
             .where(FacilitySystem.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        facility_system: Optional[FacilitySystem] = result.scalar_one_or_none()
+        return facility_system
 
     async def create_system(
         self,
@@ -1751,7 +1761,8 @@ class FacilitiesService:
             .where(FacilityInspection.id == inspection_id)
             .where(FacilityInspection.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        facility_inspection: Optional[FacilityInspection] = result.scalar_one_or_none()
+        return facility_inspection
 
     async def create_inspection(
         self,
@@ -1855,7 +1866,10 @@ class FacilitiesService:
             .where(FacilityUtilityAccount.id == account_id)
             .where(FacilityUtilityAccount.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_utility_account: Optional[FacilityUtilityAccount] = (
+            result.scalar_one_or_none()
+        )
+        return facility_utility_account
 
     async def create_utility_account(
         self,
@@ -1957,7 +1971,10 @@ class FacilitiesService:
             .where(FacilityUtilityReading.id == reading_id)
             .where(FacilityUtilityReading.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_utility_reading: Optional[FacilityUtilityReading] = (
+            result.scalar_one_or_none()
+        )
+        return facility_utility_reading
 
     async def create_utility_reading(
         self,
@@ -2063,7 +2080,8 @@ class FacilitiesService:
             .where(FacilityAccessKey.id == key_id)
             .where(FacilityAccessKey.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_access_key: Optional[FacilityAccessKey] = result.scalar_one_or_none()
+        return facility_access_key
 
     async def create_access_key(
         self,
@@ -2211,7 +2229,7 @@ class FacilitiesService:
             .where(FacilityRoom.id == room_id)
             .where(FacilityRoom.organization_id == organization_id)
         )
-        room = result.scalar_one_or_none()
+        room: Optional[FacilityRoom] = result.scalar_one_or_none()
         if room and include_display_codes:
             await self._attach_display_codes([room], organization_id)
         return room
@@ -2689,7 +2707,10 @@ class FacilitiesService:
         if for_update:
             query = query.with_for_update(of=FacilityEmergencyContact)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        facility_emergency_contact: Optional[FacilityEmergencyContact] = (
+            result.scalar_one_or_none()
+        )
+        return facility_emergency_contact
 
     async def create_emergency_contact(
         self,
@@ -2814,7 +2835,10 @@ class FacilitiesService:
             .where(FacilityShutoffLocation.id == location_id)
             .where(FacilityShutoffLocation.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_shutoff_location: Optional[FacilityShutoffLocation] = (
+            result.scalar_one_or_none()
+        )
+        return facility_shutoff_location
 
     async def create_shutoff_location(
         self,
@@ -2914,7 +2938,10 @@ class FacilitiesService:
             .where(FacilityCapitalProject.id == project_id)
             .where(FacilityCapitalProject.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_capital_project: Optional[FacilityCapitalProject] = (
+            result.scalar_one_or_none()
+        )
+        return facility_capital_project
 
     async def create_capital_project(
         self,
@@ -3022,7 +3049,10 @@ class FacilitiesService:
             .where(FacilityInsurancePolicy.id == policy_id)
             .where(FacilityInsurancePolicy.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_insurance_policy: Optional[FacilityInsurancePolicy] = (
+            result.scalar_one_or_none()
+        )
+        return facility_insurance_policy
 
     async def create_insurance_policy(
         self,
@@ -3127,7 +3157,8 @@ class FacilitiesService:
             .where(FacilityOccupant.id == occupant_id)
             .where(FacilityOccupant.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_occupant: Optional[FacilityOccupant] = result.scalar_one_or_none()
+        return facility_occupant
 
     async def create_occupant(
         self,
@@ -3228,7 +3259,10 @@ class FacilitiesService:
             .where(FacilityComplianceChecklist.organization_id == organization_id)
             .options(selectinload(FacilityComplianceChecklist.items))
         )
-        return result.scalar_one_or_none()
+        facility_compliance_checklist: Optional[FacilityComplianceChecklist] = (
+            result.scalar_one_or_none()
+        )
+        return facility_compliance_checklist
 
     async def create_compliance_checklist(
         self,
@@ -3330,7 +3364,10 @@ class FacilitiesService:
             .where(FacilityComplianceItem.id == item_id)
             .where(FacilityComplianceItem.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        facility_compliance_item: Optional[FacilityComplianceItem] = (
+            result.scalar_one_or_none()
+        )
+        return facility_compliance_item
 
     async def create_compliance_item(
         self,

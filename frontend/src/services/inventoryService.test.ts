@@ -583,7 +583,13 @@ describe('inventoryService', () => {
 
   describe('createEquipmentRequest', () => {
     it('should POST to /inventory/requests', async () => {
-      const data = { item_name: 'New Radio', quantity: 2, priority: 'high', reason: 'Broken unit' };
+      const data: Parameters<typeof inventoryService.createEquipmentRequest>[0] = {
+        item_name: 'New Radio',
+        quantity: 2,
+        requested_duration: 'ongoing',
+        priority: 'high',
+        reason: 'Broken unit',
+      };
       const response = { id: 'r1', item_name: 'New Radio', status: 'pending', message: 'Created' };
       mockPost.mockResolvedValueOnce({ data: response });
 
@@ -655,7 +661,7 @@ describe('inventoryService', () => {
 
   describe('reviewWriteOff', () => {
     it('should PUT /inventory/write-offs/:id/review', async () => {
-      const data = { status: 'approved' };
+      const data = { status: 'approved', review_notes: 'Confirmed lost on scene' };
       const response = { id: 'w1', status: 'approved', message: 'Approved' };
       mockPut.mockResolvedValueOnce({ data: response });
 

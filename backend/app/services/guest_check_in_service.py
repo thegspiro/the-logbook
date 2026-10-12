@@ -178,7 +178,10 @@ class GuestCheckInService:
             )
 
         result = await self.db.execute(query.limit(1))
-        return result.scalars().first()
+        event_external_attendee: Optional[EventExternalAttendee] = (
+            result.scalars().first()
+        )
+        return event_external_attendee
 
     async def _link_prospect(
         self,

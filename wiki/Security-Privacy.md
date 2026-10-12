@@ -241,7 +241,11 @@ task.
   department sets a period in the self-report settings
   (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
   daily by the `self_report_attachment_retention` task. It deletes the files
-  only; the submission and training record rows stay.
+  only; the submission and training record rows stay. They can also be
+  **malware-scanned on upload** with ClamAV (`CLAMAV_ENABLED`, off by default)
+  — an infected file is never stored, and the audit event carries the
+  signature name and a hash, never the file or its name. See
+  [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 
@@ -380,6 +384,9 @@ The software implements controls; it cannot adopt policy on your behalf:
 - Deciding when a departed member's record is anonymized, and recording that
   decision
 - Setting retention values that match your state's records schedule
+- Deciding whether to run ClamAV for uploaded certificates — it costs a
+  container and 1.5-3 GB of RAM, and while it is enabled and down, members
+  cannot upload certificates
 - Breach notification, which has **statutory deadlines** under HIPAA (60 days)
   — see [Security Overview → Incident Response](Security-Overview#incident-response)
 

@@ -9,16 +9,12 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
 import { Hand } from 'lucide-react';
-import { Modal } from '../Modal';
-import { PromptDialog } from '../ux';
-import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { eventService } from '../../services/api';
 import { AttendancePetitionStatus } from '../../constants/enums';
 import type { AttendancePetition } from '../../types/event';
-import { formatDateTime, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
-import { getErrorDetail } from '../../utils/errorHandling';
+import { formatDateTime } from '../../utils/dateFormatting';
+import { AttendancePetitionApproveDialog, AttendancePetitionDeclineDialog } from './AttendancePetitionDecisionDialogs';
 
 interface EventAttendancePetitionsCardProps {
   eventId: string;
@@ -47,11 +43,6 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
   const [petitions, setPetitions] = useState<AttendancePetition[]>([]);
   const [approving, setApproving] = useState<AttendancePetition | null>(null);
   const [declining, setDeclining] = useState<AttendancePetition | null>(null);
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [note, setNote] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -67,62 +58,8 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
     void load();
   }, [load]);
 
-  const openApprove = (petition: AttendancePetition) => {
-    setCheckIn(formatForDateTimeInput(petition.requested_check_in_at || defaultCheckIn, timezone));
-    setCheckOut(formatForDateTimeInput(petition.requested_check_out_at || defaultCheckOut, timezone));
-    setNote('');
-    setFormError(null);
-    setApproving(petition);
-  };
-
   const replace = (updated: AttendancePetition) =>
     setPetitions((current) => current.map((p) => (p.id === updated.id ? updated : p)));
-
-  const handleApprove = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!approving) return;
-    const checkInAt = localToUTC(checkIn, timezone);
-    const checkOutAt = localToUTC(checkOut, timezone);
-    if (!checkInAt || !checkOutAt) {
-      setFormError('Enter both a check-in and a check-out time.');
-      return;
-    }
-    if (new Date(checkOutAt) <= new Date(checkInAt)) {
-      setFormError('Check-out must be after check-in.');
-      return;
-    }
-    setBusy(true);
-    setFormError(null);
-    try {
-      const updated = await eventService.approveAttendancePetition(eventId, approving.id, {
-        check_in_at: checkInAt,
-        check_out_at: checkOutAt,
-        review_note: note.trim() || undefined,
-      });
-      replace(updated);
-      setApproving(null);
-      toast.success('Attendance confirmed');
-      onApproved?.();
-    } catch (err) {
-      setFormError(getErrorDetail(err) || 'Failed to approve the request');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleDecline = async (reason: string) => {
-    if (!declining) return;
-    setBusy(true);
-    try {
-      replace(await eventService.rejectAttendancePetition(eventId, declining.id, reason));
-      setDeclining(null);
-      toast.success('Request declined');
-    } catch (err) {
-      toast.error(getErrorDetail(err) || 'Failed to decline the request');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (petitions.length === 0) return null;
 
@@ -172,8 +109,8 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
                 <div className="flex shrink-0 gap-2">
                   <button
                     type="button"
-                    onClick={() => openApprove(petition)}
-                    disabled={attendanceFinalized || busy}
+                    onClick={() => setApproving(petition)}
+                    disabled={attendanceFinalized}
                     className="btn-primary text-sm font-medium disabled:opacity-50"
                     aria-label={`Approve ${petition.user_name || 'member'}'s request`}
                   >
@@ -182,7 +119,6 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
                   <button
                     type="button"
                     onClick={() => setDeclining(petition)}
-                    disabled={busy}
                     className="btn-secondary text-sm font-medium disabled:opacity-50"
                     aria-label={`Decline ${petition.user_name || 'member'}'s request`}
                   >
@@ -210,98 +146,29 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
       )}
 
       {approving && (
-        <Modal
-          isOpen
+        <AttendancePetitionApproveDialog
+          eventId={eventId}
+          petition={approving}
+          defaultCheckIn={defaultCheckIn}
+          defaultCheckOut={defaultCheckOut}
+          timezone={timezone}
           onClose={() => setApproving(null)}
-          title="Confirm attendance"
-          titleId="approve-petition-title"
-          aria-describedby="approve-petition-description"
-          onSubmit={(e) => void handleApprove(e)}
-          footer={
-            <>
-              <button
-                type="submit"
-                disabled={busy}
-                className="btn-primary inline-flex w-full justify-center rounded-md text-base font-medium sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                {busy ? 'Saving...' : 'Approve'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setApproving(null)}
-                className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </>
-          }
-        >
-          <p id="approve-petition-description" className="text-theme-text-secondary mb-4 text-sm">
-            Confirm when {approving.user_name || 'this member'} was present. These times decide the hours credited.
-          </p>
-          {formError && (
-            <div className="alert-danger mb-4 text-sm" role="alert">
-              {formError}
-            </div>
-          )}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="petition-check-in" className="form-label">
-                Check-in
-              </label>
-              <DateTimeQuarterHour
-                id="petition-check-in"
-                value={checkIn}
-                onChange={setCheckIn}
-                timezone={timezone}
-                timeLabel="Check-in time"
-                required
-                className="form-input mt-1"
-              />
-            </div>
-            <div>
-              <label htmlFor="petition-check-out" className="form-label">
-                Check-out
-              </label>
-              <DateTimeQuarterHour
-                id="petition-check-out"
-                value={checkOut}
-                onChange={setCheckOut}
-                timezone={timezone}
-                timeLabel="Check-out time"
-                required
-                className="form-input mt-1"
-              />
-            </div>
-            <div>
-              <label htmlFor="petition-note" className="form-label">
-                Note to the member <span className="text-theme-text-muted font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="petition-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={1000}
-                rows={2}
-                className="form-input mt-1"
-              />
-            </div>
-          </div>
-        </Modal>
+          onApproved={(updated) => {
+            replace(updated);
+            setApproving(null);
+            onApproved?.();
+          }}
+        />
       )}
 
-      <PromptDialog
-        isOpen={declining !== null}
+      <AttendancePetitionDeclineDialog
+        eventId={eventId}
+        petition={declining}
         onClose={() => setDeclining(null)}
-        onSubmit={(value) => void handleDecline(value)}
-        title="Decline attendance request"
-        message={`${declining?.user_name || 'The member'} will be told the request was declined, with your reason. They cannot ask again for this event.`}
-        label="Reason"
-        multiline
-        required
-        confirmLabel="Decline request"
-        confirmVariant="warning"
-        loading={busy}
+        onDeclined={(updated) => {
+          replace(updated);
+          setDeclining(null);
+        }}
       />
     </div>
   );

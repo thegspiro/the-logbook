@@ -101,6 +101,19 @@ export interface SwapRequestReview {
  * where both members are cleared for the seat they would take, by the same
  * rule that refuses an unqualified exchange when it is submitted.
  */
+/** An open swap the caller is cleared to pick up (`GET /swap-requests/open`). */
+export interface OpenSwapPickup {
+  swap_request_id: string;
+  shift_id: string;
+  shift_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  position?: string | null;
+  requesting_user_name?: string | null;
+  apparatus_label?: string | null;
+  reason?: string | null;
+}
+
 export interface ExchangeCandidate {
   shift_id: string;
   shift_date: string;
@@ -570,7 +583,12 @@ export interface CloseoutAttachableCall {
   call_date: string;
   call_type?: string | null;
   source: string;
+  /** The other units on the call — never this shift's own apparatus. */
   apparatus_ids: string[];
+  /** What an officer recognises the call by ("Engine 5"). */
+  unit_labels: string[];
+  /** This shift already claims the call; unticking it detaches. */
+  attached: boolean;
 }
 
 export interface CloseoutState {
@@ -585,7 +603,10 @@ export interface CloseoutState {
   combined_hours: number;
   reported_call_count: number;
   reported_call_types: Record<string, number>;
-  /** Served by the API; unused until the shared-call picker ships. */
+  /**
+   * Calls another unit logged while this shift was on — the shared-call
+   * picker. Claimed ones (`attached`) are part of `reported_call_count`.
+   */
   attachable_calls: CloseoutAttachableCall[];
 }
 
@@ -598,6 +619,10 @@ export interface CloseoutAttendanceEntry {
 export interface CloseoutCallsPayload {
   reported_call_count?: number | null;
   reported_call_types?: Record<string, number> | undefined;
+  /** Calls another unit logged that this shift was also on. */
+  attach_call_ids?: string[] | undefined;
+  /** Calls claimed earlier that the officer has unticked. */
+  detach_call_ids?: string[] | undefined;
 }
 
 export interface MemberCallCredit {

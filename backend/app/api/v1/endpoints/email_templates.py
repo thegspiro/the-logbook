@@ -61,10 +61,15 @@ from app.services.email_template_service import (
     live_sample_context,
 )
 from app.services.email_test_records import real_record_context
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
+)
 from app.services.notification_channels import SMS_ALERT_DETAILS, SMS_CONDITIONS
 from app.services.officer_service import OfficerService
+from app.utils import email_attachments as email_attachment_paths
 from app.utils.member_names import format_display_name, format_legal_name
-from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
@@ -301,12 +306,15 @@ async def _with_list_metadata(
     an admin reads as "my change did not save".
     """
     counts = await service.sent_counts(template.organization_id)
-    return EmailTemplateResponse.model_validate(template).model_copy(
+    response: EmailTemplateResponse = EmailTemplateResponse.model_validate(
+        template
+    ).model_copy(
         update={
             "is_customized": service.is_customized(template),
             "sent_count": counts.get(_type_value(template.template_type), 0),
         }
     )
+    return response
 
 
 def _type_value(template_type: Any) -> str:
@@ -317,7 +325,8 @@ def _type_value(template_type: Any) -> str:
     ``.value``. Accepting both is what stops the count silently reading zero
     for every row.
     """
-    return getattr(template_type, "value", template_type)
+    wire_value: str = getattr(template_type, "value", template_type)
+    return wire_value
 
 
 @router.get("", response_model=list[EmailTemplateResponse])
@@ -707,6 +716,60 @@ async def preview_email_template(
     )
 
 
+# What an email-template attachment may be. Executables and scripts are not
+# in either list. The uploader's extension is kept when it agrees with the
+# detected content, so a calendar invite stays .ics though it detects as text.
+EMAIL_ATTACHMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-powerpoint": ".ppt",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": (
+            ".pptx"
+        ),
+        "text/plain": ".txt",
+        "text/csv": ".csv",
+        "text/calendar": ".ics",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/bmp": ".bmp",
+        "image/svg+xml": ".svg",
+        "application/zip": ".zip",
+        "application/x-zip-compressed": ".zip",
+    },
+    max_bytes=10 * 1024 * 1024,
+    description="PDF, Office documents, text, CSV, calendar, images, ZIP",
+    keep_consistent_extension=True,
+    allowed_extensions=frozenset(
+        {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".txt",
+            ".csv",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".bmp",
+            ".svg",
+            ".zip",
+            ".ics",
+        }
+    ),
+)
+
+
 @router.post("/{template_id}/attachments", response_model=EmailAttachmentResponse)
 async def upload_attachment(
     template_id: str,
@@ -719,8 +782,8 @@ async def upload_attachment(
     """
     Upload a file attachment for an email template.
 
-    Files are stored locally (or in MinIO when configured).
-    Max file size: 10MB.
+    Files are malware-scanned and stored on the uploads volume under the
+    organization's own directory. Max file size: 10MB.
     """
     from sqlalchemy import select
 
@@ -743,102 +806,22 @@ async def upload_attachment(
             detail="This template does not allow attachments",
         )
 
-    # Read file and enforce size limit (10MB)
-    contents = await file.read()
-    max_size = 10 * 1024 * 1024
-    if len(contents) > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File exceeds 10MB limit",
-        )
-
-    # Validate file extension — block executable and script types
-    ALLOWED_EXTENSIONS = {
-        ".pdf",
-        ".doc",
-        ".docx",
-        ".xls",
-        ".xlsx",
-        ".ppt",
-        ".pptx",
-        ".txt",
-        ".csv",
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".bmp",
-        ".svg",
-        ".zip",
-        ".ics",
-    }
-    _, ext = os.path.splitext(file.filename or "attachment")
-    ext = ext.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-        )
-
-    # SEC: Validate actual file content via magic bytes, not just extension
-    ALLOWED_EMAIL_MIME_TYPES = {
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/plain",
-        "text/csv",
-        "text/calendar",
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/bmp",
-        "image/svg+xml",
-        "application/zip",
-        "application/x-zip-compressed",
-    }
-    try:
-        detected_mime = detect_mime_type(contents)
-    except RuntimeError:
-        logger.error("Email attachment validation unavailable: libmagic missing")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Attachment validation is temporarily unavailable.",
-        )
-    if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
-        logger.warning(
-            "Email attachment rejected: detected MIME '{}' "
-            "(claimed: '{}') for file '{}'",
-            detected_mime,
-            file.content_type,
-            file.filename,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File content type '{detected_mime}' is not allowed.",
-        )
-
-    # Store file with UUID name (prevents path traversal)
-    attachment_dir = os.path.join(
-        "storage", "email_attachments", current_user.organization_id
+    # Size cap, content-type detection, extension/content agreement and the
+    # malware scan, then a UUID-named write under the organization's
+    # email-attachments area. The extension is the uploader's only when it
+    # matches the detected content (no PDF named .png reaching recipients).
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.EMAIL_ATTACHMENTS,
+        rules=EMAIL_ATTACHMENT_RULES,
+        user=current_user,
+        record_id=template_id,
+        upload_kind="email_template_attachment",
     )
-    await asyncio.to_thread(os.makedirs, attachment_dir, exist_ok=True)
-
-    file_id = str(uuid.uuid4())
-    storage_filename = f"{file_id}{ext}"
-    storage_path = os.path.join(attachment_dir, storage_filename)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, storage_path, contents)
 
     # Human-readable file size
-    size = len(contents)
+    size = stored.size
     if size < 1024:
         file_size = f"{size} B"
     elif size < 1024 * 1024:
@@ -847,12 +830,13 @@ async def upload_attachment(
         file_size = f"{size / (1024 * 1024):.1f} MB"
 
     attachment = EmailAttachment(
-        id=file_id,
+        id=str(uuid.uuid4()),
         template_id=template_id,
-        filename=file.filename or "attachment",
-        content_type=file.content_type or "application/octet-stream",
+        filename=stored.original_name,
+        # The detected type, never the browser's claim.
+        content_type=stored.mime_type,
         file_size=file_size,
-        storage_path=storage_path,
+        storage_path=stored.path,
         uploaded_by=current_user.id,
     )
     db.add(attachment)
@@ -897,8 +881,8 @@ async def delete_attachment(
 
     # File first, row second, and a failed unlink is NOT swallowed.
     #
-    # The row is the only record that this file exists: nothing sweeps
-    # `storage/email_attachments`. So committing the delete first and then
+    # The row is the only record that this file exists: nothing sweeps the
+    # email attachment directory. So committing the delete first and then
     # discarding an unlink error turns a transient EACCES/EIO into a file that
     # survives forever with nothing pointing at it — and these are member-facing
     # attachments, so the bytes left behind can be exactly the sort of document
@@ -928,7 +912,19 @@ async def delete_attachment(
         except FileNotFoundError:
             pass
 
-    await asyncio.to_thread(_remove_file, storage_path)
+    # Only a path inside this organization's attachment storage is unlinked.
+    # Anything else is not this row's file to remove; the row still goes.
+    confined = email_attachment_paths.resolve_email_attachment_path(
+        storage_path, current_user.organization_id
+    )
+    if confined is None:
+        logger.warning(
+            "Not removing email attachment {}: stored path is outside the "
+            "organization's attachment storage",
+            attachment.id,
+        )
+    else:
+        await asyncio.to_thread(_remove_file, confined)
 
     await db.delete(attachment)
     await db.commit()

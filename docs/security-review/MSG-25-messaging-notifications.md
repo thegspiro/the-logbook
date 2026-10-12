@@ -2,9 +2,9 @@
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03
-(pass 5) · **PR:** #1907 (pass 1), pass 2 PR recorded in `PROGRESS.md`, #2305
-(pass 3), pass 4 PR recorded in `PROGRESS.md`, pass 5 PR recorded in
-`PROGRESS.md`
+(pass 5), 2026-10-07 (pass 6) · **PR:** #1907 (pass 1), pass 2 PR recorded in
+`PROGRESS.md`, #2305 (pass 3), pass 4 PR recorded in `PROGRESS.md`, pass 5 PR
+recorded in `PROGRESS.md`, pass 6 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -1600,3 +1600,145 @@ a signal the scoped run (which covers every file this pass actually read)
 already gives for this feature's own surface. A failure in it would be a
 pre-existing or cross-feature issue, not something this pass's docs-only
 diff could cause.
+
+## Pass 6 (2026-10-07) — watchdog pickup, near-zero-delta re-verification, 0 fixed, 0 new findings
+
+Picked up by the scheduled `/loop 30m` watchdog, not the dedicated
+security-review session directly: at the time this pass began, over an hour
+had elapsed since PR #2983 (Feature 24, Meetings & minutes, pass 6) merged
+(14:37 UTC) with no new `claude/security-review-*` branch or PR opened for
+Feature 25, confirmed via `list_pull_requests` (state=open, no match) both
+before this pass started and again immediately before this PR was opened.
+`PROGRESS.md`'s own Log section (append-ordered newest-first) and Rotation
+table were already current through Feature 24 ✅ once read in full — the
+apparent staleness on a first look (its last chronological `### ` entry read
+"Next: Feature 19" because that is pass 7's oldest, not newest, log line)
+was a misreading, not a tracker defect; corrected before relying on it
+further.
+
+**Backend:** diffed every file this feature's scope covers against pass 5's
+merge commit (`cfeb21e34`) rather than re-read cold, per CLAUDE.md's "match
+the verification to the change" — the four endpoint files
+(`messages.py`/`message_history.py`/`notifications.py`/`email_templates.py`),
+all eleven service/integration files, `schemas/notifications.py`, and
+`models/notification.py` (not in the feature's own file list, but its
+`NotificationLog.recipient_name` property is read by this surface). Real
+delta since pass 5: one feature (`914594940`, W50-23 — proxy-aware ballot
+mail notice) plus a handful of incidental "preferred name" display-helper
+swaps (`format_display_name`/`format_legal_name` from `app/utils/member_names.py`
+replacing hand-rolled `f"{first} {last}".strip()` in `messaging_service.py`
+and `models/notification.py`) and one copy-only change (`email_policy.py`'s
+digest label text). `notifications.py`, `message_history.py`,
+`messaging_service.py`'s remainder, `message_delivery_service.py`,
+`notifications_service.py`, `push_service.py`, `notification_rules.py`,
+`notification_channels.py`, `integration_services/notification_dispatch.py`,
+`email_templates_storefront.py`, `email_footers.py`, `email_policy.py`
+(beyond the one label string), and `email_test_records.py` are byte-identical
+to pass 5 — confirmed by `git diff cfeb21e34..HEAD` returning no hunks for
+each, not inferred from the commit list.
+
+**W50-23 (proxy-aware ballot mail) reviewed against all seven dimensions,
+found clean:** `EmailService.render_ballot_notification` gains an optional
+`proxy_holder_name` parameter; when set, both the voter's and the holder's
+names are `_html.escape`d (`email_service.py`) before being interpolated
+into the new `ballot_link_notice_html`/`_text` card, matching the existing
+escape-then-interpolate pattern this file uses everywhere else (MSG-6/MSG-7's
+citation). The new variable is added to `EmailTemplateService`'s
+`_RAW_HTML_VARIABLES` allowlist (`email_template_service.py:3672`) — correct,
+since it is a pre-built, pre-escaped HTML fragment the same way
+`custom_message_html`/`footer_html` already are, not raw user input reaching
+the allowlist unescaped. The companion migration
+(`20261005_1830_24f56e4fc320`) only rewrites `email_templates.html_body`/
+`text_body` text columns — no new table or column, so Pitfall #2/#26 don't
+apply — is guarded on `_has_table`, and its `upgrade()`/`downgrade()` call the
+same `_swap()` helper with swapped arguments, so a revert is exact. No
+tenant-isolation concern: the migration operates on rows already scoped to
+their own `organization_id` by virtue of updating in place, and the sender
+(`send_ballot_emails`, unchanged) is what decides whether a given send
+carries a `proxy_holder_name` — this pass re-read that call site and
+confirmed it is still gated on the existing proxy-holder lookup, not newly
+introduced trust in client input.
+
+**Preferred-name display-helper swaps reviewed, no behavior-relevant change
+for this feature:** `MessagingService._message_to_response`'s author-name
+map and the removed-from-audience audit entry now go through
+`format_display_name`/`User.display_name` instead of a hand-rolled
+`f"{first} {last}".strip()```; `NotificationLog.recipient_name`likewise.
+Neither reaches raw HTML output in this feature's own send paths (both are
+plain-text display/audit fields), so the escape-boundary findings from
+earlier passes (MSG-6/MSG-7/MAIL-1/MAIL-2) are unaffected.`email_templates.py`'s
+`preview_email_template`endpoint was more substantially touched — it now
+picks between the member's preferred name and their legal name per`TEST_RECIPIENT_FIELDS`'s per-template-type `legal_*`markers (election and
+storefront-billing templates use the legal name; everyday templates use the
+preferred one) — but this is preview-only sample-data selection, not a new
+user-facing write or a new permission surface; the endpoint's existing`require_permission` gate (unchanged) and org-scoped member lookup (unchanged)
+were re-checked directly and still apply before this logic runs.
+
+**Frontend:** no commit since pass 5 touched any of the six swept paths
+(`modules/communications`, `modules/notifications`, `pages/NotificationsPage.tsx`,
+`components/NotificationCard.tsx`, `services/communicationsServices.ts`,
+`hooks/usePushNotifications.ts`) — confirmed by `git log` path-filtered
+against pass 5's commit, zero results. The one frontend commit touching this
+feature's surface since pass 5 (`54e163ffa`, the Templates banner wording
+fix) only edits `EmailTemplatesPage.tsx`'s static copy and its own test; no
+security-relevant surface.
+
+### Re-verified still intact, not re-derived
+
+Every standing fix (MSG-4 through MSG-9, MSG-13 through MSG-16, the
+`cc_emails` legacy-read fix, MSG-11's migration-detector ratchet, the W50-23
+escape/allowlist pattern above) re-confirmed by `git diff` showing zero
+change at each citation since pass 5 re-read them directly — none of this
+pass's own delta touches any of those call sites.
+
+### Confirmed still open — unchanged
+
+MSG-3 (test-email arbitrary destination, by design), MSG-12's `failed`/
+throttled sub-cases (product decision pending), MSG-15 (Web Push send-time
+DNS-rebinding pin skipped outside `production`/`staging`), MAIL-4 (arbitrary
+scheduled-email recipients), `email_service.py`'s F4 (no SSRF guard on an
+org-configured SMTP host — deliberate policy), the informational
+`NotificationRuleCreate`/`Update.config` unbounded-JSON note, and MAIL-22 /
+`docs/KNOWN_LIMITATIONS.md`'s "Email attachments: the detected MIME type is
+validated, then discarded" (`email_templates.py:832`, unchanged this pass) —
+all re-verified against current code, none re-flagged as new ids.
+
+### Route inventory — re-enumerated, 51 routes (unchanged since pass 5)
+
+`grep -c '@router\.\(get\|post\|put\|patch\|delete\)'` against all four
+endpoint files: 13 + 2 + 20 + 16 = 51, matching pass 5 exactly; `git diff`
+against each file shows no added or removed `@router.` decorator, so this is
+confirmed rather than merely re-counted.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: 538 revisions, single head
+(`8c4f2a6e1d93`), up from pass 5's 508 — the growth is other features' work;
+this feature's own migration since pass 5 is the one `24f56e4fc320` already
+covered above.
+
+## Guard tests added (pass 6)
+
+None — no code fix was made this pass (0 new findings).
+
+## Completion gate (pass 6)
+
+| Check                                                                             | Result                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                     | clean (0 violations)                                    |
+| `black --check app/ tests/ alembic/`                                              | clean — 2027 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/`                                         | clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                 | PASSED — 538 revisions, single head                     |
+| backend tests, scope (`-k "message or notification or email_template or ballot"`) | 1197 passed, 1 skipped (environment-only — `pywebpush`) |
+| `npm run typecheck` (frontend)                                                    | 0 errors                                                |
+| `npm run lint` (frontend, `eslint --max-warnings 10`)                             | clean, exit 0                                           |
+
+No code was changed this pass, so the gate confirms current `main` is clean
+rather than verifying a diff this pass produced, matching pass 5's own
+rationale. `alembic upgrade head` was also re-verified to build cleanly
+end-to-end on a fresh database (538 revisions, single head reached) before
+the scoped test run, since the session's own startup hook had failed with
+`python3 -m alembic` (no `__main__.py` in this alembic version) — the
+console-script entry point (`alembic upgrade head`) is unaffected and is
+what CI and `npm run db:migrate` actually invoke, so this is an environment
+note, not an application defect, and is out of this feature's scope to fix.

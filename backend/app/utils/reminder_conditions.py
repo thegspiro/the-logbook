@@ -106,4 +106,4 @@ def should_send_warning(
     threshold = conditions["send_if_below_percentage"]
     if threshold >= 100.0:
         return True
-    return (progress_percentage or 0.0) < threshold
+    return bool((progress_percentage or 0.0) < threshold)

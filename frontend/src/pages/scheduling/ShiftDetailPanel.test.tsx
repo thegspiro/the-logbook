@@ -24,6 +24,7 @@ const shift = {
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShiftAssignments: vi.fn().mockResolvedValue([]),
+    getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
     getMyAttendance: vi.fn().mockResolvedValue(null),
     getShiftAttendance: vi.fn().mockResolvedValue([]),
     getShift: vi.fn().mockResolvedValue(null),
@@ -575,7 +576,7 @@ const VIEWPORT_WIDTHS = { phone: 390, laptop: 1440 } as const;
  * hard-coded query, so it keeps working if the header gains another breakpoint.
  */
 let currentWidth: number = VIEWPORT_WIDTHS.phone;
-let mediaListeners: ((event: MediaQueryListEvent) => void)[] = [];
+let mediaListeners: EventListenerOrEventListenerObject[] = [];
 
 const matches = (query: string) => {
   const minWidth = /min-width:\s*(\d+)px/.exec(query);
@@ -593,10 +594,10 @@ const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
     // Real listeners, so a test can cross the breakpoint rather than only
     // choose one side of it: useMediaQuery re-reads on `change`, so a
     // re-render alone would leave its state where it started.
-    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+    addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
       mediaListeners.push(listener);
     },
-    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+    removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
       mediaListeners = mediaListeners.filter((registered) => registered !== listener);
     },
     dispatchEvent: vi.fn(),
@@ -608,7 +609,12 @@ const resizeTo = async (width: keyof typeof VIEWPORT_WIDTHS) => {
   mockViewport(width);
   await act(async () => {
     for (const listener of [...mediaListeners]) {
-      listener({ matches: matches('(min-width: 640px)') } as MediaQueryListEvent);
+      const event = Object.assign(new Event('change'), {
+        matches: matches('(min-width: 640px)'),
+        media: '(min-width: 640px)',
+      });
+      if (typeof listener === 'function') listener(event);
+      else listener.handleEvent(event);
     }
   });
 };
@@ -1039,5 +1045,35 @@ describe('ShiftDetailPanel File Shift Report button', () => {
     // absence below is a decision rather than a frame not yet painted.
     await screen.findByRole('button', { name: 'Close out shift' });
     expect(screen.queryByRole('button', { name: /File Shift Report/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel equipment check hints', () => {
+  afterEach(() => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValue(DEFAULT_CHECKLISTS);
+  });
+
+  // The panel has no Checklists tab; checks open from Complete Checklists.
+  it('points an unstarted check at the Complete Checklists button, not a tab that does not exist', async () => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValue([
+      {
+        templateId: 'start-check',
+        templateName: 'Start check',
+        checkTiming: 'start_of_shift',
+        isCompleted: false,
+        overallStatus: 'incomplete',
+        totalItems: 3,
+        completedItems: 0,
+        failedItems: 0,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Complete Checklists/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Equipment Checks/ }));
+
+    expect(await screen.findByText('Not started — use Complete Checklists above')).toBeInTheDocument();
+    expect(screen.queryByText(/Go to Checklists tab/)).not.toBeInTheDocument();
   });
 });

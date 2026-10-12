@@ -10,7 +10,7 @@ exceptions propagate immediately.
 
 import asyncio
 import functools
-from typing import Callable, TypeVar
+from typing import Awaitable, Callable, TypeVar
 
 from loguru import logger
 from sqlalchemy.exc import DBAPIError, OperationalError
@@ -47,7 +47,7 @@ def is_transient_db_error(exc: BaseException) -> bool:
 
 
 async def with_db_retry(
-    coro_fn: Callable[..., T],
+    coro_fn: Callable[..., Awaitable[T]],
     *args,
     max_retries: int = 2,
     base_delay: float = 0.5,

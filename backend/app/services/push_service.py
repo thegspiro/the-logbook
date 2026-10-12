@@ -154,7 +154,7 @@ def _resolve_public_address(endpoint: str) -> tuple[str, str]:
     if hostname is None:  # validate_push_endpoint has already rejected this
         raise PermanentPushEndpointError("Invalid push endpoint")
     answers = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
-    addresses = {answer[4][0] for answer in answers}
+    addresses = {str(answer[4][0]) for answer in answers}
     if not addresses or any(not ipaddress.ip_address(ip).is_global for ip in addresses):
         raise ValueError("Push endpoint does not resolve exclusively to public IPs")
     return hostname, sorted(addresses)[0]
@@ -192,6 +192,22 @@ class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
         request.url = urlunsplit(("https", address, parsed.path, parsed.query, ""))
         request.headers["Host"] = self.hostname
         return super().send(request, **kwargs)
+
+
+# Test-only bypass of the send-time pin (MSG-15). Every send is pinned unless
+# a test flips this, which the push tests do so a local stand-in push service
+# at http://127.0.0.1 can be reached. It is a module attribute and not a
+# setting on purpose: no environment variable or ENVIRONMENT value can turn
+# pinning off on a real deployment, and production/staging pin even if it is
+# set. Gating on ENVIRONMENT alone left every deployment not named exactly
+# "production" or "staging" unpinned.
+_UNPINNED_SENDS_FOR_TESTS = False
+
+
+def _pin_this_send() -> bool:
+    if settings.ENVIRONMENT in ("production", "staging"):
+        return True
+    return not _UNPINNED_SENDS_FOR_TESTS
 
 
 def _pinned_session(endpoint: str) -> requests.Session:
@@ -328,7 +344,7 @@ class PushService:
         # row was deleted between the peek and here, this simply finds
         # nothing and falls through to the brand-new-subscription path
         # below, exactly like a peek that found nothing in the first place.
-        existing = None
+        existing: Optional[PushSubscription] = None
         if peeked_id is not None:
             result = await self.db.execute(
                 select(PushSubscription)
@@ -423,7 +439,7 @@ class PushService:
     def _send_one(self, sub_info: Dict[str, Any], payload: str) -> None:
         """Blocking pywebpush call, run off the event loop by the caller."""
         session = None
-        if settings.ENVIRONMENT in ("production", "staging"):
+        if _pin_this_send():
             # pywebpush accepts a requests session. Its adapter pins the socket
             # to the address validated above while preserving SNI and hostname
             # verification, closing the check/use DNS-rebinding window.
@@ -443,8 +459,8 @@ class PushService:
 
     async def send_to_user(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         title: str,
         body: str,
         url: str = "/notifications?tab=inbox",

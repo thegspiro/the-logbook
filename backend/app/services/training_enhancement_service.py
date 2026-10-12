@@ -35,9 +35,10 @@ from app.models.training import (
     TrainingType,
     XAPIStatement,
 )
-from app.models.user import User, UserStatus
+from app.models.user import Position, User, UserStatus
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    load_credited_shift_dates,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -89,7 +90,9 @@ def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
     return round(max(0, current - (expiring_count / total * 100)), 1)
 
 
-def _requirement_cells(requirements, user, records, today: date) -> List[str]:
+def _requirement_cells(
+    requirements, user, records, today: date, shift_dates: List[date]
+) -> List[str]:
     """One export cell per requirement column for ``user``.
 
     "N/A" where the requirement does not grade this member — their membership
@@ -106,7 +109,7 @@ def _requirement_cells(requirements, user, records, today: date) -> List[str]:
             cells.append("N/A")
             continue
         detail = TrainingService.evaluate_requirement_detail(
-            req, records, today, join_date=join_date
+            req, records, today, join_date=join_date, shift_dates=shift_dates
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
@@ -131,16 +134,19 @@ class RecertificationService:
         if active_only:
             query = query.where(RecertificationPathway.active.is_(True))
         result = await self.db.execute(query.order_by(RecertificationPathway.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_pathway(self, pathway_id: str, organization_id: str):
+    async def get_pathway(
+        self, pathway_id: str, organization_id: str
+    ) -> Optional[RecertificationPathway]:
         """Get a specific recertification pathway"""
         result = await self.db.execute(
             select(RecertificationPathway)
             .where(RecertificationPathway.id == pathway_id)
             .where(RecertificationPathway.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        pathway: Optional[RecertificationPathway] = result.scalar_one_or_none()
+        return pathway
 
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure every client-supplied pathway FK belongs to the current tenant."""
@@ -240,7 +246,7 @@ class RecertificationService:
         result = await self.db.execute(
             query.order_by(RenewalTask.certification_expiration_date)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def generate_renewal_tasks(self, organization_id: str) -> int:
         """
@@ -340,22 +346,55 @@ class CompetencyService:
         if position:
             query = query.where(CompetencyMatrix.position == position)
         result = await self.db.execute(query.order_by(CompetencyMatrix.name))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_matrix(self, matrix_id: str, organization_id: str):
+    async def get_matrix(
+        self, matrix_id: str, organization_id: str
+    ) -> Optional[CompetencyMatrix]:
         """Get a specific competency matrix"""
         result = await self.db.execute(
             select(CompetencyMatrix)
             .where(CompetencyMatrix.id == matrix_id)
             .where(CompetencyMatrix.organization_id == organization_id)
         )
-        return result.scalar_one_or_none()
+        matrix: Optional[CompetencyMatrix] = result.scalar_one_or_none()
+        return matrix
+
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure client-supplied matrix FKs belong to the current tenant (XC-1).
+
+        ``skill_requirements`` is free-form JSON, but each entry's
+        ``skill_evaluation_id`` names a skill the heat-map grades against, so a
+        foreign one is a dangling cross-tenant reference. Only keys present in
+        ``data`` are checked, so a partial update leaves stored values alone.
+        """
+        await assert_in_org(
+            self.db,
+            Position,
+            data.get("role_id"),
+            organization_id,
+            allow_none=True,
+            label="role",
+        )
+        skill_ids = [
+            entry.get("skill_evaluation_id")
+            for entry in (data.get("skill_requirements") or [])
+            if isinstance(entry, dict)
+        ]
+        await assert_all_in_org(
+            self.db,
+            SkillEvaluation,
+            skill_ids,
+            organization_id,
+            label="skill evaluation",
+        )
 
     async def create_matrix(
         self, organization_id: str, data: dict, created_by: str
     ) -> CompetencyMatrix:
         """Create a competency matrix"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         matrix = CompetencyMatrix(
             organization_id=organization_id,
             created_by=created_by,
@@ -375,22 +414,99 @@ class CompetencyService:
         matrix = await self.get_matrix(matrix_id, organization_id)
         if not matrix:
             raise ValueError("Matrix not found")
-        apply_updates(matrix, _stringify_uuids(data))
+        data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
+        apply_updates(matrix, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.
         await self.db.refresh(matrix)
         return matrix
 
-    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
-        """Get all competencies for a member"""
-        result = await self.db.execute(
-            select(MemberCompetency)
-            .where(MemberCompetency.user_id == user_id)
+    def _competencies_query(self, organization_id: str):
+        """Stored MemberCompetency rows with their skill's name, newest first.
+
+        The one read behind both the per-member endpoints and the department
+        heat-map, so the level a heat-map cell shows is exactly the level the
+        member's own view reports — the heat-map grades nothing itself
+        (CLAUDE.md pitfall #29). The skill join carries the org predicate so a
+        row can never be named from another department's catalog.
+        """
+        return (
+            select(MemberCompetency, SkillEvaluation.name)
+            .outerjoin(
+                SkillEvaluation,
+                (SkillEvaluation.id == MemberCompetency.skill_evaluation_id)
+                & (SkillEvaluation.organization_id == organization_id),
+            )
             .where(MemberCompetency.organization_id == organization_id)
             .order_by(MemberCompetency.updated_at.desc())
         )
-        return result.scalars().all()
+
+    @staticmethod
+    def _named(rows) -> list:
+        competencies = []
+        for competency, skill_name in rows:
+            # ``skill_name`` is the response schema's enriched field; it is
+            # not a mapped column, so setting it writes nothing.
+            competency.skill_name = skill_name
+            competencies.append(competency)
+        return competencies
+
+    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
+        """Get all competencies for a member"""
+        result = await self.db.execute(
+            self._competencies_query(organization_id).where(
+                MemberCompetency.user_id == user_id
+            )
+        )
+        return self._named(result.all())
+
+    async def get_department_competencies(self, organization_id: str) -> Dict[str, Any]:
+        """Every active member's stored levels, for the readiness heat-map.
+
+        Members are the department's active roster — including those with no
+        evaluation yet, who show as a row of empty cells rather than vanishing
+        — and skills are its active skill evaluations, which are the columns.
+        """
+        members_result = await self.db.execute(
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+        members = [
+            {
+                "user_id": str(member.id),
+                "name": member.full_name,
+                "station": member.station,
+                "rank": member.rank,
+            }
+            for member in members_result.scalars().all()
+        ]
+        active_ids = {m["user_id"] for m in members}
+
+        skills_result = await self.db.execute(
+            select(SkillEvaluation)
+            .where(
+                SkillEvaluation.organization_id == organization_id,
+                SkillEvaluation.active.is_(True),
+            )
+            .order_by(SkillEvaluation.category, SkillEvaluation.name)
+        )
+        skills = [
+            {"id": str(skill.id), "name": skill.name, "category": skill.category}
+            for skill in skills_result.scalars().all()
+        ]
+
+        result = await self.db.execute(self._competencies_query(organization_id))
+        competencies = [
+            c for c in self._named(result.all()) if str(c.user_id) in active_ids
+        ]
+        return {"members": members, "skills": skills, "competencies": competencies}
 
 
 class InstructorQualificationService:
@@ -495,7 +611,7 @@ class InstructorQualificationService:
             .where(InstructorQualification.id == qual_id)
             .where(InstructorQualification.organization_id == organization_id)
         )
-        qual = result.scalar_one_or_none()
+        qual: Optional[InstructorQualification] = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
         data = _stringify_uuids(data)
@@ -546,7 +662,7 @@ class InstructorQualificationService:
                 | (InstructorQualification.expiration_date >= today)
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
 
 class TrainingEffectivenessService:
@@ -626,7 +742,7 @@ class TrainingEffectivenessService:
         result = await self.db.execute(
             query.order_by(TrainingEffectivenessEvaluation.created_at.desc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_course_effectiveness_summary(
         self, course_id: str, organization_id: str
@@ -702,7 +818,7 @@ class MultiAgencyService:
         result = await self.db.execute(
             query.order_by(MultiAgencyTraining.exercise_date.desc())
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def _validate_references(self, organization_id: str, data: dict) -> None:
         """Ensure client-supplied exercise FKs belong to the current tenant."""
@@ -758,7 +874,7 @@ class MultiAgencyService:
             .where(MultiAgencyTraining.id == exercise_id)
             .where(MultiAgencyTraining.organization_id == organization_id)
         )
-        exercise = result.scalar_one_or_none()
+        exercise: Optional[MultiAgencyTraining] = result.scalar_one_or_none()
         if not exercise:
             raise ValueError("Exercise not found")
 
@@ -977,7 +1093,7 @@ class XAPIService:
             return None
         try:
             # Simple parser for common formats: PT1H30M, PT45M, PT3600S
-            seconds = 0
+            seconds: float = 0
             time_part = duration_str.split("T")[-1] if "T" in duration_str else ""
             import re
 
@@ -1051,6 +1167,9 @@ class ReportExportService:
         # "Met" is judged as of the department's today, the same day the
         # compliance screens use; a caller's end_date only bounds the rows.
         today = await resolve_org_today(self.db, organization_id)
+        shifts_by_user = await load_credited_shift_dates(
+            self.db, organization_id, [u.id for u in users], requirements, today, True
+        )
         for user in users:
             records_result = await self.db.execute(
                 select(TrainingRecord)
@@ -1070,7 +1189,15 @@ class ReportExportService:
                 str(len(records)),
             ]
 
-            row.extend(_requirement_cells(requirements, user, records, today))
+            row.extend(
+                _requirement_cells(
+                    requirements,
+                    user,
+                    records,
+                    today,
+                    shifts_by_user.get(str(user.id), []),
+                )
+            )
 
             writer.writerow(row)
 
@@ -1182,6 +1309,17 @@ class ReportExportService:
             )
         )
         all_requirements = req_result.scalars().all()
+        # Full history: a rolling requirement's due date, which the at-risk
+        # list below reads, anchors on the latest shift however old.
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            all_requirements,
+            today,
+            True,
+            full_history=True,
+        )
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1209,7 +1347,11 @@ class ReportExportService:
                 from app.services.training_service import TrainingService
 
                 detail = TrainingService.evaluate_requirement_detail(
-                    req, records, today, join_date=join_date
+                    req,
+                    records,
+                    today,
+                    join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(user.id), []),
                 )
                 statuses.append(_detail_status(detail))
                 if (
@@ -1295,6 +1437,14 @@ class ReportExportService:
         # tomorrow for a US department every evening.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         generated_on = datetime.now(org_tz).date()
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            generated_on,
+            True,
+        )
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
@@ -1354,7 +1504,13 @@ class ReportExportService:
             c.drawString(col_x[2], y, f"{total_hours:.1f}")
             c.drawString(col_x[3], y, str(len(records)))
 
-            cells = _requirement_cells(requirements, user, records, generated_on)
+            cells = _requirement_cells(
+                requirements,
+                user,
+                records,
+                generated_on,
+                shifts_by_user.get(str(user.id), []),
+            )
             for i, status_text in enumerate(cells):
                 x = req_col_start + i * 70
                 if x + 60 > page_w - margin:

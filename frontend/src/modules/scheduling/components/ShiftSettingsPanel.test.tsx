@@ -119,10 +119,10 @@ describe('ShiftSettingsPanel', () => {
     });
   });
 
-  // 'equipment' belongs in this list, not the one above: its four settings were
-  // stored and read by nothing, so they were deleted and the section is now a
-  // signpost to Inventory. A Save button there would write nothing.
-  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'equipment'])(
+  // Every section outside LOCALLY_SAVED_SECTIONS owns its own save control.
+  // (An 'equipment' section used to be listed here; its settings were stored
+  // and read by nothing, so the section was removed from SettingsTab outright.)
+  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'outside-apparatus'])(
     'on the %s section',
     (tab) => {
       it('hides the Save/Reset footer it would not act on', () => {
@@ -185,6 +185,22 @@ describe('ShiftSettingsPanel', () => {
     await user.click(toggle);
 
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
+  });
+
+  it('shows pre-shift work as on when the response omits the field, matching the backend default', async () => {
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /allow pre-shift work/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turns pre-shift work off as a single-key patch', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /allow pre-shift work/i });
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ pre_shift_work_enabled: false }));
   });
 });
 

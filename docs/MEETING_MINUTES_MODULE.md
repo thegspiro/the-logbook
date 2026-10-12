@@ -300,7 +300,14 @@ _(Corrected 2026-10-04: the router is mounted at `/api/v1/minutes-records`, not
 | `DELETE` | `/api/v1/minutes-records/templates/{id}`            | `minutes.manage` | Delete template                                                                                               |
 
 Motions, action items and quorum have their own sub-routes under
-`/{id}/motions`, `/{id}/action-items` and `/{id}/quorum`, all `minutes.manage`.
+`/{id}/motions`, `/{id}/action-items` and `/{id}/quorum`, all `minutes.manage`
+— with one exception: `PUT /{id}/action-items/{item_id}` also accepts the
+item's assignee (matched on `assignee_id`), who may change only `status` and
+`completion_notes`; any other field is a 403, and someone else's item a 404
+_(2026-10-11, W52-7)_. `GET /api/v1/minutes-records/action-item-assignees`
+(`minutes.manage`) lists every active member as `{id, name}` for the assignee
+picker; an action item's `assignee_id` must name an active member of the
+department, and the server stores that member's name beside it _(W52-6)_.
 Meeting records themselves are a separate router at `/api/v1/meetings`.
 
 ### List Response Counts _(2026-08-17)_

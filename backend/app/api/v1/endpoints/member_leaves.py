@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -54,29 +54,47 @@ async def leave_widget_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
-    """Return oversight counts only, scoped to the officer's organization."""
+    """Return oversight counts only, scoped to the officer's organization.
+
+    **Requires permission: members.manage**
+    """
     today = await resolve_org_today(db, current_user.organization_id)
-    leaves = (
-        (
-            await db.execute(
-                select(MemberLeaveOfAbsence).where(
-                    MemberLeaveOfAbsence.organization_id
-                    == current_user.organization_id,
-                    MemberLeaveOfAbsence.active.is_(True),
-                )
+    # Counted in SQL (USR-5): leave rows are never deleted and the `active`
+    # flag only clears when somebody deactivates one, so loading them to count
+    # in Python cost a department more on every dashboard load for as long as
+    # it existed. Same three tallies, same definitions, one aggregate row.
+    end = MemberLeaveOfAbsence.end_date
+    counts = (
+        await db.execute(
+            select(
+                func.count(MemberLeaveOfAbsence.id),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    end.is_not(None),
+                                    end >= today,
+                                    end <= today + timedelta(days=30),
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(func.sum(case((end.is_(None), 1), else_=0)), 0),
+            ).where(
+                MemberLeaveOfAbsence.organization_id == current_user.organization_id,
+                MemberLeaveOfAbsence.active.is_(True),
             )
         )
-        .scalars()
-        .all()
-    )
+    ).one()
     return LeaveWidgetResponse(
-        active=len(leaves),
-        ending_within_30_days=sum(
-            1
-            for leave in leaves
-            if leave.end_date and today <= leave.end_date <= today + timedelta(days=30)
-        ),
-        open_ended=sum(1 for leave in leaves if leave.end_date is None),
+        active=int(counts[0] or 0),
+        ending_within_30_days=int(counts[1] or 0),
+        open_ended=int(counts[2] or 0),
     )
 
 

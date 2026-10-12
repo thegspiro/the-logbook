@@ -93,11 +93,18 @@ Recommended crontab (add to host or container cron):
 
 # Every 15 minutes — election lifecycle: auto-open flagged drafts, auto-close overdue elections, pre-close non-voter reminders
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=election_lifecycle
+
+# Daily at 4:45 AM — recover PayPal store payments the webhook never recorded
+45 4 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=paypal_capture_backfill
+
+# Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
+10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
 -----------------------------------------------------
 """
 
 import copy
 import html as _html
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -252,6 +259,17 @@ SCHEDULE = {
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
     },
+    "budget_request_reminders": {
+        "description": (
+            "Email budget-line owners who still owe a request for a draft "
+            "fiscal year, 7 days and 1 day before its request deadline (once "
+            "per member, deadline and reminder — safe to run more than once a "
+            "day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:10",
+        "cron": "10 8 * * *",
+    },
     "prospect_attendance_advance": {
         "description": (
             "Advance prospective members off a meeting stage once the event "
@@ -335,6 +353,12 @@ SCHEDULE = {
         "recommended_time": "09:00",
         "cron": "0 9 * * *",
     },
+    "paypal_capture_backfill": {
+        "description": "Recover completed PayPal captures from the last 7 days that the payment webhook never recorded, and match them to store orders",
+        "frequency": "daily",
+        "recommended_time": "04:45",
+        "cron": "45 4 * * *",
+    },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
         "frequency": "daily",
@@ -388,6 +412,12 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30",
         "cron": "*/30 * * * *",
+    },
+    "retry_message_deliveries": {
+        "description": "Retry department message emails and texts that failed or were held back by the hourly limit (up to 5 retries, 5 to 80 minutes apart)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5",
+        "cron": "*/5 * * * *",
     },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
@@ -472,6 +502,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:30",
         "cron": "30 6 * * *",
+    },
+    "membership_auto_purge": {
+        "description": "Email the membership coordinators about inactive prospective-member applications due for deletion within 7 days, then permanently delete those inactive longer than their pipeline's Auto-Purge grace period (only pipelines with Auto-Purge on; applications with no recorded inactive date are never purged)",
+        "frequency": "daily",
+        "recommended_time": "06:45",
+        "cron": "45 6 * * *",
     },
 }
 
@@ -622,14 +658,29 @@ async def _for_each_org(
     organizations = list(orgs.scalars().all())
     results = []
     total = 0
+    rolled_back = False
     for org in organizations:
+        # A session rollback expires every loaded instance, these Organization
+        # rows included, and an expired attribute cannot lazy-load outside the
+        # async context (MissingGreenlet). Without the refresh, the first
+        # failing org turned every later org's callback into a failure too.
+        # Tolerant in the same way as the rollback below: a session that cannot
+        # refresh cannot run the callback either, and that failure is reported
+        # per org rather than ending the loop.
+        if rolled_back:
+            try:
+                await db.refresh(org)
+            except Exception as e:
+                logger.warning(f"{task_name}: could not reload org after rollback: {e}")
+        org_id = str(org.id)
         try:
             count = await callback(db, org)
             total += count
         except Exception as e:
-            logger.error(f"{task_name} failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), task_name, e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"{task_name} failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, task_name, e)
+            results.append({"org_id": org_id, "error": str(e)})
+            rolled_back = True
             # The orgs share one session; roll back the failed unit of work so a
             # broken commit doesn't leave the session in a failed state that
             # cascades into every later org's callback.
@@ -911,6 +962,58 @@ async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]
     return await _for_each_org(db, "membership_inactivity_warnings", _process)
 
 
+async def run_membership_auto_purge(db: AsyncSession) -> Dict[str, Any]:
+    """Apply each pipeline's Auto-Purge setting to its inactive applications.
+
+    Before this runner the setting was stored and never read (CLAUDE.md
+    pitfall #19). The rules — which pipelines, how long, which applications —
+    live in ``MembershipPipelineService.auto_purge_inactive_prospects``, which
+    commits each pipeline itself and reports a failed pipeline rather than
+    raising, so one bad pipeline does not stop its siblings. ``_for_each_org``
+    isolates organizations from each other the same way.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    async def _process(db_session, org):
+        # Read before anything can roll the session back: a rollback expires
+        # the org row, and it cannot lazy-load outside the async context.
+        org_id = str(org.id)
+        service = MembershipPipelineService(db_session)
+        # Warn first, so an application entering the 7-day window is announced
+        # on the run that would otherwise be silent about it. A failed warning
+        # does not hold up the purge: the window is seven daily runs long, and
+        # a send that failed is retried on each of them.
+        warning_error: Exception | None = None
+        try:
+            await service.warn_upcoming_auto_purges(org_id)
+        except Exception as e:
+            warning_error = e
+            await db_session.rollback()
+        result = await service.auto_purge_inactive_prospects(org_id)
+        if warning_error is not None:
+            # Raised after the purge so the purge still runs, and raised at
+            # all so _for_each_org records it and reloads the org rows the
+            # rollback above expired before the next org's callback.
+            raise RuntimeError(
+                f"auto-purge warning failed ({warning_error}); purged "
+                f"{result['purged']} application(s)"
+            )
+        if result["errors"]:
+            # Surface it through _for_each_org's error path (task error log,
+            # per-org entry in the result) — the purged pipelines are already
+            # committed, so the rollback there undoes nothing of theirs.
+            raise RuntimeError(
+                f"auto-purge failed for {len(result['errors'])} pipeline(s) "
+                f"after purging {result['purged']} application(s): "
+                + "; ".join(
+                    f"{e['pipeline_id']}: {e['error']}" for e in result["errors"]
+                )
+            )
+        return result["purged"]
+
+    return await _for_each_org(db, "membership_auto_purge", _process)
+
+
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     Send reminders for action items approaching or past their due dates.
@@ -1121,7 +1224,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_reminders = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_reminders = 0
@@ -1414,7 +1517,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -1622,7 +1725,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -2007,7 +2110,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     Controlled by org.settings["shift_reminders"]:
       - enabled (bool, default True)
       - lookahead_hours (int, default 2)
-      - send_email (bool, default False)
+      - send_email (bool, default True — emails go out until a department turns them off)
       - cc_emails (list[str], default [])
     """
     from datetime import timedelta
@@ -2034,7 +2137,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -2534,7 +2637,7 @@ async def run_end_of_shift_checklist_reminders(
                 # Exclude inactive users — matches run_shift_reminders (a
                 # member assigned before being deactivated should not
                 # receive reminders); previously missing here (CRON2-31-5).
-                .where(User.is_active.is_(True))
+                .where(User.is_active)
             )
             for sid, uid in asres.all():
                 assigned_map.setdefault(str(sid), []).append(str(uid))
@@ -2714,7 +2817,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
     total_notifications = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_notifications = 0
@@ -3214,7 +3317,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
     total_escalations = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_escalations = 0
@@ -4286,6 +4389,165 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
     }
 
 
+async def run_retry_message_deliveries(db: AsyncSession) -> Dict[str, Any]:
+    """Retry department message deliveries whose backoff has run out (MSG-12).
+
+    A send that failed, or that the department's hourly escalation cap held
+    back, is recorded as ``retrying`` with a ``next_attempt_at`` (5, 10, 20,
+    40 then 80 minutes on, the owner's schedule). This re-delivers the due
+    ones through ``MessageDeliveryService.deliver``, which claims each due row
+    as its next attempt; a sixth failure is recorded as ``failed`` and stays
+    that way.
+
+    A due row that can no longer be sent — its message deactivated, deleted
+    or expired, its department switched off, or its member no longer in the
+    audience — is written down as failed with the reason rather than left
+    ``retrying``: ``deliver`` silently skips such members, so the row would
+    otherwise be selected on every pass and fill the bounded window.
+    """
+    from datetime import timezone as dt_timezone
+
+    from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
+    from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
+
+    now = datetime.now(dt_timezone.utc)
+    due = (
+        DepartmentMessageDelivery.status == "retrying",
+        DepartmentMessageDelivery.next_attempt_at <= now,
+    )
+
+    undeliverable = (
+        (
+            await db.execute(
+                select(DepartmentMessageDelivery.id)
+                .join(
+                    DepartmentMessage,
+                    DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+                )
+                .join(
+                    Organization,
+                    Organization.id == DepartmentMessage.organization_id,
+                )
+                .where(
+                    *due,
+                    or_(
+                        DepartmentMessage.is_active.is_(False),
+                        DepartmentMessage.deleted_at.isnot(None),
+                        DepartmentMessage.expires_at <= now,
+                        Organization.active.is_(False),
+                    ),
+                )
+                .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    retired = len(undeliverable)
+    if undeliverable:
+        await db.execute(
+            update(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.id.in_(list(undeliverable)))
+            .values(
+                status="failed",
+                next_attempt_at=None,
+                error="Message is no longer active; delivery abandoned",
+            )
+        )
+        await db.commit()
+
+    result = await db.execute(
+        select(
+            DepartmentMessageDelivery.message_id,
+            DepartmentMessageDelivery.recipient_id,
+        )
+        .join(
+            DepartmentMessage,
+            DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+        )
+        .join(Organization, Organization.id == DepartmentMessage.organization_id)
+        .where(
+            *due,
+            DepartmentMessage.is_active.is_(True),
+            DepartmentMessage.deleted_at.is_(None),
+            or_(
+                DepartmentMessage.expires_at.is_(None),
+                DepartmentMessage.expires_at > now,
+            ),
+            Organization.active.isnot(False),
+        )
+        .order_by(DepartmentMessageDelivery.next_attempt_at.asc())
+        .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+    )
+    pending: Dict[str, Set[str]] = {}
+    for message_id, recipient_id in result.all():
+        pending.setdefault(str(message_id), set()).add(str(recipient_id))
+
+    delivery = MessageDeliveryService(db)
+    retried = 0
+    failed = 0
+    for message_id, user_ids in pending.items():
+        try:
+            message = (
+                await db.execute(
+                    select(DepartmentMessage).where(
+                        DepartmentMessage.id == message_id,
+                        DepartmentMessage.is_active.is_(True),
+                        DepartmentMessage.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if message is None:
+                continue
+
+            targeted = await MessagingService(db)._targeted_users(
+                message, str(message.organization_id)
+            )
+            still_targeted = {
+                str(u.id) for u in targeted if str(u.id) != str(message.posted_by)
+            }
+            dropped = sorted(user_ids - still_targeted)
+            if dropped:
+                await db.execute(
+                    update(DepartmentMessageDelivery)
+                    .where(
+                        DepartmentMessageDelivery.message_id == message_id,
+                        DepartmentMessageDelivery.recipient_id.in_(dropped),
+                        DepartmentMessageDelivery.status == "retrying",
+                    )
+                    .values(
+                        status="failed",
+                        next_attempt_at=None,
+                        error="Recipient is no longer in the message audience",
+                    )
+                )
+                await db.commit()
+                retired += len(dropped)
+
+            deliverable = user_ids & still_targeted
+            if not deliverable:
+                continue
+            await delivery.deliver(message, only_user_ids=deliverable)
+            retried += 1
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to retry deliveries for message {}: {}", message_id, e
+            )
+            failed += 1
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "task": "retry_message_deliveries",
+        "messages": retried,
+        "retired": retired,
+        "failed": failed,
+    }
+
+
 async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """
     Open and close department-store order windows that have reached their
@@ -4311,6 +4573,63 @@ async def run_storefront_payment_reminders(db: AsyncSession) -> Dict[str, Any]:
         return await service.run_payment_reminders(str(org.id))
 
     return await _for_each_org(db, "storefront_payment_reminders", process)
+
+
+async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
+    """Recover PayPal captures the store's payment webhook missed. Daily.
+
+    Keyed on the integration rather than run through ``_for_each_org``: only a
+    department with PayPal enabled has anything to reconcile. Each integration
+    is isolated — a refused credential or a missing Transaction Search
+    permission is logged to that department's error monitor and the next
+    integration still runs. See ``app/services/paypal_backfill_service.py``.
+    """
+    from app.models.integration import Integration
+    from app.services.paypal_backfill_service import backfill_paypal_captures
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type == "paypal",
+            # The webhook accepts deliveries only for an enabled integration;
+            # the backfill recovers exactly what that webhook would have taken.
+            Integration.enabled.is_(True),
+            Organization.active.isnot(False),
+        )
+    )
+    integrations = list(result.scalars().all())
+
+    recorded = 0
+    failed = 0
+    rolled_back = False
+    # Read every org id while the rows are still loaded: rollback() expires
+    # every instance even with expire_on_commit=False, and after one
+    # department fails, a plain attribute read on the next would lazy-load,
+    # which async SQLAlchemy refuses (MissingGreenlet) — that used to abort
+    # the task for every department after the failing one.
+    targets = [(i, str(i.organization_id)) for i in integrations]
+    for integration, org_id in targets:
+        try:
+            if rolled_back:
+                await db.refresh(integration)
+            outcome = await backfill_paypal_captures(db, integration)
+            recorded += int(outcome.get("recorded", 0))
+        except Exception as e:
+            await db.rollback()
+            rolled_back = True
+            logger.opt(exception=True).warning(
+                "PayPal capture backfill failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "PayPal payment backfill", e)
+            failed += 1
+
+    return {
+        "task": "paypal_capture_backfill",
+        "integrations": len(integrations),
+        "recorded": recorded,
+        "failed": failed,
+    }
 
 
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
@@ -5216,7 +5535,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     total_reminders = 0
     total_emails = 0
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for org in organizations:
         org_reminders = 0
@@ -6288,6 +6607,21 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
+async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind line owners before a draft year's budget request deadline.
+
+    Email only (CLAUDE.md pitfall #18). The per-department work, the
+    sent-log that makes a second run the same day send nothing, and the
+    choice of which reminder is due are in
+    ``finance_budget_request_notifications.send_deadline_reminders``.
+    """
+    from app.services.finance_budget_request_notifications import (
+        send_deadline_reminders,
+    )
+
+    return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
+
+
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
     """Advance applicants whose meeting attendance has settled without a finalize.
 
@@ -6570,10 +6904,9 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
     from datetime import timezone as dt_timezone
 
     from app.models.integration import Integration
+    from app.services.integration_health import record_integration_run
     from app.services.integration_services.salesforce_sync_service import (
-        get_salesforce_sync_service,
-        pull_org_from_salesforce,
-        push_org_to_salesforce,
+        run_salesforce_sync,
     )
 
     result = await db.execute(
@@ -6600,21 +6933,20 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             continue
         enabled += 1
         org_id = str(integration.organization_id)
+        started = time.monotonic()
         try:
-            sync_service = await get_salesforce_sync_service(db, org_id)
-            if not sync_service:
-                continue
-            direction = str(config.get("sync_direction", "push")).lower()
-            sync_types = config.get("sync_types") or [
-                "members",
-                "training",
-                "events",
-            ]
-            if direction in ("push", "both"):
-                await push_org_to_salesforce(db, sync_service, org_id, sync_types)
-            if direction in ("pull", "both"):
-                await pull_org_from_salesforce(db, sync_service, integration)
+            counts = await run_salesforce_sync(db, integration)
             integration.last_sync_at = datetime.now(dt_timezone.utc)
+            await record_integration_run(
+                db,
+                integration,
+                operation="salesforce_sync",
+                trigger="scheduled",
+                success=True,
+                summary=counts,
+                started_monotonic=started,
+                mark_synced=True,
+            )
             await db.commit()
             synced += 1
         except Exception as e:
@@ -6623,6 +6955,23 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
                 "Salesforce auto-sync failed for org {}", org_id
             )
             await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
+            # Recorded on the integration as well, so the failure shows on its
+            # detail page and not only in the server's task error log.
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation="salesforce_sync",
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Could not record auto-sync failure for org {}", org_id)
             failed += 1
 
     return {
@@ -6681,6 +7030,7 @@ TASK_RUNNERS = {
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
+    "paypal_capture_backfill": run_paypal_capture_backfill,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
@@ -6690,6 +7040,7 @@ TASK_RUNNERS = {
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
     "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
+    "retry_message_deliveries": run_retry_message_deliveries,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -6702,11 +7053,13 @@ TASK_RUNNERS = {
     "reap_expired_sessions": run_reap_expired_sessions,
     "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
+    "membership_auto_purge": run_membership_auto_purge,
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
+    "budget_request_reminders": run_budget_request_reminders,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -6720,6 +7073,9 @@ TASK_RUNNERS = {
 # how end_of_shift_summary, shift_auto_checkout, trainee_report_escalation and
 # others were defined and documented but never actually fired.
 TASK_INTERVALS_SECONDS: Dict[str, int] = {
+    # Every 5 minutes: the first retry of a failed message delivery is due 5
+    # minutes after it (MSG-12).
+    "retry_message_deliveries": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
@@ -6745,6 +7101,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "inventory_audit_digest": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
+    "paypal_capture_backfill": 86400,
     "compliance_auto_reports": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,
@@ -6757,6 +7114,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "reap_expired_sessions": 86400,
     "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
+    "membership_auto_purge": 86400,
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
     "shift_pattern_generation": 86400,
@@ -6764,6 +7122,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
     "prospect_attendance_advance": 86400,
+    # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
+    "budget_request_reminders": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

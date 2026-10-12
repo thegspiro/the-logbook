@@ -81,6 +81,7 @@ from app.services.storefront_preview_service import (
     StorefrontPreviewService,
 )
 from app.services.storefront_service import StorefrontService
+from app.services.upload_scanning import reject_if_malicious
 from app.utils.image_processing import optimize_image
 from app.utils.storefront_payments import build_payment_method_summaries
 
@@ -102,7 +103,8 @@ def _detect_image_mime(contents: bytes) -> str:
     try:
         import magic
 
-        return magic.from_buffer(contents, mime=True)
+        detected: str = magic.from_buffer(contents, mime=True)
+        return detected
     except Exception:
         # libmagic is optional in some deployments; fall back to signatures.
         if contents[:8] == b"\x89PNG\r\n\x1a\n":
@@ -748,10 +750,19 @@ async def upload_product_image(
             status_code=400,
             detail=f"Images must be {_MAX_IMAGE_BYTES // (1024 * 1024)}MB or smaller",
         )
-    if _detect_image_mime(contents) not in _ALLOWED_IMAGE_MIMES:
+    detected_mime = _detect_image_mime(contents)
+    if detected_mime not in _ALLOWED_IMAGE_MIMES:
         raise HTTPException(
             status_code=400, detail="Invalid image type. Allowed: JPEG, PNG, WebP"
         )
+    # Scanned as uploaded, before re-encoding.
+    await reject_if_malicious(
+        db,
+        contents,
+        upload_kind="storefront_product_image",
+        detected_mime=detected_mime,
+        user=current_user,
+    )
 
     try:
         optimized = optimize_image(

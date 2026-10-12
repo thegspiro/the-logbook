@@ -21,6 +21,7 @@ import type {
   EventHourMappingCreate,
   EventHourMappingUpdate,
   AdminHoursComplianceItem,
+  AdminHoursReviewSettings,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -185,6 +186,11 @@ export const adminHoursEntryService = {
     // summary payload lacking it took the whole page down. Nested arrays like
     // this sit below where the generic asArray boundary guard can reach.
     return { ...response.data, byCategory: asArray(response.data?.byCategory) };
+  },
+
+  async getReviewSettings(): Promise<AdminHoursReviewSettings> {
+    const response = await api.get<AdminHoursReviewSettings>('/admin-hours/settings');
+    return response.data;
   },
 
   async getPendingCount(): Promise<number> {

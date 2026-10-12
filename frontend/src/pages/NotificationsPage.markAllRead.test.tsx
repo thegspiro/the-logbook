@@ -21,6 +21,7 @@ import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 import NotificationsPage from './NotificationsPage';
 import { notificationsService } from '../services/api';
+import type { NotificationLogPage } from '../services/adminServices';
 
 vi.mock('../services/api', () => ({
   notificationsService: {
@@ -199,7 +200,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
     renderPage('/notifications?tab=log');
 
     // Start the next page and hold it open.
-    let releasePage!: (value: { logs: (typeof unread)[]; total: number; skip: number; limit: number }) => void;
+    let releasePage!: (value: NotificationLogPage) => void;
     vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
       new Promise((resolve) => {
         releasePage = resolve;

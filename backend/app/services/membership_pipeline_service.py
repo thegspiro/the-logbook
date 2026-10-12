@@ -12,7 +12,7 @@ import re
 import secrets
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import (
     AbstractSet,
     Any,
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
@@ -53,11 +54,13 @@ from app.models.membership_pipeline import (
 )
 from app.models.user import Organization, Role, User, UserStatus, generate_uuid
 from app.schemas.membership_pipeline import resolve_conversion_outcome
+from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
     recipients_for,
 )
+from app.services.file_storage_service import StorageArea
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
@@ -72,6 +75,20 @@ from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+
+def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
+    """Real path of a stored applicant document, confined to its organization.
+
+    Applicant files are stored by ``FileStorageService`` under the
+    organization's applicants area. Returns None for anything outside it (or
+    outside the legacy ``prospect-documents/<organization_id>/`` tree) —
+    including another organization's directory under the same root, which a
+    root-level check would accept. Every path this service writes, removes or
+    serves goes through here.
+    """
+    return file_storage.resolve(file_path, organization_id, StorageArea.APPLICANTS)
+
 
 # The tab on every email the pipeline sends an applicant. One constant so the
 # three senders cannot drift apart, and so the stage editor's preview
@@ -140,6 +157,18 @@ ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
 )
 
 
+# Auto-purge grace period bounds, in days. They match the settings screen's
+# own input limits (PipelineSettingsPage), and a stored value outside them is
+# clamped on read rather than trusted: the setting permanently deletes records.
+AUTO_PURGE_MIN_DAYS = 30
+AUTO_PURGE_MAX_DAYS = 1095
+# Coordinators are emailed this many days before an application is
+# auto-purged (owner decision, 2026-10-08). Below AUTO_PURGE_MIN_DAYS, so
+# every enabled pipeline has a warning window.
+AUTO_PURGE_WARNING_DAYS = 7
+AUTO_PURGE_WARNING_ACTION = "auto_purge_warning_sent"
+
+
 # The detailed duplicate-match message names the existing member and their
 # email. /transfer redacts it deliberately (see transfer_prospect); the
 # completion paths must too — /approve-step is reachable by any member holding
@@ -182,7 +211,7 @@ def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
         ActionType.SEND_EMAIL.value: PipelineStepType.AUTOMATED_EMAIL,
         ActionType.SCHEDULE_MEETING.value: PipelineStepType.MEETING,
         ActionType.COLLECT_DOCUMENT.value: PipelineStepType.DOCUMENT_UPLOAD,
-    }.get(raw, PipelineStepType.ACTION)
+    }.get(raw or "", PipelineStepType.ACTION)
 
 
 def is_status_page_stage(step: MembershipPipelineStep) -> bool:
@@ -390,9 +419,12 @@ def _approval_roles_held(positions: Iterable[Any]) -> set[str]:
     }
     slugs = {position.slug.casefold() for position in positions if position.slug}
     for office in OFFICE_CATALOG:
-        office_slugs = {
-            str(slug).casefold() for slug in office.get("position_slugs", [])
-        }
+        position_slugs = office.get("position_slugs")
+        office_slugs = (
+            {str(slug).casefold() for slug in position_slugs}
+            if isinstance(position_slugs, list)
+            else set()
+        )
         if slugs & office_slugs:
             roles.add(str(office["key"]).casefold())
             roles.add(str(office["label"]).casefold())
@@ -637,7 +669,10 @@ class MembershipPipelineService:
                 self.db.add(step)
 
         await self.db.commit()
-        return await self.get_pipeline(pipeline.id, organization_id)
+        created = await self.get_pipeline(pipeline.id, organization_id)
+        if created is None:
+            raise RuntimeError(f"Pipeline {pipeline.id} not found after commit")
+        return created
 
     # Fields that may never be set via the generic update dict
     _PIPELINE_PROTECTED_FIELDS = frozenset(
@@ -746,8 +781,8 @@ class MembershipPipelineService:
             description=source.description,
             is_template=False,
             is_default=False,
-            is_active=source.is_active,
-            auto_transfer_on_approval=source.auto_transfer_on_approval,
+            is_active=bool(source.is_active),
+            auto_transfer_on_approval=bool(source.auto_transfer_on_approval),
             inactivity_config=source.inactivity_config,
             conversion_config=copy.deepcopy(source.conversion_config),
             steps=steps,
@@ -1532,6 +1567,7 @@ class MembershipPipelineService:
                 # blocked advancing anyone past it, including in bulk.
                 selectinload(ProspectiveMember.interviews),
                 selectinload(ProspectiveMember.target_role),
+                selectinload(ProspectiveMember.referrer),
             )
             # Refresh identity-map instances: the prospect's pipeline/steps
             # may already be cached in this session from an earlier call, and
@@ -1558,6 +1594,17 @@ class MembershipPipelineService:
             # leave a stale copy on every application that wanted it.
             prospect.target_role_name = (
                 prospect.target_role.name if prospect.target_role else None
+            )
+            # The drawer shows who referred the applicant, and a member id is
+            # not a name. Only an in-org referrer is named: rows written
+            # before referred_by was validated may point at another
+            # department's member, whose name must not cross over (XC-1).
+            referrer = prospect.referrer
+            prospect.referred_by_name = (
+                referrer.display_name
+                if referrer is not None
+                and str(referrer.organization_id) == str(prospect.organization_id)
+                else None
             )
         return prospect
 
@@ -1602,9 +1649,7 @@ class MembershipPipelineService:
                 # staff compare it against the applicant's legal name.
                 "name": m.full_name,
                 "email": m.email,
-                "status": (
-                    m.status.value if hasattr(m.status, "value") else str(m.status)
-                ),
+                "status": getattr(m.status, "value", str(m.status)),
                 "membership_number": m.membership_number,
                 "archived_at": m.archived_at.isoformat() if m.archived_at else None,
                 "match_type": (
@@ -1772,6 +1817,8 @@ class MembershipPipelineService:
         ):
             await self.db.commit()
             created = await self.get_prospect(prospect.id, organization_id)
+        if created is None:
+            raise RuntimeError(f"Prospect {prospect.id} not found after commit")
         return created
 
     # Fields that may never be set via the generic update dict
@@ -1802,6 +1849,7 @@ class MembershipPipelineService:
             "reactivated_at",
             "withdrawn_at",
             "withdrawal_reason",
+            "inactive_since",
             "target_role",
         }
     )
@@ -1904,10 +1952,31 @@ class MembershipPipelineService:
             k: v for k, v in data.items() if k not in self._PROSPECT_PROTECTED_FIELDS
         }
         old_values = {k: getattr(prospect, k, None) for k in updates}
+        previous_status = None
+        if updates.get("status") is not None:
+            previous_status = (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else str(prospect.status)
+            )
 
         written = apply_updates(prospect, updates)
 
-        changes = {}
+        # A status written through this generic update is still a transition,
+        # so it is stamped like one; otherwise an application deactivated here
+        # would carry no inactive_since and never be auto-purged, and one
+        # reactivated here would keep a running purge clock.
+        if (
+            "status" in written
+            and updates.get("status") is not None
+            and previous_status is not None
+        ):
+            raw_status = updates["status"]
+            target_status = self._parse_status(getattr(raw_status, "value", raw_status))
+            if target_status.value != previous_status:
+                self._stamp_lifecycle(prospect, previous_status, target_status, None)
+
+        changes: Dict[str, Dict[str, Any]] = {}
         for key in written:
             new_value = getattr(prospect, key)
             old_value = old_values.get(key)
@@ -2104,7 +2173,7 @@ class MembershipPipelineService:
                     ScreeningStatus,
                 )
 
-                result = await self.db.execute(
+                screening_result = await self.db.execute(
                     select(ScreeningRecord).where(
                         and_(
                             ScreeningRecord.prospect_id == prospect.id,
@@ -2118,8 +2187,10 @@ class MembershipPipelineService:
                         )
                     )
                 )
-                records = result.scalars().all()
-                passed_types = {r.screening_type.value for r in records}
+                screening_records = screening_result.scalars().all()
+                passed_types = {
+                    record.screening_type.value for record in screening_records
+                }
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
                     raise ValueError(
@@ -2457,7 +2528,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect: ProspectiveMember,
         step_id: str,
-        recorded_by: str,
+        recorded_by: Optional[str],
         action_result: Dict[str, Any],
         notes: Optional[str],
         missing_roles: List[str],
@@ -3582,11 +3653,18 @@ class MembershipPipelineService:
         others as the history they are. `20260924_1540_77d4aa7798dd` backfilled
         existing rows from the activity log on exactly this rule.
 
-        Called from ``_apply_status_change``, which is the single choke point
-        for every transition, single and bulk alike, so there is no path that
-        changes a status without passing through here.
+        ``inactive_since`` is the one exception, and deliberately: it is the
+        auto-purge clock, not history, so it follows ``status`` — set on entry
+        into inactive, cleared on every exit. An application reactivated and
+        later deactivated again starts a fresh grace period.
+
+        Called from ``_apply_status_change`` (every chosen transition, single
+        and bulk) and from ``update_prospect``'s generic status write. The
+        inactivity sweep and the transfer path set status without a chosen
+        target and stamp the same columns inline; keep all four in step.
         """
         now = datetime.now(timezone.utc)
+        prospect.inactive_since = now if target == ProspectStatus.INACTIVE else None
         if target == ProspectStatus.WITHDRAWN:
             prospect.withdrawn_at = now
             prospect.withdrawal_reason = reason
@@ -4395,6 +4473,7 @@ class MembershipPipelineService:
 
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
+        prospect.inactive_since = None
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.now(timezone.utc)
 
@@ -4466,7 +4545,7 @@ class MembershipPipelineService:
         self,
         user_id: str,
         organization_id: str,
-        enrolled_by: str,
+        enrolled_by: Optional[str],
     ) -> Optional[Dict[str, Any]]:
         """
         Auto-enroll a newly converted member into the organization's
@@ -5450,7 +5529,7 @@ class MembershipPipelineService:
         self, organization_id: str, created_by: Optional[str] = None
     ):
         """Create default pipeline templates for an organization"""
-        templates = [
+        templates: List[Dict[str, Any]] = [
             {
                 "name": "Standard Membership Pipeline",
                 "description": "A standard pipeline for processing new membership applications with bookended steps.",
@@ -5573,7 +5652,15 @@ class MembershipPipelineService:
     async def _get_default_pipeline(
         self, organization_id: str
     ) -> Optional[MembershipPipeline]:
-        """Get the default pipeline for an organization"""
+        """The pipeline an applicant with no explicit pipeline is placed on.
+
+        The organization's default pipeline; failing that, its first active,
+        non-template pipeline by creation time. Without the fallback a
+        department whose only pipeline was never marked default collected
+        guest sign-ins on no board at all (W23-1, owner decision). The
+        stranded rows were placed by migration e1a5bfe7a2ed, which inlines
+        this same rule.
+        """
         query = (
             select(MembershipPipeline)
             .where(
@@ -5582,10 +5669,29 @@ class MembershipPipelineService:
                     MembershipPipeline.is_default.is_(True),
                 )
             )
+            .order_by(MembershipPipeline.created_at, MembershipPipeline.id)
             .options(selectinload(MembershipPipeline.steps))
         )
         result = await self.db.execute(query)
-        return result.scalars().first()
+        default: Optional[MembershipPipeline] = result.scalars().first()
+        if default is not None:
+            return default
+        fallback = await self.db.execute(
+            select(MembershipPipeline)
+            .where(
+                MembershipPipeline.organization_id == organization_id,
+                MembershipPipeline.is_active.is_(True),
+                or_(
+                    MembershipPipeline.is_template.is_(False),
+                    MembershipPipeline.is_template.is_(None),
+                ),
+            )
+            .order_by(MembershipPipeline.created_at, MembershipPipeline.id)
+            .limit(1)
+            .options(selectinload(MembershipPipeline.steps))
+        )
+        first_active: Optional[MembershipPipeline] = fallback.scalars().first()
+        return first_active
 
     async def _get_first_step_id(self, pipeline_id: str) -> Optional[str]:
         """Get the first step ID for a pipeline"""
@@ -6203,7 +6309,30 @@ class MembershipPipelineService:
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
+        ids = await self._delete_inactive_prospects(
+            pipeline_id, organization_id, prospect_ids=prospect_ids
+        )
+        if ids:
+            await self.db.commit()
+        return len(ids)
 
+    async def _delete_inactive_prospects(
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        prospect_ids: Optional[List[str]] = None,
+        inactive_before: Optional[datetime] = None,
+    ) -> List[str]:
+        """Delete the matching inactive applications and their files; no commit.
+
+        Shared by the manual purge and the scheduled auto-purge so the two
+        cannot drift on what may be deleted or how the files go. The caller
+        commits, which lets auto-purge write its audit entry in the same
+        transaction as the delete. ``inactive_before`` restricts the purge to
+        applications whose current inactive spell began at or before it; a
+        NULL ``inactive_since`` never matches, which is what keeps an
+        application with no known start date out of auto-purge.
+        """
         conditions = [
             ProspectiveMember.pipeline_id == pipeline_id,
             ProspectiveMember.organization_id == organization_id,
@@ -6211,6 +6340,9 @@ class MembershipPipelineService:
         ]
         if prospect_ids:
             conditions.append(ProspectiveMember.id.in_(prospect_ids))
+        if inactive_before is not None:
+            conditions.append(ProspectiveMember.inactive_since.isnot(None))
+            conditions.append(ProspectiveMember.inactive_since <= inactive_before)
 
         # Locked so an applicant reactivated mid-purge is either purged before
         # the reactivation or not at all.
@@ -6226,7 +6358,7 @@ class MembershipPipelineService:
             .all()
         )
         if not ids:
-            return 0
+            return []
 
         paths = (
             (
@@ -6242,9 +6374,16 @@ class MembershipPipelineService:
         import os
 
         for stored_path in paths:
-            if stored_path and os.path.exists(stored_path):
+            confined = prospect_document_path(stored_path, organization_id)
+            if stored_path and confined is None:
+                logger.warning(
+                    "Purge is not removing a prospect document whose stored "
+                    f"path is outside organization {organization_id}'s storage"
+                )
+                continue
+            if confined and os.path.exists(confined):
                 try:
-                    await asyncio.to_thread(os.remove, stored_path)
+                    await asyncio.to_thread(os.remove, confined)
                 except OSError as exc:
                     logger.error(
                         f"Failed to remove prospect document file {stored_path}: {exc}"
@@ -6258,8 +6397,295 @@ class MembershipPipelineService:
         await self.db.execute(
             delete(ProspectiveMember).where(ProspectiveMember.id.in_(ids))
         )
+        return [str(i) for i in ids]
+
+    @staticmethod
+    def auto_purge_threshold_days(inactivity_config: Any) -> Optional[int]:
+        """The pipeline's auto-purge grace period in days, or None to skip it.
+
+        ``inactivity_config`` is unvalidated JSON (CLAUDE.md pitfall #19), so
+        only an explicit ``auto_purge_enabled: true`` turns purging on, and a
+        missing or non-numeric ``purge_days_after_inactive`` skips the pipeline
+        rather than guessing a period that permanently deletes records. A
+        numeric value is clamped to the settings screen's own bounds, so a
+        hand-edited 1 cannot purge an application the day after it goes
+        inactive.
+        """
+        if not isinstance(inactivity_config, dict):
+            return None
+        if inactivity_config.get("auto_purge_enabled") is not True:
+            return None
+        days = inactivity_config.get("purge_days_after_inactive")
+        if isinstance(days, bool):
+            return None
+        if isinstance(days, float) and days.is_integer():
+            days = int(days)
+        if not isinstance(days, int):
+            return None
+        return max(AUTO_PURGE_MIN_DAYS, min(AUTO_PURGE_MAX_DAYS, days))
+
+    async def auto_purge_inactive_prospects(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Purge each auto-purge pipeline's applications past its grace period.
+
+        Runs from the daily scheduled task. For every pipeline in the
+        organization whose inactivity config enables auto-purge, deletes the
+        ``inactive`` applications whose ``inactive_since`` is at least
+        ``purge_days_after_inactive`` days old, measured in UTC, through the
+        same delete the manual Purge button uses. Each pipeline is its own
+        transaction and its own audit entry; one that fails is rolled back to
+        its savepoint and reported without stopping the rest.
+
+        The candidate read inside the delete is a locking read, so a
+        concurrent manual purge or a second run of this job blocks on the same
+        rows and then finds them gone rather than deleting them twice, and an
+        application reactivated while the purge waits is no longer inactive
+        when the lock is granted.
+        """
+        now = now or datetime.now(timezone.utc)
+        pipelines = (
+            await self.db.execute(
+                select(
+                    MembershipPipeline.id, MembershipPipeline.inactivity_config
+                ).where(MembershipPipeline.organization_id == organization_id)
+            )
+        ).all()
+
+        purged = 0
+        pipelines_purged = 0
+        errors: List[Dict[str, str]] = []
+        for pipeline_id, config in pipelines:
+            days = self.auto_purge_threshold_days(config)
+            if days is None:
+                continue
+            cutoff = now - timedelta(days=days)
+            # A savepoint per pipeline rather than a session rollback: a failed
+            # pipeline undoes only its own work, whereas a full rollback would
+            # expire every object the scheduler's shared session holds (the
+            # organization rows _for_each_org iterates), which then cannot
+            # lazy-load outside the async context.
+            ids: List[str] = []
+            try:
+                async with self.db.begin_nested():
+                    ids = await self._delete_inactive_prospects(
+                        str(pipeline_id), organization_id, inactive_before=cutoff
+                    )
+                    if ids:
+                        await log_audit_event(
+                            db=self.db,
+                            event_type="membership_pipeline.prospects_purged",
+                            event_category="membership",
+                            severity="warning",
+                            event_data={
+                                "pipeline_id": str(pipeline_id),
+                                "purged_count": len(ids),
+                                "purged_ids": ids,
+                                "trigger": "auto_purge",
+                                "purge_days_after_inactive": days,
+                                "inactive_before": cutoff.isoformat(),
+                            },
+                            username="system",
+                            organization_id=organization_id,
+                        )
+            except Exception as exc:
+                logger.error(
+                    f"Auto-purge failed for pipeline {pipeline_id} in "
+                    f"organization {organization_id}: {exc}"
+                )
+                errors.append({"pipeline_id": str(pipeline_id), "error": str(exc)})
+                ids = []
+            # Commits the deletion together with its audit entry, and in every
+            # case ends the transaction, so the candidate read's row locks are
+            # released before the next pipeline.
+            await self.db.commit()
+            if ids:
+                purged += len(ids)
+                pipelines_purged += 1
+
+        if purged or errors:
+            logger.info(
+                f"Auto-purge for organization {organization_id}: purged "
+                f"{purged} inactive application(s) from {pipelines_purged} "
+                f"pipeline(s); {len(errors)} pipeline(s) failed"
+            )
+        return {
+            "purged": purged,
+            "pipelines_purged": pipelines_purged,
+            "errors": errors,
+        }
+
+    async def warn_upcoming_auto_purges(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> int:
+        """Email the coordinators about applications auto-purge will delete soon.
+
+        Owner decision: the department's prospect coordinators are told
+        ``AUTO_PURGE_WARNING_DAYS`` before an application is purged, so one
+        worth keeping can be reactivated first. An application is listed once
+        per inactive spell: the daily run picks every application whose purge
+        falls within the window and has no ``auto_purge_warning_sent`` entry
+        dated on or after its current ``inactive_since``. A missed run is made
+        up by the next one rather than skipped, and an application that is
+        reactivated and goes inactive again is warned again. The window and
+        the purge date use the same clamped grace period and the same clock
+        as ``auto_purge_inactive_prospects``, so the date in the email is the
+        date it acts on.
+
+        Recipients are the members the withdrawal notice goes to (Membership
+        Coordinator / Assistant, else whoever can manage prospective members),
+        filtered by their email preferences. Nothing is marked as warned
+        unless the email was accepted, so a failed send is retried next run.
+        Returns how many applications were included in a sent warning.
+        """
+        import html as _html
+
+        now = now or datetime.now(timezone.utc)
+        pipelines = (
+            await self.db.execute(
+                select(
+                    MembershipPipeline.id,
+                    MembershipPipeline.name,
+                    MembershipPipeline.inactivity_config,
+                ).where(MembershipPipeline.organization_id == organization_id)
+            )
+        ).all()
+
+        # (prospect id, name, pipeline name, purge date)
+        due: List[tuple] = []
+        for pipeline_id, pipeline_name, config in pipelines:
+            days = self.auto_purge_threshold_days(config)
+            if days is None:
+                continue
+            purge_cutoff = now - timedelta(days=days)
+            warn_cutoff = now - timedelta(days=days - AUTO_PURGE_WARNING_DAYS)
+            already_warned = (
+                select(ProspectActivityLog.id)
+                .where(
+                    ProspectActivityLog.prospect_id == ProspectiveMember.id,
+                    ProspectActivityLog.action == AUTO_PURGE_WARNING_ACTION,
+                    ProspectActivityLog.created_at >= ProspectiveMember.inactive_since,
+                )
+                .exists()
+            )
+            rows = (
+                await self.db.execute(
+                    select(
+                        ProspectiveMember.id,
+                        ProspectiveMember.first_name,
+                        ProspectiveMember.last_name,
+                        ProspectiveMember.inactive_since,
+                    )
+                    .where(
+                        ProspectiveMember.pipeline_id == str(pipeline_id),
+                        ProspectiveMember.organization_id == organization_id,
+                        ProspectiveMember.status == ProspectStatus.INACTIVE,
+                        ProspectiveMember.inactive_since.isnot(None),
+                        ProspectiveMember.inactive_since <= warn_cutoff,
+                        # Already due: the purge, not a warning, comes next.
+                        ProspectiveMember.inactive_since > purge_cutoff,
+                        ~already_warned,
+                    )
+                    .order_by(ProspectiveMember.inactive_since, ProspectiveMember.id)
+                )
+            ).all()
+            for prospect_id, first, last, inactive_since in rows:
+                if inactive_since.tzinfo is None:
+                    inactive_since = inactive_since.replace(tzinfo=timezone.utc)
+                due.append(
+                    (
+                        str(prospect_id),
+                        f"{first or ''} {last or ''}".strip(),
+                        pipeline_name,
+                        inactive_since + timedelta(days=days),
+                    )
+                )
+        if not due:
+            return 0
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one_or_none()
+        if org is None:
+            return 0
+        recipients = recipients_for(
+            await self._withdrawal_notice_recipients(organization_id),
+            EmailKind.MEMBERSHIP_ADMIN,
+            department_required_kinds(org),
+        )
+        if not recipients:
+            logger.warning(
+                f"Auto-purge warning: {len(due)} application(s) in org "
+                f"{organization_id} are due for purge and no coordinator can be "
+                "emailed; the purge will still run"
+            )
+            return 0
+
+        from app.core.config import settings as app_settings
+        from app.services.email_service import EmailService, build_email_logo_html
+
+        frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+        queue_url = f"{frontend_url}/prospective-members?status=inactive"
+
+        def _on(purge_at: datetime) -> str:
+            return format_in_org_timezone(purge_at, org, "%B %d, %Y")
+
+        count = len(due)
+        subject = (
+            f"{count} inactive application{'s' if count != 1 else ''} will be "
+            f"deleted in {AUTO_PURGE_WARNING_DAYS} days"
+        )
+        items_html = "".join(
+            f"<li>{_html.escape(name)} ({_html.escape(pipeline)}) — deleted on "
+            f"{_html.escape(_on(purge_at))}</li>"
+            for _, name, pipeline, purge_at in due
+        )
+        items_text = "\n".join(
+            f"- {name} ({pipeline}) — deleted on {_on(purge_at)}"
+            for _, name, pipeline, purge_at in due
+        )
+        explain = (
+            "Auto-Purge is on for these pipelines, so these inactive "
+            "applications, with their uploaded documents, will be permanently "
+            "deleted on the date shown. To keep one, reactivate it before then."
+        )
+        html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{build_email_logo_html(org)}
+<p>{_html.escape(explain)}</p>
+<ul>
+{items_html}
+</ul>
+<p><a href="{_html.escape(queue_url)}">Open the inactive applications</a></p>
+</div>"""
+        text_body = f"{explain}\n\n{items_text}\n\n{queue_url}\n"
+
+        success, _ = await EmailService(org).send_email(
+            to_emails=[u.email for u in recipients],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=self.db,
+        )
+        if not success:
+            logger.warning(
+                f"Auto-purge warning email for org {organization_id} was not "
+                "sent; it will be retried on the next run"
+            )
+            return 0
+
+        for prospect_id, _, _, purge_at in due:
+            await self._log_activity(
+                prospect_id=prospect_id,
+                action=AUTO_PURGE_WARNING_ACTION,
+                details={
+                    "purge_on": purge_at.isoformat(),
+                    "recipient_count": len(recipients),
+                },
+            )
         await self.db.commit()
-        return len(ids)
+        return count
 
     # =========================================================================
     # Document Management
@@ -6310,20 +6736,14 @@ class MembershipPipelineService:
             if not any(str(s.id) == str(step_id) for s in steps):
                 raise ValueError("Step does not belong to this prospect's pipeline")
 
-        # Validate file_path: must resolve to a location under the uploads
-        # volume (mounted at /app/uploads in docker-compose) to prevent path
-        # traversal via symlinks or unicode tricks.
-        from pathlib import Path
-
-        base_dir = Path("/app/uploads").resolve()
-        resolved = Path(file_path).resolve()
-        if (
-            not str(resolved).startswith(str(base_dir) + os.sep)
-            and resolved != base_dir
-        ):
+        # Validate file_path: must resolve inside this organization's own
+        # applicant-document subtree. The whole uploads volume is not a safe
+        # boundary — it holds every module's files for every organization.
+        resolved = prospect_document_path(file_path, organization_id)
+        if resolved is None:
             raise ValueError(
-                "Invalid file_path: must be under /app/uploads and may not "
-                "contain path traversal"
+                "Invalid file_path: must be inside this organization's "
+                "applicant document storage"
             )
 
         # Sanitise file_name to prevent path injection through the file name
@@ -6335,7 +6755,7 @@ class MembershipPipelineService:
             step_id=step_id,
             document_type=document_type,
             file_name=safe_file_name,
-            file_path=str(resolved),
+            file_path=resolved,
             file_size=file_size,
             mime_type=mime_type,
             uploaded_by=uploaded_by,
@@ -6395,16 +6815,25 @@ class MembershipPipelineService:
         # raise rather than be swallowed: the DB row is the only record that
         # this PII-carrying file still needs cleaning up, so it must survive
         # a failed removal for a retry instead of being deleted alongside it.
+        #
+        # A stored path outside this organization's subtree is never unlinked:
+        # the row goes, the foreign file stays where it is.
         stored_path = doc.file_path
         if stored_path:
             import os
 
-            if os.path.exists(stored_path):
+            confined = prospect_document_path(stored_path, organization_id)
+            if confined is None:
+                logger.warning(
+                    f"Not removing prospect document {document_id}: stored path "
+                    f"is outside organization {organization_id}'s storage"
+                )
+            elif os.path.exists(confined):
                 try:
-                    await asyncio.to_thread(os.remove, stored_path)
+                    await asyncio.to_thread(os.remove, confined)
                 except OSError as exc:
                     logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                        f"Failed to remove prospect document file {confined}: {exc}"
                     )
                     raise ValueError(
                         "Could not delete the document file; please try again"
@@ -6547,8 +6976,11 @@ class MembershipPipelineService:
         # the pipeline's election step" case the pass-4 tests cover, and
         # never when step_id is omitted). The caller re-fetches and retries,
         # which is correct — the applicant genuinely moved.
+        # `current_step is not None` matters: an applicant whose stage was
+        # deleted has neither, and `None is None` would otherwise fire this.
         if (
-            election_step is current_step
+            current_step is not None
+            and election_step is current_step
             and step_id is not None
             and str(step_id) != str(current_step.id)
         ):
@@ -7116,8 +7548,6 @@ class MembershipPipelineService:
         off for this applicant (see ``public_status_enabled_for``), grants
         neither.  Requires ``prospect.pipeline.steps`` loaded.
         """
-        from datetime import timedelta
-
         if prospect.status_token_created_at:
             age = datetime.now(timezone.utc) - prospect.status_token_created_at
             if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
@@ -7151,7 +7581,10 @@ class MembershipPipelineService:
         """
         result = await self.db.execute(
             select(ProspectiveMember)
-            .where(ProspectiveMember.status_token == token)
+            .where(
+                ProspectiveMember.status_token_hash
+                == ProspectiveMember.hash_status_token(token)
+            )
             .options(
                 selectinload(ProspectiveMember.pipeline).selectinload(
                     MembershipPipeline.steps
@@ -7387,7 +7820,7 @@ class MembershipPipelineService:
         """
         config = getattr(step, "config", None) or {}
         raw_type = getattr(step, "step_type", None)
-        step_type = raw_type.value if hasattr(raw_type, "value") else raw_type
+        step_type = getattr(raw_type, "value", raw_type)
 
         if step_type == "meeting" and config.get("scheduling_provider") == "calcom":
             url = config.get("calcom_booking_url") or ""
@@ -7432,7 +7865,10 @@ class MembershipPipelineService:
         """
         query = (
             select(ProspectiveMember)
-            .where(ProspectiveMember.status_token == token)
+            .where(
+                ProspectiveMember.status_token_hash
+                == ProspectiveMember.hash_status_token(token)
+            )
             .options(
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline).selectinload(
@@ -7466,7 +7902,11 @@ class MembershipPipelineService:
                 if step.public_visible:
                     public_step_ids.add(str(step.id))
 
-        show_future = prospect.pipeline.public_show_future_stages is not False
+        pipeline = prospect.pipeline
+        if pipeline is None:
+            # _status_token_usable already refused a pipeline-less applicant.
+            return None
+        show_future = pipeline.public_show_future_stages is not False
 
         # Build stage timeline — only include public-visible steps
         completed_stages = []
@@ -7596,7 +8036,10 @@ class MembershipPipelineService:
             if not timeout_days:
                 continue
 
-            days_inactive = (now - (prospect.updated_at or prospect.created_at)).days
+            last_activity = prospect.updated_at or prospect.created_at
+            if last_activity is None:
+                continue
+            days_inactive = (now - last_activity).days
             warning_pct = 80  # default warning at 80%
             if prospect.pipeline and prospect.pipeline.inactivity_config:
                 warning_pct = prospect.pipeline.inactivity_config.get(
@@ -7664,11 +8107,24 @@ class MembershipPipelineService:
 
         to_mark = [w for w in critical if w["prospect_id"] not in already_marked]
         if to_mark:
-            # One UPDATE for the whole batch instead of one per prospect.
+            # One UPDATE for the whole batch instead of one per prospect. It
+            # bypasses _stamp_lifecycle, so it stamps the same columns that
+            # would: without inactive_since an application the sweep
+            # deactivated would never reach auto-purge. The status guard keeps
+            # it from re-stamping a row a coordinator moved in the meantime.
             await self.db.execute(
                 update(ProspectiveMember)
-                .where(ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]))
-                .values(status=ProspectStatus.INACTIVE)
+                .where(
+                    ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]),
+                    ProspectiveMember.organization_id == organization_id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
+                )
+                .values(
+                    status=ProspectStatus.INACTIVE,
+                    deactivated_at=now,
+                    deactivated_reason=None,
+                    inactive_since=now,
+                )
             )
             for w in to_mark:
                 await self._log_activity(

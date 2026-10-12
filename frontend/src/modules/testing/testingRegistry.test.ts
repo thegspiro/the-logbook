@@ -64,17 +64,18 @@ const declaredRoutes = (): DeclaredRoute[] => {
       if (declared === '*' || seen.has(declared)) continue;
       const nextRoute = window.slice(1).search(/<Route\s/);
       const scope = nextRoute > -1 ? window.slice(0, nextRoute + 1) : window;
+      const capture = (pattern: RegExp): string | undefined => scope.match(pattern)?.[1];
+      const permission = capture(/requiredPermission="([^"]+)"/);
+      const anyPermission = capture(/requiredAnyPermission=\{([^}]*)\}/);
+      const role = capture(/requiredRole="([^"]+)"/);
+      const module = capture(/requiredModule="([^"]+)"/);
       seen.set(declared, {
         path: declared,
         file: path.relative(SRC, file),
-        ...(scope.match(/requiredPermission="([^"]+)"/)
-          ? { permission: scope.match(/requiredPermission="([^"]+)"/)?.[1] }
-          : {}),
-        ...(scope.match(/requiredAnyPermission=\{([^}]*)\}/)
-          ? { anyPermission: scope.match(/requiredAnyPermission=\{([^}]*)\}/)?.[1] }
-          : {}),
-        ...(scope.match(/requiredRole="([^"]+)"/) ? { role: scope.match(/requiredRole="([^"]+)"/)?.[1] } : {}),
-        ...(scope.match(/requiredModule="([^"]+)"/) ? { module: scope.match(/requiredModule="([^"]+)"/)?.[1] } : {}),
+        ...(permission !== undefined ? { permission } : {}),
+        ...(anyPermission !== undefined ? { anyPermission } : {}),
+        ...(role !== undefined ? { role } : {}),
+        ...(module !== undefined ? { module } : {}),
       });
     }
   }

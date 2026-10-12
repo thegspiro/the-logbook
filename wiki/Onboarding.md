@@ -181,6 +181,14 @@ agency type usually has and changes them to match what it actually uses:
 > The ladder is also editable after setup at **Members → Administration →
 > Settings → Operational Ranks**, which accepts `members.manage` _(2026-09-11)_.
 
+> **Once a department has any rank rows, the ladder is the vocabulary**
+> _(2026-10-05, ONBOARD-3)_. The built-in rank codes (`firefighter`, …) are
+> honoured only while the department has no rank rows at all. A department that
+> deleted "Firefighter" during setup no longer has it accepted by the member API,
+> CSV import or prospect conversion; assigning a code that is no longer on the
+> ladder needs the rung added in the rank editor first. Members who already hold
+> such a code keep their seats and are not reported as broken.
+
 **Then positions**, with a two-tier permission model (View Access / Manage
 Access) per module:
 

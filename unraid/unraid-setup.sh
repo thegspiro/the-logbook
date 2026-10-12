@@ -478,10 +478,6 @@ PGID=100
 # Email Configuration (disabled by default)
 EMAIL_ENABLED=false
 
-# Storage Configuration
-STORAGE_TYPE=local
-MAX_FILE_SIZE=52428800
-
 # Backup Configuration (consumed by the backup sidecar service)
 BACKUP_TIME=02:00
 BACKUP_RETENTION_DAYS=30
@@ -654,6 +650,14 @@ display_summary() {
     echo "  1. Open ${PUBLIC_ORIGIN} in your browser"
     echo "  2. Complete the onboarding wizard"
     echo "  3. Configure your organization settings"
+    echo ""
+    echo -e "${YELLOW}⚠ ENCRYPTION KEY — do this now:${NC}"
+    echo "  Every stored file and sensitive field is encrypted with ENCRYPTION_KEY and"
+    echo "  ENCRYPTION_SALT in $INSTALL_DIR/.env. Copy both to a password manager or a"
+    echo "  sealed record, somewhere other than this server and the backups in"
+    echo "  $BACKUP_DIR. Lose them and no backup can be read; keep them with the"
+    echo "  backups and anyone holding a backup can read it. Setup asks you to"
+    echo "  confirm this. See docs/BACKUP.md."
     echo ""
     echo -e "${YELLOW}⚠ SECURITY:${NC}"
     echo "  Onboarding and login must use the HTTPS URL above. Do not expose or"

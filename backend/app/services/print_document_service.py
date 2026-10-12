@@ -98,6 +98,11 @@ def _to_local(value: Optional[datetime], tz_name: str) -> Optional[datetime]:
     """Move a stored UTC datetime into the organization's timezone."""
     if value is None:
         return None
+    return _in_zone(value, tz_name)
+
+
+def _in_zone(value: datetime, tz_name: str) -> datetime:
+    """``_to_local`` for a value that is known to be present."""
     try:
         zone = ZoneInfo(tz_name)
     except Exception:
@@ -271,7 +276,7 @@ async def build_shift_roster(
         title="Shift Roster",
         subtitle=" | ".join(subtitle_parts),
         sections=sections,
-        footer=f"Printed {_to_local(datetime.now(timezone.utc), tz_name).strftime('%d %b %H:%M')}",
+        footer=f"Printed {_in_zone(datetime.now(timezone.utc), tz_name).strftime('%d %b %H:%M')}",
     )
 
 

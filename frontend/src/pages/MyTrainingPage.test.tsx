@@ -286,6 +286,30 @@ describe('MyTrainingPage', () => {
       expect(screen.getByText('Report Review Workflow')).toBeInTheDocument();
     });
 
+    it('offers no save bar until a setting changes, then counts the changes', async () => {
+      auth.permissions = ['training.configure'];
+      mockGetConfig.mockResolvedValue({
+        show_training_history: true,
+        show_officer_narrative: false,
+        report_review_required: false,
+        rating_scale_type: 'stars',
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<MyTrainingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /member visibility settings/i }));
+      const history = await screen.findByRole('checkbox', { name: /training history/i });
+      expect(screen.queryByRole('button', { name: /^save/i })).not.toBeInTheDocument();
+
+      await user.click(history);
+      expect(screen.getByRole('status')).toHaveTextContent('1 unsaved change');
+      expect(screen.getByRole('button', { name: 'Save 1 Change' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('checkbox', { name: /officer narrative/i }));
+      expect(screen.getByRole('status')).toHaveTextContent('2 unsaved changes');
+      expect(screen.getByRole('button', { name: 'Save 2 Changes' })).toBeInTheDocument();
+    });
+
     it('keeps the overview usable when the settings fetch fails', async () => {
       auth.permissions = ['training.manage'];
       mockGetConfig.mockRejectedValue(new Error('config unavailable'));

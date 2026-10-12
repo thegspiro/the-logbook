@@ -317,7 +317,7 @@ class EmailServiceSettings(BaseModel):
 
         if value is None or value == "":
             return "app_password"
-        if value not in MICROSOFT_AUTH_METHODS:
+        if not isinstance(value, str) or value not in MICROSOFT_AUTH_METHODS:
             raise ValueError(
                 "microsoft_auth_method must be one of: "
                 f"{', '.join(MICROSOFT_AUTH_METHODS)}"
@@ -326,7 +326,7 @@ class EmailServiceSettings(BaseModel):
 
     def redacted(self) -> "EmailServiceSettings":
         """Return a copy with secret fields replaced by redaction markers."""
-        return self.model_copy(
+        copied: EmailServiceSettings = self.model_copy(
             update={
                 "google_app_password": _redact(self.google_app_password),
                 "microsoft_app_password": _redact(self.microsoft_app_password),
@@ -335,10 +335,11 @@ class EmailServiceSettings(BaseModel):
                 "cloudflare_api_token": _redact(self.cloudflare_api_token),
             }
         )
+        return copied
 
     def without_infrastructure(self) -> "EmailServiceSettings":
         """Drop identifiers that describe the deployment, not the department."""
-        return self.model_copy(
+        copied: EmailServiceSettings = self.model_copy(
             update=dict.fromkeys(
                 (
                     "smtp_host",
@@ -350,6 +351,7 @@ class EmailServiceSettings(BaseModel):
                 None,
             )
         )
+        return copied
 
 
 class EmailConnectionTestResponse(BaseModel):
@@ -447,17 +449,18 @@ class FileStorageSettings(BaseModel):
 
     def redacted(self) -> "FileStorageSettings":
         """Return a copy with secret fields replaced by redaction markers."""
-        return self.model_copy(
+        copied: FileStorageSettings = self.model_copy(
             update={
                 "google_drive_client_secret": _redact(self.google_drive_client_secret),
                 "onedrive_client_secret": _redact(self.onedrive_client_secret),
                 "s3_secret_access_key": _redact(self.s3_secret_access_key),
             }
         )
+        return copied
 
     def without_infrastructure(self) -> "FileStorageSettings":
         """Drop identifiers that describe the deployment, not the department."""
-        return self.model_copy(
+        copied: FileStorageSettings = self.model_copy(
             update=dict.fromkeys(
                 (
                     "google_drive_client_id",
@@ -474,6 +477,7 @@ class FileStorageSettings(BaseModel):
                 None,
             )
         )
+        return copied
 
 
 class SchedulingNotificationSettings(BaseModel):
@@ -967,13 +971,14 @@ class AuthSettings(BaseModel):
 
     def redacted(self) -> "AuthSettings":
         """Return a copy with secret fields replaced by redaction markers."""
-        return self.model_copy(
+        copied: AuthSettings = self.model_copy(
             update={
                 "google_client_secret": _redact(self.google_client_secret),
                 "microsoft_client_secret": _redact(self.microsoft_client_secret),
                 "authentik_client_secret": _redact(self.authentik_client_secret),
             }
         )
+        return copied
 
     def without_infrastructure(self) -> "AuthSettings":
         """Drop identifiers that describe the deployment, not the department.
@@ -981,7 +986,7 @@ class AuthSettings(BaseModel):
         `provider` stays: the login page needs to know which SSO button to
         show, and it names a product, not an endpoint.
         """
-        return self.model_copy(
+        copied: AuthSettings = self.model_copy(
             update=dict.fromkeys(
                 (
                     "google_client_id",
@@ -993,6 +998,7 @@ class AuthSettings(BaseModel):
                 None,
             )
         )
+        return copied
 
 
 class SetupProgressSettings(BaseModel):
@@ -1282,6 +1288,48 @@ class ApparatusSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class AdminHoursSettingsUpdate(BaseModel):
+    """Administrative hours review rules; read by app/utils/admin_hours_settings.py."""
+
+    allow_self_approval: Optional[bool] = Field(
+        None,
+        description=(
+            "Let an approver approve their own entries — for a department with "
+            "a single admin_hours.manage holder. Absent reads as off."
+        ),
+    )
+    resync_requeue_growth_percent: Optional[int] = Field(
+        None,
+        ge=0,
+        le=1000,
+        description=(
+            "Return an approved event-attendance entry to Pending Review when a "
+            "reopened event's correction grows it by more than this percentage "
+            "(and its category would not auto-approve the new length). "
+            "Absent reads as 25."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
+class FinanceSettingsUpdate(BaseModel):
+    """Finance rules; read by app/utils/finance_settings.py."""
+
+    dual_approval_threshold: Optional[int] = Field(
+        None,
+        ge=1,
+        le=9_999_999_999,
+        description=(
+            "Whole dollars. A purchase request, check request or expense report "
+            "of this amount or more needs two different approvers. Null turns "
+            "the rule off, which is also the default."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
 
@@ -1301,6 +1349,8 @@ class OrganizationSettingsUpdate(BaseModel):
     appearance: Optional[AppearanceSettings] = None
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
+    admin_hours: Optional[AdminHoursSettingsUpdate] = None
+    finance: Optional[FinanceSettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -1376,13 +1426,14 @@ class OrganizationSettingsResponse(BaseModel):
 
     def redacted(self) -> "OrganizationSettingsResponse":
         """Return a copy with secret fields in nested settings replaced by redaction markers."""
-        return self.model_copy(
+        copied: OrganizationSettingsResponse = self.model_copy(
             update={
                 "email_service": self.email_service.redacted(),
                 "file_storage": self.file_storage.redacted(),
                 "auth": self.auth.redacted(),
             }
         )
+        return copied
 
     def without_infrastructure(self) -> "OrganizationSettingsResponse":
         """Return a copy with deployment identifiers removed.
@@ -1401,7 +1452,7 @@ class OrganizationSettingsResponse(BaseModel):
         The response keeps its shape — fields are nulled, not dropped — so the
         settings UI renders "not configured" instead of breaking.
         """
-        return self.model_copy(
+        copied: OrganizationSettingsResponse = self.model_copy(
             update={
                 "email_service": self.email_service.without_infrastructure(),
                 "file_storage": self.file_storage.without_infrastructure(),
@@ -1416,6 +1467,7 @@ class OrganizationSettingsResponse(BaseModel):
                 "it_team": ITTeamSettings(),
             }
         )
+        return copied
 
 
 class EnabledModulesResponse(BaseModel):

@@ -37,7 +37,7 @@
 
 ## Findings
 
-### W26-1 — MED — A linked requirement starts at zero, contradicting the department's own figure — FLAGGED
+### W26-1 — MED — A linked requirement starts at zero, contradicting the department's own figure — ✅ FIXED (2026-10-06)
 
 **Did:**
 
@@ -71,6 +71,19 @@ program progress is a separate tally from the compliance calculation
 
 Changing the sentence alone would hide the gap rather than close it.
 Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-06).** The owner chose to read the compliance result live,
+not to seed at enrollment. A linked requirement's progress row is now a
+projection of `evaluate_member_requirement_detail` — the compliance matrix's
+grader, with the member's records, shifts worked, waivers and catch-up —
+written by `TrainingProgramService.refresh_linked_progress` whenever program
+progress is shown, so "Annual Hazmat Hours" reads 4 of 6 under Training
+Requirements and under Pipeline Progress. Enrollments already made read live
+from their next view; completed, withdrawn, failed and expired enrollments
+keep what they finished with. Feeds accrue nothing on a linked row, and an
+officer may only waive it for the program. The wizard's sentence now says
+that. Covered by
+`tests/test_program_linked_requirement_reads_compliance.py`.
 
 ### W26-2 — LOW — The member's pipeline card named neither the program nor its requirements — ✅ FIXED
 

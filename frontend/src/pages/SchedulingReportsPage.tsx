@@ -105,19 +105,32 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
 // Summary Stats Component
 // ============================================
 
+/** The window a requirement counts; a one-time requirement leaves it open. */
+const compliancePeriodLabel = (start: string | null, end: string | null, tz: string): string => {
+  if (start && end) return `${formatDate(start, tz)} — ${formatDate(end, tz)}`;
+  if (start) return `Since ${formatDate(start, tz)}`;
+  if (end) return `Through ${formatDate(end, tz)}`;
+  return 'All shifts on record';
+};
+
 interface StatCardProps {
   label: string;
   value: string | number;
   icon: React.ReactNode;
+  className?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value, icon }) => (
-  <div className="card p-4">
+// `min-w-0` on the card and its text column, because grid and flex items
+// default to their content's width: at 320px a two-column grid of these could
+// not shrink below an unbroken value such as a date, and pushed past the edge
+// of the screen (WCAG 1.4.10 reflow).
+const StatCard: React.FC<StatCardProps> = ({ label, value, icon, className = '' }) => (
+  <div className={`card min-w-0 p-4 ${className}`}>
     <div className="flex items-center gap-3">
-      <div className="bg-theme-surface-secondary rounded-lg p-2">{icon}</div>
-      <div>
+      <div className="bg-theme-surface-secondary shrink-0 rounded-lg p-2">{icon}</div>
+      <div className="min-w-0">
         <p className="text-theme-text-muted text-xs">{label}</p>
-        <p className="text-theme-text-primary text-xl font-bold">{value}</p>
+        <p className="text-theme-text-primary text-xl font-bold break-words">{value}</p>
       </div>
     </div>
   </div>
@@ -447,6 +460,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 />
                 <StatCard
                   label="Period"
+                  className="col-span-2 md:col-span-1"
                   value={`${formatDate(memberHoursReport.period_start, tz)} - ${formatDate(memberHoursReport.period_end, tz)}`}
                   icon={<Clock className="text-theme-text-muted h-5 w-5" aria-hidden="true" />}
                 />
@@ -1074,7 +1088,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                 {req.frequency.replace('_', ' ')}
                               </span>
                               <span className="text-theme-text-muted text-xs">
-                                {formatDate(req.period_start, tz)} — {formatDate(req.period_end, tz)}
+                                {compliancePeriodLabel(req.period_start, req.period_end, tz)}
                               </span>
                               <span className="text-theme-text-secondary text-xs font-medium">
                                 Required: {req.required_value} {req.requirement_type === 'shifts' ? 'shifts' : 'hours'}

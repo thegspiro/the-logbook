@@ -4,12 +4,22 @@
  * Modal form for creating/editing individual screening records.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { X } from 'lucide-react';
 import { ScreeningType, ScreeningStatus, SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS } from '../types';
-import type { ScreeningRecord, ScreeningRequirement, ScreeningRecordCreate, ScreeningRecordUpdate } from '../types';
+import type {
+  ScreeningRecord,
+  ScreeningRequirement,
+  ScreeningRecordCreate,
+  ScreeningRecordUpdate,
+  ScreeningSubjects,
+} from '../types';
 import { blankToNull } from '../../../utils/formValues';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { medicalScreeningService } from '../services/api';
+
+type SubjectKind = 'member' | 'prospect';
 
 interface ScreeningRecordFormProps {
   record: ScreeningRecord | null;
@@ -19,6 +29,12 @@ interface ScreeningRecordFormProps {
 }
 
 const inputClass = 'form-input';
+
+function subjectPlaceholder(kind: SubjectKind, loaded: boolean, failed: boolean): string {
+  if (failed) return 'Unavailable';
+  if (!loaded) return 'Loading…';
+  return kind === 'member' ? 'Select a member' : 'Select a prospect';
+}
 const labelClass = 'form-label mb-2';
 
 export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
@@ -34,6 +50,33 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
   const [resultSummary, setResultSummary] = useState(record?.result_summary ?? '');
   const [notes, setNotes] = useState(record?.notes ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  // Create only: who the record is for. Exactly one member or one prospect —
+  // the API rejects neither and both (MS-13), because compliance resolves a
+  // record by its subject and a record with none counts toward nobody.
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>('member');
+  const [subjectId, setSubjectId] = useState('');
+  const [subjects, setSubjects] = useState<ScreeningSubjects | null>(null);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Editing never changes who a record belongs to (the update schema has no
+    // subject fields), so only the create dialog needs the list.
+    if (record) return;
+    let cancelled = false;
+    medicalScreeningService
+      .listSubjects()
+      .then((loaded) => {
+        if (!cancelled) setSubjects(loaded);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSubjectsError(getErrorMessage(err, 'Could not load members and prospects'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [record]);
+
+  const subjectOptions = subjectKind === 'member' ? (subjects?.members ?? []) : (subjects?.prospects ?? []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +102,8 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
       await onSave(data);
     } else {
       const data: ScreeningRecordCreate = {
+        user_id: subjectKind === 'member' ? subjectId || undefined : undefined,
+        prospect_id: subjectKind === 'prospect' ? subjectId || undefined : undefined,
         screening_type: screeningType as ScreeningRecordCreate['screening_type'],
         status: recordStatus as ScreeningRecordCreate['status'],
         requirement_id: requirementId || undefined,
@@ -95,10 +140,56 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className="max-h-[70dvh] space-y-4 overflow-y-auto p-6">
           {!record && (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-              Not linked to a member or prospect. You can&apos;t choose who a screening is for here, so this record
-              won&apos;t count toward anyone&apos;s compliance or appear in their screening history.
-            </p>
+            <fieldset className="space-y-2">
+              <legend className={labelClass}>Record is for *</legend>
+              <div className="flex gap-4">
+                {(['member', 'prospect'] as const).map((kind) => (
+                  <label key={kind} className="text-theme-text-primary touch:min-h-11 flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="rec-subject-kind"
+                      value={kind}
+                      checked={subjectKind === kind}
+                      onChange={() => {
+                        setSubjectKind(kind);
+                        setSubjectId('');
+                      }}
+                    />
+                    {kind === 'member' ? 'Member' : 'Prospect'}
+                  </label>
+                ))}
+              </div>
+              <label htmlFor="rec-subject" className="sr-only">
+                {subjectKind === 'member' ? 'Member' : 'Prospect'}
+              </label>
+              <select
+                id="rec-subject"
+                value={subjectId}
+                onChange={(e) => setSubjectId(e.target.value)}
+                className={inputClass}
+                required
+                disabled={!subjects}
+              >
+                <option value="">{subjectPlaceholder(subjectKind, subjects !== null, subjectsError !== null)}</option>
+                {subjectOptions.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+              {subjectsError && (
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                  {subjectsError}
+                </p>
+              )}
+              {subjects && subjectOptions.length === 0 && (
+                <p className="text-theme-text-secondary text-xs">
+                  {subjectKind === 'member'
+                    ? 'No current members to choose from.'
+                    : 'No prospects are open in the pipeline.'}
+                </p>
+              )}
+            </fieldset>
           )}
           {!record && (
             <div>
@@ -253,7 +344,7 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || (!record && !subjectId)}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : record ? 'Save Changes' : 'Add Record'}

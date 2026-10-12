@@ -119,6 +119,17 @@ event-request intake.
 > cross-origin frontend's preflight rejects the header and the challenge can
 > never be submitted.
 
+### Malware scanning (ClamAV) _(2026-10-06; on by default 2026-10-08)_
+
+| Variable                 | Default  | Description                                                              |
+| ------------------------ | -------- | ------------------------------------------------------------------------ |
+| `CLAMAV_ENABLED`         | `true`   | Scan every uploaded file before it is stored or parsed                   |
+| `CLAMAV_HOST`            | `clamav` | clamd host — the compose service name, or your own daemon                |
+| `CLAMAV_PORT`            | `3310`   | clamd TCP port                                                           |
+| `CLAMAV_TIMEOUT_SECONDS` | `30`     | Wall-clock budget for one scan (connect, stream, verdict) before refusal |
+
+See [Malware scanning of uploads](#malware-scanning-of-uploads) below.
+
 ---
 
 ## Session Management
@@ -166,6 +177,14 @@ The Logbook supports multiple authentication methods:
 | API (general)         | 60/minute | Per authenticated user |
 | Public forms (view)   | 60/minute | Per IP                 |
 | Public forms (submit) | 10/minute | Per IP                 |
+
+The bundled nginx proxies add a per-address ceiling in front of these _(2026-10-05)_:
+`limit_conn 400` concurrent requests and the API zone at 50 requests a second with
+`burst=600 delay=100` (the first 100 requests of a burst pass at once, the rest
+queue rather than being refused). The values are sized for a station of about a
+hundred members sharing one public address; sign-in stays at 5 a minute (burst 3).
+A proxy you run yourself needs its own limits sized the same way. See
+[Deployment guide](../docs/DEPLOYMENT.md#docker-compose-production-profile).
 
 ---
 
@@ -303,6 +322,51 @@ accept every bot it had already detected.
 - **Guest check-in is deliberately excluded.** It is reached by scanning a QR
   code on a station display, where a challenge is hostile to somebody standing
   in a firehouse.
+
+### Malware scanning of uploads
+
+Every file that enters the platform is scanned by a ClamAV daemon before it is
+stored or parsed: documents (including facility files), event, training-record
+and self-reported certificate attachments, applicant documents, email-template
+attachments, suggestion screenshots, member photos, logos, storefront and
+equipment-check photos, and every CSV import. The backend streams the bytes to
+clamd with its `INSTREAM` command over TCP; nothing is written to a temporary
+file first. _(On by default since 2026-10-08; before that it was opt-in and
+covered self-reported certificates only.)_
+
+Every compose file starts the bundled `clamav` service with the rest of the
+stack — a plain `docker compose up -d` is enough. It uses the multi-arch
+`clamav/clamav-debian` image, so ARM hosts (Raspberry Pi, Apple Silicon,
+Graviton) pull it too, and budgets roughly **1.5–3 GB of RAM**.
+
+```bash
+CLAMAV_ENABLED=true      # the default
+CLAMAV_HOST=clamav
+CLAMAV_PORT=3310
+CLAMAV_TIMEOUT_SECONDS=30
+```
+
+- **Infected:** the upload is refused with `LB-UPLD-004`, nothing is stored,
+  and an `upload_malware_detected` audit event records the signature name, the
+  file's type, size and SHA-256. The file's content and its name are never
+  logged, and no member is recorded for an anonymous suggestion screenshot or
+  an onboarding logo.
+- **Scanner down or slow — fails closed:** an unreachable clamd or one that
+  misses `CLAMAV_TIMEOUT_SECONDS` refuses the upload with a retryable `503`
+  (`LB-UPLD-005`). Same reasoning as CAPTCHA: accepting unscanned files during
+  an outage is the state an attacker wants. _Confirmed by the owner,
+  2026-10-08._
+- **The backend does not wait for clamav to be healthy.** Until clamd has
+  loaded its signatures (a few minutes on first start) uploads are refused with
+  the retryable 503; the rest of the application works.
+- **clamd's `StreamMaxLength` must cover the largest upload.** The compose
+  files set it to 60M (`CLAMD_CONF_StreamMaxLength`); clamd's own default of
+  25M would leave a 50 MB document with no verdict, which is refused.
+- **Turning it off.** `CLAMAV_ENABLED=false` accepts files **unscanned**. It
+  is there for a host that cannot spare the memory, and it is never quiet: the
+  startup log and `python -m app.preflight` warn, and every administrator with
+  `settings.manage` sees a standing notice in the app until it is turned back
+  on. Adding memory is the better fix.
 
 ---
 

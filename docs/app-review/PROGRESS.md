@@ -41,8 +41,8 @@ from its open list.
 | --- | -------------------------- | ------ | ------ |
 | B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ✅     |
-| B3  | inventory                  | INV2   | ⬜     |
-| B4  | facilities                 | FAC2   | ⬜     |
+| B3  | inventory                  | INV2   | ✅     |
+| B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ⬜     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
 | B7  | equipment-check            | EC2    | ⬜     |
@@ -263,7 +263,7 @@ Established before the first iteration, so any later failure is attributable:
   backend capability with **no UI that sets it** — so the room-clash warning the
   service docstring advertises can never fire. Same shape as the finance-dues-UI
   entry; a frontend build-out plus a per-cohort/per-class product call, not a
-  correction). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
+  correction; ✅ resolved 2026-10-06 — per-cohort room with per-class override). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
   See course-cohorts.md. Next: A6 member lifecycle & offboarding.
 - **A6 member lifecycle & offboarding ✅** — the irreversible operations
   (anonymization, unattended retention deletion, archival) were the priority and
@@ -2852,10 +2852,129 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   `CHANGELOG.md`; CHECKLIST.md's no-DB claim (the one that caused the deferral);
   pass 4's stale `assert_in_org` count; and `module-audit/apparatus.md`'s AP-1,
   whose heading said FIXED while its body still said "not auto-fixed".
-  Flagged for later: no `docs/APPARATUS.md` exists for the repo's largest module
-  by endpoint count, and `ApparatusMaintenanceType`'s four `default_interval_*`
+  Flagged for later: no feature doc exists for the repo's largest module
+  by endpoint count (**closed 2026-10-08** — `docs/APPARATUS_MODULE.md`; this
+  entry originally named it `docs/APPARATUS.md`, but the house convention is
+  `<NAME>_MODULE.md`), and `ApparatusMaintenanceType`'s four `default_interval_*`
   columns have no reader — completing an annual pump test schedules nothing
   (pitfall #19's shape, but plausibly deliberate, so recorded rather than
   called a bug). Gate: flake8 0 · black 1,370 unchanged · tsc 0 · eslint (no
   frontend change this pass) · backend **57 passed**. See apparatus.md → Pass 5.
   Next: B3 inventory.
+- **B3 inventory ✅ (pass 5) — the real test baseline, the last open item closed,
+  and no new code defects. 0 code fixes, 1 item closed, 1 process correction.**
+  ~22,000 lines across three files, 51 commits since the last pass, so the scope
+  is stated explicitly in the findings file rather than implied: 148 route gates,
+  12 self-scoped routes, 31 LIKE calls, 8 quantity-mutating methods and every
+  bounded quantity field were checked **exhaustively**; the lots/ledger
+  internals, NFC, kiosk, labels, import/export, impact planner and vendors were
+  **not read** and carry no verdict from this pass. **The headline is a number
+  nobody had before:** passes 3–4 could only report "142 DB-free passed, 75
+  fixture errors" because the checklist said DB tests cannot run here. They can.
+  `-k inventory` is **1,169 passed, 1 skipped, 0 failed**. **Getting there
+  produced the one thing this pass needed to write down:** the suite opened with
+  **98 failures and 25 errors** on a tree I had not touched, every one of them
+  `(1054, "Unknown column 'x'")` — the session-start hook builds the schema once,
+  `main` moved several migrations past it during the session, and that failure
+  signature is indistinguishable from a real defect in the feature under review.
+  All 123 vanished after `alembic upgrade head && repair_schema.py`.
+  `CHECKLIST.md` now says to rebuild before reading such a failure as a finding,
+  because the next reviewer would otherwise lose the same time or report phantom
+  findings. **INV2-3 closes the last open item** — the `_escape_like` DRY cleanup
+  carried by passes 2, 3 and 4 is already resolved: `grep -c` returns 0, the
+  repo-wide pitfall-#25 work replaced it with `like_pattern` /
+  `LIKE_ESCAPE_CHAR`, and nobody closed the item because nobody looked. With
+  INV-4 (pass 4) and INV-6 (the follow-up) already closed, **this module now
+  carries no open code findings.** **Verified rather than inherited:** 148 routes,
+  **0** without an auth dependency; all **12** authenticated-only routes
+  correctly self-scoped — the five `users/{user_id}/…` reads through a
+  `_require_self_or_quartermaster` that raises 403 with no fall-through, and both
+  list endpoints _forcing_ the requester filter to the caller for non-managers so
+  `mine_only` cannot widen a read; **every** quantity mutation serialized by a row
+  lock, including the three private helpers, checked by resolving each call site's
+  enclosing method rather than assuming — `issue_from_pool` is pitfall #27's
+  exact shape and `_get_item_locked` documents the `populate_existing` trap that
+  makes the lock real rather than decorative; negative stock closed on both sides
+  (every `*Create`/`*Update` quantity bounded `ge=0`/`ge=1`, decrements check
+  sufficiency, migration `7d2e4f6a8b13` clamped the history); 31/31 LIKE calls
+  escaped, verified by paren-matching because a line grep false-positives on the
+  continuation line; 0 E712. Also confirmed **yesterday's AP2-5 no-op ternary
+  class is extinct repo-wide** — an AST sweep comparing each `IfExp`'s two
+  branches finds 0 in `app/`, `tests/` and `scripts/` (the regex form yields ~49
+  false positives, so the AST comparison is the check worth keeping).
+  **No new code defects**, said plainly: four passes, a follow-up and a security
+  rotation have worked this module hard, and the two dimensions most likely to
+  still hide something came back clean under exhaustive checks. Doc gap recorded
+  at the time, **closed 2026-10-08** by `docs/INVENTORY_MODULE.md`: this module
+  had no structured reference under `docs/`, and neither did apparatus. (The
+  entry originally said "no `docs/INVENTORY.md`" and that the module was
+  documented only in docstrings and the wiki's nav tables — both wrong: the
+  convention is `<NAME>_MODULE.md`, and a 1,472-line `wiki/Module-Inventory.md`
+  existed throughout. See the correction in inventory.md.) Gate: flake8 0 · black 1,425
+  unchanged · isort clean · tsc 0 · eslint 0 · docs links 0 broken · backend
+  **1,169 passed**. See inventory.md → Pass 5. Next: B4 facilities.
+- **B4 facilities ✅ (pass 5)** — the pass that went where four earlier ones
+  said "n/a". Passes 1–4 each recorded `tsc --noEmit` as "no frontend change"
+  and none of them read `modules/facilities` — **10,108 lines across 43 files**,
+  about half the module. The backend was deliberately **not** re-derived:
+  `docs/security-review/FAC-12-facilities.md` is a seven-pass review of the same
+  files whose pass 7 (2026-10-06) found 0 new findings, so re-running that lens
+  would have spent the iteration re-reading cleared ground. What was re-verified
+  instead were this file's own two-month-old claims, because the module had grown
+  underneath them: **98/98** endpoints permission-gated (was "95/95"), enumerated
+  by parsing every decorator — and worth recording because a parser that looked
+  right returned **48 of 98**, its block loop having eaten routes it had already
+  passed; a spot-check would not have caught that. **FAC2-3 (MED, fixed)** is the
+  frontend's half of pitfall #1: `useMaintenanceForm` and `useInspectionForm` each
+  built **one** payload with `if (formData.x) payload.x = …` and handed it to both
+  create and update, so on edit every cleared field was omitted — and the backend
+  dumps update payloads `exclude_unset`, so omitted means "leave this alone".
+  Sixteen fields across the two forms: a cost typed in error could not be removed
+  and a vendor who did not do the work stayed attributed, behind a "Record
+  updated" toast. The backend was already right (`apply_updates` clears on an
+  explicit null), so the fix is frontend-only and uses `formCoercions(isEdit)`,
+  the house helper written for this exact shape. Nullability was taken from live
+  SQLAlchemy introspection, not read off the model text — two of my own regex
+  readings were **wrong** (`performed_by`, `attachments`) — so
+  `maintenance_type_id` stays _omitted_ when blank because its column is NOT NULL
+  and nulling it would be a 400, not a clear; the payload types now encode that
+  distinction so a future edit cannot null an un-clearable column without a type
+  error. **FAC2-4 (MED, fixed)**: the dashboard's "Overdue maintenance" card is a
+  true org-wide SQL count and deep-links to a list that loaded `limit=100`
+  ordered `desc(created_at)` and then filtered `isOverdue` in the browser — so the
+  truncation did not lose rows at random, it preferentially discarded the oldest
+  overdue work, which is exactly what the filter was for. An org with 250 records
+  and 12 overdue could see a red "12 — Action required" card linking to "No
+  maintenance records found". The fix needed **no API change**: `is_overdue` and
+  `is_completed` already existed as query parameters and simply were not
+  forwarded (pitfall #29 — the screen reports what the backend decided).
+  **FAC2-5 (flagged)** is what could not be fixed without an API change: the
+  inspections endpoint's `passed: bool | None` cannot express "awaiting a
+  result", so fixing two of three tabs server-side would make correctness vary by
+  tab; that plus client-side-only search and no pagination on either list is in
+  `KNOWN_LIMITATIONS.md`. **FAC2-6 (MED, flagged, cross-module)** is the
+  uncomfortable one: chasing FAC2-3 found the identical defect in
+  `apparatus/components/MaintenanceRecordModal.tsx` — sixteen conditional
+  spreads, one payload, both verbs — which **B2 pass 5 missed three iterations
+  ago**, along with that service's raw `setattr` loop where `apply_updates`
+  belongs. Left unfixed on purpose (different module, one feature per run) and
+  `apparatus.md` corrected to say so. Checked and **not** re-reported: inventory's
+  same-shaped payload is create-only and its update method has no UI caller, so
+  the B3 "no new code defects" claim stands. 7 new tests, each mutation-tested —
+  forcing `isEdit` false fails exactly the null assertions and leaves the create
+  and NOT NULL ones green; removing the filter forwarding fails 3 of 4, with
+  `all` correctly still passing. **Doc corrections (5):**
+  `module-audit/facilities.md`'s FAC-3 heading said FIXED while its body still
+  said "flagged", a contradiction that survived four passes; two different
+  findings were both numbered FAC-P11; FAC-P10 ("photos and documents are
+  API-only") is closed by a `FilesSection` that has existed for some time; and
+  the audit praised `list_facilities` for hand-escaping LIKE wildcards as "the
+  correct pattern" — which pitfall #25 later established is **inert** without the
+  `escape=` kwarg. The code was fixed properly in between, so the claim's
+  conclusion is true for a reason it does not give, which is worse than being
+  wrong: a reader would copy the described pattern into a new module. Gate: tsc 0
+  (repo-wide; the first run failed on `exactOptionalPropertyTypes` and was fixed
+  by widening the target type, not casting) · eslint clean · flake8 0 · black
+  clean · facilities frontend **124 passed** (18 files) · widened-type consumers
+  26 passed · backend n/a (no Python changed). See facilities.md → Pass 5.
+  Next: B5 elections.

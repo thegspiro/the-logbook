@@ -75,6 +75,7 @@ Not driven: Web Push on the Notifications tab. It's hidden unless push is config
 
 **Saw:** "call me maybe" saved as the phone and shown back after a reload.
 **Why not fixed:** which formats to accept, and what to do with rows that already exist, is a product decision. Read from code, the Notifications tab's `hasMobileOnFile` counts any text as somewhere to send a text. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Owner decision (2026-10-05) — fixed:** lenient validation on new writes only; existing rows untouched. `app/utils/phone_numbers.py` accepts digits, spaces, dashes, dots, brackets, a leading `+` and an extension, with 7–15 digits. Member creates refuse anything else (`422`); the contact-info and profile updates refuse a _changed_ value that fails (`400`, naming the field) and pass a value sent back unchanged, so a legacy entry never blocks saving the rest of a profile. Stored values were not rewritten, so `hasMobileOnFile` can still count a legacy non-number until it is edited.
 
 ### W04-8 — LOW — Three notification switches had no accessible name — ✅ FIXED
 

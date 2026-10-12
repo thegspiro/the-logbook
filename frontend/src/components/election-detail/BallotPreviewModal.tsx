@@ -33,7 +33,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
     >
       <div
         ref={dialogRef}
-        className="bg-theme-surface-secondary max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl"
+        className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl"
       >
         <div className="sticky top-0 z-10 bg-amber-500 px-4 py-2 text-center text-sm font-bold text-amber-900">
           BALLOT PREVIEW — This is how voters will see the ballot
@@ -244,7 +244,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
           </div>
         </div>
 
-        <div className="bg-theme-surface-secondary border-theme-surface-border sticky bottom-0 flex justify-end border-t px-6 py-4">
+        <div className="bg-theme-surface-modal border-theme-surface-border sticky bottom-0 flex justify-end border-t px-6 py-4">
           <button
             type="button"
             onClick={onClose}

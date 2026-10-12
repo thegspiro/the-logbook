@@ -562,6 +562,31 @@ SkillTestCriticalResult
 - Upcoming skills evaluations due (from requirements)
 - Overdue evaluations
 
+**As built — the Test Records tab, paging and export** _(2026-10-05, SKT3-2)_
+
+- `GET /training/skills-testing/tests` returns `{ items, total }` (it was a bare
+  list), newest first (`created_at DESC, id DESC`), takes `limit` (default 50,
+  max 200) and `offset`, and the new `search` (template, candidate or examiner
+  name) and `date_from` / `date_to` parameters move the tab's filtering to the
+  server. Officers page and count in SQL; for a non-officer the disclosure pass
+  cannot run in SQL, so the narrowed rows are resolved first and then counted
+  and sliced: `total` is what the reader may see, and disclosure is unchanged.
+  `GET /templates` keeps its bare list but takes `limit` (default and cap 500)
+  and `offset`, ordered by name, with member visibility applied before the limit.
+- The date used by the list, the filters and the export is
+  `COALESCE(completed_at, created_at)`, so an unfinished test is not hidden from
+  every dated view and the CSV is exactly the rows the tab shows.
+- `GET /tests/export/csv` returns **400** without both `date_from` and `date_to`,
+  or with a window over **366 days**. The tab defaults to the last twelve months;
+  **Export** sends that range and the tab's filters and is disabled, with the
+  reason, when there is no range or it exceeds a year. The **Needs Validation**
+  deep link opens undated so the queue matches the tile's count.
+- **Templates tab cards.** Officers (`training.manage`) always see **Needs
+  Validation**, zero included, beside **Pass Rate**; it links to Test Records
+  filtered to the queue. Members see the four cards as before (the API reports 0
+  pending to them). There is no separate "Summary" tab. My Results and My Skill
+  Tests page too.
+
 ---
 
 ## 6. Permissions & Roles

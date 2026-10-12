@@ -6,16 +6,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+const mockPut = vi.fn();
+const mockDelete = vi.fn();
 
 vi.mock('../../../utils/createApiClient', () => ({
   createApiClient: () => ({
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
+    put: (...args: unknown[]) => mockPut(...args) as unknown,
+    delete: (...args: unknown[]) => mockDelete(...args) as unknown,
   }),
 }));
 
 // Import AFTER mocks are in place
-import { approvalChainService, approvalService } from './api';
+import { approvalChainService, approvalService, budgetRequestService, fiscalYearService } from './api';
 import { ApprovalEntityType } from '../types';
 
 describe('approvalService manual approval', () => {
@@ -126,5 +130,59 @@ describe('approvalChainService.getApproverCoverage', () => {
   it('returns an empty list for a non-array body', async () => {
     mockGet.mockResolvedValue({ data: null });
     await expect(approvalChainService.getApproverCoverage()).resolves.toEqual([]);
+  });
+});
+
+describe('next-year planning calls', () => {
+  beforeEach(() => {
+    for (const mock of [mockGet, mockPost, mockPut, mockDelete]) {
+      mock.mockReset();
+      mock.mockResolvedValue({ data: {} });
+    }
+  });
+
+  it('starts a draft year from another', async () => {
+    mockPost.mockResolvedValue({ data: { created: 3, skipped: 1 } });
+    await expect(fiscalYearService.startFrom('fy-27', 'fy-26')).resolves.toEqual({ created: 3, skipped: 1 });
+    expect(mockPost).toHaveBeenCalledWith('/finance/fiscal-years/fy-27/start-from/fy-26');
+  });
+
+  it('sends a cleared deadline as null', async () => {
+    await fiscalYearService.update('fy-27', { requestDeadline: null });
+    expect(mockPut).toHaveBeenCalledWith('/finance/fiscal-years/fy-27', { requestDeadline: null });
+  });
+
+  it('lists requests with snake_case filters', async () => {
+    mockGet.mockResolvedValue({ data: null });
+    await expect(budgetRequestService.list({ fiscalYearId: 'fy-27', status: 'submitted' })).resolves.toEqual([]);
+    expect(mockGet).toHaveBeenCalledWith('/finance/budget-requests', {
+      params: { fiscal_year_id: 'fy-27', status: 'submitted' },
+    });
+  });
+
+  it('reads the owner’s lines for a year', async () => {
+    await budgetRequestService.myLines('fy-27');
+    expect(mockGet).toHaveBeenCalledWith('/finance/budget-requests/my-lines', {
+      params: { fiscal_year_id: 'fy-27' },
+    });
+  });
+
+  it('walks a request through its lifecycle', async () => {
+    const body = { fiscalYearId: 'fy-27', budgetId: 'b-1', requestedAmount: '2400.00', justification: 'Seats' };
+    await budgetRequestService.create(body);
+    expect(mockPost).toHaveBeenCalledWith('/finance/budget-requests', body);
+    await budgetRequestService.update('br-1', { requestedAmount: '2500.00' });
+    expect(mockPut).toHaveBeenCalledWith('/finance/budget-requests/br-1', { requestedAmount: '2500.00' });
+    await budgetRequestService.submit('br-1');
+    expect(mockPost).toHaveBeenCalledWith('/finance/budget-requests/br-1/submit');
+    await budgetRequestService.withdraw('br-1');
+    expect(mockPost).toHaveBeenCalledWith('/finance/budget-requests/br-1/withdraw');
+    await budgetRequestService.decide('br-1', { decision: 'decline', decisionNote: 'Flat year' });
+    expect(mockPost).toHaveBeenCalledWith('/finance/budget-requests/br-1/decide', {
+      decision: 'decline',
+      decisionNote: 'Flat year',
+    });
+    await budgetRequestService.delete('br-1');
+    expect(mockDelete).toHaveBeenCalledWith('/finance/budget-requests/br-1');
   });
 });

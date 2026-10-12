@@ -2,6 +2,8 @@
  * Admin Hours Types
  */
 
+import type { AdminHoursEntryMethod } from '../../../constants/enums';
+
 export interface AdminHoursCategory {
   id: string;
   organizationId: string;
@@ -47,7 +49,7 @@ export interface AdminHoursEntry {
   clockOutAt: string | null;
   durationMinutes: number | null;
   description: string | null;
-  entryMethod: 'qr_scan' | 'manual' | 'event_attendance';
+  entryMethod: AdminHoursEntryMethod;
   status: 'active' | 'pending' | 'approved' | 'rejected' | 'withdrawn';
   approvedBy: string | null;
   approvedAt: string | null;
@@ -144,6 +146,12 @@ export interface AdminHoursSummary {
   }>;
   periodStart: string | null;
   periodEnd: string | null;
+}
+
+/** The department's review rules, as the server resolves them (camelCase wire). */
+export interface AdminHoursReviewSettings {
+  allowSelfApproval: boolean;
+  resyncRequeueGrowthPercent: number;
 }
 
 export interface AdminHoursQRData {

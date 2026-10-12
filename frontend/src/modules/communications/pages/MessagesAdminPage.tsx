@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, EmptyState, Pagination, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
-import type { DepartmentMessageRecord, AcknowledgmentReport } from '../../../services/adminServices';
+import type { DepartmentMessageRecord, AcknowledgmentReport, DeliveryState } from '../../../services/adminServices';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
@@ -34,6 +34,30 @@ const PRIORITY_BADGE: Record<string, string> = {
   important: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   urgent: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
 };
+
+interface DeliveryNote {
+  text: string;
+  cls: string;
+}
+
+/**
+ * A line under a member for an email or text that has not simply gone out
+ * (MSG-12). A delivered send says nothing — the list stays about who read
+ * the message — while a retrying one says when the next try is and a failed
+ * one says so, which is the only place a department finds out.
+ */
+function deliveryNote(channel: string, state: DeliveryState | null | undefined, tz: string): DeliveryNote | null {
+  if (!state || state.status === 'delivered') return null;
+  const reason = state.error ? ` — ${state.error}` : '';
+  if (state.status === 'failed') {
+    return { text: `${channel} failed${reason}`, cls: 'text-red-700 dark:text-red-400' };
+  }
+  if (state.status === 'retrying') {
+    const when = state.next_attempt_at ? `, trying again ${formatDateTime(state.next_attempt_at, tz)}` : '';
+    return { text: `${channel} not sent yet${when}${reason}`, cls: 'text-amber-700 dark:text-amber-400' };
+  }
+  return { text: `${channel} sending`, cls: 'text-theme-text-muted' };
+}
 
 function audienceLabel(m: DepartmentMessageRecord, roleNames: Record<string, string>): string {
   switch (m.target_type) {
@@ -374,18 +398,31 @@ const MessagesAdminPage: React.FC = () => {
                                         cls: 'text-amber-600 dark:text-amber-400',
                                       };
                               const StateIcon = state.icon;
+                              const deliveryNotes = [
+                                deliveryNote('Email', r.email_delivery, tz),
+                                deliveryNote('Text', r.sms_delivery, tz),
+                              ].filter((n): n is DeliveryNote => n !== null);
                               return (
-                                <li key={r.user_id} className="flex items-center justify-between gap-3 py-1.5">
-                                  <span className="text-theme-text-primary min-w-0 truncate">
-                                    {r.name}
-                                    {r.status ? (
-                                      <span className="text-theme-text-muted ml-2 text-xs capitalize">{r.status}</span>
-                                    ) : null}
-                                  </span>
-                                  <span className={`flex shrink-0 items-center gap-1 text-xs ${state.cls}`}>
-                                    <StateIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                                    {state.label}
-                                  </span>
+                                <li key={r.user_id} className="py-1.5">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-theme-text-primary min-w-0 truncate">
+                                      {r.name}
+                                      {r.status ? (
+                                        <span className="text-theme-text-muted ml-2 text-xs capitalize">
+                                          {r.status}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    <span className={`flex shrink-0 items-center gap-1 text-xs ${state.cls}`}>
+                                      <StateIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                      {state.label}
+                                    </span>
+                                  </div>
+                                  {deliveryNotes.map((n) => (
+                                    <p key={n.text} className={`mt-0.5 text-xs ${n.cls}`}>
+                                      {n.text}
+                                    </p>
+                                  ))}
                                 </li>
                               );
                             })}

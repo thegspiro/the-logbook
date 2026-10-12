@@ -59,6 +59,27 @@ behaviour. Field-level detail is in `backend/app/docs/TRAINING_MODULE.md`
 (TrainingRequirement → Grandfathering Fields); the officer's view is in
 [Training & Certification › Existing Members](training/02-training.md#existing-members--exempting-or-giving-a-catch-up-deadline-2026-10-03).
 
+**Three requirement rules changed on 2026-10-05.**
+
+- **Certification name matching is legacy-only.** A completed record whose
+  course name merely contained a certification requirement's name used to credit
+  it ("CPR Refresher" crediting "CPR"). That match survives only for records
+  completed on or before the requirement's `name_match_until` date, which the
+  upgrade set to the day it ran on every requirement that existed; a requirement
+  created afterwards needs a linked course, the training type or the registry
+  code.
+- **`required_roles` holds rank slugs and is matched against the member's rank.**
+  It previously never matched anybody. It is not the compliance profile's
+  `role_ids` (position ids).
+- **Shift Credit.** HOURS requirements have a **Shift Credit** checkbox
+  (`shift_credited`). Scheduling's Shift Compliance report grades only
+  shift-credited requirements: SHIFTS requirements by default, HOURS only when
+  ticked, so an existing HOURS requirement is off that report until an officer
+  ticks it.
+
+See [Compliance configuration](COMPLIANCE_CONFIG.md#how-profiles-are-applied-2026-10-05)
+for how the figures are graded.
+
 ### Training Programs
 
 Training programs are structured pathways that group requirements together. Programs can be:
@@ -369,13 +390,21 @@ tracking works with no extra setup.
 class timeline with live sign-up and attendance counts, plus the roster with
 each member's progress:
 
-| Action                    | Effect                                                                                                                                                      |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Reschedule** a class    | Moves the class _and_ its calendar event; RSVPs are preserved.                                                                                              |
-| **Cancel** a class        | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays on the cohort for the record.                         |
-| **Add class**             | An ad-hoc class (make-up session, add-on) that was never on the syllabus; the roster is invited automatically.                                              |
-| **Shift remaining**       | Slides every upcoming class by N days. Classes that already happened keep their dates — their attendance records are anchored to them.                      |
-| **Create missing events** | Repairs a class whose event failed to create or was deleted. Idempotent: a class that already has an event is skipped, so this can never duplicate a class. |
+| Action                        | Effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reschedule** a class        | Moves the class _and_ its calendar event; RSVPs are preserved.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Cancel** a class            | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays on the cohort for the record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Add class**                 | An ad-hoc class (make-up session, add-on) that was never on the syllabus; the roster is invited automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Shift remaining**           | Slides every upcoming class by N days. Classes that already happened keep their dates — their attendance records are anchored to them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Create missing events**     | Repairs a class whose event failed to create or was deleted. Idempotent: a class that already has an event is skipped, so this can never duplicate a class.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Add member** _(2026-10-05)_ | Adds a late joiner (member picker). Classes already held before they joined are listed as "N classes held before they joined — decide": each is either **credited** (a completed training record, built from the class's course and credit hours and dated by the class's local day, applied to the pipeline requirement the class feeds) or given a **make-up** session that copies the class to a chosen time and invites that member alone. A make-up is credited the usual way when its attendance is finalized; cancelling it reopens the decision. A class counts as missed when it started before the member was added, is not cancelled, is not a make-up, and the member holds no RSVP for it. |
+
+> **Shift and Cancel are all-or-nothing** _(2026-10-05)_. A finalized class or a
+> room already taken on the new date refuses the whole operation and nothing is
+> moved or cancelled (it used to move or cancel the earlier classes and then
+> report the refusal). Cancelling the cohort leaves alone a class already
+> cancelled from the calendar. A cohort cancel does not send notices for the
+> classes it cancels.
 
 > **Timezone note.** Class times are stored as local wall clock and resolved
 > against the organization timezone at generation. A cohort spanning a DST
@@ -493,10 +522,15 @@ reminders**.
 
 Entries made in error can be undone without hand-editing progress:
 
-- **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
-  marks the record cancelled — kept for audit, never hard-deleted — and un-applies
-  any pipeline credit it produced. The compliance engine only counts completed
-  records, so a voided one stops counting immediately.
+- **Void a training record**
+  (`DELETE /training/records/{id}?reason=…`, `training.manage`) marks the record
+  cancelled — kept for audit, never hard-deleted — and un-applies any pipeline
+  credit it produced. The compliance engine only counts completed records, so a
+  voided one stops counting immediately. Since 2026-10-07 the `reason` is
+  **required** (a call without one gets 422) and is stored on the record as
+  `void_reason`, shown to the member, and sent to them by bell and email. A
+  voided record can't be edited (`PATCH` returns 400), and a re-import of the same
+  provider completion links to it rather than crediting it again.
 - **Reverse an approval**
   (`POST /training/submissions/{id}/reverse-approval`, `training.manage`) voids the
   record the approval spawned, un-applies the credit keyed on both the submission
@@ -1549,16 +1583,25 @@ hours count toward that requirement's Airway section.
    - **NFPA 1500 Occupational Safety Training** (8 hrs, annual, calendar period)
    - **NREMT EMT Recertification** (40 hrs, 24-month rolling period)
    - **CPR/BLS Certification** (certification, 24-month rolling period)
-   - **Hazmat Operations Refresher** (8 hrs, annual — OSHA 29 CFR 1910.120)
-   - **Bloodborne Pathogens Annual Refresher** (2 hrs, annual — OSHA 29 CFR 1910.1030)
-   - **HIPAA Privacy & Security Awareness** (1 hr, annual — 45 CFR 164.530(b))
+   - **Hazmat Operations Refresher** (course you link, annual — OSHA 29 CFR 1910.120)
+   - **Bloodborne Pathogens Annual Refresher** (course you link, annual — OSHA 29 CFR 1910.1030)
+   - **HIPAA Privacy & Security Awareness** (course you link, annual — 45 CFR 164.530(b))
    - **SCBA Fit Test & Respiratory Protection** (checklist, annual — OSHA 29 CFR 1910.134)
    - **NIMS/ICS Initial Certification** (ICS-100/200, IS-700/800 courses, one-time)
    - **New Member Orientation Checklist** (checklist, one-time, probationary members)
 3. Selecting a template opens the create form pre-filled — review and adjust
-   the hours, due date configuration, and assignment before saving. Templates
+   the hours, due date configuration, and assignment before saving. The
+   Hazmat, Bloodborne Pathogens and HIPAA templates are Courses requirements:
+   pick the department's course for that topic from the library. Templates
    based on national standards carry NFPA/NREMT/OSHA/HIPAA/FEMA source
    attribution automatically.
+
+> **Warning:** never model a topic-specific mandate (HIPAA, bloodborne
+> pathogens, a policy acknowledgment) as an **Hours** requirement filtered only
+> by training type — any course of that type will satisfy it. A department's
+> HIPAA refresher, built that way, was shown as met by two medical CE courses
+> and no HIPAA training. Link the requirement to the course instead. See
+> [Never Use an Hours Requirement for a Required Topic](./training/02-training.md#never-use-an-hours-requirement-for-a-required-topic).
 
 ### 2. Create Training Program
 
@@ -2396,8 +2439,9 @@ Training sessions can be linked to events via the `training_session.event_id` fo
 - Event QR code check-ins can be used for attendance verification
 - Event location is inherited by the training session
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
+<!-- Screenshot placeholder:
+_[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
+-->
 
 #### Training Session Approval → Pipeline Progress
 

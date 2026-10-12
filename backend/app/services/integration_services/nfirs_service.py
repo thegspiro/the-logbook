@@ -126,7 +126,7 @@ def _format_date(dt: Any) -> str:
         except (ValueError, AttributeError):
             return ""
     if hasattr(dt, "strftime"):
-        return dt.strftime("%m/%d/%Y")
+        return str(dt.strftime("%m/%d/%Y"))
     return ""
 
 
@@ -143,7 +143,7 @@ def _format_time(dt: Any) -> str:
         except (ValueError, AttributeError):
             return ""
     if hasattr(dt, "strftime"):
-        return dt.strftime("%H%M")
+        return str(dt.strftime("%H%M"))
     return ""
 
 

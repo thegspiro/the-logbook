@@ -97,6 +97,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'administration approvals workflow',
   },
   {
+    path: '/admin/security-alerts',
+    source: 'src/modules/admin/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/admin-hours',
     source: 'src/modules/admin-hours/routes.tsx',
     coverage: 'ratchet',
@@ -265,6 +271,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/events/attendance-requests',
+    source: 'src/modules/events/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/events/analytics',
     source: 'src/modules/events/routes.tsx',
     coverage: 'exempt',
@@ -398,6 +410,24 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/finance/my-budgets',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/finance/budget-requests',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/finance/budget-requests/review',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/finance/settings',
     source: 'src/modules/finance/routes.tsx',
     coverage: 'exempt',
@@ -405,6 +435,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/finance/settings/approval-chains',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/finance/settings/quickbooks',
     source: 'src/modules/finance/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
@@ -518,6 +554,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/grants/opportunities/new',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/grants/applications',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',
@@ -560,6 +602,24 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/grants/donations/new',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/grants/pledges',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/grants/events',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/grants/reports',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',
@@ -570,6 +630,26 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/integrations/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet — integrations catalogue',
+  },
+  {
+    path: '/integrations/:integrationId',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/claude/authorize',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'OAuth consent screen opened only by the backend redirect with a one-time ?request= id; a single max-w-xl card of checkboxes and two buttons built from the shared form and button utilities',
+  },
+  {
+    path: '/claude/connections',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      "secondary list of a member's own Claude connections; single-column cards with one shared-utility button each",
   },
   {
     path: '/inventory',
@@ -642,6 +722,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/admin/clearances/:clearanceId',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
     path: '/inventory/admin/write-offs',
@@ -890,6 +976,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/minutes/attendance',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
+  },
+  {
     path: '/minutes/:minutesId',
     source: 'src/modules/minutes/routes.tsx',
     coverage: 'exempt',
@@ -1023,6 +1116,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'legacy redirect; destination is inventoried',
   },
   {
+    path: '/onboarding/encryption-key',
+    source: 'src/modules/onboarding/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/onboarding/admin-user',
     source: 'src/modules/onboarding/routes.tsx',
     coverage: 'exempt',
@@ -1123,6 +1222,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/scheduling/admin/history-import',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/admin/history-import/:importId',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
     path: '/scheduling/admin/reports',
@@ -1557,6 +1668,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/training/skills-testing/test/:testId/active',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/training/knowledge-tests',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/training/knowledge-tests/attempts/:attemptId',
     source: 'src/modules/training/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',

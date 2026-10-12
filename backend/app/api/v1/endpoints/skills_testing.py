@@ -77,6 +77,7 @@ from app.services.skills_testing_service import (
     lock_attempt_capacity,
     notify_candidate_result_available,
     notify_candidate_result_voided,
+    pending_validation_criteria,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_elapsed_seconds,
@@ -271,13 +272,14 @@ async def _org_training_config(db: AsyncSession, organization_id) -> object | No
     """The organization's training config, or None when it has never been saved."""
     from app.models.training import TrainingModuleConfig
 
-    return (
+    config: TrainingModuleConfig | None = (
         await db.execute(
             select(TrainingModuleConfig).where(
                 TrainingModuleConfig.organization_id == str(organization_id)
             )
         )
     ).scalar_one_or_none()
+    return config
 
 
 async def _named_viewer_ids(db: AsyncSession, test_id: str) -> set[str]:
@@ -706,7 +708,7 @@ async def update_template(
     update_data = template_update.model_dump(exclude_unset=True)
 
     # Convert sections to JSON-serializable dicts if provided
-    if "sections" in update_data and update_data["sections"] is not None:
+    if "sections" in update_data and template_update.sections is not None:
         update_data["sections"] = [s.model_dump() for s in template_update.sections]
 
     # Validate/normalize the requirement link (UUID -> str for the FK column)
@@ -1078,11 +1080,7 @@ def _apply_test_filters(
     # The review queue is not expressible as a status — it is a status *and*
     # the absence of a validation.
     if pending_validation:
-        query = query.where(
-            SkillTest.is_practice.is_(False),
-            SkillTest.status == SkillTestStatus.COMPLETED.value,
-            SkillTest.validated_at.is_(None),
-        )
+        query = query.where(*pending_validation_criteria(organization_id))
 
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
@@ -1485,6 +1483,38 @@ async def create_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
         )
 
+    # A client-minted id (offline cold start). A replay of a create that
+    # already landed — the response was lost, or the queue retried — returns
+    # the test it made instead of a second one. Anything else holding that id
+    # is refused with one message whoever owns it, so the answer says nothing
+    # about another department's tests.
+    if test_data.id is not None:
+        existing = (
+            await db.execute(select(SkillTest).where(SkillTest.id == str(test_data.id)))
+        ).scalar_one_or_none()
+        if existing is not None:
+            if not (
+                existing.organization_id == current_user.organization_id
+                and str(existing.examiner_id) == str(current_user.id)
+                and str(existing.template_id) == str(test_data.template_id)
+                and str(existing.candidate_id) == str(test_data.candidate_id)
+                and bool(existing.is_practice) == bool(test_data.is_practice)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="That test id is already in use",
+                )
+            replay_candidate = (
+                await db.execute(select(User).where(User.id == existing.candidate_id))
+            ).scalar_one_or_none()
+            return _build_test_response(
+                existing,
+                template,
+                replay_candidate,
+                current_user,
+                org_config=await _org_training_config(db, current_user.organization_id),
+            )
+
     # Mirror get_template's visibility rule. The test response carries the full
     # template body (template_sections), so without this a member could practice
     # against an officers_only/assigned_only template and read the very content
@@ -1499,6 +1529,22 @@ async def create_test(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Template must be published before it can be used for testing",
+        )
+
+    # Scored on a device against a cached copy of the sheet: the snapshot
+    # frozen below must be the sheet that was scored, or the scorecard's
+    # criterion ids may not line up with it.
+    if (
+        test_data.expected_template_version is not None
+        and (template.version or 1) != test_data.expected_template_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This skill sheet was changed after the evaluation was started "
+                "offline, so it cannot be filed against the new version. The "
+                "scoring is still on the examiner's device."
+            ),
         )
 
     # Verify candidate exists in org
@@ -1558,6 +1604,8 @@ async def create_test(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     new_test = SkillTest(
+        # A client-minted id when one was sent; otherwise the column default.
+        **({"id": str(test_data.id)} if test_data.id is not None else {}),
         organization_id=current_user.organization_id,
         template_id=str(test_data.template_id),
         candidate_id=str(test_data.candidate_id),
@@ -1820,7 +1868,7 @@ async def update_test(
         test.resume_count = (test.resume_count or 0) + 1
 
     # Convert section_results to JSON-serializable dicts if provided
-    if "section_results" in update_data and update_data["section_results"] is not None:
+    if "section_results" in update_data and test_update.section_results is not None:
         update_data["section_results"] = [
             sr.model_dump() for sr in test_update.section_results
         ]
@@ -1906,7 +1954,8 @@ async def _lock_test_for_transition(
         .where(SkillTest.organization_id == organization_id)
         .with_for_update()
     )
-    return result.scalar_one_or_none()
+    locked_test: SkillTest | None = result.scalar_one_or_none()
+    return locked_test
 
 
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)
@@ -3953,12 +4002,7 @@ async def get_testing_summary(
     pending_validation_count = 0
     if _can_manage_tests(current_user):
         pending_validation_result = await db.execute(
-            select(func.count(SkillTest.id)).where(
-                SkillTest.organization_id == org_id,
-                SkillTest.status == "completed",
-                SkillTest.validated_at.is_(None),
-                SkillTest.is_practice.is_(False),
-            )
+            select(func.count(SkillTest.id)).where(*pending_validation_criteria(org_id))
         )
         pending_validation_count = pending_validation_result.scalar() or 0
 

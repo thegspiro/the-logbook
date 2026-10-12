@@ -446,6 +446,14 @@ confirmation modal. Submit.]**
 > receipt can verify against the system that the vote was recorded, without
 > revealing _what_ the vote was. We'll use these in the audit chapter."
 
+**[PRODUCTION NOTE — 2026-10-06. Re-record any in-app [SCREEN] where the receipt
+is meant to stay on screen after "Vote submitted for <position>": until
+92468ec2 the page refetched after the vote, flashed its loading skeleton, and
+the receipt block was thrown away with it, so a take filmed before that shows it
+vanishing (or never painting). It now stays and the verify form reports the
+vote counted. The same fix covers a refetch after close or publish, which now
+update the page in place.]**
+
 ### IN-APP VOTING (21:00 – 21:45)
 
 **[SCREEN: Logged-in member on the election detail page, Cast Vote tab]**
@@ -1121,6 +1129,18 @@ refusal message]**
 > "So: closed with votes — permanent; run a new election, it takes two
 > minutes. Closed by accident with _no_ votes — rollback works fine, with a
 > written reason, and leadership gets notified either way."
+
+> "One thing a voter will notice if you do roll back after sending ballot
+> links: the old link now says the election was closed and reopened, rather
+> than claiming it had expired. A link replaced by a reminder still says it was
+> replaced by a newer ballot email."
+
+**[PRODUCTION NOTE — 2026-10-06. New line, about 15 seconds (5b4c798b). Before
+this, a link retired by a zero-vote rollback read "Voting token has expired"
+even days before the end. Also: the election list's card for an election closed
+early now shows the close date, not the scheduled end; the help popover on
+/elections is a readable width. Retake any older /elections [SCREEN] showing a
+narrow help popover.]**
 
 **[CALLOUT: "Vote secrecy and reopening can't coexist. Secrecy wins."]**
 

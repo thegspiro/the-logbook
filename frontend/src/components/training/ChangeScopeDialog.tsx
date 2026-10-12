@@ -74,7 +74,7 @@ export const ChangeScopeDialog: React.FC<ChangeScopeDialogProps> = ({
         </div>
       }
     >
-      <div className="modal-body space-y-3" role="radiogroup" aria-label="Who the change applies to">
+      <div className="space-y-3" role="radiogroup" aria-label="Who the change applies to">
         <label className="border-theme-surface-border flex cursor-pointer items-start gap-3 rounded-lg border p-3">
           <input
             type="radio"

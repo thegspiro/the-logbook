@@ -946,6 +946,12 @@ export const PipelineSettingsPage: React.FC = () => {
                           />
                           <span className="text-theme-text-muted text-sm">days after becoming inactive</span>
                         </div>
+                        <p className="text-theme-text-muted mb-3 ml-6 text-xs">
+                          Checked once a day. The period counts from when an application last became inactive, and
+                          restarts if it is reactivated and goes inactive again. Applications that were already inactive
+                          when this setting began to take effect count from that upgrade, not from their original
+                          deactivation date.
+                        </p>
                         <div className="ml-6 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                           <AlertTriangle
                             className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"

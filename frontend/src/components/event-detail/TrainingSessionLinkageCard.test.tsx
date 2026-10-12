@@ -11,7 +11,6 @@
  * holds rather than guessing at it (pitfall #29).
  */
 
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

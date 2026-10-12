@@ -2880,7 +2880,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       data-testid="swap-modal"
       className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
     >
-      <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
         <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
           <div className="min-w-0">
             <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>

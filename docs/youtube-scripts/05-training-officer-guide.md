@@ -67,9 +67,21 @@ and skills testing status.]**
 **[SCREEN: Point to each section as you describe it]**
 
 > "**Department Compliance** — the big number at the top. This is the percentage
-> of your department that's fully compliant with all required certifications.
-> The goal is 100%, but in reality, you'll spend most of your time managing the
-> gap."
+> of your department that's compliant, graded the same way the Compliance
+> Matrix grades it — a member's compliance profile and your own thresholds
+> decide who counts, not a flat hundred percent. The goal is 100%, but in
+> reality, you'll spend most of your time managing the gap."
+
+> "One detail: a member nothing applies to — no requirement covers them yet, or
+> every one is still in its catch-up period — is **not applicable**, not
+> compliant. They're left out of the percentage rather than flattering it."
+
+**[PRODUCTION NOTE — 2026-10-06. Reworded (TR4-3, TR4-4). The card used to
+count a member compliant only at exactly 100% and ignored profiles and
+thresholds; it now agrees with the matrix it links to. Departments using
+profiles, or a threshold under 100%, will see the number move on upgrade, and a
+member with nothing to be graded on no longer counts as compliant. Do not
+narrate a pre-upgrade figure as current.]**
 
 **[CALLOUT: Arrow pointing to compliance percentage]**
 
@@ -232,6 +244,26 @@ form pre-filled with its values]**
 > **Frequency:** 'Every 2 Years' — the system will automatically flag members
 > when their completion date is approaching the two-year mark.
 > **Required Hours:** If there's a minimum hour requirement, enter it here."
+
+**[SCREEN: Scroll to the "Shift Credit" section of the form — the checkbox
+"Shift attendance satisfies this requirement"]**
+
+> "One box to know about on an hours or shifts requirement: **Shift Credit**.
+> Tick it when time on shift should count toward this requirement. Leave it
+> unticked for ordinary training hours — annual hazmat hours, say — so a member
+> can't look compliant on the scheduling Shift Compliance report just because
+> they worked duty shifts. A shifts requirement starts ticked; an hours one
+> starts unticked."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 20 seconds; re-time Chapter 3
+and re-record the form (W37-2). The Shift Compliance report now grades only the
+shift-credited requirements, so an existing hours requirement drops off that
+report until somebody ticks the box. Also: a requirement scoped by **role** is
+matched against the member's **rank**, and a certification requirement matches a
+course by its linked course, training type or registry code — not by the
+course's name containing the requirement's name (name matching survives only
+for requirements that existed at the upgrade, up to that day). Neither needs
+narration; both can move a department's percentages.]**
 
 **[SCREEN: Scroll to the "Existing Members" section: Apply to everyone /
 Exempt existing members / Give a catch-up deadline]**
@@ -445,10 +477,15 @@ duration stepper, the start-time field]**
 **[SCREEN: A member's approved record showing its attached certificate]**
 
 **[PRESENTER NOTE — say this once, it is a records question your chief will
-ask: approved certificates are kept indefinitely and nothing expires them, and
-uploaded files are checked to be genuinely the file type they claim but are
-**not scanned for malware**. If your department has a retention policy, that is
-a decision for the department, not a setting in the product.]**
+ask. Uploaded files are checked to be genuinely the file type they claim but are
+**not scanned for malware**. Approved certificates are still kept indefinitely
+unless the department opts in: **Review Submissions → Settings → Certificate
+Files → Delete certificate files after (days)** (minimum 90, counted from the
+approval or rejection; empty means keep forever). A daily job then deletes the
+uploaded files from the submission and from the member's training record — the
+record itself stays. Nothing is deleted on upgrade; a department has to set a
+number. Updated 2026-10-06; the earlier take said retention was not a setting
+in the product.]**
 
 **[CALLOUT: "Member submissions require Training Officer approval"]**
 

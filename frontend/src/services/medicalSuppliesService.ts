@@ -149,6 +149,22 @@ export const medicalSuppliesService = {
     return response.data;
   },
 
+  /**
+   * Create a medical supply, or get back the one already carrying the name.
+   *
+   * The equipment check builder's create-and-link path. `category_id` must be
+   * a medical category — that is what files the row on the Medical Supplies
+   * page rather than as gear. A name already filed as gear is refused with 409
+   * rather than linked; `created` says whether this call made the row.
+   */
+  async createItemIfAbsent(data: InventoryItemCreate): Promise<{ item: InventoryItem; created: boolean }> {
+    const response = await api.post<{ item: InventoryItem; created: boolean }>(
+      '/medical-supplies/items/create-if-absent',
+      data
+    );
+    return response.data;
+  },
+
   async updateItem(itemId: string, data: MedicalItemUpdate): Promise<InventoryItem> {
     const response = await api.patch<InventoryItem>(`/medical-supplies/items/${itemId}`, data);
     return response.data;

@@ -75,6 +75,35 @@ _ESCALATION_WINDOW_SECONDS = 3600
 _EMAIL_ESCALATION_LIMIT = 30
 _SMS_ESCALATION_LIMIT = 10
 
+# MSG-12, the owner's decision: a failed or throttled send is retried up to
+# five times, 5, 10, 20, 40 and 80 minutes after the attempt before it, then
+# recorded as failed for good. A throttled attempt counts as an attempt, so a
+# department stuck at its hourly cap gives up after the same ~2.5 hours.
+MAX_DELIVERY_RETRIES = 5
+_RETRY_BASE_DELAY = timedelta(minutes=5)
+THROTTLED_REASON = "Held back by the department's hourly sending limit"
+
+
+def retry_delay(attempt_count: int) -> Optional[timedelta]:
+    """Wait before the next attempt after ``attempt_count`` attempts, or None
+    once the retries are spent."""
+    if attempt_count > MAX_DELIVERY_RETRIES:
+        return None
+    delay: timedelta = _RETRY_BASE_DELAY * (2 ** (attempt_count - 1))
+    return delay
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """MySQL hands back naive datetimes that are already UTC."""
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _retry_is_due(attempt: DepartmentMessageDelivery, now: datetime) -> bool:
+    due = _as_utc(attempt.next_attempt_at)
+    return attempt.status == "retrying" and due is not None and due <= now
+
 
 def _priority_value(message: DepartmentMessage) -> str:
     return (
@@ -170,11 +199,20 @@ class MessageDeliveryService:
             .where(DepartmentMessageDelivery.idempotency_key == key)
             .with_for_update()
         )
-        attempt = result.scalar_one_or_none()
-        cutoff = datetime.now(timezone.utc) - _STALE_CLAIM_AFTER
-        attempted_at = getattr(attempt, "attempted_at", None) if attempt else None
-        if attempted_at is not None and attempted_at.tzinfo is None:
-            attempted_at = attempted_at.replace(tzinfo=timezone.utc)
+        attempt: Optional[DepartmentMessageDelivery] = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if attempt is not None and _retry_is_due(attempt, now):
+            # A failed or throttled attempt whose wait is over (MSG-12): this
+            # send is its next attempt.
+            attempt.status = "pending"
+            attempt.attempt_count = (attempt.attempt_count or 1) + 1
+            attempt.attempted_at = now
+            attempt.next_attempt_at = None
+            await self.db.commit()
+            return attempt
+
+        cutoff = now - _STALE_CLAIM_AFTER
+        attempted_at = _as_utc(getattr(attempt, "attempted_at", None))
         if (
             attempt is None
             or attempt.status != "pending"
@@ -185,7 +223,7 @@ class MessageDeliveryService:
             await self.db.rollback()
             return None
 
-        attempt.attempted_at = datetime.now(timezone.utc)
+        attempt.attempted_at = now
         await self.db.commit()
         logger.info(
             "Reclaimed an abandoned delivery claim ({}) for message {}",
@@ -211,10 +249,42 @@ class MessageDeliveryService:
         channel of record (see the module docstring), which is exactly the
         channel this would silently drop.
         """
-        attempt.status = "failed" if error else "delivered"
-        attempt.error = str(error) if error else None
-        attempt.delivered_at = None if error else datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        if error:
+            # Retried on the owner's schedule (MSG-12) until the retries are
+            # spent; only then is the failure final.
+            delay = retry_delay(attempt.attempt_count or 1)
+            attempt.status = "failed" if delay is None else "retrying"
+            attempt.next_attempt_at = None if delay is None else now + delay
+            attempt.error = str(error)
+            attempt.delivered_at = None
+        else:
+            attempt.status = "delivered"
+            attempt.next_attempt_at = None
+            attempt.error = None
+            attempt.delivered_at = now
         await self.db.commit()
+
+    async def _record_throttled(
+        self, message_id: str, user_ids: List[str], channel: str
+    ) -> int:
+        """Write a retriable row for each member a throttled send skipped.
+
+        A throttled send used to return before claiming anyone, which left no
+        row at all — nothing to retry and nothing for an administrator to find
+        (MSG-12). Each member is now claimed and the attempt recorded as held
+        back, so the retry task sends it once the hour has room. A member
+        whose row already exists and is not due (delivered, or waiting out an
+        earlier backoff) is left alone by the claim.
+        """
+        recorded = 0
+        for user_id in user_ids:
+            attempt = await self._claim_delivery(message_id, user_id, channel)
+            if attempt is None:
+                continue
+            await self._finish_delivery(attempt, THROTTLED_REASON)
+            recorded += 1
+        return recorded
 
     async def deliver(
         self,
@@ -374,10 +444,15 @@ class MessageDeliveryService:
                 _ESCALATION_WINDOW_SECONDS,
                 fail_closed=False,
             ):
+                recorded = await self._record_throttled(
+                    message.id, [u.id for u in email_recipients], "email"
+                )
                 logger.warning(
-                    "Email escalation throttled for org {} (message {})",
+                    "Email escalation throttled for org {} (message {}); "
+                    "{} delivery(ies) queued for retry",
                     message.organization_id,
                     message.id,
+                    recorded,
                 )
                 return
 
@@ -408,17 +483,19 @@ class MessageDeliveryService:
             # half is never emailed — on the channel of record. Claims stay
             # per member; the connection is shared.
             claimed = []
+            addresses: List[str] = []
             for user in email_recipients:
                 attempt = await self._claim_delivery(message.id, user.id, "email")
                 if attempt is not None and user.email:
                     claimed.append((user, attempt))
+                    addresses.append(user.email)
             if not claimed:
                 return
 
             outcomes: List[bool] = []
             try:
                 await email_svc.send_email(
-                    to_emails=[user.email for user, _ in claimed],
+                    to_emails=addresses,
                     subject=subject,
                     html_body=html_body,
                     db=self.db,
@@ -483,10 +560,15 @@ class MessageDeliveryService:
                 _ESCALATION_WINDOW_SECONDS,
                 fail_closed=False,
             ):
+                recorded = await self._record_throttled(
+                    message.id, [user_id for user_id, _ in targets], "sms"
+                )
                 logger.warning(
-                    "SMS escalation throttled for org {} (message {})",
+                    "SMS escalation throttled for org {} (message {}); "
+                    "{} delivery(ies) queued for retry",
                     message.organization_id,
                     message.id,
+                    recorded,
                 )
                 return
 

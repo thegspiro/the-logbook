@@ -82,7 +82,7 @@ export const AnonymizeMemberModal: React.FC<AnonymizeMemberModalProps> = ({
         </div>
       }
     >
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           This permanently removes <span className="text-theme-text-primary font-medium">{member?.name}</span>&rsquo;s
           personal information. <span className="font-medium">It cannot be undone</span>, and the member cannot be

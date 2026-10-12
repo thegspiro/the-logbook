@@ -207,11 +207,11 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 # EC2/VM - SSH in, then:
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
 
-# With managed database (RDS/Azure SQL/Cloud SQL):
-# Edit .env to point to your managed database
-DB_HOST=your-database-endpoint
-DB_PASSWORD=your-secure-password
-docker compose up -d backend frontend
+# With a managed MySQL and Redis (RDS + ElastiCache, or another provider):
+# set DB_HOST, DB_PORT, REDIS_HOST, REDIS_PORT and the TLS settings in .env,
+# then layer the external-services override so the bundled ones stay off
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
 ```
 
 See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Deployment Guide](wiki/Deployment-Guide.md) for other cloud platforms.

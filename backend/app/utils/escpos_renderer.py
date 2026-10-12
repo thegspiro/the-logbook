@@ -23,7 +23,7 @@ PDF and ZPL paths, so no module needed changing to gain a second printer
 language.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 from app.utils.label_renderer import (
     SYMBOLOGY_CODE128,
@@ -36,10 +36,17 @@ from app.utils.label_renderer import (
 )
 from app.utils.print_document import PrintDocument
 
+
+class EscposPaper(TypedDict):
+    description: str
+    printable_dots: int
+    characters: int
+
+
 # Receipt stock is sold by paper width, and the printable width is narrower
 # than the paper: the print head does not reach the edges. These are the
 # printable dot counts every 203 dpi unit of that width shares.
-ESCPOS_PAPER: Dict[str, Dict[str, object]] = {
+ESCPOS_PAPER: Dict[str, EscposPaper] = {
     "escpos_58mm": {
         "description": "Receipt / label roll 58mm (2.3 in)",
         "printable_dots": 384,

@@ -60,5 +60,12 @@ describe('NominationsPanel keeps focus on the form after Nominate (W50-73)', () 
     await waitFor(() => expect(mockCreateNomination).toHaveBeenCalled());
     await waitFor(() => expect(nominate).toBeDisabled());
     expect(position).toHaveFocus();
+
+    // The refetch that follows must not swap the form for the loading line:
+    // on screen focus sat on <body> because the select had been unmounted.
+    await waitFor(() => expect(mockGetCandidates).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Loading nominations…')).not.toBeInTheDocument();
+    expect(position).toBeInTheDocument();
+    expect(position).toHaveFocus();
   });
 });

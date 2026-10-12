@@ -561,7 +561,11 @@ class TestManualBallots(TestNominationSetup):
         results = await svc.get_election_results(
             uuid.UUID(election_id), uuid.UUID(org_id)
         )
-        counts = {c.candidate_name: c.vote_count for c in results.overall_results}
+        counts = {
+            c.candidate_name: c.vote_count
+            for pr in results.results_by_position
+            for c in pr.candidates
+        }
         assert counts.get("Dana Deputy") == 4
 
 

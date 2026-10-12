@@ -4,6 +4,112 @@
 
 ---
 
+## Owner decisions applied (2026-10-05)
+
+The owner decided the open ELEC and W50 items on 2026-10-05; each is applied
+in its own commit on the `worktree-elections` branch and recorded here. A
+finding below that says FLAGGED or OPEN is superseded by its line here.
+
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) — **fixed: a
+  per-org creation cap of 200** (`MAX_SAVED_BALLOT_TEMPLATES_PER_ORG` in
+  `elections.py`), enforced under a lock on the organization row with a
+  locking count (pitfall #27); the 201st save is a 409. The list response is
+  unchanged. Guard: `tests/test_saved_ballot_template_cap.py`.
+- **ELEC-14** (receipt as a GET query parameter) — **fixed: `POST
+/{election_id}/verify-receipt`** takes `{"receipt"}` in a body that forbids
+  extra keys; the frontend uses it. The GET stays for external callers,
+  marked `deprecated` in OpenAPI and answering `Deprecation: true` with a
+  `Link` to the POST; both share `_verify_receipt` and the read rate limit.
+  Guards: `TestReceiptVerificationRoutes` in
+  `tests/test_w50_test_ballot_marking.py`, `electionService.test.ts`.
+- **ELEC-40** (alias collision / pre-ELEC-34 legacy-hash gap) — **made
+  unreachable for new ballots:** `_validate_ballot_item_identities`
+  refuses an item whose title or position equals another item's id on
+  create, update and saved template. Not taken: the `ballot_item_id` schema
+  change and the re-hash migration. Residual (a ballot stored with a
+  collision before the fix) stays in `docs/KNOWN_LIMITATIONS.md`. Guard:
+  `tests/test_ballot_item_alias_collision.py`.
+- **W50-22** (results gate needed the scheduled end even when CLOSED; also
+  the first-drive W50-10) — **fixed:** `get_election_results` unlocks on
+  CLOSED alone, or the pre-open live-tally flag. A closed election accepts
+  no vote on any path, so its tally is final; a live tally stays refused.
+  S10's permission shape (`elections.view`, 403 vs 404) is unchanged.
+  Guard: `TestResultsVisibilityGate` in `tests/test_election_voting_flow.py`.
+- **W50-13** (override on a restricted list shown as admitting a member
+  the vote paths refused) — **fixed: an override extends the list.**
+  `_restricted_voter_ids` (the list plus override holders) is the one
+  definition read by `check_voter_eligibility`, the ballot mailer, the
+  non-voter list and the unfrozen denominator; the frozen-roll denominator
+  already added overrides. Guard: `tests/test_w50_override_extends_list.py`.
+- **W50-19** (a draft's test ballot link answered "Election is draft") —
+  **fixed: a test token is admitted on a DRAFT.** `_token_window_error`
+  is the one window rule for lookup and the locked submission: a live
+  token still needs an OPEN election inside its window; a test token may
+  also use a draft, whose future start is not enforced (its end is). Its
+  votes stay `is_test`, test-namespaced in the dedup hash and excluded from
+  every tally and from the candidate-edit guard. Guard:
+  `tests/test_w50_test_token_draft.py`.
+- **W50-23** (proxy holder Cc'd a ballot saying the link is the voter's
+  alone) — **fixed, Cc kept:** the ballot email's link card is a variable
+  the sender fills, naming the holder and whose ballot it is on a proxied
+  send; names are HTML-escaped. Migration `24f56e4fc320` carries untouched
+  stored bodies (guarded on the table, idempotent, real downgrade); an
+  edited template gets the notice at the head of the message. The Cc itself
+  is unchanged. Guard: `tests/test_w50_proxy_ballot_mail.py`.
+- **W50-8** (paper ballots could not record a motion) — **fixed:**
+  `open_election` creates each approval item's Approve/Deny rows under the
+  item's canonical key (`approval_option_position`, the key the token route
+  already stores votes under), reusing a row a vote materialised; a rollback
+  to draft drops only rows no vote references. Paper votes on them are
+  ordinary signed, chained manual votes. The printable ballot also carries a
+  candidate-selection item outside `election.positions`. Guard:
+  `tests/test_w50_paper_motion_options.py`.
+- **W50-9** (certified results silently revised by merge/void after
+  close) — **fixed, corrections kept and marked:** `soft_delete_vote`,
+  `void_manual_ballot_batch` and `merge_write_in_candidates` call
+  `_record_results_revision` on a CLOSED election, appending
+  `{at, by, by_name, action, detail}` to the new `elections.results_revisions`
+  (migration `5b1e7d3c9a42`, guarded, real downgrade); the certified PDF and
+  the Results tab print each as "Revised <when> by <who>". Votes are never
+  re-pointed or re-signed, so integrity verification is untouched; a
+  rollback to open clears the marks. Guard: `tests/test_w50_results_revised.py`.
+- **ELEC-28 / W50-10** (in-app ballot showed positions only; the emailed
+  ballot could not carry a plain position) — **fixed: one ballot model.**
+  `position_ballot_items` serves each plain position no item claims as a
+  ballot item (id `position-<sha256 prefix>`, explicit `position`), so its
+  votes are stored, deduplicated and tallied under the position name exactly
+  as before. The token lookup adds the ones in the token's
+  `eligible_positions`; `submit_ballot_with_token` accepts them and checks
+  them against the positions snapshot (never `eligible_item_ids`), refusing
+  Approve/Deny on them. The in-app ballot (`GET/POST /{id}/ballot`) takes
+  the emailed shape and records each selection through `cast_vote(commit=
+False)` in one transaction, so eligibility, limits, the dedup hash, the
+  signature, the chain and the anonymous audit row are those of every in-app
+  vote; one refusal rolls back the ballot. `_validate_vote_limits` and the
+  in-app/proxy dedup discriminator now honour an item's method override, as
+  the token route and the tally already did (ELEC-37). `check_voter_
+eligibility`'s "already voted in this election" applies only to a ballot
+  with no items. Guard: `tests/test_ballot_convergence.py`.
+- **Proxy ballot mode** (configured proxies could not vote) — **finished
+  for named elections:** the Cast Vote tab's "Voting for" choice loads the
+  delegating member's ballot and submits through `cast_proxy_vote`
+  (`commit=False`). On an anonymous election it needs the delegating
+  member's acknowledgement (ELEC-43, decided 2026-10-08). Guard:
+  `TestProxyBallot` in `tests/test_ballot_convergence.py`.
+- **W50-11** (a "(2 seats)" race declared one winner) — **fixed:
+  `elections.seats_per_position`** (migration `8c4f2a6e1d93`, guarded,
+  real downgrade; default 1, so every stored election tallies as before).
+  `_declare_seat_winners` marks up to that many qualifiers; a multi-seat
+  race's percentages are of ballots cast (`_count_ballots_cast`, already
+  conservative for paper) rather than of vote rows. `seat_rule_error`
+  refuses ranked choice and a per-race cap below the seats on create and
+  on update against the stored half. Votes, signatures and the chain are
+  untouched — this is tally-only. Guard: `tests/test_w50_seats_per_position.py`.
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) — **accepted as is.**
+  Paper-tally sessions per election are naturally few; no cap and no
+  pagination. Revisit if an election ever carries more than a few dozen
+  batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
 ## Pass 7 (2026-10-05)
 
 **Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests` (open)
@@ -209,7 +315,7 @@ every call site (12, same shape as pass 6) and confirmed none is inside the
 reverting the ELEC-38 narrowing or a backfill migration) stands exactly as
 pass 3 described it.
 
-### ELEC-43 — HIGH — A proxy ballot on an anonymous election is attributable — 🚩 FLAGGED (cross-ref: W50-2/S01, `KNOWN_LIMITATIONS.md`)
+### ELEC-43 — HIGH — A proxy ballot on an anonymous election is attributable — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-2/S01, `KNOWN_LIMITATIONS.md`)
 
 **What:** S01 (W50-2's fix) stops `vote_cast`/`vote_cast_token` audit rows
 from naming the voter on an anonymous election. It does not touch
@@ -247,8 +353,20 @@ salted hash that dies with the anonymity salt at close plus a migration
 over existing rows and a `_sign_vote` change — both are product/schema
 decisions, not a same-pass mechanical fix, and no proxy-vote UI exists
 today to drive urgency. Same disposition as `KNOWN_LIMITATIONS.md`.
+**Resolution (2026-10-08):** the owner chose (a) and made the
+disclosure an acknowledgement. An authorization on an anonymous election
+requires `anonymity_acknowledged` (refused otherwise) and is stamped
+`anonymity_acknowledged_at`; the delegating member is emailed the warning;
+an unstamped authorization on an anonymous election is refused at the
+ballot (`_proxy_anonymity_error(election, auth)`), so nothing created before
+the rule casts an attributable ballot unannounced; and the certified PDF's
+anonymity sentence names the proxy votes as the exception. The audit rows
+and vote columns keep the linkage in clear, by that decision. Guard:
+`tests/test_w50_proxy_anonymity_ack.py`.
 
-### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — 🚩 FLAGGED (cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
+### ELEC-44 — LOW — The election body and the public ballot lookup over-expose recipient list, live vote counts, and candidate identity ids — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-70, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** while OPEN, the election body withholds recipients, the voter list and (unless results are public) live counts from non-managers, the list withholds `total_votes` likewise, and the ballot lookup / in-app ballot serve `BallotCandidateResponse` without member ids. Guard: `tests/test_w50_member_live_detail.py`.
 
 **What:** `ElectionResponse` (`schemas/election.py:540-592`) includes
 `email_recipients: Optional[List[UUID]]` and (via `_build_election_response`)
@@ -291,7 +409,9 @@ what the ballot already shows) does not by itself justify guessing at the
 right contract without the owner's input on what a recipient or attendee
 is meant to see.
 
-### ELEC-45 — MED — A sanctioned void certifies the election's vote chain CHAIN_BROKEN, while voiding the chain's tail evades detection entirely — 🚩 FLAGGED (cross-ref: W50-31, `KNOWN_LIMITATIONS.md`)
+### ELEC-45 — MED — A sanctioned void certifies the election's vote chain CHAIN_BROKEN, while voiding the chain's tail evades detection entirely — ✅ RESOLVED (2026-10-08, owner decision; cross-ref: W50-31, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** the owner chose "walk voids and report them". `verify_vote_integrity` no longer filters `deleted_at` before the walk: voided rows are signature-checked and chained like every other row, and returned as `voided_votes` / `voids` (officer, reason, time). A sanctioned void reads PASS with the void named on the Forensics panel and certified PDF, a tail void is reported rather than silent, and a voided row altered after the fact still fails. Guard: `tests/test_w50_integrity_with_voids.py`.
 
 **What:** `verify_vote_integrity` (`election_service.py:2045-2120`; pass 6 cited
 `1879-1945`, shifted by the intervening diff — re-read in full this pass) drops soft-deleted rows **before**
@@ -331,7 +451,9 @@ risks quietly weakening the chain's guarantee in the other direction (a
 walk that too easily accepts voided rows as explained could also let a
 real tamper event hide behind a bogus void reason).
 
-### ELEC-46 — MED — A manager can accept a nomination on the nominee's behalf; the slate is not frozen at Close Nominations — 🚩 FLAGGED (cross-ref: W50-38, `KNOWN_LIMITATIONS.md`)
+### ELEC-46 — MED — A manager can accept a nomination on the nominee's behalf; the slate is not frozen at Close Nominations — ✅ RESOLVED by owner decision (2026-10-08; cross-ref: W50-38, `KNOWN_LIMITATIONS.md`)
+
+**Resolution:** on-behalf acceptance is allowed before nominations close and is now labelled (`candidates.accepted_on_behalf_by` / `_at`), audited (`nomination_accepted_on_behalf`) and notified to the nominee; Close Nominations stamps `elections.nominations_closed_at`, after which `respond_to_nomination` and the manager toggle both refuse until nominations reopen. Guard: `tests/test_w50_manager_accept_frozen_slate.py`.
 
 **What:** `PATCH /{election_id}/candidates/{candidate_id}` accepts an
 `accepted: true` update from any `elections.manage` holder with **no

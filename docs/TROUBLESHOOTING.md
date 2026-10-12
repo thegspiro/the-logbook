@@ -3320,7 +3320,8 @@ is excluded from `GET /summary` (pass rate, average score).
 
 **Fix**: An officer opens **Training Admin > Skills Testing > Tests**, filters
 `pending_validation=true`, reads the scorecard, and clicks **Validate**. The
-badge count is on the summary dashboard.
+count waiting is the **Needs Validation** card on the **Templates** tab (officers
+only, shown even at 0); clicking it opens Test Records filtered to them.
 
 #### "You cannot validate a test you are the candidate in"
 
@@ -3509,25 +3510,24 @@ percentage = (total points earned across all sections / total possible points ac
 
 **Fix Applied**: As of 2026-02-28, all completed test timestamps are displayed in the user's local timezone using the standard date formatting utilities. Pull latest changes and hard-refresh.
 
-### Summary Dashboard Issues
+### Summary Cards Issues
 
-#### Pass Rate Shows 0%
+The summary is the row of cards on **Training Admin > Skills Testing >
+Templates** _(corrected 2026-10-06 — there is no separate summary dashboard)_.
 
-**Cause**: The pass rate only includes tests with `completed` status. Tests that are `in_progress`, `not_started`, or `cancelled` are excluded.
+#### Pass Rate or Avg Score Shows "—"
 
-**Fix**: Ensure at least one test has been completed (not just started).
+**Cause**: There is nothing to measure yet. Both figures count only
+**validated**, completed, non-practice, non-voided tests, so a department whose
+results are all still awaiting sign-off reads "—", as does one that has run none.
 
-#### Summary Shows No Data
+**Fix**: Validate the waiting results — the **Needs Validation** card links to
+them.
 
-**Causes**:
+#### Pass Rate, Avg Score and Needs Validation Are Missing or "—" for Me
 
-1. No templates or tests exist for your organization
-2. You don't have the `training.manage` permission
-
-**Fix**:
-
-- Create templates and administer tests first
-- Contact your administrator to verify your permissions
+**Cause**: Working as designed. Those figures are officer-only (`training.manage`);
+a member sees the Templates and Tests This Month cards and "—" for the rest.
 
 ---
 
@@ -4130,7 +4130,8 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 
 - Increase screen brightness to maximum
 - Zoom in on the QR code or use the print feature (`Ctrl+P`) to produce a physical card at standard ID card dimensions
-- The QR code encodes the member's UUID — ensure your scanner application supports URL or text QR codes
+- The QR code encodes the member's **badge code** (for example `MB-7KQ2W9HXRT`; before 2026-10-05 it encoded the member id) — ensure your scanner application supports plain text QR codes
+- A badge printed or reissued under an old code stops scanning after **Reissue badge** on the member's ID card page; print a new card
 
 ### Problem: Barcode Scanner Not Finding Member
 
@@ -4143,7 +4144,9 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 
 - Navigate to the barcode scanner page from the Member ID Card page
 - Verify the member's account is active and belongs to your organization
-- The barcode uses Code128 encoding of the member's UUID
+- The barcode is Code 128 of the member's server-issued badge code (`MB-` plus ten characters). Scans are resolved by the server (`POST /member-badges/resolve`), so the scanner needs a network connection
+- "No member found" for an **old** badge (membership number, short id, old phone-card QR) means an officer turned **Accept old badges** off (Members → select → Print ID Cards, bottom of the page). Reprint the card, or turn the setting back on while cards are reissued
+- Lookups are limited to 120 a minute per address; a long queue behind one scanner can briefly be refused
 
 ### Problem: Print Layout Not Matching ID Card Dimensions
 
@@ -4152,6 +4155,10 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 - Paper size: auto or custom (3.375" × 2.125")
 - Margins: None or Minimum
 - Background graphics: Enabled (for department branding colors)
+
+### Problem: Printing CR80 cards for a plastic card printer
+
+Members → select → **Print ID Cards** produces a PDF with one page per card side. In the printer driver choose the CR80 / ID-1 card size and print at 100% or "Actual size" — "Fit to page" shrinks the barcode below what scanners read. For **Front and back**, turn on two-sided printing, or print and flip by hand. Cards are black-only, so they print the same on monochrome and colour ribbons. Use **Test card** to check alignment before a run.
 
 ---
 
@@ -4206,6 +4213,12 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Fix**: Wait for the countdown timer to reach zero. The default cooldown is 30 seconds after 5 rapid attempts. The timer is displayed on the login form.
 
 **If the issue persists**: The backend also enforces IP-based and per-user rate limiting. If your IP has been temporarily locked out (30-minute lockout after exceeding the threshold), wait for the lockout period to expire or contact your administrator.
+
+---
+
+### Problem: Pages load slowly or show 503 from one station address _(2026-10-05)_
+
+The bundled proxies bound each address at `limit_conn 400` and the API zone at 50 requests a second with `burst=600 delay=100`: the first 100 requests of a burst pass at once and the rest queue at 50 a second instead of being refused. (Before 2026-10-05 the limits were 10 concurrent and 10 a second, burst 20, so one member's dashboard load could lose most of its requests to 503.) A proxy configuration you copied before that still carries the old numbers. The sign-in limits (nginx `login_limit`, the backend's `rate_limit_login`: 5 a minute) are unchanged brute-force controls, so the sixth member to sign in at a station within a minute is asked to wait; see KNOWN_LIMITATIONS.
 
 ---
 
@@ -4295,6 +4308,13 @@ cd backend
 alembic upgrade head
 docker-compose restart backend
 ```
+
+**Also check whose alert it is.** The Security Alerts screen shows only your
+department's alerts. A failed sign-in against a real account is attributed to
+that account's department, and on a single-department installation every
+alert is. On an installation hosting several departments, a brute-force alert
+against a username that matches no account belongs to no department and is
+not shown anywhere (see `docs/KNOWN_LIMITATIONS.md`).
 
 ---
 
@@ -4388,6 +4408,18 @@ docker-compose restart backend
 **Cause:** Transient database connection failures (e.g., MySQL container restart, network blip) caused the login endpoint to throw an unhandled exception.
 
 **Status (Fixed 2026-03-01):** The login endpoint now catches transient connection errors and returns a user-friendly error message with HTTP 503 (Service Unavailable) instead of 500.
+
+### Problem: A request is answered 409 `LB-AUTH-012` _(2026-10-05)_
+
+Two tabs refreshed the same session at once; one rotated the tokens first and the other got this code instead of being treated as token theft. The app retries with the new cookies. Nothing is revoked and nobody needs to sign in again. If a member sees it as an error, a reload picks it up.
+
+### Problem: A "sign-out not confirmed" screen covers the app _(2026-10-05)_
+
+Signing out asks the server three times to end the session. If none is confirmed (server or network down), the screen is blocked, because the session cookies are still live. Close every browser window on that computer and choose **Try signing out again** once the connection is back. The block survives a reload by design.
+
+### Problem: "Items held offline" notice with Send as me / Discard _(2026-10-05)_
+
+Equipment checks, shift reports or submissions queued before 2026-10-05 carry no owner, so they are held rather than sent under whoever is signed in now. Only the member who queued them should choose **Send as me**; **Discard** deletes them. Entries queued after the upgrade are tagged with their member and sent only when that member is signed in.
 
 ### Problem: Login lockout resets on page refresh
 
@@ -5403,6 +5435,38 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 - The edit form cannot save **any** change to a finalized event, even a title fix, because it always sends the schedule and check-in fields. Reopen first.
 - On the event requests screen the same refusal shows only as "Failed to postpone request.", or as a generic failure on schedule.
 - Shifting or cancelling a cohort's classes is not atomic: classes before the finalized one stay moved or cancelled while the request reports the refusal. See [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md), "Events — Attendance-Lock Refusals".
+
+### A member who was at an event has no check-in
+
+**Symptoms**: A member attended but their phone died, they had no signal, or nobody put the QR code up, so the event shows them as absent.
+
+**Solution**: Once the event's check-in has closed, the member opens the event and presses **I was there** ("Were you at this event but never checked in?"), says why there is no check-in and, optionally, when they arrived and left. The organizer and alternate are notified; they — or anyone holding `events.manage` — confirm the times on the event's **Attendance Requests** card and approve, or decline with a reason. The approved times are credited when attendance is finalized, like any **Edit Times** correction. An event manager can still record the member directly instead: **Check In** on the event (the **Check In Members** dialog), then **Edit Times** on their row to set the real times.
+
+### "I was there" does not appear on an event
+
+**Cause**: The server decides whether a member may ask, and the page shows the button only when it says yes. It says no when:
+
+- check-in for the event is **still open** — the member should check in instead. A "window" event keeps accepting check-ins for its after-end minutes, so the button appears only once those pass;
+- the event ended **more than 30 days ago**;
+- the event is **cancelled** or a **draft**;
+- the member is **already recorded as present**, including an officer's back-filled check-in time;
+- the member **already asked**. There is one request per member per event, so the page shows the earlier request instead. While it is still waiting the member can press **Withdraw request** on it and ask again — twice per event; after the second withdrawal the button is gone and the request waits for an answer. Once it has been approved or declined, the decision is final.
+
+**Solution**: For a case the request cannot cover (more than 30 days, or a declined request that was wrong), an event manager records the attendance directly with **Check In** and **Edit Times** — reopening attendance first if it is finalized.
+
+### Approve is greyed out on an attendance request
+
+**Symptoms**: The **Attendance Requests** card says "Attendance is finalized. Reopen attendance to approve a request; declining still works.", and **Approve** cannot be pressed (the API answers 409).
+
+**Cause**: Approving changes the hours the finalized event already credited, so it waits behind the attendance lock like every other attendance correction.
+
+**Solution**: Someone holding `events.reopen_attendance` presses **Reopen Attendance**, the request is approved, and attendance is finalized again so the new attendance is credited.
+
+### Nobody is acting on attendance requests
+
+**Cause**: A request notifies the event's **organizer** and **alternate** in-app and by email. When neither can take it (both have left, or the only one set is the member asking), it goes to the position chosen for that event type under **Manage Events → Event settings → Attendance → Attendance requests** (default **Secretary**), then the `secretary` position, then every `events.manage` holder. Email follows each recipient's **Event officer duties** preference, so someone who switched that off sees the request only in the notification bell and on the event page.
+
+**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. Anyone holding `events.manage` can also decide a request from the event page, or see every waiting request at once on **Attendance Requests** (`/events/attendance-requests`) with **All events**.
 
 ---
 
@@ -10012,6 +10076,40 @@ fix, use **Reset Password** in Member Management.
 properly wherever the Host allowlist is active (production, staging, or any
 environment with `TRUSTED_HOSTS` set). Make health checks and proxies send the real hostname. See
 [Configuration → Security](../wiki/Configuration-Security.md#host-header-allowlist-2026-07).
+
+### Problem: A finance request is waiting and nobody can approve it _(2026-10-05)_
+
+**Cause:** Approval steps now go to the approver they name. A step that names a
+position nobody active holds, a member who has left, a permission nobody has, or
+a mistyped email leaves its requests waiting with nobody able to act.
+
+**Fix:** Open **Finance → Settings → Approval Chains**: a step nobody can act on
+carries a warning chip ("No active member can act on this step", "That position
+no longer exists", …) with "N requests waiting", and the page banner counts them.
+Rename the step's approver. In the meantime a holder of
+`finance.configure_approvals` can approve or deny from **Approvals** ("Not
+assigned to you" rows) by giving an override reason, which is audited at warning
+severity; nobody can approve their own request. The same list is
+`GET /api/v1/finance/approval-chains/approver-coverage`.
+
+### Problem: A scheduled task failed and nobody was told _(2026-10-05)_
+
+Failures of per-organization scheduled tasks (event, shift and series reminders,
+post-event and post-shift validation, end-of-shift summary, trainee escalation,
+compliance auto-report, event request reminders, officer directory sync,
+prospect attendance advance, Salesforce sync, and the others run through the
+per-organization loop) are written to **Admin → Error Monitoring**, labelled
+**Scheduled task**, with the task name and traceback. Before this they reached
+only the backend log and Sentry. A task that fails for one organization does not
+stop the others.
+
+### Problem: Skills-testing CSV export is refused with 400 _(2026-10-05)_
+
+The Test Records export needs a date range of at most 366 days
+(`date_from` and `date_to`). Set the tab's date range (it defaults to the last
+twelve months); the Export button is disabled with the reason when the range is
+missing or longer than a year. The **Needs Validation** deep link opens undated,
+so set a range before exporting.
 
 ## Still Stuck?
 

@@ -112,7 +112,7 @@ Beyond membership type, a member may also be restricted by:
 
 - **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages. _(2026-09-29)_ The attendance window runs from the later of `voting_attendance_period_months` ago (calendar months) and the start of the member's current stint (latest `MemberServicePeriod`, else `hire_date`) to the department's today — see [below](#voting-attendance-window-2026-09-29)
 - **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting. The roll is frozen at open, so a member checked in after opening is recorded present but cannot vote without an override
-- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. **Not** a specific `eligible_voters` list: an override for someone off the list is stored and counted in the eligible denominator, yet their vote is still refused — open owner decision (W50-13)
+- **Secretary overrides** — The secretary can grant eligibility overrides for individual members (chosen by name on the **Overrides** tab since 2026-09-30), bypassing tier, attendance and role checks. On an election restricted to a specific `eligible_voters` list, an override **extends** the list: the member votes in the app, is sent a ballot email and counts in the eligible total, as the roster shows (W50-13, 2026-10-05)
 
 ---
 
@@ -185,6 +185,12 @@ later confirmed count again everywhere; electronic votes (no
 - **Live turnout dashboard** — meeting-night panel (fullscreen-capable)
   with ballots received vs eligible and quorum progress; auto-refreshes;
   never shows candidate tallies before close.
+- **Seats per race** — per-election `seats_per_position` (1–50, W50-11):
+  a multi-seat race marks up to that many winners. The victory condition
+  decides who qualifies, measured against ballots cast rather than vote
+  rows; a tie on the last seat follows the tie policy. Refused with ranked
+  choice (on the election or any item) and with a `max_votes_per_position`
+  below the seat count. Runoffs and clones copy it.
 - **Tie policy** — per-election `tie_policy`: `co_winners` (legacy
   default), `runoff`, `revote`, `chair_decides`. Non-legacy policies
   declare no winner on a tie, flag it in results and the UI, and audit
@@ -206,7 +212,11 @@ transitions and reminders:
 - **Auto-open**: DRAFT elections are opened at `start_date` only when the
   creator enabled **Open Automatically at Start Time** (`auto_open`). The
   real open path runs, so an invalid draft (e.g. no candidates) is skipped
-  and retried, never force-opened.
+  and retried, never force-opened. Since 2026-10-08 (W50-72) the ballots are
+  then emailed as the election's creator, with links on `FRONTEND_URL`; a
+  send that fails or reaches nobody leaves the election open and emails every
+  `elections.manage` holder to send them (`ballots_auto_sent` /
+  `ballots_auto_send_failed` audit events).
 - **Nomination auto-close**: an election in the nomination phase with a
   `nomination_deadline` returns to draft automatically once the deadline
   passes (audited as `nominations_auto_closed`).
@@ -317,6 +327,9 @@ POST   /api/v1/elections/{id}/rollback       # Roll back status (guarded — see
 POST   /api/v1/elections/{id}/vote           # Cast a single vote (authenticated)
 POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/ranked/multi-position)
 GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
+GET    /api/v1/elections/{id}/ballot         # In-app ballot: every item and position, per-item standing (?proxy_authorization_id= for a proxy ballot)
+POST   /api/v1/elections/{id}/ballot         # Cast the in-app (or proxy) ballot atomically, emailed-ballot shape
+GET    /api/v1/elections/{id}/ballot/proxies # Proxies the current member holds (named elections only)
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
 POST   /api/v1/elections/{id}/open-nominations  # Draft -> nomination phase (manage)
@@ -341,7 +354,8 @@ GET    /api/v1/elections/{id}/package-recipients  # Prefill list for the pre-mee
 GET    /api/v1/elections/{id}/package-pdf    # Download pre-meeting package PDF (manage; variant=member|full)
 POST   /api/v1/elections/{id}/send-package   # Email pre-meeting package to an edited address list (manage)
 GET    /api/v1/elections/{id}/preview-ballot # Preview a member's ballot (manage)
-GET    /api/v1/elections/{id}/verify-receipt # Verify a vote receipt (public, rate-limited)
+POST   /api/v1/elections/{id}/verify-receipt # Verify a vote receipt, {"receipt": …} in the body (public, rate-limited)
+GET    /api/v1/elections/{id}/verify-receipt # Deprecated ?receipt= form — use the POST (2026-10-05)
 GET    /api/v1/elections/{id}/integrity      # Verify vote signatures (manage)
 GET    /api/v1/elections/{id}/forensics      # Full forensic report (manage)
 GET    /api/v1/elections/{id}/attendees      # List meeting check-ins
@@ -754,6 +768,30 @@ record is `docs/workflow-review/W50-elections.md`; the owner decisions left
 open are tabled in `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner
 Decisions From the W50 Drive (2026-09-30)".
 
+**On-screen re-drive of the frontend round** _(2026-10-06)_. The 23 frontend
+fixes were re-driven in the real browser, two drivers at once; twenty held and
+eight more things were fixed:
+
+- **The in-app vote receipt survives the refetch.** Casting a vote refetches the
+  election, and the refetch raised the page's loading skeleton, unmounting the
+  ballot and the receipt it had just recorded. The skeleton now shows only until
+  the election has loaded once; a refetch after a vote, close or publish updates
+  the page in place (W50-53). The nominations panel keeps focus the same way
+  (W50-90).
+- **The election list shows the real close time.** `GET /elections` now carries
+  `closed_at`, so a card for an election closed early is not dated to the
+  scheduled end (W50-83).
+- **A ballot link retired by a zero-vote rollback no longer reads "Voting token
+  has expired".** The rollback stamps `superseded_at` as well. The lookup tells a
+  reminder's supersede (a newer live token for the same voter hash: "replaced by
+  a newer ballot email") from a rollback's (none, since the re-send keys new
+  tokens to the new salt: the election was closed and reopened) (W50-85).
+- The help popover on `/elections` takes its content width (it rendered about
+  100px wide), Results & Publishing wraps its hint at phone width (W50-87), the
+  delete dialog no longer prints a bare "0" bullet on a zero-vote election
+  (W50-88), and the inline candidate edit's controls have accessible names
+  (W50-89).
+
 > **⚠️ Upgrade: close any OPEN election first.** In-app votes on a
 > ballot-item election now carry the item id as their position and token votes
 > key the same vote by a hash of it; rows written before the change match
@@ -776,18 +814,18 @@ Decisions From the W50 Drive (2026-09-30)".
 
 ### Reporting
 
-| Finding                                                                                   | Fix                                                                                                                                                                                                                          |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W50-7 Ballot-item outcomes reported nowhere                                               | Per-item results with a `label` on the Results tab, the report mail and the certified PDF. The pooled `overall_results` list is unchanged — flagged                                                                          |
-| W50-8 Print Blank Ballots carried positions only                                          | Each approval item prints "☐ Approve ☐ Deny". Recording paper votes on items is still impossible — flagged                                                                                                                   |
-| W50-12 `send-report` mailed a mid-vote tally as "closed … official report"                | 400 "Election report is only available after the election closes"                                                                                                                                                            |
-| W50-14 Early close dated to the scheduled end, with no actor                              | `elections.closed_at` / `closed_by` (migration `ac06a2998013`), stamped on manual and lifecycle closes and printed on the PDF and report ("… by Sam Ortiz"); older rows fall back to the scheduled end and "Automatic close" |
-| W50-20 Pre-meeting package said everyone was eligible                                     | Per-item eligibility block from the roster's `item_eligibility`                                                                                                                                                              |
-| W50-32 / -48 Ties printed as two 50% rows; "Quorum Met" with no quorum                    | `is_tie` set under co-winners too, report prints "Tie — co-winners per policy" / "Tie — runoff round created"; `quorum_met: None` and "No quorum requirement" when `quorum_type == 'none'`                                   |
-| W50-33 Close report invented recipient facts                                              | One source: `email_recipients` plus `elections.email_skipped_details` (migration `c4e8a1f7d2b6`) from the last send or reminder                                                                                              |
-| W50-65 / -66 Forensics and results counters disagreed; voided batch cards showed no trail | Tokens reported as issued / used / superseded / expired / live; batches carry `voided_by` / `voided_at` / `void_reason` / `over_count_override` (migration `d9f3a6c2e8b1`, backfilled for already-voided batches)            |
-| W50-45 Audit Log page showed "system" for every row                                       | `username` resolved server-side; "system" only when `user_id` is null                                                                                                                                                        |
-| W50-71 `runoff_election_created` had no `election_id`                                     | Written on the parent with a mirror on the child                                                                                                                                                                             |
+| Finding                                                                                   | Fix                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W50-7 Ballot-item outcomes reported nowhere                                               | Per-item results with a `label` on the Results tab, the report mail and the certified PDF. Since 2026-10-08 `overall_results` holds only candidates in no contest, never a cross-item pool, and the runoff check reads each race |
+| W50-8 Print Blank Ballots carried positions only                                          | Each approval item prints "☐ Approve ☐ Deny". Recording paper votes on items is still impossible — flagged                                                                                                                       |
+| W50-12 `send-report` mailed a mid-vote tally as "closed … official report"                | 400 "Election report is only available after the election closes"                                                                                                                                                                |
+| W50-14 Early close dated to the scheduled end, with no actor                              | `elections.closed_at` / `closed_by` (migration `ac06a2998013`), stamped on manual and lifecycle closes and printed on the PDF and report ("… by Sam Ortiz"); older rows fall back to the scheduled end and "Automatic close"     |
+| W50-20 Pre-meeting package said everyone was eligible                                     | Per-item eligibility block from the roster's `item_eligibility`                                                                                                                                                                  |
+| W50-32 / -48 Ties printed as two 50% rows; "Quorum Met" with no quorum                    | `is_tie` set under co-winners too, report prints "Tie — co-winners per policy" / "Tie — runoff round created"; `quorum_met: None` and "No quorum requirement" when `quorum_type == 'none'`                                       |
+| W50-33 Close report invented recipient facts                                              | One source: `email_recipients` plus `elections.email_skipped_details` (migration `c4e8a1f7d2b6`) from the last send or reminder                                                                                                  |
+| W50-65 / -66 Forensics and results counters disagreed; voided batch cards showed no trail | Tokens reported as issued / used / superseded / expired / live; batches carry `voided_by` / `voided_at` / `void_reason` / `over_count_override` (migration `d9f3a6c2e8b1`, backfilled for already-voided batches)                |
+| W50-45 Audit Log page showed "system" for every row                                       | `username` resolved server-side; "system" only when `user_id` is null                                                                                                                                                            |
+| W50-71 `runoff_election_created` had no `election_id`                                     | Written on the parent with a mirror on the child                                                                                                                                                                                 |
 
 ### Mail, tokens and lifecycle
 

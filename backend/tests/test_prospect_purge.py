@@ -23,9 +23,21 @@ from app.models.membership_pipeline import (
     ProspectStatus,
 )
 from app.schemas.membership_pipeline import PurgeInactiveRequest
+from app.services import file_storage_service
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 pytestmark = [pytest.mark.integration]
+
+
+@pytest.fixture(autouse=True)
+def _prospect_storage(tmp_path, monkeypatch):
+    """Point upload storage at tmp_path; applicant files go under
+    ``<org_id>/applicants/<prospect_id>/``.
+
+    Purge only ever unlinks inside the organization's own applicants area, so
+    a fixture file has to live there to be the organization's file at all.
+    """
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
 
 
 def _uid() -> str:
@@ -160,7 +172,8 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "licence.jpg"
+        stored.parent.mkdir(parents=True, exist_ok=True)
         await self._with_document(db_session, prospect, stored)
 
         await svc.purge_inactive_prospects(
@@ -177,7 +190,8 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "licence.jpg"
+        stored.parent.mkdir(parents=True, exist_ok=True)
         await self._with_document(db_session, prospect, stored)
         stored.unlink()
 
@@ -195,7 +209,8 @@ class TestUploadedFiles:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "licence.jpg"
+        stored.parent.mkdir(parents=True, exist_ok=True)
         await self._with_document(db_session, prospect, stored)
 
         with patch("os.remove", side_effect=PermissionError("read-only")):
@@ -252,7 +267,8 @@ class TestTheEndpoint:
         prospect = await _prospect(
             svc, db_session, org_id, pipeline_id, ProspectStatus.INACTIVE
         )
-        stored = tmp_path / "licence.jpg"
+        stored = tmp_path / org_id / "applicants" / str(prospect.id) / "licence.jpg"
+        stored.parent.mkdir(parents=True, exist_ok=True)
         stored.write_bytes(b"x")
         db_session.add(
             ProspectDocument(

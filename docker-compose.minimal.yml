@@ -1,7 +1,15 @@
 # ============================================
 # MINIMAL PROFILE - Docker Compose Override
 # ============================================
-# Use for: Raspberry Pi, small VPS (1-2GB RAM)
+# Use for: Raspberry Pi, small VPS
+#
+# Memory: the application services below fit in about 1 GB, but ClamAV —
+# which every installation runs, because every upload is scanned before it
+# is stored — needs roughly 1.5-3 GB on its own. Plan for at least 3 GB in
+# total. On a smaller host clamd is killed for memory and uploads are refused
+# until memory is added, or until an administrator sets CLAMAV_ENABLED=false,
+# which accepts files UNSCANNED behind a standing warning (see
+# docs/FILE_STORAGE_HARDENING.md).
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d

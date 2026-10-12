@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { InventoryItem, InventoryVendor } from '../types';
+import type { InventoryCategory, InventoryItem, InventoryVendor } from '../types';
 
 const mockCreateItem = vi.fn();
 const mockUpdateItem = vi.fn();
@@ -35,7 +35,7 @@ import { ItemFormModal } from './ItemFormModal';
 // The Condition control renders only for item types whose ITEM_TYPE_FIELDS
 // include `inspection_interval_days` — ppe alone — so these tests need a PPE
 // category selected for the dropdown to exist at all.
-const ppeCategory = {
+const ppeCategory: InventoryCategory = {
   id: 'cat-ppe',
   organization_id: 'org-1',
   name: 'Turnout Gear',
@@ -44,6 +44,8 @@ const ppeCategory = {
   requires_serial_number: false,
   requires_maintenance: false,
   nfpa_tracking_enabled: false,
+  allow_self_checkout: false,
+  self_checkout_loan_days: null,
   active: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',

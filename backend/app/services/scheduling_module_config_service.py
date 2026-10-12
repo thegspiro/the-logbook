@@ -162,7 +162,10 @@ class SchedulingModuleConfigService:
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
-        return result.scalars().first()
+        scheduling_module_config: Optional[SchedulingModuleConfig] = (
+            result.scalars().first()
+        )
+        return scheduling_module_config
 
     async def get_settings(
         self, organization_id: str

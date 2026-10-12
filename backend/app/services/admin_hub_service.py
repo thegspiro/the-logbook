@@ -30,7 +30,13 @@ from sqlalchemy.orm import aliased
 
 from app.api.dependencies import user_has_permission
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
-from app.models.event import Event, EventRSVP, EventType, RSVPStatus
+from app.models.event import (
+    Event,
+    EventAttendancePetition,
+    EventRSVP,
+    EventType,
+    RSVPStatus,
+)
 from app.models.event_request import EventRequest, EventRequestStatus
 from app.models.inventory import (
     EquipmentRequest,
@@ -65,12 +71,14 @@ from app.models.training import (
     ProgramEnrollment,
     Shift,
     ShiftAttendance,
+    ShiftCompletionReport,
     ShiftStatus,
     ShiftSwapRequest,
     ShiftTimeOff,
     SubmissionStatus,
     SwapRequestStatus,
     TimeOffStatus,
+    TrainingModuleConfig,
     TrainingProgram,
     TrainingRecord,
     TrainingStatus,
@@ -86,12 +94,17 @@ from app.schemas.admin_hub import (
     AdminMetricSettings,
     AdminMetricSettingsUpdate,
 )
+from app.services.event_attendance_petition_service import (
+    pending_petition_criteria,
+)
 from app.services.organization_service import OrganizationService
+from app.services.pre_shift_work_service import approved_pre_work_minutes
 from app.services.scheduling_service import (
     SchedulingService,
     closeout_backlog_halves,
     open_ended_cushion_hours,
 )
+from app.services.skills_testing_service import pending_validation_criteria
 from app.services.training_compliance import (
     compute_org_compliance_tally,
     count_active_requirements,
@@ -838,6 +851,111 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             )
         )
 
+    items.extend(await _skill_test_attention(ctx))
+    items.extend(await _shift_report_attention(ctx))
+    return items
+
+
+async def _skill_test_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    """Official skills tests a member scored that no officer has signed off.
+
+    Until it is validated a pass credits nothing — not the pipeline step, not
+    the attempt count — so the candidate is waiting on this queue.
+    """
+    count, oldest = await _count_and_oldest(
+        ctx.db,
+        SkillTest,
+        *pending_validation_criteria(ctx.organization_id),
+        date_column=func.coalesce(SkillTest.completed_at, SkillTest.created_at),
+    )
+    if not count:
+        return []
+    age = _age_days(oldest, ctx.today, ctx.timezone_name)
+    return [
+        AdminAttentionItem(
+            key="skill_tests_awaiting_validation",
+            title=f"{count} skills {_plural(count, 'test')} awaiting validation",
+            detail=" · ".join(
+                part
+                for part in (
+                    _waiting_phrase(age),
+                    "a result counts once an officer validates it",
+                )
+                if part
+            ),
+            action_label="Validate results",
+            # Opens on the records tab's own "Needs Validation" filter, which
+            # reads the same criteria this count does.
+            href=(
+                "/training/admin?page=evaluations&tab=tests"
+                "&status=pending_validation"
+            ),
+            severity="warning",
+            count=count,
+            oldest_age_days=age,
+        )
+    ]
+
+
+async def _shift_report_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    """Shift reports waiting on an officer's review, and ones flagged for it.
+
+    Reviewed on the Scheduling page, so the rows link there. Left out when the
+    page would not show them: the Scheduling module off, or shift reports
+    switched off, which hides that tab.
+    """
+    if "scheduling" not in ctx.enabled_modules:
+        return []
+    reports_enabled = (
+        await ctx.db.execute(
+            select(TrainingModuleConfig.shift_reports_enabled).where(
+                TrainingModuleConfig.organization_id == ctx.organization_id
+            )
+        )
+    ).scalar_one_or_none()
+    # No config row is the built-in default, which is on.
+    if reports_enabled is False:
+        return []
+
+    items: list[AdminAttentionItem] = []
+    for review_status, key, noun, view, severity in (
+        (
+            "pending_review",
+            "shift_reports_awaiting_review",
+            "awaiting review",
+            "pending-review",
+            "warning",
+        ),
+        (
+            "flagged",
+            "shift_reports_flagged",
+            "flagged for follow-up",
+            "flagged",
+            "warning",
+        ),
+    ):
+        count, oldest = await _count_and_oldest(
+            ctx.db,
+            ShiftCompletionReport,
+            ShiftCompletionReport.organization_id == ctx.organization_id,
+            ShiftCompletionReport.review_status == review_status,
+            date_column=ShiftCompletionReport.created_at,
+        )
+        if not count:
+            continue
+        age = _age_days(oldest, ctx.today, ctx.timezone_name)
+        items.append(
+            AdminAttentionItem(
+                key=key,
+                title=f"{count} shift {_plural(count, 'report')} {noun}",
+                detail=_waiting_phrase(age),
+                action_label="Review reports",
+                href=f"/scheduling?tab=shift-reports&view={view}",
+                severity=severity,
+                count=count,
+                oldest_age_days=age,
+            )
+        )
     return items
 
 
@@ -1315,6 +1433,52 @@ async def _events_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             )
         )
 
+    # A member saying "I was there" gets no credit until somebody decides it.
+    # Counted department-wide, the scope an events.manage holder reviews at,
+    # and joined to the event exactly as that list is, so the number is the
+    # length of the list it opens.
+    petition_row = (
+        await ctx.db.execute(
+            select(
+                func.count(EventAttendancePetition.id),
+                func.min(EventAttendancePetition.created_at),
+            )
+            .join(
+                Event,
+                and_(
+                    Event.id == EventAttendancePetition.event_id,
+                    Event.organization_id == ctx.organization_id,
+                ),
+            )
+            .where(*pending_petition_criteria(ctx.organization_id, str(ctx.user.id)))
+        )
+    ).one()
+    petition_count = int(petition_row[0] or 0)
+    if petition_count:
+        age = _age_days(petition_row[1], ctx.today, ctx.timezone_name)
+        items.append(
+            AdminAttentionItem(
+                key="pending_attendance_requests",
+                title=(
+                    f"{petition_count} attendance "
+                    f"{_plural(petition_count, 'request')} awaiting a decision"
+                ),
+                detail=" · ".join(
+                    part
+                    for part in (
+                        _waiting_phrase(age),
+                        "members asking to be marked present",
+                    )
+                    if part
+                ),
+                action_label="Decide requests",
+                href="/events/attendance-requests?scope=all",
+                severity="warning",
+                count=petition_count,
+                oldest_age_days=age,
+            )
+        )
+
     return items
 
 
@@ -1497,7 +1661,14 @@ async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
             )
         )
     ).scalar()
-    hours = float(minutes or 0) / 60.0
+    prep_rows = await approved_pre_work_minutes(
+        ctx.db,
+        Shift.organization_id == ctx.organization_id,
+        Shift.shift_date >= month_start,
+        Shift.shift_date < next_month,
+    )
+    minutes = float(minutes or 0) + float(prep_rows[0].minutes if prep_rows else 0)
+    hours = minutes / 60.0
     return _fmt_hours(hours), f"since {month_start.strftime('%B')} 1"
 
 
@@ -1922,6 +2093,49 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 href="/inventory/admin/store?tab=windows",
                 severity="warning",
                 count=stale_count,
+                oldest_age_days=age,
+            )
+        )
+
+    # Past its close time but still open. Members can no longer order, and
+    # nothing moves to fulfillment until somebody closes it. The scheduler
+    # closes an auto-close window within minutes, so the hour's grace keeps
+    # one that is about to close off the queue while still catching a window
+    # managed by hand, or one the scheduler never reached.
+    overdue_count, oldest_due = await _count_and_oldest(
+        ctx.db,
+        StoreOrderWindow,
+        StoreOrderWindow.organization_id == ctx.organization_id,
+        StoreOrderWindow.status == StoreWindowStatus.OPEN,
+        StoreOrderWindow.closes_at.isnot(None),
+        StoreOrderWindow.closes_at < now - timedelta(hours=1),
+        date_column=StoreOrderWindow.closes_at,
+    )
+    if overdue_count:
+        age = _age_days(oldest_due, ctx.today, ctx.timezone_name)
+        items.append(
+            AdminAttentionItem(
+                key="store_windows_past_close",
+                title=(
+                    f"{overdue_count} order {_plural(overdue_count, 'window')} "
+                    "still open past its close time"
+                ),
+                detail=" · ".join(
+                    part
+                    for part in (
+                        (
+                            f"oldest due to close {age} {_plural(age, 'day')} ago"
+                            if age
+                            else "due to close today"
+                        ),
+                        "orders are not fulfilled until it is closed",
+                    )
+                    if part
+                ),
+                action_label="Close windows",
+                href="/inventory/admin/store?tab=windows",
+                severity="warning",
+                count=overdue_count,
                 oldest_age_days=age,
             )
         )

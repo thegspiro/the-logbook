@@ -6,7 +6,7 @@ check requests, dues, and approval chains.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -23,7 +23,32 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import Position, User
+from app.services.finance_budget_request_service import FinanceBudgetRequestService
 from app.services.finance_service import BudgetLimitExceededError, FinanceService
+
+
+async def _adopt(db: AsyncSession, fy, org_id: str):
+    """Take a new draft through review, record the board's adoption, start it."""
+    stages = FinanceBudgetRequestService(db)
+    await stages.set_planning_stage(fy.id, org_id, "leadership_review")
+    await stages.set_planning_stage(fy.id, org_id, "board_review")
+    service = FinanceService(db)
+    await service.adopt_fiscal_year(
+        fy.id,
+        org_id,
+        recorded_by=fy.created_by,
+        adopted_on=date(2025, 12, 10),
+        adoption_reference="Board minutes 2025-12-10, motion 4",
+    )
+    return await service.activate_fiscal_year(fy.id, org_id)
+
+
+async def _close_and_lock(service: FinanceService, fy, org_id: str):
+    await service.begin_year_end_close(fy.id, org_id)
+    return await service.lock_fiscal_year(
+        fy.id, org_id, locked_by=fy.created_by, notes="Reconciled to the bank"
+    )
+
 
 pytestmark = [pytest.mark.integration]
 
@@ -197,8 +222,11 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
-        activated = await service.activate_fiscal_year(fy.id, sample_org_data["id"])
+        activated = await _adopt(db_session, fy, sample_org_data["id"])
         assert activated.status == FiscalYearStatus.ACTIVE
+        assert activated.adopted_on == date(2025, 12, 10)
+        assert activated.adoption_reference == "Board minutes 2025-12-10, motion 4"
+        assert activated.planning_stage is None
 
     async def test_lock_fiscal_year(self, db_session: AsyncSession, sample_org_data):
         """Test locking a fiscal year"""
@@ -211,9 +239,13 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
-        locked = await service.lock_fiscal_year(fy.id, sample_org_data["id"])
+        await _adopt(db_session, fy, sample_org_data["id"])
+        locked = await _close_and_lock(service, fy, sample_org_data["id"])
         assert locked.is_locked is True
         assert locked.status == FiscalYearStatus.CLOSED
+        assert locked.locked_by == fy.created_by
+        assert locked.locked_at is not None
+        assert locked.lock_notes == "Reconciled to the bank"
 
     async def test_cannot_update_locked_fiscal_year(
         self, db_session: AsyncSession, sample_org_data
@@ -227,7 +259,8 @@ class TestFiscalYearService:
             start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
-        await service.lock_fiscal_year(fy.id, sample_org_data["id"])
+        await _adopt(db_session, fy, sample_org_data["id"])
+        await _close_and_lock(service, fy, sample_org_data["id"])
 
         with pytest.raises(ValueError, match="locked"):
             await service.update_fiscal_year(
@@ -237,7 +270,7 @@ class TestFiscalYearService:
     async def test_only_one_active_fiscal_year(
         self, db_session: AsyncSession, sample_org_data
     ):
-        """Test that activating a FY deactivates the current one"""
+        """Starting a year waits for the current one's close to begin"""
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
@@ -257,7 +290,14 @@ class TestFiscalYearService:
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
 
-        await service.activate_fiscal_year(fy1.id, org_id)
+        await _adopt(db_session, fy1, org_id)
+        with pytest.raises(ValueError, match="FY2025 is still the active"):
+            await _adopt(db_session, fy2, org_id)
+        assert (
+            await service.get_fiscal_year(fy1.id, org_id)
+        ).status == FiscalYearStatus.ACTIVE
+
+        await service.begin_year_end_close(fy1.id, org_id)
         await service.activate_fiscal_year(fy2.id, org_id)
 
         refreshed_fy1 = await service.get_fiscal_year(fy1.id, org_id)

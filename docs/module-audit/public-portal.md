@@ -114,7 +114,7 @@ interpolation, which React auto-escapes, and does not use
 helpers). No stored-XSS path. **Status:** verified safe (storing raw values is
 fine given output-encoding at render).
 
-### PP-6 — MEDIUM (flagged) — Rate limiter is per-process + application-status token plaintext at rest
+### PP-6 — MEDIUM — ✅ FIXED (2026-10-05) — Rate limiter is per-process + application-status token plaintext at rest
 
 The in-memory `rate_limit_cache`/`ip_rate_limit_cache` are per-worker (true
 ceiling = workers × limit) and reset on restart — a shared Redis store is needed
@@ -129,6 +129,19 @@ a **two-column** design (`status_token_hash` indexed for lookup + the token stor
 it" would break every status link. Confirms the schema-change deferral. See
 `docs/app-review/public-portal.md`.
 
+**✅ Fixed (2026-10-05, owner decision: do both).** The per-IP and per-API-key
+limits now count in Redis through `_shared_window_hit` (fixed clock-bucket INCR,
+TTL self-heal as in `daily_cap_exceeded`), so every worker draws on one counter;
+the per-process caches remain only as the fallback when Redis is unavailable or a
+command fails. The status token now has the two-column shape described above:
+`status_token_hash` (hex SHA-256, unique) is the only column a lookup matches, and
+`status_token` is `EncryptedText`. A model validator keeps the hash in step with
+every assignment, so a rotation (the anonymizer's) moves the lookup key too.
+Migration `f7c09cfec5b0` hashes and encrypts existing rows in place, keeping the
+token value — links already emailed keep working. Tests:
+`tests/test_public_portal_security.py::TestSharedRateLimit`,
+`tests/test_status_token_at_rest.py`.
+
 ### PP-7 — LOW — ✅ mostly FIXED — Per-request write + query amplification, nested-address whitelist
 
 - **✅ `last_used_at` write throttled.** `authenticate_api_key` no longer writes +
@@ -136,6 +149,15 @@ it" would break every status link. Confirms the schema-change deferral. See
   (`_last_used_is_stale`), and only commits when something actually changed (the
   timestamp refresh or a legacy-prefix self-heal), removing per-read write
   amplification / row contention on a hot key.
+  **Regressed, then re-fixed (2026-10-09):** migration `20260805_0004` made
+  `last_used_at` a `DateTime` column, but `_last_used_is_stale` still parsed it
+  with `fromisoformat`; the `TypeError` a datetime raises was swallowed as
+  "stale", so the throttle never throttled and every request wrote the row
+  again. It now compares datetimes (naive read as UTC) and the write stores a
+  datetime. Same root cause, fixed alongside: `POST /api-keys` 500'd after
+  committing the key (`fromisoformat` on the refreshed `created_at`), and a key
+  with no rate-limit override 500'd on every request (lazy load of `config`
+  from an `AsyncSession`). Tests: `tests/test_public_portal_datetimes.py`.
 - **✅ `detect_anomalies` query count reduced 3→2.** The two last-minute signals
   (request volume + distinct-endpoint spread) share the same IP+window and are now
   fetched in a single `SELECT count(id), count(distinct endpoint)` round-trip; the

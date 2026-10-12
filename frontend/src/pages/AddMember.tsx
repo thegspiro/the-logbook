@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { UserPlus, Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
+import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
@@ -266,6 +266,7 @@ const AddMember: React.FC = () => {
         address_country: 'USA',
         emergency_contacts: emergencyContacts,
         send_welcome_email: !useCustomPassword,
+        status: formData.status,
         ...(formData.middleName ? { middle_name: formData.middleName } : {}),
         ...(formData.preferredName.trim() ? { preferred_name: formData.preferredName.trim() } : {}),
         ...(formData.membershipNumber.trim() ? { membership_number: formData.membershipNumber.trim() } : {}),
@@ -339,28 +340,11 @@ const AddMember: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-                <UserPlus className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-theme-text-primary text-xl font-bold">Add New Member</h1>
-                <p className="text-theme-text-muted text-sm">Add someone to the roster</p>
-              </div>
-            </div>
-            <button
-              onClick={() => void handleCancel()}
-              className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone shrink-0 self-start text-sm transition-colors sm:self-auto"
-            >
-              ← Back to Members
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Rendered only as the Add Member tab of Members Administration, whose
+          section nav already names it; the title stays for heading navigation
+          only. The old back link duplicated the form's own Cancel, which runs
+          the same unsaved-changes check. */}
+      <h2 className="sr-only">Add New Member</h2>
 
       <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         <form
@@ -742,11 +726,10 @@ const AddMember: React.FC = () => {
             </div>
           </div>
 
-          {/* Department Information. There is no Status or Preferred Contact
-              control: both were offered here, and neither was sent — the create
-              endpoint has no field for either, so "On Leave" produced an active
-              member (workflow review W08; the owner question is in
-              KNOWN_LIMITATIONS). */}
+          {/* Department Information. Status is sent (W08-1): a member can be
+              added inactive or on leave. Preferred Contact Method is not
+              offered — the department records no such field, and a control
+              wired to nothing is worse than none (CLAUDE.md pitfall 19). */}
           <div className="card p-6">
             <div className="mb-4 flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-orange-700 dark:text-orange-400" />
@@ -754,6 +737,27 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="add-status" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Status
+                </label>
+                <select
+                  id="add-status"
+                  aria-describedby="add-status-help"
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value)}
+                  className="form-input"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="leave">On Leave</option>
+                </select>
+                <p id="add-status-help" className="text-theme-text-muted mt-1 text-xs">
+                  Retired or dropped is set from the member&rsquo;s profile once they are added, so their service
+                  history is recorded.
+                </p>
+              </div>
+
               <div>
                 <label htmlFor="add-joinDate" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Join Date

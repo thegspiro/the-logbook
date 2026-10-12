@@ -7,11 +7,12 @@ fields, submissions, integrations, and public access.
 
 import enum
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -21,11 +22,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 def generate_slug() -> str:
@@ -99,23 +103,23 @@ class Form(Base):
 
     __tablename__ = "forms"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Form Information
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    category = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    category: Mapped[FormCategory] = mapped_column(
         Enum(FormCategory, values_callable=lambda x: [e.value for e in x]),
         default=FormCategory.OPERATIONS,
         nullable=False,
         server_default="operations",
     )
-    status = Column(
+    status: Mapped[FormStatus] = mapped_column(
         Enum(FormStatus, values_callable=lambda x: [e.value for e in x]),
         default=FormStatus.DRAFT,
         nullable=False,
@@ -124,43 +128,59 @@ class Form(Base):
     )
 
     # Settings
-    allow_multiple_submissions = Column(Boolean, default=True)
-    require_authentication = Column(Boolean, default=True)
-    notify_on_submission = Column(Boolean, default=False)
-    notification_emails = Column(JSON)  # List of emails to notify
+    allow_multiple_submissions: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True
+    )
+    require_authentication: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=True
+    )
+    notify_on_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    notification_emails: Mapped[Optional[list[str]]] = mapped_column(
+        JSON
+    )  # List of emails to notify
 
     # Public access
-    public_slug = Column(String(12), unique=True, index=True, default=generate_slug)
-    is_public = Column(Boolean, default=False)
+    public_slug: Mapped[Optional[str]] = mapped_column(
+        String(12), unique=True, index=True, default=generate_slug
+    )
+    is_public: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Cross-module integration — when set, submission processing uses
     # label-based mapping directly instead of requiring a FormIntegration
     # record with field_mappings.  Values come from IntegrationType.
-    integration_type = Column(String(50), nullable=True, index=True)
+    integration_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, index=True
+    )
 
     # Metadata
-    version = Column(Integer, default=1)
-    is_template = Column(Boolean, default=False, index=True)  # System starter templates
+    version: Mapped[Optional[int]] = mapped_column(Integer, default=1)
+    is_template: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, index=True
+    )  # System starter templates
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    published_at = Column(DateTime(timezone=True))
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Relationships
-    fields = relationship(
+    fields: Mapped[list["FormField"]] = relationship(
         "FormField",
         back_populates="form",
         cascade="all, delete-orphan",
         order_by="FormField.sort_order",
     )
-    submissions = relationship(
+    submissions: Mapped[list["FormSubmission"]] = relationship(
         "FormSubmission", back_populates="form", cascade="all, delete-orphan"
     )
-    integrations = relationship(
+    integrations: Mapped[list["FormIntegration"]] = relationship(
         "FormIntegration", back_populates="form", cascade="all, delete-orphan"
     )
 
@@ -180,55 +200,67 @@ class FormField(Base):
 
     __tablename__ = "form_fields"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    form_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    form_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Field Configuration
-    label = Column(String(255), nullable=False)
-    field_type = Column(
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    field_type: Mapped[FieldType] = mapped_column(
         Enum(FieldType, values_callable=lambda x: [e.value for e in x]), nullable=False
     )
-    placeholder = Column(String(255))
-    help_text = Column(Text)
-    default_value = Column(Text)
+    placeholder: Mapped[Optional[str]] = mapped_column(String(255))
+    help_text: Mapped[Optional[str]] = mapped_column(Text)
+    default_value: Mapped[Optional[str]] = mapped_column(Text)
 
     # Validation
-    required = Column(Boolean, default=False)
-    min_length = Column(Integer)
-    max_length = Column(Integer)
-    min_value = Column(Integer)
-    max_value = Column(Integer)
-    validation_pattern = Column(String(500))  # Regex pattern
+    required: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    min_length: Mapped[Optional[int]] = mapped_column(Integer)
+    max_length: Mapped[Optional[int]] = mapped_column(Integer)
+    min_value: Mapped[Optional[int]] = mapped_column(Integer)
+    max_value: Mapped[Optional[int]] = mapped_column(Integer)
+    validation_pattern: Mapped[Optional[str]] = mapped_column(
+        String(500)
+    )  # Regex pattern
 
     # Options (for select, multiselect, radio, checkbox)
-    options = Column(JSON)  # List of {value, label} objects
+    options: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON
+    )  # List of {value, label} objects
 
     # Conditional visibility
     # When set, this field is only shown if the referenced field's value matches.
-    condition_field_id = Column(
+    condition_field_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True
     )  # ID of the controlling field
-    condition_operator = Column(
+    condition_operator: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True
     )  # "equals", "not_equals", "contains", "not_empty", "is_empty"
-    condition_value = Column(String(500), nullable=True)  # Value to compare against
+    condition_value: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )  # Value to compare against
 
     # Layout
-    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
-    width = Column(String(20), default="full")  # "full", "half", "third"
+    sort_order: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
+    width: Mapped[Optional[str]] = mapped_column(
+        String(20), default="full"
+    )  # "full", "half", "third"
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    form = relationship("Form", back_populates="fields")
+    form: Mapped["Form"] = relationship("Form", back_populates="fields")
 
     __table_args__ = (Index("idx_form_fields_form_order", "form_id", "sort_order"),)
 
@@ -242,13 +274,13 @@ class FormSubmission(Base):
 
     __tablename__ = "form_submissions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    form_id = Column(
+    form_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
@@ -256,39 +288,55 @@ class FormSubmission(Base):
     )
 
     # Submission Info
-    submitted_by = Column(
+    submitted_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Data stored as JSON for flexibility
-    data = Column(JSON, nullable=False)  # {field_id: value} mapping
+    data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False
+    )  # {field_id: value} mapping
 
     # Public submission metadata
-    submitter_name = Column(String(255))  # For anonymous/public submissions
-    submitter_email = Column(String(255))  # For anonymous/public submissions
-    is_public_submission = Column(Boolean, default=False)
+    submitter_name: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # For anonymous/public submissions
+    submitter_email: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # For anonymous/public submissions
+    is_public_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Metadata
-    ip_address = Column(String(45))
-    user_agent = Column(String(500))
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
+    user_agent: Mapped[Optional[str]] = mapped_column(String(500))
 
     # Integration processing
-    integration_processed = Column(Boolean, default=False)
-    integration_result = Column(JSON)  # Result/errors from integration processing
+    integration_processed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False
+    )
+    integration_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON
+    )  # Result/errors from integration processing
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    form = relationship("Form", back_populates="submissions")
-    submitter = relationship("User", foreign_keys=[submitted_by])
+    form: Mapped["Form"] = relationship("Form", back_populates="submissions")
+    submitter: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[submitted_by]
+    )
 
     __table_args__ = (
         Index("idx_form_submissions_org_form", "organization_id", "form_id"),
@@ -307,40 +355,42 @@ class FormIntegration(Base):
 
     __tablename__ = "form_integrations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    form_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    form_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
 
     # Integration configuration
-    target_module = Column(
+    target_module: Mapped[IntegrationTarget] = mapped_column(
         Enum(IntegrationTarget, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    integration_type = Column(
+    integration_type: Mapped[IntegrationType] = mapped_column(
         Enum(IntegrationType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Field mappings: maps form field IDs to target module field names
     # e.g., {"field-uuid-1": "first_name", "field-uuid-2": "email", "field-uuid-3": "phone"}
-    field_mappings = Column(JSON, nullable=False)
+    field_mappings: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
 
-    is_active = Column(Boolean, default=True)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    form = relationship("Form", back_populates="integrations")
+    form: Mapped["Form"] = relationship("Form", back_populates="integrations")
 
     __table_args__ = (
         UniqueConstraint("form_id", "target_module", name="uq_form_integration_target"),

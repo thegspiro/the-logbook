@@ -30,6 +30,7 @@ import {
   BarChart3,
   MoreHorizontal,
   Settings,
+  Hand,
 } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
@@ -276,6 +277,25 @@ export const EventsPage: React.FC = () => {
       cancelled = true;
     };
   }, [canManage]);
+
+  // Requests waiting on the viewer's own events. Most members organize
+  // nothing and get an empty list, so the link appears only for someone with
+  // something to decide; a failed load simply leaves it out.
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    eventService
+      .getPendingAttendancePetitions('mine')
+      .then((pending) => {
+        if (!cancelled) setPendingRequestCount(pending.length);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingRequestCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /**
    * Non-critical: the band simply renders without "missed" rows if this fails,
@@ -879,6 +899,18 @@ export const EventsPage: React.FC = () => {
         <div className="sr-only" role="status" aria-live="polite">
           {liveEventAnnouncement}
         </div>
+
+        {pendingRequestCount > 0 && (
+          <Link
+            to="/events/attendance-requests"
+            className="alert-info mb-4 flex items-center gap-2 text-sm font-medium hover:underline"
+          >
+            <Hand className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {pendingRequestCount === 1
+              ? '1 attendance request is waiting for you'
+              : `${pendingRequestCount} attendance requests are waiting for you`}
+          </Link>
+        )}
 
         {/* Only the events with something outstanding, each beside the control
             that clears it. Renders nothing when there is nothing to do. */}

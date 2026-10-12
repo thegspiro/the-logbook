@@ -96,7 +96,8 @@ class DriverExceptionService:
             .order_by(DriverException.apparatus_id.is_(None))
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        driver_exception: Optional[DriverException] = result.scalar_one_or_none()
+        return driver_exception
 
     # ------------------------------------------------------------------
     # Who can approve
@@ -362,7 +363,8 @@ class DriverExceptionService:
                 DriverException.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        driver_exception: Optional[DriverException] = result.scalar_one_or_none()
+        return driver_exception
 
     async def list_exceptions(
         self,

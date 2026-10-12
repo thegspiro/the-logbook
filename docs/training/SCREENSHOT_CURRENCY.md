@@ -1,5 +1,312 @@
 # Screenshot currency
 
+## Queued by the October 11 – 12 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10-11_TO_10-12](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Nothing was captured; every row is open.
+
+| Guide / image | Disposition | Why |
+| ------------- | ----------- | --- |
+| 11 Finance, Dues page | **NEW + REPLACE** | Now has **New schedule**, **Generate dues**, **Record payment** for `finance.manage`; capture the page and the schedule dialog |
+| 11 Finance, QuickBooks | **NEW** | Export history list beside the mappings |
+| 12 Grants, library | **REPLACE** | **Add Opportunity** now opens a real form; capture the form (fixed vs rolling deadline) |
+| 12 Grants | **NEW** | Record Donation form, Pledges page with the Record Pledge dialog, Fundraising Events page |
+| 05 Inventory | **NEW** | Assign terms step (Permanent / Temporary + return date); Distribute Items with **Temporary assignment**; departure clearance record with the Resolve dialog |
+| 05 / 06 | **CHECK** | Equipment-check reports now include basic apparatus and an expected/missed count |
+| 13 Medical screening | **NEW** | **Show compliance for** panel for a member and a prospect; roster with **Not compliant (overdue)** |
+| 04 Events & Meetings | **NEW** | Minutes **Attendance** dashboard; event page **Guests (n)** card; action-item Assignee select |
+| 07 Documents & Forms | **NEW** | **Manage folder** dialog; "Publish this form?" warning dialog; builder one-submission control |
+| 14 Elections | **REPLACE** | Ballot screens without a default Abstain; results grouped per item; resend-ballots banner |
+| 15 Prospective members / 08 Admin | **NEW** | Drawer referral fields; **Department Email** section in Organization settings |
+| 03 Scheduling, `03-77-closeout-step3-confirm.png` | **REPLACE** | Shows **Give everyone all N calls**; capture with one member below the total |
+| 03 Scheduling settings | **CHECK** | Three settings now carry a "not in effect" notice |
+
+## Moved out of 01-membership.md by the plain-language rewrite, 2026-10-11
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `01-01-member-directory.png` | **REPLACE** | The table gained a **Rank** column between the name and **Member #**. Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set |
+| `01-02-member-profile.png` | **REPLACE** | Assigned Inventory is absent for a viewer without permission to manage equipment. Caption the capturing account's grants — the page differs by viewer |
+| `01-05-add-member-form.png` | **REPLACE** | One **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID box is gone); **Preferred Contact** is gone and **Status** offers Active, Inactive and On Leave; **Rank** and **Position** carry help lines; with **Set initial password** ticked a rules checklist sits under the password fields. Shoot with auto-numbering on |
+| `01-08-member-audit-history.png` | **REPLACE** | Each entry shows the time beside the date. Re-shoot filtered to profile updates, on a member with two edits on the same day |
+| `01-40-member-directory-member.png` | **CHECK** | Alt text says "name, member number and status only"; the member view also has a **Rank** column, and **Member #** is hidden until someone in the department is numbered |
+| `01-26-print-applicant-badges.png` | **REPLACE** | Bulk buttons read **Advance Selected**, **Hold Selected**, **Reject Selected**. Re-shoot the bar with two applicants selected (alt text still says "Advance All") |
+| `01-11-create-waiver.png` | **REPLACE** | **Applies To** has two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements**. Re-shoot with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver" |
+| `01-19-create-waiver.png` | **REPLACE** | Same change as `01-11`. Re-shoot with only **Training Requirements** ticked, showing "Creates a standalone training waiver without a leave of absence" |
+| `19-37-member-id-cards.png` | **CHECK** | The frame shows a card in a "revoked" state, but the ID Cards panel offers no Revoke action (Suspend, Lost, Reactivate, delete). Confirm what the frame shows, or re-shoot with a suspended card |
+| Applicant conversion dialog; administrative member's ID card | **CHECK** | Both now show **Member class** (the conversion dialog asks for **Member class** and **Starting status**; an administrative member's card shows **Member Class** where others show **Rank**) |
+
+## Moved out of 00-getting-started.md by the plain-language rewrite, 2026-10-08
+
+The guide no longer carries inline `[SCREENSHOT — REPLACE/CHECK …]` notes: a
+member reading it was reading instructions meant for whoever captures the
+images. The notes it carried are kept here, unchanged in substance. Its
+`> **Screenshot needed:**` placeholders stay in the guide, because
+`status_report.py` and `apply_placeholders.py` find them there. Image file
+names and alt text are unchanged, so `manifest.mjs` entries still match.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `00-01-login-page.png` | **CHECK** | The page is unchanged; replace only if the frame shows a lockout or session-expired message, whose wording changed on 2026-09-29 |
+| `00-19-change-password.png` | **REPLACE** | The requirements list is visible before typing and has seven rules: "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row" |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png` | **REPLACE** | The Scheduling Operations tiles are new. Caption which permissions the capturing account held — what a reader sees depends on their own grants |
+| `00-09-account-settings.png` | **REPLACE** | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" |
+| `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **REPLACE** | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** |
+
+## Moved out of 03-scheduling.md by the plain-language rewrite, 2026-10-11
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+## Queued by the October 8 – 11 documentation pass, 2026-10-11
+
+Covers the merges from 2026-10-08 13:13 UTC to 2026-10-11. Audit:
+[CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+**Nothing has been captured** (the capture stack does not run in this
+environment). Finance, attendance-request, encryption and receipt screens from
+this window were queued by their own commits; only items not already queued
+appear here. The first rows under _Existing images_ for guide 03 were queued by the
+Scheduling guide rewrite the same day.
+
+**Demo data this needs:** a shift starting within 48 hours with a rostered member
+and a vehicle with a QR code; a draft shift-history import with unmatched names
+and one outside unit; a suggestion box with a routed dropdown; an unedited
+Compliance box.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 03-scheduling.md | Pre-Shift Work | Vehicle check-in page with check-in closed: **Doing pre-shift work?**, the 48-hour shift list, **Start pre-shift work** |
+| 03-scheduling.md | Pre-Shift Work | **Pre-shift work in progress** card, then the **Pre-shift time awaiting review** queue on Shift Close-Out (as an officer who did not do the work) |
+| 03-scheduling.md | Pre-Shift Work | Shift Settings with **Allow pre-shift work** |
+| 03-scheduling.md | Importing Shift History | `/scheduling/admin/history-import`: upload with time-zone picker, drafts and committed imports |
+| 03-scheduling.md | Importing Shift History | A draft's **Members**, **Units** and **Shifts** tabs (confidence column, **Split apart**, a **Remembered** badge) and the Commit confirmation that says it cannot be undone |
+| 07-documents-forms.md | Asking questions first | Suggestion Box dialog, **Questions** section: a dropdown question whose option routes to another box, and a follow-up with **Show only after this question** |
+| 07-documents-forms.md | Asking questions first | Member submit form with an intake question and a follow-up; reviewer panel showing intake answers |
+| 07-documents-forms.md | Asking questions first | The Compliance box submit form: **What kind of concern is this?** and, after choosing safety, **Is anyone at immediate risk?** |
+| 08-admin-reports.md | Administration hubs | Events, Members and Store hubs as described cards with a red count; Training's seven area cards |
+| 08-admin-reports.md | Administration hubs | **Needs attention** with the new queues (skills tests awaiting validation, shift reports, attendance requests, open order windows) |
+| 08-admin-reports.md | Administration hubs | Command palette with a hub section typed in |
+| 10-mobile-pwa.md | Admin hubs on a phone | The chip row at 390px wide with the right-edge fade and arrow; the metrics row with two phone slots |
+| 10-mobile-pwa.md | Checklist builder | Builder header at 390px; a row's overflow menu as a bottom sheet; an empty location with **Add items** |
+| 07-documents-forms.md | Asking questions first | Intake editor with a **Rating** and a **Pick a member** question, and a follow-up using **at least** |
+| 05-inventory.md | Medical supplies in the builder | Item picker with a medical result badge and **Create in Medical Supplies**; the clone-to-apparatus dialog |
+| 01-membership.md / 03-scheduling.md | Archived former members | Members list on **All Current**; a history import's Members tab saying "archived former member" |
+| 06-apparatus-facilities.md | Deficiency | Vehicle page with the Deficiency explanation and Failures link; edit form **Reason** field; Create Shift with the apparatus picker |
+| 03-scheduling.md | Shift Close-Out | Close-out wizard attendance step listing pre-shift work |
+| 03-scheduling.md | Call Logging → claiming a call another unit logged | `03-84-closeout-shared-call-picker`: close-out step 2 on a phone, **Already logged by another unit** listing one ticked call (Medic 1 · EMS · Aug 19) above the typed rows, the total reading the tick plus the typed calls |
+| 03-scheduling.md | Shift Swap Requests → picking up an open swap | `03-85-open-swap-pickup`: Requests tab on a phone, **Open shifts you can pick up** above the list, one card (day, time, Engine 5, Driver/Operator, from a named member, reason) with **Pick up** |
+| 03-scheduling.md | Equipment Checks → building a template | Builder on a phone (390×844): the same engine template, compact rows, the blockers bar along the bottom |
+| 03-scheduling.md | Shift Reports → skill linkage | A mixed green/amber skill linkage on the report form; never captured |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Any Training admin hub frame (`02-*` hub shots) | **REPLACE** | Six sections with a **More** menu became seven area cards plus an icon tab strip and a strip naming the open page |
+| Events, Members and Store hub frames | **REPLACE** | The underline tab bar is now a row of described cards; Members no longer has its own red **Add Member** under the hub's |
+| Inventory and Scheduling hub frames | **REPLACE** | Settings tab renamed **Headline Metrics**; one-tab hubs draw no section nav |
+| Tab pages inside a hub (Create Training Session, Create Pipeline, Review Submissions, Add Member, Import Members, Create Event, Shift Reports) | **CHECK** | The back link and the large repeated title are gone |
+| Equipment-check template builder (desktop and phone) | **REPLACE** | Header, location rows and the overflow menu changed under 640px |
+| Pending Review, All Entries and My Admin Hours frames | **CHECK** | The method now reads **QR Scan** or **ID Card Station** |
+| Compliance suggestion box submit form | **REPLACE** | It now asks a required question first |
+| Apparatus status in the edit form | **REPLACE** | New **Reason** field |
+| Create Shift (any frame showing the apparatus picker) | **CHECK** | Lists Apparatus-module rigs |
+| Every desktop shot of the scheduling page (`03-01`, `03-04`, `03-61`, `03-62` among them) | **REPLACE** | The subtitle reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades") |
+| `03-05-open-shifts.png`, `03-100-open-shifts-member.png`, `03-105-open-shifts-admin.png` | **REPLACE** | The intro reads "Shifts with open seats. Sign up for one and it goes straight onto your schedule."; the old one promised an officer would confirm the signup |
+| `03-02-shift-detail-panel.png`, `03-05-assignment-form.png` | **CHECK** | Taken of the older right-hand drawer; may show the old **Add Assignment** form. Compare with `03-102` / `03-58` |
+| `03-82-call-volume-count-only.png` | **REPLACE** | The count-only report reads **Total Calls**, **Avg Calls/Day**, **Peak Calls**, with no per-unit footnote |
+| `03-67-swap-request-dialog.png` | **REPLACE** | Three cards (Open Swap, Specific Shift, Exchange With a Member); Open Swap's subtitle is "Offered to members cleared for your seat; it stays yours until one picks it up". Alt text still says "two swap-type cards" |
+| `03-47-settings-desktop.png` | **REPLACE** | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
+| `03-48-settings-phone.png` | **CHECK** | Seven-section strip; settings use full width on phones |
+| `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
+| `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
+| `03-61-review-queue-batch.png` | **REPLACE** | **New report** is a separate button beside the view strip (was **+ New** inside it) |
+| `03-62-flagged-queue.png` | **REPLACE** | Same strip change; the expanded card shows only the reviewer's comment box |
+| `03-46-finalized-badge.png` | **CHECK** | Alt text mentions a pass-down note under the badge; the closed-out badge shows none |
+| `03-63-batch-report-form.png` | **CHECK** | Alt text mentions "shared hours and calls"; calls are entered per member |
+| `03-22-equipment-check-builder.png` | **REPLACE** | Predates the one-list builder; the shot shows a sidebar, progress strip and readiness card that no longer exist. Demo: engine template with three locations, one nested, one item of each answer type, **Before publishing** showing two items. Viewport at least 1440px |
+| `03-72-check-item-controls.png` | **CHECK** | May predate the **Note required** state on a failed item |
+| `03-80-submitted-check-phone.png` | note | The queued/offline half of its description is not pictured; the harness cannot simulate a dropped connection honestly |
+| Placeholder "Scheduling Admin → Settings → Notifications → the 'Not in effect yet' notice above the six switches" | **RETIRE** | The six switches and the notice no longer exist; the placeholder can never be filled |
+
+## Queued by the October 7 – 8 documentation pass, 2026-10-08
+
+Covers PRs #2981–#2996. Audit:
+[CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md). **Nothing
+has been captured** (the capture stack does not run in this environment). Run
+`status_report.py` after adding inline placeholders to refresh
+[SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md).
+
+**What the seeded demo cannot produce yet:** a Target Solutions provider with an
+uploaded report and unmapped courses, a voided record with its reason, and a
+member who holds only `finance.request`. Use a throwaway demo provider; never
+capture a real key, secret or Transcript ID.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 06-apparatus-facilities.md | A first-time fleet | `/apparatus` on an empty department: **No apparatus yet** with its explanation and **Add Apparatus** |
+| 06-apparatus-facilities.md | A first-time fleet | Add Apparatus: "Only the fields marked * are needed to start", the NFPA checkbox with its help text, Fuel Type list showing **CNG** |
+| 06-apparatus-facilities.md | Equipment Tracking | Equipment tab with the "separate checklist" note and **Build equipment checklists** link (as a holder of `inventory.check_manage`) |
+| 06-apparatus-facilities.md | Logging Maintenance | Maintenance record form with the which-date sentence and the Next Due note |
+| 02-training.md | Void a record | Member Training History: **Void** dialog with the required reason; a voided record with its reason; **Edit** dialog (training.manage) |
+| 02-training.md | Void a record | My Training as the member: voided record marked **voided** with the reason under it |
+| 02-training.md | Member Visibility Settings | The card layout in two columns with the pinned "N unsaved changes" bar and **Save** |
+| 11-finance.md | Member requests | A member's **My Purchase Requests** list with **New**, the Finance navigation group, and the budget-line picker ("Training — $1,250.00 remaining") |
+| 16-integrations.md | Upload Report | Target Solutions provider card with **Upload Report**, and the result summary |
+| 16-integrations.md | Course mappings | Mappings › **Courses** tab: a course with a suggested library match and **Map**; a mapped course |
+| 16-integrations.md | Policy acknowledgments | A staged Admin item shown as **Policy Acknowledgment** |
+| 08-admin-reports.md or 17 (email) | Training record emails | _Training Record Voided_ and _Training Record Updated_ in Email Templates, plus the sent email at 390px |
+| 08-admin-reports.md or 17 (email) | New Course Version to Map | The training-officer email |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `06-*` apparatus list rows | **REPLACE** | Row **Archive** removed; the wrench opens Maintenance; badge text colour changed |
+| `06-*` Add Apparatus and `06-03-apparatus-detail.png` | **REPLACE** | Intro line, NFPA help text, CNG label; status and type badges |
+| `06-04-apparatus-maintenance-tab.png`, `06-06-apparatus-equipment-tab.png` | **REPLACE** | New guidance text above the lists and form |
+| `02-*` Member Visibility Settings | **REPLACE** | Grouped cards, two columns, pinned Save bar |
+| `02-*` Training Admin **More** menu and equipment-check builder menus in dark mode | **REPLACE** | Opaque surface |
+| `02-*` requirement template picker (HIPAA, Bloodborne, Hazmat) and any requirement card for them | **CHECK** | Now Courses requirements; the old ones can show a warning |
+| `02-*` / `16-*` Training History with Void | **REPLACE** | Reason, voided marker, Edit button |
+| `16-*` provider cards, Imports and Mappings | **REPLACE** | Upload Report, Courses tab, auto-credited rows |
+| `11-*` finance lists, forms and the navigation | **REPLACE** | "My …" titles for members, Finance nav group, options-based pickers |
+| Any email-templates list shot | **CHECK** | Three new required or system templates (voided, updated, course match) |
+
+## Queued by the October 6 – 7 documentation pass, 2026-10-07
+
+Covers PR #2965 (owner-decision docket), #2967 (desktop density) and the review
+records through #2980. Audit:
+[CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md). **Nothing
+has been captured** (the capture stack does not run in this environment). Guides
+for these features were written by the feature PRs; the rows below are the screens
+that need a first capture or a replacement. Run `status_report.py` after adding
+inline placeholders to refresh [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md).
+
+**What the seeded demo cannot produce yet:** an alert in each state (open,
+acknowledged, resolved), an integration with a failed sync, a Claude client and a
+live connection (needs `MCP_OAUTH_ENABLED=true` and an https issuer), an offline
+skills evaluation held in IndexedDB, a custom crew seat, a closed election with a
+correction after close, and a proxy authorization. Never capture a real token or
+client secret; use a throwaway demo client.
+
+### New screens (no image exists)
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 02-training.md | Knowledge tests (member) | Knowledge Tests list; an attempt in progress with a multiple-answer question; the result screen after submitting |
+| 02-training.md | Knowledge tests (officer) | Training Admin knowledge-test tab: question bank editor and the test settings (`max_attempts`) |
+| 02-training.md | Skill Evaluations | Training Admin › Setup › Skill Evaluations: list, and the evaluator picker (default / positions / named members) |
+| 02-training.md | Competency | Training Admin › Advanced › Competency › Department Readiness grid with station, rank and category filters |
+| 02-training.md | Cohort rooms | Cohort wizard Schedule step room picker; Preview step with one class moved and the "Location already booked" warning |
+| 01-membership.md | Qualifications | Member profile Qualifications card; Members admin › Import Qualifications dry-run result with a rejected row by line |
+| 01-membership.md | Undo a drop | Profile of a dropped member showing the Undo drop control and its confirmation (do not confirm) |
+| 01-membership.md | Add Member | Add Member with the **Status** field |
+| 03-scheduling.md | Shared calls | Close-out wizard step 2 with "calls another unit already logged" ticked, showing unit labels |
+| 03-scheduling.md | Open swaps | Requests tab listing an open swap with **Pick up**, and the refusal message for an unqualified member |
+| 03-scheduling.md | Skills testing offline | Skills-test screen with the "saved on this device" state; Sign Out warning about unsent evaluations (do not confirm) |
+| 08-admin-reports.md | Security Alerts | `/admin/security-alerts` with alerts in each state; the resolve dialog with a note; Download activity list |
+| 08-admin-reports.md | Admin hours Review Rules | `/admin-hours/manage` › Review Rules tab with self-approval and the resync percentage |
+| 08-admin-reports.md | Role Management | The confirmation before changing the baseline Member position's permissions (do not confirm) and the duplicate-name 409 message |
+| 13-medical-screening.md | Add Record | Add Record with the Member/Prospect picker; a record row with the **Self-recorded** badge |
+| 14-elections.md | One ballot | Cast Vote tab showing positions and ballot items together; proxy ballot banner naming the delegating member |
+| 14-elections.md | Seats per race | Create/Edit election race with Seats; Results tab showing two winners |
+| 14-elections.md | Results revised | Results tab with "Results revised <when> by <who>" and the revised line on the certified PDF |
+| 16-integrations.md | Integration health | `/integrations/:integrationId` with sync history, a scrubbed error and **Retry sync**; list showing the health indicator |
+| 16-integrations.md | Claude connections | Consent page `/claude/authorize`; `/claude/connections`; the admin client panel on Integrations (blur secrets) |
+| 02-training.md | Review Submissions › Settings | Certificate Files card with the retention days field and the virus-scan notice (when `CLAMAV_ENABLED=true`) |
+
+### Existing images to replace or check
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Any image of a **toggle switch** or a hub/table **icon button** at desktop width | **REPLACE** at the next full sweep | With a mouse, `btn-icon` is 36px and `toggle-track` a 24px pill (was 44px); rows holding a switch are 20px shorter. Touch/phone shots are unchanged |
+| `04-*` event cards and Create Event shots at 820–1280px | **CHECK** | Titles clamp at two lines (three from `md`); Start/End stack until `lg` |
+| `18-*` store catalog shots | **REPLACE** | Price moved from beside the name to the end of the badge row |
+| `02-*` cohort list and `03-*` shift-pattern list shots | **CHECK** | Status badge wraps below long names |
+| `03-*` shift-template dialog | **REPLACE** | Starts and Ends are stacked at every width |
+| `03-*` swap request dialog and Requests tab | **CHECK** | Open swaps are picked up, not officer-approved |
+| `03-*` close-out wizard step 2 | **REPLACE** | Gained the shared-calls picker |
+| `14-*` Results tab, Cast Vote tab and Send Ballot Emails shots | **REPLACE** | One ballot model; results released on close; revised mark |
+| `01-*` Members page as a non-manager | **CHECK** | Directory hides archived members and opens on Active |
+| `02-*` Compliance Matrix, Shift Compliance and program enrollment progress | **CHECK** | Shift counts and linked requirements now read shift attendance / live compliance |
+| `13-*` Add Record dialog | **REPLACE** | Member/Prospect picker |
+
+## Queued by the October 5 – 6 documentation pass, 2026-10-06
+
+Covers PRs #2941–#2972. **Nothing has been captured.** The new placeholders are
+inline `> **Screenshot needed:**` paragraphs in the guides, counted by
+`status_report.py` (regenerated: [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md)).
+Topic index: [21 — October 5–6, 2026 workflow updates](./21-october-2026-release-changes.md).
+
+**What the seeded demo cannot produce yet:** a held offline item (seed untagged
+entries straight into IndexedDB), an approval step assigned to someone other than
+the capturing account, an approval step whose position nobody holds, an exchange
+whose member lost a qualification after submission, and a member no requirement
+grades. Never capture a real badge code; use a throwaway demo member.
+
+### New placeholders
+
+| Guide | Section | Capture brief |
+| ----- | ------- | ------------- |
+| 01-membership.md | Badge codes | Print ID Cards page (`/members/print-id-cards`): Orientation, Sides and Code options, Save as department layout, and the **Accept old badges** switch |
+| 01-membership.md | Badge codes | Member ID card page: the badge with its QR code, **Reissue badge** and the "Reissue this badge?" confirmation (do not confirm) |
+| 02-training.md | One definition of "compliant" everywhere | Compliance Matrix rail with the **Not applicable** group and a member's detail |
+| 02-training.md | One definition of "compliant" everywhere | Training dashboard **Department Compliance** card beside the matrix it opens, same percentage |
+| 02-training.md | Compliance Attestations | New Attestation with the **Quarter** picker and the "calculated when you submit" sentence; one history entry showing "as of <date>" |
+| 02-training.md | Shift Credit | Requirement form for an Hours requirement: **Shift attendance satisfies this requirement**, unticked |
+| 03-scheduling.md | Trades somebody can actually accept | Request swap dialog with **Exchange With a Member** chosen and the **Exchange With** list |
+| 03-scheduling.md | Trades somebody can actually accept | Requests tab: **Approve without qualification?** with **Approve anyway** / **Keep it pending** (do not confirm) |
+| 04-events-meetings.md | A finalized event can still be edited | Edit form on a finalized event: the "Attendance for this event is finalized" notice, locked controls, editable title |
+| 05-inventory.md | What the alert emails say now | Supplies to Replace email at 390px: **Status** column with an expiring, a **Restock reported** and a **Short — 2 of 4 aboard** row |
+| 10-mobile-pwa.md | Queued Work Is Sent Only by the Member Who Saved It | The "N offline items are on hold" notice with **Send as me** / **Discard**, and the "Send these as yours?" confirmation (do not confirm) |
+| 11-finance.md | The Approvals screen | Approvals as an approvals admin: "Requests waiting on you.", admin line, **Waiting on** column, **Not assigned to you** badge, **Approve/Deny as approvals admin** |
+| 11-finance.md | The Approvals screen | **Approve as approvals admin** dialog with the **Override reason** box |
+| 11-finance.md | Steps nobody can act on | Approval Chains page banner and the amber "No active member can act on this step" chip with "N requests waiting" |
+| 14-elections.md | Fixes From the On-Screen Re-Drive | In-app vote receipt under "Vote submitted for <position>" |
+| 15-prospective-members.md | Moving Applicants Through Stages | Applicant drawer on a Checklist stage: "1 of 2 items done — tick every item to advance" |
+| 15-prospective-members.md | Pipeline Settings | **Automatic Transfer to Membership** card and its tickbox |
+
+### Existing images
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `11-12-purchase-request-detail`, `11-14-expense-report-detail`, `11-16-check-request-detail` | **REPLACE** | Pending-approval panel now always says "Waiting on <who>" and shows the **Not assigned to you** / override buttons for an approvals admin |
+| the Approvals screen placeholder in guide 11 | **REPLACE** when captured | Gains the **Waiting on** column and admin rows; heading reads "Requests waiting on you." |
+| `11-06-approval-chains` | **CHECK** | Step help text changed to "Only the approver chosen here can approve or deny this step…"; chain cards gain coverage warnings when a step has no one who can act |
+| `02-73-compliance-attestations` | **REPLACE** | Form lost the Compliance % box and gained the Quarter picker; entries show "as of" |
+| `02-66-compliance-matrix`, `02-65-print-compliance`, `02-17-officer-dashboard` | **CHECK** | A Not applicable group and graded-member percentages can change the rail and the Department Compliance card |
+| `02-16-requirements` | **REPLACE** | Requirement form gains the Shift Credit box (Hours and Shifts types) |
+| `03-14-scheduling-reports` | **REPLACE** | Shift Compliance cards are **Requirement Checks**, **Checks Met**, **Checks Not Met** (were Total Members, Compliant, Non-Compliant) |
+| `03-67-swap-request-dialog`, `03-11-swap-requests-tab` | **REPLACE** | Exchange With a Member picker; exchange cards name the other member |
+| `03-60-dashboard-my-shifts`, `00-04-dashboard-overview` | **CHECK** | Open slots the member cannot take read "Not eligible" instead of Sign Up |
+| `01-23-print-member-badges`, `19-37-member-id-cards` | **CHECK** | Badge now encodes the server badge code; Print Badges needs `members.manage` or `members.manage_id_cards` |
+| `15-10-pipeline-settings`, `15-14-applicant-drawer-overview` | **CHECK** | Automatic Transfer card; checklist items as tickboxes in the drawer |
+| `08-11-error-monitor` | **CHECK** | Rows from scheduled tasks carry the source **Scheduled task** |
+| `05-01-inventory-items`, `05-25-admin-hub`, `05-60-admin-hub-groups` | **REPLACE at phone width** | Below 640px the nine Items filters sit behind a **Filters** toggle; eight admin pages lost their doubled side padding; hub metric labels wrap to two lines |
+| `09-12-summary-pending-validation` | **CHECK** | **Needs Validation** is shown to officers always (zero included) beside **Pass Rate** |
+| `14-17-election-results`, election list frames | **CHECK** | Closed card shows the real close time |
+
+### Manifest steps flagged
+
+`scripts/screenshots/manifest.mjs`: only the comment on `09-12-summary-pending-validation`
+was updated (the selector still matches the **Needs Validation** label). Not
+changed, because a capture-step edit needs the new UI to be run: `03-62`
+(dashboard sign-up positions) selects a seeded open shift by its Sign Up button
+and now needs a shift the member **is** eligible for, since an ineligible one
+reads Not eligible; `03-14-scheduling-reports` (check its wait text against the new
+**Requirement Checks** card labels); and the My Training frames may want a pending record seeded.
+The anchor on `09-12` ("The Summary dashboard viewed by a training officer") no
+longer appears verbatim in guide 09.
+
 ## Queued by the second September 23 – 30 reading, ported 2026-10-05
 
 A second reading of PRs #2651–#2846 checked each guide's screens against the code, not against fresh captures. It ran in parallel with the September 24 – October 4 pass and was ported onto it afterwards. Where that pass had already queued an image, the row says so rather than queueing it twice.
@@ -1734,7 +2041,7 @@ These are worth handling as sweeps rather than one image at a time.
 | --- | --- |
 | Equipment check crew **"Sweep"** | **Shipped behind a prop and not switched on for crews.** It is visible only in the template builder's preview. Capturing it as the member experience would document a screen no crew can reach |
 | Equipment check **lap** | Still built and unwired; the live check screen renders the previous flat compartment list |
-| **Member qualifications** entry | Still no direct entry screen (QUAL-1) — a qualification is written only as a side effect of a training record against a course whose **Certifies** field is set |
+| **Member qualifications** entry | ~~Still no direct entry screen (QUAL-1)~~ — superseded 2026-10-06: the profile's **Qualifications** card and **Members > Administration > Import Qualifications** now exist and can be captured |
 
 
 ## Captured 2026-09-01 — the dashboard timeline at thirty days, and the manifest that pointed at the old heading

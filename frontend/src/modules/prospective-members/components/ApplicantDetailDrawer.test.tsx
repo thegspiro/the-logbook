@@ -369,3 +369,101 @@ describe('ApplicantDetailDrawer checklist stage', () => {
     expect(screen.getByText(/1 of 2 items done/)).toBeInTheDocument();
   });
 });
+
+describe('ApplicantDetailDrawer referral details', () => {
+  it('shows where the applicant came from, who referred them and why', async () => {
+    renderDrawer({
+      referral_source: 'Attended: Spring Open House',
+      referred_by_name: 'Jordan Avery',
+      interest_reason: 'Grew up next to the station.',
+    });
+    await screen.findByText('Stage History');
+
+    const section = screen.getByRole('region', { name: 'How They Found Us' });
+    expect(within(section).getByText('Attended: Spring Open House')).toBeInTheDocument();
+    expect(within(section).getByText('Jordan Avery')).toBeInTheDocument();
+    expect(within(section).getByText('Grew up next to the station.')).toBeInTheDocument();
+  });
+
+  it('shows only the parts on file', async () => {
+    renderDrawer({ referral_source: 'Website' });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByText('Website')).toBeInTheDocument();
+    expect(screen.queryByText('Referred by')).not.toBeInTheDocument();
+    expect(screen.queryByText('Why they want to join')).not.toBeInTheDocument();
+  });
+
+  it('omits the section entirely when nothing is on file', async () => {
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    expect(screen.queryByRole('heading', { name: 'How They Found Us' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The dialog shell. This surface was a right-edge `drawer-panel`; it is now a
+ * centred dialog on the shared stack, like the shift detail panel.
+ */
+describe('ApplicantDetailDrawer dialog shell', () => {
+  function renderWithClose(onClose: () => void) {
+    renderWithRouter(
+      <ApplicantDetailDrawer
+        applicant={applicant}
+        isOpen
+        onClose={onClose}
+        onConvert={vi.fn()}
+        isLastStage={false}
+        isFirstStage={false}
+      />
+    );
+  }
+
+  it('renders as a centred modal dialog, not a side drawer', async () => {
+    renderWithClose(vi.fn());
+    await screen.findByText('Stage History');
+
+    const dialog = screen.getByRole('dialog', { name: 'Applicant details' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveClass('items-center', 'justify-center');
+    expect(dialog).not.toHaveClass('drawer-panel');
+  });
+
+  it('closes on Escape and on the close button', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithClose(onClose);
+    await screen.findByText('Stage History');
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Close detail panel' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not close on a click on the scrim', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithClose(onClose);
+    await screen.findByText('Stage History');
+
+    await user.click(screen.getByRole('dialog', { name: 'Applicant details' }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing when closed', () => {
+    renderWithRouter(
+      <ApplicantDetailDrawer
+        applicant={applicant}
+        isOpen={false}
+        onClose={vi.fn()}
+        onConvert={vi.fn()}
+        isLastStage={false}
+        isFirstStage={false}
+      />
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});

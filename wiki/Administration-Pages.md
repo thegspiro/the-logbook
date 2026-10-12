@@ -212,3 +212,20 @@ on the 16px page gutter; the one screen rendered inside an administration hub
 (Events settings) passes `inHub` to keep its 32px and stay aligned with the hub
 header. The body card is `p-3` on phones (`p-6` from `sm`). Desktop padding is
 unchanged.
+
+## Members and Inventory admin pages on phones _(2026-10-05)_
+
+- **Members.** Audit history no longer spins forever when a member response has
+  no id (it shows the load error) and rejects a non-list history body instead of
+  reading it as "no history". The read-only email field on Edit member no longer
+  fails AA contrast, the Waivers tab strip is a named horizontal scroll region
+  (no overflow at 320px), Add Member's show/hide password button is a 44px
+  target, and the Waivers and Edit member links use blue-800. The hub's add,
+  import and settings tabs and the waivers, edit and history routes are in the
+  mobile accessibility ratchet.
+- **Inventory.** Eight admin pages no longer pad their own container inside the
+  app's padded page (16px lost each side), Items puts its nine filters behind a
+  **Filters** toggle below 640px, and every admin hub's metric tiles wrap their
+  label to two lines (see [Inventory](Module-Inventory)).
+- **Print ID Cards** is reached from the Members list: select members, then
+  **Print ID Cards** ([Member ID cards](Member-ID-Cards)).

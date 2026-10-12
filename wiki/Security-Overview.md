@@ -99,6 +99,40 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 `audit_logs.organization_id` column) are tracked in
 [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 
+### Security Changes of 2026-10-05
+
+- **Member badges.** A badge used to encode the membership number or a short
+  member id, both readable in the directory, so anyone could make a badge that
+  scans as a colleague, and the inventory scanner trusted the member id inside a
+  QR code. Badges now carry a random server-issued code (`users.badge_code`),
+  shown only to the member and to `members.manage` / `members.manage_id_cards`
+  holders and never in rosters, exports or anonymized records; both scanners
+  resolve through `POST /member-badges/resolve` (org-scoped, rate limited);
+  **Reissue badge** cancels a lost one. Old badges keep resolving until an officer
+  turns off **Accept old badges**. See [Member ID cards](Member-ID-Cards).
+- **Integration SSRF: DNS pinning (SCH-10).** `assert_outbound_url_safe()`
+  resolved a host and then the request resolved it again, so a DNS-rebinding host
+  could pass with a public address and connect to an internal one. The shared
+  integration client now resolves once, refuses unless every answer is a global,
+  non-multicast address, and connects to that address with the original hostname
+  kept for Host and TLS SNI. It covers teams, webhook, slack, discord, calcom,
+  documenso and audit shipping (`AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` lifts only
+  the public-address rule; a metadata address is still refused). Proxy mounts are
+  not pinned (the proxy resolves; recorded in `docs/KNOWN_LIMITATIONS.md`).
+- **Google Calendar responses (INT-9)** are capped at 10 MB on the wire and
+  decompressed, with 5 s connect and 10 s socket timeouts, because it reaches
+  Google through httplib2 rather than the bounded httpx client.
+- **Refresh race (AUTH-21).** A refresh that loses a rotation race returns 409
+  `LB-AUTH-012` and revokes nothing; it is no longer audited as token theft. See
+  [Authentication](Security-Authentication).
+- **Sign-out and offline queues (FE3-34).** A failed sign-out is retried and then
+  blocks the screen until confirmed; queued offline items are owned by the member
+  who queued them and pre-upgrade entries are held until that member decides.
+- **Finance approvals** are limited to each step's named approver, with an audited
+  override for approvals administrators.
+- **Self-report certificate retention** is department-set (default keep).
+- **Proxy limits** are sized per station address; sign-in limits are unchanged.
+
 ### Onboarding Session Storage (2026-08-15)
 
 The onboarding session identifier moved from `localStorage` to **`sessionStorage`**
@@ -208,7 +242,7 @@ The Logbook includes a comprehensive security monitoring system that provides:
 
 - **Real-time threat detection**: Monitors all requests for suspicious patterns
 - **Automated alerting**: Generates security alerts for anomalies
-- **Dashboard visibility**: Security status accessible via API
+- **Dashboard visibility**: **Administration → Security Alerts** (`/admin/security-alerts`, `audit.view`) lists your department's alerts by state and every recorded data export; holders of `audit.export` acknowledge and resolve alerts there, with an optional resolution note. Both actions are attributed and written to the audit log, and neither can be overwritten by a second officer
 - **Log integrity verification**: Scheduled checks for tampering
 
 ### Security Monitoring API Endpoints
@@ -219,7 +253,8 @@ Access security monitoring through the API:
 GET  /api/v1/security/status              - Overall security status
 GET  /api/v1/security/alerts              - Recent security alerts
 POST /api/v1/security/alerts/{id}/acknowledge - Acknowledge an alert
-POST /api/v1/security/alerts/{id}/resolve     - Mark alert as resolved
+POST /api/v1/security/alerts/{id}/resolve     - Mark alert as resolved (optional {"note": ...})
+GET  /api/v1/security/download-activity       - Recent data exports (route, size, member, IP)
 GET  /api/v1/security/audit-log/integrity     - Verify log integrity
 GET  /api/v1/security/audit-log/status        - Get audit log statistics
 POST /api/v1/security/audit-log/checkpoint    - Create integrity checkpoint
@@ -319,12 +354,14 @@ The system monitors for data exfiltration through:
 
 ### Protected Endpoints
 
-Export endpoints with DLP monitoring:
-
-- `/api/v1/users/export`
-- `/api/v1/events/export`
-- `/api/v1/audit/export`
-- `/api/v1/reports`
+Every API route whose path contains `export` is monitored — the list lives in
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` (fixed paths) and
+`EXPORT_ENDPOINT_TEMPLATES` (paths with an id in them), and a test fails the
+build when a new export route is missing from either. Each completed export is
+sized from the bytes actually sent (streamed CSVs included) and recorded as a
+`data_export` audit event holding the route, the byte count, the member and
+the IP address. The exported content and the request's query string are never
+recorded — a search term can name a member.
 
 ### Alert Triggers
 
@@ -760,6 +797,12 @@ database write access. Rows written before the keyed upgrade are verified under
 the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later
 unkeyed row after any keyed row. This makes it impossible to modify historical
 logs without detection.
+
+Each row records a fingerprint of the key that signed it and is verified only
+against that key. Rows signed with `SECRET_KEY` before a dedicated
+`AUDIT_LOG_SIGNING_KEY` took effect keep verifying, but only up to the first
+row signed with the dedicated key — `SECRET_KEY` is never a standing second
+key. Ballot signatures (`VOTE_SIGNING_KEY`) are handled the same way.
 
 ### What is Logged
 

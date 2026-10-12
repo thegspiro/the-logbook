@@ -172,4 +172,47 @@ describe('ElectionDetailPage open confirmations (W50-56, W50-57)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Keep as draft' }));
     expect(openNominations).not.toHaveBeenCalled();
   });
+
+  it('warns that an election with no race at all cannot email ballots once open (W50-11)', async () => {
+    getElection.mockResolvedValue({ ...draftElection, positions: [], ballot_items: [] });
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open Election' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Open election' });
+    expect(
+      within(dialog).getByText(/no ballot items or positions, so ballot emails cannot be sent once it opens/)
+    ).toBeInTheDocument();
+  });
+
+  it('does not warn for a positions-only election, whose positions are on the emailed ballot', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open Election' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Open election' });
+    expect(within(dialog).queryByText(/ballot emails cannot be sent/)).not.toBeInTheDocument();
+  });
+
+  it('does not warn when the election has ballot items to email', async () => {
+    getElection.mockResolvedValue({
+      ...draftElection,
+      ballot_items: [
+        {
+          id: 'chief',
+          type: 'officer_election',
+          title: 'Chief',
+          position: 'Chief',
+          eligible_voter_types: ['all'],
+          vote_type: 'candidate_selection',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open Election' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Open election' });
+    expect(within(dialog).queryByText(/ballot emails cannot be sent/)).not.toBeInTheDocument();
+  });
 });

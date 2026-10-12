@@ -396,6 +396,14 @@ class SectionResultSchema(BaseModel):
 class SkillTestCreate(BaseModel):
     """Schema for creating (starting) a new skill test session"""
 
+    # Client-minted id (owner decision: offline cold start). A device with no
+    # signal creates the test locally under this id and sends it on reconnect;
+    # a replay of the same create is answered with the existing test.
+    id: Optional[UUID] = None
+    # The template version a test started offline was scored against. The
+    # server refuses the create if the sheet has changed since, rather than
+    # freezing a snapshot that does not match the scorecard.
+    expected_template_version: Optional[int] = Field(None, ge=1)
     template_id: UUID
     candidate_id: UUID
     notes: Optional[str] = None

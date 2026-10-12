@@ -22,6 +22,8 @@ const TrainingProgramsPage = lazyWithRetry(() => import('../../pages/TrainingPro
 const PipelineDetailPage = lazyWithRetry(() => import('../../pages/PipelineDetailPage'));
 const MyProgramProgressPage = lazyWithRetry(() => import('../../pages/MyProgramProgressPage'));
 const MySkillTestResultPage = lazyWithRetry(() => import('../../pages/MySkillTestResultPage'));
+const MyKnowledgeTestsPage = lazyWithRetry(() => import('../../pages/training/MyKnowledgeTestsPage'));
+const KnowledgeTestAttemptPage = lazyWithRetry(() => import('../../pages/training/KnowledgeTestAttemptPage'));
 
 // Training Module - Course Cohorts (multi-class courses)
 const CohortsPage = lazyWithRetry(() => import('../../pages/training/CohortsPage'));
@@ -239,6 +241,25 @@ export const getTrainingRoutes = () => {
           backend enforces — as it does per-record read access, so a member
           reaching a test they are not party to gets a 404 from the API rather
           than a route they should not have been able to open. */}
+      {/* Online knowledge tests. Auth-only like skills testing: any member may
+          sit a published test, and the API scopes each attempt to the member
+          who sat it (or an officer). Authoring is in the admin hub. */}
+      <Route
+        path="/training/knowledge-tests"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <MyKnowledgeTestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/knowledge-tests/attempts/:attemptId"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <KnowledgeTestAttemptPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/training/skills-testing"
         element={

@@ -6,12 +6,14 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ArrowLeft, Edit, Archive, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { ArchiveApparatusModal } from './ArchiveApparatusModal';
 import type { Apparatus, ApparatusStatus } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate, toLocalDateString } from '../../../utils/dateFormatting';
 
 interface ApparatusDetailHeaderProps {
   currentApparatus: Apparatus;
@@ -33,7 +35,10 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('apparatus.manage');
   const canEdit = canManage || checkPermission('apparatus.edit');
+  // Matches the gate on /inventory/admin/checklists/reports.
+  const canViewChecks = checkPermission('inventory.check_view');
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const tz = useTimezone();
 
   return (
     <header className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
@@ -57,7 +62,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
                 <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                 {status && <StatusBadge status={status} />}
                 {currentApparatus.hasDeficiency && (
-                  <span className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
+                  <span className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-900 dark:text-red-300">
                     <AlertTriangle className="h-3 w-3" />
                     Deficiency
                   </span>
@@ -97,6 +102,36 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
             </div>
           )}
         </div>
+        {/* Statuses such as Out of Service carry a reason; without it on the
+            page, nobody can tell why a rig is off the road. */}
+        {currentApparatus.statusReason && (
+          <p className="text-theme-text-secondary mt-3 text-sm">
+            <span className="font-medium">{status?.name ?? 'Status'}:</span> {currentApparatus.statusReason}
+          </p>
+        )}
+        {/* has_deficiency is set by a failed equipment check and cleared only
+            by the next passing one (EquipmentCheckService
+            ._update_apparatus_deficiency), so logging the repair leaves it on.
+            The failure itself is on Check reports, not on this page. */}
+        {currentApparatus.hasDeficiency && (
+          <p className="text-theme-text-secondary mt-3 text-sm">
+            An equipment check on this apparatus found a problem
+            {currentApparatus.deficiencySince ? ` on ${formatDate(currentApparatus.deficiencySince, tz)}` : ''}. The
+            Deficiency badge clears when the next check passes; logging a repair does not clear it.{' '}
+            {canViewChecks && (
+              <Link
+                to={`/inventory/admin/checklists/reports?tab=failures${
+                  currentApparatus.deficiencySince
+                    ? `&from=${toLocalDateString(new Date(currentApparatus.deficiencySince), tz)}`
+                    : ''
+                }`}
+                className="mobile-touch-target font-medium text-red-800 hover:underline dark:text-red-300"
+              >
+                See what was found →
+              </Link>
+            )}
+          </p>
+        )}
       </div>
       <ArchiveApparatusModal
         isOpen={archiveOpen}

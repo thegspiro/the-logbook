@@ -10,6 +10,7 @@ import { Modal } from '../../../components/Modal';
 import { userService } from '../../../services/api';
 import type { User } from '../../../types/user';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 import { apparatusOperatorService, evocLevelService } from '../services/api';
 import type { ApparatusOperator, ApparatusOperatorCreate, ApparatusOperatorUpdate, EvocLevel } from '../types';
 import { displayNameOf } from '../../../utils/memberName';
@@ -117,18 +118,21 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
     setSaving(true);
     try {
       if (editOperator) {
+        // Every field the form owns, every save: the backend applies updates
+        // with exclude_unset, so a blank left out of the payload would keep
+        // the old value. A blank goes as null, which clears it.
         const payload: ApparatusOperatorUpdate = {
-          evocLevelId: f.evocLevelId || undefined,
+          evocLevelId: f.evocLevelId || null,
           isCertified: f.isCertified,
+          certificationDate: f.certificationDate || null,
+          certificationExpiration: f.certificationExpiration || null,
+          licenseTypeRequired: blankToNull(f.licenseTypeRequired),
           licenseVerified: f.licenseVerified,
+          licenseVerifiedDate: f.licenseVerifiedDate || null,
           hasRestrictions: f.hasRestrictions,
+          restrictionNotes: blankToNull(f.restrictionNotes),
           isActive: f.isActive,
-          ...(f.certificationDate ? { certificationDate: f.certificationDate } : {}),
-          ...(f.certificationExpiration ? { certificationExpiration: f.certificationExpiration } : {}),
-          ...(f.licenseTypeRequired ? { licenseTypeRequired: f.licenseTypeRequired } : {}),
-          ...(f.licenseVerifiedDate ? { licenseVerifiedDate: f.licenseVerifiedDate } : {}),
-          ...(f.restrictionNotes ? { restrictionNotes: f.restrictionNotes } : {}),
-          ...(f.notes ? { notes: f.notes } : {}),
+          notes: blankToNull(f.notes),
         };
         await apparatusOperatorService.updateOperator(editOperator.id, payload);
         toast.success('Operator updated');

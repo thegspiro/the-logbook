@@ -135,7 +135,7 @@ def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
     changed = getattr(member, "status_changed_at", None)
     if changed is None:
         return today
-    changed_date = changed
+    changed_date: date = changed
     if isinstance(changed, datetime):
         aware = changed if changed.tzinfo else changed.replace(tzinfo=timezone.utc)
         changed_date = aware.astimezone(tz).date()
@@ -334,6 +334,34 @@ class MemberServiceHistoryService:
         )
         self.db.add(period)
         return period
+
+    async def undo_separation(
+        self, member: User, separation_status: UserStatus
+    ) -> Optional[MemberServicePeriod]:
+        """Reopen the stint a mistaken drop closed, as if it never happened.
+
+        The reverse of :meth:`record_separation` for the undo-drop action
+        (W15-3): the latest stint closed into ``separation_status`` gets its end
+        and separation cleared, so the member's service runs on unbroken —
+        unlike a rejoin, which opens a new stint and leaves a gap. Returns
+        ``None`` when there is nothing to reopen (a stint is already open, or
+        the history was entered by hand without one closed by this drop).
+
+        Does not commit; the caller holds the member row's lock and changes
+        the status in the same transaction.
+        """
+        periods = await self.list_periods(
+            member.organization_id, member.id, for_update=True
+        )
+        if any(p.end_date is None for p in periods):
+            return None
+        closed = [p for p in periods if p.separation_status == separation_status.value]
+        if not closed:
+            return None
+        reopened = closed[-1]
+        reopened.end_date = None
+        reopened.separation_status = None
+        return reopened
 
     async def record_rejoin(
         self,
@@ -560,14 +588,12 @@ class MemberServiceHistoryService:
                 "have no end date."
             )
 
-        spans = sorted(
-            (
-                (p.start_date or hire_date, p.end_date or today)
-                for p in periods
-                if (p.start_date or hire_date) is not None
-            ),
-            key=lambda s: s[0],
-        )
+        spans: List[tuple[date, date]] = []
+        for p in periods:
+            span_start = p.start_date or hire_date
+            if span_start is not None:
+                spans.append((span_start, p.end_date or today))
+        spans.sort(key=lambda s: s[0])
         for (_a_start, a_end), (b_start, _b_end) in zip(spans, spans[1:]):
             if b_start <= a_end:
                 raise ValueError(

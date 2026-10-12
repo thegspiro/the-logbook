@@ -27,6 +27,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     saveCloseoutAttendance: (...a: unknown[]) => mockSaveAttendance(...a) as unknown,
     saveCloseoutCalls: (...a: unknown[]) => mockSaveCalls(...a) as unknown,
     finalizeShift: (...a: unknown[]) => mockFinalize(...a) as unknown,
+    // The attendance step lists pre-shift work; none on these shifts.
+    getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -468,9 +470,9 @@ describe('ShiftCloseoutWizard', () => {
       const fire = screen.getByLabelText('Fire calls');
       const other = screen.getByLabelText('Not categorised calls');
       // A pre-filled "0" is what turned a typed "4" into "40".
-      expect(ems.value).toBe('');
-      expect(fire.value).toBe('');
-      expect(other.value).toBe('');
+      expect(ems).toHaveDisplayValue('');
+      expect(fire).toHaveDisplayValue('');
+      expect(other).toHaveDisplayValue('');
     });
 
     it('reads as not-tracked until something is entered', async () => {
@@ -549,8 +551,8 @@ describe('ShiftCloseoutWizard', () => {
       renderWizard();
       const a = await screen.findByLabelText('Calls credited to Capt. Morales');
       const b = screen.getByLabelText('Calls credited to FF Okonjo');
-      expect(a.value).toBe('5');
-      expect(b.value).toBe('5');
+      expect(a).toHaveDisplayValue('5');
+      expect(b).toHaveDisplayValue('5');
     });
 
     it('warns when nobody was on every call', async () => {
@@ -574,7 +576,7 @@ describe('ShiftCloseoutWizard', () => {
       const a = await screen.findByLabelText('Calls credited to Capt. Morales');
       setValue(a, '99');
       fireEvent.blur(a);
-      expect(a.value).toBe('5');
+      expect(a).toHaveDisplayValue('5');
     });
 
     it('keeps an adjustment made before stepping back and saving again', async () => {
@@ -597,6 +599,12 @@ describe('ShiftCloseoutWizard', () => {
       expect(screen.getByLabelText('Calls credited to Capt. Morales')).toHaveValue(5);
     });
 
+    it('does not offer the fill-in while everyone already has every call', async () => {
+      renderWizard();
+      await screen.findByLabelText('Calls credited to Capt. Morales');
+      expect(screen.queryByRole('button', { name: /Give everyone all/ })).not.toBeInTheDocument();
+    });
+
     it('never sends a member more calls than the apparatus ran', async () => {
       const user = userEvent.setup();
       renderWizard();
@@ -612,5 +620,194 @@ describe('ShiftCloseoutWizard', () => {
         });
       });
     });
+  });
+});
+
+describe('correcting the call count on a reopened shift', () => {
+  // Reopened two days later with 3 calls on record, each member credited 3 at
+  // the first close-out. The officer raises EMS to 5. The saved per-member
+  // credit is kept on purpose — a reduction made for someone who left early
+  // must survive a reopen — so the crew shows 3 against a total of 5 and the
+  // officer needs one tap to bring everyone up.
+  const reopened = (reportedTotal: number) =>
+    baseState({
+      closeout_step: 1,
+      reported_call_count: reportedTotal,
+      reported_call_types: { ems: reportedTotal },
+      members: [
+        { ...baseState().members[0], call_count: 3 },
+        { ...baseState().members[1], call_count: 3 },
+      ],
+    });
+
+  beforeEach(() => {
+    mockGetState.mockReset();
+    mockSaveCalls.mockReset();
+    mockFinalize.mockReset();
+    mockGetState.mockResolvedValue(reopened(3));
+    mockSaveCalls.mockImplementation((_id: string, body: { reported_call_count: number | null }) =>
+      Promise.resolve(reopened(body.reported_call_count ?? 0))
+    );
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  const raiseEmsToFive = async (user: ReturnType<typeof userEvent.setup>) => {
+    setValue(await screen.findByLabelText('EMS calls'), '5');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Does this look right?');
+  };
+
+  it('keeps each member at the credit saved before the reopen, and says so', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await raiseEmsToFive(user);
+    expect(screen.getByLabelText('Calls credited to Capt. Morales')).toHaveValue(3);
+    expect(screen.getByLabelText('Calls credited to FF Okonjo')).toHaveValue(3);
+    expect(screen.getByText(/keeps the calls credited when this shift was last closed out/)).toBeInTheDocument();
+  });
+
+  it('brings the whole crew up to the new total in one tap', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await raiseEmsToFive(user);
+    await user.click(screen.getByRole('button', { name: 'Give everyone all 5 calls' }));
+    expect(screen.getByLabelText('Calls credited to Capt. Morales')).toHaveValue(5);
+    expect(screen.getByLabelText('Calls credited to FF Okonjo')).toHaveValue(5);
+    expect(screen.queryByRole('button', { name: /Give everyone all/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close out shift' }));
+    await waitFor(() => {
+      expect(mockFinalize).toHaveBeenCalledWith('sh1', undefined, {
+        member_call_counts: [
+          { user_id: 'u1', call_count: 5 },
+          { user_id: 'u2', call_count: 5 },
+        ],
+      });
+    });
+  });
+
+  it('keeps the fill-in after stepping back and saving the calls again', async () => {
+    // Re-hydrating from the save response would otherwise re-seed from the
+    // saved credit of 3 and undo the tap.
+    const user = userEvent.setup();
+    renderWizard();
+    await raiseEmsToFive(user);
+    await user.click(screen.getByRole('button', { name: 'Give everyone all 5 calls' }));
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Calls credited to FF Okonjo')).toHaveValue(5);
+    });
+    expect(screen.getByLabelText('Calls credited to Capt. Morales')).toHaveValue(5);
+  });
+});
+
+describe('the shared-call picker (SCHED-10)', () => {
+  // An MVA Medic 1 logged that Engine 5 also ran. Ticking it claims the call
+  // instead of logging a second one, so the department counts it once.
+  const mva = {
+    id: 'call-mva',
+    call_date: '2026-08-19',
+    call_type: 'ems',
+    source: 'manual',
+    apparatus_ids: ['medic-1'],
+    unit_labels: ['Medic 1'],
+    attached: false,
+  };
+
+  beforeEach(() => {
+    mockGetState.mockReset();
+    mockSaveAttendance.mockReset();
+    mockSaveCalls.mockReset();
+    mockFinalize.mockReset();
+    mockGetState.mockResolvedValue(baseState({ closeout_step: 1, attachable_calls: [mva] }));
+    mockSaveCalls.mockResolvedValue(baseState({ closeout_step: 2, attachable_calls: [mva] }));
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  it('lists the other unit’s call by unit, type and date', async () => {
+    renderWizard();
+    expect(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' })).not.toBeChecked();
+  });
+
+  it('counts a ticked call in the total and sends it as an attachment, not a typed call', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' }));
+    await user.type(screen.getByLabelText('Fire calls'), '2');
+    expect(total()).toBe('3');
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(mockSaveCalls).toHaveBeenCalledWith('sh1', {
+        reported_call_count: 3,
+        reported_call_types: { fire: 2 },
+        attach_call_ids: ['call-mva'],
+        detach_call_ids: undefined,
+      });
+    });
+  });
+
+  it('a tick alone answers the question — the total is not left blank', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    const box = await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' });
+    expect(total()).toBe('—');
+    await user.click(box);
+    expect(total()).toBe('1');
+  });
+
+  it('shows a claimed call ticked and keeps its type out of the typed rows', async () => {
+    // The server's tally includes the claimed EMS call. Seeding it into the
+    // EMS row as well would show it twice and save it as two calls.
+    mockGetState.mockResolvedValue(
+      baseState({
+        closeout_step: 1,
+        reported_call_count: 3,
+        reported_call_types: { ems: 2, fire: 1 },
+        attachable_calls: [{ ...mva, attached: true }],
+      })
+    );
+    renderWizard();
+    expect(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' })).toBeChecked();
+    expect(screen.getByLabelText('EMS calls')).toHaveValue(1);
+    expect(screen.getByLabelText('Fire calls')).toHaveValue(1);
+    expect(total()).toBe('3');
+  });
+
+  it('unticking a claimed call detaches it', async () => {
+    const user = userEvent.setup();
+    mockGetState.mockResolvedValue(
+      baseState({
+        closeout_step: 1,
+        reported_call_count: 1,
+        reported_call_types: { ems: 1 },
+        attachable_calls: [{ ...mva, attached: true }],
+      })
+    );
+    renderWizard();
+    await user.click(await screen.findByRole('checkbox', { name: 'Medic 1 · EMS · Aug 19' }));
+    // Nothing typed and nothing ticked reads as unanswered, the same as a
+    // fresh close-out; the server records it as no calls.
+    expect(total()).toBe('—');
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(mockSaveCalls).toHaveBeenCalledWith('sh1', {
+        reported_call_count: null,
+        reported_call_types: undefined,
+        attach_call_ids: undefined,
+        detach_call_ids: ['call-mva'],
+      });
+    });
+  });
+
+  it('shows no picker when no other unit logged a call', async () => {
+    mockGetState.mockResolvedValue(baseState({ closeout_step: 1 }));
+    renderWizard();
+    await screen.findByLabelText('EMS calls');
+    expect(screen.queryByText('Already logged by another unit')).not.toBeInTheDocument();
   });
 });

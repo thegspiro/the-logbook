@@ -16,8 +16,10 @@ tool call itself.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -27,8 +29,8 @@ from app.core.utils import generate_uuid
 class McpServiceKey(Base):
     __tablename__ = "mcp_service_keys"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -36,23 +38,31 @@ class McpServiceKey(Base):
     )
     # SHA-256 hex digest of the plaintext key. Unique so the by-hash lookup
     # during authentication returns at most one candidate.
-    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    key_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     # First characters of the plaintext key, shown in the UI so an
     # administrator can tell which key a client is configured with.
-    key_prefix = Column(String(24), nullable=False)
-    name = Column(String(100), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(24), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     # NULL means the key never expires ("lifetime").
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Set when an administrator revokes the key or mints its replacement.
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
-    revoked_by = Column(
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
@@ -66,4 +76,4 @@ class McpServiceKey(Base):
         expires = self.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=timezone.utc)
-        return expires > datetime.now(timezone.utc)
+        return bool(expires > datetime.now(timezone.utc))

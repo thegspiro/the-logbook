@@ -236,6 +236,15 @@ class AdminHoursBulkApproveResponse(BaseModel):
     approved_count: int
 
 
+class AdminHoursReviewSettingsResponse(BaseModel):
+    """The department's review rules, as the server resolves them."""
+
+    model_config = _RESPONSE_CONFIG
+
+    allow_self_approval: bool
+    resync_requeue_growth_percent: int
+
+
 class AdminHoursClosedStaleResponse(BaseModel):
     """Response from closing stale sessions"""
 

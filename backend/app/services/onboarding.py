@@ -135,8 +135,10 @@ class OnboardingService:
     #
     # Ordered by what a department can answer, not by what the system wants to
     # store. Identity is second so the remainder of setup belongs to a real
-    # account rather than to an anonymous 30-minute session; what the
-    # department uses (modules, ranks, stations, apparatus) precedes the
+    # account rather than to an anonymous 30-minute session. The encryption
+    # key is third: it is the one thing setup cannot finish without, and the
+    # account just created is the one recorded as having confirmed it. What
+    # the department uses (modules, ranks, stations, apparatus) precedes the
     # external integrations (email, storage, sign-in), which are the steps that
     # send an operator away to find credentials and are all skippable.
     #
@@ -160,69 +162,76 @@ class OnboardingService:
         },
         {
             "id": 3,
+            "name": "key_custody",
+            "title": "Encryption Key",
+            "description": "Confirm the encryption key is stored separately from the server and its backups",
+            "required": True,
+        },
+        {
+            "id": 4,
             "name": "modules",
             "title": "Select Modules",
             "description": "Choose which modules to enable for your organization",
             "required": False,
         },
         {
-            "id": 4,
+            "id": 5,
             "name": "roles",
             "title": "Ranks & Positions",
             "description": "Configure the rank ladder, positions and permissions",
             "required": False,
         },
         {
-            "id": 5,
+            "id": 6,
             "name": "stations",
             "title": "Stations",
             "description": "Add the stations beyond headquarters",
             "required": False,
         },
         {
-            "id": 6,
+            "id": 7,
             "name": "apparatus",
             "title": "Apparatus",
             "description": "Add your engines, trucks, and ambulances",
             "required": False,
         },
         {
-            "id": 7,
+            "id": 8,
             "name": "it_team",
             "title": "IT Team & Backup Access",
             "description": "Configure IT team and backup access",
             "required": False,
         },
         {
-            "id": 8,
+            "id": 9,
             "name": "email_platform",
             "title": "Email Platform",
             "description": "Select your email service provider",
             "required": False,
         },
         {
-            "id": 9,
+            "id": 10,
             "name": "email_config",
             "title": "Email Configuration",
             "description": "Configure email settings",
             "required": False,
         },
         {
-            "id": 10,
+            "id": 11,
             "name": "file_storage",
             "title": "File Storage",
             "description": "Choose your file storage solution",
             "required": False,
         },
         {
-            "id": 11,
+            "id": 12,
             "name": "authentication",
             "title": "Authentication",
             "description": "Select authentication method",
             "required": False,
         },
         {
-            "id": 12,
+            "id": 13,
             "name": "navigation",
             "title": "Navigation Layout",
             "description": "Choose your preferred navigation layout",
@@ -318,7 +327,8 @@ class OnboardingService:
                 .order_by(OnboardingStatus.created_at.desc())
                 .limit(1)
             )
-            return result.scalar_one_or_none()
+            onboarding_status: Optional[OnboardingStatus] = result.scalar_one_or_none()
+            return onboarding_status
         except (ProgrammingError, OperationalError):
             await self.db.rollback()
             return None
@@ -605,8 +615,31 @@ class OnboardingService:
         # a second org outright: a leaked/replayed in-progress session could
         # otherwise create several (each with its own default roles), and
         # downstream "first active org" logic would silently pick one and strand
-        # the rest.
-        any_org = await self.db.execute(select(Organization.id).limit(1))
+        # the rest -- including create_system_owner's own "first active org"
+        # lookup, so a second, attacker-created org that wins the race could
+        # receive the real operator's System Owner account instead of its own.
+        #
+        # This was a plain read-then-write with nothing serializing it -- the
+        # exact shape ONB3-30-3 found and fixed one call below, in
+        # create_system_owner (CLAUDE.md pitfall #27: "a capacity check is a
+        # read-then-write and needs the row locked"). Reproduced against a
+        # real database: two concurrent /organization calls both read "no
+        # organization exists" and both created one -- 2/2 succeeded, two
+        # rows in `organizations`. There is no Organization row to lock yet
+        # (the conflicting row does not exist until the loser has already
+        # lost), so onboarding_status is the parent to lock instead -- exactly
+        # one row from /start onward (ONBOARD-7's unique constraint), and
+        # always present by the time this method can be reached at all (the
+        # session required to call it is only mintable after /start has
+        # created it). The existence check must then be a locking read too,
+        # not a plain one: under InnoDB's default REPEATABLE READ, a loser
+        # that already took its own snapshot would still see zero
+        # organizations after winning the onboarding_status lock, and would
+        # create a second one anyway.
+        await self.db.execute(select(OnboardingStatus).with_for_update())
+        any_org = await self.db.execute(
+            select(Organization.id).limit(1).with_for_update()
+        )
         if any_org.scalar_one_or_none() is not None:
             raise ValueError("An organization has already been created")
 
@@ -811,7 +844,8 @@ class OnboardingService:
             if name:
                 query = query.where(FacilityType.name == name)
             result = await self.db.execute(query.limit(1))
-            return result.scalars().first()
+            facility_type: Optional[FacilityType] = result.scalars().first()
+            return facility_type
 
         facility_type = await _find_type(default_type_name) or await _find_type(None)
 
@@ -832,7 +866,8 @@ class OnboardingService:
             if name:
                 query = query.where(FacilityStatus.name == name)
             result = await self.db.execute(query.limit(1))
-            return result.scalars().first()
+            facility_status: Optional[FacilityStatus] = result.scalars().first()
+            return facility_status
 
         facility_status = await _find_status("Operational") or await _find_status(None)
 
@@ -1093,7 +1128,8 @@ class OnboardingService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def _deferred_rank(
         self,
@@ -1556,8 +1592,10 @@ class OnboardingService:
         if status.is_completed:
             raise ValueError("Onboarding is already completed")
 
-        # Verify all critical steps are completed (only organization and admin_user are required)
-        required_steps = ["organization", "admin_user"]
+        # Verify all critical steps are completed. key_custody is required
+        # because a lost encryption key cannot be recovered from any backup
+        # (docs/FILE_STORAGE_HARDENING.md decision 25).
+        required_steps = ["organization", "admin_user", "key_custody"]
         for step in required_steps:
             step_data = status.steps_completed.get(step)
             if not step_data or not step_data.get("completed", False):
@@ -1606,7 +1644,10 @@ class OnboardingService:
         """
         for step in cls.STEPS:
             if step["name"] == step_name:
-                return int(step["id"])
+                step_id = step["id"]
+                if not isinstance(step_id, int):
+                    raise TypeError(f"Onboarding step {step_name!r} has no integer id")
+                return step_id
         raise ValueError(f"Unknown onboarding step: {step_name}")
 
     async def _mark_step_completed(self, status: OnboardingStatus, step_name: str):

@@ -449,16 +449,24 @@ pre-deploy double-vote window (MED, in `docs/UPGRADING.md`), pooled
 
 Frontend round 2 (a follow-up PR after #2856 merged) fixed W50-24, 26, 29,
 30, 36, 43, 46, 50, 51, 52, 53, 56, 57, 58, 59, 61, 62, 63, 64, 73 and the
-frontend halves of fourteen backend fixes, each with a Vitest; gated clean,
-not re-driven on screen (usage limit). Open: W50-74 to W50-82 (NIT). The manual (`docs/training/14-elections.md`) corrected on five
+frontend halves of fourteen backend fixes, each with a Vitest. Re-driven on
+screen 2026-10-06 (two browsers, from each finding's own scenario): 20 of 23
+held; the three that did not — the list card's close stamp (the list endpoint
+never sent `closed_at`), the in-app receipt and focus after a nomination (both
+unmounted by a refetch's loading state) — and six more things seen on the way
+are W50-83 to W50-92: eight fixed with tests (W50-83, 84, 85 confirmed live
+again), W50-91 a re-observation of W50-11, W50-92 a note. Open: W50-74 to
+W50-82, W50-91, W50-92 (NIT/NOTE). The manual (`docs/training/14-elections.md`) corrected on five
 lines the drive contradicted.
 
 Gate: backend — the election suite 622 passed and the CI unit selection
 11977 passed after round 2 and the template carry; flake8, black and isort
 clean; each new Alembic revision proven up, down and up; `generate_schema_docs`
 and `check_route_permissions --strict` clean. Frontend — typecheck, eslint,
-prettier and the election suites (143 passed) clean after round 1; the
-round-2 gate is recorded when that round lands. Next: W51.
+prettier and the election suites (143 passed) clean after round 1; round 2
+and the re-drive — typecheck, eslint, prettier and the election suites (61
+page and ballot tests, 15 panel tests) clean; backend election suites 173
+passed, flake8, black and isort clean. Next: W51.
 
 - **Any forms or prospects run** — `scripts/clear_hidden_form_answers.py`
   still judges each rule one level deep (`FormsService._is_field_visible`,
@@ -816,7 +824,9 @@ row's Sign up / Confirm / Swap / Approve buttons had one shared name), W33-2
 a double-clicked Approve reviewed twice and showed an error), W33-5 (LOW — an
 answered request vanished behind the Pending filter with "No requests").
 Flagged: W33-4 (MED — an open swap is visible to nobody else and approving it
-moves nothing; the dialog's "Any member can pick it up" is corrected). Gate:
+moves nothing; the dialog's "Any member can pick it up" is corrected). W33-4
+fixed 2026-10-05 on the owner's decision: open swaps are offered to members
+cleared for the seat, and a pickup moves the assignment. Gate:
 typecheck, lint and the scheduling suites clean. Next: W34.
 
 ### W32 — Shift templates and patterns, then generate a month of shifts — 2026-09-29
@@ -913,7 +923,7 @@ requirements; `program_name` added to the summary), W26-3 (LOW — two refused
 requests per visit, an "Enrolled 0" and a Duplicate for a plain member), W26-4
 (LOW — the wizard's new-requirement fields had no accessible names; a raw
 position slug on the review), W26-5 (NIT — the enroll picker's selection was
-colour only). Flagged: W26-1 (MED — a linked requirement starts at zero,
+colour only). Flagged: W26-1 (MED — fixed 2026-10-06 on the owner's decision to read the compliance result live; a linked requirement starts at zero,
 contradicting the compliance figure on the same screen and the wizard's
 promise). Gate: typecheck, lint, flake8, black, isort and the touched suites
 clean. Next: W27.

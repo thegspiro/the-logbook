@@ -56,7 +56,9 @@ def _resolve(hostname: str, port: int) -> tuple[str, ...]:
             f"Could not resolve hostname '{hostname}'"
         ) from exc
 
-    addresses = tuple(dict.fromkeys(answer[4][0] for answer in answers))
+    # typeshed widens the sockaddr host to str | int; for the AF_INET/AF_INET6
+    # answers getaddrinfo yields it is always the address string.
+    addresses = tuple(dict.fromkeys(str(answer[4][0]) for answer in answers))
     if not addresses:
         raise UnsafeDestinationError(f"Could not resolve hostname '{hostname}'")
     return addresses

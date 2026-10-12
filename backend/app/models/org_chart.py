@@ -33,17 +33,11 @@ splitting them into sibling rows duplicated the responsibility text onto every
 one of them and made the chart claim a hierarchy the department does not have.
 """
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-)
-from sqlalchemy.orm import relationship
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -55,8 +49,8 @@ class OrgChartNode(Base):
 
     __tablename__ = "org_chart_nodes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -71,7 +65,7 @@ class OrgChartNode(Base):
     # roots, never silently delete a subtree. The service reparents children
     # onto the removed seat's own parent first, so this is the safety net for
     # a path that bypasses it.
-    parent_id = Column(
+    parent_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("org_chart_nodes.id", ondelete="SET NULL"),
         nullable=True,
@@ -79,10 +73,10 @@ class OrgChartNode(Base):
 
     # The real-life title, not an application role: "Fire Chief", "Training
     # Committee Chair", "Station 2 Captain".
-    title = Column(String(150), nullable=False)
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
 
     # What this seat is in charge of — the question the chart exists to answer.
-    responsibility = Column(Text, nullable=True)
+    responsibility: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # The corporate position this seat is linked to, if any. NULL is a seat
     # that names its people itself.
@@ -91,7 +85,7 @@ class OrgChartNode(Base):
     # error 1830 (pitfall #2). Deleting a role must leave the seat standing,
     # falling back to whoever leadership listed by hand, rather than deleting a
     # branch of the chart.
-    position_id = Column(
+    position_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("positions.id", ondelete="SET NULL"),
         nullable=True,
@@ -104,36 +98,40 @@ class OrgChartNode(Base):
     # A seat links to a position or a rank, never both: the editor asks one
     # question ("which role is this?") and two answers to it would leave the
     # box explaining itself twice.
-    rank_code = Column(String(100), nullable=True)
+    rank_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Published *office* contact details, e.g. training@department.org. These
     # are never derived from the holder's member record: the roster's personal
     # email and phone are governed by the organization's contact-visibility
     # setting, and the chart is read by the whole membership, so anything shown
     # here has to be something leadership deliberately chose to publish.
-    contact_email = Column(String(320), nullable=True)
-    contact_phone = Column(String(50), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Lets leadership build out a reorganisation before the membership sees it.
     # Unpublished seats are visible only to those who can manage the chart.
-    is_published = Column(Boolean, nullable=False, default=True, server_default="1")
+    is_published: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    holders = relationship(
+    holders: Mapped[list["OrgChartNodeHolder"]] = relationship(
         "OrgChartNodeHolder",
         back_populates="node",
         cascade="all, delete-orphan",
@@ -160,8 +158,8 @@ class OrgChartNodeHolder(Base):
 
     __tablename__ = "org_chart_node_holders"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    node_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    node_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("org_chart_nodes.id", ondelete="CASCADE"),
         nullable=False,
@@ -170,21 +168,25 @@ class OrgChartNodeHolder(Base):
     # The member holding the seat. SET NULL so removing a member leaves the
     # seat (and the other people in it) standing rather than deleting the row
     # out from under a co-chair.
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Name typed outright, for a holder with no login (a board member, a
     # volunteer chaplain) or to override how a linked member is announced.
-    display_name = Column(String(200), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
-    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    node = relationship("OrgChartNode", back_populates="holders")
+    node: Mapped["OrgChartNode"] = relationship(
+        "OrgChartNode", back_populates="holders"
+    )
 
     __table_args__ = (Index("ix_org_chart_node_holders_node", "node_id", "sort_order"),)
 

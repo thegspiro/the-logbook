@@ -10,6 +10,7 @@ import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
+import { useSkillsLogoutGuard } from '../../hooks/useSkillsLogoutGuard';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { useAnyOverlaySurface } from '../../hooks/useOverlaySurface';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
@@ -18,6 +19,7 @@ import { useScrollToTopOnNavigate } from '../../hooks/useScrollToTopOnNavigate';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
 import { BottomNavigation } from './BottomNavigation';
 import { HeldOfflineItemsNotice } from '../HeldOfflineItemsNotice';
+import { SystemNoticesBanner } from '../SystemNoticesBanner';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -40,6 +42,7 @@ interface AppLayoutProps {
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const mayLogOut = useSkillsLogoutGuard();
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   // Seeded from the last known value so the shell paints in the right shape
@@ -142,6 +145,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleLogoutConfirm = async () => {
+    setShowLogoutModal(false);
+    // Unsent skills evaluations are not purged without the examiner's say.
+    if (!(await mayLogOut())) return;
     await logout();
     sessionStorage.clear();
     void navigate('/login');
@@ -203,6 +209,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
         <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
           <main className="flex-1" id="main-content" tabIndex={-1}>
+            <SystemNoticesBanner />
             <HeldOfflineItemsNotice />
             <PageTransition>{content}</PageTransition>
           </main>
@@ -239,6 +246,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <CommandPalette />
       <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
       <main className="flex-1" id="main-content" tabIndex={-1}>
+        <SystemNoticesBanner />
         <HeldOfflineItemsNotice />
         <PageTransition>{content}</PageTransition>
       </main>

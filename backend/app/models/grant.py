@@ -8,12 +8,15 @@ models map to existing migration tables for campaigns, donors, donations,
 pledges, and fundraising events.
 """
 
+from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
+from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, Date, DateTime
+from sqlalchemy import JSON, Boolean, Date, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -251,66 +254,82 @@ class GrantOpportunity(Base):
 
     __tablename__ = "grant_opportunities"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Grant program details
-    name = Column(String(255), nullable=False)
-    agency = Column(String(255), nullable=True)
-    description = Column(Text, nullable=True)
-    eligible_uses = Column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    agency: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    eligible_uses: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Award range
-    typical_award_min = Column(Numeric(12, 2), nullable=True)
-    typical_award_max = Column(Numeric(12, 2), nullable=True)
+    typical_award_min: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    typical_award_max: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
 
     # Eligibility
-    eligibility_criteria = Column(Text, nullable=True)
+    eligibility_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Links
-    application_url = Column(String(500), nullable=True)
-    program_url = Column(String(500), nullable=True)
+    application_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    program_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Match requirements
-    match_required = Column(Boolean, nullable=False, default=False, server_default="0")
-    match_percentage = Column(Numeric(5, 2), nullable=True)
-    match_description = Column(String(500), nullable=True)
+    match_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    match_percentage: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(5, 2), nullable=True
+    )
+    match_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Deadline info
-    deadline_type = Column(
+    deadline_type: Mapped[Optional[DeadlineType]] = mapped_column(
         SQLEnum(DeadlineType, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    deadline_date = Column(Date, nullable=True)
-    recurring_schedule = Column(JSON, nullable=True)  # month/day patterns
+    deadline_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    recurring_schedule: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )  # month/day patterns
 
     # Requirements and metadata
-    required_documents = Column(JSON, nullable=True)  # list of strings
-    tags = Column(JSON, nullable=True)
+    required_documents: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )  # list of strings
+    tags: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Classification
-    category = Column(
+    category: Mapped[Optional[GrantCategory]] = mapped_column(
         SQLEnum(GrantCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    federal_program_code = Column(String(50), nullable=True)  # e.g. "AFG", "SAFER"
+    federal_program_code: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # e.g. "AFG", "SAFER"
 
     # Status
-    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
-    notes = Column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -330,7 +349,7 @@ class GrantOpportunity(Base):
     # expenditures, compliance tasks, notes) at worst — the opposite of
     # what the FK's own ondelete says. passive_deletes=True leaves this
     # entirely to the DB's own ON DELETE SET NULL.
-    applications = relationship(
+    applications: Mapped[list["GrantApplication"]] = relationship(
         "GrantApplication", back_populates="opportunity", passive_deletes=True
     )
 
@@ -353,26 +372,28 @@ class GrantApplication(Base):
 
     __tablename__ = "grant_applications"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Link to opportunity (optional - may be a custom/manual entry)
-    opportunity_id = Column(
+    opportunity_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("grant_opportunities.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Grant program info (for when no opportunity is linked)
-    grant_program_name = Column(String(255), nullable=True)
-    grant_agency = Column(String(255), nullable=True)
+    grant_program_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    grant_agency: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Pipeline status
-    application_status = Column(
+    application_status: Mapped[ApplicationStatus] = mapped_column(
         SQLEnum(ApplicationStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ApplicationStatus.RESEARCHING,
@@ -380,55 +401,67 @@ class GrantApplication(Base):
     )
 
     # Financial
-    amount_requested = Column(Numeric(12, 2), nullable=True)
-    amount_awarded = Column(Numeric(12, 2), nullable=True)
-    match_amount = Column(Numeric(12, 2), nullable=True)
-    match_source = Column(String(255), nullable=True)
+    amount_requested: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    amount_awarded: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    match_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    match_source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Timeline
-    application_deadline = Column(Date, nullable=True)
-    submitted_date = Column(Date, nullable=True)
-    award_date = Column(Date, nullable=True)
-    grant_start_date = Column(Date, nullable=True)
-    grant_end_date = Column(Date, nullable=True)
+    application_deadline: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    submitted_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    award_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    grant_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    grant_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Description
-    project_description = Column(Text, nullable=True)
-    narrative_summary = Column(Text, nullable=True)
+    project_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    narrative_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Structured data
-    budget_summary = Column(JSON, nullable=True)
-    key_contacts = Column(JSON, nullable=True)
+    budget_summary: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    key_contacts: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Federal tracking
-    federal_award_id = Column(String(100), nullable=True)
-    nfirs_compliant = Column(Boolean, nullable=True)
+    federal_award_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    nfirs_compliant: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Performance and reporting
-    performance_period_months = Column(Integer, nullable=True)
-    reporting_frequency = Column(
+    performance_period_months: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    reporting_frequency: Mapped[Optional[ReportingFrequency]] = mapped_column(
         SQLEnum(ReportingFrequency, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    next_report_due = Column(Date, nullable=True)
-    final_report_due = Column(Date, nullable=True)
+    next_report_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    final_report_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Set once `_generate_compliance_tasks` has generated the standard
     # report/closeout/inventory task set for this application (GF-14) — not
     # inferable from the tasks table's own contents, since `task_type` on a
     # manually-created task is fully client-chosen and can collide with the
     # auto-generated set's types.
-    compliance_tasks_generated = Column(
+    compliance_tasks_generated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Assignment
-    assigned_to = Column(
+    assigned_to: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Priority
-    priority = Column(
+    priority: Mapped[GrantPriority] = mapped_column(
         SQLEnum(GrantPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantPriority.MEDIUM,
@@ -436,23 +469,23 @@ class GrantApplication(Base):
     )
 
     # Link to fundraising campaign (for match campaigns)
-    linked_campaign_id = Column(
+    linked_campaign_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -460,19 +493,21 @@ class GrantApplication(Base):
     )
 
     # Relationships
-    opportunity = relationship("GrantOpportunity", back_populates="applications")
-    budget_items = relationship(
+    opportunity: Mapped[Optional["GrantOpportunity"]] = relationship(
+        "GrantOpportunity", back_populates="applications"
+    )
+    budget_items: Mapped[list["GrantBudgetItem"]] = relationship(
         "GrantBudgetItem", back_populates="application", cascade="all, delete-orphan"
     )
-    expenditures = relationship(
+    expenditures: Mapped[list["GrantExpenditure"]] = relationship(
         "GrantExpenditure", back_populates="application", cascade="all, delete-orphan"
     )
-    compliance_tasks = relationship(
+    compliance_tasks: Mapped[list["GrantComplianceTask"]] = relationship(
         "GrantComplianceTask",
         back_populates="application",
         cascade="all, delete-orphan",
     )
-    grant_notes = relationship(
+    grant_notes: Mapped[list["GrantNote"]] = relationship(
         "GrantNote",
         back_populates="application",
         cascade="all, delete-orphan",
@@ -481,7 +516,7 @@ class GrantApplication(Base):
         # in, which reads as a shuffled history rather than a timeline.
         order_by="desc(GrantNote.created_at)",
     )
-    linked_campaign = relationship(
+    linked_campaign: Mapped[Optional["FundraisingCampaign"]] = relationship(
         "FundraisingCampaign", foreign_keys=[linked_campaign_id]
     )
 
@@ -506,36 +541,46 @@ class GrantBudgetItem(Base):
 
     __tablename__ = "grant_budget_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    application_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("grant_applications.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Budget item details
-    category = Column(
+    category: Mapped[BudgetItemCategory] = mapped_column(
         SQLEnum(BudgetItemCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    description = Column(String(500), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Financial
-    amount_budgeted = Column(Numeric(12, 2), nullable=False)
-    amount_spent = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
-    amount_remaining = Column(Numeric(12, 2), nullable=True)
-    federal_share = Column(Numeric(12, 2), nullable=True)
-    local_match = Column(Numeric(12, 2), nullable=True)
+    amount_budgeted: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    amount_spent: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0, server_default="0"
+    )
+    amount_remaining: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    federal_share: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    local_match: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
 
     # Notes and ordering
-    notes = Column(Text, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -543,8 +588,12 @@ class GrantBudgetItem(Base):
     )
 
     # Relationships
-    application = relationship("GrantApplication", back_populates="budget_items")
-    expenditures = relationship("GrantExpenditure", back_populates="budget_item")
+    application: Mapped["GrantApplication"] = relationship(
+        "GrantApplication", back_populates="budget_items"
+    )
+    expenditures: Mapped[list["GrantExpenditure"]] = relationship(
+        "GrantExpenditure", back_populates="budget_item"
+    )
 
     __table_args__ = (
         Index("ix_grant_budget_items_application_id", "application_id"),
@@ -562,46 +611,46 @@ class GrantExpenditure(Base):
 
     __tablename__ = "grant_expenditures"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    application_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("grant_applications.id", ondelete="CASCADE"),
         nullable=False,
     )
-    budget_item_id = Column(
+    budget_item_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("grant_budget_items.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Expenditure details
-    description = Column(String(500), nullable=False)
-    amount = Column(Numeric(12, 2), nullable=False)
-    expenditure_date = Column(Date, nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    expenditure_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # Vendor / payment info
-    vendor = Column(String(255), nullable=True)
-    invoice_number = Column(String(100), nullable=True)
-    receipt_url = Column(String(500), nullable=True)
-    payment_method = Column(String(100), nullable=True)
+    vendor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Approval
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    approval_date = Column(Date, nullable=True)
+    approval_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -609,8 +658,12 @@ class GrantExpenditure(Base):
     )
 
     # Relationships
-    application = relationship("GrantApplication", back_populates="expenditures")
-    budget_item = relationship("GrantBudgetItem", back_populates="expenditures")
+    application: Mapped["GrantApplication"] = relationship(
+        "GrantApplication", back_populates="expenditures"
+    )
+    budget_item: Mapped[Optional["GrantBudgetItem"]] = relationship(
+        "GrantBudgetItem", back_populates="expenditures"
+    )
 
     __table_args__ = (
         Index("ix_grant_expenditures_application_id", "application_id"),
@@ -629,27 +682,27 @@ class GrantComplianceTask(Base):
 
     __tablename__ = "grant_compliance_tasks"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    application_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("grant_applications.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Task details
-    task_type = Column(
+    task_type: Mapped[ComplianceTaskType] = mapped_column(
         SQLEnum(ComplianceTaskType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Dates
-    due_date = Column(Date, nullable=False)
-    completed_date = Column(Date, nullable=True)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Status
-    status = Column(
+    status: Mapped[ComplianceTaskStatus] = mapped_column(
         SQLEnum(ComplianceTaskStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ComplianceTaskStatus.PENDING,
@@ -657,7 +710,7 @@ class GrantComplianceTask(Base):
     )
 
     # Priority
-    priority = Column(
+    priority: Mapped[GrantPriority] = mapped_column(
         SQLEnum(GrantPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantPriority.MEDIUM,
@@ -665,34 +718,38 @@ class GrantComplianceTask(Base):
     )
 
     # Assignment
-    assigned_to = Column(
+    assigned_to: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Reminders
-    reminder_days_before = Column(
+    reminder_days_before: Mapped[int] = mapped_column(
         Integer, nullable=False, default=14, server_default="14"
     )
-    last_reminder_sent = Column(DateTime(timezone=True), nullable=True)
+    last_reminder_sent: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Report guidance
-    report_template = Column(Text, nullable=True)
+    report_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Submission
-    submission_url = Column(String(500), nullable=True)
+    submission_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Attachments and notes
-    attachments = Column(JSON, nullable=True)
-    notes = Column(Text, nullable=True)
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -700,7 +757,9 @@ class GrantComplianceTask(Base):
     )
 
     # Relationships
-    application = relationship("GrantApplication", back_populates="compliance_tasks")
+    application: Mapped["GrantApplication"] = relationship(
+        "GrantApplication", back_populates="compliance_tasks"
+    )
 
     __table_args__ = (
         Index("ix_grant_compliance_tasks_application_id", "application_id"),
@@ -720,36 +779,40 @@ class GrantNote(Base):
 
     __tablename__ = "grant_notes"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    application_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    application_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("grant_applications.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Note details
-    note_type = Column(
+    note_type: Mapped[GrantNoteType] = mapped_column(
         SQLEnum(GrantNoteType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantNoteType.GENERAL,
         server_default="general",
     )
-    content = Column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Structured metadata (e.g. old_status, new_status for status changes)
     # "metadata" is reserved by SQLAlchemy Declarative; map via Column("metadata")
-    note_metadata = Column("metadata", JSON, nullable=True)
+    note_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        "metadata", JSON, nullable=True
+    )
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     # Relationships
-    application = relationship("GrantApplication", back_populates="grant_notes")
+    application: Mapped["GrantApplication"] = relationship(
+        "GrantApplication", back_populates="grant_notes"
+    )
 
     __table_args__ = (
         Index("ix_grant_notes_application_id", "application_id"),
@@ -773,69 +836,81 @@ class FundraisingCampaign(Base):
 
     __tablename__ = "fundraising_campaigns"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Campaign details
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    campaign_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    campaign_type: Mapped[CampaignType] = mapped_column(
         SQLEnum(CampaignType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Financial
-    goal_amount = Column(Numeric(12, 2), nullable=False)
-    current_amount = Column(Numeric(12, 2), nullable=False, server_default="0.00")
+    goal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    current_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0.00"
+    )
 
     # Timeline
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Status
-    status = Column(
+    status: Mapped[CampaignStatus] = mapped_column(
         SQLEnum(CampaignStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="draft",
     )
 
     # Public page
-    public_page_enabled = Column(Boolean, nullable=False, server_default="0")
-    public_page_url = Column(String(255), nullable=True)
-    hero_image_url = Column(String(500), nullable=True)
-    thank_you_message = Column(Text, nullable=True)
+    public_page_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    public_page_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    hero_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    thank_you_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Donation settings
-    allow_anonymous = Column(Boolean, nullable=False, server_default="1")
-    minimum_donation = Column(Numeric(10, 2), nullable=True)
-    suggested_amounts = Column(JSON, nullable=True)
-    custom_fields = Column(JSON, nullable=True)
+    allow_anonymous: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="1"
+    )
+    minimum_donation: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    suggested_amounts: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Active flag
-    active = Column(Boolean, nullable=False, server_default="1")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
 
     # Relationships
-    donations = relationship("Donation", back_populates="campaign")
-    pledges = relationship("Pledge", back_populates="campaign")
-    fundraising_events = relationship("FundraisingEvent", back_populates="campaign")
+    donations: Mapped[list["Donation"]] = relationship(
+        "Donation", back_populates="campaign"
+    )
+    pledges: Mapped[list["Pledge"]] = relationship("Pledge", back_populates="campaign")
+    fundraising_events: Mapped[list["FundraisingEvent"]] = relationship(
+        "FundraisingEvent", back_populates="campaign"
+    )
 
     __table_args__ = (
         Index("idx_fundraising_campaigns_status", "organization_id", "status"),
@@ -854,58 +929,68 @@ class Donor(Base):
 
     __tablename__ = "donors"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Contact info
-    first_name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)
-    email = Column(String(255), nullable=True)
-    phone = Column(String(20), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Address
-    address_line1 = Column(String(255), nullable=True)
-    address_line2 = Column(String(255), nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(50), nullable=True)
-    postal_code = Column(String(20), nullable=True)
-    country = Column(String(100), server_default="USA", nullable=True)
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(
+        String(100), server_default="USA", nullable=True
+    )
 
     # Donor classification
-    donor_type = Column(
+    donor_type: Mapped[DonorType] = mapped_column(
         SQLEnum(DonorType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="individual",
     )
-    company_name = Column(String(255), nullable=True)
+    company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Donation summary
-    total_donated = Column(Numeric(12, 2), nullable=False, server_default="0.00")
-    donation_count = Column(Integer, nullable=False, server_default="0")
-    first_donation_date = Column(Date, nullable=True)
-    last_donation_date = Column(Date, nullable=True)
+    total_donated: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0.00"
+    )
+    donation_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    first_donation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_donation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Notes and preferences
-    notes = Column(Text, nullable=True)
-    tags = Column(JSON, nullable=True)
-    communication_preferences = Column(JSON, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tags: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    communication_preferences: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Flags
-    is_anonymous = Column(Boolean, nullable=False, server_default="0")
-    active = Column(Boolean, nullable=False, server_default="1")
+    is_anonymous: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -913,8 +998,10 @@ class Donor(Base):
     )
 
     # Relationships
-    donations = relationship("Donation", back_populates="donor")
-    pledges = relationship("Pledge", back_populates="donor")
+    donations: Mapped[list["Donation"]] = relationship(
+        "Donation", back_populates="donor"
+    )
+    pledges: Mapped[list["Pledge"]] = relationship("Pledge", back_populates="donor")
 
     __table_args__ = (
         Index("idx_donors_user", "user_id"),
@@ -934,83 +1021,97 @@ class Donation(Base):
 
     __tablename__ = "donations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    campaign_id = Column(
+    campaign_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
         nullable=True,
     )
-    donor_id = Column(
+    donor_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("donors.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Financial
-    amount = Column(Numeric(10, 2), nullable=False)
-    currency = Column(String(3), nullable=False, server_default="USD")
-    donation_date = Column(DateTime(timezone=True), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="USD"
+    )
+    donation_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     # Payment
-    payment_method = Column(
+    payment_method: Mapped[PaymentMethod] = mapped_column(
         SQLEnum(PaymentMethod, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    payment_status = Column(
+    payment_status: Mapped[PaymentStatus] = mapped_column(
         SQLEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="completed",
     )
-    transaction_id = Column(String(255), nullable=True)
-    check_number = Column(String(50), nullable=True)
+    transaction_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    check_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Recurring
-    is_recurring = Column(Boolean, nullable=False, server_default="0")
-    recurring_frequency = Column(
+    is_recurring: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    recurring_frequency: Mapped[Optional[RecurringFrequency]] = mapped_column(
         SQLEnum(RecurringFrequency, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
 
     # Anonymous / display
-    is_anonymous = Column(Boolean, nullable=False, server_default="0")
-    donor_name = Column(String(255), nullable=True)
-    donor_email = Column(String(255), nullable=True)
+    is_anonymous: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    donor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    donor_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Dedication
-    dedication_type = Column(
+    dedication_type: Mapped[Optional[DedicationType]] = mapped_column(
         SQLEnum(DedicationType, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
-    dedication_name = Column(String(255), nullable=True)
+    dedication_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Receipt and thank you tracking
-    receipt_sent = Column(Boolean, nullable=False, server_default="0")
-    thank_you_sent = Column(Boolean, nullable=False, server_default="0")
+    receipt_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    thank_you_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
 
     # Tax
-    tax_deductible = Column(Boolean, nullable=False, server_default="1")
+    tax_deductible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="1"
+    )
 
     # Custom fields
-    custom_fields = Column(JSON, nullable=True)
+    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Recorded by
-    recorded_by = Column(
+    recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
 
     # Metadata
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1018,8 +1119,10 @@ class Donation(Base):
     )
 
     # Relationships
-    campaign = relationship("FundraisingCampaign", back_populates="donations")
-    donor = relationship("Donor", back_populates="donations")
+    campaign: Mapped[Optional["FundraisingCampaign"]] = relationship(
+        "FundraisingCampaign", back_populates="donations"
+    )
+    donor: Mapped[Optional["Donor"]] = relationship("Donor", back_populates="donations")
 
     __table_args__ = (
         Index("idx_donations_campaign", "campaign_id"),
@@ -1040,54 +1143,62 @@ class Pledge(Base):
 
     __tablename__ = "pledges"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    campaign_id = Column(
+    campaign_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
         nullable=True,
     )
-    donor_id = Column(
+    donor_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("donors.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Financial
-    pledged_amount = Column(Numeric(10, 2), nullable=False)
-    fulfilled_amount = Column(Numeric(10, 2), nullable=False, server_default="0.00")
+    pledged_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    fulfilled_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, server_default="0.00"
+    )
 
     # Dates
-    pledge_date = Column(Date, nullable=False)
-    due_date = Column(Date, nullable=True)
+    pledge_date: Mapped[date] = mapped_column(Date, nullable=False)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Status
-    status = Column(
+    status: Mapped[PledgeStatus] = mapped_column(
         SQLEnum(PledgeStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="pending",
     )
 
     # Schedule and reminders
-    payment_schedule = Column(JSON, nullable=True)
-    reminder_enabled = Column(Boolean, nullable=False, server_default="1")
-    last_reminder_sent = Column(DateTime(timezone=True), nullable=True)
+    payment_schedule: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    reminder_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="1"
+    )
+    last_reminder_sent: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1095,8 +1206,10 @@ class Pledge(Base):
     )
 
     # Relationships
-    campaign = relationship("FundraisingCampaign", back_populates="pledges")
-    donor = relationship("Donor", back_populates="pledges")
+    campaign: Mapped[Optional["FundraisingCampaign"]] = relationship(
+        "FundraisingCampaign", back_populates="pledges"
+    )
+    donor: Mapped[Optional["Donor"]] = relationship("Donor", back_populates="pledges")
 
     __table_args__ = (
         Index("idx_pledges_campaign", "campaign_id"),
@@ -1116,65 +1229,79 @@ class FundraisingEvent(Base):
 
     __tablename__ = "fundraising_events"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    campaign_id = Column(
+    campaign_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("fundraising_campaigns.id", ondelete="CASCADE"),
         nullable=True,
     )
-    event_id = Column(
+    event_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("events.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Event details
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    event_type = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    event_type: Mapped[FundraisingEventType] = mapped_column(
         SQLEnum(FundraisingEventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    event_date = Column(DateTime(timezone=True), nullable=False)
-    location = Column(String(300), nullable=True)
+    event_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # Ticketing
-    ticket_price = Column(Numeric(10, 2), nullable=True)
-    max_attendees = Column(Integer, nullable=True)
-    current_attendees = Column(Integer, nullable=False, server_default="0")
+    ticket_price: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    max_attendees: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_attendees: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
 
     # Financial
-    revenue_goal = Column(Numeric(12, 2), nullable=True)
-    actual_revenue = Column(Numeric(12, 2), nullable=False, server_default="0.00")
-    expenses = Column(Numeric(12, 2), nullable=False, server_default="0.00")
+    revenue_goal: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    actual_revenue: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0.00"
+    )
+    expenses: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0.00"
+    )
 
     # Status
-    status = Column(
+    status: Mapped[FundraisingEventStatus] = mapped_column(
         SQLEnum(FundraisingEventStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="planning",
     )
 
     # Registration
-    registration_url = Column(String(500), nullable=True)
+    registration_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Sponsors and notes
-    sponsors = Column(JSON, nullable=True)
-    notes = Column(Text, nullable=True)
+    sponsors: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -1182,7 +1309,9 @@ class FundraisingEvent(Base):
     )
 
     # Relationships
-    campaign = relationship("FundraisingCampaign", back_populates="fundraising_events")
+    campaign: Mapped[Optional["FundraisingCampaign"]] = relationship(
+        "FundraisingCampaign", back_populates="fundraising_events"
+    )
 
     __table_args__ = (
         Index("idx_fundraising_events_campaign", "campaign_id"),

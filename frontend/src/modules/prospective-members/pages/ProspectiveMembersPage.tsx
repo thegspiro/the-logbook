@@ -42,7 +42,7 @@ import { ConversionModal } from '../components/ConversionModal';
 import TargetRolePicker from '../components/TargetRolePicker';
 import { applicantService, eventLinkService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult, ProspectSourceEvent } from '../types';
-import { isValidEmail, getInitials } from '../utils';
+import { isValidEmail, getInitials, isConvertStage } from '../utils';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -379,11 +379,10 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
   };
 
+  // The backend's final-stage flag decides Convert vs Advance (pitfall #29).
   const isLastStage = useMemo(() => {
     if (!currentPipeline || !currentApplicant) return false;
-    const sortedStages = [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order);
-    const lastStage = sortedStages[sortedStages.length - 1];
-    return lastStage?.id === currentApplicant.current_stage_id;
+    return isConvertStage(currentPipeline.stages, currentApplicant.current_stage_id);
   }, [currentPipeline, currentApplicant]);
 
   const isFirstStage = useMemo(() => {

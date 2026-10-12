@@ -365,7 +365,7 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
     finally:
         _leave_registration(key, registration)
 
-    token = (result or {}).get("access_token")
+    token: Optional[str] = (result or {}).get("access_token")
     if token:
         # The directory is reachable again; nothing should be held back.
         _clear_failure(key)

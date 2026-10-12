@@ -167,3 +167,11 @@ export function describePackageSendError(err: unknown, recipientEmails: string[]
   }
   return getErrorMessage(err, fallback);
 }
+
+/**
+ * Whether ballot emails can be sent: the emailed ballot carries ballot items
+ * and plain positions (each position served as an item since the 2026-10-05
+ * ballot convergence). Candidates with no race at all have nothing to mail.
+ */
+export const electionCanEmailBallots = (election: Pick<Election, 'ballot_items' | 'positions'>): boolean =>
+  (election.ballot_items?.length ?? 0) > 0 || (election.positions?.length ?? 0) > 0;

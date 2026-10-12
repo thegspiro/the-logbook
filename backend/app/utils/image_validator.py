@@ -161,7 +161,7 @@ class ImageValidator:
         This prevents attackers from renaming malicious files.
         """
         try:
-            mime_type = self.magic.from_buffer(image_bytes)
+            mime_type: str = self.magic.from_buffer(image_bytes)
 
             if mime_type not in self.ALLOWED_MIME_TYPES:
                 raise ImageValidationError(
@@ -327,6 +327,16 @@ def get_image_validator() -> ImageValidator:
     if _validator_instance is None:
         _validator_instance = ImageValidator()
     return _validator_instance
+
+
+def decode_logo_base64(base64_data: str) -> bytes:
+    """Raw bytes of a base64 logo (a ``data:`` URI prefix is allowed).
+
+    Raises ``ImageValidationError`` for input that is not valid base64. Used
+    to malware-scan the file exactly as it was uploaded, before validation
+    re-encodes it.
+    """
+    return get_image_validator()._decode_base64(base64_data)
 
 
 # Convenience function for FastAPI endpoints

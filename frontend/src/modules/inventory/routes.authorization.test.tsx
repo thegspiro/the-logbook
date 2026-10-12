@@ -14,7 +14,6 @@
  * door widened, and what is behind the door did not.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes } from 'react-router';
 

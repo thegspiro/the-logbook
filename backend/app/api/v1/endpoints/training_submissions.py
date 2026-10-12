@@ -7,7 +7,6 @@ and self-report configuration management.
 
 import asyncio
 import os
-import uuid as uuid_lib
 from datetime import datetime, timezone
 
 from fastapi import (
@@ -32,10 +31,8 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
-from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.training import SubmissionStatus, TrainingSubmission
 from app.models.user import User
@@ -48,9 +45,14 @@ from app.schemas.training_submission import (
     TrainingSubmissionUpdate,
     sanitize_attachments,
 )
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import (
+    FileRules,
+    StorageArea,
+    stored_file_response,
+)
 from app.services.training_submission_service import TrainingSubmissionService
-from app.utils.mime_validation import detect_mime_type
-from app.utils.upload_limits import read_upload_limited
+from app.utils import download_names
 
 router = APIRouter()
 
@@ -157,7 +159,7 @@ async def create_submission_with_attachment(
         # {field, message} body as every other validation failure in the app.
         raise RequestValidationError(e.errors()) from e
 
-    stored = await _store_attachment_file(file, current_user)
+    stored = await _store_attachment_file(file, current_user, db)
 
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to create submission"):
@@ -318,7 +320,11 @@ async def delete_submission(
             submission_id, current_user.organization_id
         )
         stored_paths = (
-            _confined_attachment_paths(submission.attachments) if submission else []
+            _confined_attachment_paths(
+                submission.attachments, submission.organization_id
+            )
+            if submission
+            else []
         )
 
         await service.delete_submission(
@@ -479,24 +485,22 @@ async def submit_draft(
 
 
 # A member attaches proof of the training they are reporting — a certificate
-# PDF or, far more often, a phone photo of a paper card. MIME type is verified
-# from the file's magic bytes, never the client-supplied Content-Type.
+# PDF or, far more often, a phone photo of a paper card. Stored, scanned and
+# confined by FileStorageService under the organization's self-reports area.
 #
-# Nested *inside* the training-record attachment root on purpose: approval
-# copies these attachment dicts verbatim onto the TrainingRecord, and the
-# record download route confines paths to TRAINING_ATTACHMENT_DIR. A sibling
-# directory would leave every approved member's certificate 404ing from their
-# own training history. tests/test_training_submission_drafts_attachments.py
-# asserts the nesting so a later tidy-up cannot quietly break it.
-SUBMISSION_ATTACHMENT_DIR = os.path.join(
-    TRAINING_ATTACHMENT_DIR, "self_reported_submissions"
+# Approval copies these attachment dicts verbatim onto the TrainingRecord, so
+# the record download route accepts the SELF_REPORTS area as well as its own;
+# without that every approved member's certificate would 404 from their own
+# training history.
+SUBMISSION_FILE_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+    },
+    max_bytes=10 * 1024 * 1024,
+    description="PDF, JPG, or PNG",
 )
-ALLOWED_SUBMISSION_ATTACHMENT_MIME = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
-MAX_SUBMISSION_ATTACHMENT_BYTES = 10 * 1024 * 1024
 # Statuses in which the submitter may still change what they sent. Mirrors the
 # service's edit/delete guard: once an officer has ruled, the evidence is
 # frozen with the decision.
@@ -541,79 +545,55 @@ def _remove_quietly(path: str) -> None:
         pass
 
 
-def _confined_path(attachment) -> str | None:
-    """Real path of a stored attachment, or None if it escapes the root.
+def _confined_path(attachment, organization_id) -> str | None:
+    """Real path of a stored attachment, or None if it escapes the org's area.
 
-    file_path is server-generated, but the column is client-writable through
-    the create/update schemas — this is what keeps that from becoming an
-    arbitrary file read (or, on delete, an arbitrary unlink).
+    file_path is server-generated, but the column round-trips through JSON —
+    this is what keeps a tampered value from becoming an arbitrary file read
+    (or, on delete, an arbitrary unlink). Confined to the submission's *own
+    organization*: a root-level check would still serve another tenant's
+    certificate.
     """
-    if not isinstance(attachment, dict) or not attachment.get("file_path"):
+    if not isinstance(attachment, dict):
         return None
-    real_path = os.path.realpath(attachment["file_path"])
-    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
-        return None
-    return real_path
+    return file_storage.resolve(
+        attachment.get("file_path"), organization_id, StorageArea.SELF_REPORTS
+    )
 
 
-def _confined_attachment_paths(attachments) -> list[str]:
-    paths = [_confined_path(a) for a in attachments or []]
+def _confined_attachment_paths(attachments, organization_id) -> list[str]:
+    paths = [_confined_path(a, organization_id) for a in attachments or []]
     return [path for path in paths if path]
 
 
-async def _store_attachment_file(file: UploadFile, current_user: User) -> dict:
-    """Validate an upload and write it under the org's attachment directory.
+async def _store_attachment_file(
+    file: UploadFile,
+    current_user: User,
+    db: AsyncSession,
+    submission_id: str | None = None,
+) -> dict:
+    """Validate, malware-scan and store an upload; return its attachment dict.
 
     MIME type comes from the file's magic bytes, never the client-supplied
     Content-Type, and the stored name is server-generated with a magic-derived
     extension so a double extension (cert.pdf.exe) cannot survive the trip.
+    A create-with-attachment has no submission id yet, so its file sits
+    directly under the organization's self-reports area.
     """
-    try:
-        content = await read_upload_limited(file, MAX_SUBMISSION_ATTACHMENT_BYTES)
-    except ValueError:
-        raise CodedHTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 10MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    try:
-        detected_mime = detect_mime_type(content)
-    except RuntimeError:
-        raise CodedHTTPException(
-            status_code=503,
-            detail="File validation is unavailable. Please try again later.",
-            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
-        )
-
-    ext = ALLOWED_SUBMISSION_ATTACHMENT_MIME.get(detected_mime)
-    if not ext:
-        raise CodedHTTPException(
-            status_code=400,
-            detail=(
-                f"File type not allowed (detected: {detected_mime}). "
-                "Allowed: PDF, JPG, or PNG."
-            ),
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    org_dir = os.path.join(SUBMISSION_ATTACHMENT_DIR, str(current_user.organization_id))
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, stored_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as handle:
-            handle.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
-
+    stored = await file_storage.FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.SELF_REPORTS,
+        rules=SUBMISSION_FILE_RULES,
+        user=current_user,
+        record_id=submission_id,
+        upload_kind="self_report_certificate",
+    )
     return {
-        "file_name": file.filename or stored_name,
-        "file_path": file_path,
-        "file_type": detected_mime,
-        "file_size": len(content),
+        "file_name": stored.original_name,
+        "file_path": stored.path,
+        "file_type": stored.mime_type,
+        "file_size": stored.size,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": str(current_user.id),
     }
@@ -641,7 +621,9 @@ async def upload_submission_attachment(
             detail="Cannot attach to a submission that has been approved or rejected.",
         )
 
-    attachment = await _store_attachment_file(file, current_user)
+    attachment = await _store_attachment_file(
+        file, current_user, db, submission_id=str(submission.id)
+    )
 
     # Plain JSON column — reassign rather than append in place so SQLAlchemy
     # detects the change (CLAUDE.md pitfall #12).
@@ -683,7 +665,6 @@ async def download_submission_attachment(
     current_user: User = Depends(get_current_user),
 ):
     """Stream one stored attachment by its index."""
-    from fastapi.responses import FileResponse
 
     submission = await _load_submission_for_attachment(db, submission_id, current_user)
     attachments = submission.attachments or []
@@ -691,17 +672,27 @@ async def download_submission_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = attachments[index]
-    real_path = _confined_path(attachment)
+    real_path = _confined_path(attachment, submission.organization_id)
     if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     if not await asyncio.to_thread(os.path.isfile, real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
-    return FileResponse(
+    filename = download_names.descriptive_filename(
+        submission.completion_date,
+        await download_names.member_name_for(
+            db, submission.submitted_by, submission.organization_id
+        ),
+        submission.course_name,
+        extension=download_names.stored_extension(real_path),
+        fallback=download_names.original_stem(attachment.get("file_name"))
+        or "certificate",
+    )
+    return stored_file_response(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(real_path),
+        filename=filename,
     )
 
 
@@ -749,6 +740,6 @@ async def delete_submission_attachment(
     flag_modified(submission, "attachments")
     await db.commit()
 
-    removed_path = _confined_path(removed)
+    removed_path = _confined_path(removed, submission.organization_id)
     if removed_path:
         await asyncio.to_thread(_remove_quietly, removed_path)

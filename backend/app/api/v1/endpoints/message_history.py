@@ -34,6 +34,7 @@ from app.services.email_service import (
 )
 from app.services.email_theme import ACCENT_GREEN
 from app.services.officer_service import OfficerService
+from app.utils.email_attachments import confined_template_attachments
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
@@ -138,9 +139,11 @@ async def send_test_email(
 
     subject = "Test Email from The Logbook"
     template_type = None
-    attachment_paths: list[str] = []
+    attachment_paths: list[tuple[str, str]] = []
     html_body = _build_test_html(organization)
-    text_body = "This is a test email from The Logbook. If you received this, your email configuration is working correctly."
+    text_body: str | None = (
+        "This is a test email from The Logbook. If you received this, your email configuration is working correctly."
+    )
 
     # If a template_id was provided, render that template instead
     if body.template_id:
@@ -190,7 +193,9 @@ async def send_test_email(
         # The same files the real send attaches (EmailService.send_welcome_email
         # uses this rule), so a test shows whether they arrive and fit.
         if template.allow_attachments and template.attachments:
-            attachment_paths = [a.storage_path for a in template.attachments]
+            attachment_paths = confined_template_attachments(
+                template.attachments, current_user.organization_id
+            )
 
     # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)

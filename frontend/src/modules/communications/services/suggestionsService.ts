@@ -17,6 +17,8 @@ import type {
   BoardSort,
   DispositionUpdate,
   MySuggestionSummary,
+  PickKind,
+  PickOption,
   ReviewerOptions,
   ReviewFilter,
   ReviewSuggestionDetail,
@@ -35,14 +37,34 @@ export const suggestionsService = {
     return asArray(response.data);
   },
 
+  /**
+   * The whole list for a pick question, filtered in the browser. Never a
+   * search request: what a member types is who they are reporting, and a
+   * query string would put it in the access log beside their address.
+   */
+  async pickOptions(kind: PickKind): Promise<PickOption[]> {
+    const response = await api.get<PickOption[]>('/suggestions/pick-options', { params: { kind } });
+    return asArray(response.data);
+  },
+
   async submit(
     boxId: string,
-    data: { title: string; details: string; anonymous: boolean; screenshots: File[] }
+    data: {
+      title: string;
+      details: string;
+      anonymous: boolean;
+      screenshots: File[];
+      /** Intake answers keyed by question id; only the questions shown. */
+      answers?: Record<string, string> | undefined;
+    }
   ): Promise<SubmissionReceipt> {
     const form = new FormData();
     form.append('title', data.title);
     form.append('details', data.details);
     form.append('anonymous', data.anonymous ? 'true' : 'false');
+    if (data.answers && Object.keys(data.answers).length > 0) {
+      form.append('answers', JSON.stringify(data.answers));
+    }
     data.screenshots.forEach((file) => form.append('screenshots', file));
     const response = await api.post<SubmissionReceipt>(`/suggestions/boxes/${boxId}/submissions`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },

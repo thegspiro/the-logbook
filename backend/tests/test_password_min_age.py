@@ -70,6 +70,7 @@ def _service():
     svc = AuthService(db)
     # Session revocation hits the DB; not under test here.
     svc._revoke_all_user_sessions = AsyncMock(return_value=0)
+    svc._revoke_mcp_connections = AsyncMock(return_value=0)
     return svc
 
 

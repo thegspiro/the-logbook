@@ -24,6 +24,18 @@ export function renderWithRouter(ui: ReactElement, options?: Omit<RenderOptions,
 }
 
 /**
+ * The element at `index` of a query's results, failing the test when the query
+ * found fewer — rather than handing `undefined` on to the next interaction.
+ */
+export function nth<T>(items: readonly T[], index: number): T {
+  const item = items[index];
+  if (item === undefined) {
+    throw new Error(`Expected at least ${index + 1} match(es), found ${items.length}`);
+  }
+  return item;
+}
+
+/**
  * Mock event data for testing
  */
 export const mockEvent = {

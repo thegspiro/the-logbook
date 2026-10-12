@@ -5,7 +5,7 @@
  * Uses react-hook-form + zod for validation.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -14,11 +14,11 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { purchaseRequestService } from '../services/api';
+import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority } from '../types';
 import type { PurchaseRequest } from '../types';
-import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { blankToNull } from '@/utils/formValues';
 
@@ -85,18 +85,7 @@ const PurchaseRequestFormPage: React.FC = () => {
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const {
-    fiscalYears,
-    budgets,
-    budgetCategories,
-    selectedPurchaseRequest,
-    isLoading,
-    fetchFiscalYears,
-    fetchBudgets,
-    fetchBudgetCategories,
-    fetchPurchaseRequest,
-    createPurchaseRequest,
-  } = useFinanceStore();
+  const { selectedPurchaseRequest, isLoading, fetchPurchaseRequest, createPurchaseRequest } = useFinanceStore();
 
   const {
     register,
@@ -117,11 +106,10 @@ const PurchaseRequestFormPage: React.FC = () => {
     },
   });
 
-  // Load reference data
-  useEffect(() => {
-    void fetchFiscalYears();
-    void fetchBudgetCategories();
-  }, [fetchFiscalYears, fetchBudgetCategories]);
+  // Fiscal years and the chosen year's budget lines come from the narrow
+  // options endpoints, which a member holding only finance.request can read.
+  const fiscalYearId = watch('fiscalYearId');
+  const { fiscalYears, budgetOptions } = useRequestFormOptions(fiscalYearId);
 
   // Load purchase request for edit mode
   useEffect(() => {
@@ -155,23 +143,6 @@ const PurchaseRequestFormPage: React.FC = () => {
       });
     }
   }, [isEdit, selectedPurchaseRequest, reset]);
-
-  // Fetch budgets when fiscal year changes
-  const fiscalYearId = watch('fiscalYearId');
-  useEffect(() => {
-    if (fiscalYearId) {
-      void fetchBudgets({ fiscalYearId });
-    }
-  }, [fiscalYearId, fetchBudgets]);
-
-  // Build category lookup for budget labels
-  const categoryMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const cat of budgetCategories) {
-      map.set(cat.id, cat.name);
-    }
-    return map;
-  }, [budgetCategories]);
 
   const onSubmit = async (data: PurchaseRequestFormData) => {
     try {
@@ -335,11 +306,9 @@ const PurchaseRequestFormPage: React.FC = () => {
             <label className={labelClass}>Budget</label>
             <select className={selectClass} {...register('budgetId')}>
               <option value="">No budget linked</option>
-              {budgets.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered))}{' '}
-                  remaining
+              {budgetOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {budgetOptionLabel(option)}
                 </option>
               ))}
             </select>

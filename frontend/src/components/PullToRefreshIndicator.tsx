@@ -33,7 +33,7 @@ export const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
       aria-live="polite"
       aria-label={refreshing ? 'Refreshing' : 'Pull to refresh'}
     >
-      <div className="bg-theme-surface border-theme-surface-border rounded-full border p-2 shadow-lg">
+      <div className="bg-theme-surface-modal border-theme-surface-border rounded-full border p-2 shadow-lg">
         {refreshing ? (
           <Loader2 className="h-5 w-5 animate-spin text-blue-500" aria-hidden="true" />
         ) : (

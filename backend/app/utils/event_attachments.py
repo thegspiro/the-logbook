@@ -1,9 +1,10 @@
 """Org-scoped containment for event attachment files (EV-17).
 
 Event attachments are uploaded through ``POST /events/{id}/attachments``,
-which writes the bytes to ``<ATTACHMENT_UPLOAD_DIR>/<organization_id>/
-<event_id>/<uuid><ext>`` and appends server-authored metadata — including
-``file_path`` — to the event's ``attachments`` JSON column. That column is
+which writes the bytes to ``<uploads>/<organization_id>/event-attachments/
+<event_id>/<uuid><ext>`` (``FileStorageService``) and appends server-authored
+metadata — including ``file_path`` — to the event's ``attachments`` JSON
+column. That column is
 also writable by the *generic* event create/update payloads
 (``EventCreate``/``EventUpdate``/``RecurringEventCreate`` all declare
 ``attachments: List[Dict[str, str]]``), and those paths stored whatever
@@ -16,10 +17,10 @@ this exploitable:
   ``file_path`` that is not inside the caller's own upload subtree, so a
   foreign path never reaches the column (CLAUDE.md pitfall #14c: validate
   client-supplied references against the caller's org *before* persisting).
-* **Read side** — ``assert_attachment_in_org`` confines download/delete to that
-  same subtree. Confining to the shared ``ATTACHMENT_UPLOAD_DIR`` root is not
-  enough: every organization's files live under that root, so a root-level
-  check passes a path pointing at *another* organization's subdirectory. This
+* **Read side** — ``is_path_in_org`` confines download/delete to that same
+  subtree. Confining to a shared root is not enough: every organization's
+  files live under it, so a root-level check passes a path pointing at
+  *another* organization's subdirectory. This
   mirrors the identical fix already made for documents (DOC-24) in
   ``api/v1/endpoints/documents.py``.
 
@@ -29,19 +30,15 @@ Copying an attachment between events of the *same* organization stays legal —
 recurring-occurrence generation and event duplication both do it deliberately.
 """
 
-import os
 from typing import Any, Iterable, Optional
 
-ATTACHMENT_UPLOAD_DIR = "/app/uploads/event-attachments"
-
-
-def org_attachment_root(organization_id: Any) -> str:
-    """Resolved filesystem root that holds *organization_id*'s attachments."""
-    return os.path.realpath(os.path.join(ATTACHMENT_UPLOAD_DIR, str(organization_id)))
+from app.services.file_storage_service import StorageArea, resolve
 
 
 def is_path_in_org(file_path: Any, organization_id: Any) -> bool:
-    """Return True iff *file_path* resolves inside the org's own upload subtree.
+    """Return True iff *file_path* resolves inside the org's own attachment
+    storage — the org-first layout or the legacy
+    ``event-attachments/<org>/`` tree (``FileStorageService.resolve``).
 
     Fails **closed**: an empty path, a missing organization, a value that is
     not a string, or anything that resolves outside the subtree (``..``
@@ -52,15 +49,13 @@ def is_path_in_org(file_path: Any, organization_id: Any) -> bool:
     typed ``List[Dict[str, Any]]`` — it has to be, because the upload handler
     writes ``file_size`` as an int and ``description`` as None — so a create
     request may legitimately reach here carrying ``{"file_path": 1}``. Without
-    this, ``os.path.realpath`` raises ``TypeError``, which the event endpoints
-    do not catch (they translate ``ValueError`` to a 400), and a malformed
-    request became a 500 instead of a validation error.
+    it, path resolution raises ``TypeError``, which the event endpoints do not
+    catch (they translate ``ValueError`` to a 400), and a malformed request
+    became a 500 instead of a validation error.
     """
-    if not isinstance(file_path, str) or not file_path or not organization_id:
-        return False
-    root = org_attachment_root(organization_id)
-    resolved = os.path.realpath(file_path)
-    return resolved == root or resolved.startswith(root + os.sep)
+    return (
+        resolve(file_path, organization_id, StorageArea.EVENT_ATTACHMENTS) is not None
+    )
 
 
 def validate_attachments_for_org(

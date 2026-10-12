@@ -19,6 +19,7 @@ from PIL import Image
 from sqlalchemy import func, select, text
 
 from app.api.v1.endpoints import suggestions as suggestion_endpoints
+from app.core import file_encryption
 from app.models.audit import AuditLog
 from app.models.notification import NotificationLog, NotificationRule
 from app.models.suggestion import (
@@ -30,7 +31,7 @@ from app.models.suggestion import (
 )
 from app.models.user import User
 from app.schemas.suggestion import SuggestionBoxWrite
-from app.services import suggestion_service
+from app.services import file_storage_service
 from app.services.suggestion_service import (
     SuggestionService,
     anonymous_timestamp,
@@ -167,7 +168,7 @@ async def _submit(db, box, user_id, anonymous=False, screenshots=()):
 
 @pytest.fixture
 def upload_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(suggestion_service, "SUGGESTION_ATTACHMENT_DIR", str(tmp_path))
+    monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
     return tmp_path
 
 
@@ -225,6 +226,9 @@ class TestAnonymousSubmissionsStoreNoAuthor:
             )
         ).scalar_one()
         assert attachment.file_name == "screenshot-1.webp"
+        assert Path(attachment.file_path).parent == (
+            upload_dir / str(dept["org"]) / "suggestions" / str(row.id)
+        )
         stamp = anonymous_timestamp(datetime.now(timezone.utc)).timestamp()
         assert os.stat(attachment.file_path).st_mtime == pytest.approx(stamp, abs=1)
 
@@ -806,7 +810,7 @@ class TestOverHttp:
                 )
             )
         ).scalar_one()
-        stored = Path(attachment.file_path).read_bytes()
+        stored = file_encryption.read_plaintext(attachment.file_path)
         assert b"Sam Member" not in stored
         assert b"Captain" not in stored
         with Image.open(io.BytesIO(stored)) as image:

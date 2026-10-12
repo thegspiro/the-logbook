@@ -7,13 +7,14 @@ and custom facility types.
 """
 
 import enum
-from typing import Optional
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     Date,
     DateTime,
     Enum,
@@ -24,7 +25,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -182,30 +183,38 @@ class FacilityType(Base):
 
     __tablename__ = "facility_types"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
     )
 
-    name = Column(String(100), nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[FacilityCategory]] = mapped_column(
         Enum(FacilityCategory, values_callable=lambda x: [e.value for e in x]),
         default=FacilityCategory.OTHER,
     )
 
-    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facilities = relationship("Facility", back_populates="facility_type")
+    facilities: Mapped[list["Facility"]] = relationship(
+        "Facility", back_populates="facility_type"
+    )
 
     __table_args__ = (
         Index("idx_facility_types_org_name", "organization_id", "name", unique=True),
@@ -229,30 +238,40 @@ class FacilityStatus(Base):
 
     __tablename__ = "facility_statuses"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
     )
 
-    name = Column(String(100), nullable=False)
-    description = Column(Text, nullable=True)
-    color = Column(String(7), nullable=True)  # Hex color for UI
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(
+        String(7), nullable=True
+    )  # Hex color for UI
 
-    is_operational = Column(
+    is_operational: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )  # Is the facility usable?
-    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facilities = relationship("Facility", back_populates="status_record")
+    facilities: Mapped[list["Facility"]] = relationship(
+        "Facility", back_populates="status_record"
+    )
 
     __table_args__ = (
         Index("idx_facility_statuses_org_name", "organization_id", "name", unique=True),
@@ -274,25 +293,25 @@ class Facility(Base):
 
     __tablename__ = "facilities"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Identity
-    name = Column(String(200), nullable=False)
-    facility_number = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    facility_number: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )  # e.g. "Station 1", "Building A"
-    facility_type_id = Column(
+    facility_type_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facility_types.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
-    status_id = Column(
+    status_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facility_statuses.id", ondelete="RESTRICT"),
         nullable=False,
@@ -300,118 +319,136 @@ class Facility(Base):
     )
 
     # Address
-    address_line1 = Column(String(200), nullable=True)
-    address_line2 = Column(String(200), nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(50), nullable=True)
-    zip_code = Column(String(20), nullable=True)
-    county = Column(String(100), nullable=True)
-    latitude = Column(Numeric(10, 7), nullable=True)
-    longitude = Column(Numeric(10, 7), nullable=True)
+    address_line1: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    zip_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    county: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
+    longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
 
     # Building Info
-    year_built = Column(Integer, nullable=True)
-    year_renovated = Column(Integer, nullable=True)
-    square_footage = Column(Integer, nullable=True)
-    num_floors = Column(Integer, nullable=True)
-    num_bays = Column(Integer, nullable=True)  # Apparatus bays for stations
-    lot_size_acres = Column(Numeric(10, 2), nullable=True)
+    year_built: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    year_renovated: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    square_footage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    num_floors: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    num_bays: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Apparatus bays for stations
+    lot_size_acres: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
 
     # Ownership
-    is_owned = Column(
+    is_owned: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )  # vs leased
-    lease_expiration = Column(Date, nullable=True)
-    property_tax_id = Column(String(100), nullable=True)
+    lease_expiration: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    property_tax_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Capacity
-    max_occupancy = Column(Integer, nullable=True)
-    sleeping_quarters = Column(Integer, nullable=True)  # For stations with bunks
+    max_occupancy: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sleeping_quarters: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # For stations with bunks
 
     # Contact
-    phone = Column(String(50), nullable=True)
-    fax = Column(String(50), nullable=True)
-    email = Column(String(200), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    fax: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Description
-    description = Column(Text, nullable=True)
-    notes = Column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Status tracking
-    status_changed_at = Column(DateTime(timezone=True), nullable=True)
-    status_changed_by = Column(
+    status_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status_changed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Archive (soft-delete)
-    is_archived = Column(Boolean, default=False, nullable=False, server_default="0")
-    archived_at = Column(DateTime(timezone=True), nullable=True)
-    archived_by = Column(
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    archived_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Metadata
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility_type = relationship("FacilityType", back_populates="facilities")
-    status_record = relationship("FacilityStatus", back_populates="facilities")
-    photos = relationship(
+    facility_type: Mapped["FacilityType"] = relationship(
+        "FacilityType", back_populates="facilities"
+    )
+    status_record: Mapped["FacilityStatus"] = relationship(
+        "FacilityStatus", back_populates="facilities"
+    )
+    photos: Mapped[list["FacilityPhoto"]] = relationship(
         "FacilityPhoto", back_populates="facility", cascade="all, delete-orphan"
     )
-    documents = relationship(
+    documents: Mapped[list["FacilityDocument"]] = relationship(
         "FacilityDocument", back_populates="facility", cascade="all, delete-orphan"
     )
-    maintenance_records = relationship(
+    maintenance_records: Mapped[list["FacilityMaintenance"]] = relationship(
         "FacilityMaintenance", back_populates="facility", cascade="all, delete-orphan"
     )
-    systems = relationship(
+    systems: Mapped[list["FacilitySystem"]] = relationship(
         "FacilitySystem", back_populates="facility", cascade="all, delete-orphan"
     )
-    inspections = relationship(
+    inspections: Mapped[list["FacilityInspection"]] = relationship(
         "FacilityInspection", back_populates="facility", cascade="all, delete-orphan"
     )
-    utility_accounts = relationship(
+    utility_accounts: Mapped[list["FacilityUtilityAccount"]] = relationship(
         "FacilityUtilityAccount",
         back_populates="facility",
         cascade="all, delete-orphan",
     )
-    access_keys = relationship(
+    access_keys: Mapped[list["FacilityAccessKey"]] = relationship(
         "FacilityAccessKey", back_populates="facility", cascade="all, delete-orphan"
     )
-    rooms = relationship(
+    rooms: Mapped[list["FacilityRoom"]] = relationship(
         "FacilityRoom", back_populates="facility", cascade="all, delete-orphan"
     )
-    emergency_contacts = relationship(
+    emergency_contacts: Mapped[list["FacilityEmergencyContact"]] = relationship(
         "FacilityEmergencyContact",
         back_populates="facility",
         cascade="all, delete-orphan",
     )
-    shutoff_locations = relationship(
+    shutoff_locations: Mapped[list["FacilityShutoffLocation"]] = relationship(
         "FacilityShutoffLocation",
         back_populates="facility",
         cascade="all, delete-orphan",
     )
-    capital_projects = relationship(
+    capital_projects: Mapped[list["FacilityCapitalProject"]] = relationship(
         "FacilityCapitalProject",
         back_populates="facility",
         cascade="all, delete-orphan",
     )
-    insurance_policies = relationship(
+    insurance_policies: Mapped[list["FacilityInsurancePolicy"]] = relationship(
         "FacilityInsurancePolicy",
         back_populates="facility",
         cascade="all, delete-orphan",
     )
-    occupants = relationship(
+    occupants: Mapped[list["FacilityOccupant"]] = relationship(
         "FacilityOccupant", back_populates="facility", cascade="all, delete-orphan"
     )
-    compliance_checklists = relationship(
+    compliance_checklists: Mapped[list["FacilityComplianceChecklist"]] = relationship(
         "FacilityComplianceChecklist",
         back_populates="facility",
         cascade="all, delete-orphan",
@@ -449,39 +486,43 @@ class FacilityPhoto(Base):
 
     __tablename__ = "facility_photos"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    file_path = Column(String(500), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     # Derived from file_path on every assignment (see ``_derive_document_id``)
     # and never written directly. Deliberately not a ForeignKey: a cascade
     # would delete the reference without the facilities.delete/.manage check
     # ``DocumentsService._delete_facility_document_references`` enforces
     # (FAC-26), and SET NULL would leave exactly the dangling reference that
     # sweep exists to prevent.
-    document_id = Column(String(36), nullable=True)
-    file_name = Column(String(200), nullable=False)
-    mime_type = Column(String(100), nullable=True)
-    caption = Column(String(500), nullable=True)
-    is_primary = Column(Boolean, default=False, nullable=False, server_default="0")
+    document_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    file_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    caption: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
-    uploaded_by = Column(
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    uploaded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    facility = relationship("Facility", back_populates="photos")
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="photos")
 
     @validates("file_path")
     def _derive_document_id(self, _key, value):
@@ -507,39 +548,43 @@ class FacilityDocument(Base):
 
     __tablename__ = "facility_documents"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    file_path = Column(String(500), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     # Same derivation and same reason for not being a ForeignKey as
     # ``FacilityPhoto.document_id``.
-    document_id = Column(String(36), nullable=True)
-    file_name = Column(String(200), nullable=False)
-    mime_type = Column(String(100), nullable=True)
-    document_type = Column(
+    document_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    file_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    document_type: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # blueprint, permit, lease, insurance, etc.
-    description = Column(Text, nullable=True)
-    document_date = Column(Date, nullable=True)
-    expiration_date = Column(Date, nullable=True)  # For permits, insurance, leases
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    document_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expiration_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )  # For permits, insurance, leases
 
-    uploaded_by = Column(
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    uploaded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    facility = relationship("Facility", back_populates="documents")
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="documents")
 
     @validates("file_path")
     def _derive_document_id(self, _key, value):
@@ -569,37 +614,45 @@ class FacilityMaintenanceType(Base):
 
     __tablename__ = "facility_maintenance_types"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
     )
 
-    name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[MaintenanceCategory]] = mapped_column(
         Enum(MaintenanceCategory, values_callable=lambda x: [e.value for e in x]),
         default=MaintenanceCategory.OTHER,
     )
 
     # Scheduling defaults
-    default_interval_value = Column(Integer, nullable=True)
-    default_interval_unit = Column(
+    default_interval_value: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    default_interval_unit: Mapped[Optional[MaintenanceIntervalUnit]] = mapped_column(
         Enum(MaintenanceIntervalUnit, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
 
-    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    maintenance_records = relationship(
+    maintenance_records: Mapped[list["FacilityMaintenance"]] = relationship(
         "FacilityMaintenance", back_populates="maintenance_type"
     )
 
@@ -627,82 +680,98 @@ class FacilityMaintenance(Base):
 
     __tablename__ = "facility_maintenance"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
-    maintenance_type_id = Column(
+    maintenance_type_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facility_maintenance_types.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    system_id = Column(
+    system_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("facility_systems.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # Scheduling
-    scheduled_date = Column(Date, nullable=True)
-    due_date = Column(Date, nullable=True)
+    scheduled_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Completion
-    completed_date = Column(Date, nullable=True)
-    completed_by = Column(
+    completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    completed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    performed_by = Column(String(200), nullable=True)  # External contractor name
+    performed_by: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )  # External contractor name
 
     # Status
-    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
-    is_overdue = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    is_overdue: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Details
-    description = Column(Text, nullable=True)
-    work_performed = Column(Text, nullable=True)
-    findings = Column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    work_performed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    findings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Cost
-    cost = Column(Numeric(10, 2), nullable=True)
-    vendor = Column(String(200), nullable=True)
-    invoice_number = Column(String(100), nullable=True)
-    work_order_number = Column(String(100), nullable=True)
+    cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    vendor: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    work_order_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Next service
-    next_due_date = Column(Date, nullable=True)
+    next_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Notes & attachments
-    notes = Column(Text, nullable=True)
-    attachments = Column(JSON, nullable=True)  # [{file_path, file_name, mime_type}]
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )  # [{file_path, file_name, mime_type}]
 
     # Historic entry support
-    is_historic = Column(Boolean, default=False, nullable=False, server_default="0")
-    occurred_date = Column(Date, nullable=True)
-    historic_source = Column(String(200), nullable=True)
+    is_historic: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    occurred_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    historic_source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Timestamps
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="maintenance_records")
-    maintenance_type = relationship(
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="maintenance_records"
+    )
+    maintenance_type: Mapped["FacilityMaintenanceType"] = relationship(
         "FacilityMaintenanceType", back_populates="maintenance_records"
     )
-    system = relationship("FacilitySystem", back_populates="maintenance_records")
+    system: Mapped[Optional["FacilitySystem"]] = relationship(
+        "FacilitySystem", back_populates="maintenance_records"
+    )
 
     __table_args__ = (
         Index("idx_facility_maint_facility", "facility_id"),
@@ -732,84 +801,94 @@ class FacilitySystem(Base):
 
     __tablename__ = "facility_systems"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # System identity
-    name = Column(String(200), nullable=False)
-    system_type = Column(
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    system_type: Mapped[FacilitySystemType] = mapped_column(
         Enum(FacilitySystemType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=FacilitySystemType.OTHER,
     )
-    description = Column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Details
-    manufacturer = Column(String(200), nullable=True)
-    model_number = Column(String(100), nullable=True)
-    serial_number = Column(String(100), nullable=True)
+    manufacturer: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    model_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    serial_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Lifecycle
-    install_date = Column(Date, nullable=True)
-    warranty_expiration = Column(Date, nullable=True)
-    expected_life_years = Column(Integer, nullable=True)
+    install_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    warranty_expiration: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expected_life_years: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Condition
-    condition = Column(
+    condition: Mapped[FacilitySystemCondition] = mapped_column(
         Enum(FacilitySystemCondition, values_callable=lambda x: [e.value for e in x]),
         default=FacilitySystemCondition.GOOD,
         nullable=False,
     )
-    last_serviced_date = Column(Date, nullable=True)
-    last_inspected_date = Column(Date, nullable=True)
+    last_serviced_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_inspected_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Certification / testing (NFPA compliance tracking)
-    last_tested_date = Column(Date, nullable=True)
-    next_test_due = Column(Date, nullable=True)
-    test_result = Column(
+    last_tested_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    next_test_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    test_result: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )  # e.g. "pass", "fail", "conditional"
-    certification_number = Column(String(100), nullable=True)
-    certified_by = Column(String(200), nullable=True)
-    test_frequency_days = Column(
+    certification_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    certified_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    test_frequency_days: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # Interval between required tests
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Display
-    sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Archive (soft-delete)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
-    archived_by = Column(
+    archived_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="systems")
-    maintenance_records = relationship("FacilityMaintenance", back_populates="system")
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="systems")
+    maintenance_records: Mapped[list["FacilityMaintenance"]] = relationship(
+        "FacilityMaintenance", back_populates="system"
+    )
 
     __table_args__ = (
         Index("idx_facility_systems_type", "facility_id", "system_type"),
@@ -833,66 +912,84 @@ class FacilityInspection(Base):
 
     __tablename__ = "facility_inspections"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Inspection details
-    inspection_type = Column(
+    inspection_type: Mapped[InspectionType] = mapped_column(
         Enum(InspectionType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=InspectionType.ROUTINE,
     )
-    title = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Dates
-    inspection_date = Column(Date, nullable=False)
-    next_inspection_date = Column(Date, nullable=True)
+    inspection_date: Mapped[date] = mapped_column(Date, nullable=False)
+    next_inspection_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Results
-    passed = Column(Boolean, nullable=True)  # null = pending/not yet determined
-    inspector_name = Column(String(200), nullable=True)
-    inspector_organization = Column(String(200), nullable=True)
-    certificate_number = Column(String(100), nullable=True)
-    inspector_license_number = Column(String(100), nullable=True)
-    inspector_agency = Column(String(200), nullable=True)
+    passed: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )  # null = pending/not yet determined
+    inspector_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    inspector_organization: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    certificate_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    inspector_license_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    inspector_agency: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Findings / deficiencies
-    findings = Column(Text, nullable=True)
-    corrective_actions = Column(Text, nullable=True)
-    corrective_action_deadline = Column(Date, nullable=True)
-    corrective_action_completed = Column(
+    findings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    corrective_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    corrective_action_deadline: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    corrective_action_completed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
-    corrective_action_completed_date = Column(Date, nullable=True)
+    corrective_action_completed_date: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
 
     # Attachments (inspection reports, certificates)
-    attachments = Column(JSON, nullable=True)
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Notes
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="inspections")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="inspections"
+    )
 
     __table_args__ = (
         Index("idx_facility_inspections_facility", "facility_id"),
@@ -1066,50 +1163,56 @@ class FacilityUtilityAccount(Base):
 
     __tablename__ = "facility_utility_accounts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    utility_type = Column(
+    utility_type: Mapped[UtilityType] = mapped_column(
         Enum(UtilityType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    provider_name = Column(String(200), nullable=False)
-    account_number = Column(String(100), nullable=True)
-    meter_number = Column(String(100), nullable=True)
+    provider_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    account_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    meter_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    contact_phone = Column(String(50), nullable=True)
-    contact_email = Column(String(200), nullable=True)
-    emergency_phone = Column(String(50), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    emergency_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    billing_cycle = Column(
+    billing_cycle: Mapped[Optional[BillingCycle]] = mapped_column(
         Enum(BillingCycle, values_callable=lambda x: [e.value for e in x]),
         default=BillingCycle.MONTHLY,
     )
 
-    notes = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="utility_accounts")
-    readings = relationship(
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="utility_accounts"
+    )
+    readings: Mapped[list["FacilityUtilityReading"]] = relationship(
         "FacilityUtilityReading",
         back_populates="utility_account",
         cascade="all, delete-orphan",
@@ -1133,36 +1236,46 @@ class FacilityUtilityReading(Base):
 
     __tablename__ = "facility_utility_readings"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    utility_account_id = Column(
+    utility_account_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facility_utility_accounts.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    reading_date = Column(Date, nullable=False)
-    period_start = Column(Date, nullable=True)
-    period_end = Column(Date, nullable=True)
+    reading_date: Mapped[date] = mapped_column(Date, nullable=False)
+    period_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    period_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
-    amount = Column(Numeric(10, 2), nullable=True)  # Cost in dollars
-    usage_quantity = Column(Numeric(12, 3), nullable=True)  # kWh, gallons, therms, etc.
-    usage_unit = Column(String(50), nullable=True)  # kWh, gallons, therms, ccf, etc.
+    amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )  # Cost in dollars
+    usage_quantity: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 3), nullable=True
+    )  # kWh, gallons, therms, etc.
+    usage_unit: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # kWh, gallons, therms, ccf, etc.
 
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
-    utility_account = relationship("FacilityUtilityAccount", back_populates="readings")
+    utility_account: Mapped["FacilityUtilityAccount"] = relationship(
+        "FacilityUtilityAccount", back_populates="readings"
+    )
 
     __table_args__ = (
         Index("idx_facility_utility_readings_account", "utility_account_id"),
@@ -1180,47 +1293,57 @@ class FacilityAccessKey(Base):
 
     __tablename__ = "facility_access_keys"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    key_type = Column(
+    key_type: Mapped[KeyType] = mapped_column(
         Enum(KeyType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    key_identifier = Column(String(100), nullable=True)  # Key number, code, fob ID
-    description = Column(String(300), nullable=True)
+    key_identifier: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # Key number, code, fob ID
+    description: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # Assignment
-    assigned_to_user_id = Column(
+    assigned_to_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    assigned_to_name = Column(String(200), nullable=True)  # For external people
-    issued_date = Column(Date, nullable=True)
-    returned_date = Column(Date, nullable=True)
+    assigned_to_name: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )  # For external people
+    issued_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    returned_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
-    notes = Column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="access_keys")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="access_keys"
+    )
 
     __table_args__ = (
         Index("idx_facility_access_keys_facility", "facility_id"),
@@ -1244,14 +1367,14 @@ class FacilityRoom(Base):
 
     __tablename__ = "facility_rooms"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
@@ -1262,51 +1385,57 @@ class FacilityRoom(Base):
     # everything hanging off them (linked Locations, kiosk codes, stored
     # inventory) — with it. The service re-parents children onto the deleted
     # room's own parent first; this is the database-level backstop.
-    parent_room_id = Column(
+    parent_room_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("facility_rooms.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
 
-    name = Column(String(200), nullable=False)
-    room_number = Column(String(50), nullable=True)
-    floor = Column(Integer, nullable=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    room_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    floor: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    room_type = Column(
+    room_type: Mapped[RoomType] = mapped_column(
         Enum(RoomType, values_callable=lambda x: [e.value for e in x]),
         default=RoomType.OTHER,
         nullable=False,
     )
-    zone_classification = Column(
+    zone_classification: Mapped[ZoneClassification] = mapped_column(
         Enum(ZoneClassification, values_callable=lambda x: [e.value for e in x]),
         default=ZoneClassification.UNCLASSIFIED,
         nullable=False,
         server_default="unclassified",
     )
 
-    square_footage = Column(Integer, nullable=True)
-    capacity = Column(Integer, nullable=True)
-    description = Column(Text, nullable=True)
-    equipment = Column(Text, nullable=True)  # Notable equipment in this room
+    square_footage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    equipment: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Notable equipment in this room
 
-    sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    updated_by = Column(
+    updated_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="rooms")
-    parent_room = relationship(
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="rooms")
+    parent_room: Mapped[Optional["FacilityRoom"]] = relationship(
         "FacilityRoom",
         remote_side=[id],
         back_populates="child_rooms",
@@ -1314,7 +1443,7 @@ class FacilityRoom(Base):
     # passive_deletes: the service re-parents children onto the grandparent
     # before deleting a room. Without this, SQLAlchemy would eagerly null out
     # the loaded children's parent_room_id on delete and undo that.
-    child_rooms = relationship(
+    child_rooms: Mapped[list["FacilityRoom"]] = relationship(
         "FacilityRoom",
         back_populates="parent_room",
         passive_deletes=True,
@@ -1339,20 +1468,20 @@ class FacilityEmergencyContact(Base):
 
     __tablename__ = "facility_emergency_contacts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    contact_type = Column(
+    contact_type: Mapped[EmergencyContactType] = mapped_column(
         Enum(EmergencyContactType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
@@ -1360,26 +1489,34 @@ class FacilityEmergencyContact(Base):
     # person with no company, e.g. a facility's own on-call staff) — see
     # FacilityEmergencyContactBase's cross-field validator, which enforces
     # that at least one of the two is present.
-    company_name = Column(String(200), nullable=True)
-    contact_name = Column(String(200), nullable=True)
-    phone = Column(String(50), nullable=True)
-    alt_phone = Column(String(50), nullable=True)
-    email = Column(String(200), nullable=True)
-    service_contract_number = Column(String(100), nullable=True)
+    company_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    alt_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    service_contract_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
-    priority = Column(
+    priority: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False, server_default="1"
     )  # 1 = primary, 2 = secondary
-    notes = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="emergency_contacts")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="emergency_contacts"
+    )
 
     __table_args__ = (
         Index("idx_facility_emerg_contacts_facility", "facility_id"),
@@ -1400,38 +1537,42 @@ class FacilityShutoffLocation(Base):
 
     __tablename__ = "facility_shutoff_locations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    shutoff_type = Column(
+    shutoff_type: Mapped[ShutoffType] = mapped_column(
         Enum(ShutoffType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    location_description = Column(Text, nullable=False)
-    floor = Column(Integer, nullable=True)
-    notes = Column(Text, nullable=True)
-    photo_path = Column(String(500), nullable=True)
+    location_description: Mapped[str] = mapped_column(Text, nullable=False)
+    floor: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    photo_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="shutoff_locations")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="shutoff_locations"
+    )
 
     __table_args__ = (
         Index("idx_facility_shutoffs_facility", "facility_id"),
@@ -1452,64 +1593,74 @@ class FacilityCapitalProject(Base):
 
     __tablename__ = "facility_capital_projects"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    project_name = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
+    project_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    project_type = Column(
+    project_type: Mapped[CapitalProjectType] = mapped_column(
         Enum(CapitalProjectType, values_callable=lambda x: [e.value for e in x]),
         default=CapitalProjectType.OTHER,
         nullable=False,
     )
-    project_status = Column(
+    project_status: Mapped[CapitalProjectStatus] = mapped_column(
         Enum(CapitalProjectStatus, values_callable=lambda x: [e.value for e in x]),
         default=CapitalProjectStatus.PLANNING,
         nullable=False,
     )
 
     # Budget
-    estimated_cost = Column(Numeric(12, 2), nullable=True)
-    actual_cost = Column(Numeric(12, 2), nullable=True)
-    budget_source = Column(String(300), nullable=True)
+    estimated_cost: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    actual_cost: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    budget_source: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # Timeline
-    start_date = Column(Date, nullable=True)
-    estimated_completion = Column(Date, nullable=True)
-    actual_completion = Column(Date, nullable=True)
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    estimated_completion: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    actual_completion: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Contractor
-    contractor_name = Column(String(200), nullable=True)
-    contractor_phone = Column(String(50), nullable=True)
-    contractor_email = Column(String(200), nullable=True)
-    project_manager = Column(String(200), nullable=True)
+    contractor_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    contractor_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contractor_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    project_manager: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Administrative
-    permit_numbers = Column(Text, nullable=True)
-    notes = Column(Text, nullable=True)
-    attachments = Column(JSON, nullable=True)
+    permit_numbers: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="capital_projects")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="capital_projects"
+    )
 
     __table_args__ = (
         Index("idx_facility_capital_facility", "facility_id"),
@@ -1531,51 +1682,63 @@ class FacilityInsurancePolicy(Base):
 
     __tablename__ = "facility_insurance_policies"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    policy_type = Column(
+    policy_type: Mapped[InsurancePolicyType] = mapped_column(
         Enum(InsurancePolicyType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    policy_number = Column(String(100), nullable=True)
-    carrier_name = Column(String(200), nullable=False)
+    policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    carrier_name: Mapped[str] = mapped_column(String(200), nullable=False)
 
-    agent_name = Column(String(200), nullable=True)
-    agent_phone = Column(String(50), nullable=True)
-    agent_email = Column(String(200), nullable=True)
+    agent_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    agent_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    agent_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
-    coverage_amount = Column(Numeric(14, 2), nullable=True)
-    deductible = Column(Numeric(10, 2), nullable=True)
-    annual_premium = Column(Numeric(10, 2), nullable=True)
+    coverage_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(14, 2), nullable=True
+    )
+    deductible: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    annual_premium: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
 
-    effective_date = Column(Date, nullable=True)
-    expiration_date = Column(Date, nullable=True)
+    effective_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expiration_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
-    notes = Column(Text, nullable=True)
-    attachments = Column(JSON, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    attachments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="insurance_policies")
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="insurance_policies"
+    )
 
     __table_args__ = (
         Index("idx_facility_insurance_facility", "facility_id"),
@@ -1597,42 +1760,46 @@ class FacilityOccupant(Base):
 
     __tablename__ = "facility_occupants"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    unit_name = Column(
+    unit_name: Mapped[str] = mapped_column(
         String(200), nullable=False
     )  # e.g., "Engine Co. 1", "Rescue Squad 2"
-    description = Column(Text, nullable=True)
-    contact_name = Column(String(200), nullable=True)
-    contact_phone = Column(String(50), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    effective_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    effective_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="occupants")
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="occupants")
 
     __table_args__ = (
         Index("idx_facility_occupants_facility", "facility_id"),
@@ -1655,47 +1822,53 @@ class FacilityComplianceChecklist(Base):
 
     __tablename__ = "facility_compliance_checklists"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    facility_id = Column(
+    facility_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    checklist_name = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
+    checklist_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    compliance_type = Column(
+    compliance_type: Mapped[ComplianceType] = mapped_column(
         Enum(ComplianceType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
-    due_date = Column(Date, nullable=True)
-    completed_date = Column(Date, nullable=True)
-    completed_by = Column(
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    completed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by = Column(
+    created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    facility = relationship("Facility", back_populates="compliance_checklists")
-    items = relationship(
+    facility: Mapped["Facility"] = relationship(
+        "Facility", back_populates="compliance_checklists"
+    )
+    items: Mapped[list["FacilityComplianceItem"]] = relationship(
         "FacilityComplianceItem",
         back_populates="checklist",
         cascade="all, delete-orphan",
@@ -1722,38 +1895,46 @@ class FacilityComplianceItem(Base):
 
     __tablename__ = "facility_compliance_items"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    checklist_id = Column(
+    checklist_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("facility_compliance_checklists.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    item_number = Column(Integer, nullable=True)
-    description = Column(Text, nullable=False)
+    item_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    is_compliant = Column(Boolean, nullable=True)  # null = not yet checked
-    findings = Column(Text, nullable=True)
-    corrective_action = Column(Text, nullable=True)
-    corrective_action_deadline = Column(Date, nullable=True)
-    corrective_action_completed = Column(
+    is_compliant: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )  # null = not yet checked
+    findings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    corrective_action: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    corrective_action_deadline: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    corrective_action_completed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
 
-    notes = Column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
-    checklist = relationship("FacilityComplianceChecklist", back_populates="items")
+    checklist: Mapped["FacilityComplianceChecklist"] = relationship(
+        "FacilityComplianceChecklist", back_populates="items"
+    )
 
     __table_args__ = (Index("idx_facility_compliance_items_checklist", "checklist_id"),)

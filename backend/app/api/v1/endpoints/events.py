@@ -4,7 +4,6 @@ Event API Endpoints
 Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
-import asyncio
 import copy
 import os
 import uuid as uuid_lib
@@ -24,7 +23,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
@@ -108,16 +106,24 @@ from app.services.event_service import (
     attendance_lock_reason,
     resolve_attendee_visibility,
 )
+from app.services.file_storage_service import (
+    FileRules,
+    FileStorageService,
+    StorageArea,
+    stored_file_response,
+)
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.services.upload_scanning import reject_if_malicious
+from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
-from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
 from app.utils.event_attachments import is_path_in_org
-from app.utils.mime_validation import detect_mime_type
+from app.utils.org_scoping import assert_in_org
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -269,7 +275,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     )
 
 
-def _display_name(user) -> Optional[str]:
+def _display_name(user: Optional[User]) -> Optional[str]:
     """Human-readable name for a roster row, falling back to the username.
 
     A member whose first/last names are both blank would otherwise appear as an
@@ -939,6 +945,23 @@ async def update_event_settings(
         )
         if fallback_ids - {str(f) for f in found}:
             raise HTTPException(status_code=400, detail="Position not found")
+
+    # XC-1: the default coordinator is a client-supplied user id that every new
+    # request is then assigned to. apply_default_assignee re-checks it at read
+    # time and skips a foreign one, but it should not be stored to begin with.
+    pipeline_update = updates_dict.get("request_pipeline") or {}
+    if "default_assignee_id" in pipeline_update:
+        try:
+            await assert_in_org(
+                db,
+                User,
+                pipeline_update["default_assignee_id"],
+                current_user.organization_id,
+                allow_none=True,
+                label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
     for key, value in updates_dict.items():
         if key in EVENT_SETTINGS_DEFAULTS:
             if isinstance(value, dict) and isinstance(current_events.get(key), dict):
@@ -1283,8 +1306,11 @@ async def update_event(
                 event_id=event_id,
                 organization_id=current_user.organization_id,
             )
-            if result:
-                old_event_obj = result[0]
+            # get_event answers a missing event with (None, None), which is a
+            # truthy tuple: test the event itself, and let the update below
+            # report the 404.
+            old_event_obj = result[0] if result else None
+            if old_event_obj is not None:
                 for field in changed_significant:
                     old_values[field] = getattr(old_event_obj, field, None)
                 rsvps_to_notify = [
@@ -2079,8 +2105,8 @@ async def check_in_attendee(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2129,8 +2155,8 @@ async def manager_add_attendee(
         notes=attendee_data.notes,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2269,8 +2295,8 @@ async def override_rsvp_attendance(
         override_data=override_data,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or rsvp is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -2437,8 +2463,8 @@ async def record_actual_times(
         ),
     )
 
-    if error:
-        raise _event_error(error)
+    if error or event is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     return _build_event_response(event)
 
@@ -2511,10 +2537,13 @@ async def reopen_attendance(
         organization_id=current_user.organization_id,
     )
 
-    if error:
+    if error or event is None:
         if error == "Event not found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
-        raise _event_error(error)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error or "An unexpected error occurred",
+            )
+        raise _event_error(error or "An unexpected error occurred")
 
     await log_audit_event(
         db=db,
@@ -2606,8 +2635,8 @@ async def get_qr_check_in_data(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise _event_error(error)
+    if error or data is None:
+        raise _event_error(error or "An unexpected error occurred")
 
     return QRCheckInData(**data)
 
@@ -2879,41 +2908,51 @@ async def create_recurring_event(
 # Event Attachment Endpoints
 # ============================================
 
-# Re-exported from app.utils.event_attachments, which owns the constant so the
-# service layer can validate client-supplied attachment paths against it
-# without importing this endpoint module.
-ATTACHMENT_UPLOAD_DIR = attachment_upload_dir
-ALLOWED_EXTENSIONS = {
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".ppt",
-    ".pptx",
-    ".txt",
-    ".csv",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-}
-# SEC: MIME types validated via magic bytes to prevent extension spoofing
-ALLOWED_ATTACHMENT_MIME_TYPES = {
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/plain",
-    "text/csv",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-}
-MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
+# Readahead materials and other files attached to an event. The uploader's
+# extension is kept when it agrees with the detected content (a CSV stays
+# .csv though libmagic reports text/plain), so the allowlist is per extension
+# as well as per detected type.
+EVENT_ATTACHMENT_RULES = FileRules(
+    allowed_types={
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+            ".docx"
+        ),
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-powerpoint": ".ppt",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": (
+            ".pptx"
+        ),
+        "text/plain": ".txt",
+        "text/csv": ".csv",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+    },
+    max_bytes=25 * 1024 * 1024,
+    description="PDF, Office documents, text, CSV, or images",
+    keep_consistent_extension=True,
+    allowed_extensions=frozenset(
+        {
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".txt",
+            ".csv",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+        }
+    ),
+)
+ALLOWED_ATTACHMENT_MIME_TYPES = frozenset(EVENT_ATTACHMENT_RULES.allowed_types)
 
 
 @router.post("/{event_id}/attachments", response_model=AttachmentUploadResponse)
@@ -2941,69 +2980,27 @@ async def upload_event_attachment(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    # Validate file extension
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise CodedHTTPException(
-            status_code=400,
-            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Read and validate size
-    content = await file.read()
-    if len(content) > MAX_ATTACHMENT_SIZE:
-        raise CodedHTTPException(
-            status_code=400,
-            detail="File too large. Maximum size is 25MB.",
-            error_code=ErrorCode.UPLD_TOO_LARGE,
-        )
-
-    # SEC: Validate actual file content via magic bytes, not just extension
-    try:
-        detected_mime = detect_mime_type(content)
-    except RuntimeError:
-        logger.error("Event attachment validation unavailable: libmagic missing")
-        raise CodedHTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Attachment validation is temporarily unavailable.",
-            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
-        )
-    if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
-        logger.warning(
-            f"Event attachment rejected: detected MIME '{detected_mime}' "
-            f"(claimed: '{file.content_type}') for file '{file.filename}'"
-        )
-        raise CodedHTTPException(
-            status_code=400,
-            detail=f"File content type '{detected_mime}' not allowed.",
-            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
-        )
-
-    # Save file
-    org_dir = os.path.join(
-        ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id)
+    stored = await FileStorageService(db).store_upload(
+        file,
+        organization_id=current_user.organization_id,
+        area=StorageArea.EVENT_ATTACHMENTS,
+        rules=EVENT_ATTACHMENT_RULES,
+        user=current_user,
+        record_id=event_id,
+        upload_kind="event_attachment",
     )
-    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-
-    unique_name = f"{uuid_lib.uuid4().hex}{ext}"
-    file_path = os.path.join(org_dir, unique_name)
-
-    def _write_file(path: str, data: bytes) -> None:
-        with open(path, "wb") as f:
-            f.write(data)
-
-    await asyncio.to_thread(_write_file, file_path, content)
 
     # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
     attachments = copy.deepcopy(event.attachments or [])
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,
-            "file_name": file.filename or unique_name,
-            "file_path": file_path,
-            "file_size": len(content),
-            "file_type": file.content_type,
+            "file_name": stored.original_name,
+            "file_path": stored.path,
+            "file_size": stored.size,
+            # The detected type, never the browser's claim: this is served
+            # back as the download's Content-Type.
+            "file_type": stored.mime_type,
             "description": description,
             "uploaded_by": str(current_user.id),
             "uploaded_at": datetime.now(dt_timezone.utc).isoformat(),
@@ -3021,27 +3018,41 @@ async def upload_event_attachment(
     )
 
 
-@router.get("/{event_id}/attachments")
-async def list_event_attachments(
-    event_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    List all attachments for an event
+async def _load_event_for_attachment_read(
+    db: AsyncSession, event_id: UUID, current_user: User
+) -> Event:
+    """Fetch an event whose attachments the caller may read.
 
-    **Authentication required**
+    Attachment reads need ``events.view`` (or ``events.manage``) — being
+    signed in is not enough. A draft is unpublished, so its attachments are
+    for organizers only; a member who guessed the id gets the same 404 as for
+    an event that does not exist rather than a 403 confirming it does.
     """
     result = await db.execute(
         select(Event)
         .where(Event.id == str(event_id))
         .where(Event.organization_id == str(current_user.organization_id))
     )
-    event = result.scalar_one_or_none()
-
+    event: Optional[Event] = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if event.is_draft and not user_has_permission(current_user, "events.manage"):
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
 
+
+@router.get("/{event_id}/attachments")
+async def list_event_attachments(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.view", "events.manage")),
+):
+    """
+    List all attachments for an event
+
+    **Requires permission: events.view or events.manage**
+    """
+    event = await _load_event_for_attachment_read(db, event_id, current_user)
     return event.attachments or []
 
 
@@ -3050,22 +3061,14 @@ async def download_event_attachment(
     event_id: UUID,
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("events.view", "events.manage")),
 ):
     """
     Download a specific event attachment
 
-    **Authentication required**
+    **Requires permission: events.view or events.manage**
     """
-    result = await db.execute(
-        select(Event)
-        .where(Event.id == str(event_id))
-        .where(Event.organization_id == str(current_user.organization_id))
-    )
-    event = result.scalar_one_or_none()
-
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    event = await _load_event_for_attachment_read(db, event_id, current_user)
 
     attachments = event.attachments or []
     attachment = next((a for a in attachments if a.get("id") == attachment_id), None)
@@ -3076,8 +3079,8 @@ async def download_event_attachment(
     file_path = attachment["file_path"]
 
     # SEC (EV-17): confine the resolved path to *this org's own* attachment
-    # subtree, not the shared ATTACHMENT_UPLOAD_DIR root. Every org's uploads
-    # live under that root, so a root-level check still serves a tampered or
+    # storage, not a shared root. Every org's uploads live under one root, so
+    # a root-level check still serves a tampered or
     # injected file_path that points at another organization's subdirectory —
     # and the generic event create/update payloads can carry attachment
     # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
@@ -3093,10 +3096,28 @@ async def download_event_attachment(
     if not os.path.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
-    return FileResponse(
+    # The attachments column is also writable through the generic event
+    # create/update payloads, so a stored file_type is only trusted when it is
+    # a type this endpoint would have accepted on upload. Anything else is
+    # served as an opaque download.
+    stored_type = attachment.get("file_type")
+    media_type = (
+        stored_type
+        if stored_type in ALLOWED_ATTACHMENT_MIME_TYPES
+        else "application/octet-stream"
+    )
+    extension = download_names.stored_extension(resolved_path)
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    return stored_file_response(
         path=resolved_path,
-        filename=attachment.get("file_name", "download"),
-        media_type=attachment.get("file_type", "application/octet-stream"),
+        filename=download_names.descriptive_filename(
+            download_names.local_day(event.start_datetime, tz),
+            event.title,
+            download_names.original_stem(attachment.get("file_name")),
+            extension=extension,
+            fallback="event-attachment",
+        ),
+        media_type=media_type,
     )
 
 
@@ -3715,6 +3736,11 @@ async def import_events_csv(
             error_code=ErrorCode.UPLD_TOO_LARGE,
         )
 
+    # Parsed in memory and never stored, but a file entering the platform all
+    # the same: scanned before it is read.
+    await reject_if_malicious(
+        db, contents, upload_kind="event_import", detected_mime=None, user=current_user
+    )
     try:
         rows = EventService.parse_csv_file(contents)
     except Exception as e:

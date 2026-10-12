@@ -1,0 +1,18 @@
+{
+  // Type-checks the test files, which `tsconfig.json` excludes. Run it with
+  // `npm run typecheck:tests`.
+  //
+  // Node's types are added here and only here. TypeScript 7 defaults `types`
+  // to `[]`, so the app build sees no Node globals and a stray `process` or
+  // `node:fs` in app code fails `npm run typecheck`. Tests do run under Node
+  // (Vitest), and several read sources off disk, so they get `@types/node`.
+  // This program pulls in the app files the tests import, so it would accept
+  // a Node global in app code too: `npm run typecheck` is the guard for that.
+  //
+  // Kept separate from `tsconfig.eslint.json` so type-aware lint (TypeScript
+  // 5.9, which still auto-includes every `@types` package) is unaffected.
+  "extends": "./tsconfig.eslint.json",
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

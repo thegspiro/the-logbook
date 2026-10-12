@@ -31,7 +31,7 @@ async def seed_organization(
     # Check if organization already exists
     if org_id:
         result = await db.execute(select(Organization).where(Organization.id == org_id))
-        existing_org = result.scalar_one_or_none()
+        existing_org: Organization | None = result.scalar_one_or_none()
         if existing_org:
             logger.info(f"Organization already exists: {existing_org.name}")
             return existing_org

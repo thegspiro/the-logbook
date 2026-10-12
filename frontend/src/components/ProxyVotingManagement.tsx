@@ -24,6 +24,7 @@ interface ProxyFormState {
   proxy_user_id: string;
   proxy_type: 'single_election' | 'regular';
   reason: string;
+  anonymity_acknowledged: boolean;
 }
 
 const emptyForm: ProxyFormState = {
@@ -31,13 +32,24 @@ const emptyForm: ProxyFormState = {
   proxy_user_id: '',
   proxy_type: 'single_election',
   reason: '',
+  anonymity_acknowledged: false,
 };
+
+/**
+ * A proxy ballot stores whom it was cast for, and the holder sees every
+ * choice. On an anonymous election the owner allowed it only with the
+ * delegating member's acknowledgement (W50-2 / ELEC-43); the server refuses
+ * the authorization without it.
+ */
+const PROXY_ANONYMITY_WARNING =
+  'This is an anonymous election, but a proxy ballot is not anonymous: the proxy holder will see how the member votes, and the ballot cast for them is stored linked to their name.';
 
 export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ electionId, canManage }) => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const [authorizations, setAuthorizations] = useState<ProxyAuthorization[]>([]);
   const [proxyVotingEnabled, setProxyVotingEnabled] = useState(false);
+  const [anonymousVoting, setAnonymousVoting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -52,6 +64,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
       const data = await electionService.getProxyAuthorizations(electionId);
       setAuthorizations(data.authorizations);
       setProxyVotingEnabled(data.proxy_voting_enabled);
+      setAnonymousVoting(Boolean(data.anonymous_voting));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load proxy authorizations'));
     } finally {
@@ -74,6 +87,11 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
       return;
     }
 
+    if (anonymousVoting && !formData.anonymity_acknowledged) {
+      toast.error("Confirm the member's acknowledgement before authorizing");
+      return;
+    }
+
     try {
       setSubmitting(true);
       const createData: ProxyAuthorizationCreate = {
@@ -81,6 +99,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
         proxy_user_id: formData.proxy_user_id.trim(),
         proxy_type: formData.proxy_type,
         reason: formData.reason.trim(),
+        ...(anonymousVoting ? { anonymity_acknowledged: formData.anonymity_acknowledged } : {}),
       };
       const newAuth = await electionService.addProxyAuthorization(electionId, createData);
       setAuthorizations((prev) => [...prev, newAuth]);
@@ -239,6 +258,22 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                 placeholder="Reason for proxy authorization (e.g., medical leave, out of town)"
               />
             </div>
+            {anonymousVoting && (
+              <div className="alert-warning rounded-md p-3 text-sm" role="note">
+                <p>{PROXY_ANONYMITY_WARNING}</p>
+                <label className="mt-2 flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox mt-0.5"
+                    checked={formData.anonymity_acknowledged}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, anonymity_acknowledged: e.target.checked }))}
+                  />
+                  <span>
+                    The delegating member has been told this and accepts it. They will also be emailed this warning.
+                  </span>
+                </label>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -256,7 +291,8 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                   submitting ||
                   !formData.delegating_user_id.trim() ||
                   !formData.proxy_user_id.trim() ||
-                  !formData.reason.trim()
+                  !formData.reason.trim() ||
+                  (anonymousVoting && !formData.anonymity_acknowledged)
                 }
                 className="btn-info rounded-md text-sm"
               >

@@ -38,14 +38,14 @@ that registers no printer simply never sees the direct-print controls.
 
 **Labels** — six modules generate them, each gated on its own permission:
 
-| Module key            | Permissions (any-of)                                     | Label carries                    |
-| --------------------- | -------------------------------------------------------- | -------------------------------- |
-| `inventory`           | `inventory.manage`                                       | item name, asset tag             |
-| `storage_areas`       | `inventory.manage`                                       | area name, parent/location trail |
-| `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
-| `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
-| `membership`          | `members.manage`, `members.manage_id_cards`              | member name, membership number   |
-| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, short record id  |
+| Module key            | Permissions (any-of)                                     | Label carries                                                                  |
+| --------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `inventory`           | `inventory.manage`                                       | item name, asset tag                                                           |
+| `storage_areas`       | `inventory.manage`                                       | area name, parent/location trail                                               |
+| `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier                                                          |
+| `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                                                                  |
+| `membership`          | `members.manage`, `members.manage_id_cards`              | member name, membership number; the barcode/QR encodes the member's badge code |
+| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, short record id                                                |
 
 **Member labels follow the ID-card rule** _(2026-10-04)_: a member label is a
 badge — its barcode is what the scanner and check-in station accept — so the
@@ -54,6 +54,38 @@ same grants the ID card page requires for someone else's card. It accepted
 `members.view`, a baseline grant, so any member could print a colleague's badge
 through `POST /labels/generate`, `/labels/preview` or `/labels/print` while the
 card page refused them. `/members/print-labels` carries the same gate.
+
+**A member label encodes a server-issued badge code, not the membership number** _(2026-10-05)_.
+The barcode or QR on a member label (and on a CR80 ID card, below) is
+`users.badge_code` — a random code such as `MB-7KQ2W9HXRT`, unique per
+organization — read through `member_badge_value()` in `label_service.py`, so a
+member's sticker and plastic card always scan as the same person. The
+membership number still prints as the label's asset-tag line. Before this, the
+barcode was the membership number (or a short form of the member's id), which
+every member can read in the directory. Codes are issued by the migration
+`ad3b979746f1` for every existing member and defaulted for new ones; label
+generation fills in any that are missing. Both scanners send what they read to
+`POST /member-badges/resolve`; **old badges keep scanning until an officer turns
+off Accept old badges** on the Print ID Cards page. See
+[Member ID cards](../wiki/Member-ID-Cards.md#badge-codes-and-printing-cr80-id-cards-2026-10-05).
+
+**CR80 ID cards** _(2026-10-05)_ are a separate print path: Members → select →
+**Print ID Cards** (`/members/print-id-cards`, `members.manage` or
+`members.manage_id_cards`) renders a PDF whose every page is exactly one card
+side (3.375 × 2.125 in), for the OS driver of any ID card printer (Zebra,
+HID Fargo, Evolis, Magicard, Entrust Datacard). The options are **Orientation**
+(Landscape / Portrait), **Sides** (Front only / Front and back) and **Code**
+(Barcode — Code 128 / QR code), starting from a department layout that
+**Save as department layout** stores in `organization.settings["id_card_print"]`;
+**Test card** prints one card. Cards are black-only, so they print the same on
+monochrome and colour ribbons. At most 500 cards per job.
+
+```
+GET  /api/v1/member-id-cards/layout    # saved layout, or the default
+PUT  /api/v1/member-id-cards/layout    # save it (audit: id_card_layout_updated)
+POST /api/v1/member-id-cards/pdf       # {user_ids, orientation?, sides?, symbology?}
+                                       #   -> application/pdf (audit: id_cards_printed)
+```
 
 > **Inventory has its own print page, and it tracks what was printed**
 > _(2026-09-23)_. `/inventory/print-labels` is not built on the shared
@@ -505,17 +537,21 @@ silently.
 | `app/services/label_printer_service.py`  | Printer CRUD, print orchestration, status                       |
 | `app/services/label_service.py`          | Module registry, spec builders, per-position presets            |
 | `app/services/print_document_service.py` | Station document builders and their per-record permission rules |
+| `app/utils/id_card_renderer.py`          | CR80 ID card PDF (one page per card side)                       |
+| `app/services/member_id_card_service.py` | Org-scoped member lookup and the saved ID card layout           |
+| `app/services/member_badge_service.py`   | Badge code issue, reissue and scan resolution                   |
 
 **Frontend**
 
-| File                                               | Holds                                                |
-| -------------------------------------------------- | ---------------------------------------------------- |
-| `src/services/labelService.ts`                     | Label + printer API client                           |
-| `src/services/stationDocumentService.ts`           | Station document API client                          |
-| `src/components/labels/LabelPrintPage.tsx`         | The shared print page                                |
-| `src/components/labels/labelPresets.ts`            | Size presets                                         |
-| `src/components/settings/LabelPrintersSection.tsx` | Registration UI                                      |
-| `src/components/PrintDocumentButton.tsx`           | Preview-then-print, hidden without a receipt printer |
+| File                                               | Holds                                                    |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `src/services/labelService.ts`                     | Label + printer API client                               |
+| `src/services/stationDocumentService.ts`           | Station document API client                              |
+| `src/components/labels/LabelPrintPage.tsx`         | The shared print page                                    |
+| `src/components/labels/labelPresets.ts`            | Size presets                                             |
+| `src/components/settings/LabelPrintersSection.tsx` | Registration UI                                          |
+| `src/components/PrintDocumentButton.tsx`           | Preview-then-print, hidden without a receipt printer     |
+| `src/pages/MemberIdCardPrintPage.tsx`              | CR80 ID card print page and the Accept old badges switch |
 
 ### ZPL escaping is order-critical
 

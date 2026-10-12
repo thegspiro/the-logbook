@@ -177,5 +177,5 @@ ${BLUE}========================================${NC}
    - Review nginx logs
    - Monitor for suspicious activity
 
-For more information, see docs/SECURITY.md
+For more information, see SECURITY.md in the repository root
 EOF

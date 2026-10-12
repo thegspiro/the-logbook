@@ -97,9 +97,10 @@ def main(argv: list[str] | None = None) -> int:
 
     compose_gaps: list[str] = []
     if args.compose:
-        compose_gaps = _report_compose(args.compose, settings)
-        if compose_gaps is None:
+        reported = _report_compose(args.compose, settings)
+        if reported is None:
             return 2
+        compose_gaps = reported
 
     unreadable_ca = _unreadable_ca_paths(settings)
     if unreadable_ca:

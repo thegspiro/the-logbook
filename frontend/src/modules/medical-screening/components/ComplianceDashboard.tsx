@@ -1,16 +1,22 @@
 /**
  * Compliance Dashboard
  *
- * Shows org-wide compliance overview with expiring screenings.
+ * The department's compliance roster (filterable — "Not compliant" is the
+ * overdue view), one member's or prospect's detail opened from it, and the
+ * org-wide list of screenings expiring soon.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_TYPE_LABELS } from '../types';
+import { SelfRecordedBadge } from './SelfRecordedBadge';
+import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
+import { ComplianceRoster } from './ComplianceRoster';
 
 export const ComplianceDashboard: React.FC = () => {
   const { expiringScreenings, fetchExpiringScreenings } = useMedicalScreeningStore();
+  const [subject, setSubject] = useState<ComplianceSubject | null>(null);
 
   useEffect(() => {
     void fetchExpiringScreenings(60);
@@ -18,6 +24,9 @@ export const ComplianceDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ComplianceRoster onOpen={setSubject} />
+      <SubjectCompliancePanel subject={subject} onClose={() => setSubject(null)} />
+
       {/* Expiring Soon */}
       <div>
         <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Screenings Expiring Within 60 Days</h3>
@@ -39,8 +48,9 @@ export const ComplianceDashboard: React.FC = () => {
                     <Clock className="h-4 w-4 shrink-0 text-blue-500" />
                   )}
                   <div>
-                    <p className="text-theme-text-primary text-sm font-medium">
+                    <p className="text-theme-text-primary flex flex-wrap items-center gap-2 text-sm font-medium">
                       {screening.user_name ?? screening.prospect_name ?? 'Unknown'}
+                      {screening.self_recorded && <SelfRecordedBadge />}
                     </p>
                     <p className="text-theme-text-muted text-xs">
                       {SCREENING_TYPE_LABELS[screening.screening_type] ?? screening.screening_type}

@@ -97,7 +97,7 @@ class ApparatusRef:
         """
         if self.full is not None:
             apparatus_type = getattr(self.full, "apparatus_type", None)
-            code = getattr(apparatus_type, "code", None)
+            code: Optional[str] = getattr(apparatus_type, "code", None)
             if code:
                 return code
             name = getattr(apparatus_type, "name", None)

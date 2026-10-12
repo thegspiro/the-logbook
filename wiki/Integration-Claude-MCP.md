@@ -106,22 +106,128 @@ claude mcp add --transport http logbook https://your-logbook.example.org/api/mcp
 ]
 ```
 
-### Claude Desktop
+### claude.ai and Claude Desktop (member sign-in)
 
-Claude Desktop's custom-connector dialog authenticates remote servers with
-OAuth, not a static bearer token; use its local-server configuration with a
-stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
-`Authorization` header. The same applies to claude.ai custom connectors — see
-**Limitations** below.
+The claude.ai custom-connector dialog and Claude Desktop's remote connectors
+authenticate with OAuth rather than a pasted key. The Logbook includes an
+OAuth 2.1 authorization server for them, **off by default** — see
+[Member sign-in (OAuth)](#member-sign-in-oauth) below. Until it is turned on,
+use Claude Desktop's local-server configuration with a stdio-to-HTTP bridge
+(such as `mcp-remote`) that passes the `Authorization` header.
+
+---
+
+## Member sign-in (OAuth)
+
+A service key acts for the whole department. Member sign-in lets each member
+connect a client **with their own account** instead: they sign in, see what
+the client is asking for, and approve it. That connection can then do only
+what the member can do in The Logbook, within the switches the department set
+on the integration.
+
+### Turning it on
+
+1. **Operator** — set two environment variables and restart the backend:
+
+   ```bash
+   MCP_OAUTH_ENABLED=true
+   MCP_OAUTH_ISSUER_URL=https://logbook.yourdept.org   # public origin, no path
+   ```
+
+   The issuer must be an `https://` origin with no path (`http://` is
+   accepted only for `localhost`). Tokens are bound to it, so it must be the
+   address clients use. If it is missing or invalid the server stays off and
+   startup logs a warning — nothing else changes.
+
+2. **Proxy (optional)** — the shipped nginx configurations route
+   `/.well-known/oauth-*` to the backend. Every document is also served under
+   `/api/`, and the MCP endpoint's `401` points clients there, so a proxy you
+   manage yourself works without the extra rule.
+
+3. **Department** — Integrations → Claude (MCP) → settings → tick **Let
+   members connect with their own account**.
+
+4. **Register each client** — on the connected card, the **Member sign-in
+   (OAuth)** panel (needs `integrations.mcp_keys`). Give it a name and its
+   exact redirect URI(s), and choose whether it gets a secret:
+
+   | Client               | Redirect URI                                                       | Secret                 |
+   | -------------------- | ------------------------------------------------------------------ | ---------------------- |
+   | claude.ai connector  | `https://claude.ai/api/mcp/auth_callback`                          | yes (confidential)     |
+   | Claude Code          | `http://localhost:<port>/callback` — run it with `--callback-port` | no (public, PKCE only) |
+   | Another OAuth client | whatever it documents, exactly                                     | if it can keep one     |
+
+   The client ID (and secret, shown **once**) go into the client's OAuth
+   settings — for claude.ai, the custom connector's **Advanced settings**.
+   There is no dynamic client registration: a client the department did not
+   register cannot start a sign-in.
+
+### What a member sees
+
+The client opens `https://<host>/api/oauth/authorize…`; the member signs in
+if needed and lands on **Connect Claude to your account**
+(`/claude/authorize`). It names the client, where they will be
+sent back, and each requested permission with how many tools it would reach
+**for them** right now — "would not reach anything" when the department has
+the switch off or the member lacks the access. They can untick the optional
+ones, then **Allow** or **Don't allow**.
+
+Members review and end their own connections at
+`/claude/connections`. Administrators see every connection in
+the Member sign-in panel and can end any of them.
+
+### Scopes
+
+| Scope                   | Adds                                                                    | Also needs                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `mcp:read`              | the read tools (always granted)                                         | the member's own permission for each tool                                                          |
+| `mcp:write`             | draft events, action items, reorder requests — attributed to the member | department access **Read and write**, and `events.manage` / `meetings.manage` / `inventory.manage` |
+| `mcp:finance`           | finance totals                                                          | department **Share finance totals**, and `finance.view`                                            |
+| `mcp:medical_screening` | medical-screening status                                                | department **Share medical screening status**, and `medical_screening.view`                        |
+
+Every tool declares the permission the app's own screen for that data
+requires (`members.view` for the roster, `training.view_all` for another
+member's training, `apparatus.view` for the fleet, …). The member's
+permissions are re-read on **every** call, so removing a position from a
+member takes effect on their next request.
+
+### Lifetimes and revocation
+
+- Authorization codes: 60 seconds, single use. Reusing one ends the
+  connection it created.
+- Access tokens: 15 minutes. Refresh tokens rotate on every use; presenting
+  an old one ends the whole connection (theft detection). A connection idles
+  out after 30 days without a refresh and ends after 90 days regardless.
+- A connection also ends when the member changes or resets their password,
+  when the member, an administrator or the client revokes it, when its client
+  is revoked, or when the integration is disconnected. Turning the
+  department switch off, deactivating the member or switching the
+  Integrations module off refuses it on the next call.
+- Only SHA-256 digests of codes, tokens and client secrets are stored.
+
+### Audit events
+
+`mcp.oauth_client_registered`, `mcp.oauth_client_revoked`,
+`mcp.oauth_consent_granted`, `mcp.oauth_consent_declined`,
+`mcp.oauth_token_issued`, `mcp.oauth_token_refreshed`,
+`mcp.oauth_token_replay` (critical), `mcp.oauth_token_exchange_failed`,
+`mcp.oauth_grant_revoked`. Tool calls made through a member's connection are
+`mcp.tool_call` rows attributed to the member, with `auth_method: oauth` and
+the client ID.
+
+The threat model and residual risks are in
+[`docs/security-review/MCPO-27-mcp-oauth-server.md`](../docs/security-review/MCPO-27-mcp-oauth-server.md).
 
 ---
 
 ## Security model
 
-- **One organization credential, not a member's.** Tools act for the
-  department as a whole and see only what every member could see; anything
-  restricted to leadership (draft minutes, executive sessions, restricted
-  document folders) is excluded outright.
+- **A service key is one organization credential, not a member's.** Tools
+  act for the department as a whole and see only what every member could
+  see; anything restricted to leadership (draft minutes, executive sessions,
+  restricted document folders) is excluded outright. A member's OAuth
+  connection is narrower still: the same tools, further limited to the ones
+  that member's permissions reach.
 - **Key storage.** Only a SHA-256 digest is stored, with a display prefix.
   The key is 32 bytes of CSPRNG output, so a slow hash adds nothing, and
   every tool call verifies the key.
@@ -177,19 +283,20 @@ streamable-HTTP transport in **stateless, JSON-response** mode, so:
 
 Dependencies added: `mcp` 2.x (which brings in `httpx2`, `sse-starlette`,
 `mcp-types`, `jsonschema` and `opentelemetry-api`). Schema: one table,
-`mcp_service_keys`, created by migration `c4d5e6f7a8b9`.
+`mcp_service_keys`, created by migration `c4d5e6f7a8b9`. Member sign-in
+adds `mcp_oauth_clients`, `mcp_oauth_authorizations` and `mcp_oauth_grants`
+(migration `2d4304107b77`) and the two optional environment variables above.
 
 ---
 
 ## Limitations
 
-- **claude.ai custom connectors need OAuth.** The claude.ai (and Claude
-  Desktop remote-connector) dialog authenticates remote MCP servers with
-  OAuth 2.1 and dynamic client registration; The Logbook is currently an
-  OAuth _client_ (Google and Microsoft sign-in), not an authorization
-  server. Until that is built, those clients connect through a local bridge
-  as described above. Claude Code and the Messages API connector work
-  directly.
+- **No dynamic client registration.** Clients that only support DCR cannot
+  connect through member sign-in; register them by hand (claude.ai accepts a
+  client ID and secret in its connector's advanced settings) or use a service
+  key through a local bridge.
+- **Redirect URIs match exactly, ports included.** A desktop client must use
+  a fixed callback port.
 - **Department contact details are also withheld.** The redaction boundary
   works by field name so it can be proven by a test; a station's public
   phone number is stripped along with a member's. Locations and facilities

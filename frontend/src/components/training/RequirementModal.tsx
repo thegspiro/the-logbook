@@ -182,7 +182,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       name: formData.name,
       description: blankToNull(formData.description),
       requirement_type: formData.requirement_type,
-      ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
+      // "Any Type" is an explicit null rather than an omitted key: an update
+      // omits a key to leave the stored value alone, so dropping it here kept
+      // a narrowed type (e.g. continuing education) after the officer widened
+      // the requirement back to every type.
+      training_type: (formData.training_type as TrainingType) || null,
       required_hours: formData.requirement_type === 'hours' ? (formData.required_hours ?? null) : null,
       // Always sent so switching a requirement off the course/certification
       // types clears stale links — a leftover course id silently narrows the
@@ -210,8 +214,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         ? { shift_credited: formData.shift_credited ?? formData.requirement_type === 'shifts' }
         : {}),
       applies_to_all: formData.applies_to_all,
-      required_membership_types:
-        formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
+      // Sent on every save, as [] when none is selected: an omitted key leaves
+      // the stored list in place, and a stale member category outranks role
+      // and position targeting when the requirement decides who it applies to.
+      required_membership_types: formData.required_membership_types,
       ...(formData.due_date ? { due_date: formData.due_date } : {}),
       ...(formData.start_date ? { start_date: formData.start_date } : {}),
       due_date_type: formData.due_date_type,
@@ -223,7 +229,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       period_end_day: usesCalendarPeriod ? formData.period_end_day : undefined,
       include_current_month:
         formData.include_current_month_mode === 'inherit' ? null : formData.include_current_month_mode === 'include',
-      category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
+      // Sent on every save, as [] when none is selected, so removing the last
+      // category stops it from crediting training rather than keeping it.
+      category_ids: formData.category_ids,
       // Sent on every save, as an explicit null when unset, so switching back
       // to "apply to everyone" actually clears a stored cutoff.
       new_member_cutoff_date: grandfathers ? cutoffDate : null,
@@ -415,6 +423,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     <option value="orientation">Orientation</option>
                     <option value="refresher">Refresher</option>
                     <option value="specialty">Specialty</option>
+                    <option value="policy_acknowledgment">Policy Acknowledgment</option>
                   </select>
                 </div>
 
@@ -955,9 +964,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
             )}
 
-            {/* Which requirements the scheduling Shift Compliance report grades
-              from shifts worked. Training screens grade from training records,
-              so an HOURS requirement left unticked is not on that report. */}
+            {/* Which requirements are graded from shifts worked. A ticked SHIFTS
+              requirement is counted from finalized shift attendance on every
+              screen; a ticked HOURS requirement only on the scheduling Shift
+              Compliance report, the training screens grading it from records. */}
             {(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts') && (
               <div className="space-y-3">
                 <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
@@ -973,8 +983,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <span className="text-theme-text-secondary text-sm">
                     Shift attendance satisfies this requirement
                     <span className="text-theme-text-muted block text-xs">
-                      Graded from shifts worked on the scheduling Shift Compliance report. Leave unticked for training
-                      hours, which are graded from training records.
+                      {formData.requirement_type === 'shifts'
+                        ? 'Counted from finalized shifts worked, including counted external shifts, on every compliance screen. Unticked, it counts training records instead and is left off the Shift Compliance report.'
+                        : 'Graded from shifts worked on the scheduling Shift Compliance report. Leave unticked for training hours, which are graded from training records.'}
                     </span>
                   </span>
                 </label>

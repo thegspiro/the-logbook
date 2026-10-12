@@ -37,7 +37,9 @@ import {
   Network,
   Rocket,
   ShieldCheck,
+  ShieldAlert,
   ClipboardCheck,
+  BookOpenCheck,
   Activity,
   CreditCard,
   ScanLine,
@@ -46,6 +48,7 @@ import {
   Stethoscope,
   Store,
   HandCoins,
+  Wallet,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -66,6 +69,8 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
+import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -124,6 +129,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
+  const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -230,6 +237,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Skills Testing',
                 path: '/training/skills-testing',
                 icon: ClipboardCheck,
+              },
+              {
+                label: 'Knowledge Tests',
+                path: '/training/knowledge-tests',
+                icon: BookOpenCheck,
               },
             ],
           } as NavItem,
@@ -411,6 +423,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           : []),
       ],
     },
+    // Every member holds finance.request, so the group is how they reach their
+    // own purchase requests, expense reports and check requests.
+    ...(isModuleOn('finance')
+      ? [
+          {
+            label: 'Finance',
+            path: financeNavPath(checkPermission),
+            icon: Wallet,
+            anyPermission: [...FINANCE_NAV_PERMISSIONS],
+            subItems: financeNavItems(checkPermission, { ownsBudgets, plansNextYear }).map((item) => ({
+              ...item,
+              icon: Wallet,
+            })),
+          } as NavItem,
+        ]
+      : []),
     // Every grants route requires `fundraising.view` as well as the module, so
     // the entry carries the same gate (a nav gate is a subset of its route's).
     ...(isModuleOn('grants')
@@ -692,6 +720,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Audit Log',
                 path: '/admin/audit-log',
                 icon: ShieldCheck,
+                permission: 'audit.view',
+              },
+              {
+                label: 'Security Alerts',
+                path: '/admin/security-alerts',
+                icon: ShieldAlert,
                 permission: 'audit.view',
               },
               {

@@ -109,8 +109,6 @@ describe('FacilitiesDashboard', () => {
       isLoadingDetail: false,
       isLoadingDashboard: false,
       error: null,
-      showArchived: false,
-      searchQuery: '',
     });
     useAuthStore.setState({
       user: { permissions: ['facilities.view', 'facilities.create', 'facilities.manage'] } as never,

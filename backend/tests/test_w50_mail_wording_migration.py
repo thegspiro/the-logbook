@@ -34,6 +34,9 @@ def _load(pattern: str):
 
 MIGRATION = _load("*_c8266855a348_*.py")
 FREEZE = _load("*_15c5bc7700aa_*.py")
+# 24f56e4fc320 carried the ballot body on again (W50-23); for that type this
+# revision's current body is the next one's previous, not what ships.
+PROXY_NOTICE = _load("*_24f56e4fc320_*.py")
 CARRIED_TYPES = sorted(MIGRATION.CARRIED)
 
 
@@ -89,8 +92,12 @@ class TestThePairs:
         frozen = FREEZE.DEFAULTS[template_type]
         assert pair["previous"]["html"] == frozen["html_body"]
         assert pair["previous"]["text"] == frozen["text_body"]
-        assert pair["current"]["html"] == _SHIPPED[template_type]["html"]
-        assert pair["current"]["text"] == _SHIPPED[template_type]["text"]
+        if template_type == PROXY_NOTICE.TEMPLATE_TYPE:
+            successor = PROXY_NOTICE.BODIES["previous"]
+        else:
+            successor = _SHIPPED[template_type]
+        assert pair["current"]["html"] == successor["html"]
+        assert pair["current"]["text"] == successor["text"]
 
     @pytest.mark.parametrize("template_type", CARRIED_TYPES)
     def test_each_pair_actually_differs(self, template_type):

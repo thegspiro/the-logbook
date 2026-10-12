@@ -1,4 +1,3 @@
-/* eslint-disable testing-library/no-node-access */
 /**
  * The checklist builder's way into a compartment's NFC tags.
  *
@@ -112,7 +111,8 @@ describe('EquipmentCheckTemplateBuilder compartment NFC tags', () => {
 
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'NFC tags' }));
+    // A phone (the test default) opens the row menu as a sheet titled Cab.
+    await user.click(within(screen.getByRole('dialog', { name: 'Cab' })).getByRole('button', { name: 'NFC tags' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'NFC tags: Cab' });
     expect(within(dialog).getByTestId('nfc-tags-card')).toHaveTextContent('check_compartment:cab:Cab');
@@ -125,9 +125,9 @@ describe('EquipmentCheckTemplateBuilder compartment NFC tags', () => {
 
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    expect(
-      within(trigger.closest('details') as HTMLElement).queryByRole('button', { name: 'NFC tags' })
-    ).not.toBeInTheDocument();
+    const menu = screen.getByRole('dialog', { name: 'Cab' });
+    expect(within(menu).getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+    expect(within(menu).queryByRole('button', { name: 'NFC tags' })).not.toBeInTheDocument();
   });
 
   it('does not ask about NFC for a template that has not been saved', () => {

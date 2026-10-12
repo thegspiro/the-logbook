@@ -48,7 +48,12 @@ def _record(record: TrainingRecord, member_name: Optional[str]) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Expiring certifications", module="training")
+    @logbook_tool(
+        server,
+        title="Expiring certifications",
+        module="training",
+        permissions=("training.view_all", "training.manage"),
+    )
     async def list_expiring_certifications(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -96,7 +101,12 @@ def register(server: Any) -> None:
         body["days_ahead"] = days_ahead
         return body
 
-    @logbook_tool(server, title="Member training summary", module="training")
+    @logbook_tool(
+        server,
+        title="Member training summary",
+        module="training",
+        permissions=("training.view_all", "training.manage"),
+    )
     async def get_member_training_summary(
         db: AsyncSession, principal: McpPrincipal, member_id: str
     ) -> dict:
@@ -109,9 +119,15 @@ def register(server: Any) -> None:
         stats = await TrainingService(db).get_user_training_stats(
             UUID(member.id), org_uuid(principal)
         )
-        return stats.model_dump(mode="json")
+        dumped: dict = stats.model_dump(mode="json")
+        return dumped
 
-    @logbook_tool(server, title="Member requirement progress", module="training")
+    @logbook_tool(
+        server,
+        title="Member requirement progress",
+        module="training",
+        permissions=("training.view_all", "training.manage"),
+    )
     async def get_member_requirements_progress(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -142,7 +158,12 @@ def register(server: Any) -> None:
             offset,
         )
 
-    @logbook_tool(server, title="Member training records", module="training")
+    @logbook_tool(
+        server,
+        title="Member training records",
+        module="training",
+        permissions=("training.view_all", "training.manage"),
+    )
     async def list_member_training_records(
         db: AsyncSession,
         principal: McpPrincipal,

@@ -178,6 +178,25 @@ gate you did not achieve:
   it, and always report the pass count alongside the error count. Tests that
   don't touch the DB run either way and must pass.
 
+- **Rebuild the schema before trusting a DB-test failure.** _(Added 2026-10-06,
+  pass B3-5.)_ The session-start hook builds the schema **once**, at session
+  start. `main` moves while a session runs, so by the time you pull it the local
+  database can be several migrations behind — and the failure that produces is
+  `(1054, "Unknown column 'x' in 'INSERT INTO'")`, which reads exactly like a
+  real defect in the feature under review. Pass B3-5 opened with **98 failures
+  and 25 errors** across the inventory suite on a tree it had not touched; all
+  123 were this, and all 123 vanished after:
+
+  ```bash
+  cd backend && python3 -m alembic upgrade head && python3 scripts/repair_schema.py
+  ```
+
+  The real result was 1,169 passed, 0 failed. So: an `Unknown column` or
+  `Unknown table` error on code you did not change is a stale schema until
+  proven otherwise. Rebuild, re-run, and only then start reading the failure as
+  a finding. (The same staleness bites a DB-backed test you have just written
+  against a column that landed on `main` today.)
+
 - **`isort` may be absent.** `npm run lint:backend` runs
   `isort --check-only`; if it isn't installed, run the other three backend
   checks and say so.

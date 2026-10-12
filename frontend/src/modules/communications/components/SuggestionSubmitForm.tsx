@@ -9,12 +9,14 @@
 
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, KeyRound, Loader2, Lightbulb } from 'lucide-react';
+import { ArrowRight, Copy, KeyRound, Loader2, Lightbulb } from 'lucide-react';
 import { EmptyState, FileDropzone } from '../../../components/ux';
 import { SuggestionAnonymityMode } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { suggestionsService } from '../services/suggestionsService';
 import type { SubmissionReceipt, SuggestionBoxPublic } from '../types/suggestions';
+import { answersToSend, resolveRoute } from '../utils/suggestionRouting';
+import IntakeQuestionsFields from './IntakeQuestionsFields';
 
 // Mirrors the backend's screenshot rules in suggestion_service.py
 // (ALLOWED_SCREENSHOT_MIME, MAX_SCREENSHOT_BYTES, SCREENSHOT_MAX_DIMENSIONS),
@@ -48,6 +50,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [anonymous, setAnonymous] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [dropzoneKey, setDropzoneKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,33 +76,63 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
     };
   }, []);
 
-  const box = boxes.find((b) => b.id === boxId);
+  const chosenBox = boxes.find((b) => b.id === boxId);
+  // An answer may send the submission to another box, whose anonymity and
+  // follow-up rules then apply. The server makes the same decision; this
+  // only shows the member where it is going before they send it.
+  const routeId = chosenBox ? resolveRoute(chosenBox.intakeQuestions, answers) : null;
+  const routedTo = routeId && routeId !== chosenBox?.id ? boxes.find((b) => b.id === routeId) : undefined;
+  const box = routedTo ?? chosenBox;
+  // A box that promised anonymity keeps the promise wherever an answer
+  // sends the submission; the server applies the same rule.
+  const anonymityPromised = chosenBox?.anonymityMode === SuggestionAnonymityMode.REQUIRED;
   const willBeAnonymous =
     box?.anonymityMode === SuggestionAnonymityMode.REQUIRED ||
-    (box?.anonymityMode === SuggestionAnonymityMode.ALLOWED && anonymous);
+    (box?.anonymityMode === SuggestionAnonymityMode.ALLOWED && (anonymous || anonymityPromised));
+  // The member asked for anonymity in the box they chose, and their answers
+  // now send it somewhere that records names. Say so before they submit.
+  const losesAnonymity =
+    Boolean(routedTo) &&
+    anonymous &&
+    chosenBox?.anonymityMode === SuggestionAnonymityMode.ALLOWED &&
+    routedTo?.anonymityMode === SuggestionAnonymityMode.DISABLED;
+
+  const handleBoxChange = (id: string) => {
+    setBoxId(id);
+    // Answers are keyed by another box's question ids; none carry over.
+    setAnswers({});
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!box) return;
+    if (!chosenBox || !box) return;
     if (screenshots.length > MAX_SCREENSHOTS) {
       toast.error(`Attach at most ${MAX_SCREENSHOTS} screenshots.`);
       return;
     }
     setIsSubmitting(true);
     try {
-      const result = await suggestionsService.submit(box.id, {
+      const result = await suggestionsService.submit(chosenBox.id, {
         title: title.trim(),
         details: details.trim(),
         anonymous: willBeAnonymous,
         screenshots,
+        answers: answersToSend(chosenBox.intakeQuestions, answers),
       });
       setReceipt(result);
       setTitle('');
       setDetails('');
       setAnonymous(false);
+      setAnswers({});
       setScreenshots([]);
       setDropzoneKey((k) => k + 1);
-      if (!result.followUpKey) toast.success('Thank you — your submission was sent.');
+      if (!result.followUpKey) {
+        toast.success(
+          result.boxName && result.boxName !== chosenBox.name
+            ? `Thank you — your submission was sent to ${result.boxName}.`
+            : 'Thank you — your submission was sent.'
+        );
+      }
       onSubmitted?.();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Unable to submit. Try again.'));
@@ -148,8 +181,10 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
             Save your follow-up key
           </p>
           <p className="text-theme-text-secondary text-sm">
-            Your submission was sent anonymously. This key is the only way to see replies and respond. It is shown once
-            and cannot be recovered — nobody, including the reviewers, can look it up for you.
+            Your submission was sent anonymously
+            {receipt.boxName && receipt.boxName !== chosenBox?.name ? ` to ${receipt.boxName}` : ''}. This key is the
+            only way to see replies and respond. It is shown once and cannot be recovered — nobody, including the
+            reviewers, can look it up for you.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="bg-theme-surface border-theme-surface-border rounded border px-2 py-1 text-sm break-all select-all">
@@ -179,7 +214,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
             id="suggestion-box"
             className="form-input"
             value={boxId}
-            onChange={(e) => setBoxId(e.target.value)}
+            onChange={(e) => handleBoxChange(e.target.value)}
             required
           >
             <option value="">Choose a box…</option>
@@ -189,13 +224,39 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
               </option>
             ))}
           </select>
-          {box?.description && <p className="text-theme-text-secondary mt-1 text-sm">{box.description}</p>}
+          {chosenBox?.description && <p className="text-theme-text-secondary mt-1 text-sm">{chosenBox.description}</p>}
         </div>
+
+        {chosenBox && (
+          <IntakeQuestionsFields
+            questions={chosenBox.intakeQuestions}
+            values={answers}
+            onChange={(id, value) => setAnswers((current) => ({ ...current, [id]: value }))}
+          />
+        )}
+
+        {routedTo && (
+          <p className="alert-info text-theme-text-primary flex items-start gap-2 text-sm" role="status">
+            <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Based on your answers, this will be sent to <strong>{routedTo.name}</strong> instead of {chosenBox?.name},
+              and only its reviewers will read it.
+            </span>
+          </p>
+        )}
+        {losesAnonymity && (
+          <p className="alert-warning text-theme-text-primary text-sm" role="alert">
+            {routedTo?.name} does not accept anonymous submissions, so this will include your name. Change your answer
+            if you want to stay anonymous.
+          </p>
+        )}
 
         {box && (
           <>
             <div className="alert-info text-sm">
-              <p className="text-theme-text-primary">{anonymityHint(box)}</p>
+              <p className="text-theme-text-primary">
+                {anonymityHint(anonymityPromised && chosenBox ? chosenBox : box)}
+              </p>
               <p className="text-theme-text-secondary mt-1">
                 {box.followUpEnabled
                   ? 'Reviewers may reply with questions, and you can follow the status of your submission.'
@@ -203,7 +264,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
               </p>
             </div>
 
-            {box.anonymityMode === SuggestionAnonymityMode.ALLOWED && (
+            {box.anonymityMode === SuggestionAnonymityMode.ALLOWED && !anonymityPromised && (
               <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"

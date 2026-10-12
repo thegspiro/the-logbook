@@ -177,24 +177,28 @@ class ShiftEligibilityService:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     def _get_scheduling_settings(self, org: Organization) -> dict:
         """Return the scheduling sub-dict from org.settings, or defaults."""
-        return (org.settings or {}).get("scheduling", {})
+        scheduling: dict = (org.settings or {}).get("scheduling", {})
+        return scheduling
 
     def get_excluded_membership_types(self, org: Organization) -> List[str]:
         """Return the list of membership types excluded from self-signup."""
         sched = self._get_scheduling_settings(org)
-        return sched.get(
+        excluded: List[str] = sched.get(
             "excluded_membership_types",
             DEFAULT_EXCLUDED_MEMBERSHIP_TYPES,
         )
+        return excluded
 
     def get_open_positions(self, org: Organization) -> List[str]:
         """Return positions available to all eligible members."""
         sched = self._get_scheduling_settings(org)
-        return sched.get("open_positions", [])
+        open_positions: List[str] = sched.get("open_positions", [])
+        return open_positions
 
     def get_platoons_enabled(self, org: Organization) -> bool:
         """Whether platoon scheduling features are enabled for the org."""
@@ -431,7 +435,7 @@ class ShiftEligibilityService:
         if shift:
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
-                eligible = eligible & shift_positions
+                eligible = self._seats_granted(eligible, shift_positions)
 
         return sorted(eligible)
 
@@ -537,7 +541,7 @@ class ShiftEligibilityService:
             eligible.update(quals_by_date.get(self._shift_date(shift, org), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
-                eligible &= shift_positions
+                eligible = self._seats_granted(eligible, shift_positions)
             answers[str(shift_id)] = sorted(eligible)
         return answers
 
@@ -801,7 +805,8 @@ class ShiftEligibilityService:
                 Shift.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        shift: Optional[Shift] = result.scalar_one_or_none()
+        return shift
 
     def _shift_position_list(self, shift: Shift) -> List[str]:
         """Extract a flat list of position strings from a shift's positions JSON."""
@@ -815,6 +820,19 @@ class ShiftEligibilityService:
                 if pos:
                     result.append(pos)
         return result
+
+    @staticmethod
+    def _seats_granted(granted: Set[str], shift_positions: Set[str]) -> Set[str]:
+        """The shift's seats that ``granted`` covers, in the shift's spelling.
+
+        Case-insensitive, matching how the signup path compares a seat. Built-in
+        seats are lowercase on both sides, so for them this is the plain
+        intersection. A department's own seat is stored verbatim, and a rank
+        granting ``rescue_tech`` must cover a template seat someone typed as
+        ``Rescue_Tech`` — the two are one seat everywhere else.
+        """
+        folded = {str(seat).casefold() for seat in granted}
+        return {seat for seat in shift_positions if str(seat).casefold() in folded}
 
     def _administrative_shift_positions(self, shift: Shift) -> List[str]:
         """Return only positions explicitly opened to administrative members."""
@@ -891,7 +909,8 @@ class ShiftEligibilityService:
             return org_today(org)
         if isinstance(value, datetime):
             return local_date(value, scheduling_timezone(org))
-        return value
+        shift_day: date = value
+        return shift_day
 
     async def _get_qualification_positions(
         self, user_id: str, organization_id: str, as_of: date
@@ -988,6 +1007,8 @@ class ShiftEligibilityService:
             "restrict_checkin_to_assigned": bool(
                 sched.get("restrict_checkin_to_assigned", False)
             ),
+            # Absent means on: the feature ships enabled for every department.
+            "pre_shift_work_enabled": bool(sched.get("pre_shift_work_enabled", True)),
         }
 
     def get_signup_window_settings(self, org: Organization) -> Dict[str, int]:
@@ -1120,7 +1141,7 @@ class ShiftEligibilityService:
         types = raw.get("call_types")
         clean_types = []
         seen = set()
-        labels_seen = set()
+        labels_seen: Set[str] = set()
         if isinstance(types, list):
             for entry in types:
                 if not isinstance(entry, dict):
@@ -1169,6 +1190,47 @@ class ShiftEligibilityService:
 
         return {"mode": mode, "call_types": clean_types}
 
+    def get_call_tracking_mode_since(self, org: Organization) -> Optional[date]:
+        """The department-calendar date the current tracking mode was adopted.
+
+        ``None`` when no change has been recorded: the stamp started on
+        2026-10-11 and was never backfilled, so a department that has not
+        switched modes since then has no date and gets no range warning
+        (owner decision, SCHED-14). Read defensively — this is hand-editable
+        JSON, and a bad value must not take the call-volume report down.
+        """
+        raw = self._get_scheduling_settings(org).get("call_tracking")
+        value = raw.get("mode_since") if isinstance(raw, dict) else None
+        if not isinstance(value, str):
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def _stamp_call_tracking_mode_since(
+        self,
+        org: Organization,
+        stored: Any,
+        incoming: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Carry or set ``mode_since`` on a call-tracking save.
+
+        The report reads one mode for a whole range, so it needs to know when
+        that mode took over to warn about a range reaching back past it. A
+        change of mode stamps today on the department's calendar; a save that
+        keeps the mode carries the existing stamp forward, because the client
+        sends the whole object and would otherwise erase it. The client
+        cannot set the date itself.
+        """
+        saved = {k: v for k, v in incoming.items() if k != "mode_since"}
+        previous_mode = self.get_call_tracking_settings(org)["mode"]
+        if saved.get("mode") != previous_mode:
+            saved["mode_since"] = org_today(org).isoformat()
+        elif isinstance(stored, dict) and isinstance(stored.get("mode_since"), str):
+            saved["mode_since"] = stored["mode_since"]
+        return saved
+
     async def update_scheduling_settings(
         self,
         organization_id: str,
@@ -1181,6 +1243,7 @@ class ShiftEligibilityService:
         auto_generate_weeks: Optional[int] = None,
         require_end_of_shift_checks: Optional[bool] = None,
         restrict_checkin_to_assigned: Optional[bool] = None,
+        pre_shift_work_enabled: Optional[bool] = None,
         signup_closes_minutes_before: Optional[int] = None,
         late_signup_grace_minutes: Optional[int] = None,
         enforce_evoc: Optional[bool] = None,
@@ -1215,6 +1278,8 @@ class ShiftEligibilityService:
             scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
         if restrict_checkin_to_assigned is not None:
             scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
+        if pre_shift_work_enabled is not None:
+            scheduling["pre_shift_work_enabled"] = pre_shift_work_enabled
         if signup_closes_minutes_before is not None:
             scheduling["signup_closes_minutes_before"] = signup_closes_minutes_before
         if late_signup_grace_minutes is not None:
@@ -1222,7 +1287,9 @@ class ShiftEligibilityService:
         if enforce_evoc is not None:
             scheduling["enforce_evoc"] = enforce_evoc
         if call_tracking is not None:
-            scheduling["call_tracking"] = call_tracking
+            scheduling["call_tracking"] = self._stamp_call_tracking_mode_since(
+                org, scheduling.get("call_tracking"), call_tracking
+            )
 
         settings["scheduling"] = scheduling
         org.settings = settings
@@ -1230,7 +1297,8 @@ class ShiftEligibilityService:
         await self.db.commit()
         await self.db.refresh(org)
 
-        return (org.settings or {}).get("scheduling", {})
+        updated: dict = (org.settings or {}).get("scheduling", {})
+        return updated
 
     # ------------------------------------------------------------------
     # EVOC-aware driver eligibility (enforcement + soft warnings)
@@ -1366,4 +1434,5 @@ class ShiftEligibilityService:
             shift_id=shift_id,
             organization_id=organization_id,
         )
-        return outcome["warnings"]
+        warnings: List[Dict[str, Any]] = outcome["warnings"]
+        return warnings

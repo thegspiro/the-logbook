@@ -61,6 +61,7 @@ const TRAINING_TYPE_OPTIONS: { value: TrainingType; label: string }[] = [
   { value: 'orientation', label: 'Orientation' },
   { value: 'refresher', label: 'Refresher' },
   { value: 'specialty', label: 'Specialty' },
+  { value: 'policy_acknowledgment', label: 'Policy Acknowledgment' },
 ];
 
 const STEPS = [

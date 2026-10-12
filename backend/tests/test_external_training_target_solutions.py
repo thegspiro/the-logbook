@@ -15,6 +15,7 @@ so a member whose Logbook email was added after the first sync never matched.
 import logging
 import uuid
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -73,6 +74,23 @@ def _csv(*rows):
     return "\n".join([CSV_HEADER, *rows]) + "\n"
 
 
+# What the live report puts above the header row: a title block of report
+# metadata, each line padded with commas to the report's width. The live header
+# also ends with a Location column.
+LIVE_PREAMBLE = (
+    "Completions (via API),,,,,,,,,,,,,,,,,,\n"
+    "Report executed 10/07/2026,,,,,,,,,,,,,,,,,,\n"
+    "User Status: Active/Offline,,,,,,,,,,,,,,,,,,\n"
+    "Assignment Type: All Assignments,,,,,,,,,,,,,,,,,,\n"
+    "Completion Date Range: From 09/01/2026 To 10/01/2026,,,,,,,,,,,,,,,,,,\n"
+)
+LIVE_HEADER = CSV_HEADER + ",Location"
+
+
+def _live_csv(*rows):
+    return LIVE_PREAMBLE + "\n".join([LIVE_HEADER, *rows]) + "\n"
+
+
 def _ts_provider(api_key=TS_KEY, api_secret=TS_SECRET):
     return ExternalTrainingProvider(
         id="prov-1",
@@ -87,14 +105,17 @@ def _ts_provider(api_key=TS_KEY, api_secret=TS_SECRET):
 
 
 class _Recorder:
-    def __init__(self, status=200, body=""):
+    def __init__(self, status=200, body="", headers=None):
         self.status = status
         self.body = body
+        self.headers = headers or {}
         self.requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        return httpx.Response(self.status, content=self.body.encode("utf-8"))
+        return httpx.Response(
+            self.status, content=self.body.encode("utf-8"), headers=self.headers
+        )
 
 
 async def _service_with(recorder: _Recorder, db=None) -> ExternalTrainingSyncService:
@@ -181,6 +202,64 @@ class TestTrainingRecordsRequest:
             await service.close()
         assert [r["external_record_id"] for r in records] == ["T-9001"]
 
+    async def test_reads_past_the_live_reports_title_block(self):
+        rows = [
+            # The live report's own shapes: unpadded m/d/yyyy dates, a 12-hour
+            # time, a quoted title with a comma, and an Admin assignment whose
+            # score is the word "Completed" and whose duration is blank.
+            "1001,member.one@dept.test,CAPCE Back Injury Prevention (2755653),"
+            'TS Course,"One, Member",9/1/2026,,9/1/2026,4:50 PM,43,95%,1,,'
+            "2755653,558932162,,1,,",
+            '1002,member.two@dept.test,"General First Aid, Part I",TS Course,'
+            '"Two, Member",9/24/2026,,9/24/2026,10:47 PM,4,90%,1,,3777,'
+            "561945159,,1,,",
+            "1002,member.two@dept.test,Code of Conduct,Admin,,9/24/2026,,"
+            "9/25/2026,12:17 AM,,Completed,,,1472902,561939704,,,,",
+        ]
+        recorder = _Recorder(body=_live_csv(*rows))
+        service = await _service_with(recorder)
+        try:
+            first, second, admin = await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+        finally:
+            await service.close()
+
+        assert first["external_record_id"] == "558932162"
+        assert first["external_user_id"] == "1001"
+        assert first["external_email"] == "member.one@dept.test"
+        assert first["course_title"] == "CAPCE Back Injury Prevention (2755653)"
+        assert first["credit_hours"] == 1.0
+        assert first["score"] == 95.0
+        assert service._parse_date(first["completion_date"]).date() == date(2026, 9, 1)
+        assert second["course_title"] == "General First Aid, Part I"
+        assert admin["training_type"] == "Admin"
+        assert admin["score"] is None
+        assert admin["credit_hours"] is None
+        assert admin["raw_data"]["Location"] == ""
+
+    async def test_live_report_with_no_completions_is_no_records(self):
+        service = await _service_with(_Recorder(body=_live_csv()))
+        try:
+            records = await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+        finally:
+            await service.close()
+        assert records == []
+
+    async def test_title_block_without_a_header_row_is_rejected(self):
+        service = await _service_with(_Recorder(body=LIVE_PREAMBLE))
+        try:
+            with pytest.raises(
+                ValueError, match="without the completions report's columns"
+            ):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
     async def test_empty_report_is_no_records(self):
         service = await _service_with(_Recorder(body=""))
         try:
@@ -226,6 +305,130 @@ class TestTrainingRecordsRequest:
         assert recorder.requests == []
 
 
+async def _report_error(recorder) -> str:
+    service = await _service_with(recorder)
+    try:
+        with pytest.raises(ValueError, match="^Target Solutions") as exc:
+            await service._fetch_external_records(
+                _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+            )
+    finally:
+        await service.close()
+    message = str(exc.value)
+    assert TS_KEY not in message
+    assert TS_SECRET not in message
+    return message
+
+
+@pytest.mark.unit
+class TestTrainingRecordsErrorMessages:
+    """Each failure says what actually came back, not one catch-all."""
+
+    @pytest.mark.parametrize("status", [401, 403])
+    async def test_rejected_credentials(self, status):
+        message = await _report_error(_Recorder(status=status))
+        assert "rejected the API key or secret" in message
+        assert f"HTTP {status}" in message
+
+    async def test_redirect_names_where_it_pointed_without_the_query(self):
+        message = await _report_error(
+            _Recorder(
+                status=302,
+                headers={
+                    "location": "https://app.targetsolutions.com/tsapp/login"
+                    f"?key={TS_KEY}&secret={TS_SECRET}"
+                },
+            )
+        )
+        assert "redirected the report request" in message
+        assert "to app.targetsolutions.com/tsapp/login" in message
+        assert "HTTP 302" in message
+        assert "?key" not in message
+
+    async def test_not_found_points_at_the_documented_base_url(self):
+        message = await _report_error(_Recorder(status=404))
+        assert "HTTP 404" in message
+        assert "https://app.targetsolutions.com/tsapp/api/" in message
+
+    async def test_server_error_is_called_theirs(self):
+        message = await _report_error(_Recorder(status=503))
+        assert "server error (HTTP 503)" in message
+        assert "try again later" in message
+
+    async def test_web_page_is_named_by_its_title(self):
+        body = (
+            "<!DOCTYPE html><html><head><title>Sign In &amp; Continue"
+            "</title></head><body>Please sign in</body></html>"
+        )
+        message = await _report_error(_Recorder(body=body))
+        assert 'returned a web page titled "Sign In & Continue"' in message
+        assert "Please sign in" not in message
+
+    async def test_web_page_title_never_echoes_the_credentials(self):
+        body = f"<html><title>Invalid key {TS_KEY} / {TS_SECRET}</title></html>"
+        message = await _report_error(_Recorder(body=body))
+        assert "Invalid key [REDACTED] / [REDACTED]" in message
+
+    async def test_untitled_web_page(self):
+        message = await _report_error(_Recorder(body="<html>Invalid key</html>"))
+        assert message.startswith("Target Solutions returned a web page instead")
+
+    async def test_other_file_quotes_its_first_line(self):
+        body = f"\nError: report type not enabled for key={TS_KEY}\nmore\n"
+        message = await _report_error(_Recorder(body=body))
+        assert "columns (Employee ID, Email)" in message
+        assert '"Error: report type not enabled for key=' in message
+        assert "more" not in message
+
+    async def test_long_first_line_is_cut_short(self):
+        message = await _report_error(_Recorder(body="x" * 1000))
+        assert "x" * 150 + "…" in message
+        assert "x" * 151 not in message
+
+    async def test_timeout(self):
+        def boom(request):
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        service = ExternalTrainingSyncService(None)
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(boom), timeout=30.0
+        )
+        try:
+            with pytest.raises(ValueError, match="did not respond within 30 seconds"):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
+    async def test_connection_failure_names_the_host(self):
+        def boom(request):
+            raise httpx.ConnectError("name resolution failed", request=request)
+
+        service = ExternalTrainingSyncService(None)
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(transport=httpx.MockTransport(boom))
+        try:
+            with pytest.raises(
+                ValueError, match="Could not connect to app.targetsolutions.com"
+            ):
+                await service._fetch_external_records(
+                    _ts_provider(), date(2026, 9, 1), date(2026, 10, 1)
+                )
+        finally:
+            await service.close()
+
+    async def test_connection_test_reports_the_same_message(self):
+        service = await _service_with(_Recorder(status=404))
+        try:
+            ok, message = await service.test_connection(_ts_provider())
+        finally:
+            await service.close()
+        assert ok is False
+        assert "no report API at this address (HTTP 404)" in message
+
+
 @pytest.mark.unit
 class TestTrainingRecordsConnectionTest:
     async def test_success_requests_today_only(self):
@@ -240,6 +443,16 @@ class TestTrainingRecordsConnectionTest:
         params = dict(recorder.requests[0].url.params)
         assert "startDate" not in params
         assert "endDate" not in params
+
+    async def test_live_report_title_block_passes(self):
+        recorder = _Recorder(body=_live_csv())
+        service = await _service_with(recorder)
+        try:
+            ok, message = await service.test_connection(_ts_provider())
+        finally:
+            await service.close()
+        assert ok is True, message
+        assert "0 record" in message
 
     async def test_bad_credentials_fail_without_echoing_them(self):
         service = await _service_with(_Recorder(status=200, body="Invalid key"))
@@ -373,6 +586,131 @@ class TestCredentialRedaction:
         assert TS_SECRET not in log.error_message
 
 
+_ECHOED_URL = (
+    f"{TS_BASE_URL}?action=reports.buildReport&key={TS_KEY}&secret={TS_SECRET}"
+)
+
+
+def _raise(exc_type, message):
+    def handler(request):
+        raise exc_type(message, request=request)
+
+    return handler
+
+
+def _respond(status, body="", headers=None):
+    return lambda request: httpx.Response(
+        status, content=body.encode("utf-8"), headers=headers or {}
+    )
+
+
+@pytest.mark.unit
+class TestNoLogLineCarriesTheCredentials:
+    """Every log a failing sync or connection test writes, captured whole.
+
+    Covers what a reader of the logs actually sees: loguru output including
+    the traceback ``logger.exception`` attaches, and the standard-library
+    loggers httpx writes to. Several cases have Target Solutions echo the
+    request — a redirect, an error page, a plain-text error — because that is
+    how a credential would arrive in a message without our own code putting
+    it there.
+    """
+
+    class _Db:
+        def add(self, obj):
+            pass
+
+        async def flush(self):
+            pass
+
+        async def commit(self):
+            pass
+
+        async def rollback(self):
+            pass
+
+        async def execute(self, statement):
+            return SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: []),
+                scalar_one_or_none=lambda: None,
+            )
+
+    @pytest.mark.parametrize(
+        "handler",
+        [
+            _raise(httpx.ReadTimeout, f"timed out reading {_ECHOED_URL}"),
+            _raise(httpx.ConnectError, f"cannot connect to {_ECHOED_URL}"),
+            _respond(500, f"Internal error while serving {_ECHOED_URL}"),
+            _respond(302, headers={"location": _ECHOED_URL}),
+            _respond(200, f"<html><title>Bad key {TS_KEY} {TS_SECRET}</title></html>"),
+            _respond(200, f"Error: key={TS_KEY}&secret={TS_SECRET} not accepted"),
+            _respond(401, f"Denied: {_ECHOED_URL}"),
+        ],
+        ids=[
+            "timeout",
+            "connect",
+            "server-error",
+            "redirect",
+            "html-title",
+            "plain-text",
+            "rejected",
+        ],
+    )
+    async def test_sync_and_connection_test_logs(self, handler, caplog):
+        from loguru import logger
+
+        captured: list[str] = []
+        # diagnose=False as every production sink is (app.core.logging), so
+        # the capture shows what the application log would hold.
+        sink = logger.add(
+            lambda m: captured.append(str(m)), level="DEBUG", diagnose=False
+        )
+        caplog.set_level(logging.DEBUG)
+        provider = _ts_provider()
+        service = ExternalTrainingSyncService(self._Db())
+        await service.http_client.aclose()
+        service.http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            log = await service.sync_training_records(provider, "manual")
+            ok, message = await service.test_connection(provider)
+        finally:
+            await service.close()
+            logger.remove(sink)
+
+        written = "\n".join([*captured, caplog.text, log.error_message or "", message])
+        assert ok is False
+        assert log.status == SyncStatus.FAILED
+        assert TS_KEY not in written
+        assert TS_SECRET not in written
+
+    async def test_an_unexpected_crash_after_the_request_is_scrubbed(self, caplog):
+        # A bug further down — not a provider response — that happens to put
+        # the URL in its message still reaches the logs only redacted.
+        from loguru import logger
+
+        captured: list[str] = []
+        # diagnose=False as every production sink is (app.core.logging), so
+        # the capture shows what the application log would hold.
+        sink = logger.add(
+            lambda m: captured.append(str(m)), level="DEBUG", diagnose=False
+        )
+        service = ExternalTrainingSyncService(self._Db())
+
+        async def _boom(*_a, **_k):
+            raise RuntimeError(f"unexpected failure for {_ECHOED_URL}")
+
+        service._fetch_external_records = _boom
+        try:
+            log = await service.sync_training_records(_ts_provider(), "manual")
+        finally:
+            await service.close()
+            logger.remove(sink)
+
+        written = "\n".join([*captured, caplog.text, log.error_message or ""])
+        assert TS_SECRET not in written
+        assert TS_KEY not in written
+
+
 @pytest.mark.unit
 class TestProviderUrlRejectsCredentials:
     PASTED = f"{TS_BASE_URL}?action=reports.buildReport&key={TS_KEY}&secret={TS_SECRET}"
@@ -445,12 +783,15 @@ async def _make_org(db_session) -> Organization:
     return org
 
 
-async def _make_user(db_session, org, email, deleted=False) -> User:
+async def _make_user(
+    db_session, org, email, deleted=False, membership_number=None
+) -> User:
     user = User(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         username=f"u{uuid.uuid4().hex[:10]}",
         email=email,
+        membership_number=membership_number,
         first_name="Test",
         last_name="Member",
         password_hash="x",
@@ -462,12 +803,14 @@ async def _make_user(db_session, org, email, deleted=False) -> User:
     return user
 
 
-async def _make_provider(db_session, org) -> ExternalTrainingProvider:
+async def _make_provider(
+    db_session, org, provider_type=ExternalProviderType.TARGET_SOLUTIONS
+) -> ExternalTrainingProvider:
     provider = ExternalTrainingProvider(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         name="Target Solutions",
-        provider_type=ExternalProviderType.TARGET_SOLUTIONS,
+        provider_type=provider_type,
         api_base_url=TS_BASE_URL,
     )
     db_session.add(provider)
@@ -622,6 +965,112 @@ class TestEmailMatching:
         row = await self._import_row(db_session, provider)
         assert row.user_id == member.id
         assert row.external_user_id == "jane.doe@dept.test"
+
+    async def test_unmatched_email_falls_back_to_membership_number(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_user(
+            db_session, org, "jdoe@personal.test", membership_number="E-501"
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == member.id
+        mapping = await self._mapping(db_session, provider)
+        assert mapping.internal_user_id == member.id
+        assert mapping.auto_mapped is True
+
+    async def test_email_match_wins_over_membership_number(self, db_session):
+        org = await _make_org(db_session)
+        by_email = await _make_user(db_session, org, "jane.doe@dept.test")
+        await _make_user(db_session, org, "other@dept.test", membership_number="E-501")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == by_email.id
+
+    async def test_membership_number_never_matches_a_deleted_member(self, db_session):
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session,
+            org,
+            "gone@dept.test",
+            deleted=True,
+            membership_number="E-501",
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_membership_number_is_scoped_to_the_org(self, db_session):
+        org = await _make_org(db_session)
+        other = await _make_org(db_session)
+        await _make_user(db_session, other, "else@dept.test", membership_number="E-501")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_later_sync_matches_a_membership_number_added_later(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_user(db_session, org, "jdoe@personal.test")
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+        await db_session.execute(
+            User.__table__.update()
+            .where(User.id == member.id)
+            .values(membership_number="E-501")
+        )
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id == member.id
+
+    async def test_other_providers_never_match_on_membership_number(self, db_session):
+        # A Vector Solutions user id is Vector's own key; one that equals a
+        # membership number is a coincidence, not an identity.
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session, org, "jdoe@personal.test", membership_number="E-501"
+        )
+        provider = await _make_provider(
+            db_session, org, provider_type=ExternalProviderType.VECTOR_SOLUTIONS
+        )
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row())
+
+        assert (await self._import_row(db_session, provider)).user_id is None
+
+    async def test_blank_employee_id_never_compares_the_email_as_a_number(
+        self, db_session
+    ):
+        # With no Employee ID the email becomes the external user id; it must
+        # not be looked up as a membership number.
+        org = await _make_org(db_session)
+        await _make_user(
+            db_session,
+            org,
+            "someone@dept.test",
+            membership_number="jane.doe@dept.test",
+        )
+        provider = await _make_provider(db_session, org)
+        log = await _make_sync_log(db_session, provider)
+
+        await self._process(db_session, provider, log, _row(**{"Employee ID": ""}))
+
+        assert (await self._import_row(db_session, provider)).user_id is None
 
     async def test_resync_updates_the_same_transcript(self, db_session):
         org = await _make_org(db_session)

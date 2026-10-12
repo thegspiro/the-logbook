@@ -89,7 +89,15 @@ class TestEquipmentCheckPdfs:
             )
         )
         assert "2026-10-06" in text
-        assert "2026-10-07" not in text
+        # Not a bare "2026-10-07" ban: the unfrozen "Generated" stamp on this
+        # same page is real wall-clock time (freezing it here would swap
+        # module-level `datetime` for a subclass, and LATE_EVENING_UTC is an
+        # instance of the real class, so _local()'s `isinstance(value,
+        # datetime)` check would go false and silently fall back to raw
+        # str(value) for the row itself — the exact regression this assertion
+        # exists to catch). Pin to the row's own raw-UTC repr instead, which
+        # is what a regression would actually produce.
+        assert "2026-10-07 02:30:00+00:00" not in text
 
     def test_the_compliance_last_check_is_local(self):
         text = _text(
@@ -109,7 +117,11 @@ class TestEquipmentCheckPdfs:
             )
         )
         assert "2026-10-06" in text
-        assert "2026-10-07" not in text
+        # See the comment in test_the_failure_log_dates_are_local: this page's
+        # "Generated" stamp is real wall-clock time, so a bare "2026-10-07"
+        # ban would coincidentally fail whenever the suite runs on that real
+        # calendar date. Pin to the row's own raw-UTC repr instead.
+        assert "2026-10-07 02:30:00+00:00" not in text
 
 
 class TestImpactPlanPdf:

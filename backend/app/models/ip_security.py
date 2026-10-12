@@ -13,19 +13,11 @@ Zero-Trust Security Model:
 """
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-)
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -65,36 +57,36 @@ class IPException(Base):
 
     __tablename__ = "ip_exceptions"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
     # ============================================
     # Request Information
     # ============================================
 
     # IP address (single address; CIDR-range support was never implemented)
-    ip_address = Column(String(45), nullable=False)
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
 
     # Exception type
-    exception_type = Column(
+    exception_type: Mapped[IPExceptionType] = mapped_column(
         Enum(IPExceptionType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
     # Reason and documentation (required - user must justify the request)
-    reason = Column(Text, nullable=False)
-    description = Column(Text)  # Additional details
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)  # Additional details
 
     # ============================================
     # User Association (REQUIRED)
     # ============================================
 
     # The user this exception is for - REQUIRED for zero-trust
-    user_id = Column(
+    user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id = Column(
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
@@ -105,11 +97,13 @@ class IPException(Base):
     # ============================================
 
     # Requested duration in days (user specifies how long they need access)
-    requested_duration_days = Column(Integer, nullable=False)
+    requested_duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Actual validity period (set by IT admin upon approval)
-    valid_from = Column(DateTime(timezone=True))  # Set when approved
-    valid_until = Column(
+    valid_from: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )  # Set when approved
+    valid_until: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )  # REQUIRED - no permanent exceptions
 
@@ -121,50 +115,58 @@ class IPException(Base):
     # ============================================
 
     # Current approval status
-    approval_status = Column(
+    approval_status: Mapped[IPExceptionApprovalStatus] = mapped_column(
         Enum(IPExceptionApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=IPExceptionApprovalStatus.PENDING,
         nullable=False,
     )
 
     # Request submitted
-    requested_by = Column(
+    requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )  # User who submitted request
-    requested_at = Column(DateTime(timezone=True), server_default=func.now())
+    requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Approval by IT Administrator
-    approved_by = Column(
+    approved_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # IT admin who approved
-    approved_at = Column(DateTime(timezone=True))
-    approval_notes = Column(Text)  # IT admin notes on approval
-    approved_duration_days = Column(
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    approval_notes: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # IT admin notes on approval
+    approved_duration_days: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Actual approved duration (may differ from requested)
 
     # Rejection (if applicable)
-    rejected_by = Column(
+    rejected_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
     )  # IT admin who rejected
-    rejected_at = Column(DateTime(timezone=True))
-    rejection_reason = Column(Text)  # Required when rejecting
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Required when rejecting
 
     # Revocation (if exception needs to be ended early)
-    revoked_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
-    revoked_at = Column(DateTime(timezone=True))
-    revoke_reason = Column(Text)
+    revoked_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revoke_reason: Mapped[Optional[str]] = mapped_column(Text)
 
     # ============================================
     # Context Information
     # ============================================
 
     # Country information (auto-populated from IP lookup)
-    country_code = Column(String(2))
-    country_name = Column(String(100))
+    country_code: Mapped[Optional[str]] = mapped_column(String(2))
+    country_name: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Use case description
-    use_case = Column(
+    use_case: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # e.g., "travel", "remote_work", "vpn", "partner_access"
 
@@ -172,15 +174,17 @@ class IPException(Base):
     # Usage Tracking
     # ============================================
 
-    last_used_at = Column(DateTime(timezone=True))
-    use_count = Column(Integer, default=0)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    use_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # ============================================
     # Timestamps
     # ============================================
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -230,7 +234,7 @@ class IPException(Base):
             if self.valid_until.tzinfo is None
             else self.valid_until
         )
-        return datetime.now(timezone.utc) > valid_until
+        return bool(datetime.now(timezone.utc) > valid_until)
 
     def days_remaining(self) -> int:
         """Get number of days remaining until expiration."""
@@ -241,7 +245,7 @@ class IPException(Base):
             if self.valid_until.tzinfo is None
             else self.valid_until
         )
-        delta = valid_until - datetime.now(timezone.utc)
+        delta: timedelta = valid_until - datetime.now(timezone.utc)
         return max(0, delta.days)
 
 
@@ -255,27 +259,31 @@ class BlockedAccessAttempt(Base):
 
     __tablename__ = "blocked_access_attempts"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
     # Request information
-    ip_address = Column(String(45), nullable=False)
-    country_code = Column(String(2))
-    country_name = Column(String(100))
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
+    country_code: Mapped[Optional[str]] = mapped_column(String(2))
+    country_name: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Associated user (if authenticated)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Block reason
-    block_reason = Column(String(100), nullable=False, index=True)
-    block_details = Column(Text)
+    block_reason: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    block_details: Mapped[Optional[str]] = mapped_column(Text)
 
     # Request details
-    request_path = Column(String(500))
-    request_method = Column(String(10))
-    user_agent = Column(Text)
+    request_path: Mapped[Optional[str]] = mapped_column(String(500))
+    request_method: Mapped[Optional[str]] = mapped_column(String(10))
+    user_agent: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamp
-    blocked_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    blocked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
 
     __table_args__ = (
         Index("idx_blocked_ip_time", "ip_address", "blocked_at"),
@@ -296,32 +304,38 @@ class CountryBlockRule(Base):
 
     __tablename__ = "country_block_rules"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
     # Country information
-    country_code = Column(String(2), nullable=False, unique=True)
-    country_name = Column(String(100))
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False, unique=True)
+    country_name: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Rule status
-    is_blocked = Column(Boolean, default=True)
+    is_blocked: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Reason and documentation
-    reason = Column(Text, nullable=False)
-    risk_level = Column(String(20))  # low, medium, high, critical
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_level: Mapped[Optional[str]] = mapped_column(
+        String(20)
+    )  # low, medium, high, critical
 
     # Audit trail
-    created_by = Column(
+    created_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(String(36), ForeignKey("users.id", ondelete="RESTRICT"))
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
     # Statistics
-    blocked_attempts_count = Column(Integer, default=0)
-    last_blocked_at = Column(DateTime(timezone=True))
+    blocked_attempts_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    last_blocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("idx_country_rule_blocked", "is_blocked"),)
 
@@ -338,31 +352,37 @@ class IPExceptionAuditLog(Base):
 
     __tablename__ = "ip_exception_audit_log"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
 
     # Reference to the exception
-    exception_id = Column(
+    exception_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("ip_exceptions.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Action taken
-    action = Column(
+    action: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # requested, approved, rejected, revoked, expired, used
 
     # Who performed the action
-    performed_by = Column(
+    performed_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
 
     # When
-    performed_at = Column(DateTime(timezone=True), server_default=func.now())
+    performed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Details
-    details = Column(Text)  # JSON with action-specific details
-    ip_address = Column(String(45))  # IP from which action was performed
+    details: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # JSON with action-specific details
+    ip_address: Mapped[Optional[str]] = mapped_column(
+        String(45)
+    )  # IP from which action was performed
 
     __table_args__ = (
         Index("idx_exception_audit_exception", "exception_id"),

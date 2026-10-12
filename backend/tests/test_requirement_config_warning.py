@@ -130,3 +130,81 @@ class TestCreateStillBlocks:
             TrainingRequirementCreate(
                 name="HIPAA", requirement_type="courses", frequency="annual"
             )
+
+
+class TestSingleTopicHoursWarning:
+    """A HIPAA/OSHA hours requirement scoped by training type alone counts any
+    hour of that type — two CAPCE medical courses met the HIPAA refresher."""
+
+    def _hipaa_hours(self, **overrides):
+        return _orm(
+            requirement_type=RequirementType.HOURS,
+            training_type="continuing_education",
+            required_hours=1,
+            registry_code="45 CFR 164.530(b)",
+            **overrides,
+        )
+
+    def test_unscoped_hipaa_hours_requirement_warns(self):
+        msg = requirement_config_warning(self._hipaa_hours())
+        assert msg is not None
+        assert "HIPAA" in msg
+        assert "Courses requirement" in msg
+
+    @pytest.mark.parametrize(
+        ("code", "topic"),
+        [("29 CFR 1910.1030", "bloodborne pathogens"), ("29 CFR 1910.120", "hazmat")],
+    )
+    def test_osha_refreshers_warn(self, code, topic):
+        msg = requirement_config_warning(
+            _orm(
+                requirement_type=RequirementType.HOURS,
+                training_type="refresher",
+                required_hours=2,
+                registry_code=code,
+            )
+        )
+        assert msg is not None
+        assert topic in msg
+
+    def test_category_scoped_requirement_does_not_warn(self):
+        assert (
+            requirement_config_warning(self._hipaa_hours(category_ids=["cat-1"]))
+            is None
+        )
+
+    def test_course_scoped_requirement_does_not_warn(self):
+        assert (
+            requirement_config_warning(self._hipaa_hours(required_courses=["course-1"]))
+            is None
+        )
+
+    def test_genuine_hour_totals_do_not_warn(self):
+        # NFPA 1001's 36 hours of any continuing education is the rule itself.
+        assert (
+            requirement_config_warning(
+                _orm(
+                    requirement_type=RequirementType.HOURS,
+                    training_type="continuing_education",
+                    required_hours=36,
+                    registry_code="NFPA 1001",
+                )
+            )
+            is None
+        )
+
+    def test_courses_requirement_with_the_code_does_not_warn(self):
+        assert (
+            requirement_config_warning(
+                _orm(
+                    registry_code="45 CFR 164.530(b)",
+                    required_courses=["course-1"],
+                )
+            )
+            is None
+        )
+
+    def test_response_surfaces_the_warning(self):
+        resp = TrainingRequirementResponse.model_validate(self._hipaa_hours())
+        assert resp.config_warning is not None
+        assert "HIPAA" in resp.config_warning

@@ -7,6 +7,7 @@ attachment on the same event) still reference (raised in review of
 PRs #1452/#1456).
 """
 
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -15,9 +16,16 @@ import pytest
 
 import app.api.v1.endpoints.events as events_endpoint
 from app.api.v1.endpoints.events import delete_event_attachment
+from app.services import file_storage_service
 
 ORG_ID = str(uuid4())
-FILE_PATH = f"{events_endpoint.ATTACHMENT_UPLOAD_DIR}/{ORG_ID}/shared-file.pdf"
+FILE_PATH = os.path.join(
+    file_storage_service.UPLOADS_ROOT,
+    ORG_ID,
+    "event-attachments",
+    str(uuid4()),
+    "shared-file.pdf",
+)
 
 
 def _event(attachments):

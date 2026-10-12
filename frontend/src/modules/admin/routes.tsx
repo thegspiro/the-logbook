@@ -16,6 +16,7 @@ const ErrorMonitoringPage = lazyWithRetry(() => import('../../pages/ErrorMonitor
 const AnalyticsDashboardPage = lazyWithRetry(() => import('../../pages/AnalyticsDashboardPage'));
 const PlatformAnalyticsPage = lazyWithRetry(() => import('../../pages/PlatformAnalyticsPage'));
 const AuditLogPage = lazyWithRetry(() => import('../../pages/AuditLogPage'));
+const SecurityAlertsPage = lazyWithRetry(() => import('../../pages/SecurityAlertsPage'));
 
 export const getAdminRoutes = () => {
   return (
@@ -56,6 +57,16 @@ export const getAdminRoutes = () => {
           <ProtectedRoute requiredPermission="audit.view">
             <Suspense fallback={null}>
               <AuditLogPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/security-alerts"
+        element={
+          <ProtectedRoute requiredPermission="audit.view">
+            <Suspense fallback={null}>
+              <SecurityAlertsPage />
             </Suspense>
           </ProtectedRoute>
         }

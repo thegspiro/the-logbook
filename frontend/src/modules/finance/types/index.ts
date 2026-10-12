@@ -15,6 +15,13 @@ export const FiscalYearStatus = {
 } as const;
 export type FiscalYearStatus = (typeof FiscalYearStatus)[keyof typeof FiscalYearStatus];
 
+export const BudgetAmendmentStatus = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'rejected',
+} as const;
+export type BudgetAmendmentStatus = (typeof BudgetAmendmentStatus)[keyof typeof BudgetAmendmentStatus];
+
 export const PurchaseRequestStatus = {
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
@@ -210,9 +217,69 @@ export interface FiscalYear {
   endDate: string;
   status: FiscalYearStatus;
   isLocked: boolean;
+  /**
+   * The last day line owners may make budget requests (`YYYY-MM-DD`, the
+   * department's calendar). Only a draft year carries one.
+   */
+  requestDeadline?: string | null;
+  /** Draft, unlocked, taking requests, and the deadline (if any) not yet passed — backend-decided. */
+  requestsOpen?: boolean;
+  /** Where a draft year's budget is on its way to adoption; null unless a draft. */
+  planningStage?: BudgetPlanningStage | null;
+  /** The board's adoption, recorded from board review (`YYYY-MM-DD`). */
+  adoptedOn?: string | null;
+  adoptionReference?: string | null;
+  adoptionNotes?: string | null;
+  adoptionRecordedBy?: string | null;
+  adoptionRecordedAt?: string | null;
+  /** When the year-end close began; a closed year that is not locked is closing. */
+  closingStartedAt?: string | null;
+  /** The active year's end date has passed and its close has not begun — backend-decided. */
+  closeDue?: boolean;
+  /** The Treasurer's reconciliation sign-off that locked the year. */
+  lockedBy?: string | null;
+  lockedAt?: string | null;
+  lockNotes?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A draft year's planning stage. Owners request amounts, then the Treasurer
+ * closes the draft for senior leadership's review, then it goes before the
+ * board. Recording the board's vote makes it `adopted`, where it waits for
+ * the Treasurer to start the year.
+ */
+export const BudgetPlanningStage = {
+  REQUESTS: 'requests',
+  LEADERSHIP_REVIEW: 'leadership_review',
+  BOARD_REVIEW: 'board_review',
+  ADOPTED: 'adopted',
+} as const;
+export type BudgetPlanningStage = (typeof BudgetPlanningStage)[keyof typeof BudgetPlanningStage];
+
+/** `POST /finance/fiscal-years/{id}/adopt`: the board's vote. */
+export interface FiscalYearAdoptionPayload {
+  adoptedOn: string;
+  adoptionReference: string;
+  adoptionNotes?: string | undefined;
+}
+
+/** `POST /finance/fiscal-years/{id}/lock`: the Treasurer's reconciliation sign-off. */
+export interface FiscalYearLockPayload {
+  notes: string;
+}
+
+/** A request still in flight that stops a closing year from locking. */
+export interface FiscalYearOpenItem {
+  /** For `budget_amendment`, `entityId` is the budget line, not the amendment. */
+  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment';
+  entityId: string;
+  number: string;
+  description: string;
+  status: string;
+  amount?: number | string | null;
 }
 
 export interface BudgetCategory {
@@ -224,6 +291,9 @@ export interface BudgetCategory {
   sortOrder: number;
   isActive: boolean;
   qbAccountName?: string;
+  /** The position answerable for this category's lines; a line without its own owner inherits it. */
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -237,10 +307,355 @@ export interface Budget {
   amountSpent: MonetaryAmount;
   amountEncumbered: MonetaryAmount;
   notes?: string;
-  stationId?: string;
+  /**
+   * The category's and fiscal year's names, sent with the line so a reader
+   * who cannot list either (a line's owner without `finance.view`) can label it.
+   */
+  categoryName?: string | null;
+  fiscalYearName?: string | null;
+  fiscalYearStatus?: FiscalYearStatus | null;
+  stationId?: string | null;
+  /** The facility name — the same one the request forms label the line with. */
+  stationName?: string | null;
+  /** The line's own owner; null when it has none of its own. */
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
+  /** Who owns the line: its own owner, else its category's (backend-resolved). */
+  effectiveOwnerPositionId?: string | null;
+  effectiveOwnerPositionName?: string | null;
+  /** True when the owner comes from the category rather than the line. */
+  ownerInherited?: boolean;
+  /**
+   * `amountBudgeted` less the line's amendments — what the line started at.
+   * Derived by the backend, never stored; `amountBudgeted` is the current budget.
+   */
+  originalAmount?: MonetaryAmount;
+  /** The sum of the line's confirmed amendments. */
+  amendmentsTotal?: MonetaryAmount;
+  /** Confirmed amendments only. */
+  amendmentCount?: number;
+  /** Amendments entered and awaiting a second officer's confirmation. */
+  pendingAmendmentCount?: number;
+  /**
+   * Whether `amountBudgeted` may be edited directly. False from board review
+   * on, and in an active, closing or locked year: from then the amount moves
+   * only through a confirmed amendment.
+   */
+  amountEditable?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A line the signed-in member owns, as "My budgets" lists it. The backend
+ * decides which lines those are (`finance_budget_ownership.py`) and reports
+ * what is left and the share used; the page shows them, it does not re-derive
+ * them (CLAUDE.md pitfall #29).
+ */
+export interface MyBudget extends Budget {
+  amountRemaining: MonetaryAmount;
+  /** Spent plus committed (encumbered), over the current budget, in percent. */
+  percentUsed: number;
+}
+
+export interface MyBudgetsSummary {
+  /** The member owns at least one budget line, in any fiscal year. */
+  ownsAny: boolean;
+  /**
+   * The member owns a line in a draft fiscal year, or has a budget request for
+   * one — the "Next year's budget" navigation entry's signal.
+   */
+  plansNextYear?: boolean;
+}
+
+/** What moved a line's totals: a purchase request, check request or expense item. */
+export type BudgetTransactionKind = 'purchase_request' | 'check_request' | 'expense_report';
+
+/** `none` is a voided check — once spent, since reversed. */
+export type BudgetTransactionEffect = 'spent' | 'encumbered' | 'none';
+
+export interface BudgetTransaction {
+  /** The row: the request itself, or an expense report's line item. */
+  id: string;
+  kind: BudgetTransactionKind;
+  /** The purchase request, check request or expense report it came from. */
+  entityId: string;
+  number: string;
+  description?: string | null;
+  /** Vendor, payee or merchant. */
+  counterparty?: string | null;
+  requesterName?: string | null;
+  status: string;
+  amount: MonetaryAmount;
+  effect: BudgetTransactionEffect;
+  occurredAt?: string | null;
+}
+
+export interface BudgetTransactionPage {
+  items: BudgetTransaction[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Extra money leadership approved for a budget line — an audit record.
+ *
+ * Entered `pending`; it moves the line's budget only once a second officer
+ * (`finance.budget_review` or `finance.manage`, never whoever entered it)
+ * confirms it. A rejected one is kept, with the reason, and moves nothing.
+ *
+ * A mistaken amendment is corrected by a reversing entry, never edited: a
+ * row with a negative `amount` (`isReversal`) naming the amendment it
+ * cancels in `reversesAmendmentId`. The reversed amendment carries the
+ * reversal's id, when it was entered and by whom.
+ */
+export interface BudgetAmendment {
+  id: string;
+  organizationId: string;
+  budgetId: string;
+  amount: MonetaryAmount;
+  reason: string;
+  approvedBy: string;
+  /** The approval date, a calendar date ("YYYY-MM-DD"). */
+  approvedOn: string;
+  createdBy?: string | null;
+  enteredByName?: string | null;
+  createdAt: string;
+  /** On a reversal: the amendment it cancels. */
+  reversesAmendmentId?: string | null;
+  isReversal?: boolean;
+  /** On a reversed amendment: the reversal, when it was entered and by whom. */
+  reversedByAmendmentId?: string | null;
+  reversedAt?: string | null;
+  reversedByName?: string | null;
+  /** On a reversed amendment: whether its reversal is pending or confirmed. */
+  reversalStatus?: BudgetAmendmentStatus | null;
+  status?: BudgetAmendmentStatus;
+  /** Who confirmed or rejected it, when, and (on a rejection) why. */
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+}
+
+/** `POST /finance/budgets/:id/amendments/:amendmentId/reject`. */
+export interface BudgetAmendmentRejectPayload {
+  note: string;
+}
+
+/** `POST /finance/budgets/:id/amendments`. Every field is required. */
+export interface BudgetAmendmentCreatePayload {
+  amount: MonetaryAmount;
+  reason: string;
+  approvedBy: string;
+  approvedOn: string;
+}
+
+/**
+ * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. Every field is
+ * required; the amount is the whole amendment's, taken by the backend.
+ */
+export interface BudgetAmendmentReversePayload {
+  reason: string;
+  approvedBy: string;
+  approvedOn: string;
+}
+
+/** The new amendment (or reversal) and the line as it now stands. */
+export interface BudgetAmendmentCreated {
+  amendment: BudgetAmendment;
+  budget: Budget;
+}
+
+/** `PUT /finance/budget-categories/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface BudgetCategoryUpdatePayload {
+  name?: string;
+  description?: string | null;
+  parentCategoryId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+  qbAccountName?: string | null;
+  ownerPositionId?: string | null;
+}
+
+/** `POST /finance/budgets`. Blank optional fields are omitted. */
+export interface BudgetCreatePayload {
+  fiscalYearId: string;
+  categoryId: string;
+  amountBudgeted: MonetaryAmount;
+  notes?: string | undefined;
+  stationId?: string | undefined;
+  ownerPositionId?: string | undefined;
+}
+
+/**
+ * `PUT /finance/budgets/:id`. An omitted key leaves the field alone; `null`
+ * clears it (a cleared owner falls back to the category's).
+ */
+export interface BudgetUpdatePayload {
+  amountBudgeted?: MonetaryAmount;
+  notes?: string | null;
+  stationId?: string | null;
+  ownerPositionId?: string | null;
+}
+
+/** An id and a name — `GET /finance/position-options` and `/finance/station-options`. */
+export interface FinanceNamedOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * A budget line as the request forms offer it — `GET /finance/budgets/options`.
+ * All a member holding only `finance.request` sees of a budget.
+ */
+export interface BudgetOption {
+  id: string;
+  /** Category name, plus the station when the line has one. */
+  label: string;
+  amountRemaining: MonetaryAmount;
+}
+
+/** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
+export interface FiscalYearOption {
+  id: string;
+  name: string;
+  status: FiscalYearStatus;
+  requestDeadline?: string | null;
+  requestsOpen?: boolean;
+  planningStage?: BudgetPlanningStage | null;
+}
+
+/** `PUT /finance/fiscal-years/{id}`. A `null` deadline clears it (CLAUDE.md pitfall #1). */
+export interface FiscalYearUpdatePayload {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  requestDeadline?: string | null;
+}
+
+/** What "Start from last year" did: lines copied, and lines the draft already had. */
+export interface StartFromLastYearResult {
+  created: number;
+  skipped: number;
+}
+
+// =============================================================================
+// Budget requests (next year's amounts, proposed by line owners)
+// =============================================================================
+
+export const BudgetRequestStatus = {
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  APPROVED: 'approved',
+  ADJUSTED: 'adjusted',
+  DECLINED: 'declined',
+} as const;
+export type BudgetRequestStatus = (typeof BudgetRequestStatus)[keyof typeof BudgetRequestStatus];
+
+export const BudgetRequestDecisionKind = {
+  APPROVE: 'approve',
+  ADJUST: 'adjust',
+  DECLINE: 'decline',
+} as const;
+export type BudgetRequestDecisionKind = (typeof BudgetRequestDecisionKind)[keyof typeof BudgetRequestDecisionKind];
+
+export interface BudgetRequest {
+  id: string;
+  organizationId: string;
+  fiscalYearId: string;
+  fiscalYearName?: string | null;
+  /** The draft-year line; set on a proposal once it is approved. */
+  budgetId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  stationId?: string | null;
+  stationName?: string | null;
+  /** "Category · Station", or the category alone. */
+  lineLabel: string;
+  /** True when the request proposed a line that did not exist. */
+  isProposedLine: boolean;
+  ownerPositionId?: string | null;
+  ownerPositionName?: string | null;
+  requestedAmount: MonetaryAmount;
+  approvedAmount?: MonetaryAmount | null;
+  status: BudgetRequestStatus;
+  justification: string;
+  decisionNote?: string | null;
+  submittedBy?: string | null;
+  submittedByName?: string | null;
+  submittedAt?: string | null;
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  /** Senior leadership's change during leadership review; the line holds this amount when set. */
+  reviewAmount?: MonetaryAmount | null;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  /** The active year's figures for the same category and station ("this year"). */
+  lastYearFiscalYearName?: string | null;
+  lastYearBudgeted?: MonetaryAmount | null;
+  lastYearSpent?: MonetaryAmount | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Either `budgetId`, or `categoryId` (+ `stationId`) and `ownerPositionId` for a new line. */
+export interface BudgetRequestCreatePayload {
+  fiscalYearId: string;
+  budgetId?: string | undefined;
+  categoryId?: string | undefined;
+  stationId?: string | undefined;
+  ownerPositionId?: string | undefined;
+  requestedAmount: MonetaryAmount;
+  justification: string;
+}
+
+export interface BudgetRequestUpdatePayload {
+  requestedAmount?: MonetaryAmount;
+  justification?: string;
+}
+
+/** `adjust` needs `approvedAmount` and `decisionNote`; `decline` needs `decisionNote`. */
+/** `POST /finance/budget-requests/{id}/review` — senior leadership's amount and why. */
+export interface BudgetRequestReviewPayload {
+  amount: MonetaryAmount;
+  note: string;
+}
+
+export interface BudgetRequestDecisionPayload {
+  decision: BudgetRequestDecisionKind;
+  approvedAmount?: MonetaryAmount | undefined;
+  decisionNote?: string | undefined;
+}
+
+export interface MyBudgetRequestLine {
+  budget: Budget;
+  request: BudgetRequest | null;
+  lastYearFiscalYearName?: string | null;
+  lastYearBudgeted?: MonetaryAmount | null;
+  lastYearSpent?: MonetaryAmount | null;
+}
+
+/**
+ * `GET /finance/budget-requests/proposal-options` — what "Propose a new line"
+ * may offer. The positions are only those the member holds; all three lists
+ * are empty for a member who holds none.
+ */
+export interface BudgetRequestProposalOptions {
+  positions: FinanceNamedOption[];
+  categories: FinanceNamedOption[];
+  stations: FinanceNamedOption[];
+}
+
+/** `GET /finance/budget-requests/my-lines` — one call for the owner's screen. */
+export interface MyBudgetRequestLines {
+  fiscalYear: FiscalYearOption;
+  lines: MyBudgetRequestLine[];
 }
 
 export interface BudgetSummary {
@@ -405,6 +820,18 @@ export interface UnroutedApproval {
   entityAmount: MonetaryAmount;
   requesterName: string;
   submittedAt: string;
+  /** Held for a second, different approver by the dual-approval threshold. */
+  awaitingSecondApproval?: boolean;
+  firstApprovedBy?: string | null;
+}
+
+/** `GET /finance/settings`: the finance rules the server applies. */
+export interface FinanceSettings {
+  /**
+   * Requests of this amount or more need two different approvers; null is off.
+   * Changed through organization settings (`settings.manage`), not here.
+   */
+  dualApprovalThreshold: MonetaryAmount | null;
 }
 
 export interface PurchaseRequest {
@@ -423,12 +850,26 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   orderedAt?: string;
   receivedAt?: string;
   paidAt?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
-  receiptUrl?: string;
+  /** A typed link; the server passes it on only if it is HTTP(S). */
+  receiptUrl?: string | null;
+  /** The uploaded receipt, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
   createdAt: string;
@@ -444,7 +885,9 @@ export interface ExpenseLineItem {
   amount: MonetaryAmount;
   dateIncurred: string;
   expenseType: ExpenseType;
-  receiptUrl?: string;
+  receiptUrl?: string | null;
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
   merchant?: string;
   createdAt: string;
 }
@@ -461,9 +904,19 @@ export interface ExpenseReport {
   status: ExpenseReportStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   paidAt?: string;
   paymentMethod?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -486,9 +939,22 @@ export interface CheckRequest {
   status: CheckRequestStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   checkNumber?: string;
   checkDate?: string;
+  voidedAt?: string | null;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
+  /** When the reversing entry for a void went to QuickBooks. */
+  qbVoidExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -530,6 +996,51 @@ export interface MemberDues {
   waivedAt?: string;
   waiveReason?: string;
   notes?: string;
+  /** The member's display name. Sent by the list endpoint only. */
+  memberName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /finance/dues-schedules`. Blank optional fields are omitted. */
+export interface DuesScheduleCreatePayload {
+  name: string;
+  amount: string;
+  frequency: DuesFrequency;
+  /** UTC instant of the due date. */
+  dueDate: string;
+  notes?: string | undefined;
+}
+
+/** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface DuesScheduleUpdatePayload {
+  name?: string;
+  amount?: string;
+  frequency?: DuesFrequency;
+  dueDate?: string;
+  isActive?: boolean;
+  notes?: string | null;
+}
+
+/** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
+export interface DuesPaymentPayload {
+  amountPaid: string;
+  paymentMethod?: string | undefined;
+  transactionReference?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** One payment in a member's dues ledger (`GET /finance/dues/:id/payments`). */
+export interface DuesPayment {
+  id: string;
+  organizationId: string;
+  memberDuesId: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  transactionReference?: string | null;
+  notes?: string | null;
+  receivedAt: string;
+  recordedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -545,15 +1056,70 @@ export interface DuesSummary {
   membersWaived: number;
 }
 
+export const ExportMappingType = {
+  EXPENSE: 'expense',
+  INCOME: 'income',
+  ASSET: 'asset',
+} as const;
+export type ExportMappingType = (typeof ExportMappingType)[keyof typeof ExportMappingType];
+
 export interface ExportMapping {
   id: string;
   organizationId: string;
   internalCategory: string;
   qbAccountName: string;
-  qbAccountNumber?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
   mappingType: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `POST /finance/export/mappings`. Blank optional fields are omitted. */
+export interface ExportMappingCreatePayload {
+  internalCategory: string;
+  qbAccountName: string;
+  qbAccountNumber?: string | undefined;
+  qbOffsetAccountName?: string | undefined;
+  mappingType: ExportMappingType;
+}
+
+/** `PUT /finance/export/mappings/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface ExportMappingUpdatePayload {
+  internalCategory?: string;
+  qbAccountName?: string;
+  qbAccountNumber?: string | null;
+  qbOffsetAccountName?: string | null;
+  mappingType?: ExportMappingType;
+}
+
+/** Why the export would refuse a category, as `GET /finance/export/readiness` reports it. */
+export const ExportReadinessStatus = {
+  READY: 'ready',
+  NO_ACCOUNT: 'no_account',
+  NO_OFFSET: 'no_offset',
+  DUPLICATE_MAPPINGS: 'duplicate_mappings',
+  /** Posts to Accounts Payable or Receivable, which QuickBooks' import needs a Name for. */
+  PAYABLE_RECEIVABLE: 'payable_receivable',
+} as const;
+export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
+
+export interface ExportReadinessCategory {
+  categoryId: string;
+  categoryName: string;
+  isActive: boolean;
+  status: ExportReadinessStatus;
+  accountName?: string | null;
+  /** `category` when the category names its own account, else `mapping`. */
+  accountSource?: 'category' | 'mapping' | null;
+  offsetAccountName?: string | null;
+  mappingIds: string[];
+}
+
+export interface ExportReadiness {
+  categories: ExportReadinessCategory[];
+  /** Mappings whose category name matches no budget category: the export never uses them. */
+  unmatchedMappingIds: string[];
 }
 
 export interface ExportLog {
@@ -565,7 +1131,12 @@ export interface ExportLog {
   recordCount: number;
   fileFormat: string;
   exportedBy: string;
+  exportedByName?: string | null;
   exportedAt: string;
+  /** `pending`, `successful`, `partial` (some rows delivered) or `failed`. */
+  status: string;
+  errorMessage?: string | null;
+  completedAt?: string | null;
 }
 
 export interface FinanceDashboard {

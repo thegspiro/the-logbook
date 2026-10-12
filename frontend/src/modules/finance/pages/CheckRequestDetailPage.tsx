@@ -10,6 +10,7 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, FileCheck, CheckCircle, Clock, XCircle, Ban, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { checkRequestService } from '../services/api';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -76,6 +77,7 @@ const CheckRequestDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { busy, run } = useSubmitGuard();
   const { selectedCheckRequest: cr, isLoading, error, fetchCheckRequest, submitCheckRequest } = useFinanceStore();
+  const access = useFinanceRequestAccess();
   const [showIssueDialog, setShowIssueDialog] = useState(false);
   const [issuing, setIssuing] = useState(false);
 
@@ -164,9 +166,12 @@ const CheckRequestDetailPage: React.FC = () => {
     );
   }
 
-  const canSubmit = cr.status === CheckRequestStatus.DRAFT;
-  const canIssue = cr.status === CheckRequestStatus.APPROVED;
-  const canVoid = cr.status !== CheckRequestStatus.VOIDED && cr.status !== CheckRequestStatus.CANCELLED;
+  // Submitting is the requester's action (or the finance office's); issuing
+  // and voiding are finance.manage alone, and only an issued check can be
+  // voided (FinanceService.void_check).
+  const canSubmit = cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
+  const canIssue = access.canManage && cr.status === CheckRequestStatus.APPROVED;
+  const canVoid = access.canManage && cr.status === CheckRequestStatus.ISSUED;
 
   return (
     <div className="space-y-6">
@@ -265,6 +270,24 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
+          {cr.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbExportedAt, tz)}</p>
+            </div>
+          )}
+          {cr.voidedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Voided</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.voidedAt, tz)}</p>
+            </div>
+          )}
+          {cr.qbVoidExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Void sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbVoidExportedAt, tz)}</p>
+            </div>
+          )}
         </div>
 
         {cr.payeeAddress && (
@@ -301,6 +324,8 @@ const CheckRequestDetailPage: React.FC = () => {
         entityId={cr.id}
         status={cr.status}
         approvalStepCount={cr.approvalSteps.length}
+        awaitingSecondApproval={cr.awaitingSecondApproval}
+        firstApprovedBy={cr.firstApprovedBy}
         requesterId={cr.requestedBy}
         onDecided={() => void fetchCheckRequest(cr.id)}
       />

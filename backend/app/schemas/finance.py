@@ -6,7 +6,7 @@ purchase requests, expense reports, check requests, dues,
 approval chains, and export operations.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -23,6 +23,7 @@ from app.models.finance import (
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
 # priority map to strict MySQL ENUM columns, but were typed as free str and stored
@@ -96,6 +97,9 @@ class FiscalYearUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    # The last day line owners may make budget requests, on the department's
+    # calendar. Settable only on a draft year; an explicit null clears it.
+    request_deadline: Optional[date] = None
 
 
 class FiscalYearResponse(UTCResponseBase):
@@ -110,9 +114,106 @@ class FiscalYearResponse(UTCResponseBase):
     end_date: datetime
     status: str
     is_locked: bool
+    request_deadline: Optional[date] = None
+    # A draft year in the requests stage whose deadline (if any) has not
+    # passed in the org's timezone — requests_open decides it.
+    requests_open: bool = False
+    # requests, leadership_review, board_review or adopted; null unless a
+    # draft.
+    planning_stage: Optional[str] = None
+    # The board's adoption, recorded from board review.
+    adopted_on: Optional[date] = None
+    adoption_reference: Optional[str] = None
+    adoption_notes: Optional[str] = None
+    adoption_recorded_by: Optional[str] = None
+    adoption_recorded_at: Optional[datetime] = None
+    # Set when the year-end close began; a closed year without the lock is in
+    # its closing period.
+    closing_started_at: Optional[datetime] = None
+    # The active year's end date has passed on the department's calendar and
+    # its close has not been begun.
+    close_due: bool = False
+    # The Treasurer's reconciliation sign-off that locked the year.
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    lock_notes: Optional[str] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class FiscalYearStageChange(BaseModel):
+    """Move a draft year one planning stage forward or back."""
+
+    model_config = _REQUEST_CONFIG
+
+    stage: str
+
+    _check_stage = field_validator("stage")(
+        _enum_check({"requests", "leadership_review", "board_review"}, "stage")
+    )
+
+
+class FiscalYearAdoption(BaseModel):
+    """The board's adoption of a draft year's budget."""
+
+    model_config = _REQUEST_CONFIG
+
+    adopted_on: date
+    adoption_reference: str = Field(..., max_length=500)
+    adoption_notes: Optional[str] = Field(None, max_length=4000)
+
+    @field_validator("adoption_reference")
+    @classmethod
+    def _reference_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter the motion or minutes reference.")
+        return value
+
+    @field_validator("adoption_notes")
+    @classmethod
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
+
+
+class FiscalYearLock(BaseModel):
+    """The Treasurer's reconciliation sign-off that locks a closing year."""
+
+    model_config = _REQUEST_CONFIG
+
+    notes: str = Field(..., max_length=4000)
+
+    @field_validator("notes")
+    @classmethod
+    def _notes_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Add the reconciliation notes for the sign-off.")
+        return value
+
+
+class FiscalYearOpenItemResponse(UTCResponseBase):
+    """A request still in flight that stops a closing year from locking."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # purchase_request, expense_report or check_request
+    kind: str
+    entity_id: str
+    number: str
+    description: str
+    status: str
+    amount: Optional[Decimal] = None
+
+
+class StartFromLastYearResponse(BaseModel):
+    """What "Start from last year" did: lines copied, and lines already there."""
+
+    model_config = _RESPONSE_CONFIG
+
+    created: int
+    skipped: int
 
 
 # ============================================
@@ -129,7 +230,8 @@ class BudgetCategoryCreate(BaseModel):
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
     sort_order: int = 0
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
+    owner_position_id: Optional[str] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -142,7 +244,9 @@ class BudgetCategoryUpdate(BaseModel):
     parent_category_id: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
-    qb_account_name: Optional[str] = None
+    qb_account_name: Optional[str] = Field(None, max_length=200)
+    # Omitted leaves the owner alone; an explicit null clears it.
+    owner_position_id: Optional[str] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -158,6 +262,8 @@ class BudgetCategoryResponse(UTCResponseBase):
     sort_order: int
     is_active: bool
     qb_account_name: Optional[str] = None
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -177,16 +283,23 @@ class BudgetCreate(BaseModel):
     amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
+    # None: the line inherits its category's owner.
+    owner_position_id: Optional[str] = None
 
 
 class BudgetUpdate(BaseModel):
-    """Update a budget line"""
+    """Update a budget line.
+
+    Dumped with ``exclude_unset``: an omitted key leaves the field alone and
+    an explicit null clears it (a cleared owner falls back to the category's).
+    """
 
     model_config = _REQUEST_CONFIG
 
     amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
+    owner_position_id: Optional[str] = None
 
 
 class BudgetResponse(UTCResponseBase):
@@ -202,10 +315,256 @@ class BudgetResponse(UTCResponseBase):
     amount_spent: Decimal
     amount_encumbered: Decimal
     notes: Optional[str] = None
+    # Names of the line's category and fiscal year, so a reader who cannot
+    # list either (an owner without finance.view) can still label the line.
+    category_name: Optional[str] = None
+    fiscal_year_name: Optional[str] = None
+    fiscal_year_status: Optional[str] = None
     station_id: Optional[str] = None
+    station_name: Optional[str] = None
+    # The line's own owner; None when it has none (and may inherit).
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
+    # Who actually owns the line: its own owner, else its category's.
+    effective_owner_position_id: Optional[str] = None
+    effective_owner_position_name: Optional[str] = None
+    owner_inherited: bool = False
+    # amount_budgeted is the current budget, amendments included; the
+    # original is derived from it (FinanceService._budget_row), never stored.
+    original_amount: Decimal
+    # Confirmed amendments only; pending ones have moved nothing yet.
+    amendments_total: Decimal = Decimal("0")
+    amendment_count: int = 0
+    pending_amendment_count: int = 0
+    # False once the budget is before the board, adopted, active, closing or
+    # locked: the amount then changes only through a confirmed amendment.
+    amount_editable: bool = True
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class MyBudgetResponse(BudgetResponse):
+    """A line the caller owns, as "My budgets" shows it.
+
+    The budget detail row plus the two figures the owner's page reports
+    rather than works out: what is left, and the share used (spent plus
+    committed — the encumbered amount — over the current budget).
+    """
+
+    amount_remaining: Decimal
+    percent_used: float
+
+
+class MyBudgetsSummaryResponse(BaseModel):
+    """Whether the caller owns any budget line, for the navigation.
+
+    ``plans_next_year`` is the "Next year's budget" entry's signal: the caller
+    owns a line in a draft fiscal year, or has a budget request for one.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    owns_any: bool
+    plans_next_year: bool = False
+
+
+class BudgetTransactionResponse(UTCResponseBase):
+    """One record that moved a budget line's spent or encumbered total.
+
+    ``effect`` is ``spent``, ``encumbered`` or ``none`` (a voided check, listed
+    because it was once spent and was reversed). ``entity_id`` is the purchase
+    request, check request or expense report the row came from; ``id`` is the
+    row itself (an expense report contributes one row per line item).
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    kind: str
+    entity_id: str
+    number: str
+    description: Optional[str] = None
+    counterparty: Optional[str] = None
+    requester_name: Optional[str] = None
+    status: str
+    amount: Decimal
+    effect: str
+    occurred_at: Optional[datetime] = None
+
+
+class BudgetTransactionPageResponse(BaseModel):
+    """A page of a line's transactions, newest first."""
+
+    model_config = _RESPONSE_CONFIG
+
+    items: list[BudgetTransactionResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class BudgetAmendmentCreate(BaseModel):
+    """Record extra money leadership approved for a budget line.
+
+    The approval date's "not in the future" check needs the department's
+    calendar, so the service makes it rather than this schema.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    # max_digits=12 with two places is the Numeric(12, 2) column's own limit.
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    reason: str = Field(..., max_length=2000)
+    approved_by: str = Field(..., max_length=200)
+    approved_on: date
+
+    @field_validator("reason", "approved_by")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetAmendmentReverse(BaseModel):
+    """Reverse a mistaken amendment with an entry of its own.
+
+    The amount is not sent: a reversal cancels the whole amendment, so the
+    service takes it from the row being reversed. The approval date's "not in
+    the future" check needs the department's calendar, so the service makes it.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    reason: str = Field(..., max_length=2000)
+    approved_by: str = Field(..., max_length=200)
+    approved_on: date
+
+    @field_validator("reason", "approved_by")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetAmendmentReject(BaseModel):
+    """Reject a pending amendment (or withdraw one's own), saying why."""
+
+    model_config = _REQUEST_CONFIG
+
+    note: str = Field(..., max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetAmendmentResponse(UTCResponseBase):
+    """One recorded amendment to a budget line.
+
+    A reversing entry has a negative ``amount`` and names the amendment it
+    cancels in ``reverses_amendment_id``; ``is_reversal`` says which kind a
+    row is. On a reversed amendment, ``reversed_by_amendment_id``,
+    ``reversed_at`` (when the reversal was entered), ``reversed_by_name`` (who
+    entered it) and ``reversal_status`` are filled from that reversal.
+    ``status`` is ``pending`` until a second officer confirms it (applied) or
+    rejects it; ``decided_by_name``, ``decided_at`` and ``decision_note``
+    record that decision.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    budget_id: str
+    amount: Decimal
+    reason: str
+    approved_by: str
+    approved_on: date
+    created_by: Optional[str] = None
+    entered_by_name: Optional[str] = None
+    created_at: datetime
+    reverses_amendment_id: Optional[str] = None
+    is_reversal: bool = False
+    reversed_by_amendment_id: Optional[str] = None
+    reversed_at: Optional[datetime] = None
+    reversed_by_name: Optional[str] = None
+    reversal_status: Optional[str] = None
+    status: str = "confirmed"
+    decided_by: Optional[str] = None
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    decision_note: Optional[str] = None
+
+
+class BudgetAmendmentCreatedResponse(BaseModel):
+    """The amendment (or reversal) and the line as it now stands."""
+
+    model_config = _RESPONSE_CONFIG
+
+    amendment: BudgetAmendmentResponse
+    budget: BudgetResponse
+
+
+class FinanceNamedOptionResponse(BaseModel):
+    """An id and a name, for the budget form's position and station pickers."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
+
+
+class BudgetRequestProposalOptionsResponse(BaseModel):
+    """What the owner's "Propose a new line" form may offer.
+
+    ``positions`` are only the positions the caller holds — a proposal is
+    made for one of them. ``categories`` and ``stations`` are ids and names
+    and are empty for a caller who holds no position, who could not propose
+    anything.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    positions: list[FinanceNamedOptionResponse]
+    categories: list[FinanceNamedOptionResponse]
+    stations: list[FinanceNamedOptionResponse]
+
+
+class BudgetOptionResponse(BaseModel):
+    """A budget line as a request form offers it: a name and what is left.
+
+    Deliberately not ``BudgetResponse``. ``finance.request`` holders see this
+    and nothing more of the budget — the budgeted, spent and encumbered
+    figures stay behind ``finance.view``.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    label: str
+    amount_remaining: Decimal
+
+
+class FiscalYearOptionResponse(BaseModel):
+    """A fiscal year a request can be raised against."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
+    status: str
+    request_deadline: Optional[date] = None
+    requests_open: bool = False
+    planning_stage: Optional[str] = None
 
 
 class BudgetSummaryResponse(BaseModel):
@@ -219,6 +578,202 @@ class BudgetSummaryResponse(BaseModel):
     total_remaining: Decimal
     percent_used: float
     category_breakdown: list[dict] = []
+
+
+# ============================================
+# Budget Request Schemas
+# ============================================
+
+_BUDGET_REQUEST_DECISIONS = {"approve", "adjust", "decline"}
+
+
+def _strip_or_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+class BudgetRequestCreate(BaseModel):
+    """Propose next year's amount for a budget line.
+
+    Either ``budget_id`` names a line in the draft year, or ``category_id``
+    (with an optional ``station_id``) describes a line that does not exist
+    yet, owned by ``owner_position_id``. The service decides which, and who
+    may make it.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    fiscal_year_id: str
+    budget_id: Optional[str] = None
+    category_id: Optional[str] = None
+    station_id: Optional[str] = None
+    owner_position_id: Optional[str] = None
+    # max_digits=12 with two places is the Numeric(12, 2) column's own limit.
+    requested_amount: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    justification: str = Field(..., max_length=4000)
+
+    @field_validator("justification")
+    @classmethod
+    def _justification_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetRequestUpdate(BaseModel):
+    """Change a draft or submitted request's amount or justification.
+
+    Dumped with ``exclude_unset``: an omitted key leaves the field alone.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    requested_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
+    justification: Optional[str] = Field(None, max_length=4000)
+
+    @field_validator("justification")
+    @classmethod
+    def _justification_not_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class BudgetRequestDecision(BaseModel):
+    """The Treasurer's decision: approve as asked, adjust with a note, decline.
+
+    ``adjust`` needs the amount approved and a note saying why; ``decline``
+    needs a note. A blank note counts as none.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    decision: str
+    approved_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
+    decision_note: Optional[str] = Field(None, max_length=4000)
+
+    _check_decision = field_validator("decision")(
+        _enum_check(_BUDGET_REQUEST_DECISIONS, "decision")
+    )
+
+    @field_validator("decision_note")
+    @classmethod
+    def _blank_note_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
+
+    @model_validator(mode="after")
+    def _decision_needs_what_it_needs(self):
+        if self.decision == "adjust":
+            if self.approved_amount is None:
+                raise ValueError("An adjusted request needs the amount approved.")
+            if not self.decision_note:
+                raise ValueError("Say why the amount was adjusted.")
+        if self.decision == "decline" and not self.decision_note:
+            raise ValueError("Say why the request was declined.")
+        return self
+
+
+class BudgetRequestReview(BaseModel):
+    """Senior leadership's change to a decided request's amount, with why."""
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    note: str = Field(..., max_length=4000)
+
+    @field_validator("note")
+    @classmethod
+    def _note_required(cls, value: str) -> str:
+        stripped = _strip_or_none(value)
+        if not stripped:
+            raise ValueError("Say why the amount was changed.")
+        return stripped
+
+
+class BudgetRequestResponse(UTCResponseBase):
+    """One budget request, as the owner's and the Treasurer's screens show it.
+
+    ``line_label`` is "Category · Station" (or the category alone).
+    ``owner_position_*`` is the line's effective owner when the request is
+    for an existing line, else the position named on the proposal.
+    ``last_year_*`` are the ACTIVE year's figures for the same category and
+    station — "this year" seen from the draft year being planned — and are
+    null when there is no such line.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    fiscal_year_id: str
+    fiscal_year_name: Optional[str] = None
+    budget_id: Optional[str] = None
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    station_id: Optional[str] = None
+    station_name: Optional[str] = None
+    line_label: str
+    is_proposed_line: bool
+    owner_position_id: Optional[str] = None
+    owner_position_name: Optional[str] = None
+    requested_amount: Decimal
+    approved_amount: Optional[Decimal] = None
+    status: str
+    justification: str
+    decision_note: Optional[str] = None
+    submitted_by: Optional[str] = None
+    submitted_by_name: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    # Senior leadership's change during leadership review, if any; the line
+    # holds this amount when it is set.
+    review_amount: Optional[Decimal] = None
+    review_note: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    last_year_fiscal_year_name: Optional[str] = None
+    last_year_budgeted: Optional[Decimal] = None
+    last_year_spent: Optional[Decimal] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MyBudgetRequestLineResponse(BaseModel):
+    """A draft-year line the caller owns, with its request if there is one.
+
+    ``request`` is the line's current (not declined) request, else its most
+    recent declined one, else null.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    budget: BudgetResponse
+    request: Optional[BudgetRequestResponse] = None
+    last_year_fiscal_year_name: Optional[str] = None
+    last_year_budgeted: Optional[Decimal] = None
+    last_year_spent: Optional[Decimal] = None
+
+
+class MyBudgetRequestLinesResponse(BaseModel):
+    """Everything the owner's request screen needs for one draft year."""
+
+    model_config = _RESPONSE_CONFIG
+
+    fiscal_year: FiscalYearOptionResponse
+    lines: list[MyBudgetRequestLineResponse]
 
 
 # ============================================
@@ -452,6 +1007,19 @@ class UnroutedApprovalResponse(UTCResponseBase):
     entity_amount: Decimal
     requester_name: str
     submitted_at: datetime
+    # Held for a second, different approver by the dual-approval threshold.
+    awaiting_second_approval: bool = False
+    first_approved_by: Optional[str] = None
+
+
+class FinanceSettingsResponse(BaseModel):
+    """The finance rules the server applies (app/utils/finance_settings.py)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None: off. Otherwise requests of this amount or more need two different
+    # approvers.
+    dual_approval_threshold: Optional[Decimal] = None
 
 
 class ManualDenyRequest(BaseModel):
@@ -513,6 +1081,11 @@ class PurchaseRequestUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
 
+    # The link is rendered as an anchor; only an HTTP(S) one may be stored.
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class PurchaseRequestResponse(UTCResponseBase):
     """Purchase request response"""
@@ -534,17 +1107,38 @@ class PurchaseRequestResponse(UTCResponseBase):
     priority: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    # A link stored before input validation existed is withheld unless it is
+    # HTTP(S), rather than handed to an href.
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/purchase-requests/{self.id}/receipt"
+            )
+        return self
 
 
 # ============================================
@@ -577,6 +1171,10 @@ class ExpenseLineItemCreate(BaseModel):
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
 
+    _check_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
+
 
 class ExpenseLineItemResponse(UTCResponseBase):
     """Expense line item response"""
@@ -591,8 +1189,21 @@ class ExpenseLineItemResponse(UTCResponseBase):
     date_incurred: datetime
     expense_type: str
     receipt_url: Optional[str] = None
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
     merchant: Optional[str] = None
     created_at: datetime
+
+    _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
+
+    @model_validator(mode="after")
+    def _set_receipt_file_url(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = (
+                f"/api/v1/finance/expense-reports/{self.expense_report_id}"
+                f"/items/{self.id}/receipt"
+            )
+        return self
 
 
 class ExpenseReportCreate(BaseModel):
@@ -633,9 +1244,16 @@ class ExpenseReportResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -698,9 +1316,19 @@ class CheckRequestResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     check_number: Optional[str] = None
     check_date: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
+    # When the reversing entry for a void went to QuickBooks.
+    qb_void_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -796,6 +1424,8 @@ class MemberDuesResponse(UTCResponseBase):
     waived_at: Optional[datetime] = None
     waive_reason: Optional[str] = None
     notes: Optional[str] = None
+    # Set by the list endpoint only; a single-record write response omits it.
+    member_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -880,6 +1510,7 @@ class ExportMappingCreate(BaseModel):
     internal_category: str = Field(..., min_length=1, max_length=200)
     qb_account_name: str = Field(..., min_length=1, max_length=200)
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: str
 
 
@@ -895,6 +1526,7 @@ class ExportMappingUpdate(BaseModel):
     internal_category: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_name: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: Optional[str] = None
 
 
@@ -908,9 +1540,36 @@ class ExportMappingResponse(UTCResponseBase):
     internal_category: str
     qb_account_name: str
     qb_account_number: Optional[str] = None
+    qb_offset_account_name: Optional[str] = None
     mapping_type: str
     created_at: datetime
     updated_at: datetime
+
+
+class ExportReadinessCategoryResponse(UTCResponseBase):
+    """What an export would post one budget category to."""
+
+    model_config = _RESPONSE_CONFIG
+
+    category_id: str
+    category_name: str
+    is_active: bool
+    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
+    status: str
+    account_name: Optional[str] = None
+    # category (its own qb_account_name) or mapping
+    account_source: Optional[str] = None
+    offset_account_name: Optional[str] = None
+    mapping_ids: list[str]
+
+
+class ExportReadinessResponse(UTCResponseBase):
+    """Export readiness for every budget category in the organization."""
+
+    model_config = _RESPONSE_CONFIG
+
+    categories: list[ExportReadinessCategoryResponse]
+    unmatched_mapping_ids: list[str]
 
 
 MAX_SYNCHRONOUS_EXPORT_DAYS = 366
@@ -925,6 +1584,9 @@ class ExportRequest(BaseModel):
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+    # Send again payments an earlier export already carried. Off, the export
+    # leaves them out so overlapping periods do not import twice.
+    include_exported: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod
@@ -969,6 +1631,7 @@ class ExportLogResponse(UTCResponseBase):
     file_format: str
     exported_by: str
     exported_at: datetime
+    exported_by_name: Optional[str] = None
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None

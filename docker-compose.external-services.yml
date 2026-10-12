@@ -1,0 +1,75 @@
+# ============================================
+# THE LOGBOOK — EXTERNAL DATABASE AND REDIS
+# ============================================
+# Runs the backend against a MySQL and a Redis this stack does not start:
+# Amazon RDS and ElastiCache, a managed database elsewhere, or a MySQL/Redis
+# already running on the host or another machine. Layer it last, after the
+# production override (and the proxy override, if you use it):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.external-services.yml up -d
+#
+# or pin the files in .env so every later `docker compose ...` applies it:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
+#
+# It does three things, and they belong together:
+#
+# - Points the backend at DB_HOST / DB_PORT / REDIS_HOST / REDIS_PORT from
+#   .env. The base file pins all four to the bundled services, which is right
+#   for everyone else: a .env written from .env.example.full says
+#   DB_HOST=localhost, and passing that through would aim the backend at its
+#   own container. Here there is no default at all — a missing value stops
+#   `docker compose` with the message below instead of quietly connecting to
+#   something else.
+# - Drops the backend's depends_on the bundled mysql and redis, which would
+#   otherwise start them.
+# - Moves mysql, redis and the production override's nightly `backup` sidecar
+#   into a profile nothing activates, so none of them start. The sidecar
+#   dumps the bundled mysql; against a managed database, the provider's
+#   automated backups take over the database half of its job. The uploads and
+#   audit archives it also bundled need a backup of their own — see
+#   "Backups" in docs/deployment/aws.md.
+#
+# Never start that profile, and never name mysql or redis on the command line
+# (`docker compose up -d mysql`): compose starts a service you name even when
+# its profile is off, and nothing would connect to it.
+#
+# Transport TLS is not set here. DB_SSL, DB_SSL_CA, REDIS_SSL, REDIS_SSL_CA
+# and SECURITY_REQUIRE_TLS already reach the backend from .env through the
+# base and production files; a managed service should use all of them, with
+# the provider's CA bundle in SSL_CERTS_DIR (mounted at /etc/ssl/logbook).
+#
+# Migrations need nothing extra: the backend applies them itself on start,
+# against DB_HOST, as it does against the bundled database.
+#
+# `!reset` needs Docker Compose v2.24.4 or later, as the production override
+# already does.
+# ============================================
+
+services:
+  backend:
+    environment:
+      DB_HOST: ${DB_HOST:?DB_HOST must be set in .env to the external MySQL endpoint (e.g. the RDS endpoint) when using docker-compose.external-services.yml}
+      DB_PORT: ${DB_PORT:?DB_PORT must be set in .env to the external MySQL port (3306 for RDS) when using docker-compose.external-services.yml}
+      REDIS_HOST: ${REDIS_HOST:?REDIS_HOST must be set in .env to the external Redis endpoint (e.g. the ElastiCache primary endpoint) when using docker-compose.external-services.yml}
+      REDIS_PORT: ${REDIS_PORT:?REDIS_PORT must be set in .env to the external Redis port (6379 for ElastiCache) when using docker-compose.external-services.yml}
+    # The base file's only dependencies are the two services this file
+    # replaces. tests/test_docker_config.py fails if the base gains another,
+    # so this reset cannot silently drop it.
+    depends_on: !reset {}
+
+  mysql:
+    profiles:
+      - replaced-by-external-services
+
+  redis:
+    profiles:
+      - replaced-by-external-services
+
+  # Defined only by docker-compose.prod.yml. Without that file this entry is
+  # an inert fragment in a disabled profile; with it, it keeps the sidecar
+  # from starting against a mysql that is not there.
+  backup:
+    profiles:
+      - replaced-by-external-services

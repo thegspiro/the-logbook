@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventsPage } from './EventsPage';
 import * as apiModule from '../services/api';
-import type { EventListItem } from '../types/event';
+import type { EventListItem, PendingAttendancePetition } from '../types/event';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -12,6 +12,7 @@ vi.mock('../services/api', () => ({
     getEvents: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
     getMissedMandatoryEvents: vi.fn().mockResolvedValue([]),
+    getPendingAttendancePetitions: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi
       .fn()
       .mockResolvedValue([
@@ -684,6 +685,36 @@ describe('EventsPage', () => {
       await waitFor(() => {
         expect(vi.mocked(eventService.getEvents).mock.calls.length).toBeGreaterThan(initialCalls);
       });
+    });
+  });
+
+  describe('Attendance requests link', () => {
+    beforeEach(() => {
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+      vi.mocked(eventService.getPendingAttendancePetitions).mockReset();
+      vi.mocked(eventService.getPendingAttendancePetitions).mockResolvedValue([]);
+    });
+
+    it('is absent when nothing waits on the viewer', async () => {
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      expect(eventService.getPendingAttendancePetitions).toHaveBeenCalledWith('mine');
+      expect(screen.queryByRole('link', { name: /attendance request/ })).not.toBeInTheDocument();
+    });
+
+    it('counts the requests waiting and links to the list', async () => {
+      vi.mocked(eventService.getPendingAttendancePetitions).mockResolvedValue([
+        {} as PendingAttendancePetition,
+        {} as PendingAttendancePetition,
+      ]);
+
+      renderWithRouter(<EventsPage />);
+
+      expect(await screen.findByRole('link', { name: '2 attendance requests are waiting for you' })).toHaveAttribute(
+        'href',
+        '/events/attendance-requests'
+      );
     });
   });
 });

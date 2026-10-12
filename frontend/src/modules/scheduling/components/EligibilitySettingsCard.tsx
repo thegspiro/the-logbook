@@ -12,28 +12,50 @@ import toast from 'react-hot-toast';
 import { MEMBERSHIP_TYPE_LABELS, MembershipType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { schedulingService } from '../services/api';
-import { positionLabel } from '../utils/positionLabels';
+import { ensureShiftSettingsLoaded } from '../services/shiftSettingsApi';
+import type { PositionOption } from '../types/shiftSettings';
+import { positionLabel, rankEligibleSeatOptions } from '../utils/positionLabels';
 
 const ALL_MEMBERSHIP_TYPES = Object.values(MembershipType);
 
-// The built-in seats this card can open to everyone.
-const POSITION_KEYS = [
-  'officer',
-  'driver',
-  'firefighter',
-  'ems',
-  'captain',
-  'lieutenant',
-  'probationary',
-  'volunteer',
-  'other',
-];
+/**
+ * The seats this card can open to everyone: the same grantable set the rank
+ * editor offers, the department's own seats included, plus any seat already
+ * open that is no longer among them — otherwise a retired seat stays open with
+ * no button to close it.
+ */
+const openSeatChoices = (seatOptions: PositionOption[], openPositions: string[]): PositionOption[] => {
+  const choices = [...seatOptions];
+  for (const held of openPositions) {
+    if (!choices.some((choice) => choice.value === held)) {
+      choices.push({ value: held, label: positionLabel(held) });
+    }
+  }
+  return choices;
+};
 
 export const EligibilitySettingsCard: React.FC = () => {
   const [excludedTypes, setExcludedTypes] = useState<string[]>([]);
   const [openPositions, setOpenPositions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Seeded with what the settings cache holds now, then refreshed once the
+  // department's own seats have landed — the same pattern as useRankEditor.
+  const [seatOptions, setSeatOptions] = useState<PositionOption[]>(() => rankEligibleSeatOptions());
+
+  useEffect(() => {
+    let cancelled = false;
+    void ensureShiftSettingsLoaded()
+      .then(() => {
+        if (!cancelled) setSeatOptions(rankEligibleSeatOptions());
+      })
+      .catch(() => {
+        /* keep the built-ins */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchSettings = useCallback(() => {
     setLoading(true);
@@ -136,7 +158,7 @@ export const EligibilitySettingsCard: React.FC = () => {
           Any eligible member can sign up for the positions you select here, whatever their rank or training.
         </p>
         <div role="group" aria-labelledby="eligibility-open-positions" className="flex flex-wrap gap-2">
-          {POSITION_KEYS.map((pos) => {
+          {openSeatChoices(seatOptions, openPositions).map(({ value: pos, label }) => {
             const isOpen = openPositions.includes(pos);
             return (
               <button
@@ -150,7 +172,7 @@ export const EligibilitySettingsCard: React.FC = () => {
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
-                {positionLabel(pos)}
+                {label}
               </button>
             );
           })}

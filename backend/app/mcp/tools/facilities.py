@@ -65,7 +65,12 @@ def _facility(f: Any) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List facilities", module="facilities")
+    @logbook_tool(
+        server,
+        title="List facilities",
+        module="facilities",
+        permissions=("facilities.view", "facilities.manage"),
+    )
     async def list_facilities(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -93,7 +98,12 @@ def register(server: Any) -> None:
         )
         return page([_facility(f) for f in rows], total, limit, offset)
 
-    @logbook_tool(server, title="Read facility description", module="facilities")
+    @logbook_tool(
+        server,
+        title="Read facility description",
+        module="facilities",
+        permissions=("facilities.view", "facilities.manage"),
+    )
     async def get_facility_description(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -115,7 +125,12 @@ def register(server: Any) -> None:
         body.update(_chunk(facility.description or "", content_offset))
         return body
 
-    @logbook_tool(server, title="Facilities counts", module="facilities")
+    @logbook_tool(
+        server,
+        title="Facilities counts",
+        module="facilities",
+        permissions=("facilities.view", "facilities.manage"),
+    )
     async def get_facilities_counts(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Dashboard counts: facilities, open maintenance, upcoming
         inspections and similar totals."""

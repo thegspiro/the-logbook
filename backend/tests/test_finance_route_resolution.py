@@ -84,3 +84,10 @@ def test_no_route_in_the_finance_router_is_shadowed_by_an_earlier_one() -> None:
                     f"shadowed by earlier route {earlier.path} "
                     f"({earlier.endpoint.__name__})"
                 )
+
+
+def test_request_form_options_are_not_captured_as_ids() -> None:
+    # The two narrow pickers the request forms read share a prefix and a
+    # segment count with the by-id routes, so they must be registered first.
+    assert _resolves_to("/budgets/options") == "list_budget_options"
+    assert _resolves_to("/fiscal-years/options") == "list_fiscal_year_options"

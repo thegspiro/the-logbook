@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import type { SkillTest } from '../types/skillsTesting';
 
 // Officer-only controls are gated on training.manage. Selector-aware, because
 // useTimezone also reads this store with a selector.
@@ -208,23 +209,21 @@ const mockFullyScoredTest = {
   ],
 };
 
-let currentMockTest:
-  | typeof mockCompletedTest
-  | typeof mockInProgressTest
-  | typeof mockInProgressPracticeTest
-  | typeof mockTestWithSections
-  | typeof mockTimedTest
-  | typeof mockChecklistTest
-  | typeof mockScoredStepTest
-  | typeof mockFullyScoredTest
-  | typeof mockVoidedTest
-  | typeof mockCancelledTest
-  | typeof mockUnverifiedTimingTest
-  | null = null;
+// `template_sections` stays loosely typed: the fixtures above give their
+// sections only the fields the page reads, not the ids a saved template has.
+let currentMockTest: (Omit<SkillTest, 'template_sections'> & { template_sections?: Record<string, unknown>[] }) | null =
+  null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
 let mockTimerRunning = false;
 let mockSectionIndex = 0;
+let mockOfflineState: null | {
+  testId: string;
+  queued: boolean;
+  completionQueued: boolean;
+  failed: string | null;
+} = null;
+let mockStoreError: string | null = null;
 
 function buildStoreState() {
   return {
@@ -241,6 +240,8 @@ function buildStoreState() {
     setActiveTestRunning: mockSetActiveTestRunning,
     updateCriterionResult: mockUpdateCriterionResult,
     clearCurrentTest: mockClearCurrentTest,
+    offlineState: mockOfflineState,
+    error: mockStoreError,
   };
 }
 
@@ -285,6 +286,8 @@ describe('ActiveSkillTestPage', () => {
     mockTimerRunning = false;
     mockSectionIndex = 0;
     mockIsOfficer = false;
+    mockOfflineState = null;
+    mockStoreError = null;
     mockSetActiveTestRunning.mockImplementation((running: boolean) => {
       mockTimerRunning = running;
     });
@@ -293,6 +296,43 @@ describe('ActiveSkillTestPage', () => {
     });
     mockUpdateTest.mockResolvedValue(currentMockTest);
     mockLoadTest.mockResolvedValue(undefined);
+  });
+
+  describe('Offline (skills offline plan)', () => {
+    it('says scoring is saved on this device while it waits to sync', () => {
+      currentMockTest = mockTestWithSections;
+      mockOfflineState = { testId: 'test-1', queued: true, completionQueued: false, failed: null };
+      renderWithRouter(<ActiveSkillTestPage />);
+      expect(screen.getByText('Sending the scoring saved on this device…')).toBeInTheDocument();
+    });
+
+    it('shows a waiting screen, not a result, for a submission queued offline', () => {
+      currentMockTest = mockTestWithSections;
+      mockOfflineState = { testId: 'test-1', queued: true, completionQueued: true, failed: null };
+      renderWithRouter(<ActiveSkillTestPage />);
+      expect(screen.getByRole('heading', { name: 'Submitted on this device' })).toBeInTheDocument();
+      expect(screen.queryByText(/PASS|FAIL/)).not.toBeInTheDocument();
+    });
+
+    it('names a refusal and offers to discard, keeping the scoring until then', () => {
+      currentMockTest = mockTestWithSections;
+      mockOfflineState = {
+        testId: 'test-1',
+        queued: true,
+        completionQueued: false,
+        failed: 'Cannot update a voided test',
+      };
+      renderWithRouter(<ActiveSkillTestPage />);
+      expect(screen.getByRole('alert')).toHaveTextContent('Cannot update a voided test');
+      expect(screen.getByRole('button', { name: 'Discard from this device' })).toBeInTheDocument();
+    });
+
+    it('explains a test that cannot be opened offline instead of spinning', () => {
+      currentMockTest = null;
+      mockStoreError = 'You are offline, and this test has not been opened on this device yet.';
+      renderWithRouter(<ActiveSkillTestPage />);
+      expect(screen.getByText(mockStoreError)).toBeInTheDocument();
+    });
   });
 
   describe('Loading state', () => {

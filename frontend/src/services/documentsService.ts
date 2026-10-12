@@ -29,11 +29,28 @@ export const documentsService = {
     return response.data;
   },
 
+  /**
+   * Update payload: an omitted key is left alone, `null` clears it
+   * (`description`, `allowed_roles`, `parent_id` — null moves to the top level).
+   */
   async updateFolder(
     folderId: string,
-    data: Partial<{ name: string; description: string; color: string }>
+    data: Partial<{
+      name: string;
+      description: string | null;
+      color: string;
+      parent_id: string | null;
+      visibility: 'organization' | 'leadership';
+      allowed_roles: string[] | null;
+    }>
   ): Promise<DocumentFolder> {
     const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);
+    return response.data;
+  },
+
+  /** Positions a folder can be restricted to (documents.manage). */
+  async getFolderRoleOptions(): Promise<Array<{ slug: string; name: string }>> {
+    const response = await api.get<Array<{ slug: string; name: string }>>('/documents/folders/role-options');
     return response.data;
   },
 

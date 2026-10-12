@@ -43,16 +43,20 @@ from app.api.v1.endpoints import (
     inventory_last_seen,
     inventory_nfc,
     ip_security,
+    knowledge_tests,
     labels,
     legal_documents,
     locations,
     mcp_keys,
+    mcp_oauth,
+    mcp_oauth_admin,
     medical_screening,
     medical_supplies,
     meetings,
     member_badges,
     member_id_cards,
     member_leaves,
+    member_qualifications,
     member_service_history,
     member_status,
     membership_pipeline,
@@ -74,10 +78,13 @@ from app.api.v1.endpoints import (
     scheduling_module_config,
     security_monitoring,
     shift_completion,
+    shift_history_import,
+    skill_evaluations,
     skills_testing,
     station_documents,
     storefront,
     suggestions,
+    system_notices,
     testing_checklist,
     training,
     training_enhancements,
@@ -175,8 +182,27 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
 api_router.include_router(
+    system_notices.router, prefix="/system-notices", tags=["system-notices"]
+)
+api_router.include_router(
     training.router,
     prefix="/training",
+    tags=["training"],
+    dependencies=module_gate("training", "Training"),
+)
+# Online knowledge tests: question bank, delivery and auto-grading.
+api_router.include_router(
+    knowledge_tests.router,
+    prefix="/training/knowledge-tests",
+    tags=["training"],
+    dependencies=module_gate("training", "Training"),
+)
+# The skill-evaluation definitions behind shift-report skill scores. Mounted
+# under /training like the rest of the module; the routes it replaced lived in
+# training.py at the same paths.
+api_router.include_router(
+    skill_evaluations.router,
+    prefix="/training/skill-evaluations",
     tags=["training"],
     dependencies=module_gate("training", "Training"),
 )
@@ -304,6 +330,9 @@ api_router.include_router(
     member_service_history.router, prefix="/users", tags=["member-status"]
 )
 api_router.include_router(
+    member_qualifications.router, prefix="/users", tags=["member-qualifications"]
+)
+api_router.include_router(
     membership_pipeline.router,
     prefix="/prospective-members",
     tags=["prospective-members"],
@@ -337,6 +366,12 @@ api_router.include_router(
 api_router.include_router(
     external_shift_hours.router,
     prefix="/scheduling/external-hours",
+    tags=["scheduling"],
+    dependencies=module_gate("scheduling", "Scheduling"),
+)
+api_router.include_router(
+    shift_history_import.router,
+    prefix="/scheduling/history-import",
     tags=["scheduling"],
     dependencies=module_gate("scheduling", "Scheduling"),
 )
@@ -420,6 +455,18 @@ api_router.include_router(
 api_router.include_router(
     mcp_keys.router,
     prefix="/integrations/claude-mcp",
+    tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    mcp_oauth_admin.router,
+    prefix="/integrations/claude-mcp/oauth",
+    tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    mcp_oauth.router,
+    prefix="/mcp-oauth",
     tags=["claude-mcp"],
     dependencies=module_gate("integrations", "Integrations"),
 )

@@ -30,6 +30,8 @@ import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
+import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -72,7 +74,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
-  const { checkPermission } = useAuthStore();
+  const { user: currentUser, checkPermission } = useAuthStore();
   const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const isOnline = useOnlineStatus();
   const pendingSyncCount = usePendingSyncStore((s) => s.count);
@@ -85,6 +87,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
+  const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
   // tap closes it again. Toggling matters because the bar stays visible above
@@ -164,6 +168,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Course Library', path: '/training/courses' },
               { label: 'Programs', path: '/training/programs' },
               { label: 'Skills Testing', path: '/training/skills-testing' },
+              { label: 'Knowledge Tests', path: '/training/knowledge-tests' },
             ],
           } as NavItem,
         ]
@@ -245,6 +250,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
       ],
     },
+    // See SideNavigation: the group is every member's way to their own requests.
+    ...(isModuleOn('finance')
+      ? [
+          {
+            label: 'Finance',
+            path: financeNavPath(checkPermission),
+            anyPermission: [...FINANCE_NAV_PERMISSIONS],
+            subItems: financeNavItems(checkPermission, { ownsBudgets, plansNextYear }),
+          } as NavItem,
+        ]
+      : []),
     ...(isModuleOn('grants')
       ? [
           {
@@ -342,6 +358,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
               { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
               { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
+              { label: 'Security Alerts', path: '/admin/security-alerts', permission: 'audit.view' },
               { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
               ...(isModuleOn('testing')
                 ? [{ label: 'Testing Home', path: '/testing', permission: 'settings.manage' }]

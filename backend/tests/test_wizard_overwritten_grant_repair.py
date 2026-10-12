@@ -73,12 +73,18 @@ def _migration():
 #: has to run every migration standing between this one and it — otherwise the
 #: next deliberate change to a seeded grant reads as this migration's failure.
 #: ``b6e4a0d17c93`` revoked ``apparatus.view`` from the rank-and-file slugs on
-#: 2026-09-05 and is the first such change since; ``f3b8d0c26a17`` is a no-op on
+#: 2026-09-05 and is the first such change since (``7db20aa49329`` adding
+#: ``finance.request`` is the second); ``f3b8d0c26a17`` is a no-op on
 #: a row this migration has already repaired and is left out for that reason.
 _LATER_LINKS = (
     (
         _VERSIONS / "20260905_1420_b6e4a0d17c93_revoke_baseline_apparatus_view.py",
         "_revoke_baseline_apparatus_view",
+    ),
+    # Added finance.request to the member and rank-and-file rows, 2026-10-07.
+    (
+        _VERSIONS / "20261007_2305_7db20aa49329_grant_finance_request_to_members.py",
+        "_grant_finance_request",
     ),
 )
 

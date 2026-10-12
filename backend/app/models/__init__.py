@@ -130,7 +130,11 @@ from app.models.finance import (
     ApprovalStepType,
     ApproverType,
     Budget,
+    BudgetAmendment,
+    BudgetAmendmentStatus,
     BudgetCategory,
+    BudgetRequest,
+    BudgetRequestStatus,
     CheckRequest,
     CheckRequestStatus,
     DuesFrequency,
@@ -192,7 +196,7 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration
+from app.models.integration import Integration, IntegrationSyncLog
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -253,6 +257,11 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.knowledge_test import (
+    KnowledgeTest,
+    KnowledgeTestAttempt,
+    KnowledgeTestQuestion,
+)
 from app.models.label_printer import LabelPrinter
 from app.models.legal import (
     LegalDocumentRevision,
@@ -260,6 +269,7 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.location import Location
+from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuthGrant
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -312,7 +322,7 @@ from app.models.notification import (
     NotificationTrigger,
     PushSubscription,
 )
-from app.models.onboarding import OnboardingStatus
+from app.models.onboarding import EncryptionKeyCustody, OnboardingStatus
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
@@ -326,6 +336,13 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_history_import import (
+    ShiftHistoryImport,
+    ShiftHistoryImportMapping,
+    ShiftHistoryImportMappingKind,
+    ShiftHistoryImportRow,
+    ShiftHistoryImportStatus,
+)
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -369,10 +386,12 @@ from app.models.testing_checklist import (
 )
 from app.models.training import (
     ExternalCategoryMapping,
+    ExternalCourseMapping,
     ExternalTrainingImport,
     ExternalTrainingProvider,
     ExternalTrainingSyncLog,
     ExternalUserMapping,
+    PreWorkStatus,
     ProgramEnrollment,
     ProgramMilestone,
     ProgramPhase,
@@ -384,6 +403,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
     ShiftEquipmentCheckSeal,
+    ShiftPreWorkSession,
     SkillCheckoff,
     SkillEvaluation,
     TrainingApproval,
@@ -435,6 +455,7 @@ __all__ = [
     "OrgCallResponse",
     # Onboarding models
     "OnboardingStatus",
+    "EncryptionKeyCustody",
     # Email template models
     "EmailTemplate",
     "EmailTemplateBackup",
@@ -487,7 +508,11 @@ __all__ = [
     "MessageTargetType",
     # Integration models
     "Integration",
+    "IntegrationSyncLog",
     "McpServiceKey",
+    "McpOAuthClient",
+    "McpOAuthGrant",
+    "McpOAuthAuthorization",
     # Analytics models
     "AnalyticsEvent",
     # Error log models
@@ -569,15 +594,27 @@ __all__ = [
     "ProgramEnrollment",
     "RequirementProgress",
     "SkillEvaluation",
+    "KnowledgeTest",
+    "KnowledgeTestAttempt",
+    "KnowledgeTestQuestion",
     "SkillCheckoff",
     "ExternalTrainingProvider",
     "ExternalCategoryMapping",
+    "ExternalCourseMapping",
     "ExternalUserMapping",
     "ExternalTrainingSyncLog",
     "ExternalTrainingImport",
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    "ShiftPreWorkSession",
+    "PreWorkStatus",
+    # Shift history import
+    "ShiftHistoryImport",
+    "ShiftHistoryImportMapping",
+    "ShiftHistoryImportMappingKind",
+    "ShiftHistoryImportRow",
+    "ShiftHistoryImportStatus",
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
@@ -696,6 +733,10 @@ __all__ = [
     "FiscalYearStatus",
     "BudgetCategory",
     "Budget",
+    "BudgetAmendment",
+    "BudgetAmendmentStatus",
+    "BudgetRequest",
+    "BudgetRequestStatus",
     "ApprovalChain",
     "ApprovalChainStep",
     "ApprovalStepRecord",

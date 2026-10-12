@@ -33,6 +33,7 @@ const EventAnalyticsPage = lazyWithRetry(() =>
     default: m.EventAnalyticsPage,
   }))
 );
+const AttendanceRequestsPage = lazyWithRetry(() => import('../../pages/AttendanceRequestsPage'));
 const EventTemplatesPage = lazyWithRetry(() =>
   import('../../pages/EventTemplatesPage').then((m) => ({
     default: m.EventTemplatesPage,
@@ -48,6 +49,17 @@ export const getEventsRoutes = () => {
         element={
           <Suspense fallback={null}>
             <EventsPage />
+          </Suspense>
+        }
+      />
+      {/* Any member: the list is scoped by the server to the events they
+          organize, so a permission gate here would lock out the organizers
+          who hold no events.manage. */}
+      <Route
+        path="/events/attendance-requests"
+        element={
+          <Suspense fallback={null}>
+            <AttendanceRequestsPage />
           </Suspense>
         }
       />

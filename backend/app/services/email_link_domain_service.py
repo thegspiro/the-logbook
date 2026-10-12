@@ -34,7 +34,8 @@ async def _primary_organization(db: AsyncSession) -> Optional[Organization]:
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    organization: Optional[Organization] = result.scalar_one_or_none()
+    return organization
 
 
 def _stored_url(org: Optional[Organization]) -> str:

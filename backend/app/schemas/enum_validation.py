@@ -10,7 +10,21 @@ gets a clean 422 instead.
 """
 
 from enum import Enum
-from typing import Optional, Type
+from typing import Optional, Type, overload
+
+
+# Overloaded so a required field's validator gets ``str`` back rather than an
+# ``Optional[str]`` it would have to narrow: only a None input returns None.
+@overload
+def validate_enum_value(value: str, enum_cls: Type[Enum], field_name: str) -> str:
+    """A string in, the normalized string out."""
+
+
+@overload
+def validate_enum_value(
+    value: Optional[str], enum_cls: Type[Enum], field_name: str
+) -> Optional[str]:
+    """An optional value in: None passes through unchanged."""
 
 
 def validate_enum_value(

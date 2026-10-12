@@ -14,7 +14,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
+from app.models.document import (
+    SYSTEM_FOLDERS,
+    Document,
+    DocumentFolder,
+    DocumentType,
+    system_folder_fields,
+)
 from app.models.minute import MeetingMinutes, MinutesMeetingType, MinutesStatus
 from app.models.user import Organization
 
@@ -87,8 +93,7 @@ class DocumentService:
                 folder = DocumentFolder(
                     organization_id=str(organization_id),
                     created_by=str(created_by),
-                    is_system=True,
-                    **folder_def,
+                    **system_folder_fields(folder_def["slug"]),
                 )
                 self.db.add(folder)
             await self.db.commit()
@@ -120,7 +125,8 @@ class DocumentService:
             .where(DocumentFolder.slug == slug)
             .where(DocumentFolder.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     # ============================================
     # Document CRUD
@@ -135,7 +141,8 @@ class DocumentService:
             .where(Document.id == document_id)
             .where(Document.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        document: Optional[Document] = result.scalar_one_or_none()
+        return document
 
     # ============================================
     # Publish Meeting Minutes

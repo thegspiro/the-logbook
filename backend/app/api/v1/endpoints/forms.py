@@ -29,6 +29,7 @@ from app.schemas.forms import (  # Form schemas; Field schemas; Submission schem
     FormIntegrationCreate,
     FormIntegrationResponse,
     FormIntegrationUpdate,
+    FormPublishWarnings,
     FormResponse,
     FormsListResponse,
     FormsSummary,
@@ -135,10 +136,10 @@ async def create_form(
         created_by=current_user.id,
     )
 
-    if error:
+    if error or new_form is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(
@@ -308,6 +309,34 @@ async def delete_form(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+
+@router.get("/{form_id}/publish-warnings", response_model=FormPublishWarnings)
+async def get_form_publish_warnings(
+    form_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("forms.manage")),
+):
+    """
+    What publishing this form will not do, read before the publish confirmation.
+
+    Today: a public form that files event requests while public event requests
+    are turned off in Events settings — it would accept submissions and file no
+    requests. Read here rather than on the Forms screen because the events
+    settings endpoint needs ``events.manage``, which a forms manager may lack.
+
+    **Authentication required**
+    **Requires permission: forms.manage**
+    """
+    service = FormsService(db)
+    warnings = await service.get_publish_warnings(
+        form_id=form_id, organization_id=current_user.organization_id
+    )
+    if warnings is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+    return FormPublishWarnings(warnings=warnings)
 
 
 @router.post("/{form_id}/publish", response_model=FormDetailResponse)
@@ -619,10 +648,10 @@ async def submit_form(
         submitted_by=current_user.id,
     )
 
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(

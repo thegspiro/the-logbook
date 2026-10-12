@@ -177,8 +177,9 @@ open the full navigation drawer.
 
 ![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
 
-> **Screenshot needed:**
-> _[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
+<!-- Screenshot needed:
+_[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
+-->
 
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
@@ -474,6 +475,33 @@ signing out threw away unsent items, the login page tells you how many.
 On your own phone this rarely matters, because you stay signed in. It matters
 on the shared terminal in the bay, which is exactly where somebody is most
 likely to sign out mid-shift.
+
+### Queued Work Is Sent Only by the Member Who Saved It _(2026-10-05)_
+
+Every queued equipment check, shift report, training submission, RSVP and NFC
+put-away or shelf audit now records **who saved it**, and the app sends only the
+items belonging to the member who is signed in. Another member's items stay on
+the device and do not hold up yours; the pending count shows only your own.
+Before this, if the browser could not clear a previous member's queue at
+sign-in, the next member's connection sent it under their name.
+
+Items saved **before** this change have no recorded owner. They are held rather
+than sent, and a yellow notice appears across the top of the app:
+_"3 offline items are on hold"_, saying they were saved before the device
+recorded who saved them and have not been sent. Choose one of two buttons, each
+behind a confirmation:
+
+- **Send as me** (_"Send these as yours?"_) sends them under your name. Do this
+  only if you saved them yourself: the device cannot tell, and if another
+  member did, their work is recorded as yours. Equipment checks and shift
+  reports go the next time you open their page with a connection.
+- **Discard** (_"Discard held items?"_) deletes them from the device for good.
+  Whoever saved them is not told.
+- **Keep on hold** in either dialog leaves things as they are.
+
+<!-- Screenshot needed:
+_[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
+-->
 
 ---
 
@@ -961,7 +989,7 @@ button claims the first open seat you are cleared for.
 ![The Schedule tab on a phone: the month header with the All shifts / Needs staffing / My shifts filter, the days-this-week-still-need-people warning, and the top of the bar grid above the bottom navigation](./images/19-35-schedule-board-phone.png)
 
 The chips, the claim button and the reasons it can be missing are described in
-[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts-2026-08-23--08-24).
+[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts).
 
 ### Settings on a phone
 
@@ -1047,8 +1075,9 @@ moment you make it, and **Use the default tabs** puts the role defaults back.
   ever offered to administrators. An officer who manages the department's
   settings reaches them from **More**.
 
-> **Screenshot needed:**
-> _[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+<!-- Screenshot needed:
+_[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+-->
 
 **[SCREENSHOT — CHECK `10-12-mobile-bottom-nav.png`.** If the frame shows an administrator's bar with a **Settings** tab, that tab now opens My Account; the frame itself is unchanged unless it predates the 2026-09-01 Add button.**]**
 
@@ -1061,8 +1090,9 @@ tapping it scrolls the list down. On desktop the sidebar keeps its permanent
 scrollbar and shows no chevron _(2026-09-30)_ — there it only covered the last
 rows.
 
-> **Screenshot needed:**
-> _[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+<!-- Screenshot needed:
+_[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+-->
 
 ## Tablets and phones: layout fixes _(2026-10-03 → 10-04)_
 
@@ -1108,7 +1138,7 @@ rows.
   the IP Security tabs now match every other primary action. Blue stays where it
   means something different: the info variant of a confirm dialog, **Start Skill
   Test** in practice mode, and two chart colours.
-- **The weekly expiring-supplies email fits a phone.** Three columns — Item,
+- **The weekly expiring-supplies email fits a phone.** (Retitled **Supplies to Replace** with a **Status** column on 2026-10-05; four more emails fit a phone the same day — see [Inventory](./05-inventory.md#what-the-alert-emails-say-now-2026-10-05).) Three columns — Item,
   Expires, Ready stock / Qty — with the apparatus and compartment (or lot) under
   the item and the days left under the date. It used to run past the edge, and
   an empty cell printed the text "&mdash;" instead of a dash.
@@ -1155,3 +1185,17 @@ wrong, not merely stale.
 - **Entering a wrong or expired MFA code was treated as an expired session**:
   the app purged local data and hard-redirected to the login screen instead of
   showing "invalid code, try again."
+
+## Admin hubs and the checklist builder on a phone _(2026-10-11)_
+
+- **Hub sections are a sideways-scrolling row of chips** on a phone, with the
+  chosen section's description beneath. A fade and a round arrow on an edge show
+  there is more; tap the arrow to page along. See _Administration hubs_ in
+  [08 — Admin & Reports](./08-admin-reports.md).
+- **The equipment-check template builder fits a phone.** Only the back arrow,
+  the template name, **Publish** and the to-fix badge stay pinned; status,
+  **Details / Tools / Save** and the **Applies to** chips scroll away with the
+  page. A row's overflow menu opens as a titled bottom sheet (the bottom
+  navigation hides while it is open), a location's header stacks onto two lines,
+  and an empty location shows one full-width **Add items** button.
+

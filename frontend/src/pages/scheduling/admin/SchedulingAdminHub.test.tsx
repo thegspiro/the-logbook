@@ -166,7 +166,8 @@ describe('SchedulingAdminHub', () => {
     window.history.replaceState({}, '', '/scheduling/admin?tab=settings');
     renderWithRouter(<SchedulingAdminHub />);
 
-    expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
+    // With Overview the only tab left, the hub draws no section nav at all.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(hrefs()).toEqual(['/inventory/admin/checklists']);
   });
 

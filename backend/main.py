@@ -31,6 +31,7 @@ from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
+from app.api.public.mcp_oauth import router as mcp_oauth_router
 from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -444,10 +445,17 @@ SEED_DATA_FILES = [
 ]
 
 
-def _cleanup_duplicate_revisions(versions_dir):
+def _cleanup_duplicate_revisions(versions_dir, refuse_duplicates=False):
     """
     Detect and remove migration files with duplicate revision IDs, and
     restore previously-staled files that are now needed.
+
+    With ``refuse_duplicates`` (production), a duplicate revision raises
+    instead of being renamed away. Renaming takes one migration silently out
+    of the chain while startup still logs success, so a production database
+    could be left without a schema change nobody knows was skipped. A
+    development checkout keeps the self-healing rename, where the usual cause
+    is a stale Docker layer or a half-finished git operation.
 
     Stale migration files can appear when Docker images cache old COPY layers,
     or from incomplete git operations. Duplicate revision IDs crash Alembic's
@@ -517,6 +525,25 @@ def _cleanup_duplicate_revisions(versions_dir):
     for rev_id, files in rev_to_files.items():
         for _, _, down_revs in files:
             referenced_revisions.update(down_revs)
+
+    duplicates = {
+        rev_id: sorted(f[1] for f in files)
+        for rev_id, files in rev_to_files.items()
+        if len(files) > 1
+    }
+    if duplicates and refuse_duplicates:
+        listing = "; ".join(
+            f"'{rev_id}' in {', '.join(names)}"
+            for rev_id, names in sorted(duplicates.items())
+        )
+        raise RuntimeError(
+            "MIGRATION FAILURE: duplicate Alembic revision id(s) found: "
+            f"{listing}. Production refuses to start rather than rename one "
+            "file to .stale and skip its schema change. Remove the stale "
+            "copy (or rebuild the image without cached layers) so each "
+            "revision id appears in exactly one file, then restart. See "
+            "docs/UPGRADING.md."
+        )
 
     # For each duplicate, keep the file that's referenced by other migrations
     # (i.e., part of the active chain). Remove extras.
@@ -894,7 +921,9 @@ def run_migrations():
     # Stale files can appear when Docker images cache old COPY layers and the
     # bind-mount doesn't fully override them, or from incomplete git operations.
     versions_dir = os.path.join(base_dir, "alembic", "versions")
-    _cleanup_duplicate_revisions(versions_dir)
+    _cleanup_duplicate_revisions(
+        versions_dir, refuse_duplicates=settings.ENVIRONMENT == "production"
+    )
 
     # Retry revision graph loading with backoff.  On union filesystems
     # (e.g. Unraid shfs) recently-created migration files may not be
@@ -1001,12 +1030,16 @@ def run_migrations():
             return
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
     # Matches Alembic's own env.py strategy (pool is discarded after migrations).
-    # connect_args mirrors the async engine's timeout so a hung MySQL fails
-    # fast instead of blocking the worker indefinitely.
+    # connect_args are the async engine's own: the timeout makes a hung MySQL
+    # fail fast instead of blocking the worker, and DB_SSL / DB_SSL_CA cover the
+    # DDL and seed rows written here exactly as they cover the app's traffic.
+    # Without them PyMySQL negotiates TLS only opportunistically and never
+    # checks the certificate, so a managed database reached across a network
+    # (RDS) would be migrated over a channel the app itself refuses to run on.
     engine = create_engine(
         settings.SYNC_DATABASE_URL,
         poolclass=NullPool,
-        connect_args={"connect_timeout": settings.DB_CONNECT_TIMEOUT},
+        connect_args=settings.get_db_connect_args(),
     )
 
     _wait_for_mysql(engine, startup_status)
@@ -2397,6 +2430,14 @@ app.include_router(
 # prefix) because the spec fixes the path at /.well-known/security.txt;
 # nginx routes that exact path to the backend.
 app.include_router(security_txt_router)
+
+# Claude MCP OAuth 2.1 authorization server (authorize, token, revoke and the
+# RFC 8414 / RFC 9728 metadata). No prefix: the router names its own paths,
+# because two of them sit at the root under /.well-known/ where the RFCs put
+# them, beside /api/ copies the shipped proxy rules already reach. Every
+# route answers 404 unless the deployment sets MCP_OAUTH_ENABLED and a valid
+# MCP_OAUTH_ISSUER_URL.
+app.include_router(mcp_oauth_router, responses=public_responses.RATE_LIMITED)
 
 # Claude MCP endpoint (bearer service key, per-organization opt-in). Routed
 # under /api/ so existing reverse-proxy rules reach it; the endpoint itself

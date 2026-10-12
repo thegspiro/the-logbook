@@ -34,6 +34,7 @@ The Events module manages department events with QR code check-in, recurring eve
 | `/events`                         | Events List                                                                                                                                                                    | Authenticated    |
 | `/events/:id`                     | Event Detail                                                                                                                                                                   | Authenticated    |
 | `/events/:id/qr-code`             | Event QR Code                                                                                                                                                                  | Authenticated    |
+| `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests on the viewer's events; **All events** for `events.manage` _(2026-10-09)_                                   | Authenticated    |
 | `/events/:id/check-in`            | Self Check-In                                                                                                                                                                  | Authenticated    |
 | `/events/:id/edit`                | Edit Event                                                                                                                                                                     | `events.manage`  |
 | `/events/:id/monitoring`          | Check-In Monitoring                                                                                                                                                            | `events.manage`  |
@@ -817,6 +818,26 @@ client API cache.
 - **Notices:** the request goes to reviewers in-app and by email
   (`EmailKind.EVENT_DUTIES`); the decision goes to the member
   (`EVENT_REMINDERS`).
+- **Withdrawing** _(2026-10-09)_: `DELETE …/attendance-petitions/mine`
+  removes the member's own request while it is pending — **Withdraw request**
+  on the waiting notice, behind a confirmation. The reviewers' prompts are
+  archived and the audit log keeps the record. A decided request cannot be
+  withdrawn.
+- **Withdrawal limit** _(2026-10-09)_: at most `MAX_PETITION_WITHDRAWALS = 2`
+  per member per event, so a request cannot be cycled to re-notify the
+  organizer; the third request is final and **Withdraw request** is no longer
+  offered (`can_withdraw` on `GET …/mine`; the API answers 400). A withdrawn
+  request is kept with status `withdrawn` and a `withdrawal_count` (migration
+  `a0b34c886658`), and asking again reuses that row. Reviewers never see
+  withdrawn rows.
+- **Across events** _(2026-10-09)_: `/events/attendance-requests` lists every
+  pending request on events the viewer organizes or is alternate for, oldest
+  first, with **Approve** / **Decline** in place (the same dialogs as the event
+  card, `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get
+  **All events**. The Events page shows _"N attendance requests are waiting for
+  you"_ when there are any. Backed by
+  `GET /events/attendance-petitions/pending?scope=mine|all`; the viewer's own
+  requests are never listed.
 
 ## Organizer, alternate and transfer _(2026-10-03)_
 
@@ -859,6 +880,52 @@ occurred". One mapping now serves all of them: `attendance_lock_reason()` in
 `event_service.py` and `attendance_lock_http_error()` in
 `app/api/attendance_lock.py`, applied to the raw error **before** sanitizing.
 `POST /events/{id}/cancel` also stopped turning its own 404 into a 500.
+
+## A finalized event can be edited — the lock refuses changes, not mentions _(2026-10-06)_
+
+Finalizing attendance locks the fields credited hours were calculated from:
+`start_datetime`, `end_datetime`, `event_type`, `custom_category` and the
+check-in rules (`check_in_window_type`, `check_in_minutes_before`,
+`check_in_minutes_after`, `require_checkout`). The lock used to refuse a save
+that **carried** any of them, and the edit form resends everything it shows, so
+no finalized event could be saved from the form, not even to fix a typo in its
+title. It now refuses a **changed value** only:
+
+- `update_event` compares each locked field with the stored value (a datetime by
+  instant, an enum against its string value, a NULL check-in rule against the
+  default the check-in window applies) and the refusal names only the fields that
+  would change; unchanged ones are not rewritten.
+- **Edit form.** On a finalized event a notice reads "Attendance for this event
+  is finalized", says what is locked, why, and how to unlock it (someone who can
+  reopen attendance reopens it from the event page); the type and category
+  selects, the schedule and the check-in rules are disabled (guest sign-in stays
+  editable), and the page leaves the locked fields out of the save.
+  `ATTENDANCE_LOCKED_EVENT_FIELDS` in `frontend/src/utils/eventAttendanceLock.ts`
+  mirrors the backend set, and `test_attendance_locked_fields_parity.py` fails
+  when they disagree.
+- **This and all future events.** Each finalized later occurrence is checked
+  against its own values, since the series loop writes the edited occurrence's
+  values onto every later one; a time change moves every occurrence, so it counts
+  as a change. A save is refused when it would change a finalized occurrence,
+  with the count of changed out of finalized ("(2 of 3 finalized occurrences
+  would change)"; the cancel and delete refusals keep their wording, since every
+  finalized occurrence blocks those). From an open occurrence, a description-only
+  edit goes through unless a finalized later occurrence differs in type,
+  category or check-in rules (the category part is new). The check runs on what
+  was sent, so a series spanning the hour clocks fall back is no longer refused
+  for a zero-length event when only the RSVP deadline was sent.
+- `custom_fields` keeps each row's **own** lifecycle markers
+  (`attendance_finalized`, `reminders_sent`, `validation_notification_sent`) on
+  both save paths. A series save used to copy the edited occurrence's markers onto
+  every later one — locking open occurrences through the legacy marker with no
+  Reopen to offer, and stripping a finalized occurrence's own.
+- A stored category is shown even when the department lists none (or the list
+  failed to load); the unlisted mandatory member-type row has a 44px target.
+- **Edit Times** pre-fills the **credited** check-in. A self check-in before the
+  start is credited from the start, but a manager's override is taken verbatim;
+  the dialog used to pre-fill the raw tap, so saving it unchanged turned a
+  40-minute-early tap into an override that credited those minutes.
+  `GET /events/{id}/rsvps` now returns `credited_check_in_at` for it.
 
 ## Room tags and badge check-in _(2026-10-02)_
 

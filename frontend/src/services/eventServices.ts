@@ -14,6 +14,7 @@ import type {
   EventListItem,
   EventStats,
   EventUpdate,
+  ExternalAttendee,
   RSVP,
   RSVPCreate,
 } from '../types/event';
@@ -408,6 +409,21 @@ export const eventService = {
     return asArray(response.data);
   },
 
+  /**
+   * Pending attendance requests across events, oldest first: on events the
+   * caller organizes or is alternate for, or — `all`, events.manage only —
+   * every event in the department.
+   */
+  async getPendingAttendancePetitions(
+    scope: 'mine' | 'all' = 'mine'
+  ): Promise<import('../types/event').PendingAttendancePetition[]> {
+    const response = await api.get<import('../types/event').PendingAttendancePetition[]>(
+      '/events/attendance-petitions/pending',
+      { params: { scope } }
+    );
+    return asArray(response.data);
+  },
+
   async approveAttendancePetition(
     eventId: string,
     petitionId: string,
@@ -418,6 +434,13 @@ export const eventService = {
       data
     );
     return response.data;
+  },
+
+  /**
+   * Withdraw the caller's own attendance request while it is still pending.
+   */
+  async withdrawAttendancePetition(eventId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attendance-petitions/mine`);
   },
 
   async rejectAttendancePetition(
@@ -580,8 +603,8 @@ export const eventService = {
   },
 
   // External Attendees
-  async getExternalAttendees(eventId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get<Array<Record<string, unknown>>>(`/events/${eventId}/external-attendees`);
+  async getExternalAttendees(eventId: string): Promise<ExternalAttendee[]> {
+    const response = await api.get<ExternalAttendee[]>(`/events/${eventId}/external-attendees`);
     return response.data;
   },
   async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -1893,7 +1916,7 @@ export interface BatchScanItem {
   code: string;
   item_id?: string;
   quantity?: number;
-  operation: 'permanent_assignment' | 'temporary_loan';
+  operation: 'permanent_assignment' | 'temporary_assignment' | 'temporary_loan';
   expected_return_at?: string;
 }
 

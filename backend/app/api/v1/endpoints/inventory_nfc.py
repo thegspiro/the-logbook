@@ -844,7 +844,7 @@ async def resolve_inventory_nfc_member(
         org_id, (data.code, data.serial_number)
     )
     if refusal is not None or user is None:
-        messages = {
+        messages: dict[NfcCheckInStatus | None, str] = {
             NfcCheckInStatus.UNKNOWN_CARD: "This card is not registered to a member.",
             NfcCheckInStatus.CARD_INACTIVE: (
                 "This card has been marked lost or replaced and no longer works."

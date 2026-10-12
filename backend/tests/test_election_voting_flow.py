@@ -318,8 +318,11 @@ class TestElectionResults(TestElectionSetup):
         assert results is not None
         assert results.total_votes == 3
 
-        # Candidate A should be the winner
-        winner = [r for r in results.overall_results if r.is_winner]
+        # Candidate A should be the winner of the Chief race; results are
+        # per contest since W50-7, so the overall pool is empty here.
+        assert results.overall_results == []
+        [chief] = [p for p in results.results_by_position if p.position == "Chief"]
+        winner = [r for r in chief.candidates if r.is_winner]
         assert len(winner) >= 1
         winner_ids = [str(w.candidate_id) for w in winner]
         assert data["candidate_a_id"] in winner_ids
@@ -675,7 +678,26 @@ class TestRunoffCreation(TestElectionSetup):
 
 
 class TestResultsVisibilityGate(TestElectionSetup):
-    async def test_results_hidden_before_end_date_without_bypass(
+    async def test_open_election_results_are_hidden(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        svc = ElectionService(db_session)
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err is None
+
+        hidden = await svc.get_election_results(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert hidden is None, "a live tally must never be readable"
+
+    async def test_early_close_releases_results(
         self, db_session: AsyncSession, setup_election
     ):
         data = setup_election
@@ -696,14 +718,15 @@ class TestResultsVisibilityGate(TestElectionSetup):
         )
         assert close_err is None
 
-        # Closed but end_date still in the future and results not flagged
-        # visible: the public results call must stay gated...
-        hidden = await svc.get_election_results(
+        # Closed before the scheduled end and not published: the close is
+        # what releases the results, not the date (W50-10, W50-22)...
+        released = await svc.get_election_results(
             uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
         )
-        assert hidden is None
+        assert released is not None
+        assert released.total_votes == 1
 
-        # ...while internal consumers (runoff check, report email) can read
+        # ...and internal consumers (runoff check, report email) read the same
         visible = await svc.get_election_results(
             uuid.UUID(data["election_id"]),
             uuid.UUID(data["org_id"]),

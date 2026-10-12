@@ -22,6 +22,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from loguru import logger
 
+from app.core import file_encryption
 from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
@@ -38,6 +39,7 @@ from app.services.email_theme import (
     facts,
     find_element_end,
 )
+from app.utils.email_attachments import confined_template_attachments
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     resolve_smtp_settings,
@@ -49,6 +51,21 @@ from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezon
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
 _HEADER_INJECTION_RE = re.compile(r"[\r\n\x00]")
+
+
+# An attachment is a file path, or a (path, filename) pair when the name the
+# recipient should see differs from the name on disk — stored template
+# attachments live under UUID names.
+AttachmentSpec = Union[str, Tuple[str, str]]
+
+
+def _attachment_path_and_name(spec: AttachmentSpec) -> Tuple[str, str]:
+    if isinstance(spec, tuple):
+        path, name = spec
+    else:
+        path, name = spec, ""
+    resolved = os.path.realpath(path)
+    return resolved, name or os.path.basename(resolved)
 
 
 def _sanitize_header(value: str) -> str:
@@ -136,7 +153,7 @@ def inline_email_css(html: str) -> str:
             class_styles[simple.group(1)] = styles
 
     # --- inline class styles ------------------------------------------
-    def _replace_class(match: re.Match) -> str:
+    def _replace_class(match: re.Match[str]) -> str:
         tag = match.group(0)
         cls_m = re.search(r'class="([\w-]+)"', tag)
         if not cls_m or cls_m.group(1) not in class_styles:
@@ -693,12 +710,13 @@ class EmailService:
         what Enhanced Filtering is looking for.
         """
         # Explicit config takes top priority
-        explicit = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
+        explicit: Optional[str] = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
         if explicit:
             return explicit
         from_email = self._smtp_config.get("from_email", "")
         if "@" in from_email:
-            return from_email.split("@")[1]
+            text: str = from_email.split("@")[1]
+            return text
         return "localhost"
 
     def _smtp_connect(self) -> smtplib.SMTP:
@@ -716,6 +734,7 @@ class EmailService:
         context = ssl.create_default_context()
         ehlo_hostname = self._get_ehlo_hostname()
 
+        server: smtplib.SMTP
         if encryption == "ssl":
             server = smtplib.SMTP_SSL(
                 host,
@@ -866,7 +885,7 @@ class EmailService:
     @classmethod
     def _build_cloudflare_attachments(
         cls,
-        attachment_paths: Optional[List[str]],
+        attachment_paths: Optional[Sequence[AttachmentSpec]],
         budget_bytes: Optional[int] = None,
     ) -> List[Dict[str, str]]:
         """Read attachment files into Cloudflare Email API attachment dicts.
@@ -884,13 +903,16 @@ class EmailService:
         )
         attachments: List[Dict[str, str]] = []
         used = 0
-        for filepath in attachment_paths or []:
-            resolved = os.path.realpath(filepath)
+        for spec in attachment_paths or []:
+            resolved, display_name = _attachment_path_and_name(spec)
             if not os.path.isfile(resolved):
                 logger.warning("Attachment not found, skipping")
                 continue
-            with open(resolved, "rb") as f:
-                content_b64 = base64.b64encode(f.read()).decode("ascii")
+            # Stored attachments are encrypted at rest; the recipient gets
+            # the plaintext.
+            content_b64 = base64.b64encode(
+                file_encryption.read_plaintext(resolved)
+            ).decode("ascii")
             if used + len(content_b64) > budget:
                 logger.warning(
                     "Attachment exceeds Cloudflare 5 MiB message cap, " "skipping: {}",
@@ -901,7 +923,7 @@ class EmailService:
             mime_type, _ = mimetypes.guess_type(resolved)
             attachments.append(
                 {
-                    "filename": _sanitize_header(os.path.basename(resolved)),
+                    "filename": _sanitize_header(display_name),
                     "type": mime_type or "application/octet-stream",
                     "content": content_b64,
                     "disposition": "attachment",
@@ -1322,7 +1344,7 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: Optional[str] = None,
-        attachment_paths: Optional[List[str]] = None,
+        attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
         db: Any = None,
@@ -1389,12 +1411,12 @@ class EmailService:
             # Pre-read attachment payloads once (avoids re-reading per recipient)
             attachment_parts: List[MIMEBase] = []
             attachment_bytes_used = 0
-            for filepath in attachment_paths or []:
-                resolved = os.path.realpath(filepath)
+            for spec in attachment_paths or []:
+                resolved, display_name = _attachment_path_and_name(spec)
                 if not os.path.isfile(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
-                file_size = os.path.getsize(resolved)
+                file_size = file_encryption.plaintext_size(resolved)
                 if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
                     logger.warning(
                         "Attachment exceeds per-message size budget, skipping: {}",
@@ -1402,11 +1424,10 @@ class EmailService:
                     )
                     continue
                 attachment_bytes_used += file_size
-                with open(resolved, "rb") as f:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(f.read())
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(file_encryption.read_plaintext(resolved))
                 encoders.encode_base64(part)
-                filename = _sanitize_header(os.path.basename(resolved))
+                filename = _sanitize_header(display_name)
                 part.add_header("Content-Disposition", "attachment", filename=filename)
                 attachment_parts.append(part)
 
@@ -1608,19 +1629,29 @@ class EmailService:
         admin_contact_name: str = "",
         admin_contact_email: str = "",
         template: Any = None,
+        proxy_holder_name: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render ballot notification email content without sending.
 
         If *template* (an ``EmailTemplate`` instance) is provided it is
         used; otherwise the built-in default template is rendered.
 
+        *proxy_holder_name* is set when the delegating member's ballot is
+        Cc'd to the member holding their proxy. The one message reaches
+        both, so it says whose ballot the link opens and who holds the
+        proxy, instead of telling the holder the link is theirs alone
+        (W50-23, owner decision 2026-10-05: keep the Cc, fix the wording).
+
         Returns ``(subject, html_body, text_body)``.
         """
         from app.services.email_template_service import (
+            BALLOT_LINK_OWN_NOTICE_HTML,
+            BALLOT_LINK_OWN_NOTICE_TEXT,
             DEFAULT_BALLOT_NOTIFICATION_HTML,
             DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
             DEFAULT_BALLOT_NOTIFICATION_TEXT,
         )
+        from app.services.email_theme import callout
 
         org_name = getattr(self.organization, "name", "") if self.organization else ""
         org_logo = (
@@ -1632,6 +1663,40 @@ class EmailService:
         custom_message_html = ""
         if custom_message:
             custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
+
+        link_notice_html = BALLOT_LINK_OWN_NOTICE_HTML
+        link_notice_text = BALLOT_LINK_OWN_NOTICE_TEXT
+        if proxy_holder_name:
+            voter = _html.escape(recipient_name or "the member")
+            holder = _html.escape(proxy_holder_name)
+            link_notice_html = callout(
+                "info",
+                f"{holder} holds {voter}'s proxy",
+                f"This email goes to {voter} and, as their proxy for this "
+                f"election, to {holder}. The link opens {voter}'s ballot and "
+                f"works once: whichever of you submits it casts {voter}'s "
+                "vote. Don't forward it to anyone else.",
+            )
+            link_notice_text = (
+                f"(This link opens {recipient_name or 'the member'}'s ballot. "
+                f"{proxy_holder_name} holds their proxy for this election and "
+                "is copied on this email; the link works once.)"
+            )
+            # A department's own template written before this notice
+            # existed has no place for it, and may still carry the old
+            # "yours alone" card; the names then lead the message instead.
+            stored_html = getattr(template, "html_body", None) or ""
+            if template is not None and "ballot_link_notice_html" not in stored_html:
+                custom_message_html = (
+                    f"<p><strong>{holder} holds {voter}'s proxy for this "
+                    f"election and is copied on this email.</strong> The link "
+                    f"opens {voter}'s ballot.</p>" + custom_message_html
+                )
+                custom_message = (
+                    f"{proxy_holder_name} holds {recipient_name}'s proxy for "
+                    "this election and is copied on this email. The link "
+                    f"opens {recipient_name}'s ballot.\n\n" + (custom_message or "")
+                )
 
         # The meeting is optional, and an election with none used to mail a
         # "Meeting Date:" label followed by nothing. The sender builds the
@@ -1672,6 +1737,8 @@ class EmailService:
             "ballot_items_text": ballot_items_text,
             "admin_contact_name": admin_contact_name,
             "admin_contact_email": admin_contact_email,
+            "ballot_link_notice_html": link_notice_html,
+            "ballot_link_notice_text": link_notice_text,
             "organization_name": org_name,
             "organization_logo": org_logo,
         }
@@ -1901,7 +1968,7 @@ class EmailService:
         login_url: str,
         db: Any = None,
         organization_id: Optional[str] = None,
-        attachment_paths: Optional[List[str]] = None,
+        attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
     ) -> bool:
         """
         Send a welcome email to a newly created user.
@@ -1945,8 +2012,10 @@ class EmailService:
                     and loaded_template.allow_attachments
                     and loaded_template.attachments
                 ):
-                    stored_paths = [a.storage_path for a in loaded_template.attachments]
-                    attachment_paths = (attachment_paths or []) + stored_paths
+                    stored = confined_template_attachments(
+                        loaded_template.attachments, organization_id
+                    )
+                    attachment_paths = [*(attachment_paths or []), *stored]
             except Exception as e:
                 logger.warning(
                     "Failed to load welcome email template, using default: {}", e
@@ -2230,6 +2299,104 @@ class EmailService:
             text_body=text_body,
             db=db,
             template_type=EmailTemplateType.SUGGESTION_SUBMITTED.value,
+        )
+
+        return success_count > 0
+
+    async def send_external_course_match_email(
+        self,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one training officer a provider sent courses that look like
+        library courses. *context* carries the ``external_course_match``
+        template variables, built by ``external_course_mapping``.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+        )
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EXTERNAL_COURSE_MATCH_SUBJECT,
+            default_html=DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
+            default_text=DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH.value,
+        )
+
+        return success_count > 0
+
+    async def send_training_record_notice_email(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one member an officer voided or edited a training record.
+
+        *template_type* is ``TRAINING_RECORD_VOIDED`` or
+        ``TRAINING_RECORD_CHANGED``; *context* carries its template variables,
+        built by ``training_record_notices``.
+        """
+        from app.services.email_template_service import (
+            DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+            DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+            DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+            DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+            DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+        )
+
+        defaults = {
+            EmailTemplateType.TRAINING_RECORD_VOIDED: (
+                DEFAULT_TRAINING_RECORD_VOIDED_SUBJECT,
+                DEFAULT_TRAINING_RECORD_VOIDED_HTML,
+                DEFAULT_TRAINING_RECORD_VOIDED_TEXT,
+            ),
+            EmailTemplateType.TRAINING_RECORD_CHANGED: (
+                DEFAULT_TRAINING_RECORD_CHANGED_SUBJECT,
+                DEFAULT_TRAINING_RECORD_CHANGED_HTML,
+                DEFAULT_TRAINING_RECORD_CHANGED_TEXT,
+            ),
+        }
+        if template_type not in defaults:
+            raise ValueError(f"Not a training record notice: {template_type}")
+        default_subject, default_html, default_text = defaults[template_type]
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default_subject,
+            default_html=default_html,
+            default_text=default_text,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
         )
 
         return success_count > 0

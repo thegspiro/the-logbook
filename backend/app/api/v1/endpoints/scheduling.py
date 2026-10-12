@@ -10,7 +10,6 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,8 +33,11 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftPosition,
+    ShiftPreWorkSession,
     StandingShiftPattern,
     StandingShiftPeriod,
+    SwapRequestStatus,
+    TimeOffStatus,
 )
 from app.models.user import Organization, User
 from app.schemas.scheduling import (
@@ -53,10 +55,17 @@ from app.schemas.scheduling import (
     GenerateShiftsRequest,
     LateSignupOpenRequest,
     MemberHoursHistoryResponse,
+    OpenSwapPickupResponse,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
     PositionRosterResponse,
+    PreShiftEligibleShiftsResponse,
+    PreShiftWorkDecision,
+    PreShiftWorkEnd,
+    PreShiftWorkReview,
+    PreShiftWorkSessionResponse,
+    PreShiftWorkStart,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -105,8 +114,6 @@ from app.schemas.scheduling import StandingShiftPeriod as SchemaStandingShiftPer
 from app.schemas.scheduling import (
     StandingShiftPreviewResponse,
     StandingShiftResponse,
-    SwapRequestStatus,
-    TimeOffStatus,
     TradeCandidateResponse,
 )
 from app.services.call_tracking_service import CallTrackingService
@@ -118,6 +125,10 @@ from app.services.event_request_service import (
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
+)
+from app.services.pre_shift_work_service import (
+    PreShiftWorkService,
+    approved_pre_work_minutes,
 )
 from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
@@ -136,7 +147,7 @@ from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftSe
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
-from app.utils.positions import normalize_stored_positions
+from app.utils.positions import UnknownSeatError, normalize_stored_positions
 
 router = APIRouter()
 
@@ -163,7 +174,8 @@ def _enum_value(value) -> str | None:
     """
     if value is None:
         return None
-    return getattr(value, "value", value)
+    unwrapped: str = getattr(value, "value", value)
+    return unwrapped
 
 
 def _safe_detail(prefix: str, error: str | None) -> str:
@@ -468,9 +480,17 @@ async def _enrich_shifts(
             .where(ShiftAttendance.shift_id.in_(shift_ids))
             .group_by(ShiftAttendance.shift_id)
         )
+        prep_rows = await approved_pre_work_minutes(
+            service.db,
+            ShiftPreWorkSession.shift_id.in_(shift_ids),
+            group_by=[ShiftPreWorkSession.shift_id],
+        )
+        prep_by_shift = {str(r[0]): float(r.minutes or 0) for r in prep_rows}
         for row in hours_result.all():
-            total_min = float(row[1])
+            total_min = float(row[1]) + prep_by_shift.pop(str(row[0]), 0.0)
             hours_map[str(row[0])] = hours_from_minutes(total_min)
+        for sid, prep_min in prep_by_shift.items():
+            hours_map[sid] = hours_from_minutes(prep_min)
 
     enriched = []
     for s in shifts:
@@ -797,6 +817,9 @@ async def get_shift(
     # TypeError and 500s the whole shift detail response. The list endpoint
     # above coerces for the same reason.
     total_min = float(total_min_result.scalar() or 0)
+    total_min += await PreShiftWorkService(service.db).approved_minutes_for_shift(
+        str(shift_id)
+    )
     total_hours = hours_from_minutes(total_min) if total_min > 0 else None
 
     attendees = await service.enrich_attendance_records(
@@ -1036,7 +1059,7 @@ async def save_shift_closeout_calls(
 
     ``attach_call_ids`` claims calls another unit already logged, so a single
     incident two units rolled on counts once for the department and as a run
-    for each of them.
+    for each of them. ``detach_call_ids`` withdraws an earlier claim.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
@@ -1056,6 +1079,9 @@ async def save_shift_closeout_calls(
         # Distinguishes "not sent" from an explicit null, so a client that
         # only attaches calls does not wipe a count it never mentioned.
         count_provided="reported_call_count" in body.model_fields_set,
+        detach_call_ids=(
+            [str(c) for c in body.detach_call_ids] if body.detach_call_ids else None
+        ),
     )
     if state is None:
         raise HTTPException(
@@ -1275,7 +1301,7 @@ async def add_attendance(
     result, error = await service.add_attendance(
         shift_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to add attendance.", error)
         )
@@ -1321,7 +1347,7 @@ async def update_attendance(
         current_user.organization_id,
         attendance.model_dump(exclude_unset=True),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update attendance.", error)
         )
@@ -1399,6 +1425,185 @@ async def member_check_out(
         )
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
+
+
+# ============================================
+# Pre-Shift Work
+# ============================================
+
+
+@router.get(
+    "/pre-shift-work/eligible-shifts",
+    response_model=PreShiftEligibleShiftsResponse,
+)
+async def get_pre_shift_eligible_shifts(
+    apparatus_id: str | None = Query(None, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upcoming shifts the caller may log pre-shift work against."""
+    enabled, shifts = await PreShiftWorkService(db).eligible_shifts(
+        str(current_user.id), current_user.organization_id, apparatus_id
+    )
+    return {"enabled": enabled, "shifts": shifts}
+
+
+@router.get(
+    "/pre-shift-work/active",
+    response_model=PreShiftWorkSessionResponse | None,
+)
+async def get_active_pre_shift_work(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's running pre-shift session, or null."""
+    service = PreShiftWorkService(db)
+    session = await service.active_session(
+        str(current_user.id), current_user.organization_id
+    )
+    if session is None:
+        return None
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.get(
+    "/pre-shift-work/pending",
+    response_model=list[PreShiftWorkSessionResponse],
+)
+async def list_pre_shift_work_awaiting_review(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Department-wide queue of pre-shift time an officer still has to review."""
+    service = PreShiftWorkService(db)
+    sessions = await service.list_awaiting_review(current_user.organization_id)
+    return await service.to_dicts(sessions, current_user.organization_id)
+
+
+@router.post(
+    "/pre-shift-work",
+    response_model=PreShiftWorkSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_pre_shift_work(
+    body: PreShiftWorkStart,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Start timing pre-shift work for one of the caller's upcoming shifts."""
+    service = PreShiftWorkService(db)
+    try:
+        session = await service.start(
+            str(current_user.id),
+            current_user.organization_id,
+            str(body.shift_id),
+            body.apparatus_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.post(
+    "/pre-shift-work/{session_id}/end",
+    response_model=PreShiftWorkSessionResponse,
+)
+async def end_pre_shift_work(
+    session_id: UUID,
+    body: PreShiftWorkEnd,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """End the caller's running pre-shift session; it then awaits approval."""
+    service = PreShiftWorkService(db)
+    try:
+        session = await service.end(
+            str(current_user.id),
+            current_user.organization_id,
+            str(session_id),
+            body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Pre-shift work not found")
+    return (await service.to_dicts([session], current_user.organization_id))[0]
+
+
+@router.get(
+    "/shifts/{shift_id}/pre-shift-work",
+    response_model=list[PreShiftWorkSessionResponse],
+)
+async def list_shift_pre_shift_work(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every pre-shift session logged against a shift, for its officer."""
+    await _authorize_shift_management(
+        SchedulingService(db), current_user, shift_id, "scheduling.manage"
+    )
+    service = PreShiftWorkService(db)
+    sessions = await service.list_for_shift(str(shift_id), current_user.organization_id)
+    return await service.to_dicts(sessions, current_user.organization_id)
+
+
+@router.post(
+    "/pre-shift-work/{session_id}/review",
+    response_model=PreShiftWorkSessionResponse,
+)
+async def review_pre_shift_work(
+    session_id: UUID,
+    body: PreShiftWorkReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Approve, adjust or reject a pre-shift session.
+
+    Open to ``scheduling.manage`` and to the shift's officer; the service
+    refuses a shift officer reviewing their own time.
+    """
+    service = PreShiftWorkService(db)
+    approve = body.decision == PreShiftWorkDecision.APPROVE
+    try:
+        session = await service.review(
+            current_user,
+            str(session_id),
+            can_manage=user_has_permission(current_user, "scheduling.manage"),
+            approve=approve,
+            approved_minutes=body.approved_minutes,
+            started_at=body.started_at,
+            ended_at=body.ended_at,
+            review_note=body.review_note,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Pre-shift work not found")
+
+    await log_audit_event(
+        db=db,
+        event_type=(
+            "shift_pre_work_approved" if approve else "shift_pre_work_rejected"
+        ),
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "session_id": str(session.id),
+            "shift_id": str(session.shift_id),
+            "member_id": str(session.user_id),
+            "duration_minutes": session.duration_minutes,
+            "approved_minutes": session.approved_minutes,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return (await service.to_dicts([session], current_user.organization_id))[0]
 
 
 @router.get("/apparatus/{apparatus_id}/active-shift")
@@ -2201,16 +2406,20 @@ async def get_unavailable_members(
     return {"unavailable_user_ids": user_ids}
 
 
-def _driver_block(exc: CodedValueError) -> CodedHTTPException:
-    """Turn the driver qualification refusal into a 400 that keeps its code.
+def _curated_refusal(exc: CodedValueError) -> CodedHTTPException:
+    """Turn a curated scheduling refusal into an error response that keeps its code.
 
     The message names what is missing and how to resolve it; the code
     (``LB-SCHED-001``) is what the UI keys its "request an exception" offer
     off, so it must survive the trip rather than being flattened into an
     anonymous 400.
+
+    A seat the shift does not have (``LB-SCHED-003``) is a 422 rather than a
+    400: the request named something that does not exist, which is the same
+    answer request validation gave when the seat vocabulary was a closed enum.
     """
     return CodedHTTPException(
-        status_code=400,
+        status_code=422 if isinstance(exc, UnknownSeatError) else 400,
         detail=str(exc),
         error_code=exc.error_code,
     )
@@ -2269,8 +2478,8 @@ async def create_assignment(
             actor=_signup_actor(shift, current_user),
         )
     except CodedValueError as e:
-        raise _driver_block(e)
-    if error:
+        raise _curated_refusal(e)
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
@@ -2313,8 +2522,8 @@ async def update_assignment(
             actor=_roster_actor(current_user),
         )
     except CodedValueError as e:
-        raise _driver_block(e)
-    if error:
+        raise _curated_refusal(e)
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
@@ -2367,7 +2576,7 @@ async def confirm_assignment(
         current_user.organization_id,
         actor=_roster_actor(current_user),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to confirm assignment.", error)
         )
@@ -2398,7 +2607,7 @@ async def decline_assignment(
         current_user.organization_id,
         actor=_roster_actor(current_user),
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to decline assignment.", error)
         )
@@ -2484,14 +2693,84 @@ async def create_swap_request(
     """Create a shift swap request"""
     service = SchedulingService(db)
     request_data = swap_request.model_dump(exclude_none=True)
-    result, error = await service.create_swap_request(
-        current_user.organization_id, current_user.id, request_data
-    )
-    if error:
+    try:
+        result, error = await service.create_swap_request(
+            current_user.organization_id, current_user.id, request_data
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to create swap request.", error),
         )
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
+
+
+@router.get("/swap-requests/open", response_model=list[OpenSwapPickupResponse])
+async def list_open_swaps(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Open swaps the caller is cleared to pick up.
+
+    An open swap names nobody, so it is offered to every member cleared for
+    the seat by the signup eligibility rule — the same rule the exchange
+    picker and the pickup itself apply. Another member's open swap is visible
+    here only when the caller could take it.
+
+    **Permissions required:** scheduling.swap
+    """
+    service = SchedulingService(db)
+    return await service.get_open_swaps_for_member(
+        current_user.organization_id, current_user.id
+    )
+
+
+@router.post(
+    "/swap-requests/{request_id}/pick-up", response_model=ShiftSwapRequestResponse
+)
+async def pick_up_open_swap(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Pick up an open swap; the seat moves to the caller.
+
+    Member self-service, like accepting a targeted offer: it is the offerer
+    withdrawing and the caller signing up, so it is bounded by the member
+    signup window and by the same eligibility, leave, overlap and seat-cap
+    checks as a signup.
+
+    **Permissions required:** scheduling.swap
+    """
+    service = SchedulingService(db)
+    try:
+        result, error = await service.pick_up_open_swap(
+            request_id, current_user.organization_id, current_user.id
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
+    if error or result is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to pick up this shift.", error),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="shift_open_swap_picked_up",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "swap_request_id": str(request_id),
+            "shift_id": str(result.offering_shift_id),
+            "from_user_id": str(result.requesting_user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]
 
@@ -2535,15 +2814,15 @@ async def review_swap_request(
             request_id,
             current_user.organization_id,
             current_user.id,
-            review.status,
+            SwapRequestStatus(review.status.value),
             review.reviewer_notes,
             override_qualification=review.override_qualification,
         )
     except CodedValueError as exc:
         # Keeps the curated code: LB-SCHED-001 (EVOC) and LB-SCHED-002
         # (exchange qualification) are what the screen keys its offers off.
-        raise _driver_block(exc)
-    if error:
+        raise _curated_refusal(exc)
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review swap request.", error),
@@ -2585,13 +2864,16 @@ async def respond_to_swap_offer(
     must be a shift coming back" and rejects an offer that has none.
     """
     service = SchedulingService(db)
-    result, error = await service.respond_to_swap_offer(
-        request_id,
-        current_user.organization_id,
-        current_user.id,
-        accept=answer.accept,
-        note=answer.note,
-    )
+    try:
+        result, error = await service.respond_to_swap_offer(
+            request_id,
+            current_user.organization_id,
+            current_user.id,
+            accept=answer.accept,
+            note=answer.note,
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     if error or result is None:
         raise HTTPException(
             status_code=400,
@@ -2614,7 +2896,7 @@ async def cancel_swap_request(
     result, error = await service.cancel_swap_request(
         request_id, current_user.organization_id, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to cancel swap request.", error),
@@ -2697,7 +2979,7 @@ async def create_time_off_request(
     result, error = await service.create_time_off(
         current_user.organization_id, current_user.id, time_off_data
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to create time-off request.", error),
@@ -2742,10 +3024,10 @@ async def review_time_off_request(
         time_off_id,
         current_user.organization_id,
         current_user.id,
-        review.status,
+        TimeOffStatus(review.status.value),
         review.reviewer_notes,
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review time-off request.", error),
@@ -2765,7 +3047,7 @@ async def cancel_time_off_request(
     result, error = await service.cancel_time_off(
         time_off_id, current_user.organization_id, current_user.id
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to cancel time-off request.", error),
@@ -3036,8 +3318,15 @@ async def signup_for_shift(
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    position_value = signup.position.value
+    position_value = signup.position
     outreach_role = None
+    if not shift.is_outreach:
+        # Ahead of eligibility, so a seat the shift does not have is reported
+        # as that rather than as "you are not eligible for it".
+        try:
+            position_value = service.resolve_shift_seat(shift, position_value)
+        except UnknownSeatError as e:
+            raise _curated_refusal(e)
     if shift.is_outreach:
         try:
             outreach_role = await resolve_outreach_signup_role(
@@ -3093,8 +3382,8 @@ async def signup_for_shift(
             self_signup=True,
         )
     except CodedValueError as e:
-        raise _driver_block(e)
-    if error:
+        raise _curated_refusal(e)
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
         )
@@ -3108,7 +3397,7 @@ async def signup_for_shift(
         shift_id,
         current_user.organization_id,
         str(current_user.id),
-        signup.position.value,
+        position_value,
     )
     return response
 
@@ -3231,8 +3520,10 @@ async def get_standing_claim_for_shift(
     a series they never set up.
     """
     service = SchedulingService(db)
-    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
-    ensure_found(shift, "Shift")
+    shift = ensure_found(
+        await service.get_shift_by_id(shift_id, current_user.organization_id),
+        "Shift",
+    )
     return await StandingShiftService(db).claim_covering_shift(
         current_user.organization_id, current_user.id, shift
     )
@@ -3268,13 +3559,19 @@ async def create_standing_shift(
     rather than failing the series.
     """
     service = SchedulingService(db)
+    try:
+        position = await service.resolve_department_seat(
+            current_user.organization_id, payload.position
+        )
+    except UnknownSeatError as e:
+        raise _curated_refusal(e)
     claim, summary, error = await StandingShiftService(db).create(
         current_user.organization_id,
         current_user.id,
         pattern=StandingShiftPattern(payload.pattern.value),
         weekday=payload.weekday,
         period=StandingShiftPeriod(payload.period.value),
-        position=payload.position.value,
+        position=position,
         start_date=payload.start_date,
         end_date=payload.end_date,
         apparatus_id=payload.apparatus_id,
@@ -3286,13 +3583,17 @@ async def create_standing_shift(
             detail=_safe_detail("Unable to create the standing shift.", error),
         )
     await log_audit_event(
-        db,
+        db=db,
+        event_type="standing_shift_created",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "standing_shift_claim_id": str(claim.id),
+            "claimed": summary.get("claimed", 0),
+        },
         user_id=str(current_user.id),
+        username=current_user.username,
         organization_id=str(current_user.organization_id),
-        action="standing_shift.create",
-        resource_type="standing_shift_claim",
-        resource_id=str(claim.id),
-        details={"claimed": summary.get("claimed", 0)},
     )
     return {"claim": claim, **summary}
 
@@ -3312,8 +3613,10 @@ async def end_standing_shift(
     short with nobody notified.
     """
     standing = StandingShiftService(db)
-    claim = await standing.get_claim(claim_id, current_user.organization_id)
-    ensure_found(claim, "Standing shift")
+    claim = ensure_found(
+        await standing.get_claim(claim_id, current_user.organization_id),
+        "Standing shift",
+    )
     # A claim is the member's own commitment; an officer changing someone
     # else's belongs on the roster, not here.
     if str(claim.user_id) != str(current_user.id):
@@ -3328,13 +3631,14 @@ async def end_standing_shift(
         claim, release_future=release_future, withdraw=_withdraw
     )
     await log_audit_event(
-        db,
+        db=db,
+        event_type="standing_shift_ended",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={"standing_shift_claim_id": str(claim.id), **result},
         user_id=str(current_user.id),
+        username=current_user.username,
         organization_id=str(current_user.organization_id),
-        action="standing_shift.end",
-        resource_type="standing_shift_claim",
-        resource_id=str(claim.id),
-        details=result,
     )
     return result
 
@@ -3361,73 +3665,11 @@ async def list_apparatus_options(
     Priority: full Apparatus module records > BasicApparatus records > hardcoded defaults.
     """
     from app.schemas.scheduling import ApparatusOption
+    from app.services.apparatus_options import department_apparatus_options
 
-    org_id = str(current_user.organization_id)
-    options: list[ApparatusOption] = []
-    source = "default"
-
-    # 1. Try the full Apparatus module
-    try:
-        from app.models.apparatus import Apparatus as FullApparatus
-        from app.models.apparatus import ApparatusType
-
-        result = await db.execute(
-            select(FullApparatus, ApparatusType.name.label("type_name"))
-            .join(
-                ApparatusType,
-                FullApparatus.apparatus_type_id == ApparatusType.id,
-                isouter=True,
-            )
-            .where(FullApparatus.organization_id == org_id)
-            .where(FullApparatus.is_archived.is_(False))
-            .order_by(FullApparatus.unit_number)
-        )
-        rows = result.all()
-        if rows:
-            for row in rows:
-                apparatus = row[0]
-                type_name = row[1] or "other"
-                options.append(
-                    ApparatusOption(
-                        id=apparatus.id,
-                        name=apparatus.name or apparatus.unit_number,
-                        unit_number=apparatus.unit_number,
-                        apparatus_type=type_name.lower(),
-                        source="apparatus",
-                        positions=normalize_stored_positions(apparatus.crew_positions),
-                        min_staffing=apparatus.min_staffing,
-                    )
-                )
-            source = "apparatus"
-    except Exception as exc:
-        # The full Apparatus module may not be installed for this org; fall
-        # through to BasicApparatus. Log so a genuine query failure (vs. the
-        # module simply being absent) is still diagnosable.
-        logger.debug(f"Apparatus module lookup failed, using fallback: {exc}")
-
-    # 2. Fall back to BasicApparatus if no full module records
-    if not options:
-        result = await db.execute(
-            select(BasicApparatus)
-            .where(BasicApparatus.organization_id == org_id)
-            .where(BasicApparatus.is_active.is_(True))
-            .order_by(BasicApparatus.unit_number)
-        )
-        basic_rows = result.scalars().all()
-        if basic_rows:
-            for ba in basic_rows:
-                options.append(
-                    ApparatusOption(
-                        id=ba.id,
-                        name=ba.name,
-                        unit_number=ba.unit_number,
-                        apparatus_type=ba.apparatus_type or "other",
-                        source="basic",
-                        positions=normalize_stored_positions(ba.positions),
-                        min_staffing=ba.min_staffing,
-                    )
-                )
-            source = "basic"
+    options, source = await department_apparatus_options(
+        db, str(current_user.organization_id)
+    )
 
     # 3. Fall back to hardcoded defaults, narrowed to what this kind of agency
     #    runs. An EMS-only service that has not entered its vehicles was
@@ -3936,6 +4178,7 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        pre_shift_work_enabled=bool(lifecycle.get("pre_shift_work_enabled", True)),
         signup_closes_minutes_before=window["signup_closes_minutes_before"],
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
@@ -3999,6 +4242,11 @@ async def update_scheduling_feature_settings(
                 if "restrict_checkin_to_assigned" in fields_set
                 else None
             ),
+            pre_shift_work_enabled=(
+                data.pre_shift_work_enabled
+                if "pre_shift_work_enabled" in fields_set
+                else None
+            ),
             # Guarded like every sibling field: each settings control sends
             # only its own key, and passing the schema default unconditionally
             # would reset the department's signup window from a save of an
@@ -4031,7 +4279,9 @@ async def update_scheduling_feature_settings(
     # a 500 — reported to the admin as a failure, with the write already
     # committed. It also mishandled a stored null, which `or 0` silently
     # turned into "closes at the start" rather than the built-in default.
-    saved_org = await service._get_org(current_user.organization_id)
+    saved_org = ensure_found(
+        await service._get_org(current_user.organization_id), "Organization"
+    )
     window = service.get_signup_window_settings(saved_org)
     return SchedulingFeatureSettings(
         platoons_enabled=bool(result.get("platoons_enabled", False)),

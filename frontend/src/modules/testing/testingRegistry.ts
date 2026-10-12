@@ -30,6 +30,12 @@ import {
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../membership/routes';
 
+/** The finance request routes' gates — see modules/finance/routes.tsx. */
+const FINANCE_REQUEST_READ_GATE = ['finance.request', 'finance.view', 'finance.manage'];
+const FINANCE_REQUEST_WRITE_GATE = ['finance.request', 'finance.manage'];
+// An expense report is also read by its approvers (the approvals queue links them to it).
+const FINANCE_EXPENSE_READ_GATE = [...FINANCE_REQUEST_READ_GATE, 'finance.approve'];
+
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
   path: string;
@@ -188,6 +194,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         isPublic: true,
       },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
+      { path: '/onboarding/encryption-key', label: 'Encryption key safekeeping', isPublic: true },
       {
         path: '/onboarding/admin-user',
         label: 'Admin user (legacy URL)',
@@ -309,6 +316,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/events/:id/check-in', label: 'Event self check-in' },
       { path: '/events/admin', label: 'Events administration hub', permission: 'events.manage' },
       { path: '/events/templates', label: 'Event templates', permission: 'events.manage' },
+      { path: '/events/attendance-requests', label: 'Attendance requests across events' },
       { path: '/events/:id/edit', label: 'Edit event', permission: 'events.manage' },
       { path: '/events/:id/monitoring', label: 'Check-in monitoring', permission: 'events.manage' },
       { path: '/events/analytics', label: 'Attendance trends', permission: 'analytics.view' },
@@ -355,6 +363,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/skills-testing/test/new', label: 'Start a skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId', label: 'Skill test', module: 'training' },
       { path: '/training/skills-testing/test/:testId/active', label: 'Active skill test', module: 'training' },
+      { path: '/training/knowledge-tests', label: 'Knowledge tests', module: 'training' },
+      { path: '/training/knowledge-tests/attempts/:attemptId', label: 'Knowledge test attempt', module: 'training' },
       {
         path: '/training/skills-testing/templates/new',
         label: 'New skill template',
@@ -457,6 +467,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/admin/closeout',
         label: 'Shift close-out queue',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/history-import',
+        label: 'Shift history import',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/history-import/:importId',
+        label: 'Shift history import — review',
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
@@ -696,6 +718,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/clearances/:clearanceId',
+        label: 'Admin — departure clearance',
+        permission: 'inventory.manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/write-offs',
         label: 'Admin — write-offs',
         permission: 'inventory.manage',
@@ -899,6 +927,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '9. Meetings & Minutes',
     pages: [
       { path: '/minutes', label: 'Minutes', module: 'minutes' },
+      {
+        path: '/minutes/attendance',
+        label: 'Meeting attendance dashboard',
+        permission: 'meetings.manage',
+        module: 'minutes',
+      },
       { path: '/minutes/:minutesId', label: 'Minutes detail', module: 'minutes' },
     ],
   },
@@ -964,40 +998,88 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/finance', label: 'Finance dashboard', permission: 'finance.view', module: 'finance' },
       { path: '/finance/budgets', label: 'Budgets', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/budgets/:id', label: 'Budget detail', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/purchase-requests', label: 'Purchase requests', permission: 'finance.view', module: 'finance' },
+      {
+        path: '/finance/budgets/:id',
+        label: 'Budget detail',
+        note: 'finance.view, or the member who owns the line (read-only); anyone else gets "Budget not found"',
+        module: 'finance',
+      },
+      {
+        path: '/finance/my-budgets',
+        label: 'My budgets',
+        note: 'The budget lines whose owner position the member holds; empty for everyone else',
+        module: 'finance',
+      },
+      {
+        path: '/finance/budget-requests',
+        label: "Next year's budget",
+        note: "A line owner's requests for a draft fiscal year's lines, and new-line proposals; empty for everyone else",
+        module: 'finance',
+      },
+      {
+        path: '/finance/budget-requests/review',
+        label: 'Budget requests (review)',
+        anyPermission: ['finance.manage', 'finance.budget_review'],
+        module: 'finance',
+      },
+      {
+        path: '/finance/purchase-requests',
+        label: 'Purchase requests',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
       {
         path: '/finance/purchase-requests/new',
         label: 'New purchase request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
       {
         path: '/finance/purchase-requests/:id',
         label: 'Purchase request detail',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
         module: 'finance',
       },
       {
         path: '/finance/purchase-requests/:id/edit',
         label: 'Edit purchase request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
-      { path: '/finance/expenses', label: 'Expense reports', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/expenses/new', label: 'New expense report', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/expenses/:id', label: 'Expense report detail', permission: 'finance.view', module: 'finance' },
-      { path: '/finance/check-requests', label: 'Check requests', permission: 'finance.view', module: 'finance' },
+      {
+        path: '/finance/expenses',
+        label: 'Expense reports',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/expenses/new',
+        label: 'New expense report',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/expenses/:id',
+        label: 'Expense report detail',
+        anyPermission: FINANCE_EXPENSE_READ_GATE,
+        module: 'finance',
+      },
+      {
+        path: '/finance/check-requests',
+        label: 'Check requests',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
+        module: 'finance',
+      },
       {
         path: '/finance/check-requests/new',
         label: 'New check request',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_WRITE_GATE,
         module: 'finance',
       },
       {
         path: '/finance/check-requests/:id',
         label: 'Check request detail',
-        permission: 'finance.view',
+        anyPermission: FINANCE_REQUEST_READ_GATE,
         module: 'finance',
       },
       { path: '/finance/dues', label: 'Dues management', permission: 'finance.view', module: 'finance' },
@@ -1009,6 +1091,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'finance.configure_approvals',
         module: 'finance',
       },
+      {
+        path: '/finance/settings/quickbooks',
+        label: 'QuickBooks export settings',
+        permission: 'finance.manage',
+        module: 'finance',
+      },
     ],
   },
   {
@@ -1018,6 +1106,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/grants', label: 'Grants dashboard', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/opportunities', label: 'Grant opportunities', permission: 'fundraising.view', module: 'grants' },
+      {
+        path: '/grants/opportunities/new',
+        label: 'New grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
       { path: '/grants/applications', label: 'Grant applications', permission: 'fundraising.view', module: 'grants' },
       {
         path: '/grants/applications/new',
@@ -1035,6 +1129,9 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/campaigns', label: 'Campaigns', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donors', label: 'Donors', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/donations', label: 'Donations', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
+      { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },
@@ -1077,12 +1174,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/integrations', label: 'Integrations', permission: 'settings.manage', module: 'integrations' },
       {
+        path: '/integrations/:integrationId',
+        label: 'Integration detail',
+        permission: 'settings.manage',
+        module: 'integrations',
+      },
+      {
+        path: '/claude/authorize',
+        label: 'Connect Claude (consent)',
+        module: 'integrations',
+        note: 'Reached from an MCP client through /api/oauth/authorize?…, which sets ?request=',
+      },
+      { path: '/claude/connections', label: 'My Claude connections', module: 'integrations' },
+      {
         path: '/admin/public-portal',
         label: 'Public portal administration',
         permission: 'settings.manage',
         module: 'public_info',
       },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
+      { path: '/admin/security-alerts', label: 'Security alerts', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },
       {
         path: '/ip-security',

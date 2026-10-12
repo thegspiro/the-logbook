@@ -14,6 +14,9 @@ vi.mock('../services/api', () => ({
   roleService: {
     getRoles: vi.fn(),
   },
+  memberStatusService: {
+    getOverduePropertyReturns: () => Promise.resolve({ overdue_count: 0, members: [] }),
+  },
   locationsService: {
     getLocations: vi.fn(),
   },
@@ -252,11 +255,16 @@ describe('MembersAdminPage — quick-removing a position (workflow review W11)',
     vi.mocked(userService.assignUserRoles).mockRejectedValueOnce({
       response: { status: 400, data: { detail: 'Cannot remove the only remaining administrator.' } },
     });
+    // The Chief position, not Member: Member carries no remove control on a
+    // current member (W11-9).
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, roles: [memberRole, chiefRole] },
+    ] as never);
     renderWithRouter(<MembersAdminPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Remove Member role from Jordan Avery' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove Chief role from Jordan Avery' }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('Remove Member from Jordan Avery?');
+    expect(dialog).toHaveTextContent('Remove Chief from Jordan Avery?');
     await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
 
     expect(await screen.findByText('Cannot remove the only remaining administrator.')).toBeInTheDocument();
@@ -300,5 +308,50 @@ describe('MembersAdminPage — sign-in lockout (workflow review W02-4)', () => {
 
     expect(await screen.findByRole('button', { name: 'Reset Password' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument();
+  });
+});
+
+// W11-9: the server refuses to remove the base Member position from anyone
+// still a member, so the screen does not offer it.
+describe('MembersAdminPage — the base Member position (workflow review W11-9)', () => {
+  const driverRole = { ...memberRole, id: 'role-driver', name: 'Driver', slug: 'driver', is_system: false };
+
+  beforeEach(() => {
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, driverRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  it('offers no remove control for an active member, but does for other positions', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, roles: [memberRole, driverRole] },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByRole('button', { name: 'Remove Driver role from Jordan Avery' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove Member role from Jordan Avery' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Member box ticked and locked in Manage Roles', async () => {
+    const user = userEvent.setup();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Manage Roles' }));
+    const dialog = screen.getByRole('dialog');
+    const box = within(dialog).getByRole('checkbox', { name: /Member/ });
+    expect(box).toBeChecked();
+    expect(box).toBeDisabled();
+    expect(within(dialog).getByRole('checkbox', { name: /Driver/ })).toBeEnabled();
+  });
+
+  it('still offers removal from an archived member', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([{ ...member, status: 'archived' }] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    expect(await screen.findByRole('button', { name: 'Remove Member role from Jordan Avery' })).toBeInTheDocument();
   });
 });

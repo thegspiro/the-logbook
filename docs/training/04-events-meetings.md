@@ -54,8 +54,9 @@ list that a search, a filter, **Past** or **My Events** has narrowed to nothing.
 
 ![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
 
-> **Screenshot needed:**
-> _[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
+<!-- Screenshot needed:
+_[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
+-->
 
 ---
 
@@ -145,6 +146,15 @@ confirmed by …"**, or **"Your request to be marked present was not approved by
 …"** with the organizer's reason. A declined member cannot ask again for that
 event.
 
+**Withdrawing it.** While the request is still waiting, the notice carries a
+**Withdraw request** button — for a request sent for the wrong event, or with
+the wrong times. Confirm with **Withdraw request** (or **Keep it** to back
+out); the organizer is no longer asked, and **I was there** comes back so you
+can send a corrected request. You can do this **twice** per event: after that
+the notice says _"You have withdrawn this request as many times as allowed."_
+and the request waits for the organizer's answer. Once the organizer has
+approved or declined it, the decision stands and can no longer be withdrawn.
+
 **Deciding it (organizers).** The event's organizer, its alternate and anyone
 holding `events.manage` see an **Attendance Requests** card on the event page —
 _"Members with no check-in who say they were here. Approving records the times
@@ -159,6 +169,13 @@ member, when they asked, their reason and the times they gave, with
   finalized.
 - **Decline** asks for a **Reason**, which the member is shown.
 
+**Every request in one place.** When requests are waiting on your events, the
+Events page says _"N attendance requests are waiting for you"_; it opens
+**Attendance Requests** (`/events/attendance-requests`), which lists every
+pending request on events you organize or are alternate for, oldest first,
+with the same **Approve** and **Decline**. Members holding `events.manage`
+can switch between **My events** and **All events**.
+
 Nobody decides their own request. **Approving is refused while attendance is
 finalized** — the card says _"Attendance is finalized. Reopen attendance to
 approve a request; declining still works."_ — because approving would change
@@ -172,11 +189,13 @@ the member asking — it goes to the position chosen for that event type in
 resort to every holder of `events.manage`. The member hears the decision in
 the app and by email (**Event reminders**).
 
-> **Screenshot needed:**
-> _[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
+<!-- Screenshot needed:
+_[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
+-->
 
-> **Screenshot needed:**
-> _[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
+<!-- Screenshot needed:
+_[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
+-->
 
 ---
 
@@ -220,8 +239,9 @@ appears only for an event that will actually record one, and no longer says
 "Created" before the record exists. Training credit from finalizing is
 described in [Training Credit from Events](#training-credit-from-events-2026-09-29).
 
-> **Screenshot needed:**
-> _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
+<!-- Screenshot needed:
+_[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
+-->
 
 ### NFC Tags — a second way in _(2026-08-18)_
 
@@ -340,11 +360,13 @@ checked in. The screen shows only the member's first name and last initial.
 > 2026-10-02; it is recorded in `docs/KNOWN_LIMITATIONS.md`. Turn badge
 > check-in on only for rooms where that is acceptable.
 
-> **Screenshot needed:**
-> _[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
+<!-- Screenshot needed:
+_[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
+-->
 
-> **Screenshot needed:**
-> _[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
+<!-- Screenshot needed:
+_[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
+-->
 
 ### Monitoring Check-Ins
 
@@ -456,6 +478,14 @@ application form is what your follow-up email links to.
 | -------------------------------------------------- | -------------------------------------------------------------------------- |
 | An entry on the event's **external attendee** list | Always                                                                     |
 | A card in the **prospective members** pipeline     | Only if the event has the second toggle on **and** the guest left an email |
+
+**Seeing who came _(2026-10-11)_.** An event manager (`events.manage`) sees a
+**Guests (_n_)** card on the event page: each guest's name, organization,
+email and phone, when they signed in, and "Signed in at the kiosk" for a QR
+sign-in. On an event that takes guest sign-ins it shows even when empty ("No
+guests have signed in yet."). Guests are **not** counted in the event's
+attendance, which stays a record of members — the card says so. Members
+without `events.manage` do not see the card.
 
 A prospect opened this way is linked back to the event it came from: the detail
 drawer's **Linked Events** panel names the open house, its date and its type, so
@@ -578,11 +608,47 @@ internal code or _"An unexpected error occurred"_. All of them now show the
 sentence. (For integrators: the refusal is an HTTP **409**, where some routes
 answered 400 or 404.)
 
-A closed event can still be edited for housekeeping — the title, the
-description, the location — from the ordinary edit form. Only a change to its
-times, its check-in rules or its type is refused, because the credited hours
-were worked out from those. The form re-sends every field each time; a field
-saved unchanged is not counted as a change.
+**A finalized event can still be edited** _(2026-10-04)_. Its title,
+description, location, RSVP, reminder and guest sign-in settings all stay
+editable. Its type, category, schedule and check-in rules are shown greyed out
+on the edit form, because members' credited hours were calculated from them;
+to change one, have attendance reopened first, then finalize again.
+
+**The lock refuses a changed value, not a mention** _(2026-10-05)_. Earlier the
+edit form re-sent every field it shows, and the server refused any save that
+carried a locked field at all, so a finalized event could not be saved even to
+fix a typo in its title. The server now compares the values: only a change to
+the type, category, schedule or check-in rules is refused (and the refusal names
+just the fields that would change); an unchanged one is simply left alone. On the
+edit form a notice at the top explains what is locked, why, and how to unlock it,
+and the locked controls say so to screen readers. Guest sign-in stays editable.
+A category the department no longer lists is still shown (so it is not lost on
+save).
+
+**A series edit's refusal counts the right occurrences** _(2026-10-05)_. Saving
+**This and all future events** over finalized occurrences is refused when it
+would change one of them, and the message now reads, for example, _"(2 of 3
+finalized occurrences would change)"_ — the ones that would change out of the
+finalized ones — instead of comparing against every occurrence in the series.
+A finalized occurrence the save would not change is not refused. Cancelling or
+deleting a series is still refused whenever any occurrence is finalized, and
+keeps its own wording. A series save also no longer copies one occurrence's
+attendance markers onto the others.
+
+**Edit Times starts from the credited check-in** _(2026-10-05)_. A member who
+self-checked-in before the scheduled start is credited from the start. The
+**Edit Times** dialog used to pre-fill the raw tap, so saving it unchanged turned
+a 40-minute-early tap into a manager override that credited the extra 40
+minutes. It now pre-fills the credited time.
+
+**Scheduling or postponing an event request shows the real reason** _(2026-10-05)_.
+When the server refuses (for example, because the event's attendance is already
+closed), the toast now shows its reason instead of a generic _"Failed to
+postpone request"_ or only the double-booked-room hint.
+
+<!-- Screenshot needed:
+_[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
+-->
 
 **On a Training event, finalizing writes each member's training record**
 _(2026-09-29)_. Every checked-in member gets a **Completed** record for the
@@ -602,8 +668,9 @@ finalizing sends the attendance to training officers instead: members see the
 class as **In Progress** until an officer approves it on the approval page
 (linked from their email and from the event's Requirements & Programs card).
 
-> **Screenshot needed:**
-> _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
+<!-- Screenshot needed:
+_[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
+-->
 
 **Training events do not credit Admin Hours.** Their attendance goes to the
 training records, and crediting admin hours as well counted the same hours
@@ -665,11 +732,13 @@ over.
   (each type defaults to **Default (Secretary)**), then to the Secretary, then
   to every event manager.
 
-> **Screenshot needed:**
-> _[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
+<!-- Screenshot needed:
+_[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
+-->
 
-> **Screenshot needed:**
-> _[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
+<!-- Screenshot needed:
+_[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
+-->
 
 ### Training Credit from Events _(2026-09-29)_
 
@@ -690,8 +759,9 @@ its attendance is finalized — however the event was created.
 4. To correct a finalized event, somebody who can reopen attendance (a chief)
    reopens it; change the details or times; finalize again.
 
-> **Screenshot needed:**
-> _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
+<!-- Screenshot needed:
+_[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
+-->
 
 **The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events _and_ their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
 
@@ -753,8 +823,9 @@ Once a recurring series is created, each occurrence appears as an individual eve
 
 > **Hint:** Deleting a single occurrence from a series does not affect other occurrences. The system warns you when an edit will affect multiple events.
 
-> **Screenshot needed:**
-> _[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
+<!-- Screenshot needed:
+_[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
+-->
 
 ### Series keep their dates and times _(2026-09-28)_
 
@@ -794,7 +865,7 @@ for edits made from now on:
 | Conflicting times/locations            | The system checks for scheduling conflicts before creating each occurrence and warns you                                                                               |
 | Earlier occurrences in "This and all future events" | Only the occurrence you edited and the later ones change; earlier occurrences remain intact                                                               |
 | Series spanning a daylight-saving change | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM _(since 2026-09-28; series created earlier may be an hour off after the change, see above)_ |
-| Editing a series with finalized attendance | Refused only when the edit actually changes times — a description-only edit goes through                                                                          |
+| Editing a series with finalized attendance | Refused when the save would change a finalized occurrence's times, type, category or check-in rules. Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open one, its type, category and check-in rules are copied onto every later occurrence, so even a description-only edit is refused when a finalized later one differs in any of them — edit those occurrences one at a time (see "Events — Edit Form Gaps" in `docs/KNOWN_LIMITATIONS.md`) |
 
 ---
 
@@ -1080,14 +1151,14 @@ carry their state: **Draft**, **Awaiting approval**, **Approved** or
    items, motions (with mover, seconder, vote results), discussions,
    adjournment — and any **action items**.
 
-**Meeting Type offers Business, Special, Committee, Board and Other**
-_(2026-10-03)_. The dialog used to offer Trustee, Executive and Annual as well,
-and a meeting of any of those three was refused every time with _"Make sure it
-has a title and a date"_ although it had both — a meeting record accepts only
-the five types. Minutes themselves still know all eight; recording an
-executive (closed) session as its own meeting type needs a database change the
-owner has not yet decided (`docs/KNOWN_LIMITATIONS.md`). A refused create now
-shows the server's own reason.
+**Meeting Type offers Business, Special, Committee, Board, Trustee, Executive,
+Annual and Other** _(2026-10-11)_. A meeting record accepted only five of these
+until this release, so between 3 and 11 October the dialog offered those five
+and a closed executive session could not be recorded at all. Minutes written
+from a meeting keep its type — an **Executive** meeting's minutes are executive
+minutes, which members cannot read even once approved, and each of the three
+new types starts with its own sections. A refused create shows the server's
+own reason.
 
 ![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
 
@@ -1120,8 +1191,11 @@ Record formal motions with:
 > the department's clock, so for a US department the minutes header showed the
 > previous evening (a meeting with no start time) or a time 4–6 hours early (a
 > 7:00 PM meeting read 2:00 PM). New minutes are dated correctly. Existing ones
-> were not changed, because a secretary may already have corrected the date by
-> hand — check any you rely on and correct the date. Meetings created from an
+> are corrected when your administrator runs
+> `scripts/backfill_minutes_meeting_dates.py --apply` _(2026-10-11)_, which
+> changes only minutes still carrying the shifted date — a date a secretary
+> already corrected by hand is left as it is. Until it has been run, check any
+> you rely on. Meetings created from an
 > event before the 26 September 2026 update had the same kind of shift (a 7 PM
 > Eastern meeting read 11 PM, and one after 8 PM landed on the next day).
 
@@ -1161,6 +1235,20 @@ Action items have:
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
 
+**Assigning an item to a member** _(2026-10-11)_. On the minutes page, **Add
+Action Item** offers an **Assignee** list of every active member (or
+**Unassigned**) instead of a box for a typed name, and the item carries that
+member's name. Only an item assigned this way appears under **Assigned to me**;
+items assigned by a typed name before this release keep their name and are not
+matched to anyone.
+
+**Closing your own item** _(2026-10-11)_. If an item is assigned to you, the
+Action Items page shows **Update status** beside it, even when you cannot open
+the minutes it came from. You can set it to Pending, In Progress, Completed or
+Cancelled and add **Completion notes**; anything else about the item — its
+wording, due date, priority or assignee — is changed by whoever keeps the
+minutes.
+
 **Reminders.** An open or in-progress action item with a due date sends its
 assignee a reminder three days before it is due, one day before, and once it is
 overdue. The check runs once a day.
@@ -1196,11 +1284,20 @@ away, and everyone with meetings scheduled for next week. A meeting that is
 both waived and inside a leave is now excluded once, not twice. The dashboard
 and the ballot check share one calculation, so they cannot disagree.
 
-**Not yet built:** there is no Attendance Dashboard screen. The calculation
-above is real and the data is served by `GET /meetings/attendance/dashboard`,
-which the frontend even has a client method for — but nothing calls it, so no
-page renders the table. Per-meeting attendance is visible on each meeting's
-own record in the meantime.
+**Opening it** _(2026-10-11)_. On the **Minutes** page, an officer holding
+`meetings.manage` has an **Attendance** button beside **Record Minutes**; it
+opens **Meeting Attendance** (`/minutes/attendance`). Choose the **Period**
+(last 3, 6, 12 or 24 months) and optionally a **Meeting type**. The tiles show
+the meetings in the period, the average attendance, how many members may vote,
+and how many are blocked by attendance; the table lists each active member's
+attendance percentage, meetings attended out of those counted, absences,
+waived meetings, meetings during leave, and whether they may vote (with the
+reason when not). A member with no meeting to count reads **Not applicable**
+rather than a percentage. Every figure is the server's — the same calculation
+the ballot check uses.
+
+**Not yet on the screen:** granting a per-meeting waiver from the dashboard;
+waivers are still granted from the meeting.
 
 ### Leave of Absence & Meeting Attendance
 
@@ -1240,13 +1337,12 @@ Each election shows:
 
 > **Hint:** Votes are anonymous by default. The system records that you voted but not how you voted. Write-in candidates are supported when enabled by the election creator.
 
-> **Voting in the app covers position races only _(2026-08-12)_.** The Cast Vote
-> tab builds its ballot from the election's positions, so a ballot item that is
-> not a position — a bylaw amendment or a membership approval — does not appear
-> there and cannot be voted on in the app. Those items do appear on the emailed
-> public ballot link, which renders every ballot item. If your ballot mixes the
-> two, send the public link rather than asking members to vote in the app. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-in-app-ballot-only-shows-position-races-2026-08-12).
+> **Voting in the app covers the whole ballot _(2026-10-05)_.** The Cast
+> Vote tab used to build its ballot from the election's positions only, so a
+> bylaw amendment or membership approval could not be voted on in the app. It
+> now shows every ballot item and every position, exactly as the emailed link
+> does, and a member holding a proxy on a named election can cast that
+> member's ballot from the same tab.
 
 ### Creating Elections (Officers)
 
@@ -1316,7 +1412,9 @@ The Events module includes a **Public Outreach Request Pipeline** that lets comm
 2. Under **Pipeline**, switch on **Accept Public Requests**. It gates **both**
    ways a request arrives: the public request API and a Forms-module event
    request form (the kind **Generate Event Request Form** produces). While it
-   is off, a published form stops creating requests.
+   is off, a published form stops creating requests. Publishing such a form
+   from the Forms screen while it is off asks **Publish this form?** and says
+   so; choose **Not yet**, turn this on, and publish again.
 3. Under **Outreach Types**, add the program types your department offers:
    - Click **Add Type**, enter a key (e.g., `fire_safety_demo`) and label (e.g., "Fire Safety Demonstration")
    - These appear as options on the public request form
@@ -1776,9 +1874,12 @@ The ballot email dispatch system has been significantly hardened:
 ### Election Report Email
 
 **Send Report** sits in the **Results & Publishing** panel on the election
-page, under _Email Results Report — send final results to all eligible voters
-by email_. Results can also be exported from the Results tab or folded into the
-pre-meeting package.
+page, under _Email Results Report — Email the results report to the election
+secretary_. It appears once the election is closed, and is refused while
+voting is open. The report goes to the secretary, not to the voters: it
+carries the results, the ballot recipients, and the reason each skipped member
+did not receive a ballot. Results can also be exported from the Results tab or
+folded into the pre-meeting package.
 
 > **Corrected 2026-08-12.** This section said the button was "not yet built"
 > and did not exist. It does, on `PublishResultsPanel`, backed by
@@ -1786,12 +1887,16 @@ pre-meeting package.
 
 ### Upcoming Business Meetings
 
-**Not yet built.** The election detail page has no **Upcoming Business
-Meetings** section and no **Link to Election** control. The link itself is
-real — an election carries `meeting_id` and `event_id`, and an event it is
-linked to shows a **Linked Elections** card (see below) — but it is set when
-the election is created, or through the API, not from a list of candidate
-meetings.
+There is no separate **Upcoming Business Meetings** section; the link is set
+from the election itself. The election detail page shows a **Linked Meeting**
+field. While the election is in **draft**, an officer with `elections.manage`
+uses **Link a meeting** (or **(change)** once one is set) to open **Link
+Meeting or Event**, a picker listing upcoming events and meeting-minutes
+records. The election can also be linked when it is created. An event the
+election is linked to shows a **Linked Elections** card (see below).
+
+> **Corrected 2026-10-08.** This section said the election-side control was
+> not yet built. It exists on `ElectionDetailPage`.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -2014,20 +2119,20 @@ matrix above.
 
 - **Per-recipient error handling**: If one ballot email fails, remaining recipients still receive their ballots
 - **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
-- **Election report email**: New "Send Report Email" button emails formatted round-by-round results
+- **Election report email**: **Send Report** under **Email Results Report** on a closed election's **Results & Publishing** panel emails the results report to the election secretary (see [Election Report Email](#election-report-email))
 
 > **Corrected 2026-08-12.** Same as above: the summary is emailed to the
 > dispatching officer, not shown on the election page.
 
 ### Election Meeting Integration
 
-**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
+An election carries a meeting/event link, set from the **Linked Meeting** field on the election detail page while the election is in draft — see [Upcoming Business Meetings](#upcoming-business-meetings). The linked event shows a **Linked Elections** card, and the link is what **Import Attendees** reads.
 
 | Troubleshooting                     | Solution                                                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
 | Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance.                                                                            |
-| Can't find report email button      | There is no such button. Export results from the Results tab, or send the pre-meeting package.                                      |
+| Can't find report email button      | It appears only once the election is closed: **Results & Publishing** panel, **Email Results Report**, **Send Report**.             |
 
 ---
 
@@ -2079,7 +2184,7 @@ This streamlines the workflow for in-meeting elections where only present member
 
 ### Quick-Link Buttons on Upcoming Meetings
 
-**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
+There is no list of upcoming meetings with a quick-link button on each. A draft election is linked from its own **Linked Meeting** field instead, whose picker lists the upcoming events — see [Upcoming Business Meetings](#upcoming-business-meetings) above.
 
 ### Edge Cases
 
@@ -2111,8 +2216,13 @@ The election forensics endpoint response (`ForensicsResponse`) was using untyped
 A new public endpoint allows voters to verify their vote receipt:
 
 ```
-GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
+POST /api/v1/elections/{id}/verify-receipt
+{"receipt": "<receipt_code>"}
 ```
+
+_(2026-10-05)_ The receipt travels in the body. The original
+`GET …/verify-receipt?receipt=<receipt_code>` still answers, but is deprecated
+because a query string lands in access logs.
 
 This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
 
@@ -2123,7 +2233,8 @@ This endpoint is **rate-limited** to prevent brute-force attacks. It returns ver
 
 ### Send Report Endpoint
 
-A dedicated endpoint for emailing election results to eligible voters:
+A dedicated endpoint for emailing the election results report to the
+election secretary (the **Send Report** button calls it):
 
 ```
 POST /api/v1/elections/{id}/send-report
@@ -2313,7 +2424,7 @@ The station lives at `/members/check-in-station` and needs `members.check_in`;
 issuing the cards needs `members.manage_id_cards`; and the whole feature is off
 until Settings → Integrations → **NFC ID Cards** is turned on. The full
 walkthrough is in
-[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
 
 **What matters for events:** a station is armed against a specific event or
 meeting, retired and on-leave members are accepted (they attend meetings and

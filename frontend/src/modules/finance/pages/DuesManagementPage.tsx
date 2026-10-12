@@ -1,20 +1,38 @@
 /**
  * Dues Management Page
  *
- * Manages dues schedules and member payment tracking.
+ * What members owe and have paid, by dues schedule. Everyone with
+ * `finance.view` reads it (a member without `finance.manage` sees only their
+ * own dues — the API confines them). A `finance.manage` holder administers
+ * dues here: creates and edits schedules, generates member dues from a
+ * schedule, records payments, waives and reverses waivers, and reads each
+ * member's payment ledger.
+ *
+ * Status, paid totals and the summary are the backend's: every write re-reads
+ * the list and the summary rather than adjusting them locally (pitfall #29).
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { AlertTriangle, DollarSign, Users, Calendar } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, DollarSign, Users, Calendar, Pencil, Plus, Receipt, RefreshCw, History } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { PromptDialog } from '@/components/ux/PromptDialog';
 import { formatDate } from '@/utils/dateFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '@/hooks/useTimezone';
-import { DuesStatus, DUES_STATUS_COLORS, DuesFrequency } from '../types';
-import type { DuesSummary } from '../types';
+import { useAuthStore } from '@/stores/authStore';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { DuesStatus, DUES_STATUS_COLORS } from '../types';
+import type { DuesSchedule, DuesSummary, MemberDues } from '../types';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { duesService } from '../services/api';
+import { DuesScheduleDialog } from '../components/DuesScheduleDialog';
+import { DUES_FREQUENCY_LABELS } from '../utils/dues';
+import { DuesPaymentDialog } from '../components/DuesPaymentDialog';
+import { DuesLedgerDialog } from '../components/DuesLedgerDialog';
 
 // =============================================================================
 // Constants
@@ -30,12 +48,22 @@ const STATUS_TABS: { value: string; label: string }[] = [
   { value: DuesStatus.EXEMPT, label: 'Exempt' },
 ];
 
-const FREQUENCY_LABELS: Record<string, string> = {
-  [DuesFrequency.ANNUAL]: 'Annual',
-  [DuesFrequency.SEMI_ANNUAL]: 'Semi-Annual',
-  [DuesFrequency.QUARTERLY]: 'Quarterly',
-  [DuesFrequency.MONTHLY]: 'Monthly',
-};
+const FREQUENCY_LABELS: Record<string, string> = DUES_FREQUENCY_LABELS;
+
+/** Statuses that still owe money, and so accept a payment or a waiver. */
+const OWING: ReadonlySet<string> = new Set([DuesStatus.PENDING, DuesStatus.PARTIAL, DuesStatus.OVERDUE]);
+
+const HEADER_CELL = 'text-theme-text-secondary px-4 py-3 text-xs font-medium tracking-wider uppercase';
+
+type DialogState =
+  | { kind: 'schedule'; schedule?: DuesSchedule | undefined }
+  | { kind: 'payment'; dues: MemberDues }
+  | { kind: 'ledger'; dues: MemberDues }
+  | { kind: 'waive'; dues: MemberDues }
+  | { kind: 'unwaive'; dues: MemberDues }
+  | null;
+
+const memberLabelOf = (dues: MemberDues): string => dues.memberName || 'This member';
 
 const STATUS_LABEL_MAP: Record<string, string> = {};
 for (const tab of STATUS_TABS) {
@@ -87,6 +115,8 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
 
 const DuesManagementPage: React.FC = () => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
+  const canManage = useAuthStore((st) => st.checkPermission('finance.manage'));
   const {
     duesSchedules,
     memberDues,
@@ -100,36 +130,119 @@ const DuesManagementPage: React.FC = () => {
 
   const [selectedScheduleId, setSelectedScheduleId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Load schedules and summary on mount
+  // Load schedules on mount
   useEffect(() => {
     void fetchDuesSchedules();
-    void fetchDuesSummary();
-  }, [fetchDuesSchedules, fetchDuesSummary]);
+  }, [fetchDuesSchedules]);
 
-  // Load member dues when schedule or status filter changes
-  useEffect(() => {
+  const loadDues = useCallback(() => {
     const params: { scheduleId?: string; status?: string } = {};
     if (selectedScheduleId) params.scheduleId = selectedScheduleId;
     if (statusFilter) params.status = statusFilter;
     void fetchMemberDues(Object.keys(params).length > 0 ? params : undefined);
   }, [fetchMemberDues, selectedScheduleId, statusFilter]);
 
-  // Refresh summary when schedule changes
+  // Load member dues when schedule or status filter changes
+  useEffect(() => {
+    loadDues();
+  }, [loadDues]);
+
+  // Summary follows the selected schedule
   useEffect(() => {
     void fetchDuesSummary(selectedScheduleId || undefined);
   }, [fetchDuesSummary, selectedScheduleId]);
 
-  const activeSchedules = useMemo(() => duesSchedules.filter((s) => s.isActive), [duesSchedules]);
+  /** Re-read everything a write can change: the list, the summary, the schedules. */
+  const refresh = useCallback(() => {
+    loadDues();
+    void fetchDuesSummary(selectedScheduleId || undefined);
+    void fetchDuesSchedules();
+  }, [loadDues, fetchDuesSummary, fetchDuesSchedules, selectedScheduleId]);
 
-  if (isLoading && duesSchedules.length === 0) {
+  // Active schedules first; an inactive one stays listed so it can be reopened.
+  const schedules = [...duesSchedules].sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  const selectedSchedule = duesSchedules.find((sch) => sch.id === selectedScheduleId);
+
+  const closeDialog = () => setDialog(null);
+
+  const handleGenerate = async (schedule: DuesSchedule) => {
+    const confirmed = await confirm({
+      title: 'Generate dues',
+      message: `Bill every active member ${formatCurrency(schedule.amount)} under "${schedule.name}", due ${formatDate(schedule.dueDate, tz)}. Members who already have dues for this schedule are skipped, so running it again only adds members who joined since.`,
+      confirmLabel: 'Generate dues',
+      cancelLabel: 'Not now',
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const { generated } = await duesService.generateDues(schedule.id);
+      toast.success(
+        generated === 0
+          ? 'Every active member already has dues for this schedule'
+          : generated === 1
+            ? 'Dues generated for 1 member'
+            : `Dues generated for ${String(generated)} members`
+      );
+      refresh();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not generate dues'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleWaive = async (dues: MemberDues, reason: string) => {
+    setBusy(true);
+    try {
+      await duesService.waive(dues.id, reason);
+      toast.success('Dues waived');
+      closeDialog();
+      refresh();
+    } catch (err: unknown) {
+      // Includes the backend's refusal to let a member waive their own dues.
+      toast.error(getErrorMessage(err, 'Could not waive these dues'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUnwaive = async (dues: MemberDues, reason: string) => {
+    setBusy(true);
+    try {
+      const restored = await duesService.unwaive(dues.id, reason);
+      toast.success(`Waiver reversed — the dues are ${STATUS_LABEL_MAP[restored.status] ?? restored.status} again`);
+      closeDialog();
+      refresh();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not reverse the waiver'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const header = (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
+      </div>
+      {canManage && (
+        <button type="button" onClick={() => setDialog({ kind: 'schedule' })} className="btn-primary">
+          <Plus className="h-4 w-4" />
+          New schedule
+        </button>
+      )}
+    </div>
+  );
+
+  if (isLoading && duesSchedules.length === 0 && memberDues.length === 0) {
     return (
       <div className="space-y-6">
         <Breadcrumbs />
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
-        </div>
+        {header}
         <SkeletonPage rows={6} showStats />
       </div>
     );
@@ -138,16 +251,11 @@ const DuesManagementPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <Breadcrumbs />
-
-      {/* Header */}
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
-      </div>
+      {header}
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+        <div role="alert" className="alert-danger flex items-center gap-3 rounded-lg p-4 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -157,14 +265,15 @@ const DuesManagementPage: React.FC = () => {
       {duesSummary && <SummaryCards summary={duesSummary} />}
 
       {/* Schedule Selector */}
-      {activeSchedules.length > 0 && (
-        <div className="card p-4">
-          <h2 className="text-theme-text-secondary mb-3 text-sm font-medium">Dues Schedule</h2>
+      {schedules.length > 0 ? (
+        <div className="card space-y-3 p-4">
+          <h2 className="text-theme-text-secondary text-sm font-medium">Dues Schedule</h2>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setSelectedScheduleId('')}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              aria-pressed={!selectedScheduleId}
+              className={`touch-target-phone rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 !selectedScheduleId
                   ? 'bg-red-800 text-white'
                   : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
@@ -172,25 +281,62 @@ const DuesManagementPage: React.FC = () => {
             >
               All Schedules
             </button>
-            {activeSchedules.map((schedule) => (
+            {schedules.map((schedule) => (
               <button
                 key={schedule.id}
                 type="button"
                 onClick={() => setSelectedScheduleId(schedule.id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                aria-pressed={selectedScheduleId === schedule.id}
+                className={`touch-target-phone rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedScheduleId === schedule.id
                     ? 'bg-red-800 text-white'
                     : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
                 }`}
               >
                 <span>{schedule.name}</span>
-                <span className="ml-1 text-xs opacity-75">
-                  ({FREQUENCY_LABELS[schedule.frequency] ?? schedule.frequency})
+                <span className="ml-1 text-xs">
+                  ({FREQUENCY_LABELS[schedule.frequency] ?? schedule.frequency}
+                  {schedule.isActive ? '' : ', inactive'})
                 </span>
               </button>
             ))}
           </div>
+          {canManage && selectedSchedule && (
+            <div className="border-theme-surface-border flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-theme-text-secondary text-sm">
+                {formatCurrency(selectedSchedule.amount)} per member, due {formatDate(selectedSchedule.dueDate, tz)}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleGenerate(selectedSchedule)}
+                  disabled={busy || !selectedSchedule.isActive}
+                  title={selectedSchedule.isActive ? undefined : 'Reactivate the schedule to generate dues from it'}
+                  className="btn-primary"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Generate dues
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDialog({ kind: 'schedule', schedule: selectedSchedule })}
+                  className="btn-secondary"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit schedule
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+      ) : (
+        canManage && (
+          <EmptyState
+            icon={Calendar}
+            title="No dues schedules yet"
+            description="Create a schedule for what each member owes and when, then generate dues from it."
+          />
+        )
       )}
 
       {/* Status Tabs */}
@@ -200,7 +346,8 @@ const DuesManagementPage: React.FC = () => {
             key={tab.value}
             type="button"
             onClick={() => setStatusFilter(tab.value)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            aria-pressed={statusFilter === tab.value}
+            className={`touch-target-phone rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -217,85 +364,200 @@ const DuesManagementPage: React.FC = () => {
           icon={Calendar}
           title="No dues records found"
           description={
-            statusFilter || selectedScheduleId ? 'Try adjusting your filters.' : 'No dues have been generated yet.'
+            statusFilter || selectedScheduleId
+              ? 'Try adjusting your filters.'
+              : canManage
+                ? 'No dues have been generated yet. Select a schedule and use Generate dues.'
+                : 'No dues have been generated yet.'
           }
         />
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="rwd-table w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-left`}>
                     Member
                   </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-right`}>
                     Amount Due
                   </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-right`}>
                     Amount Paid
                   </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-left`}>
                     Due Date
                   </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-left`}>
                     Status
                   </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
+                  <th scope="col" className={`${HEADER_CELL} text-left`}>
                     Paid Date
+                  </th>
+                  <th scope="col" className={`${HEADER_CELL} text-right`}>
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
-                {memberDues.map((md) => (
-                  <tr key={md.id} className="hover:bg-theme-surface-hover transition-colors">
-                    <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
-                      {md.userId}
-                    </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
-                      {formatCurrency(md.amountDue)}
-                    </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
-                      {formatCurrency(md.amountPaid)}
-                    </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                      {formatDate(md.dueDate, tz)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                {memberDues.map((md) => {
+                  const label = memberLabelOf(md);
+                  return (
+                    <tr key={md.id} className="hover:bg-theme-surface-hover transition-colors">
+                      <td
+                        data-label="Member"
+                        className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap"
                       >
-                        {STATUS_LABEL_MAP[md.status] ?? md.status}
-                      </span>
-                    </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                      {md.paidDate ? formatDate(md.paidDate, tz) : '--'}
-                    </td>
-                  </tr>
-                ))}
+                        {md.memberName || 'Unknown member'}
+                      </td>
+                      <td
+                        data-label="Amount Due"
+                        className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                      >
+                        {formatCurrency(md.amountDue)}
+                      </td>
+                      <td
+                        data-label="Amount Paid"
+                        className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                      >
+                        {formatCurrency(md.amountPaid)}
+                      </td>
+                      <td
+                        data-label="Due Date"
+                        className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
+                      >
+                        {formatDate(md.dueDate, tz)}
+                      </td>
+                      <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                        >
+                          {STATUS_LABEL_MAP[md.status] ?? md.status}
+                        </span>
+                      </td>
+                      <td
+                        data-label="Paid Date"
+                        className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
+                      >
+                        {md.paidDate ? formatDate(md.paidDate, tz) : '--'}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {canManage && OWING.has(md.status) && (
+                            <button
+                              type="button"
+                              onClick={() => setDialog({ kind: 'payment', dues: md })}
+                              className="btn-secondary"
+                              aria-label={`Record a payment for ${label}`}
+                            >
+                              <Receipt className="h-4 w-4" />
+                              Record payment
+                            </button>
+                          )}
+                          {canManage && OWING.has(md.status) && (
+                            <button
+                              type="button"
+                              onClick={() => setDialog({ kind: 'waive', dues: md })}
+                              className="btn-secondary"
+                              aria-label={`Waive the dues for ${label}`}
+                            >
+                              Waive
+                            </button>
+                          )}
+                          {canManage && md.status === DuesStatus.WAIVED && (
+                            <button
+                              type="button"
+                              onClick={() => setDialog({ kind: 'unwaive', dues: md })}
+                              className="btn-secondary"
+                              aria-label={`Reverse the waiver for ${label}`}
+                            >
+                              Reverse waiver
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setDialog({ kind: 'ledger', dues: md })}
+                            className="btn-icon"
+                            aria-label={`Payment history for ${label}`}
+                          >
+                            <History className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
+
+      {dialog?.kind === 'schedule' && (
+        <DuesScheduleDialog
+          schedule={dialog.schedule}
+          onClose={closeDialog}
+          onSaved={(saved) => {
+            closeDialog();
+            if (!dialog.schedule) setSelectedScheduleId(saved.id);
+            refresh();
+          }}
+        />
+      )}
+      {dialog?.kind === 'payment' && (
+        <DuesPaymentDialog
+          dues={dialog.dues}
+          memberLabel={memberLabelOf(dialog.dues)}
+          onClose={closeDialog}
+          onSaved={() => {
+            closeDialog();
+            refresh();
+          }}
+        />
+      )}
+      {dialog?.kind === 'ledger' && (
+        <DuesLedgerDialog dues={dialog.dues} memberLabel={memberLabelOf(dialog.dues)} onClose={closeDialog} />
+      )}
+      <PromptDialog
+        isOpen={dialog?.kind === 'waive'}
+        onClose={closeDialog}
+        onSubmit={(reason) => {
+          if (dialog?.kind === 'waive') void handleWaive(dialog.dues, reason);
+        }}
+        title="Waive dues"
+        message={
+          dialog?.kind === 'waive'
+            ? `${memberLabelOf(dialog.dues)} will no longer owe ${formatCurrency(dialog.dues.amountDue)} on this schedule. Payments cannot be recorded against waived dues until the waiver is reversed.`
+            : undefined
+        }
+        label="Reason"
+        multiline
+        hint="Kept on the dues record."
+        confirmLabel="Waive dues"
+        cancelLabel="Keep owing"
+        loading={busy}
+      />
+      <PromptDialog
+        isOpen={dialog?.kind === 'unwaive'}
+        onClose={closeDialog}
+        onSubmit={(reason) => {
+          if (dialog?.kind === 'unwaive') void handleUnwaive(dialog.dues, reason);
+        }}
+        title="Reverse waiver"
+        message={
+          dialog?.kind === 'unwaive'
+            ? `${memberLabelOf(dialog.dues)} will owe these dues again, less anything already paid. The original waiver reason is erased.`
+            : undefined
+        }
+        label="Why are you reversing it?"
+        multiline
+        hint="Required so the reversal is deliberate. It is not stored."
+        confirmLabel="Reverse waiver"
+        cancelLabel="Keep waiver"
+        confirmVariant="warning"
+        loading={busy}
+      />
     </div>
   );
 };

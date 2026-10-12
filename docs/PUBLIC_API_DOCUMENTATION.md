@@ -10,11 +10,21 @@ The Logbook Public API provides read-only access to selected organization data f
 
 ## Authentication
 
-All API requests require authentication using an API key. Include your API key in the `X-API-Key` header:
+The organization endpoints — **Get Organization Information**, **Get Organization Statistics** and **Get Public Events** — require an API key. Include it in the `X-API-Key` header:
 
 ```
 X-API-Key: your-api-key-here
 ```
+
+The other endpoints in this document do **not** use an API key, and sending one has no effect:
+
+| Endpoint                                          | What protects it instead                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| Health Check (`GET /health`)                      | Nothing — it reveals only that the service is running                    |
+| Public forms (`/forms/{slug}`)                    | The form must be published as public; per-IP rate limits                 |
+| Personal shift calendar (`/calendar/{token}.ics`) | The unguessable token in the URL                                         |
+| Guest event check-in                              | The room display's code; the event must allow guest sign-in; rate limits |
+| Location kiosk display (`/display/{code}`)        | The display code assigned to the location                                |
 
 ### Getting an API Key
 

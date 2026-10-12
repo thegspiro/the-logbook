@@ -13,8 +13,9 @@
 `evoc_level_service.py` (475 L — was 329), `schemas/apparatus.py` (1,967 L),
 `driver_exception_service.py`
 **Frontend:** none changed this pass
-**Docs:** no `docs/APPARATUS.md`; `wiki/API-Reference.md` covers the module at
-the nav/permission level
+**Docs:** at review time, `wiki/Module-Apparatus.md` (feature narrative + change
+history) and `wiki/API-Reference.md`'s nav table — but no structured reference
+under `docs/`. Closed 2026-10-08 by `docs/APPARATUS_MODULE.md`
 
 ### Scope
 
@@ -32,6 +33,38 @@ the EVOC certificate date move, security-review pass 5, and `preferred_name`).
 **Not** read line-by-line: the fuel-log, equipment, photo/document and custom-field
 sub-resources, whose invariants passes 1–4 verified and which this pass did not
 re-derive.
+
+**Correction (2026-10-11, found during app-review B4 pass 5).** This pass read
+the maintenance lifecycle "in full" on the **backend** and did not read the
+frontend form that drives it, and a MED defect was sitting there:
+
+`modules/apparatus/components/MaintenanceRecordModal.tsx` builds one payload out
+of sixteen conditional spreads — `...(f.vendor ? { vendor: f.vendor } : {})` —
+and sends it to `updateMaintenanceRecord` when editing and
+`createMaintenanceRecord` otherwise. On edit every cleared field is **omitted**,
+and the backend dumps update payloads with `exclude_unset`, so the omission means
+"leave this alone": the user empties the vendor, the cost or the notes, the toast
+says "Maintenance record updated", and the old value is still there. That is
+CLAUDE.md pitfall #1's update rule, which this document's own pass-2 and pass-3
+sections cite for the backend mirror-image of the same bug. All the affected
+columns (`vendor`, `cost`, `notes`, `performed_by`, `findings`, `work_performed`,
+`mileage_at_service`, `hours_at_service`, the three `next_due_*`) are nullable,
+so an explicit null is what the schema wants.
+
+A second defect sits behind it: `apparatus_service.update_maintenance_record`
+applies updates with a raw `for field, value in update_data.items(): setattr(...)`
+loop rather than the shared `apply_updates`. The raw loop does write a null
+through, so a frontend-only fix would function — but it loses `apply_updates`'
+guarantees: a null against a NOT NULL column becomes an `IntegrityError` → 500
+instead of a clean 400, and a field the model does not have is set silently
+instead of reported. A fix should do both halves.
+
+Recorded as **FAC2-6** in `docs/app-review/facilities.md` with the full
+mechanism. Not fixed in the facilities PR that found it — different module,
+different iteration — so it is **open** and belongs to this module's next pass.
+The lesson for this file is the one B4 pass 5 acted on: a pass that records
+`tsc --noEmit` as "no frontend change" has not reviewed the frontend, and should
+not describe its scope as having read a workflow "in full".
 
 ### Verified good ✅
 
@@ -222,17 +255,32 @@ Four corrected this pass, all of them claims that had rotted:
    when the fix landed and the body never was. Body rewritten to record both the
    fix and the original reasoning, which is what produced `assert_in_org`.
 
-Still missing, not created here: there is **no `docs/APPARATUS.md`**. 88
-endpoints, two permission strings of its own plus six it shares, the EVOC
-ladder, the maintenance lifecycle and the driver-exception workflow are
-documented only in docstrings and `wiki/API-Reference.md`'s nav table. Writing
-it is a pass of its own, not a side-effect of this one.
+Still missing at the time of this pass: no structured reference under `docs/`.
+88 endpoints, two permission strings of its own plus six it shares, the EVOC
+ladder, the maintenance lifecycle and the driver-exception workflow had no
+single place stating their shapes and gates. Writing it is a pass of its own,
+not a side-effect of this one.
+
+> **Correction (2026-10-08).** This paragraph originally said the module was
+> "documented only in docstrings and `wiki/API-Reference.md`'s nav table". That
+> was wrong: **[wiki/Module-Apparatus.md](../../wiki/Module-Apparatus.md)** —
+> 465 lines of feature narrative and dated change history — existed throughout,
+> and this pass did not look for it. The gap was narrower than stated: no
+> _structured reference_ (data models, endpoint-and-permission tables, flows,
+> edge cases), which is what
+> [docs/APPARATUS_MODULE.md](../APPARATUS_MODULE.md) now provides, cross-linked
+> with the wiki page. Several modules in this repository carry both, by design —
+> `docs/SCHEDULING_MODULE.md` and `wiki/Module-Scheduling.md` are the
+> precedent.
 
 ### Future development
 
 1. **AP2-4's decision** (above) — fail closed, or give `shifts.apparatus_id` a
    real FK. The second option is the better fix and the more invasive one.
-2. **`docs/APPARATUS.md` does not exist.** The largest module in the repo by
+2. ~~**No feature doc exists.**~~ **Closed 2026-10-08** by
+   [docs/APPARATUS_MODULE.md](../APPARATUS_MODULE.md) — note the house convention
+   is `<NAME>_MODULE.md`, which this pass named wrongly as `docs/APPARATUS.md`.
+   The largest module in the repo by
    endpoint count has no feature doc.
 3. **The maintenance interval fields are declared but unscheduled.**
    `ApparatusMaintenanceType` carries `default_interval_value`,

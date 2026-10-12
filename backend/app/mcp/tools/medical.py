@@ -50,6 +50,7 @@ def register(server: Any) -> None:
         title="Member medical compliance",
         gate="medical_screening",
         module="medical_screening",
+        permissions=("medical_screening.view", "medical_screening.manage"),
     )
     async def get_member_medical_compliance(
         db: AsyncSession, principal: McpPrincipal, member_id: str
@@ -73,6 +74,7 @@ def register(server: Any) -> None:
             "non_compliant_count": summary.non_compliant_count,
             "expiring_soon_count": summary.expiring_soon_count,
             "is_fully_compliant": summary.is_fully_compliant,
+            "self_recorded_count": summary.self_recorded_count,
             "items": [
                 {
                     "requirement_id": item.requirement_id,
@@ -82,6 +84,7 @@ def register(server: Any) -> None:
                     "last_screening_date": iso(item.last_screening_date),
                     "expiration_date": iso(item.expiration_date),
                     "days_until_expiration": item.days_until_expiration,
+                    "self_recorded": item.self_recorded,
                 }
                 for item in summary.items
             ],
@@ -92,6 +95,7 @@ def register(server: Any) -> None:
         title="Expiring screenings",
         gate="medical_screening",
         module="medical_screening",
+        permissions=("medical_screening.view", "medical_screening.manage"),
     )
     async def list_expiring_screenings(
         db: AsyncSession,

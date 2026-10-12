@@ -80,6 +80,7 @@ import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfi
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
+import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
@@ -1532,6 +1533,14 @@ export const EventDetailPage: React.FC = () => {
             {/* Pipeline meeting stages can also link prospects to ordinary
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
+
+            {/* Guests are listed apart from member attendance and never
+                counted in it (W23-2). */}
+            <EventGuestsCard
+              eventId={event.id}
+              canManage={canManage}
+              allowsGuestCheckIn={event.allow_guest_check_in ?? false}
+            />
 
             {/* Attachments */}
             {event.attachments && event.attachments.length > 0 && (

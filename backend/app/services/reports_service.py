@@ -6,7 +6,7 @@ training summary, event attendance, and compliance reports.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple, TypeGuard
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -55,8 +55,10 @@ from app.utils.hours import (
 )
 from app.utils.org_timezone import (
     local_date,
-    local_day_start_utc,
+    local_range_utc,
+    resolve_local_range_utc,
     resolve_org_today,
+    resolve_reporting_timezone,
     resolve_scheduling_timezone,
 )
 from app.utils.sql_ordering import nulls_last_asc
@@ -72,7 +74,7 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
-def _is_valid_stage_groups(value: Any) -> bool:
+def _is_valid_stage_groups(value: Any) -> TypeGuard[List[Dict[str, Any]]]:
     """True iff ``value`` is a well-formed client-supplied stage-groups
     override: a non-empty list of dicts, each with a string ``name`` and a
     list of string ``step_ids``. Anything else (missing, wrong shape, a
@@ -146,9 +148,18 @@ class ReportsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
+        hidden_prospect_ids: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
-        """Generate a report based on type"""
-        generators = {
+        """Generate a report based on type.
+
+        ``hidden_prospect_ids`` is the caller's own prospective-membership
+        record id(s) (see ``app.api.prospect_privacy``) — only
+        ``pipeline_overview`` takes it, since it is the only report that
+        lists individual prospect records. Every other generator ignores it;
+        passing it unconditionally here (rather than threading it through all
+        thirteen signatures) keeps that asymmetry in one place.
+        """
+        generators: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
             "member_roster": self._generate_member_roster,
             "training_summary": self._generate_training_summary,
             "event_attendance": self._generate_event_attendance,
@@ -168,6 +179,14 @@ class ReportsService:
         if not generator:
             return {"error": f"Unknown report type: {report_type}"}
 
+        if report_type == "pipeline_overview":
+            return await generator(
+                organization_id,
+                start_date,
+                end_date,
+                filters,
+                hidden_prospect_ids=hidden_prospect_ids,
+            )
         return await generator(organization_id, start_date, end_date, filters)
 
     # ============================================
@@ -300,7 +319,7 @@ class ReportsService:
         total_courses = courses_result.scalar() or 0
 
         # Aggregate per member
-        member_stats = {}
+        member_stats: Dict[str, Dict[str, Any]] = {}
         for user in users:
             member_stats[str(user.id)] = {
                 "member_id": str(user.id),
@@ -471,20 +490,16 @@ class ReportsService:
         # The requested dates, and each event's date in the report, are the
         # department's: bounded at its midnights rather than UTC's, which put an
         # evening event on the last day outside the range and dated it wrongly.
-        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        tz = await resolve_reporting_timezone(self.db, organization_id)
         events_query = select(Event).where(
             Event.organization_id == str(organization_id)
         )
 
-        if start_date:
-            events_query = events_query.where(
-                Event.start_datetime >= local_day_start_utc(start_date, tz)
-            )
-        if end_date:
-            events_query = events_query.where(
-                Event.start_datetime
-                < local_day_start_utc(end_date + timedelta(days=1), tz)
-            )
+        range_start, range_end = local_range_utc(start_date, end_date, tz)
+        if range_start:
+            events_query = events_query.where(Event.start_datetime >= range_start)
+        if range_end:
+            events_query = events_query.where(Event.start_datetime < range_end)
 
         events_query = events_query.order_by(Event.start_datetime.desc())
         events_result = await self.db.execute(events_query)
@@ -509,7 +524,7 @@ class ReportsService:
                 rsvp_stats[str(row[0])] = (row[1], int(row[2] or 0))
 
         event_entries = []
-        total_attendance_rate = 0
+        total_attendance_rate: float = 0
 
         for event in events:
             total_rsvps, attended = rsvp_stats.get(str(event.id), (0, 0))
@@ -590,7 +605,7 @@ class ReportsService:
             for u in users
         }
 
-        entries = []
+        entries: List[Dict[str, Any]] = []
         status_summary = {"active": 0, "completed": 0, "expired": 0, "withdrawn": 0}
 
         for enrollment in enrollments:
@@ -727,7 +742,7 @@ class ReportsService:
         shift_reports = shift_reports_result.scalars().all()
 
         # Aggregate per member
-        member_data = {}
+        member_data: Dict[str, Dict[str, Any]] = {}
         for uid, user in member_map.items():
             member_data[uid] = {
                 "member_id": uid,
@@ -745,7 +760,7 @@ class ReportsService:
         # Process training records
         total_hours = 0.0
         total_completions = 0
-        by_type = {}
+        by_type: Dict[str, int] = {}
 
         for record in records:
             uid = str(record.user_id)
@@ -788,7 +803,7 @@ class ReportsService:
                 ratings.append(sr.performance_rating)
 
         # Calculate per-member average ratings
-        member_ratings = {}
+        member_ratings: Dict[str, List[int]] = {}
         for sr in shift_reports:
             uid = str(sr.trainee_id)
             if sr.performance_rating:
@@ -989,7 +1004,7 @@ class ReportsService:
                 )
                 .where(
                     ApparatusMaintenance.apparatus_id.in_(apparatus_ids),
-                    ApparatusMaintenance.status != "completed",
+                    ApparatusMaintenance.is_completed.is_(False),
                 )
                 .group_by(ApparatusMaintenance.apparatus_id)
             )
@@ -1203,7 +1218,7 @@ class ReportsService:
                 ):
                     user_completed[uid].add(str(rp.requirement_id))
 
-        report_entries = []
+        report_entries: List[Dict[str, Any]] = []
         fully_compliant = 0
         partially_compliant = 0
         non_compliant = 0
@@ -1350,6 +1365,13 @@ class ReportsService:
         report["unfinalized_shifts"] = await self._count_unfinalized_shifts(
             organization_id, period_start, period_end
         )
+        # The whole range is read under the current mode, so any part of it
+        # before that mode took over comes from the other source and is
+        # missing here. Warn rather than change the figures (SCHED-14).
+        report["tracking_mode"] = tracking.get("mode")
+        mode_since = await call_service.mode_since(str(organization_id))
+        report["mode_since"] = str(mode_since) if mode_since else None
+        report["range_predates_mode"] = bool(mode_since and period_start < mode_since)
         return report
 
     async def _count_unfinalized_shifts(
@@ -1449,6 +1471,13 @@ class ReportsService:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(period_start),
             "period_end": str(period_end),
+            "source": "shift_reports",
+            # Shift completion reports are filed per member, so a shift two
+            # members reported contributes its calls twice. The figure is a
+            # sum of member-reported calls, not an incident count, and the
+            # renderer names it that way (SCHED-15, owner decision: rename,
+            # numbers unchanged).
+            "counts_member_reports": True,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": avg_per_day,
@@ -1527,14 +1556,14 @@ class ReportsService:
             "period_start": str(period_start),
             "period_end": str(period_end),
             "source": "call_counts",
-            # Until a closing officer can say "we were on that one too", each
-            # unit reports its own tour independently and nothing links two
-            # units to one incident. So this figure counts *unit responses*:
-            # an MVA that an engine and a medic both ran appears as two. The
-            # flag travels with the data so a report cannot silently present
-            # it as a deduplicated incident count — the number is truthful
-            # under one name and overstated under the other.
-            "counts_unit_responses": True,
+            # False since the close-out wizard's shared-call picker (SCHED-10):
+            # a closing officer now says "we were on that one too" by ticking
+            # the call another unit logged, and the incident is one OrgCall
+            # with two responses — so this is the department's incident count.
+            # It was True while nothing could link two units to one incident
+            # and the same MVA appeared once per unit; the renderer still
+            # labels the figure "Unit Responses" for any client that sets it.
+            "counts_unit_responses": False,
             "summary": {
                 "total_calls": total_calls,
                 "avg_calls_per_day": round(total_calls / num_days, 1),
@@ -1677,8 +1706,6 @@ class ReportsService:
         Cross-module department overview report.
         Aggregates key metrics from members, training, events, and action items.
         """
-        from datetime import timedelta
-
         from app.models.meeting import ActionItemStatus, MeetingActionItem
         from app.models.minute import ActionItem as MinutesActionItem
         from app.models.minute import MeetingMinutes, MinutesActionItemStatus
@@ -1687,6 +1714,13 @@ class ReportsService:
         today = await resolve_org_today(self.db, org_id)
         period_start = start_date or today - timedelta(days=365)
         period_end = end_date or today
+        # Timestamped rows are bounded at the department's midnights, not
+        # UTC's (GF-24a); date columns compare against the dates directly.
+        range_start, range_end = local_range_utc(
+            period_start,
+            period_end,
+            await resolve_reporting_timezone(self.db, org_id),
+        )
 
         # ── Members ──
         total_result = await self.db.execute(
@@ -1740,14 +1774,8 @@ class ReportsService:
         events_result = await self.db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.start_datetime
-                >= datetime.combine(
-                    period_start, datetime.min.time(), tzinfo=timezone.utc
-                ),
-                Event.start_datetime
-                <= datetime.combine(
-                    period_end, datetime.max.time(), tzinfo=timezone.utc
-                ),
+                Event.start_datetime >= range_start,
+                Event.start_datetime < range_end,
                 Event.is_cancelled.is_(False),
             )
         )
@@ -1762,14 +1790,8 @@ class ReportsService:
                 # RPT-5: bound check-ins to the report period like total_events
                 # above — this metric was counting all-time while the rest of
                 # the department overview is period-scoped.
-                Event.start_datetime
-                >= datetime.combine(
-                    period_start, datetime.min.time(), tzinfo=timezone.utc
-                ),
-                Event.start_datetime
-                <= datetime.combine(
-                    period_end, datetime.max.time(), tzinfo=timezone.utc
-                ),
+                Event.start_datetime >= range_start,
+                Event.start_datetime < range_end,
             )
         )
         total_checkins = checkins_result.scalar() or 0
@@ -1856,18 +1878,13 @@ class ReportsService:
             ),
             AdminHoursEntry.duration_minutes.isnot(None),
         ]
-        if start_date:
-            base_conditions.append(
-                AdminHoursEntry.clock_in_at
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            base_conditions.append(
-                AdminHoursEntry.clock_in_at
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, organization_id, start_date, end_date
+        )
+        if range_start:
+            base_conditions.append(AdminHoursEntry.clock_in_at >= range_start)
+        if range_end:
+            base_conditions.append(AdminHoursEntry.clock_in_at < range_end)
 
         # Individual entries with user and category info
         entries_query = (
@@ -1948,6 +1965,7 @@ class ReportsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
+        hidden_prospect_ids: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
         """
         Generate a pipeline overview report with configurable stage grouping.
@@ -1955,6 +1973,14 @@ class ReportsService:
         Filters:
           - pipeline_id: specific pipeline (uses default if omitted)
           - stage_groups: ad-hoc override for grouping config
+
+        ``hidden_prospect_ids`` excludes the caller's own prospective-
+        membership record, the same way every list/aggregate route in
+        ``membership_pipeline.py`` does via ``get_hidden_prospect_ids``
+        (RPT-29 pass 8): this report lists individual prospects by name and
+        email, and an elected officer who once applied through this same
+        pipeline must not see their own application surface here, matching
+        ``app.api.prospect_privacy``'s router-wide guarantee.
         """
         from app.models.membership_pipeline import (
             MembershipPipeline,
@@ -2038,18 +2064,15 @@ class ReportsService:
             ProspectiveMember.pipeline_id == pipeline.id,
             ProspectiveMember.organization_id == org_id,
         ]
-        if start_date:
-            prospect_conditions.append(
-                ProspectiveMember.created_at
-                >= datetime.combine(
-                    start_date, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
-        if end_date:
-            prospect_conditions.append(
-                ProspectiveMember.created_at
-                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
-            )
+        range_start, range_end = await resolve_local_range_utc(
+            self.db, org_id, start_date, end_date
+        )
+        if range_start:
+            prospect_conditions.append(ProspectiveMember.created_at >= range_start)
+        if range_end:
+            prospect_conditions.append(ProspectiveMember.created_at < range_end)
+        if hidden_prospect_ids:
+            prospect_conditions.append(ProspectiveMember.id.notin_(hidden_prospect_ids))
 
         prospects_query = select(ProspectiveMember).where(*prospect_conditions)
         prospects_result = await self.db.execute(prospects_query)
@@ -2077,10 +2100,13 @@ class ReportsService:
             if (p.status.value if hasattr(p.status, "value") else p.status)
             == "transferred"
             and p.transferred_at
+            and p.created_at
         ]
         if transferred_prospects:
             total_days = sum(
-                (p.transferred_at - p.created_at).days for p in transferred_prospects
+                (p.transferred_at - p.created_at).days
+                for p in transferred_prospects
+                if p.transferred_at and p.created_at
             )
             avg_days = round(total_days / len(transferred_prospects), 1)
         else:
@@ -2186,16 +2212,12 @@ class ReportsService:
                 ProspectStepProgress.prospect_id.in_(prospect_ids)
             )
             progress_result = await self.db.execute(progress_query)
-            for prog in progress_result.scalars().all():
-                key = f"{prog.prospect_id}:{prog.step_id}"
+            for record in progress_result.scalars().all():
+                key = f"{record.prospect_id}:{record.step_id}"
                 progress_map[key] = {
-                    "status": (
-                        prog.status.value
-                        if hasattr(prog.status, "value")
-                        else prog.status
-                    ),
-                    "completed_at": prog.completed_at,
-                    "created_at": prog.created_at,
+                    "status": getattr(record.status, "value", record.status),
+                    "completed_at": record.completed_at,
+                    "created_at": record.created_at,
                 }
 
         # Build group data
@@ -2324,10 +2346,14 @@ class ReportsService:
                     if progress_map.get(f"{p.id}:{step.id}", {}).get("status")
                     == StepProgressStatus.COMPLETED.value
                 )
-                reached = sum(
+                reached_count = sum(
                     1 for p in prospects if f"{p.id}:{step.id}" in progress_map
                 )
-                rate = round(completed / reached * 100, 1) if reached > 0 else 0
+                rate = (
+                    round(completed / reached_count * 100, 1)
+                    if reached_count > 0
+                    else 0
+                )
 
                 groups_data.append(
                     {
@@ -2343,7 +2369,9 @@ class ReportsService:
         prospect_rows = []
         for p in prospects:
             status_val = p.status.value if hasattr(p.status, "value") else p.status
-            current_step = step_map.get(p.current_step_id)
+            current_step = (
+                step_map.get(p.current_step_id) if p.current_step_id else None
+            )
             current_step_name = current_step.name if current_step else "—"
 
             # Find which group the prospect's current step belongs to

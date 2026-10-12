@@ -157,7 +157,7 @@ class LabelPrinterService:
         ``settings.manage`` in one organization must not reach another's
         printer row (CLAUDE.md pitfall 14a/14b).
         """
-        printer = await self.db.scalar(
+        printer: Optional[LabelPrinter] = await self.db.scalar(
             select(LabelPrinter).where(
                 LabelPrinter.id == str(printer_id),
                 LabelPrinter.organization_id == str(organization_id),

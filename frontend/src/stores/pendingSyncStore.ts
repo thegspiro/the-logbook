@@ -7,6 +7,7 @@
  *   - genericOfflineQueue (training submission, RSVP)
  *   - offlineQueue (equipment checks)
  *   - shiftReportOfflineQueue (shift reports)
+ *   - skillsTestOffline (skills-test scoring, one entry per test)
  *
  * `count` is the signed-in member's own items — the ones that will sync.
  * Items queued before owners were recorded are counted separately in
@@ -17,6 +18,7 @@ import { genericPendingCount } from '../utils/genericOfflineQueue';
 import { pendingCount as equipmentPendingCount } from '../utils/offlineQueue';
 import { pendingReportCount } from '../utils/shiftReportOfflineQueue';
 import { listHeldOfflineItems } from '../utils/offlineQueueQuarantine';
+import { skillsPendingCount } from '../utils/skillsTestOffline';
 
 export type SyncStatus = 'idle' | 'syncing' | 'error';
 
@@ -37,13 +39,14 @@ export const usePendingSyncStore = create<PendingSyncState>((set) => ({
   lastError: null,
   refresh: async () => {
     try {
-      const [generic, equipment, reports, held] = await Promise.all([
+      const [generic, equipment, reports, skills, held] = await Promise.all([
         genericPendingCount().catch(() => 0),
         equipmentPendingCount().catch(() => 0),
         pendingReportCount().catch(() => 0),
+        skillsPendingCount().catch(() => 0),
         listHeldOfflineItems().catch(() => []),
       ]);
-      set({ count: generic + equipment + reports, heldCount: held.length });
+      set({ count: generic + equipment + reports + skills, heldCount: held.length });
     } catch {
       // Counts are best-effort.
     }

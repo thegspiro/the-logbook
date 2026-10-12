@@ -143,7 +143,7 @@ const SchedulingPage: React.FC = () => {
     members: membersList,
     templates: backendTemplates,
     templatesLoaded,
-    apparatus: apparatusList,
+    shiftApparatus: apparatusList,
     summary,
     loadInitialData,
     loadSummary,
@@ -952,7 +952,7 @@ const SchedulingPage: React.FC = () => {
                       if (!tmpl) return null;
                       const suffix =
                         tmpl.duration_hours >= 24 ? '24' : tmpl.start_time_of_day < tmpl.end_time_of_day ? 'DS' : 'NS';
-                      const label = apparatus ? `${apparatus.unit_number} ${suffix}` : `${tmpl.name}`;
+                      const label = apparatus ? `${apparatus.unit_number ?? apparatus.name} ${suffix}` : `${tmpl.name}`;
                       return (
                         <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center gap-2 rounded-lg border p-2.5">
                           <span className="text-theme-text-muted text-xs">Shift label:</span>

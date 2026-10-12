@@ -187,7 +187,8 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['members.manage'],
     expectText: 'Waiver Management',
   },
-  // Both read the member through `/users/:id/with-roles`; the catch-all `{}` has
+  // The edit page reads the member through `/users/:id/with-roles`, the
+  // audit history through `/users/:id/roles`; the catch-all `{}` has
   // no id, so without the record these measure their load-error states.
   {
     path: '/members/admin/edit/1',
@@ -247,6 +248,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
+  { path: '/admin/security-alerts', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
   // The rest of Training Administration's tabs. Every one of these brought its
   // own padded page container into the hub's column and was indented twice on
   // a phone; `expectText` names something only that tab's body renders, since

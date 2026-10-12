@@ -9,6 +9,8 @@ import type {
   BallotItem,
   BallotItemVote,
   BallotLookupResponse,
+  MemberBallotResponse,
+  MyProxyAuthorizationsResponse,
   BallotPreview,
   BallotSubmissionResponse,
   BallotTemplate,
@@ -37,6 +39,7 @@ import type {
   PreMeetingPackageSend,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
+  ProxyAuthorizationList,
   ProxyVoteCreate,
   VotingMethod,
   SavedBallotTemplate,
@@ -295,6 +298,40 @@ export const electionService = {
   },
 
   /**
+   * The signed-in member's in-app ballot, or — with a proxy authorization —
+   * the ballot of the member whose proxy they hold.
+   */
+  async getMemberBallot(electionId: string, proxyAuthorizationId?: string): Promise<MemberBallotResponse> {
+    const response = await api.get<MemberBallotResponse>(`/elections/${electionId}/ballot`, {
+      params: proxyAuthorizationId ? { proxy_authorization_id: proxyAuthorizationId } : undefined,
+    });
+    return response.data;
+  },
+
+  /**
+   * Cast the in-app ballot (the emailed ballot's shape), atomically.
+   */
+  async submitMemberBallot(
+    electionId: string,
+    votes: BallotItemVote[],
+    proxyAuthorizationId?: string
+  ): Promise<BallotSubmissionResponse> {
+    const response = await api.post<BallotSubmissionResponse>(`/elections/${electionId}/ballot`, {
+      votes,
+      ...(proxyAuthorizationId ? { proxy_authorization_id: proxyAuthorizationId } : {}),
+    });
+    return response.data;
+  },
+
+  /**
+   * The proxies the signed-in member holds in this election.
+   */
+  async getMyProxies(electionId: string): Promise<MyProxyAuthorizationsResponse> {
+    const response = await api.get<MyProxyAuthorizationsResponse>(`/elections/${electionId}/ballot/proxies`);
+    return response.data;
+  },
+
+  /**
    * Submit a ballot using a voting token
    */
   async submitBallot(token: string, votes: BallotItemVote[]): Promise<BallotSubmissionResponse> {
@@ -365,12 +402,8 @@ export const electionService = {
   /**
    * Get proxy authorizations for an election
    */
-  async getProxyAuthorizations(
-    electionId: string
-  ): Promise<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }> {
-    const response = await api.get<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }>(
-      `/elections/${electionId}/proxy-authorizations`
-    );
+  async getProxyAuthorizations(electionId: string): Promise<ProxyAuthorizationList> {
+    const response = await api.get<ProxyAuthorizationList>(`/elections/${electionId}/proxy-authorizations`);
     return response.data;
   },
 
@@ -676,12 +709,12 @@ export const electionService = {
   },
 
   /**
-   * Verify a vote receipt hash (public — no auth required)
+   * Verify a vote receipt hash (public — no auth required). The receipt goes
+   * in the POST body so it never lands in an access log or browser history;
+   * the GET form with `?receipt=` is deprecated (ELEC-14).
    */
   async verifyReceipt(electionId: string, receipt: string): Promise<VoteReceiptResponse> {
-    const response = await api.get<VoteReceiptResponse>(`/elections/${electionId}/verify-receipt`, {
-      params: { receipt },
-    });
+    const response = await api.post<VoteReceiptResponse>(`/elections/${electionId}/verify-receipt`, { receipt });
     return response.data;
   },
 };

@@ -222,10 +222,11 @@ def resolve(
     choice, not their footer.
     """
     library = read_library(organization)
-    by_key = {f["key"]: f for f in library["footers"]}
+    by_key: Dict[str, Dict[str, Any]] = {f["key"]: f for f in library["footers"]}
     if footer_key and footer_key in by_key:
         return by_key[footer_key]
-    return by_key.get(library["default_key"], library["footers"][0])
+    fallback: Dict[str, Any] = library["footers"][0]
+    return by_key.get(library["default_key"], fallback)
 
 
 def render_html(footer: Dict[str, Any], context: Dict[str, Any]) -> str:
@@ -303,7 +304,7 @@ def _substitute(text: str, context: Dict[str, Any], escape: bool) -> str:
     """
     source = _html.escape(text) if escape else text
 
-    def replacer(match: "re.Match") -> str:
+    def replacer(match: "re.Match[str]") -> str:
         name = match.group(1).strip()
         if name not in FOOTER_VARIABLE_NAMES or name not in context:
             return match.group(0)

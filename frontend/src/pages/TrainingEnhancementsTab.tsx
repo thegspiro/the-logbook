@@ -30,6 +30,7 @@ import { Modal } from '../components/Modal';
 import { MemberPickerModal } from '../components/MemberPickerModal';
 import { EffectivenessEvaluationModal } from '../components/training/EffectivenessEvaluationModal';
 import { EmptyState } from '../components/ux/EmptyState';
+import { CompetencyHeatmap } from '../components/training/CompetencyHeatmap';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -858,14 +859,6 @@ const CompetencySection: React.FC = () => {
     );
   }
 
-  const competencyLevels = [
-    { level: 'novice', label: 'Novice', color: 'bg-theme-text-muted' },
-    { level: 'advanced_beginner', label: 'Advanced Beginner', color: 'bg-blue-400' },
-    { level: 'competent', label: 'Competent', color: 'bg-green-400' },
-    { level: 'proficient', label: 'Proficient', color: 'bg-yellow-400' },
-    { level: 'expert', label: 'Expert', color: 'bg-red-400' },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -882,15 +875,6 @@ const CompetencySection: React.FC = () => {
           <Plus className="h-4 w-4" />
           <span>Add Matrix</span>
         </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {competencyLevels.map((l) => (
-          <div key={l.level} className="text-theme-text-muted flex items-center gap-1 text-xs">
-            <div className={`h-3 w-3 rounded-full ${l.color}`} />
-            <span>{l.label}</span>
-          </div>
-        ))}
       </div>
 
       {matrices.length === 0 ? (
@@ -911,6 +895,8 @@ const CompetencySection: React.FC = () => {
           ))}
         </div>
       )}
+
+      <CompetencyHeatmap />
 
       <AddMatrixModal
         isOpen={showAddModal}

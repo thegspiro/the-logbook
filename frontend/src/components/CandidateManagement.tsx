@@ -203,7 +203,13 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
         accepted: !candidate.accepted,
       });
       setCandidates((prev) => prev.map((c) => (c.id === candidate.id ? updated : c)));
-      toast.success(updated.accepted ? 'Candidate accepted' : 'Candidate declined');
+      toast.success(
+        updated.accepted_on_behalf_by
+          ? `Accepted on ${updated.name}'s behalf — they have been emailed`
+          : updated.accepted
+            ? 'Candidate accepted'
+            : 'Candidate declined'
+      );
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to update candidate'));
     }
@@ -251,6 +257,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
   }
 
   const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
+  // Close Nominations freezes the slate: no acceptance can change until
+  // nominations reopen (W50-38). The server refuses it either way.
+  const slateFrozen = Boolean(election.nominations_closed_at) && election.status !== ElectionStatus.NOMINATIONS;
   // A write-in that exists once voting has started was typed by a voter and
   // is what their vote points at; renaming or removing it would alter the
   // ballot record. Spelling variants are consolidated with Merge Write-Ins,
@@ -472,12 +481,14 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                       <div className="space-y-3">
                         <input
                           type="text"
+                          aria-label="Candidate name"
                           value={formData.name}
                           onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                           className="form-input shadow-xs"
                         />
                         {positions.length > 0 && (
                           <select
+                            aria-label="Position"
                             value={formData.position}
                             onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                             className="form-input shadow-xs"
@@ -491,6 +502,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           </select>
                         )}
                         <textarea
+                          aria-label="Statement"
                           value={formData.statement}
                           onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                           rows={2}
@@ -531,7 +543,12 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                             )}
                             {!candidate.accepted && (
                               <span className="rounded-sm bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-300">
-                                Pending
+                                {slateFrozen ? 'Not accepted before nominations closed' : 'Pending'}
+                              </span>
+                            )}
+                            {candidate.accepted && candidate.accepted_on_behalf_by && (
+                              <span className="rounded-sm bg-blue-500/20 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-300">
+                                Accepted by manager
                               </span>
                             )}
                           </div>
@@ -550,14 +567,22 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                               onClick={() => {
                                 void handleToggleAccepted(candidate);
                               }}
-                              aria-label={`${candidate.accepted ? 'Accepted' : 'Accept'} ${candidate.name}`}
-                              className={`rounded px-2 py-1 text-xs ${
+                              disabled={slateFrozen}
+                              title={slateFrozen ? 'Nominations have closed — the slate is final' : undefined}
+                              aria-label={`${
+                                candidate.accepted ? 'Accepted' : candidate.user_id ? 'Accept on behalf of' : 'Accept'
+                              } ${candidate.name}`}
+                              className={`rounded px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
                                 candidate.accepted
                                   ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30 dark:text-green-300'
                                   : 'bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300'
                               }`}
                             >
-                              {candidate.accepted ? 'Accepted' : 'Accept'}
+                              {candidate.accepted
+                                ? 'Accepted'
+                                : candidate.user_id
+                                  ? 'Accept on their behalf'
+                                  : 'Accept'}
                             </button>
                             <button
                               type="button"

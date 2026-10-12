@@ -11,9 +11,9 @@ field cannot leak across by being "optional" in a shared one:
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.models.suggestion import SuggestionAnonymityMode, SuggestionDisposition
@@ -38,8 +38,8 @@ Disposition = Literal[
 ]
 
 # Keep the Literal types above honest against the model enums they mirror.
-assert set(AnonymityMode.__args__) == {m.value for m in SuggestionAnonymityMode}
-assert set(Disposition.__args__) == {d.value for d in SuggestionDisposition}
+assert set(get_args(AnonymityMode)) == {m.value for m in SuggestionAnonymityMode}
+assert set(get_args(Disposition)) == {d.value for d in SuggestionDisposition}
 
 
 def _strip_required(value: str) -> str:
@@ -47,6 +47,157 @@ def _strip_required(value: str) -> str:
     if not value:
         raise ValueError("must not be blank")
     return value
+
+
+# ---------------------------------------------------------------------------
+# Intake questions
+# ---------------------------------------------------------------------------
+
+MAX_INTAKE_QUESTIONS = 25
+MAX_INTAKE_OPTIONS = 25
+MAX_INTAKE_LABEL_LENGTH = 200
+MAX_INTAKE_HELP_LENGTH = 500
+
+IntakeQuestionType = Literal[
+    "select",
+    "radio",
+    "checkbox",
+    "text",
+    "textarea",
+    "date",
+    "number",
+    "rating",
+    "time",
+    "member",
+    "apparatus",
+]
+# The operators the forms module's branching rule understands; the rule itself
+# is shared (FormsService._visible_field_ids), so these must stay a subset.
+IntakeConditionOperator = Literal[
+    "equals",
+    "not_equals",
+    "contains",
+    "not_empty",
+    "is_empty",
+    "at_least",
+    "at_most",
+]
+CHOICE_QUESTION_TYPES = frozenset({"select", "radio", "checkbox"})
+# A checkbox answer can name several options, so it cannot name one box.
+ROUTING_QUESTION_TYPES = frozenset({"select", "radio"})
+# Answered by choosing a record the department keeps; the answer is its id.
+PICK_QUESTION_TYPES = frozenset({"member", "apparatus"})
+# Questions whose answers compare as numbers, for "at least" / "at most".
+NUMERIC_QUESTION_TYPES = frozenset({"number", "rating"})
+RATING_VALUES = ("1", "2", "3", "4", "5")
+_OPERATORS_WITH_VALUE = frozenset(
+    {"equals", "not_equals", "contains", "at_least", "at_most"}
+)
+
+
+def _optional_text(value: Optional[str]) -> Optional[str]:
+    value = (value or "").strip()
+    return value or None
+
+
+class IntakeOption(BaseModel):
+    model_config = _REQUEST_CONFIG
+
+    value: str = Field(..., min_length=1, max_length=MAX_INTAKE_LABEL_LENGTH)
+    label: str = Field(..., min_length=1, max_length=MAX_INTAKE_LABEL_LENGTH)
+    # Choosing this option moves the submission to that box.
+    route_to_box_id: Optional[str] = Field(None, max_length=36)
+
+    @field_validator("value", "label")
+    @classmethod
+    def _required(cls, value: str) -> str:
+        return _strip_required(value)
+
+    @field_validator("value")
+    @classmethod
+    def _no_comma(cls, value: str) -> str:
+        # Checkbox answers are stored comma-joined, as the forms module does,
+        # so a comma inside one option would read as two.
+        if "," in value:
+            raise ValueError("must not contain a comma")
+        return value
+
+    @field_validator("route_to_box_id")
+    @classmethod
+    def _route(cls, value: Optional[str]) -> Optional[str]:
+        return _optional_text(value)
+
+
+class IntakeQuestion(BaseModel):
+    """One question a box asks. Also the stored shape, in snake_case."""
+
+    model_config = _REQUEST_CONFIG
+
+    # Assigned by the service when absent; kept stable across edits so a
+    # follow-up question's condition keeps pointing at the same question.
+    id: Optional[str] = Field(None, max_length=36)
+    label: str = Field(..., min_length=1, max_length=MAX_INTAKE_LABEL_LENGTH)
+    help_text: Optional[str] = Field(None, max_length=MAX_INTAKE_HELP_LENGTH)
+    type: IntakeQuestionType
+    required: bool = False
+    options: List[IntakeOption] = Field(
+        default_factory=list, max_length=MAX_INTAKE_OPTIONS
+    )
+    condition_question_id: Optional[str] = Field(None, max_length=36)
+    condition_operator: Optional[IntakeConditionOperator] = None
+    condition_value: Optional[str] = Field(None, max_length=MAX_INTAKE_LABEL_LENGTH)
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, value: str) -> str:
+        return _strip_required(value)
+
+    @field_validator("id", "help_text", "condition_question_id", "condition_value")
+    @classmethod
+    def _blank_to_none(cls, value: Optional[str]) -> Optional[str]:
+        return _optional_text(value)
+
+    @model_validator(mode="after")
+    def _shape(self) -> "IntakeQuestion":
+        if self.type in CHOICE_QUESTION_TYPES:
+            if not self.options:
+                raise ValueError(f"'{self.label}' needs at least one option")
+            values = [o.value for o in self.options]
+            if len(set(values)) != len(values):
+                raise ValueError(f"'{self.label}' has two options with one value")
+            if self.type not in ROUTING_QUESTION_TYPES and any(
+                o.route_to_box_id for o in self.options
+            ):
+                raise ValueError(
+                    f"'{self.label}' allows several answers, so it cannot route "
+                    "to a box; use a dropdown or single choice"
+                )
+        elif self.options:
+            raise ValueError(f"'{self.label}' is not a choice question")
+
+        if bool(self.condition_question_id) != bool(self.condition_operator):
+            raise ValueError(
+                f"'{self.label}' needs both a question and a rule to branch on"
+            )
+        if self.condition_operator in _OPERATORS_WITH_VALUE:
+            if not self.condition_value:
+                raise ValueError(f"'{self.label}' needs a value to compare against")
+        else:
+            self.condition_value = None
+        return self
+
+
+class IntakeAnswer(BaseModel):
+    """One answered question, as stored on the submission."""
+
+    model_config = _REQUEST_CONFIG
+
+    question_id: str
+    label: str
+    # The stored answer; checkbox answers comma-joined.
+    value: str
+    # What a person reads: option labels rather than values.
+    display: str
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +223,10 @@ class SuggestionBoxWrite(BaseModel):
     watcher_member_ids: Optional[List[str]] = Field(None, max_length=200)
     # None leaves the setting alone, for the same reason as the watchers.
     public_board_enabled: Optional[bool] = None
+    # None leaves the questions as they are, for the same reason.
+    intake_questions: Optional[List[IntakeQuestion]] = Field(
+        None, max_length=MAX_INTAKE_QUESTIONS
+    )
 
     @field_validator("name")
     @classmethod
@@ -118,6 +273,7 @@ class SuggestionBoxAdminResponse(UTCResponseBase):
     watcher_positions: List[ReviewerRef] = Field(default_factory=list)
     watcher_members: List[ReviewerRef] = Field(default_factory=list)
     public_board_enabled: bool = False
+    intake_questions: List[IntakeQuestion] = Field(default_factory=list)
     # How much a permanent delete would destroy; the admin screen asks for
     # the box's name before deleting a box where this is above zero.
     submission_count: int = 0
@@ -149,6 +305,22 @@ class SuggestionBoxPublic(UTCResponseBase):
     anonymity_mode: str
     follow_up_enabled: bool
     public_board_enabled: bool = False
+    # A route only appears when its destination is open; the server routes
+    # the same way, so the member's preview matches where it lands.
+    intake_questions: List[IntakeQuestion] = Field(default_factory=list)
+
+
+PickKind = Literal["member", "apparatus"]
+
+
+class PickOption(BaseModel):
+    """One member or vehicle a pick question offers: an id and a name, and
+    nothing else — no contact details, rank or status."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
 
 
 class SubmissionReceipt(UTCResponseBase):
@@ -159,6 +331,8 @@ class SubmissionReceipt(UTCResponseBase):
     id: Optional[str] = None
     is_anonymous: bool
     follow_up_key: Optional[str] = None
+    # The box the submission landed in, which an answer may have changed.
+    box_name: Optional[str] = None
 
 
 class AttachmentResponse(UTCResponseBase):
@@ -226,6 +400,7 @@ class SubmitterSuggestionDetail(UTCResponseBase):
     messages: List[ThreadMessageResponse]
     # Empty in a one-way box, where the submitter sees no status at all.
     timeline: List[TimelineEntry] = Field(default_factory=list)
+    intake_answers: List[IntakeAnswer] = Field(default_factory=list)
     created_at: datetime
     timestamp_precision: Literal["exact", "day"] = "exact"
 
@@ -349,6 +524,9 @@ class ReviewSuggestionDetail(UTCResponseBase):
     published_title: Optional[str] = None
     published_summary: Optional[str] = None
     vote_count: int = 0
+    intake_answers: List[IntakeAnswer] = Field(default_factory=list)
+    # The box the member submitted to, when an answer moved it here.
+    routed_from_box_name: Optional[str] = None
 
 
 class ReviewSummary(UTCResponseBase):

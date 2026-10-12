@@ -206,6 +206,11 @@ docker compose up -d
      sudo ./scripts/setup-ssl.sh yourdomain.com admin@yourdomain.com
      ```
 
+To use Amazon RDS and ElastiCache (or any MySQL and Redis outside the stack)
+instead of the bundled containers, layer `docker-compose.external-services.yml`
+after the production override; see Method 2 of the
+[AWS Deployment Guide](deployment/aws.md#method-2-ec2--rds--elasticache-production).
+
 #### Digital Ocean Deployment
 
 1. **Create Droplet**
@@ -355,6 +360,19 @@ Port 80 redirects to the same host on port 443, so publish HTTPS on 443
 upload limit and the rate limits match the host configuration;
 `backend/tests/test_nginx_config_consistency.py` keeps the parts that must
 agree with the backend in step.
+
+**Per-address limits** _(2026-10-05)_: both bundled configs
+(`infrastructure/nginx/nginx.conf`, `docker.conf`) are sized for a department
+whose members share one station address, not for one person: `limit_conn 400`
+concurrent requests per address (under HTTP/2 nginx counts every in-flight
+request, and a dashboard load is about 20 API calls) and the API zone at 50
+requests a second with `burst=600 delay=100` — the first 100 requests of a burst
+pass at once and the rest queue at 50/s instead of being refused. They were 10
+concurrent and 10/s with burst 20, which turned one member's page load into 503s.
+The sign-in limits (`login_limit` 5/minute, burst 3) are brute-force controls and
+were not changed. A reverse proxy you run yourself keeps its own limits: size
+them the same way. The test above requires both bundled proxies to carry the same
+per-address limits and to stay above the floor one member's first page load needs.
 
 ---
 

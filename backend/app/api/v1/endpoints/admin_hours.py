@@ -42,12 +42,14 @@ from app.schemas.admin_hours import (
     AdminHoursEntryResponse,
     AdminHoursPaginatedEntries,
     AdminHoursQRData,
+    AdminHoursReviewSettingsResponse,
     AdminHoursSummary,
     EventHourMappingCreate,
     EventHourMappingResponse,
     EventHourMappingUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService, mapping_effect
+from app.utils.admin_hours_settings import load_admin_hours_review_settings
 from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
@@ -840,6 +842,34 @@ async def bulk_approve_entries(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Review settings
+# =============================================================================
+
+
+@router.get("/settings", response_model=AdminHoursReviewSettingsResponse)
+async def get_review_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """
+    The department's admin-hours review rules, as the server enforces them.
+
+    Written through `PATCH /organization/settings` (`admin_hours` section),
+    which needs `settings.manage` — not here, because one of the rules relaxes
+    the self-approval control on the people who hold this permission.
+
+    **Requires permission: admin_hours.manage**
+    """
+    resolved = await load_admin_hours_review_settings(
+        db, str(current_user.organization_id)
+    )
+    return AdminHoursReviewSettingsResponse(
+        allow_self_approval=resolved.allow_self_approval,
+        resync_requeue_growth_percent=resolved.resync_requeue_growth_percent,
+    )
 
 
 # =============================================================================

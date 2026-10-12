@@ -377,8 +377,8 @@ export interface MockOptions {
    */
   platoonsEnabled?: boolean;
   /**
-   * Serve a member record at `/users/:id/with-roles` and an empty audit
-   * history beside it.
+   * Serve a member record at `/users/:id/with-roles` (and its name at
+   * `/users/:id/roles`) and an empty audit history beside it.
    *
    * Opt-in because the catch-all `{}` is what every other ratcheted page that
    * reads a member was measured against; the member edit and audit-history
@@ -459,9 +459,100 @@ const routes = ({
     }),
   ],
 
+  // The security alerts screen rejects the catch-all `{}` for the same reason
+  // as the audit log: "nothing waiting" over a broken endpoint is the wrong
+  // answer. One open alert, so the pass measures its actions.
+  [
+    '**/api/v1/security/alerts**',
+    () => ({
+      alerts: [
+        {
+          id: 'alert-1',
+          alert_type: 'brute_force',
+          threat_level: 'high',
+          timestamp: new Date().toISOString(),
+          description: 'Brute force attack detected from 198.51.100.4',
+          source_ip: '198.51.100.4',
+          user_id: null,
+          details: { failed_attempts: 10, time_window: '1 hour' },
+          acknowledged: false,
+          acknowledged_by: null,
+          acknowledged_at: null,
+          resolved: false,
+          resolved_by: null,
+          resolved_at: null,
+          resolution_note: null,
+        },
+      ],
+      total: 1,
+      counts: { open: 1, unacknowledged: 1, acknowledged: 0, resolved: 0 },
+    }),
+  ],
+  ['**/api/v1/security/download-activity**', () => ({ exports: [] })],
+
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],
   ['**/api/v1/medical-supplies/categories**', () => []],
   ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],
+
+  // The department store's admin page. Unmocked, the catch-all's `{}` reached
+  // StoreSettingsTab as a settings object with no `notifyEmails`, which the
+  // API never sends (the schema turns a stored null into `[]`), and the tab
+  // threw on `.join` — so every Store route in the mobile sweeps was measuring
+  // a page of error toasts. Shapes, not stubs: a store set up but quiet.
+  [
+    '**/api/v1/store/settings',
+    () => ({
+      id: 'store-settings-1',
+      organizationId: 'e2e-org',
+      isEnabled: true,
+      storeName: 'Department Store',
+      tagline: null,
+      description: null,
+      currency: 'USD',
+      showOpenOrderBanner: true,
+      acceptedPaymentMethods: ['cash', 'check'],
+      paymentPolicy: 'before_pickup',
+      checkPayableTo: 'Oakville Fire Department',
+      cashInstructions: 'Pay at the station office.',
+      taxRate: '0.0600',
+      shippingFlatRate: null,
+      allowPickup: true,
+      allowShipping: false,
+      pickupLocation: 'Station 1',
+      notifyEmails: ['quartermaster@example.com'],
+      notifyAdminsOnOrder: true,
+      sendOrderConfirmation: true,
+      sendStatusUpdates: true,
+      sendPaymentReminders: true,
+      sendPaymentReceipts: true,
+      sendWindowOpened: true,
+      sendWindowClosingReminder: true,
+      sendWindowClosed: true,
+      sendVendorOrderUpdates: false,
+      paymentReminderDays: 3,
+      windowReminderHours: 24,
+      termsText: null,
+      receiptFooter: null,
+    }),
+  ],
+  [
+    '**/api/v1/store/dashboard',
+    () => ({
+      isEnabled: true,
+      activeWindow: null,
+      newOrderCount: 0,
+      openOrderCount: 0,
+      awaitingPaymentCount: 0,
+      pendingVerificationCount: 0,
+      readyForPickupCount: 0,
+      outstandingBalance: '0.00',
+      collectedThisWindow: '0.00',
+      activeProductCount: 0,
+      statusCounts: {},
+      recentActivity: [],
+      recentOrders: [],
+    }),
+  ],
 
   // Every Administration hub reads this. Unmocked, the catch-all answered `{}`
   // — truthy, so `AdminHubFrame` rendered the attention queue, but with no
@@ -524,6 +615,9 @@ const routes = ({
     () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
   ],
   ['**/api/v1/ranks**', () => []],
+  // The admin banner in the app shell maps over this list; none is the state
+  // of a scanned installation.
+  ['**/api/v1/system-notices', () => []],
   // The rank ladder under Members Administration reads these. Without them the
   // catch-all above fulfils both with `{}`, and the section maps over it.
   ['**/api/v1/operational-ranks', () => []],
@@ -685,6 +779,17 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
       status: 'active',
       membership_type: 'active',
       emergency_contacts: [],
+      roles: [],
+    }),
+  ],
+  // The audit-history page reads the member's name here rather than from
+  // `with-roles`, which records a profile view.
+  [
+    '**/api/v1/users/*/roles',
+    () => ({
+      user_id: TEST_USER.id,
+      username: TEST_USER.username,
+      full_name: `${TEST_USER.first_name} ${TEST_USER.last_name}`,
       roles: [],
     }),
   ],

@@ -92,6 +92,40 @@ active requirement; callers check `count_active_requirements()` first and show
 reads **Not applicable** for a requirement that applies to no active member,
 instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
 
+### One Definition of "Who Is Graded, and How" _(2026-10-05)_
+
+- **Profiles everywhere.** The Department Compliance card and the annual and
+  monthly compliance reports now grade through compliance profiles exactly as the
+  matrix and dashboard percentage do (narrowed requirement lists, threshold
+  overrides, the org's at-risk tier). Departments with profiles, or a compliant
+  threshold under 100%, will see the card and the report move; stored reports
+  keep their old figures.
+- **Not applicable members leave every percentage.** A member nothing grades
+  (no requirement applies, a profile selects none, or all are in catch-up) shows
+  **N/A**, not 100%. The dashboard percentage is blank when nobody is graded, and
+  "X of Y members current" counts graded members. The annual report's executive
+  summary adds `graded_members` and `not_applicable_members`.
+- **Required roles match the member's rank.** A requirement's `required_roles`
+  holds rank slugs; every screen used to compare them with position ids, so a
+  requirement scoped only by role applied to nobody. It now grades the members of
+  those ranks everywhere, in the annual report, and in Scheduling's Shift
+  Compliance report — which also now honours required membership types.
+  Profile `role_ids` are unchanged (position ids).
+- **Certification name matching is legacy-only.** A completed record whose
+  course name merely contains a certification requirement's name (a "CPR
+  Refresher" crediting "CPR") still counts only on or before the requirement's
+  `name_match_until` date. The upgrade (migration `60aaf273de27`) sets it, on
+  every requirement that exists, to the day it runs; requirements created later,
+  and every requirement on a fresh install, never match by name and need a linked
+  course, the training type or the registry code.
+- **Attestations record the server's figure.** The form has no Compliance % box;
+  it records the department's percentage as of the period's last day
+  (`compliance_as_of`), refuses a period that has not started, and has a quarter
+  picker (quarterly attestations were previously refused for a missing quarter).
+- **Faster grading, same answers.** The graders load only the records inside each
+  requirement's window; a test grades an eight-year department bounded and
+  unbounded and requires identical output.
+
 ---
 
 ## API Endpoints

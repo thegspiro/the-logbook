@@ -268,6 +268,13 @@ class ActionItemUpdate(BaseModel):
     completion_notes: Optional[str] = None
 
 
+class ActionItemAssignee(BaseModel):
+    """A member who may be assigned an action item (W52-6)."""
+
+    id: str
+    name: str
+
+
 class ActionItemResponse(ActionItemBase):
     """Action item response schema"""
 

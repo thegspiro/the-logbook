@@ -309,10 +309,11 @@ Pre-existing; found, not caused, by this window.]**
 **[SCREEN: Navigate to Member Scan page (MemberScanPage)]**
 
 > "The Member Scan page lets you scan a member's ID card, QR code or printed
-> badge to pull up their profile instantly. A badge printed for someone without
-> a membership number carries a twelve-character code instead — that scans too,
-> so there's no need to reprint. Useful at events, during check-in, or at the
-> firehouse."
+> badge to pull up their profile instantly. Badges now carry a random code the
+> server issues — it isn't the membership number — and a scan is checked
+> against your department only, so a hand-made code gets nowhere. Badges
+> printed before that keep scanning until an administrator turns off **Accept
+> old badges**. Useful at events, during check-in, or at the firehouse."
 
 **[SCREEN: Show scanning a QR code and the profile appearing]**
 

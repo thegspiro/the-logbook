@@ -135,7 +135,11 @@ def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List documents")
+    @logbook_tool(
+        server,
+        title="List documents",
+        permissions=("documents.view", "documents.manage"),
+    )
     async def list_documents(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -168,7 +172,9 @@ def register(server: Any) -> None:
         )
         return page([_document(d, False) for d in docs], total, limit, offset)
 
-    @logbook_tool(server, title="Get document")
+    @logbook_tool(
+        server, title="Get document", permissions=("documents.view", "documents.manage")
+    )
     async def get_document(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -184,7 +190,11 @@ def register(server: Any) -> None:
         doc = await _visible_document(db, principal, document_id)
         return _document(doc, True, content_offset)
 
-    @logbook_tool(server, title="Read document description")
+    @logbook_tool(
+        server,
+        title="Read document description",
+        permissions=("documents.view", "documents.manage"),
+    )
     async def get_document_description(
         db: AsyncSession,
         principal: McpPrincipal,

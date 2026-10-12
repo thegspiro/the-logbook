@@ -55,7 +55,13 @@ def _chunk(text: str, offset: int) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List fiscal years", gate="finance", module="finance")
+    @logbook_tool(
+        server,
+        title="List fiscal years",
+        gate="finance",
+        module="finance",
+        permissions=("finance.view", "finance.manage"),
+    )
     async def list_fiscal_years(
         db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
     ) -> dict:
@@ -86,7 +92,13 @@ def register(server: Any) -> None:
         ]
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Budget summary", gate="finance", module="finance")
+    @logbook_tool(
+        server,
+        title="Budget summary",
+        gate="finance",
+        module="finance",
+        permissions=("finance.view", "finance.manage"),
+    )
     async def get_budget_summary(
         db: AsyncSession, principal: McpPrincipal, fiscal_year_id: str
     ) -> dict:
@@ -100,7 +112,13 @@ def register(server: Any) -> None:
         summary = await service.get_budget_summary(principal.organization_id, fy_id)
         return {k: iso(v) for k, v in summary.items()}
 
-    @logbook_tool(server, title="List budgets", gate="finance", module="finance")
+    @logbook_tool(
+        server,
+        title="List budgets",
+        gate="finance",
+        module="finance",
+        permissions=("finance.view", "finance.manage"),
+    )
     async def list_budgets(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -154,7 +172,13 @@ def register(server: Any) -> None:
             )
         return page(items, None, limit, offset)
 
-    @logbook_tool(server, title="Read budget notes", gate="finance", module="finance")
+    @logbook_tool(
+        server,
+        title="Read budget notes",
+        gate="finance",
+        module="finance",
+        permissions=("finance.view", "finance.manage"),
+    )
     async def get_budget_notes(
         db: AsyncSession,
         principal: McpPrincipal,

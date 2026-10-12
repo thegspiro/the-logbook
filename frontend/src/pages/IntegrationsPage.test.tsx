@@ -603,6 +603,7 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        oauth_enabled: false,
       });
     });
 
@@ -623,6 +624,27 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        oauth_enabled: false,
+      });
+    });
+
+    it('sends the member sign-in switch when it is turned on', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(within(screen.getByTestId('integration-card-claude-mcp')).getByText('Connect'));
+      await user.click(screen.getByLabelText(/Let members connect with their own account/));
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        oauth_enabled: true,
       });
     });
 

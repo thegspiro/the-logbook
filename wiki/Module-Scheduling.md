@@ -54,6 +54,7 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Personal Calendar Feed & Automation** — _(2026-07-16)_ Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
 - **Shifts With Other Departments** — _(2026-09-27 → 09-29)_ Members log time on another jurisdiction's apparatus by start and end time (+12 / +24 presets), picked from an officer-kept list; it counts on save and an officer can reject it. See [below](#september-24--october-4-2026)
 - **Setup Guide** — _(2026-09-29)_ The administration hub walks a new department through template → pattern → shifts on the calendar
+- **Shift History Import** — _(2026-10-09)_ Bring in shifts worked before the department used the system, from a CSV with one row per member per shift: reviewed as a draft, matched against members, units and shifts already on the schedule, then committed. See the [user guide](Scheduling-History-Import)
 
 ---
 
@@ -108,9 +109,10 @@ guarded. Limits in `docs/KNOWN_LIMITATIONS.md`; endpoints in
 
 ### Swaps
 
-- **Open Swap** now reads "An officer finds cover; it stays yours until then".
-  It never could be picked up by another member, and approving it moves nothing
-  — open in `docs/KNOWN_LIMITATIONS.md` (W33-4).
+- **Open Swap** is offered to every member cleared for the seat _(2026-10-05)_:
+  they see it on the Requests tab under **Open shifts you can pick up**, and the
+  first to pick it up takes the seat. Officers no longer approve one — approving
+  used to move nothing — but can still deny it (W33-4).
 - **Officers approve offers to a named member** and **pending swaps are
   cancelled with their seat** _(2026-09-30)_ — see
   [Trades a member can complete](#trades-a-member-can-complete).
@@ -154,8 +156,31 @@ guarded. Limits in `docs/KNOWN_LIMITATIONS.md`; endpoints in
   EVOC-qualified member (an 8-second notice), and says "No new shifts. Dates
   already on the schedule are skipped…" instead of "Generated 0 shifts" (W32).
 - **Shift Compliance** reads **Not applicable** for a requirement nobody is
-  held to (W37-1); it still grades training hours requirements from shift
-  attendance alone (W37-2, open).
+  held to (W37-1). Since 2026-10-05 it grades **only shift-credited
+  requirements** (W37-2): a SHIFTS requirement by default, an HOURS requirement
+  only when an officer ticks **Shift Credit** on the requirement form
+  (`training_requirements.shift_credited`, migration `f16b004db34e`). **An
+  existing HOURS requirement drops off the report until it is ticked.** The
+  summary cards are now **Requirement Checks**, **Checks Met** and **Checks Not
+  Met** (they were "Total Members", "Compliant" and "Non-Compliant", though each
+  counts a member-requirement pair, so 22 members under three requirements read
+  66); the numbers are unchanged. A requirement scoped by `required_roles` now
+  matches the member's rank, and one scoped by membership type now appears for
+  the members it names.
+- **Dashboard "Not eligible"** _(2026-10-05)_: the Next 30 Days list asks the bulk
+  eligibility endpoint once for every open shift it shows and labels a shift the
+  member cannot take **Not eligible** instead of offering Sign Up and refusing a
+  tap later. A failed lookup leaves the button, whose tap-time check still
+  refuses.
+- **Flagged shift reports stay reachable** _(2026-10-05)_: with report review
+  switched off, the Shift Reports tab still offers the **Flagged** view while any
+  flagged report exists (it stays offered while open), so a report flagged before
+  review was turned off is not stranded.
+- **End-of-shift summary is retried until the email goes** _(2026-10-05)_: a
+  member is stamped as sent only once their email was sent (or when no email can
+  go: no address, opted out of shift notices, or email off for the department). A
+  failed send is retried on the next run inside the lookback window and repeats
+  the in-app notice, the accepted cost.
 - **Writing an apparatus NFC tag** from the shift panel needs
   `apparatus.manage_nfc_tags` _(2026-10-02)_.
 - Plain-language copy across the module, and accessible names on every row
@@ -752,6 +777,7 @@ schedule to find the settings.
 | Shift Close-Out           | `/scheduling/admin/closeout`           | `scheduling.manage` |
 | Scheduling Reports        | `/scheduling/admin/reports`            | `scheduling.manage` |
 | Platoons                  | `/scheduling/admin/platoons`           | `scheduling.manage` |
+| Shift History Import      | `/scheduling/admin/history-import`     | `scheduling.manage` |
 | Who Can Fill What         | `/scheduling/admin/positions`          | `scheduling.manage` |
 | Settings (seven sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
 
@@ -804,6 +830,8 @@ GET    /api/v1/scheduling/templates          # List templates
 POST   /api/v1/scheduling/templates          # Create template
 POST   /api/v1/scheduling/patterns           # Create shift pattern
 POST   /api/v1/scheduling/swap-requests      # Request swap
+GET    /api/v1/scheduling/swap-requests/open # Open swaps the caller is cleared to pick up (2026-10-05)
+POST   /api/v1/scheduling/swap-requests/{id}/pick-up # Take an open swap; the seat moves to the caller
 POST   /api/v1/scheduling/time-off           # Request time off
 GET    /api/v1/scheduling/summary            # Counts, incl. active_templates / active_patterns (2026-09-29)
 *      /api/v1/scheduling/external-hours/*   # Shifts with other departments (2026-09-27) — see docs/SCHEDULING_MODULE.md
@@ -1508,3 +1536,7 @@ compartment already at par is untouched and stays one tap.
 ---
 
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus) | [Inventory Module](Module-Inventory)
+
+## Shift History Import _(2026-10-11)_
+
+`scheduling.manage` users bring past shifts in from a CSV (one row per member per shift) at `/scheduling/admin/history-import`. Uploads are drafts (`shift_history_imports`, `shift_history_import_rows`); times are read in a chosen IANA zone; an end at or before the start crosses midnight; entries for one member on one unit within 30 minutes are joined (`keep_separate` splits them); crews group by unit and day with a confidence score (90+ automatic, 60–89 held for review). Exact unit names only; other agencies' units become `ExternalShiftHours`. Former members are created **archived** (`archived_at` set, migration `990e288940bc` moved earlier imports) with no password or email. Commit writes finalized shifts, confirmed assignments and attendance directly (no notifications, equipment-check gate or completion-report drafts) and is final. Member, unit and position decisions persist per department in `shift_history_import_mappings` once a commit succeeds. Routes: `/api/v1/scheduling/history-import`. See also the Pre-shift work section above and `docs/SCHEDULING_MODULE.md`.

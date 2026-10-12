@@ -71,7 +71,10 @@ class TrainingSessionCreate(BaseModel):
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: str = Field(
         ...,
-        description="certification, continuing_education, skills_practice, orientation, refresher, specialty",
+        description=(
+            "certification, continuing_education, skills_practice, orientation, "
+            "refresher, specialty, policy_acknowledgment"
+        ),
     )
     credit_hours: float = Field(..., ge=0)
     instructor: Optional[str] = Field(None, max_length=255)

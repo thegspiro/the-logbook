@@ -26,6 +26,8 @@ import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { ProgramImportSummaryView } from '../components/training/ProgramImportSummaryView';
 import { enumLabel } from '@/utils/displayValue';
 import { isSafeExternalUrl } from '@/utils/safeUrl';
 import type {
@@ -61,6 +63,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
+  const { confirm } = useConfirm();
   const requestIdRef = React.useRef(0);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
@@ -80,12 +83,30 @@ const TrainingProgramsPage: React.FC = () => {
     }
   };
 
+  // A file is staged with a dry run first and only imported once the officer
+  // has seen what it creates: an accidental pick otherwise leaves a program,
+  // its phases and any new requirements to be deleted by hand.
   const handleImportProgram = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const text = await file.text();
-      const data = JSON.parse(text) as Record<string, unknown>;
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        toast.error('That file is not valid JSON — choose a program exported from The Logbook');
+        return;
+      }
+      const preview = await trainingProgramService.previewProgramImport(data);
+      const confirmed = await confirm({
+        title: 'Import this program?',
+        message: <ProgramImportSummaryView summary={preview.summary} />,
+        confirmLabel: 'Confirm Import',
+        cancelLabel: 'Cancel',
+        variant: 'info',
+      });
+      if (!confirmed) return;
       const result = await trainingProgramService.importProgram(data);
       toast.success(result.message);
       void loadData();

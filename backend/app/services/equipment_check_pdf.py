@@ -113,10 +113,11 @@ def _local(value: Any, organization: Optional[Organization], fmt: str) -> str:
     if not value:
         return ""
     if isinstance(value, str):
+        text = value
         try:
-            value = datetime.fromisoformat(value)
+            value = datetime.fromisoformat(text)
         except ValueError:
-            return value
+            return text
     if isinstance(value, datetime):
         return format_in_org_timezone(value, organization, fmt)
     return str(value)
@@ -160,11 +161,12 @@ def generate_compliance_pdf(
     rate = data.get("pass_rate", 0)
     avg_items = data.get("avg_items_per_check", 0)
     elements.append(Paragraph("Summary", SECTION_STYLE))
+    missed = data.get("overdue_count", 0)
     summary_data = [
-        ["Total Checks", "Pass Rate", "Avg Items / Check"],
-        [str(total), f"{rate}%", str(avg_items)],
+        ["Total Checks", "Missed", "Pass Rate", "Avg Items / Check"],
+        [str(total), str(missed), f"{rate}%", str(avg_items)],
     ]
-    summary_table = Table(summary_data, colWidths=[2.2 * inch] * 3)
+    summary_table = Table(summary_data, colWidths=[1.65 * inch] * 4)
     summary_table.setStyle(
         TableStyle(
             [
@@ -188,7 +190,9 @@ def generate_compliance_pdf(
         elements.append(Paragraph("Apparatus Compliance", SECTION_STYLE))
         header = [
             "Apparatus",
+            "Expected",
             "Checks",
+            "Missed",
             "Pass",
             "Fail",
             "Last Check",
@@ -200,7 +204,9 @@ def generate_compliance_pdf(
             rows.append(
                 [
                     str(a.get("apparatus_name", "")),
+                    str(a.get("checks_expected", 0)),
                     str(a.get("checks_completed", 0)),
+                    str(a.get("checks_missed", 0)),
                     str(a.get("pass_count", 0)),
                     str(a.get("fail_count", 0)),
                     str(last_dt or "-"),
@@ -208,12 +214,14 @@ def generate_compliance_pdf(
                 ]
             )
         col_widths = [
-            2 * inch,
-            0.8 * inch,
-            0.7 * inch,
-            0.7 * inch,
-            1.2 * inch,
+            1.6 * inch,
+            0.75 * inch,
+            0.65 * inch,
+            0.65 * inch,
+            0.55 * inch,
+            0.55 * inch,
             1 * inch,
+            0.85 * inch,
         ]
         t = Table(rows, colWidths=col_widths)
         t.setStyle(_BASE_TABLE_STYLE)

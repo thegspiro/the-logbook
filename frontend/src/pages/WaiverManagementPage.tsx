@@ -28,6 +28,7 @@ import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { Breadcrumbs } from '../components/ux';
+import { EditLeaveDialog, type EditableLeave } from '../components/members/EditLeaveDialog';
 
 type WaiverTab = 'active' | 'create' | 'history';
 
@@ -120,6 +121,9 @@ export const WaiverManagementPage: React.FC = () => {
     exempt_from_training_waiver: false,
   });
   const [creating, setCreating] = useState(false);
+  // Correcting a leave's dates happens here, beside where leaves are created
+  // (member lifecycle; the edit had an API and no screen).
+  const [editingLeave, setEditingLeave] = useState<EditableLeave | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -496,7 +500,24 @@ export const WaiverManagementPage: React.FC = () => {
                         <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                           {waiver.reason || '-'}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {waiver.source === 'leave' && (
+                            <button
+                              onClick={() =>
+                                setEditingLeave({
+                                  id: waiver.id,
+                                  member_name: waiver.member_name,
+                                  start_date: waiver.start_date,
+                                  end_date: waiver.end_date,
+                                  reason: waiver.reason,
+                                })
+                              }
+                              className="mr-3 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              aria-label={`Edit the leave for ${waiver.member_name}`}
+                            >
+                              Edit
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               void handleDeactivate(waiver);
@@ -839,6 +860,8 @@ export const WaiverManagementPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <EditLeaveDialog leave={editingLeave} onClose={() => setEditingLeave(null)} onSaved={() => fetchData()} />
     </div>
   );
 };

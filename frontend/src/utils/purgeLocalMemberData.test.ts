@@ -5,6 +5,7 @@ const mockClearAllQueuedChecks = vi.fn();
 const mockClearAllQueuedReports = vi.fn();
 const mockClearAllGenericQueued = vi.fn();
 const mockClearAllEquipmentCheckDrafts = vi.fn();
+const mockClearAllSkillsOffline = vi.fn();
 
 vi.mock('./shiftReportDrafts', () => ({
   clearAllDrafts: () => mockClearAllDrafts() as number,
@@ -21,6 +22,9 @@ vi.mock('./genericOfflineQueue', () => ({
 vi.mock('./equipmentCheckDrafts', () => ({
   clearAllEquipmentCheckDrafts: () => mockClearAllEquipmentCheckDrafts() as Promise<number>,
 }));
+vi.mock('./skillsTestOffline', () => ({
+  clearAllSkillsOffline: () => mockClearAllSkillsOffline() as Promise<number>,
+}));
 
 import { purgeLocalMemberData } from './purgeLocalMemberData';
 
@@ -32,6 +36,18 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedReports.mockResolvedValue(0);
     mockClearAllGenericQueued.mockResolvedValue(0);
     mockClearAllEquipmentCheckDrafts.mockResolvedValue(0);
+    mockClearAllSkillsOffline.mockResolvedValue(0);
+  });
+
+  it('clears offline skills testing and counts its unsent scorecards as lost', async () => {
+    mockClearAllSkillsOffline.mockResolvedValue(2);
+    mockClearAllGenericQueued.mockResolvedValue(1);
+
+    const result = await purgeLocalMemberData();
+
+    expect(mockClearAllSkillsOffline).toHaveBeenCalled();
+    expect(result.queuedSkillsTests).toBe(2);
+    expect(result.unsyncedDiscarded).toBe(3);
   });
 
   it('clears every device-local store that can hold member PII', async () => {
@@ -107,12 +123,14 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedChecks.mockRejectedValue(new Error('idb gone'));
     mockClearAllQueuedReports.mockRejectedValue(new Error('idb gone'));
     mockClearAllGenericQueued.mockRejectedValue(new Error('idb gone'));
+    mockClearAllSkillsOffline.mockRejectedValue(new Error('idb gone'));
 
     await expect(purgeLocalMemberData()).resolves.toEqual({
       drafts: 0,
       queuedChecks: 0,
       queuedReports: 0,
       queuedGeneric: 0,
+      queuedSkillsTests: 0,
       unsyncedDiscarded: 0,
     });
   });

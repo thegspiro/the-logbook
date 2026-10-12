@@ -1,6 +1,234 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 6 (2026-10-07) — watchdog pickup; real delta since pass 5, mostly already reviewed elsewhere; 0 new findings this pass
+
+Watchdog pickup: PR #2986 (Feature 26, Forms, pass 6) merged at 18:30:01 UTC —
+74 minutes before this iteration started, with nothing new begun for Feature
+27 since. Confirmed via `list_pull_requests` (state=open) that no PR whose
+head branch starts with `claude/security-review-` existed, both before
+starting and again before this PR was opened.
+
+**Scope of growth since pass 5 (`bf0a45a6`, 2026-10-04):** `git log
+bf0a45a6..HEAD` against every file this feature owns turns up only two
+commits in the squashed-merge log, but a direct `git diff bf0a45a6..HEAD`
+(the reliable signal per pass 3/4/5's own prior correction of the same `git
+log` artifact) shows a real, substantial delta: `integrations.py` 849→1119 L
+(+2 routes), `salesforce_sync.py` 585→680 L, `models/integration.py` +73 L,
+`schemas/integration.py` +18 L, `integration_services/base.py` +107 L,
+`integration_services/paypal_service.py` +171 L,
+`integration_services/google_calendar_service.py` +145 L,
+`integration_services/notification_dispatch.py` +40 L,
+`integration_services/salesforce_sync_service.py` +27 L,
+`mcp/keys.py` refactored (+60/-48, behavior-preserving — see below),
+`IntegrationsPage.tsx` +86 L (mostly unrelated mobile-touch-target and
+search-box-width fixes), plus two entirely new files not in any prior pass's
+file list: `app/services/integration_health.py` (263 L, new) and
+`app/services/paypal_backfill_service.py` (215 L, new).
+
+**Read in full, newly:** both new files above, every diffed hunk in the
+files listed, the new migration
+(`20261005_1830_4e8b1c6d2a90_add_integration_health.py`), and
+`app/utils/ssrf_transport.py` (179 L, new since pass 5) — the SSRF-pinning
+transport `create_integration_client()` now wraps every connector in.
+**Spot-checked against its own documentation rather than re-derived:**
+`app/mcp/oauth.py` (1327 L, new) and the `mcp/registry.py`/`mcp/principal.py`
+changes that wire it in — these already have their own dedicated,
+contemporaneous threat-model review,
+[`MCPO-27-mcp-oauth-server.md`](./MCPO-27-mcp-oauth-server.md) (2026-10-06,
+owner-decided `L` effort build), outside this rotation's numbering; nothing
+in `app/mcp/oauth.py` is in this feature's declared file list (`integrations.py`,
+`salesforce_sync.py`) and re-deriving a second review of the same 1327-line
+authorization server here would be exactly the Pitfall #29 mistake this
+rotation exists to avoid. `mcp/keys.py`'s refactor (extracting
+`resolve_department_access`, shared by the service-key and OAuth-token
+paths) is confirmed, by direct read, to be a pure extraction — same checks,
+same order, same fail-closed messages, same org-scoping — matching
+MCPO-27's own claim that this path is "unchanged behaviour."
+
+### The real delta is almost entirely new hardening, not new attack surface
+
+Three features landed since pass 5, none of them opened by this rotation,
+all independently well-documented:
+
+1. **Integration health tracking** (`integration_health.py`, new
+   `IntegrationSyncLog` table, two new routes on `integrations.py`). Every
+   outbound run — a sync, a connection test, a chat delivery — is now
+   recorded with a sanitized error message (`sanitize_integration_error`:
+   strips URLs, emails, bearer tokens, long token-shaped strings, caps at
+   300 chars) and an integer-only `summary` (`summarize_counts` drops
+   anything that isn't an int, so no member name or contact detail can land
+   in the history). History is pruned to the last 50 runs per integration
+   on every write (Pitfall #9 — bounded, no unbounded growth). Both new
+   routes (`GET /{id}/sync-history`, `POST /{id}/retry-sync`) require
+   `integrations.manage` and resolve their target through
+   `_get_org_integration(db, id, organization_id)` — id+org filtered in the
+   same query (checklist 14a). `/integrations` is already in
+   `UNCACHEABLE_PREFIXES` as a prefix, so both new routes inherit the
+   no-cache exclusion without a frontend change.
+
+   **Retry Sync's concurrency control matches Pitfall #27 exactly, in the
+   order that avoids its own warning.** `_get_org_integration(..., lock=True)`
+   issues `SELECT ... FOR UPDATE` on the integration row as the _first_
+   query in the transaction — a locking read, which in MySQL's REPEATABLE
+   READ does not itself establish the transaction's consistent-read
+   snapshot. The cooldown check that follows (`SELECT
+IntegrationSyncLog.started_at ... ORDER BY started_at DESC LIMIT 1`) is
+   therefore the first _plain_ read, and its snapshot is taken only once
+   the row lock is held — not before, which is the specific failure Pitfall
+   #27 describes (a snapshot predating the lock). A concurrent retry blocks
+   on the row lock, and once the first commits, the second's own first-plain-read
+   snapshot is taken after that commit, so it correctly sees the fresh
+   "running"/"retry" log row and is refused with 429. The lock window is
+   short by design — released at the `db.commit()` immediately after the
+   cooldown check and the `start_integration_run` insert, _before_ the
+   provider is ever called — so a slow Salesforce sync does not hold the
+   row lock for its duration. A caller-IP rate limit (`check_rate_limit`,
+   10/min, 300s lockout) sits in front of the lock as a second, independent
+   layer. Verified by direct read, not merely by the docstring's own claim.
+
+2. **SSRF connection pinning, closing the DNS-rebinding TOCTOU gap this
+   file has carried as "narrowed, not closed" since INT-1 (pass 1)** —
+   `app/utils/ssrf_transport.py`'s `SSRFSafeAsyncTransport`, wrapped into
+   `create_integration_client()` (`base.py`). This is **not new to this
+   pass**: it shipped 2026-10-05 under SCH-10 (Scheduling's own rotation
+   pass, `docs/security-review/SCH-15-scheduling.md`), is already recorded
+   as resolved in `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration
+   Requests" entry, and that entry already correctly attributes the count
+   and the Documenso-specific piece to this file's own pass 4. Re-verified
+   directly against the current code for this feature's own six connectors
+   (`salesforce`, `salesforce_oauth`, `paypal`, `calcom`, `documenso`,
+   `webhook`) rather than trusting the citation: `create_integration_client()`
+   wraps `SSRFSafeAsyncTransport(transport=httpx.AsyncHTTPTransport(...),
+allow_private=allow_private_destinations)`, which resolves the request's
+   host exactly once (off the event loop, via `asyncio.to_thread`), refuses
+   a non-global/multicast answer, and connects to the validated address
+   while keeping the original hostname for the `Host` header and TLS
+   SNI — so there is no second, independent resolution for a DNS-rebinding
+   attacker to win. The known residual (an egress-proxied deployment, where
+   the proxy — not this transport — resolves the destination) is
+   unchanged and already documented. No new finding; re-verification only.
+3. **A wall-clock deadline on every `httpx`-based integration call**
+   (`INTEGRATION_DEADLINE_SECONDS = 60.0`, `_DeadlineAsyncClient.send()`
+   wrapped in `asyncio.timeout()`) — closes the slow-drip gap INT-7's own
+   "Timeout semantics corrected" note (pass 3) flagged as still open
+   (`httpx.Timeout`'s per-read budget resets on every chunk, so a server
+   trickling one byte every few seconds could hold a connection open
+   indefinitely even though `MAX_RESPONSE_SIZE` bounds memory). Also not
+   new to this pass — already reflected in `base.py`'s own comment, which
+   this pass re-read and confirmed matches the code.
+4. **Google Calendar's connector gains the same response-size cap and
+   socket timeouts every other connector gets from `create_integration_client()`**
+   (`_BoundedHttp`/`_CappedHTTPResponse`/`_BoundedHTTPSConnection` wrapping
+   `httplib2`, since this connector reaches Google via `googleapiclient` →
+   `httplib2`, never `httpx`, so it never passed through that factory). This
+   closes the size-cap and timeout halves of **INT-9**, open since pass 2.
+   `docs/KNOWN_LIMITATIONS.md`'s INT-9 entry already correctly states this
+   as "resolved 2026-10-05" and separately lists what remains open for this
+   connector specifically (no wall-clock deadline — `httplib2` calls are
+   synchronous, so `asyncio.timeout()` cannot wrap them; redirects follow
+   `httplib2`'s own default; the library isn't pinned in `requirements.txt`).
+   Re-verified by direct read of `_build_service()`'s `AuthorizedHttp(creds,
+http=_BoundedHttp())` wiring and the capped-read logic; matches the
+   documented mechanism exactly. No new finding.
+5. **A PayPal reconciliation backfill** (`paypal_backfill_service.py`, new,
+   invoked from `scheduled_tasks.py`, not from any endpoint) for captures
+   the webhook missed when PayPal's verify API was briefly unreachable.
+   Read in full: every PayPal call uses that integration's own credentials
+   (`credentials_from_integration(integration)`), so an account can only
+   discover its own transactions; every DB read/write is filtered on or
+   stamped with `organization_id`; `fetch_completed_capture` URL-encodes
+   the PayPal-supplied capture id before it reaches the request path
+   (`quote(capture_id, safe='')`) even though that id originates from
+   PayPal's own Transaction Search response, not end-user input; and
+   idempotency with the webhook is structural rather than assumed — both
+   paths call the same `StorefrontService.record_external_payment` entry
+   point, which keys a payment on `(organization_id, provider,
+external_id)`'s unique constraint, so a capture the webhook already
+   recorded is dropped at the pre-filter step (`_already_recorded`) and one
+   the webhook records _while_ the backfill is mid-run loses the race and
+   is detected (`event.raw_payload != raw_payload`) rather than double-applied.
+   `auto_apply_payments`'s semantics (only a literal `False` disables
+   auto-settlement; a stray non-bool does not silently disable it) are
+   centralized in the new `paypal_auto_apply()` helper and read identically
+   by the webhook and the backfill — one definition, not two copies that
+   could drift (Pitfall #29's shape, avoided here by construction). No
+   endpoint exposes this path to a caller; it runs only from the scheduler
+   against the org's own stored integration row.
+
+### Re-verified from passes 1–5 (all hold)
+
+- **INT-2** (OAuth `error` URL-encoded): intact, `salesforce_sync.py`.
+- **INT-3** (list/get gated on `integrations.manage`; `/connected`
+  status-only on bare auth, registered first): intact.
+- **INT-4** (`exclude_unset` partial-PATCH merge): intact.
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still
+  an explicit owner decision.
+- **INT-6** (connector exception sanitization via `sanitize_connector_error`):
+  intact; the new `sanitize_integration_error` (integration_health.py) is a
+  distinct, stricter sanitizer for the health-history use case (also strips
+  URLs/emails/bearer tokens, not just the exception-type allowlisting
+  `sanitize_connector_error` does) and both are used at their own call
+  sites, not in place of each other.
+- **INT-8** (`http1`/`http2`/`cert` kwargs reaching the wrapped transport):
+  intact.
+- **INT-11** (Salesforce "clear the refresh token" has no reachable UI
+  control): **still open, unchanged.** `IntegrationsPage.tsx:593` still
+  builds `refresh_token: sfRefreshToken || undefined`; no new control added
+  this pass. Still the product decision pass 4 named.
+- **SOQL injection defense, instance-URL domain pinning, secret handling,
+  frontend cache exclusion, webhook replay dedup, module gating**: all
+  re-confirmed against current code, no change since pass 5.
+
+### Checked, no new finding
+
+- **New JSON column** (`IntegrationSyncLog.summary`): always written as a
+  fresh dict from `summarize_counts()`, never read back and mutated in
+  place — Pitfall #12 n/a.
+- **New migration** (`4e8b1c6d2a90`): guards `integrations` not existing
+  (create_all-only table, Pitfall #26) before touching it or creating
+  `integration_sync_logs`; idempotent column/index adds; `triggered_by` FK
+  is `ondelete="SET NULL"` and correctly `nullable=True` (Pitfall #2).
+  `validate_migrations.py --strict`: single head, confirmed below.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **Route inventory**: `integrations.py` now 9 routes (+2:
+  `GET /{id}/sync-history`, `POST /{id}/retry-sync`), both
+  `integrations.manage` + id-and-org filtered. `salesforce_sync.py` (9),
+  `calcom_sync.py` (1), `mcp_keys.py` (4), the three public webhook files
+  (4) all unchanged from pass 5's count. `check_route_permissions.py
+--strict`: 251 application routes, 0 errors/warnings.
+
+## Schema & migration notes
+
+One migration this pass (landed before this pass started, re-verified
+here): `20261005_1830_4e8b1c6d2a90` adds `integrations.last_success_at`,
+`last_error`, `last_error_at`, `consecutive_error_count` and the
+`integration_sync_logs` table. `validate_migrations.py --strict`: 541
+revisions, single head `95dbdfb6591d`, PASSED.
+
+## Guard tests added
+
+None by this pass — the hardening above shipped with its own guard tests
+before this pass started (`test_integration_dns_pinning.py`,
+`test_google_calendar_http_bounds.py`), re-run as part of the scoped suite
+below and confirmed still passing.
+
+## Completion gate (pass 6)
+
+| Check                                                                                                                                          | Result                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                  | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/`                                                                                                           | ✅ 2034 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                      | ✅ clean                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                                                              | ✅ 541 revisions, single head, PASSED                         |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                          | ✅ 251 routes, 0 errors/warnings                              |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar"`) | ✅ 4285 passed, 21 skipped (env-only — `pywebpush`), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                 | ✅ 0 errors                                                   |
+| `npm run lint` (frontend)                                                                                                                      | ✅ exit 0, 0 warnings                                         |
 
 ---
 

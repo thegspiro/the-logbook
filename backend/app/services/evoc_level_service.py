@@ -193,7 +193,8 @@ class EvocLevelService:
                 EvocLevel.organization_id == organization_id,
             )
         )
-        return result.scalar_one_or_none()
+        evoc_level: Optional[EvocLevel] = result.scalar_one_or_none()
+        return evoc_level
 
     async def update_level(
         self,
@@ -390,7 +391,7 @@ class EvocLevelService:
         def _covers(level) -> bool:
             if level.level_number == required_level.level_number:
                 return True
-            return level.is_cumulative and level.level_number > (
+            return bool(level.is_cumulative) and level.level_number > (
                 required_level.level_number
             )
 

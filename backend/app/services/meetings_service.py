@@ -252,7 +252,8 @@ class MeetingsService:
                 selectinload(Meeting.action_items),
             )
         )
-        return result.scalar_one_or_none()
+        meeting: Optional[Meeting] = result.scalar_one_or_none()
+        return meeting
 
     async def update_meeting(
         self, meeting_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -488,7 +489,7 @@ class MeetingsService:
 
         query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ============================================
     # Summary & Reporting

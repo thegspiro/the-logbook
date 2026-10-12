@@ -13,16 +13,19 @@ means the module's built-in default four — never "no metrics" (CLAUDE.md
 Pitfall #19: a missing config must mean current behaviour).
 """
 
+from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Index,
     String,
     UniqueConstraint,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -38,16 +41,16 @@ class AdminHubMetricPreference(Base):
 
     __tablename__ = "admin_hub_metric_preferences"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    module_key = Column(String(50), nullable=False)
+    module_key: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    user_id = Column(
+    user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
@@ -57,7 +60,7 @@ class AdminHubMetricPreference(Base):
     # unique index, so a NULL user_id cannot carry the one-row-per-scope rule
     # this table needs — two department-wide rows would both be legal and the
     # reader would pick whichever the optimizer returned first.
-    scope_key = Column(
+    scope_key: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
         default=DEPARTMENT_SCOPE,
@@ -67,17 +70,19 @@ class AdminHubMetricPreference(Base):
 
     #: The three open slots, in display order. Slot 4 is always the attention
     #: count and is never stored.
-    metric_keys = Column(JSON, nullable=False)
+    metric_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False)
 
     #: Meaningful only on the department-wide row. True (the default) means
     #: every admin sees the department's selection and personal rows are
     #: ignored; False lets each admin keep their own.
-    applies_to_everyone = Column(
+    applies_to_everyone: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 

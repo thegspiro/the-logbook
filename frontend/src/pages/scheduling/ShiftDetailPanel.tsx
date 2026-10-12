@@ -62,6 +62,7 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import type { Assignment } from '../../types/scheduling';
 import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/inventory/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
+import ShiftPreShiftWorkSection from '../../modules/scheduling/components/ShiftPreShiftWorkSection';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
   calendarDaysBetween,
@@ -157,8 +158,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const signupWindow = useSignupWindow();
   const canManage = checkPermission('scheduling.manage');
   const {
-    apparatus: apparatusList,
-    loadApparatus,
+    shiftApparatus: apparatusList,
+    loadShiftApparatus,
     members: memberOptions,
     loadMembers,
     platoonsEnabled,
@@ -196,7 +197,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [platoonRoster, setPlatoonRoster] = useState<PlatoonRosterEntry[]>([]);
 
   /** Extract HH:MM from an ISO datetime or time string in the user's local timezone. */
-  const toTimeValue = (v?: string): string => {
+  const toTimeValue = (v?: string | null): string => {
     if (!v) return '';
     // If it contains 'T', it's an ISO datetime — convert to local timezone
     if (v.includes('T')) {
@@ -448,8 +449,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   // Load apparatus list when editing
   useEffect(() => {
-    if (isEditing) void loadApparatus();
-  }, [isEditing, loadApparatus]);
+    if (isEditing) void loadShiftApparatus();
+  }, [isEditing, loadShiftApparatus]);
 
   // Load active training programs once, when the assign form is first opened,
   // for the training-slot program dropdown.
@@ -1618,6 +1619,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* Pre-shift work logged against this shift. Here rather than only
+              in the close-out so an officer can review it on any department's
+              close-out, and after finalizing. Hidden while the wizard is open,
+              which shows the same list on its attendance step. */}
+              {canManageShift && !(showFinalizeChecklist && callTrackingMode === 'count_only') && (
+                <ShiftPreShiftWorkSection shiftId={shift.id} />
               )}
 
               {/* Close-out. A department that records call counts rather than
@@ -3102,7 +3111,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   <p className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
                                     {summary.completedItems > 0
                                       ? `Continue check \u2192 ${summary.totalItems - summary.completedItems} items remaining`
-                                      : 'Start check \u2192 Go to Checklists tab'}
+                                      : // Checklists live under Inventory, not on a tab of this panel; the
+                                        // Complete Checklists button above is the way in.
+                                        'Not started \u2014 use Complete Checklists above'}
                                   </p>
                                 )}
                               </div>

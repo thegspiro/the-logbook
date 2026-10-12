@@ -22,6 +22,7 @@ import {
   BarChart3,
   ShieldCheck,
   ClipboardCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
@@ -335,6 +336,12 @@ const FinanceDashboardPage: React.FC = () => {
             icon={<ShieldCheck className="h-5 w-5" />}
             title="Approval Chains"
             description="Set who approves each type of request"
+          />
+          <QuickLinkCard
+            to="/finance/settings/quickbooks"
+            icon={<FileSpreadsheet className="h-5 w-5" />}
+            title="QuickBooks Export"
+            description="Map budget categories to QuickBooks accounts"
           />
         </div>
       </div>

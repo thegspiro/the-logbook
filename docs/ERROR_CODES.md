@@ -93,11 +93,13 @@ fails if this document misses a curated code).
 
 ## File uploads (LB-UPLD)
 
-| Code        | Meaning                                                                                     | What to do                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).             | Compress/resize the file, or split archives into parts.                                |
-| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.        | Convert to one of the listed types; re-export if the file may be corrupted.            |
-| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted. | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency. |
+| Code        | Meaning                                                                                                   | What to do                                                                                                        |
+| ----------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).                           | Compress/resize the file, or split archives into parts.                                                           |
+| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.                      | Convert to one of the listed types; re-export if the file may be corrupted.                                       |
+| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted.               | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency.                            |
+| LB-UPLD-004 | The file was identified as malicious by the ClamAV scan; nothing was stored and the rejection is audited. | Get a fresh copy from the source; an admin can check the audit log (`upload_malware_detected`) for the signature. |
+| LB-UPLD-005 | Malware scanning is on but ClamAV was unreachable or timed out; upload refused rather than unscanned.     | Retry in a few minutes; if persistent, check the `clamav` container is healthy and `CLAMAV_HOST`/`CLAMAV_PORT`.   |
 
 ## Onboarding (LB-ONBD)
 
@@ -124,6 +126,7 @@ fails if this document misses a curated code).
 | ------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | LB-SCHED-001 | The member lacks the EVOC certification the shift's apparatus requires to drive it.  | Record the certification on the apparatus's Operators tab, or request a driver qualification exception (Scheduling → Qualifications → Driver exceptions).                           |
 | LB-SCHED-002 | In a two-way shift exchange, one member is not cleared for the seat they would take. | Exchange with a member the picker offers, or record the rank/qualification that grants the position. A duty officer can approve with the qualification override, which is recorded. |
+| LB-SCHED-003 | The requested seat is not one the shift names (sent as a 422).                       | Choose a seat the shift lists, or add the seat to the shift, its template or its apparatus. A department's own seats are defined under Scheduling → Position Names.                 |
 
 `LB-SCHED-001` is a safety block, not a permissions problem — it applies to
 officer assignment and member self-signup alike. Departments that want it

@@ -130,6 +130,54 @@ Click on any apparatus to view its complete record:
 
 ---
 
+### A first-time fleet _(2026-10-08)_
+
+On a department with no apparatus yet, the list reads **No apparatus yet** and
+explains what a record is for: add each vehicle you run (an engine, ladder or
+ambulance) and its record keeps status, maintenance, fuel, drivers and
+expiration dates in one place, and its crew seats fill in on new shifts. A
+search or filter that matches nothing still reads **No Apparatus Found**, so the
+two are no longer confused.
+
+- **Only the fields marked \* are needed to start.** The Add form says so;
+  everything else can be filled in later with **Edit**.
+- **NFPA tracking is chosen per vehicle.** The checkbox is off for each new unit
+  even when the department's NFPA switch is on; ticking it adds the NFPA tab for
+  NFPA 1911 tests such as the annual pump test. Leave it off for vehicles NFPA
+  1911 does not cover.
+- **Fuel Type** reads **CNG** for compressed natural gas (it showed "Cng").
+- **Row buttons.** The wrench on a list row opens that unit's **Maintenance**
+  tab. There is no **Archive** button on the row: archiving asks for a disposal
+  method, so use **Archive** on the apparatus page.
+- **Badge colours.** In Service, Out of Service and each type badge tint the
+  badge and icon with the status colour, but the text uses the theme's primary
+  colour so it stays readable (some seeded colours measured under 2:1).
+
+<!-- Screenshot needed: the empty fleet list (**No apparatus yet**) and the Add
+Apparatus form with the intro line, the NFPA help text and the **CNG** fuel
+option. See `SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8
+documentation pass_.
+-->
+
+### Why a rig shows Deficiency, and why it is Out of Service _(2026-10-11)_
+
+- **Deficiency.** A failed equipment check sets the badge. The vehicle page now
+  says when it began, that **only a passing check clears it** (logging the repair
+  does not), and links to the **Failures** report from that date.
+- **Reason for a status.** Statuses such as **Out of Service** require a reason.
+  The edit form now has a **Reason** field, required for those statuses, and the
+  page shows the reason beside the status. Before this, a rig could be put out of
+  service from the edit form with no record of why.
+- **Putting a shift on a rig.** Create Shift and the shift panel's apparatus
+  picker now list rigs added through the Apparatus module (until now they listed
+  only the simplified basic list, so a department using the full module saw no
+  picker and every shift was created without a rig, and its checklists never came
+  due). A shift template that names a rig keeps it.
+
+> **Screenshot needed:** a vehicle page showing the Deficiency explanation and
+> the Failures link; the edit form with the **Reason** field; Create Shift with
+> the apparatus picker.
+
 ## Maintenance Scheduling
 
 Track preventive and corrective maintenance for each apparatus:
@@ -151,6 +199,13 @@ Each apparatus has a maintenance section showing:
 4. Select the maintenance type (e.g., Oil Change, Pump Test, Annual Inspection).
 5. Enter the date, description, cost, and vendor.
 6. Click **Add Record** (**Save Changes** when editing).
+
+**Which date to use** _(2026-10-08)_. The form now says it: for work already
+done, tick **Mark as completed** and set the **Completed Date**; for upcoming
+work, leave it unticked and set a **Due Date**, and it counts toward
+**Maintenance Due** on the fleet page as the date approaches. The **Next Due**
+fields are kept on the record but **do not** add the next service to
+Maintenance Due; for that, add a separate record with a Due Date.
 
 ![Apparatus maintenance tab with past records and the add-maintenance form](./images/06-04-apparatus-maintenance-tab.png)
 
@@ -180,6 +235,11 @@ Track equipment stored on each apparatus (tools, medical supplies, SCBA, etc.):
 2. Navigate to the **Equipment** tab.
 3. Add or remove equipment items.
 4. Track equipment condition and last inspection date.
+
+> **This list is not the crew's shift check** _(2026-10-08)_. It records what
+> the apparatus carries. Crews check equipment at the start of a shift from an
+> equipment checklist, which is built separately; the tab links to **Build
+> equipment checklists** for members who hold `inventory.check_manage`.
 
 ![Apparatus equipment tab listing carried items with condition](./images/06-06-apparatus-equipment-tab.png)
 
@@ -241,8 +301,9 @@ The facilities dashboard shows:
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
 
-> **Screenshot needed:**
-> _[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
+<!-- Screenshot needed:
+_[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
+-->
 
 ### Printing Facility Labels
 
@@ -336,8 +397,9 @@ on a page that asks the room what is in its check-in window right now:
   guessing.
 - **None** — "Nothing to check in to", with **Check again**.
 
-> **Screenshot needed:**
-> _[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
+<!-- Screenshot needed:
+_[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
+-->
 
 A writer whom the server does not give kiosk codes to (the Vice President, by
 default) sees a **Room NFC Tags** list instead of the room cards — "Write a tag
@@ -972,7 +1034,7 @@ its tracked positions, the lots and expiration dates aboard each one, and the
 ready stock on the shelf behind it. A crew can record what they used at the
 moment they use it rather than waiting for the next morning's check.
 
-See [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+See [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step)
 for the full workflow, and
 [Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10)
 for the shelf side of it.

@@ -2,7 +2,7 @@
  * Verify Receipt
  *
  * A small public form that checks a vote receipt hash against
- * GET /elections/{id}/verify-receipt. A voter is told to save the hash when
+ * POST /elections/{id}/verify-receipt. A voter is told to save the hash when
  * they cast a ballot; this is the one place in the app that lets them use it
  * (W50-53). It distinguishes the three matched states the backend reports —
  * counted, test (recorded but never tallied) and voided by an officer — from

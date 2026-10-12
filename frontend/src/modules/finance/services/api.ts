@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   ApprovalChain,
   ApprovalChainCreatePayload,
@@ -16,24 +17,68 @@ import type {
   ApprovalStepRecord,
   ApproverCoverageRow,
   Budget,
+  BudgetAmendment,
+  BudgetAmendmentCreatePayload,
+  BudgetAmendmentCreated,
+  BudgetAmendmentRejectPayload,
+  BudgetAmendmentReversePayload,
   BudgetCategory,
+  BudgetCategoryUpdatePayload,
+  BudgetCreatePayload,
+  BudgetOption,
+  BudgetRequest,
+  BudgetRequestCreatePayload,
+  BudgetRequestDecisionPayload,
+  BudgetRequestReviewPayload,
+  BudgetPlanningStage,
+  BudgetRequestProposalOptions,
+  BudgetRequestStatus,
+  BudgetRequestUpdatePayload,
   BudgetSummary,
+  BudgetTransactionPage,
+  BudgetUpdatePayload,
   CheckRequest,
+  DuesPayment,
+  DuesPaymentPayload,
   DuesSchedule,
+  DuesScheduleCreatePayload,
+  DuesScheduleUpdatePayload,
   DuesSummary,
   ExpenseLineItem,
   ExpenseReport,
   FinanceDashboard,
   FiscalYear,
+  ExportMapping,
+  ExportMappingCreatePayload,
+  ExportMappingUpdatePayload,
+  ExportLog,
+  ExportReadiness,
+  FiscalYearOption,
+  FiscalYearAdoptionPayload,
+  FiscalYearLockPayload,
+  FiscalYearOpenItem,
+  FiscalYearUpdatePayload,
+  FinanceNamedOption,
   MemberDues,
+  MyBudget,
+  MyBudgetRequestLines,
+  MyBudgetsSummary,
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
+  StartFromLastYearResult,
   UnroutedApproval,
+  FinanceSettings,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
+
+function receiptForm(file: File): FormData {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
 
 // =============================================================================
 // Fiscal Years
@@ -42,6 +87,12 @@ const api = createApiClient();
 export const fiscalYearService = {
   async list(): Promise<FiscalYear[]> {
     const response = await api.get<FiscalYear[]>('/finance/fiscal-years');
+    return asArray(response.data);
+  },
+
+  /** Active and draft years, for the request forms. Open to `finance.request`. */
+  async options(): Promise<FiscalYearOption[]> {
+    const response = await api.get<FiscalYearOption[]>('/finance/fiscal-years/options');
     return asArray(response.data);
   },
 
@@ -55,18 +106,48 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async update(id: string, data: Partial<FiscalYear>): Promise<FiscalYear> {
+  async update(id: string, data: FiscalYearUpdatePayload): Promise<FiscalYear> {
     const response = await api.put<FiscalYear>(`/finance/fiscal-years/${id}`, data);
     return response.data;
   },
 
+  /** Copy another year's lines into the draft year `draftId` (finance.manage). */
+  async startFrom(draftId: string, sourceId: string): Promise<StartFromLastYearResult> {
+    const response = await api.post<StartFromLastYearResult>(`/finance/fiscal-years/${draftId}/start-from/${sourceId}`);
+    return response.data;
+  },
+
+  /** Record the board's vote on a draft in board review; the year stays a draft until started. */
+  async adopt(id: string, adoption: FiscalYearAdoptionPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/adopt`, adoption);
+    return response.data;
+  },
+
+  /** Start an adopted draft on or after its start date, or reopen a year in its year-end close. */
   async activate(id: string): Promise<FiscalYear> {
     const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`);
     return response.data;
   },
 
-  async lock(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`);
+  async beginClose(id: string): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/begin-close`);
+    return response.data;
+  },
+
+  /** What still stops a closing year from locking. */
+  async openItems(id: string): Promise<FiscalYearOpenItem[]> {
+    const response = await api.get<FiscalYearOpenItem[]>(`/finance/fiscal-years/${id}/open-items`);
+    return response.data;
+  },
+
+  /** Move a draft year one planning stage forward or back. */
+  async setPlanningStage(id: string, stage: BudgetPlanningStage): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/planning-stage`, { stage });
+    return response.data;
+  },
+
+  async lock(id: string, signOff: FiscalYearLockPayload): Promise<FiscalYear> {
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`, signOff);
     return response.data;
   },
 };
@@ -87,12 +168,13 @@ export const budgetCategoryService = {
     parentCategoryId?: string;
     sortOrder?: number;
     qbAccountName?: string;
+    ownerPositionId?: string;
   }): Promise<BudgetCategory> {
     const response = await api.post<BudgetCategory>('/finance/budget-categories', data);
     return response.data;
   },
 
-  async update(id: string, data: Partial<BudgetCategory>): Promise<BudgetCategory> {
+  async update(id: string, data: BudgetCategoryUpdatePayload): Promise<BudgetCategory> {
     const response = await api.put<BudgetCategory>(`/finance/budget-categories/${id}`, data);
     return response.data;
   },
@@ -107,12 +189,24 @@ export const budgetCategoryService = {
 // =============================================================================
 
 export const budgetService = {
-  async list(params?: { fiscalYearId?: string; categoryId?: string }): Promise<Budget[]> {
+  async list(params?: { fiscalYearId?: string; categoryId?: string; stationId?: string }): Promise<Budget[]> {
     const response = await api.get<Budget[]>('/finance/budgets', {
       params: {
         fiscal_year_id: params?.fiscalYearId,
         category_id: params?.categoryId,
+        station_id: params?.stationId,
       },
+    });
+    return asArray(response.data);
+  },
+
+  /**
+   * A fiscal year's budget lines as label + amount remaining, for the request
+   * forms. Open to `finance.request`, unlike the rest of this service.
+   */
+  async options(fiscalYearId: string): Promise<BudgetOption[]> {
+    const response = await api.get<BudgetOption[]>('/finance/budgets/options', {
+      params: { fiscal_year_id: fiscalYearId },
     });
     return asArray(response.data);
   },
@@ -122,19 +216,80 @@ export const budgetService = {
     return response.data;
   },
 
-  async create(data: {
-    fiscalYearId: string;
-    categoryId: string;
-    amountBudgeted: MonetaryAmount;
-    notes?: string;
-    stationId?: string;
-  }): Promise<Budget> {
+  async create(data: BudgetCreatePayload): Promise<Budget> {
     const response = await api.post<Budget>('/finance/budgets', data);
     return response.data;
   },
 
-  async update(id: string, data: Partial<Budget>): Promise<Budget> {
+  async update(id: string, data: BudgetUpdatePayload): Promise<Budget> {
     const response = await api.put<Budget>(`/finance/budgets/${id}`, data);
+    return response.data;
+  },
+
+  /** A line's amendments, newest first. */
+  async listAmendments(id: string): Promise<BudgetAmendment[]> {
+    const response = await api.get<BudgetAmendment[]>(`/finance/budgets/${id}/amendments`);
+    return asArray(response.data);
+  },
+
+  /**
+   * What moved the line's spent and committed totals, newest first. Open to
+   * `finance.view` and to the line's owner, like `get` and `listAmendments`.
+   */
+  async listTransactions(id: string, params: { limit: number; offset: number }): Promise<BudgetTransactionPage> {
+    const response = await api.get<BudgetTransactionPage>(`/finance/budgets/${id}/transactions`, { params });
+    return { ...response.data, items: asArray(response.data.items) };
+  },
+
+  /** The lines the signed-in member owns, every fiscal year, newest first. */
+  async listMine(params?: { fiscalYearId?: string }): Promise<MyBudget[]> {
+    const response = await api.get<MyBudget[]>('/finance/my-budgets', {
+      params: { fiscal_year_id: params?.fiscalYearId },
+    });
+    return asArray(response.data);
+  },
+
+  /** Whether the signed-in member owns any line — the navigation's signal. */
+  async mySummary(): Promise<MyBudgetsSummary> {
+    const response = await api.get<MyBudgetsSummary>('/finance/my-budgets/summary');
+    return response.data;
+  },
+
+  /** Record extra money approved for a line; pending until a second officer confirms it. */
+  async addAmendment(id: string, data: BudgetAmendmentCreatePayload): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments`, data);
+    return response.data;
+  },
+
+  /** Cancel a mistaken amendment with a reversing entry, pending like any amendment. */
+  async reverseAmendment(
+    id: string,
+    amendmentId: string,
+    data: BudgetAmendmentReversePayload
+  ): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(
+      `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
+      data
+    );
+    return response.data;
+  },
+
+  /** Confirm a pending amendment; this is what moves the line's budget. */
+  async confirmAmendment(id: string, amendmentId: string): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(`/finance/budgets/${id}/amendments/${amendmentId}/confirm`);
+    return response.data;
+  },
+
+  /** Reject a pending amendment, with the reason. The line is left as it was. */
+  async rejectAmendment(
+    id: string,
+    amendmentId: string,
+    data: BudgetAmendmentRejectPayload
+  ): Promise<BudgetAmendmentCreated> {
+    const response = await api.post<BudgetAmendmentCreated>(
+      `/finance/budgets/${id}/amendments/${amendmentId}/reject`,
+      data
+    );
     return response.data;
   },
 
@@ -143,6 +298,97 @@ export const budgetService = {
       params: { fiscal_year_id: fiscalYearId },
     });
     return response.data;
+  },
+};
+
+// =============================================================================
+// Budget requests (next year's amounts)
+// =============================================================================
+
+export const budgetRequestService = {
+  /** finance.manage sees every request; anyone else, their own lines' and positions'. */
+  async list(params?: { fiscalYearId?: string; status?: BudgetRequestStatus }): Promise<BudgetRequest[]> {
+    const response = await api.get<BudgetRequest[]>('/finance/budget-requests', {
+      params: { fiscal_year_id: params?.fiscalYearId, status: params?.status },
+    });
+    return asArray(response.data);
+  },
+
+  /** The caller's lines in one year, each with its request, plus the year's deadline. */
+  async myLines(fiscalYearId: string): Promise<MyBudgetRequestLines> {
+    const response = await api.get<MyBudgetRequestLines>('/finance/budget-requests/my-lines', {
+      params: { fiscal_year_id: fiscalYearId },
+    });
+    return response.data;
+  },
+
+  /** The positions the caller holds, and the categories and stations, for a proposal. */
+  async proposalOptions(): Promise<BudgetRequestProposalOptions> {
+    const response = await api.get<BudgetRequestProposalOptions>('/finance/budget-requests/proposal-options');
+    return {
+      positions: asArray(response.data.positions),
+      categories: asArray(response.data.categories),
+      stations: asArray(response.data.stations),
+    };
+  },
+
+  async get(id: string): Promise<BudgetRequest> {
+    const response = await api.get<BudgetRequest>(`/finance/budget-requests/${id}`);
+    return response.data;
+  },
+
+  async create(data: BudgetRequestCreatePayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>('/finance/budget-requests', data);
+    return response.data;
+  },
+
+  async update(id: string, data: BudgetRequestUpdatePayload): Promise<BudgetRequest> {
+    const response = await api.put<BudgetRequest>(`/finance/budget-requests/${id}`, data);
+    return response.data;
+  },
+
+  async submit(id: string): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/submit`);
+    return response.data;
+  },
+
+  async withdraw(id: string): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/withdraw`);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/finance/budget-requests/${id}`);
+  },
+
+  /** finance.manage only. */
+  async decide(id: string, data: BudgetRequestDecisionPayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/decide`, data);
+    return response.data;
+  },
+
+  /** Senior leadership (`finance.budget_review`) changes a decided amount during leadership review. */
+  async review(id: string, data: BudgetRequestReviewPayload): Promise<BudgetRequest> {
+    const response = await api.post<BudgetRequest>(`/finance/budget-requests/${id}/review`, data);
+    return response.data;
+  },
+};
+
+// =============================================================================
+// Budget form options (finance.manage)
+// =============================================================================
+
+export const financeOptionService = {
+  /** The department's positions, for the budget and category owner pickers. */
+  async positions(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/position-options');
+    return asArray(response.data);
+  },
+
+  /** The department's facilities that are not archived, for the station picker. */
+  async stations(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/station-options');
+    return asArray(response.data);
   },
 };
 
@@ -215,6 +461,14 @@ const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
   notes: notes || undefined,
   ...(overrideReason ? { overrideReason } : {}),
 });
+
+export const financeSettingsService = {
+  /** The finance rules as the approval path reads them. */
+  async get(): Promise<FinanceSettings> {
+    const response = await api.get<FinanceSettings>('/finance/settings');
+    return response.data;
+  },
+};
 
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {
@@ -318,6 +572,17 @@ export const purchaseRequestService = {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/cancel`);
     return response.data;
   },
+
+  async uploadReceipt(id: string, file: File): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/receipt`, receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  downloadReceipt(id: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/purchase-requests/${id}/receipt`, 'receipt');
+  },
 };
 
 // =============================================================================
@@ -348,6 +613,19 @@ export const expenseReportService = {
   async addLineItem(id: string, data: Partial<ExpenseLineItem>): Promise<ExpenseLineItem> {
     const response = await api.post<ExpenseLineItem>(`/finance/expense-reports/${id}/items`, data);
     return response.data;
+  },
+
+  async uploadLineItemReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
+      receiptForm(file),
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  downloadLineItemReceipt(reportId: string, itemId: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/expense-reports/${reportId}/items/${itemId}/receipt`, 'receipt');
   },
 
   async submit(id: string): Promise<ExpenseReport> {
@@ -416,12 +694,12 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async createSchedule(data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async createSchedule(data: DuesScheduleCreatePayload): Promise<DuesSchedule> {
     const response = await api.post<DuesSchedule>('/finance/dues-schedules', data);
     return response.data;
   },
 
-  async updateSchedule(id: string, data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async updateSchedule(id: string, data: DuesScheduleUpdatePayload): Promise<DuesSchedule> {
     const response = await api.put<DuesSchedule>(`/finance/dues-schedules/${id}`, data);
     return response.data;
   },
@@ -442,21 +720,23 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async recordPayment(
-    duesId: string,
-    data: {
-      amountPaid: MonetaryAmount;
-      paymentMethod?: string;
-      transactionReference?: string;
-      notes?: string;
-    }
-  ): Promise<MemberDues> {
+  async recordPayment(duesId: string, data: DuesPaymentPayload): Promise<MemberDues> {
     const response = await api.put<MemberDues>(`/finance/dues/${duesId}`, data);
     return response.data;
   },
 
+  async listPayments(duesId: string): Promise<DuesPayment[]> {
+    const response = await api.get<DuesPayment[]>(`/finance/dues/${duesId}/payments`);
+    return asArray(response.data);
+  },
+
   async waive(duesId: string, reason: string): Promise<MemberDues> {
     const response = await api.post<MemberDues>(`/finance/dues/${duesId}/waive`, { reason });
+    return response.data;
+  },
+
+  async unwaive(duesId: string, reason: string): Promise<MemberDues> {
+    const response = await api.post<MemberDues>(`/finance/dues/${duesId}/unwaive`, { reason });
     return response.data;
   },
 
@@ -469,10 +749,6 @@ export const duesService = {
 };
 
 // =============================================================================
-// Export
-// =============================================================================
-
-// =============================================================================
 // Dashboard
 // =============================================================================
 
@@ -480,5 +756,44 @@ export const financeDashboardService = {
   async getDashboard(): Promise<FinanceDashboard> {
     const response = await api.get<FinanceDashboard>('/finance/dashboard');
     return response.data;
+  },
+};
+
+// =============================================================================
+// QuickBooks Export
+// =============================================================================
+
+export const exportMappingService = {
+  async list(): Promise<ExportMapping[]> {
+    // The API pages at 100 by default; a department's chart of accounts is
+    // far smaller than its 1000 ceiling, and a truncated list would hide a
+    // duplicate mapping the readiness report is pointing at.
+    const response = await api.get<ExportMapping[]>('/finance/export/mappings', { params: { limit: 1000 } });
+    return asArray(response.data);
+  },
+
+  async create(data: ExportMappingCreatePayload): Promise<ExportMapping> {
+    const response = await api.post<ExportMapping>('/finance/export/mappings', data);
+    return response.data;
+  },
+
+  async update(id: string, data: ExportMappingUpdatePayload): Promise<ExportMapping> {
+    const response = await api.put<ExportMapping>(`/finance/export/mappings/${id}`, data);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/finance/export/mappings/${id}`);
+  },
+
+  async readiness(): Promise<ExportReadiness> {
+    const response = await api.get<ExportReadiness>('/finance/export/readiness');
+    return response.data;
+  },
+
+  /** Export history, newest first. */
+  async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
+    const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
+    return asArray(response.data);
   },
 };

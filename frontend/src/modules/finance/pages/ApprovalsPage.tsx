@@ -8,9 +8,16 @@
  * admin can act on only with an override reason, is the backend's decision
  * (`canAct` / `requiresOverride`, from finance_approver_matching.py). This page
  * shows those flags and does not re-derive who matches a step.
+ *
+ * Below them, for a `finance.approve` holder, the requests decided on their
+ * own page instead (`GET /finance/approvals/unrouted`): ones no approval chain
+ * applies to, and ones the dual-approval threshold holds for a second approver
+ * (`awaitingSecondApproval`, the backend's reading).
  */
 
 import React, { useEffect, useState } from 'react';
+import { approvalService } from '../services/api';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle, ClipboardCheck, XCircle } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -21,7 +28,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
-import type { PendingApproval } from '../types';
+import type { PendingApproval, UnroutedApproval } from '../types';
 import { ApprovalDecisionDialog } from '../components/ApprovalDecisionDialog';
 import type { ApprovalDecision } from '../components/ApprovalDecisionDialog';
 import { APPROVAL_ENTITY_LABELS, approvalEntityPath } from '../components/approvalEntities';
@@ -103,11 +110,110 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
   );
 };
 
+const ManualDecisions: React.FC = () => {
+  const tz = useTimezone();
+  const [rows, setRows] = useState<UnroutedApproval[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    approvalService
+      .getUnrouted()
+      .then((next) => {
+        if (current) setRows(next);
+      })
+      .catch((err: unknown) => {
+        if (current) setError(getErrorMessage(err, 'Could not load the requests waiting for a decision'));
+      });
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  if (error) {
+    return <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
+  }
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <section className="card overflow-hidden" aria-labelledby="manual-decisions-title">
+      <div className="p-4">
+        <h2 id="manual-decisions-title" className="text-theme-text-primary text-lg font-semibold">
+          Waiting for a decision on their own page
+        </h2>
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          No approval chain applies to these, or they need a second approver. Open one to approve or deny it.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="rwd-table w-full">
+          <thead>
+            <tr className="border-theme-surface-border border-y">
+              <th scope="col" className={HEADER_CELL}>
+                Request
+              </th>
+              <th scope="col" className={HEADER_CELL}>
+                Type
+              </th>
+              <th scope="col" className={HEADER_CELL}>
+                Requested by
+              </th>
+              <th scope="col" className={`${HEADER_CELL} text-right`}>
+                Amount
+              </th>
+              <th scope="col" className={HEADER_CELL}>
+                Needs
+              </th>
+              <th scope="col" className={HEADER_CELL}>
+                Submitted
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-theme-surface-border divide-y">
+            {rows.map((row) => (
+              <tr key={`${row.entityType}-${row.entityId}`}>
+                <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
+                  <Link
+                    to={approvalEntityPath(row.entityType, row.entityId)}
+                    className="text-red-700 hover:underline dark:text-red-400"
+                  >
+                    {row.entityTitle}
+                  </Link>
+                </td>
+                <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                  {APPROVAL_ENTITY_LABELS[row.entityType]}
+                </td>
+                <td data-label="Requested by" className="text-theme-text-primary px-4 py-3 text-sm">
+                  {row.requesterName}
+                </td>
+                <td
+                  data-label="Amount"
+                  className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                >
+                  {formatCurrency(row.entityAmount)}
+                </td>
+                <td data-label="Needs" className="text-theme-text-primary px-4 py-3 text-sm">
+                  {row.awaitingSecondApproval ? 'A second approver' : 'An approver (no chain applies)'}
+                </td>
+                <td data-label="Submitted" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                  {formatDate(row.submittedAt, tz)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
 const ApprovalsPage: React.FC = () => {
   const tz = useTimezone();
   const { pendingApprovals, error, fetchPendingApprovals } = useFinanceStore();
   const [loaded, setLoaded] = useState(false);
   const [decision, setDecision] = useState<ApprovalDecision | null>(null);
+  // The list's own gate (`GET /finance/approvals/unrouted`).
+  const canDecideManually = useAuthStore((s) => s.checkPermission('finance.approve'));
 
   useEffect(() => {
     // fetchPendingApprovals never rejects — a failure lands in `error`.
@@ -239,6 +345,8 @@ const ApprovalsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {canDecideManually && <ManualDecisions />}
 
       <ApprovalDecisionDialog decision={decision} onClose={() => setDecision(null)} />
     </div>

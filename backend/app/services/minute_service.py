@@ -42,9 +42,28 @@ from app.schemas.minute import (
 )
 from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+_DEFAULT_SECTIONS_BY_TYPE = {
+    "special": DEFAULT_SPECIAL_SECTIONS,
+    "committee": DEFAULT_COMMITTEE_SECTIONS,
+    "trustee": DEFAULT_TRUSTEE_SECTIONS,
+    "executive": DEFAULT_EXECUTIVE_SECTIONS,
+    "annual": DEFAULT_ANNUAL_SECTIONS,
+}
+
+
+# The only fields a member may change on an action item assigned to them
+# without minutes.manage (W52-7). Widening this widens a write permission.
+ASSIGNEE_EDITABLE_FIELDS = frozenset({"status", "completion_notes"})
+
+
+def _default_sections_for(meeting_type) -> list:
+    """The starting sections for a meeting type; business for anything else."""
+    value = getattr(meeting_type, "value", meeting_type)
+    return _DEFAULT_SECTIONS_BY_TYPE.get(value, DEFAULT_BUSINESS_SECTIONS)
 
 
 class MinuteService:
@@ -52,6 +71,48 @@ class MinuteService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ============================================
+    # Action-item assignees (W52-6)
+    # ============================================
+
+    async def list_assignable_members(self, organization_id: UUID) -> List[dict]:
+        """Every active member of the department, as ``{id, name}``.
+
+        Any active member may be assigned an action item — the owner's
+        decision; it is not limited to members who can read minutes.
+        """
+        result = await self.db.execute(
+            select(User).where(
+                User.organization_id == str(organization_id),
+                User.is_active,
+            )
+        )
+        members = [
+            {"id": str(u.id), "name": u.display_name or u.username}
+            for u in result.scalars().all()
+        ]
+        return sorted(members, key=lambda m: (m["name"] or "").lower())
+
+    async def _active_assignee_name(self, assignee_id: str, organization_id) -> str:
+        """The name to store beside ``assignee_id``, or ValueError.
+
+        One query does the org check (XC-1) and the active check: the error
+        does not say which failed, so it is no existence oracle across
+        departments.
+        """
+        result = await self.db.execute(
+            select(User).where(
+                User.id == str(assignee_id),
+                User.organization_id == str(organization_id),
+                User.is_active,
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise ValueError("Invalid assignee: choose an active member")
+        name: str = user.display_name or user.username
+        return name
 
     # ============================================
     # Meeting Minutes CRUD
@@ -74,37 +135,42 @@ class MinuteService:
             allow_none=True,
             label="event",
         )
+        assignee_names: dict[str, str] = {}
         for item_data in data.action_items or []:
-            await assert_in_org(
-                self.db,
-                User,
-                item_data.assignee_id,
-                organization_id,
-                allow_none=True,
-                label="assignee",
-            )
+            if item_data.assignee_id:
+                assignee_names[item_data.assignee_id] = (
+                    await self._active_assignee_name(
+                        item_data.assignee_id, organization_id
+                    )
+                )
+        # Attendees are a JSON list; an entry may name a member by user_id or
+        # be a free-text guest (user_id omitted). A named member must be ours.
+        await assert_all_in_org(
+            self.db,
+            User,
+            [a.user_id for a in data.attendees or [] if a.user_id],
+            organization_id,
+            label="attendee",
+        )
 
         # Serialize attendees to dicts for JSON storage
         if minutes_dict.get("attendees"):
             minutes_dict["attendees"] = [
                 a.model_dump() if hasattr(a, "model_dump") else a
-                for a in data.attendees
+                for a in data.attendees or []
             ]
 
         # Serialize sections to dicts
         if minutes_dict.get("sections"):
             minutes_dict["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections or []
             ]
 
         # Serialize header/footer configs
-        if minutes_dict.get("header_config") and hasattr(
-            data.header_config, "model_dump"
-        ):
+        if minutes_dict.get("header_config") and data.header_config is not None:
             minutes_dict["header_config"] = data.header_config.model_dump()
-        if minutes_dict.get("footer_config") and hasattr(
-            data.footer_config, "model_dump"
-        ):
+        if minutes_dict.get("footer_config") and data.footer_config is not None:
             minutes_dict["footer_config"] = data.footer_config.model_dump()
 
         # Validate any client-supplied template_id belongs to the caller's org
@@ -140,15 +206,7 @@ class MinuteService:
 
         # If no template and no sections, generate default sections for the meeting type
         if not minutes_dict.get("sections"):
-            mt = minutes_dict.get("meeting_type", "business")
-            defaults_map = {
-                "special": DEFAULT_SPECIAL_SECTIONS,
-                "committee": DEFAULT_COMMITTEE_SECTIONS,
-                "trustee": DEFAULT_TRUSTEE_SECTIONS,
-                "executive": DEFAULT_EXECUTIVE_SECTIONS,
-                "annual": DEFAULT_ANNUAL_SECTIONS,
-            }
-            default = defaults_map.get(mt, DEFAULT_BUSINESS_SECTIONS)
+            default = _default_sections_for(minutes_dict.get("meeting_type"))
             minutes_dict["sections"] = [
                 {
                     "order": s["order"],
@@ -192,7 +250,13 @@ class MinuteService:
                     minutes_id=minutes.id,
                     description=item_data.description,
                     assignee_id=item_data.assignee_id,
-                    assignee_name=item_data.assignee_name,
+                    assignee_name=(
+                        assignee_names.get(
+                            item_data.assignee_id, item_data.assignee_name
+                        )
+                        if item_data.assignee_id
+                        else item_data.assignee_name
+                    ),
                     due_date=item_data.due_date,
                     priority=ActionItemPriority(item_data.priority),
                     status=MinutesActionItemStatus.PENDING,
@@ -203,7 +267,10 @@ class MinuteService:
         await self.db.refresh(minutes)
 
         # Reload with relationships
-        return await self.get_minutes(minutes.id, organization_id)
+        reloaded = await self.get_minutes(minutes.id, organization_id)
+        if reloaded is None:
+            raise RuntimeError("Meeting minutes vanished immediately after creation")
+        return reloaded
 
     async def _get_template(
         self, template_id: str, organization_id: UUID
@@ -214,7 +281,8 @@ class MinuteService:
             .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
+        return minutes_template
 
     async def get_minutes(
         self,
@@ -253,7 +321,8 @@ class MinuteService:
                 MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
             )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        meeting_minutes: Optional[MeetingMinutes] = result.scalar_one_or_none()
+        return meeting_minutes
 
     async def list_minutes(
         self,
@@ -378,18 +447,27 @@ class MinuteService:
                 organization_id,
                 label="event",
             )
+        if update_data.get("attendees"):
+            await assert_all_in_org(
+                self.db,
+                User,
+                [a.user_id for a in data.attendees or [] if a.user_id],
+                organization_id,
+                label="attendee",
+            )
 
         # Serialize attendees
         if "attendees" in update_data and update_data["attendees"]:
             update_data["attendees"] = [
                 a.model_dump() if hasattr(a, "model_dump") else a
-                for a in data.attendees
+                for a in data.attendees or []
             ]
 
         # Serialize sections
         if "sections" in update_data and update_data["sections"]:
             update_data["sections"] = [
-                s.model_dump() if hasattr(s, "model_dump") else s for s in data.sections
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections or []
             ]
 
         # Serialize header/footer configs
@@ -564,7 +642,7 @@ class MinuteService:
             .where(Motion.id == motion_id)
             .where(Motion.minutes_id == minutes_id)
         )
-        motion = result.scalar_one_or_none()
+        motion: Optional[Motion] = result.scalar_one_or_none()
         if not motion:
             return None
 
@@ -617,21 +695,17 @@ class MinuteService:
         if not minutes:
             return None
 
-        # MM-4 (XC-1): validate the assignee is in-org (None allowed).
-        await assert_in_org(
-            self.db,
-            User,
-            data.assignee_id,
-            organization_id,
-            allow_none=True,
-            label="assignee",
-        )
+        assignee_name = data.assignee_name
+        if data.assignee_id:
+            assignee_name = await self._active_assignee_name(
+                data.assignee_id, organization_id
+            )
 
         item = ActionItem(
             minutes_id=minutes_id,
             description=data.description,
             assignee_id=data.assignee_id,
-            assignee_name=data.assignee_name,
+            assignee_name=assignee_name,
             due_date=data.due_date,
             priority=ActionItemPriority(data.priority),
             status=MinutesActionItemStatus.PENDING,
@@ -647,8 +721,15 @@ class MinuteService:
         minutes_id: str,
         organization_id: UUID,
         data: ActionItemUpdate,
+        as_assignee: Optional[str] = None,
     ) -> Optional[ActionItem]:
-        """Update an action item (status can be updated even on approved minutes)"""
+        """Update an action item (status can be updated even on approved minutes)
+
+        ``as_assignee`` is the caller's user id when they hold no
+        ``minutes.manage`` and act only as the item's assignee (W52-7): the
+        item must be assigned to them by ``assignee_id``, and only status and
+        completion notes may change.
+        """
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -658,11 +739,23 @@ class MinuteService:
             .where(ActionItem.id == str(item_id))
             .where(ActionItem.minutes_id == minutes_id)
         )
-        item = result.scalar_one_or_none()
+        item: Optional[ActionItem] = result.scalar_one_or_none()
         if not item:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+
+        if as_assignee is not None:
+            # Someone else's item answers as missing, not forbidden, so this
+            # path cannot be used to learn which items exist.
+            if not item.assignee_id or str(item.assignee_id) != str(as_assignee):
+                return None
+            extra = set(update_data) - ASSIGNEE_EDITABLE_FIELDS
+            if extra:
+                raise PermissionError(
+                    "As the assignee you can change only the status and "
+                    "completion notes of this action item."
+                )
 
         # For approved minutes, only allow status and completion updates
         if minutes.status == MinutesStatus.APPROVED.value:
@@ -676,16 +769,13 @@ class MinuteService:
         # everything but status/completion_notes.
         item.applied_fields = set(update_data.keys())
 
-        # MM-4 (XC-1): a reassigned owner must be in-org, same as
-        # add_action_item's existing check.
-        if "assignee_id" in update_data:
-            await assert_in_org(
-                self.db,
-                User,
-                update_data.get("assignee_id"),
-                organization_id,
-                allow_none=True,
-                label="assignee",
+        # MM-4 (XC-1) and W52-6: a new owner must be an active member of this
+        # department. Keeping the current owner is not re-checked, so an item
+        # whose assignee has since left can still be edited.
+        new_assignee = update_data.get("assignee_id")
+        if new_assignee and new_assignee != item.assignee_id:
+            update_data["assignee_name"] = await self._active_assignee_name(
+                new_assignee, organization_id
             )
 
         if "status" in update_data:
@@ -832,7 +922,7 @@ class MinuteService:
             ("committee_reports", MeetingMinutes.committee_reports),
         ]
 
-        results = []
+        results: List[dict] = []
         seen_ids = set()
 
         for field_name, field in search_fields:
@@ -917,11 +1007,17 @@ class MinuteService:
             return None
 
         # Map meeting type to minutes meeting type
+        # Every meeting type has a minutes type of the same name. Executive is
+        # the one that matters: falling back to "business" would publish a
+        # closed session's minutes to every member once approved (W51-4).
         type_map = {
             "business": MinutesMeetingType.BUSINESS,
             "special": MinutesMeetingType.SPECIAL,
             "committee": MinutesMeetingType.COMMITTEE,
             "board": MinutesMeetingType.BOARD,
+            "trustee": MinutesMeetingType.TRUSTEE,
+            "executive": MinutesMeetingType.EXECUTIVE,
+            "annual": MinutesMeetingType.ANNUAL,
             "other": MinutesMeetingType.OTHER,
         }
         meeting_type_val = (
@@ -962,11 +1058,7 @@ class MinuteService:
                 )
 
         # Build default sections based on meeting type
-        section_defaults = DEFAULT_BUSINESS_SECTIONS
-        if minutes_type == MinutesMeetingType.SPECIAL:
-            section_defaults = DEFAULT_SPECIAL_SECTIONS
-        elif minutes_type == MinutesMeetingType.COMMITTEE:
-            section_defaults = DEFAULT_COMMITTEE_SECTIONS
+        section_defaults = _default_sections_for(minutes_type)
 
         # The meeting's date and start time are the department's wall clock,
         # not UTC. Combining them as UTC put a 7 PM meeting at 2 PM, and a

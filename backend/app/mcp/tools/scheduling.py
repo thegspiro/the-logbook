@@ -241,7 +241,12 @@ async def _render(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List shifts", module="scheduling")
+    @logbook_tool(
+        server,
+        title="List shifts",
+        module="scheduling",
+        permissions=("scheduling.view", "scheduling.manage"),
+    )
     async def list_shifts(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -270,7 +275,12 @@ def register(server: Any) -> None:
         )
         return page(await _render(db, principal, list(shifts)), total, limit, offset)
 
-    @logbook_tool(server, title="List open shifts", module="scheduling")
+    @logbook_tool(
+        server,
+        title="List open shifts",
+        module="scheduling",
+        permissions=("scheduling.view", "scheduling.manage"),
+    )
     async def list_open_shifts(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -344,7 +354,12 @@ def register(server: Any) -> None:
             body["next_cursor"] = _cursor_for(candidates[-1])
         return body
 
-    @logbook_tool(server, title="Read shift notes", module="scheduling")
+    @logbook_tool(
+        server,
+        title="Read shift notes",
+        module="scheduling",
+        permissions=("scheduling.view", "scheduling.manage"),
+    )
     async def get_shift_notes(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -367,7 +382,12 @@ def register(server: Any) -> None:
         body.update(_chunk(shift.notes or "", content_offset))
         return body
 
-    @logbook_tool(server, title="Scheduling summary", module="scheduling")
+    @logbook_tool(
+        server,
+        title="Scheduling summary",
+        module="scheduling",
+        permissions=("scheduling.view", "scheduling.manage"),
+    )
     async def get_scheduling_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Counts of scheduled shifts and hours worked. Unless the department
         shares its full schedule with Claude, the figures cover only shifts

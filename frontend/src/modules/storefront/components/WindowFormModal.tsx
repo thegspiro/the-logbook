@@ -158,7 +158,7 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
         </div>
       }
     >
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <div>
           <label htmlFor="window-name" className="form-label">
             Name

@@ -380,6 +380,41 @@ trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the columns behind it
 were removed on 2026-10-04; a `.env` that still sets it boots and logs that the
 setting has no effect.
 
+**Two refreshes at the same instant no longer revoke anything** _(2026-10-05,
+AUTH-21)_. Two tabs sharing one cookie jar can refresh the same valid token at
+once. The rotation is now an `UPDATE` conditional on the presented token, so of
+two overlapping refreshes exactly one wins; the other is answered with **409
+`LB-AUTH-012`** and revokes nothing. The client treats that answer as success —
+the shared cookie jar already holds the winner's tokens — and retries the
+original request. A refresh that starts _after_ the first has committed still
+reads as replay, as above: telling it from theft would need the previous token
+on record, which was removed with the grace window. See
+[Error codes](../docs/ERROR_CODES.md).
+
+### Sign-Out Is Confirmed, Not Assumed _(2026-10-05, FE3-34-2)_
+
+The server clears the httpOnly auth cookies only on a successful
+`POST /auth/logout`, so a sign-out that failed on a shared station computer left
+the previous member's session live behind a login screen. `logout()` now asks
+the server up to three times (pauses of 0.5 s and 1.5 s); a 401 counts as
+confirmed, since the server holds no live session for those cookies. The local
+session is torn down either way. If no attempt is confirmed, the app blocks the
+screen with a notice that has no dismiss — it tells the member to close every
+browser window and offers **Try signing out again**, which clears the block once
+the server confirms. The block is stored in `localStorage`, so a reload cannot
+bring back a plain login screen.
+
+### Offline Queues Belong to the Member Who Queued Them _(2026-10-05, FE3-34-5)_
+
+Equipment checks, shift reports and generic submissions queued while offline now
+record the owning member (`ownerId`) when they are written, and nothing is
+written with nobody signed in. Every drain sends only the signed-in member's own
+entries and leaves another member's in place. Entries queued before the upgrade
+carry no owner and are **held**: a notice in the app shell lists how many and of
+what kind, with **Send as me** and **Discard**, each behind a confirmation that
+states the consequence. Until one is chosen they are not sent under anyone's
+cookies.
+
 ### Deactivated Organizations Cannot Log In _(2026-08-12)_
 
 Password login now joins on the organization and requires

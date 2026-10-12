@@ -3,6 +3,14 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
+// One change per search rather than one per keystroke: each keystroke
+// re-renders the whole route registry, and typing a path letter by letter ran
+// these tests past their timeout on a loaded machine.
+async function searchPages(user: ReturnType<typeof userEvent.setup>, query: string) {
+  await user.click(screen.getByLabelText('Search pages'));
+  await user.paste(query);
+}
+
 // Mutable so a test can re-run the same screen as a different account, which
 // is the whole method the page exists to support.
 let currentPermissions = ['events.view'];
@@ -179,7 +187,7 @@ describe('TestingChecklistPage', () => {
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
 
-    await user.type(screen.getByLabelText('Search pages'), '/minutes');
+    await searchPages(user, '/minutes');
 
     expect(screen.getByText('Minutes detail')).toBeInTheDocument();
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
@@ -188,7 +196,7 @@ describe('TestingChecklistPage', () => {
   it('filters to the pages this account can open', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
-    await user.type(screen.getByLabelText('Search pages'), 'events');
+    await searchPages(user, 'events');
 
     expect(screen.getByText('Events administration hub')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Only pages I can open/ }));
@@ -200,7 +208,7 @@ describe('TestingChecklistPage', () => {
   it('asks before clearing the run, and clears only your own marks', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
-    await user.type(screen.getByLabelText('Search pages'), '/dashboard');
+    await searchPages(user, '/dashboard');
     await user.click(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' }));
 
     await user.click(screen.getByRole('button', { name: /Clear my marks/ }));
@@ -235,7 +243,7 @@ describe('TestingChecklistPage', () => {
       isMine: true,
     });
     renderWithRouter(<TestingChecklistPage />);
-    await user.type(screen.getByLabelText('Search pages'), '/events/admin');
+    await searchPages(user, '/events/admin');
 
     expect(
       within(cardFor('Events administration hub')).getByText(/Opened when it should have refused/)
@@ -268,7 +276,7 @@ describe('TestingChecklistPage', () => {
     // appears after a reload is a finding they cannot act on.
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
-    await user.type(screen.getByLabelText('Search pages'), '/events/admin');
+    await searchPages(user, '/events/admin');
 
     await user.click(within(cardFor('Events administration hub')).getByRole('button', { name: 'Pass' }));
 
@@ -380,7 +388,7 @@ describe('TestingChecklistPage', () => {
     it('shows what every other tester found, and from which seat', async () => {
       const user = userEvent.setup();
       renderWithRouter(<TestingChecklistPage />);
-      await user.type(screen.getByLabelText('Search pages'), '/events');
+      await searchPages(user, '/events');
 
       const card = cardFor('Events');
       expect(within(card).getByText('Other testers')).toBeInTheDocument();

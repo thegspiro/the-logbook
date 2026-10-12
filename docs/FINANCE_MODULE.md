@@ -4,7 +4,724 @@
 >
 > **Availability**: Controlled per organization at runtime via the organization's settings (`enabled_modules`), configured in Organization/Admin Settings. The API routers register unconditionally.
 >
-> **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+> **Permissions**: `finance.request`, `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+
+## Who may do what with a request _(2026-10-07)_
+
+`finance.request` is seeded to **every member** through the `member` position, which every
+member holds (migration `7db20aa49329` carries it to departments onboarded
+earlier). It is deliberately not a rank default: a rank's grants resolve at
+runtime and cannot be withdrawn, while a department that does not want members
+raising requests can remove it from the Member position. It is the requester's side of purchase
+requests, expense reports and check requests, and it is confined to the
+caller's own records: the endpoints scope reads to `requested_by` /
+`submitted_by` and refuse another member's record with **404**, exactly as for
+an id that does not exist.
+
+| Action                                                                                                       | Gate                                                  | Scope without `finance.manage`                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| List / read purchase and check requests                                                                      | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                                                                                                           |
+| List / read expense reports                                                                                  | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                                                                                                            |
+| Create, edit (draft / submitted), submit; add an expense line                                                | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                                                                                                |
+| Cancel a purchase request                                                                                    | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels                                                                                |
+| Mark ordered / received / paid, mark an expense paid, issue / void                                           | `finance.manage`                                      | —                                                                                                                                                                                          |
+| Attach a receipt — `POST /purchase-requests/{id}/receipt`, `POST /expense-reports/{id}/items/{item}/receipt` | `finance.request` or `finance.manage`                 | own only; a purchase request until paid, an expense line while the report is a draft or submitted. `finance.manage`: until denied or cancelled. Replacing a receipt keeps the earlier file |
+| Open a receipt — `GET` on the same paths                                                                     | `finance.request`, `finance.view` or `finance.manage` | whoever may read the record. The file is a document under **Finance > Receipts**, a folder only finance rights open                                                                        |
+| `GET /finance/budgets/options?fiscal_year_id=` — id, label, amount left                                      | `finance.request`, `finance.view` or `finance.manage` | org-scoped; the label is the category, plus the station when set, numbered if two still read the same                                                                                      |
+| `GET /finance/fiscal-years/options` — active and draft years: id, name, status                               | `finance.request`, `finance.view` or `finance.manage` | org-scoped                                                                                                                                                                                 |
+| Budgets, budget summary, fiscal-year list, dashboard, dues                                                   | unchanged (`finance.view` and up)                     | —                                                                                                                                                                                          |
+
+Approval chains, separation of duties and the named-approver enforcement are
+unchanged: a member's request goes through the same chain as anyone else's, and
+nobody approves or pays their own. `tests/test_finance_member_requests.py` pins
+all of the above over HTTP.
+
+## Budget-line owners, stations, and the Create/Edit Budget screen _(2026-10-08)_
+
+**Ownership is by position.** A budget line (`budgets.owner_position_id`) and
+a budget category (`budget_categories.owner_position_id`) may each name a
+position; both are nullable, `ON DELETE SET NULL`, and added by migration
+`1be4fbbc235d`. The rule, defined once in
+`backend/app/services/finance_budget_ownership.py`:
+
+| Line's own owner | Category's owner | Effective owner   | `ownerInherited` |
+| ---------------- | ---------------- | ----------------- | ---------------- |
+| set              | any              | the line's        | `false`          |
+| none             | set              | the category's    | `true`           |
+| none             | none             | none ("No owner") | `false`          |
+
+A member owns a line when they hold its effective owner position — org-scoped
+at every join, active members only, and **in every fiscal year**, closed ones
+included (`owned_budgets_query`, `owned_budget_ids`, `user_owns_budget`). Owning
+a line grants no write: only `finance.manage` sets amounts, owners and stations.
+What an owner may _see_ of their lines is described under
+[My Budgets](#my-budgets-the-owners-view-and-the-transaction-list-2026-10-08).
+
+**API** (camelCase both ways; request schemas use `_REQUEST_CONFIG`):
+
+- `POST /finance/budgets` (`finance.manage`) — `fiscalYearId`, `categoryId`,
+  `amountBudgeted`, optional `notes`, `stationId`, `ownerPositionId`. A
+  **closed** fiscal year is refused with 400 "This fiscal year is closed…";
+  draft and active years take lines.
+- `PUT /finance/budgets/{id}` (`finance.manage`) — `amountBudgeted`, `notes`,
+  `stationId`, `ownerPositionId`. Omitted leaves a field alone and `null`
+  clears it; a cleared owner falls back to the category's. An update does not
+  move a line to another fiscal year or category. Lowering the amount below
+  spent + encumbered is 409 _Insufficient available budget_.
+- `GET /finance/budgets[?station_id=]` (`finance.view`) and
+  `GET /finance/budgets/{id}` (`finance.view` or the line's owner) — each row adds `stationId`, `stationName`,
+  `ownerPositionId`, `ownerPositionName`, `effectiveOwnerPositionId`,
+  `effectiveOwnerPositionName` and `ownerInherited`, from one org-scoped join
+  rather than a query per row.
+- `POST`/`PUT /finance/budget-categories` (`finance.manage`) — optional
+  `ownerPositionId` with the same omit / null semantics; responses add
+  `ownerPositionId` and `ownerPositionName`.
+- `GET /finance/position-options` (`finance.manage`) — the org's positions as
+  `{id, name}`. Not `/roles`, whose grants a Treasurer may not hold.
+- `GET /finance/station-options` (`finance.manage`) — the org's unarchived
+  facilities as `{id, name}`. The name is the one
+  `GET /finance/budgets/options` puts in a line's label.
+
+A station or owner position from another department is refused with 400
+(`assert_in_org`, CLAUDE.md pitfall #14c). Nothing enforces one line per fiscal
+year, category and station: two lines for the same pair are permitted, as the
+training guide says, and the options endpoint numbers them apart.
+
+**Screens.** _Finance › Budgets_ gains **Add budget line** (manage only), a
+**Station** filter, and **Station** and **Owner** columns ("Training Officer
+(from category)" when inherited). The budget detail page shows station and
+owner and offers **Edit** to a manager; both open `BudgetFormDialog`.
+_Finance › Settings_ gives each category an owner-position picker on create and
+a new edit dialog.
+
+## Budget amendments _(2026-10-08)_
+
+When leadership approves extra money for a budget line, the Treasurer records it
+as an **amendment** rather than editing the amount: each one is a logged
+increase carrying the amount added (> 0), a reason, who approved it (free text,
+e.g. "Board vote 10/7"), the approval date (not in the future, on the
+department's calendar via `resolve_org_today`), who entered it and when. Table
+`budget_amendments`, migration `ca564ba5a9ad`, model `BudgetAmendment`.
+
+**Original vs current.** `budgets.amount_budgeted` stays the live ceiling the
+spend checks enforce, so they did not change. Adding an amendment, in one
+transaction, locks the line (`SELECT … FOR UPDATE`, the same locking read
+`update_budget` uses — CLAUDE.md pitfall #27), checks the year is not locked,
+inserts the amendment and raises `amount_budgeted` by its amount. The
+**original** budget is computed, never stored: `amount_budgeted` minus the sum
+of the line's amendments (`FinanceService._budget_row`). A direct edit of the
+amount therefore moves the original by the same amount.
+
+**Fiscal years.** Allowed in draft, active and closed years; refused in a
+**locked** one (400 "This fiscal year is locked…"). Locking also freezes a plain
+`PUT /finance/budgets/{id}` that _changes_ `amountBudgeted` (same 400). Sending
+the unchanged amount, or `notes`, `stationId` and `ownerPositionId`, still
+saves: those describe the line and move no money, so they stay editable. The
+lock flag is read under a share lock, so neither path slips in beside a
+`lock_fiscal_year` that is landing.
+
+A request refused earlier for lack of funds is **not** reprocessed and no email
+goes out; the member resubmits (owner decision). Amendments cannot be edited or
+deleted — they are the record of what was approved. A mistaken one is corrected
+by a reversing entry (below).
+
+**API** (camelCase both ways):
+
+- `POST /finance/budgets/{id}/amendments` (`finance.manage`) — `amount`
+  (2 dp, at most the column's 9,999,999,999.99), `reason` (≤ 2000), `approvedBy`
+  (≤ 200), `approvedOn` (date). Blank text and a non-positive amount are 422; a
+  future date, a locked year, or a total past the column's limit are 400; a
+  line in another department is 404. Returns `{amendment, budget}` (201).
+  Audited as `finance.budget_amended`.
+- `GET /finance/budgets/{id}/amendments` (`finance.view` or the line's owner,
+  the line's own gate) — newest first, each with `enteredByName`. Another department's line is 404.
+- Every budget response, list and detail, adds `originalAmount`,
+  `amendmentsTotal` and `amendmentCount`, from one grouped subquery joined into
+  the existing query rather than a query per row.
+
+**Screens.** The budget detail page shows **Original budget**, **Current
+budget** and **Amendments: +$X (n)** once a line has been amended, lists the
+amendments (approval date, amount, approved by, reason, who entered it and
+when), and offers **Add amendment** to a manager unless the year is locked
+(`AmendmentDialog`). The Budgets list marks an amended line "(amended)". In a
+locked year the Edit dialog shows the amount read-only with "This fiscal year
+is locked." and leaves it out of the save.
+
+### Reversing a mistaken amendment _(2026-10-09)_
+
+A mistaken amendment is corrected by a **reversing entry**, never by editing or
+deleting it (owner decision, 2026-10-09). The reversal is another
+`budget_amendments` row: its `amount` is the original's, negated, and
+`reverses_amendment_id` names the original (nullable FK to
+`budget_amendments.id`, `ON DELETE SET NULL`, with a UNIQUE key — migration
+`c62a98b47406`). It carries its own reason, approver, approval date and
+entering member; the original row is untouched.
+
+**Arithmetic.** Recording one lowers `amount_budgeted` by the amount. The
+original budget stays `amount_budgeted − Σ amount` over every row, reversals
+included, so it does not move. `amendmentsTotal` is the net sum (never negative:
+each positive amendment is reversed at most once, for exactly its amount), and
+`amendmentCount` counts both rows — an amended-then-reversed line still shows
+the Original / Current tiles, and the list explains the zero.
+
+**Rules** (`FinanceService.reverse_budget_amendment`):
+
+- whole-amendment only — no partial reversal; the body carries no amount;
+- an amendment is reversed **once** — a second attempt is **409** "This
+  amendment has already been reversed.";
+- a reversal is never reversed — **400**; to restore the money, record a new
+  amendment. A negative row whose link a downgrade dropped still counts as a
+  reversal;
+- the amendment must be on that line, in the caller's department — otherwise
+  **404** ("Amendment not found" / "Budget not found");
+- refused in a **locked** year (400, the amendments' message); allowed in draft,
+  active and closed years;
+- refused with **409** "Insufficient available budget" when the lower budget
+  would fall below spent + committed;
+- the approval date may not be in the future on the department's calendar (400);
+  blank reason or approver is 422.
+
+One transaction, locks in `add_budget_amendment`'s order: the line
+(`SELECT … FOR UPDATE`, pitfall #27), then the amendment, then a **locking**
+read for an existing reversal — a plain read would answer from the snapshot
+taken before the line's lock was granted. The UNIQUE key stands behind that
+check (mapped to the same 409).
+
+**API** (camelCase both ways):
+
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/reverse`
+  (`finance.manage`) — `reason` (≤ 2000), `approvedBy` (≤ 200), `approvedOn`.
+  Returns `{amendment, budget}` (201), `amendment` being the reversal. Audited
+  as `finance.budget_amendment_reversed` with `budget_id`, `amendment_id` (the
+  reversal), `reversed_amendment_id`, `amount` (negative), `approved_by` and
+  `approved_on`.
+- `GET /finance/budgets/{id}/amendments` rows gain `isReversal`,
+  `reversesAmendmentId`, and — on a reversed amendment —
+  `reversedByAmendmentId`, `reversedAt` (when the reversal was entered) and
+  `reversedByName` (who entered it), from one more in-org self-join. Existing
+  fields are unchanged.
+
+**Screen.** In the Amendments list a manager gets **Reverse** on a confirmed
+amendment that is neither a reversal nor already reversed, unless the year is
+locked; an
+owner sees the list but no button. `ReverseAmendmentDialog` says "This lowers
+the current budget by $X. The original amendment stays on record." (prefixed
+"Once a second officer confirms it," since 2026-10-09, below), takes Reason,
+Approved by and Approval date (today by default), and confirms with **Record
+reversal**, after which the page re-reads
+the line and the list. A reversal reads "−$X · Reverses the {date} amendment of
++$Y"; a reversed amendment's amount is struck through, with "Reversed {date} by
+{name}".
+
+### Second-officer confirmation _(2026-10-09)_
+
+Owner decision, 2026-10-09: an amendment, or a reversal, is entered **pending**
+and moves no money until a second officer confirms it. The confirmer holds
+`finance.budget_review` or `finance.manage` and is **not** whoever entered it
+(`assert_different_person`, the same separation-of-duties check the approval
+steps use — 400). Migration `0a55dae43a0a` adds to `budget_amendments`:
+`status` (`pending` / `confirmed` / `rejected`, `BudgetAmendmentStatus`;
+server default `confirmed`, so every row that existed before the upgrade, which
+had already moved the budget, stays confirmed), `decided_by` (FK users,
+`ON DELETE SET NULL`), `decided_at` and `decision_note`.
+
+**What changed from the sections above.** Entering an amendment or a reversal
+no longer touches `amount_budgeted`; confirming it does, under the same locks
+(the line `FOR UPDATE`, then the amendment). `originalAmount`,
+`amendmentsTotal` and `amendmentCount` count **confirmed** rows only, and every
+budget response adds `pendingAmendmentCount`. Only a confirmed amendment is
+reversed; a pending reversal holds its target (a second reversal is 409) until
+it is rejected, which clears its `reverses_amendment_id` so the target can be
+reversed again — the audit event `finance.budget_amendment_rejected` keeps
+`reversed_amendment_id`.
+
+**Confirming** (`FinanceService.confirm_budget_amendment`) re-checks what entry
+checked, because the year and the line may have moved since: a locked year is
+400, a total past the column's limit is 400, and a negative amount that would
+leave spent + committed uncovered is 409 "Insufficient available budget". An
+amendment already decided is **409** ("That amendment has already been
+confirmed or rejected. Refresh to see where it stands."). **Rejecting** requires a note (≤ 2000, not blank —
+422); whoever entered it may reject (withdraw) their own.
+
+**The amount freezes once the budget goes before the board.** A direct
+`PUT /finance/budgets/{id}` that changes `amountBudgeted` is 400 ("Once a
+budget goes before the board, a line's amount changes only through an
+amendment, which another officer confirms.") when the year is active or
+closing, or a draft at `board_review` or `adopted`; a draft taking requests or
+in leadership review still takes it. Every budget response reports this as
+`amountEditable`. A new line in such a year is created at zero only (400
+otherwise); its amount then comes by amendment. Owner, station and notes stay
+editable throughout. This closes the gap where the Treasurer's line edit could
+change an adopted draft.
+
+**Year-end.** A pending amendment holds the year open: `GET
+/fiscal-years/{id}/open-items` lists it as kind `budget_amendment` (its
+`entityId` is the **line**, "Amendment to {category}"), and the lock is refused
+until each one is confirmed or rejected.
+
+**API** (camelCase both ways; another department's line or amendment is 404):
+
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/confirm`
+  (`finance.budget_review` or `finance.manage`) — no body. Returns
+  `{amendment, budget}` (200). Audited as `finance.budget_amendment_confirmed`.
+- `POST /finance/budgets/{id}/amendments/{amendmentId}/reject` (same gate) —
+  `{note}`. Returns `{amendment, budget}` (200). Audited as
+  `finance.budget_amendment_rejected`.
+- Amendment rows add `status`, `decidedBy`, `decidedByName`, `decidedAt`,
+  `decisionNote`, and on a reversed amendment `reversalStatus`.
+
+**Screens.** The line's page marks a pending amendment **Pending
+confirmation**, says above the figures how many are awaiting confirmation and
+that the figures exclude them, and offers **Confirm** (through the app's
+confirmation dialog, stating what it raises or lowers) and **Reject** (a
+reason, `PromptDialog`) to a reviewer or manager while the year is unlocked —
+Confirm is hidden on the viewer's own entry, where Reject reads **Withdraw**. A
+confirmed row reads "Confirmed {date} by {name}"; a rejected one is struck
+through with "Rejected {date} by {name}: {reason}"; an amendment whose reversal
+is pending reads "Reversal entered {date} by {name}, awaiting confirmation" and
+is not struck through. The Edit dialog shows the amount read-only when
+`amountEditable` is false, and the lock dialog links a pending amendment to its
+line.
+
+## My Budgets: the owner's view, and the transaction list _(2026-10-08)_
+
+**Who reads a line.** `GET /finance/budgets/{id}`, `…/amendments` and
+`…/transactions` admit `finance.view` **or** the line's owner — the member who
+holds its effective owner position (`user_owns_budget`; the rule is
+`finance_budget_ownership.py` and nothing re-derives it). One body helper,
+`_authorize_budget_view` in `endpoints/finance.py`, applies it to all three, and
+`scripts/check_endpoint_permissions.py` knows it as a body authorizer (as with
+the scheduling module's shift-officer check), so the docstrings' "finance.view"
+is checked against it. Anyone else — a member who owns nothing, the category's
+owner on a line whose own owner overrides it, a member whose account is no
+longer active, and every other department — gets **404**, the same answer #2991
+gives for another member's request, so a line id is no existence oracle.
+Ownership opens **reads only**: `PUT /finance/budgets/{id}`,
+`POST …/amendments` and `POST …/amendments/{id}/reverse` stay `finance.manage`
+(403 to an owner), and the org-wide
+`GET /finance/budgets` list stays `finance.view`. Access only widened, for
+owners; nothing existing callers could do changed, so there is no
+`UPGRADING.md` entry.
+
+**API** (camelCase):
+
+- `GET /finance/my-budgets[?fiscal_year_id=]` (any signed-in member) — the
+  caller's lines in every fiscal year, newest year first
+  (`owned_budgets_query`), empty — not 403 — for a member who owns nothing.
+  Each row is the budget detail row plus `amountRemaining` (budget − spent −
+  encumbered) and `percentUsed` (spent + encumbered over the current budget, one
+  decimal). Budget rows everywhere now also carry `categoryName`,
+  `fiscalYearName` and `fiscalYearStatus`, so a reader without the category and
+  fiscal-year lists can label a line.
+- `GET /finance/my-budgets/summary` (any signed-in member) — `{ownsAny}`, one
+  `LIMIT 1` probe (`user_owns_any_budget`). The navigation asks it once per
+  signed-in member (`useOwnsBudgets`) rather than on every page, and adding a
+  field to the auth payload instead would have put a finance query into every
+  sign-in and refresh. An owner assigned mid-session sees the entry after a
+  reload, or at once on opening `/finance/my-budgets`.
+- `GET /finance/budgets/{id}/transactions?limit=&offset=` (`finance.view` or the
+  owner; `limit` 1–100, default 25) — `{items, total, limit, offset}`, newest
+  first. Each item: `kind` (`purchase_request` / `check_request` /
+  `expense_report`), `entityId`, `number` (PR-/CR-/ER-), `description`,
+  `counterparty` (vendor, payee or merchant), `requesterName`, `status`,
+  `amount`, `effect` and `occurredAt`. No payee address, check number or
+  payment method.
+
+**What the transaction list counts.** Exactly what `_mutate_budget` counted
+against the line, from the same `budget_id` its callers pass, so the listed
+`spent` rows add up to `amountSpent` and the `encumbered` rows to
+`amountEncumbered`:
+
+| Record                       | Status listed                 | Effect                                         | Date        |
+| ---------------------------- | ----------------------------- | ---------------------------------------------- | ----------- |
+| Purchase request             | approved / ordered / received | `encumbered`, the estimate                     | approved at |
+| Purchase request             | paid                          | `spent`, the actual amount (else the estimate) | paid at     |
+| Check request                | issued                        | `spent`                                        | check date  |
+| Check request                | voided                        | `none` — reversed by `void_check`, shown so    | check date  |
+| Expense report **line item** | report paid                   | `spent`, the item's amount, on the item's line | paid at     |
+
+Excluded because they never moved the totals: drafts, submitted, pending,
+denied and cancelled records (a request cancelled after approval had its
+encumbrance released). The only way the sum can differ from the stored totals
+is `_mutate_budget`'s floor at zero clipping a release larger than the balance.
+
+**Screens.** _Finance › My Budgets_ (`/finance/my-budgets`, any signed-in
+member, Finance module on) groups the caller's lines by fiscal year — the
+current year, then drafts, then closed years — each card naming the category
+and station, the owner ("… (from category)" when inherited), the current
+budget (and the original once amended), **Spent**, **Committed** (the
+encumbered amount), **Remaining** and a progress bar, linking to the line. With
+no lines it explains that a line appears once the Treasurer makes the member's
+position its owner. The Finance navigation offers **My Budgets** to anyone who
+owns a line — a Treasurer included — and to nobody who would find it empty.
+`/finance/budgets/:id` now needs only a session (the API decides) and loads the
+line by id instead of finding it in the budget list, which an owner cannot
+fetch; for an owner it is read-only (no Edit, no Add amendment, no Reverse) and links back
+to My Budgets. Its **Transaction History** is the paginated list above; a row
+links to its request only for a viewer who may open it (`finance.view` for
+purchase and check requests, `finance.manage` for expense reports). The detail
+page now labels encumbered money **Committed**.
+
+## Next-year planning: start from last year, the request deadline, and budget requests _(2026-10-08)_
+
+Next year's budget is built in a **draft** fiscal year. The Treasurer
+(`finance.manage`) seeds it from this year, sets a deadline, and each line's
+owner — the member holding its owner position, the line's own else its
+category's (`finance_budget_ownership.py`, the one definition, pitfall #29) —
+proposes an amount. The Treasurer approves it as asked, adjusts it with a note,
+or declines it (owner decisions, 2026-10-08). Owners already see previous years
+on My Budgets. Step 3a was the API and the Treasurer's two settings controls;
+step 3b added the owners' request screen, the Treasurer's review screen and the
+emails (see [Screens (3b)](#screens-3b) and
+[Budget request emails](#budget-request-emails) below). The code is
+`app/services/finance_budget_request_service.py` and
+`app/services/finance_budget_request_notifications.py`; the schema change is
+revision `9effb8790488` (`fiscal_years.request_deadline`, `budget_requests`).
+Step 3b needed no schema change.
+
+**Start from last year** — `POST /finance/fiscal-years/{draftId}/start-from/{sourceId}`
+(`finance.manage`) → `{created, skipped}`. Only into a draft year that is not
+locked; the source is any other year of the department (normally the active
+one); another department's year is 404 either way. Each source line becomes a
+draft line with the same category, station, notes and **own** owner position —
+a category's owner is not copied onto the line, it keeps arriving through the
+category — and `amountBudgeted` equal to the source line's **current** budget
+(amendments included) as a starting point the Treasurer edits. Spent and
+committed start at zero; amendments are not copied. A category + station that
+already has a line in the draft is skipped, so a second run creates nothing.
+The draft year's row is locked for the run, so two runs cannot both copy.
+Audited as `finance.fiscal_year_started_from`.
+
+**The request deadline** — `fiscal_years.request_deadline` (a date, nullable),
+set or cleared (`null`) through the existing `PUT /finance/fiscal-years/{id}`
+as `requestDeadline`, and only while the year is a draft (400 otherwise; an
+unchanged value sent with another edit is not a change). It is a calendar day
+on the department's calendar: requests stay open **through the end of that day
+in the organization's timezone** (`resolve_org_today`). Every fiscal-year
+response — the list, the detail, create/update/activate/lock and
+`/fiscal-years/options` — carries `requestDeadline` and a computed
+`requestsOpen`: the year is a draft, not locked, and either has no deadline or
+today ≤ deadline. That one function (`requests_open`) is what the API enforces
+with, so the flag and the refusal cannot disagree. Audited as
+`finance.fiscal_year_request_deadline_set`.
+
+**Budget requests** — table `budget_requests`. A request is for an existing
+draft-year line (`budgetId`), or proposes a line that does not exist yet
+(`categoryId`, optional `stationId`, and the `ownerPositionId` that will own it).
+Amounts are `Numeric(12, 2)`, ≥ 0; `justification` is required.
+
+| Status      | Who moves it there                          | From                    |
+| ----------- | ------------------------------------------- | ----------------------- |
+| `draft`     | create; **withdraw** (owner or Treasurer)   | — / `submitted`         |
+| `submitted` | **submit** (owner or Treasurer)             | `draft`                 |
+| `approved`  | **decide** `approve` — approved = requested | `submitted`, or decided |
+| `adjusted`  | **decide** `adjust` — an amount and a note  | `submitted`, or decided |
+| `declined`  | **decide** `decline` — a note, no amount    | `submitted`, or decided |
+
+- **Who may make, edit, submit, withdraw or delete one.** For a line: a member
+  who owns it (`user_owns_budget`). For a proposal: a member who holds the named
+  position, in the department and active (`user_holds_position`). Anyone else
+  is 403; `finance.manage` may act on anyone's behalf. Owners may change a
+  request only while it is `draft` or `submitted` and while `requestsOpen`;
+  after the deadline they get 400 _"The request deadline for {year} has
+  passed."_ — the Treasurer is not held to the deadline. Delete is for drafts
+  only (withdraw a submitted one first); a decided request stays as the record.
+- **One live request per line.** A second request for the same line (or the
+  same proposed category + station) that is not declined is 409; so is a
+  proposal for a category + station that already has a draft-year line —
+  request against that line instead. The check is a locking read behind the
+  fiscal year's row lock (pitfall #27).
+- **Deciding** (`finance.manage` only). `approve` and `adjust` write the
+  approved amount into the draft-year line under the same locking read
+  `update_budget` uses, refused (409) below what the line has already spent or
+  committed; for a proposal the line is created first — its category, station
+  and the proposal's position as the line's own owner — and linked
+  (`budgetId`). A decision may be changed while the year is still a draft (the
+  amount is written again); once the year is active or locked, no decision is
+  made or changed. A draft request is not decided — it must be submitted
+  (the Treasurer can submit it on the owner's behalf).
+- **Who sees which.** `finance.manage` sees every request. Anyone else sees
+  requests for lines they own, proposals for positions they hold, and requests
+  they submitted; any other request, and every other department's, is 404.
+- **Audit.** `finance.budget_request_created`, `…_submitted`, `…_decided`.
+
+**API** (camelCase bodies and responses):
+
+| Method & path                                             | Who                                                     | Notes                                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /finance/budget-requests?fiscal_year_id=&status=`    | any signed-in member, scoped as above                   | newest first; bad `status` is 400                                                   |
+| `GET /finance/budget-requests/my-lines?fiscal_year_id=`   | any signed-in member                                    | `{fiscalYear, lines: [{budget, request, lastYear…}]}` — the owner screen's one call |
+| `GET /finance/budget-requests/{id}`                       | as the list                                             | 404 when not visible                                                                |
+| `POST /finance/budget-requests`                           | the line's owner / position holder, or `finance.manage` | creates a `draft`                                                                   |
+| `PUT /finance/budget-requests/{id}`                       | owner while open, or `finance.manage`                   | `requestedAmount`, `justification`                                                  |
+| `POST /finance/budget-requests/{id}/submit` · `/withdraw` | owner while open, or `finance.manage`                   |                                                                                     |
+| `DELETE /finance/budget-requests/{id}`                    | owner while open, or `finance.manage`                   | drafts only                                                                         |
+| `POST /finance/budget-requests/{id}/decide`               | `finance.manage`                                        | `{decision: approve\|adjust\|decline, approvedAmount?, decisionNote?}`              |
+
+Each request row carries `lineLabel` ("Category · Station"), `isProposedLine`,
+the owner position's id and name (the line's effective owner for a line
+request), `requestedAmount`, `approvedAmount`, `status`, `justification`,
+`decisionNote`, `submittedByName`/`submittedAt`, `decidedByName`/`decidedAt`,
+and the comparison **`lastYearBudgeted` / `lastYearSpent`** (with
+`lastYearFiscalYearName`): the **active** year's figures for the same category
+and station — "this year", seen from the draft being planned — summed if the
+active year has more than one such line, and null when it has none.
+`my-lines` returns the draft-year lines the caller owns (`list_my_budgets`'s
+rows), each with its live request (else its most recent declined one, else
+null) and the same comparison, plus the year's `requestDeadline` and
+`requestsOpen`.
+
+**Design decisions taken for this step** (the owner may overrule any):
+
+1. Start from last year copies only a line's **own** owner; inheritance from the
+   category carries on through the category.
+2. The carried-forward amount is the source line's **current** budget
+   (amendments included), not its original.
+3. Once a draft year is **activated or locked, decisions are final** — first
+   decisions included; money in an active year changes through amendments.
+4. **Declining an approved request leaves the line's amount as it is.** The
+   Treasurer edits the draft line directly; the decision does not try to
+   reconstruct what the line held before.
+5. A proposal duplicating a category + station that already has a line is
+   refused rather than merged into that line.
+6. The Treasurer is not bound by the deadline, may create requests on an
+   owner's behalf, and may make a proposal without naming a position (the new
+   line then inherits its category's owner).
+7. The deadline day is inclusive, and "today" is the department's.
+
+**Screens (3a).** _Finance › Settings_: a draft year's row shows _"Requests close
+{date}"_ (or _"No request deadline"_) and a **Requests open / Requests closed**
+badge, and below it **Start from last year** (choose the year, defaulting to
+the active one, then **Copy lines**; a confirmation names both years; the toast
+reads _"{n} lines copied, {m} already there"_) and **Request deadline** (a date,
+**Save deadline**, **Clear deadline**, which sends `null`). Types and
+`budgetRequestService` for the request API are in the finance module for 3b.
+No new route.
+
+**Upgrading.** A new nullable column and a new table; nothing existing changes
+behaviour, so there is no `UPGRADING.md` entry. On an installation whose
+finance tables were built by `create_all`, the migration adds both; on an empty
+database it skips both and `create_all` builds them from the models.
+
+### Screens (3b)
+
+**Next year's budget** — `/finance/budget-requests`, any signed-in member,
+Finance module on (the route needs only a session, like My Budgets: what is
+the member's is the API's answer). One call, `my-lines`, plus the request list
+for proposals. Picked over `/finance/my-budgets/next-year` because the screen
+is about requests, it sits beside the API it drives, and the review screen
+nests under it.
+
+- A year picker when more than one draft year exists (otherwise the one).
+- The deadline, prominently: _"Requests close {date}"_, _"No deadline set"_,
+  or _"Requests are closed"_ with _"The deadline for {year} was {date}.
+  Requests can be read but no longer changed."_ — from `requestsOpen` and
+  `requestDeadline`, formatted with `formatCalendarDate`.
+- A card per owned draft-year line: category · station, the owner position,
+  **Budgeted {this year}** and **Spent {this year}** (the active year's
+  figures, "No line" when it has none), **Requested**, **Approved** (or
+  "Declined"), the status badge and the Treasurer's note. While requests are
+  open: **Request an amount** (no request, or the last one was declined —
+  **Request again**), **Submit** / **Edit** / **Delete draft** on a draft,
+  **Edit** / **Withdraw** on a submitted one. Withdraw and Delete confirm
+  first (`useConfirm`). Nothing is offered once requests close or the request
+  is decided.
+- **Propose a new line** (while open, and only for a member who holds a
+  position): category, station (optional, "Department-wide"), and **For your
+  position** — only the positions the member holds, from
+  `GET /finance/budget-requests/proposal-options`. Proposals are listed under
+  **New lines you proposed** with the same actions.
+- Dialogs are `Modal` (no outside-click close), `form-*` controls. A create
+  leaves a blank station out (`|| undefined`); an edit sends both fields it
+  owns. Every action re-fetches the screen (pitfall #11); the API's refusal is
+  the toast.
+- The navigation's **Next year's budget** entry is offered to a member who owns
+  a line in a draft year or has a request for one — `plansNextYear` on
+  `GET /finance/my-budgets/summary` (two `LIMIT 1` probes, asked once per
+  session alongside `ownsAny`).
+
+**Budget requests (review)** — `/finance/budget-requests/review`,
+`finance.manage` (the decide endpoint's gate). Linked from the Finance
+navigation for managers and from a draft year's row in Finance Settings
+(**Review requests**).
+
+- Year picker (draft years), the deadline and **Owners can still change
+  requests** / **Closed to owners**, a status filter (default **Submitted**)
+  whose options carry counts, and a count per status.
+- A table (`rwd-table`, cards on a phone): budget line ("New line" for a
+  proposal), owner position, submitted by and when, this year budgeted and
+  spent, requested, approved, status. A totals row adds up what is shown:
+  requested, this year budgeted, approved (summed in cents).
+- **Review** (submitted) or **Change** (decided) opens the decision dialog: who
+  asked for what and when, this year's figures, the justification, and
+  **Approve as requested** / **Approve a different amount** (amount and note
+  required) / **Decline** (note required). The API's refusal is shown in its
+  own words; the list is fetched again after a decision. Drafts are listed but
+  not decided (the API refuses).
+
+**`GET /finance/budget-requests/proposal-options`** — authenticated, no
+permission: `{positions, categories, stations}`, ids and names. Positions are
+only those the caller holds (`held_positions_query`); categories are the
+department's active ones and stations its unarchived facilities; all three are
+empty for a caller holding no position, who could not propose anything.
+
+### Budget request emails
+
+All four are **email only** (pitfall #18: administrative notices, not in
+`SmsAlert`; no bell entry, as nothing in Finance has one). Recipients are
+resolved inside the department through the ownership resolver (pitfall #29),
+active members only. A send that fails is logged and dropped — it never fails
+the action. Two new optional email kinds, on by default, govern them
+(`email_policy.py`): **Next year's budget requests** (`budget_requests`,
+members) and **Treasurer duties** (`finance_duties`, officers).
+
+| Trigger                                                   | Recipients                                                                                                 | Subject                                                                         | Kind              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------- |
+| A request is submitted                                    | Active `finance.manage` holders (wildcards count), not the submitter                                       | `Budget request to review: {line} ({amount})`                                   | `finance_duties`  |
+| A request is approved / adjusted / declined               | The submitter and the active holders of the owning position (line's own, else category's), not the decider | `Budget request approved: {line}` · `… adjusted: {line}` · `… declined: {line}` | `budget_requests` |
+| A deadline is set on a draft year while requests are open | Active holders of every position owning a line in that year, once each                                     | `Budget requests for {year} are open until {date}`                              | `budget_requests` |
+| The deadline is changed (still open)                      | As above                                                                                                   | `Budget request deadline for {year} changed to {date}`                          | `budget_requests` |
+| Scheduled: 7 days and 1 day before the deadline           | Those owners with at least one line in the year no request was submitted for                               | `Reminder: budget requests for {year} close {date}`                             | `budget_requests` |
+
+Clearing a deadline, saving the same date again, or setting one already past
+sends nothing. The decision email carries the approved amount and the note;
+the submitted email carries this year's figures and the justification; all
+link to the owner's or the review screen. User text is escaped.
+
+**The reminder** is the `budget_request_reminders` scheduled task (daily, in
+the in-process scheduler, so no operator action is needed; cron `10 8 * * *`
+where an external scheduler is used), iterating departments through
+`_for_each_org` so one department's failure is logged and the next still runs.
+For each draft, unlocked year whose deadline is today or later it picks the
+most urgent reminder whose window has begun — the 7-day one from seven days
+before, the 1-day one from the day before — so a run missed while the server
+was down still goes out on the next one. **Idempotency** is a sent-log: each
+reminder and each requests-open email is recorded as an email-channel
+`NotificationLog` row (categories `budget_request_reminder` /
+`budget_request_window`, metadata naming the year, the deadline and the
+offset). A member already recorded for that year, deadline and offset is not
+sent it again, and a member sent the requests-open email inside a reminder's
+window is not sent that reminder. Moving the deadline starts a fresh set. The
+offsets are constants (see
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-request-reminders-go-out-7-days-and-1-day-before-for-every-department-2026-10-08)).
+
+## Adopting the budget: planning stages, leadership review and the board _(2026-10-09)_
+
+A draft year's budget now moves through stages before it is spent, matching the
+department's process: line owners request, the Treasurer decides and closes the
+draft for senior leadership's review, it goes before the board, and the board's
+adoption — recorded — is what activates it. Migration `5c8be05f2f0f`.
+
+| Stage (`fiscal_years.planning_stage`) | Owners may request | Treasurer decides | Leadership changes amounts |
+| ------------------------------------- | ------------------ | ----------------- | -------------------------- |
+| `requests` (NULL on a draft reads so) | until the deadline | yes               | no                         |
+| `leadership_review`                   | no                 | no                | yes                        |
+| `board_review`                        | no                 | no                | no                         |
+
+- **Moves** — `POST /finance/fiscal-years/{id}/planning-stage` `{stage}`
+  (`finance.manage`), one stage forward or back, draft and unlocked years only;
+  audited `finance.fiscal_year_stage_changed`. `requests_open` is false outside
+  `requests`, so the owner screen, the Treasurer's own edits and the deadline
+  reminders all stop with it. Moving back to `requests` reopens it.
+- **Leadership review** — `POST /finance/budget-requests/{id}/review`
+  `{amount, note}` (new permission **`finance.budget_review`**, seeded to no
+  position; a department grants it to e.g. the President and Chief). Only in
+  `leadership_review`, only on an `approved`/`adjusted` request, never by the
+  holder of the line's owner position or the request's submitter (403). The
+  amount is written to the line under the decision's locking read (409 below
+  spent + committed) and kept in `budget_requests.review_amount`, `review_note`,
+  `reviewed_by`, `reviewed_at` beside the Treasurer's `approved_amount`;
+  audited `finance.budget_request_reviewed`. A new Treasurer decision (after
+  moving back to `requests`) clears it. `finance.budget_review` also reads every
+  request (list and detail), as `finance.manage` does.
+- **Adoption** — `POST /finance/fiscal-years/{id}/adopt` on a draft in
+  `board_review`, body `{adoptedOn, adoptionReference, adoptionNotes?}`; the
+  date may not be after the department's today. Stored on the year
+  (`adopted_on`, `adoption_reference`, `adoption_notes`,
+  `adoption_recorded_by`, `adoption_recorded_at`), the stage set to
+  `adopted`, audited `finance.budget_adopted`. An adopted year's stage no
+  longer moves. Starting the year is a separate step — see the next section.
+- **Lock** refuses a draft year (400).
+
+**Screens.** _Finance › Settings_: a draft row shows its stage badge and the
+buttons to move it (each confirmed), with **Record adoption** in board review
+opening `BudgetAdoptionDialog` and **Start the year** once adopted; the start-from and deadline controls show only
+while taking requests; an adopted year shows _"Adopted by the board {date} ·
+{reference}"_. _Finance › Budget requests_ (`/finance/budget-requests/review`)
+now admits `finance.budget_review`: a **Leadership** column, and **Change
+amount** (`BudgetRequestLeadershipDialog`) on approved/adjusted rows for
+leadership in leadership review; the Treasurer's decision buttons show only
+while taking requests. The owner's screen names the stage when it is closed
+and shows a leadership change with its note.
+
+## Starting, closing and locking a year _(2026-10-09)_
+
+Adoption, the start of the year and its close are separate steps the Treasurer
+takes (`finance.manage`), each audited. Migration `af92f1496c43`.
+
+| Step                 | Endpoint                                 | Allowed from                                                 | Effect                                                                            |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Record adoption      | `POST /fiscal-years/{id}/adopt`          | draft in `board_review`                                      | stage `adopted`; `finance.budget_adopted`                                         |
+| Start the year       | `POST /fiscal-years/{id}/activate`       | draft in `adopted`, on/after its start date; no other active | `active`; owners emailed (`notify_budget_adopted`); `finance.fiscal_year_started` |
+| Begin year-end close | `POST /fiscal-years/{id}/begin-close`    | `active`                                                     | `closed`, `closing_started_at` set; `finance.fiscal_year_close_begun`             |
+| Reopen               | `POST /fiscal-years/{id}/activate`       | `closed`, not locked; no other active                        | `active` again; `finance.fiscal_year_reopened`                                    |
+| Lock (sign-off)      | `POST /fiscal-years/{id}/lock` `{notes}` | `closed`, not locked, **no open items**                      | `is_locked`, `locked_by`, `locked_at`, `lock_notes`; `finance.fiscal_year_locked` |
+
+- **No automatic close.** Starting a year never closes the current one; it is
+  refused (400, naming the active year) until that year's close is begun. The
+  start date is compared with the department's today (`resolve_org_today`).
+- **What each status admits** (`FinanceService._require_year_accepts`, read
+  under a share lock on the year's row so it waits out a lock that is
+  landing). _New_ — create, edit, add a line item to, or submit a purchase
+  request, expense report or check request — needs a draft or active year.
+  _Finish_ — mark ordered/received/paid, cancel, pay an expense report, issue
+  or void a check — needs only a year that is not locked, so a closing year
+  settles its last bills. Approvals are not gated: a locked year has nothing
+  left to approve, which the lock's open-items rule guarantees. Budget
+  amendments keep their own rule (refused only when locked).
+- **Open items** (`GET /fiscal-years/{id}/open-items`): purchase requests
+  `submitted`, `pending_approval`, `approved`, `ordered` or `received`;
+  expense reports and check requests `submitted`, `pending_approval` or
+  `approved`. Drafts are not open items — they moved no money and can no
+  longer be submitted. The lock re-reads the list under the year's row lock
+  and refuses while it is non-empty, naming the count and the first five
+  numbers.
+- **`closeDue`** on the year response: active, not locked, and the
+  department's today is after its end date. _Finance › Settings_ shows a
+  banner for it.
+
+**Screens.** _Finance › Settings_ labels a closed, unlocked year **Closing**
+and a locked one **Closed**. The active year offers **Begin year-end close**; a
+closing year offers **Reopen** and **Lock**, which opens
+`FiscalYearLockDialog`: the open items (each linked to its request), and the
+required reconciliation notes, with the lock disabled while anything is open.
+A locked year shows _"Locked {date} · {notes}"_.
+
+## Expense receipts are required _(2026-10-09)_
+
+Builds on the uploaded receipts above (a document under **Finance >
+Receipts**, linked by `receipt_document_id`, migration `c0bf0b155719`).
+
+- **The requirement.** `submit_expense_report` refuses (400) a report with any
+  line lacking `receipt_document_id`, naming up to three lines. Reports
+  submitted before this are unaffected; the typed `receipt_url` does not
+  count.
+- **Who reads a report and its receipts**
+  (`GET /finance/expense-reports/{id}` and
+  `GET …/items/{item_id}/receipt`, both through `_readable_expense_report`):
+  its submitter, `finance.manage`, and its approvers
+  (`FinanceService.reviews_entity`) — anyone its chain's steps name
+  (`user_matches_step`, the rule approve/deny enforce), anyone who has acted
+  on one of its steps, an approvals administrator, and, for a submitted report
+  no chain applies to, any `finance.approve` holder (they approve it by hand).
+  A draft has no approvers. Everyone else gets 404. Before this, the approvals
+  queue linked an approver without `finance.manage` to a report that answered 404.
+- **The year's close.** Attaching a receipt also passes
+  `require_year_accepts`: a member's (`new`) is refused in a closing or locked
+  year; a finance manager's (`finish`) only in a locked one, so the office can
+  file evidence for what it is settling.
+- **Screen.** _Expense report_ disables **Submit for Approval** while any line
+  has no receipt, with the count of lines still missing one beside it.
 
 ## Context
 
@@ -50,8 +767,9 @@ Enums:
 
 - `GET/POST /finance/fiscal-years`
 - `GET/PUT /finance/fiscal-years/{id}`
-- `POST /finance/fiscal-years/{id}/activate`
-- `POST /finance/fiscal-years/{id}/lock`
+- `POST /finance/fiscal-years/{id}/adopt`, `/activate`, `/begin-close`, `/lock`
+  and `GET /finance/fiscal-years/{id}/open-items` — see "Starting, closing and
+  locking a year"
 - `GET/POST /finance/budget-categories`
 - `PUT/DELETE /finance/budget-categories/{id}`
 - `GET/POST /finance/budgets`
@@ -65,6 +783,7 @@ Enums:
 **Permissions** (add to `backend/app/core/permissions.py`):
 
 - New category: `FINANCE = "finance"`
+- `finance.request` — Create, submit and track your own purchase requests, expense reports and check requests (every member; see **Who may do what with a request** above)
 - `finance.view` — View financial data, budgets
 - `finance.manage` — Manage budgets, fiscal years, categories
 - `finance.approve` — Approve purchase requests, expenses, check requests (used as a fallback approver type when no chain is configured)
@@ -214,8 +933,55 @@ Approve and deny check the caller against the step's named approver, in addition
 - `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
 - `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
 - `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; 403 when the caller is not the step's named approver — see above)
-- `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
-- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log) and `.../deny` (body `{reason}`, required) — only for a request with no approval steps; a request with steps returns 409
+- `GET /finance/approvals/unrouted` (requests in `pending_approval` with no approval step still pending: no chain applied, or held for a second approver — `awaitingSecondApproval`, `firstApprovedBy`; see **Dual approval** below)
+- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log, with `completed` false when the approval was the first of two) and `.../deny` (body `{reason}`, required) — only for a request with no approval step still pending; a request whose chain is still running returns 409
+- `GET /finance/settings` (`finance.view`, `finance.approve`, `finance.manage` or `finance.configure_approvals`) — `{dualApprovalThreshold}` as the approval path reads it, null when off
+
+#### Dual approval _(2026-10-11)_
+
+Owner decision, 2026-10-09: at or above a department-set threshold, a purchase
+request, check request or expense report is approved only once **two
+different people** have approved it, and the request waits for the second
+rather than refusing the first.
+
+- **Where it is set.** Organization settings, `finance.dual_approval_threshold`
+  (whole dollars; `FinanceSettingsUpdate`, 1 to 9,999,999,999), written only by
+  `PATCH /organization/settings` (`settings.manage`). It binds the finance
+  officers, so the people it applies to cannot lift it — the arrangement
+  `admin_hours.allow_self_approval` uses. `app/utils/finance_settings.py` is the
+  reader; absent, null, zero, negative, a boolean or any non-integer reads as
+  **off**, the default, so no existing installation changes on upgrade.
+- **Where it bites.** `_finalize_approval`, the one place both paths reach —
+  the end of an approval chain (including email-token approvals and chains
+  whose steps all auto-approved) and a manual approval.
+  `_held_for_second_approver` counts the people who have approved: each chain
+  step approved in the app as the member who approved it, one approved from an
+  emailed link as the address the step names, an auto-approved step as nobody,
+  plus a first approval recorded on the request. With fewer than two, the
+  request stays `pending_approval`; a first approval given outside a chain is
+  recorded as `first_approved_by` / `first_approved_at` (migration
+  `3c9c5025a380`, on all three tables). Budget encumbrance happens once, on
+  the approval that completes the request.
+- **How the second approver acts.** A held request has nothing left in its
+  chain, so the manual path decides it: `_lock_unrouted_entity` now refuses
+  only a request with a step **still pending** (`_has_pending_step_records`),
+  and the unrouted listing uses the same predicate. Any `finance.approve`
+  holder may give the second approval — not only a chain step's named approver
+  — except the requester (FIN-4) and anyone who has already approved it
+  (400, "You have already approved this request…"). A held request can still
+  be denied.
+- **Reported, not re-derived.** Detail responses carry `firstApprovedBy`,
+  `firstApprovedAt` and `awaitingSecondApproval`
+  (`FinanceService.is_awaiting_second_approval`: waiting for approval, no step
+  pending, and either a chain that has run or a first approval recorded).
+- **Screens.** The approval chains settings page shows the rule
+  (`DualApprovalSettingsCard`, reading `GET /finance/settings`), editable only
+  with `settings.manage`. `ManualApprovalPanel` also appears on a held request
+  — _"This request needs a second approval from someone who has not approved it
+  yet."_ — and offers whoever gave the first approval only Deny; its approve
+  toast is now "Approval recorded". The Approvals page lists, below the step
+  rows, the requests decided on their own page (`GET /finance/approvals/unrouted`),
+  each marked "A second approver" or "An approver (no chain applies)".
 
 ### Frontend
 
@@ -228,7 +994,7 @@ Components:
 
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
 - **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
-- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. These requests are not on the Approvals page, which lists step records; `GET /finance/approvals/unrouted` lists them but no screen reads it yet
+- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. Since 2026-10-11 it also shows on a request held for a second approver (`awaitingSecondApproval`), and the Approvals page lists both kinds below its step rows, from `GET /finance/approvals/unrouted`
 - **ApprovalChainPreview** — _planned, not built._ `GET /finance/approval-chains/preview` and `approvalChainService.preview()` exist, but no component calls them; request forms show no chain preview and the settings page has no preview tool
 
 **Request bodies accept camelCase and snake_case** _(2026-09-30)_. Every request schema in `app/schemas/finance.py` uses `_REQUEST_CONFIG` (`alias_generator=to_camel`, `populate_by_name=True`, `loc_by_alias=False`). Before this the pages sent camelCase and no schema carried an alias: creates were refused with a 422 for "missing" required fields (`POST /finance/fiscal-years` with `startDate`), and updates silently dropped every multi-word key, so clearing a purchase request's `budgetId` returned 200 and changed nothing. Dumps stay by field name, `exclude_unset` keeps "omitted = leave alone, null = clear", and 422 field names stay snake_case. `tests/test_finance_request_camelcase.py` fails if a new request schema lacks the config.
@@ -253,7 +1019,7 @@ Where `PENDING_APPROVAL` means "at least one approval step is pending." The serv
 
 **Additional tables in `finance.py`:**
 
-- **`purchase_requests`** — id, organization_id, request_number (auto: "PR-YYYY-0001"), fiscal_year_id, budget_id (FK), requested_by (FK users), title, description, vendor, estimated_amount `Numeric(12,2)`, actual_amount `Numeric(12,2)` (nullable), status (enum), priority, approved_by (FK users, nullable), approved_at, ordered_at, received_at, paid_at, denial_reason, notes, receipt_url, created_at, updated_at
+- **`purchase_requests`** — id, organization_id, request_number (auto: "PR-YYYY-0001"), fiscal_year_id, budget_id (FK), requested_by (FK users), title, description, vendor, estimated_amount `Numeric(12,2)`, actual_amount `Numeric(12,2)` (nullable), status (enum), priority, approved_by (FK users, nullable), approved_at, ordered_at, received_at, paid_at, denial_reason, notes, receipt_url (typed link, HTTP(S) only), receipt_document_id (FK documents, SET NULL — the uploaded receipt), created_at, updated_at
 
 Enums:
 
@@ -294,7 +1060,7 @@ Pages:
 **Additional tables in `finance.py`:**
 
 - **`expense_reports`** — id, organization_id, report_number (auto: "ER-YYYY-0001"), submitted_by (FK users), fiscal_year_id, title, description, total_amount `Numeric(12,2)`, status (enum), approved_by (FK users, nullable), approved_at, paid_at, payment_method, notes, created_at, updated_at
-- **`expense_line_items`** — id, expense_report_id (FK), budget_id (FK, nullable), description, amount `Numeric(12,2)`, date_incurred, category, receipt_url, merchant
+- **`expense_line_items`** — id, expense_report_id (FK), budget_id (FK, nullable), description, amount `Numeric(12,2)`, date_incurred, category, receipt_url (typed link, HTTP(S) only), receipt_document_id (FK documents, SET NULL), merchant
 - **`check_requests`** — id, organization_id, request_number (auto: "CK-YYYY-0001"), requested_by (FK users), fiscal_year_id, budget_id (FK), payee_name, payee_address, amount `Numeric(12,2)`, memo, purpose, status (enum), approved_by, approved_at, check_number (nullable — filled after cut), check_date, notes, created_at, updated_at
 
 Enums:
@@ -365,7 +1131,7 @@ Enums:
 - `GET/POST /finance/dues-schedules`
 - `GET/PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
-- `GET /finance/dues` (list with member/status filters)
+- `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
 - `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
@@ -419,18 +1185,32 @@ Pages:
 
 **QuickBooks Export:**
 
-- **`export_mappings`** table — id, organization_id, internal_category (budget_category name), qb_account_name, qb_account_number, mapping_type (EXPENSE, INCOME, ASSET), created_at, updated_at
+- **`export_mappings`** table — id, organization_id, internal_category (budget_category name), qb_account_name, qb_account_number, qb_offset_account_name _(2026-10-08)_, mapping_type (EXPENSE, INCOME, ASSET), created_at, updated_at
 - **`export_logs`** table — id, organization_id, export_type, date_range_start, date_range_end, record_count, file_format (CSV, IIF), exported_by, exported_at
 
 **Endpoints:**
 
 - `GET/POST/PUT /finance/export/mappings` — manage QB account mappings
+- `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
+- `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category` or `mapping`), the offset account and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own classifier (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range
-- `GET /finance/export/logs` — export history
+- `GET /finance/export/logs` — export history, newest first. Each row carries `exportedByName` _(2026-10-11)_; read by **Export history** on **Finance › QuickBooks Export**
 
 Export format:
 
-- **CSV** (Phase 5 MVP): Date, Type, Num, Name, Memo, Account, Debit, Credit — standard QuickBooks import format. _(2026-09-25)_ **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
+- **CSV — QuickBooks Online journal-entry import** _(2026-10-08)_. Columns `Journal No, Journal Date, Memo, Account Name, Debits, Credits, Description`, the names the QuickBooks Online **Journal Entries** importer maps by. Every transaction is a balanced entry: a debit to its budget category's account and an equal credit to the offset account it was paid from, both under the transaction's request number (`PR-…`, `CR-…`, `ER-…`, unique across types). An expense report is one entry with a pair of lines per line item, each charged to its own budget line. Paid purchase requests, issued check requests and paid expense reports are exported; dues are not (see `docs/KNOWN_LIMITATIONS.md`).
+  - **Accounts.** The debit account is the category's `qb_account_name`, or else the account on the export mapping whose `internal_category` matches the category name (trimmed, case-insensitive). The credit account is that mapping's `qb_offset_account_name`. Subaccounts are written `Parent:Child`, the way QuickBooks expects them.
+  - **Refusal.** If any transaction in the range has no budget line, or its category has no account, no offset account, more than one matching mapping, or an account the import cannot post to (below), the export is refused with a 400 naming the problems. Nothing is logged and no file is produced. A partial file would leave the books silently short, which is worse than no file.
+  - **Intuit's import rules** _(checked against Intuit's "Import journal entries" help, 2026-10-09)_:
+    - **Fewer than 1,000 rows per file**, header included. Each transaction or expense line is two rows, so `generate_export` refuses (400) a period that would reach `QB_IMPORT_MAX_ROWS` (999) and asks for a shorter one. It does not split: a split could separate an expense report's lines into two files, and each file must balance per Journal No.
+    - **Accounts Payable and Accounts Receivable need a Name** (a vendor or customer) on every line, which the export has no column for. `_refuse_name_required` refuses them as a category's `qb_account_name` or a mapping's account or offset (400), and `_classify_category_accounts` reports a stored one as `payable_receivable`, so readiness shows it and the export refuses it. It recognizes QuickBooks' standard account names by prefix (`Accounts Payable…`, `Accounts Receivable…`, including their subaccounts); a renamed one is not caught, which the settings page's checklist covers.
+    - **Accounts must exist; subaccounts are `Parent:Child`; account numbers should be off during import; the duplicate-journal-number warning must be off** (every entry carries its request number). These are QuickBooks settings, listed on the settings page and in the training guide.
+    - Journal numbers are request numbers (`PR-2026-0001`, 12 characters), well within the 21 characters connector documentation gives as QuickBooks' limit. A void's reversing entry adds `-V` (14 characters).
+  - **Sent once** _(2026-10-11, migration `3f3bd6f3c7e4`)_. QuickBooks imports a second copy of an entry without complaint (the duplicate-number warning has to be off for this import), so the export keeps the books single. `purchase_requests`, `expense_reports` and `check_requests` carry `qb_exported_at` and `qb_export_log_id` (`SET NULL` to `finance_export_logs`); `generate_export` leaves out a stamped payment unless `include_exported` (`includeExported` on `POST /finance/export/transactions`) asks to send the period again, which restamps what it sends. Payments are stamped (`_stamp_exported`) only after the last row is produced, in the same commit that marks the log `successful`: an interrupted stream stamps nothing, so its payments go out with the next export. An expense report is stamped as a whole. PR, check and report responses report `qbExportedAt`, and the three detail pages show **Sent to QuickBooks**.
+  - **Voided checks are reversed** _(2026-10-11)_. `void_check` records `voided_at`. A check voided after an export carried it gets a reversing entry in the export whose period covers the void date: Journal No `CR-…-V`, dated the void day, memo `Void: …`, description `… voided`, with the debit and credit swapped so the money goes back to the account the check was drawn on. It posts to the accounts the original entry used, stored on the check when it was exported (`qb_export_account`, `qb_export_offset_account`), not to whatever the category maps to by then; a check exported before this change has none stored and is reversed against the category's current accounts. `qb_void_exported_at` / `qb_void_export_log_id` stamp the reversal so it goes out once. A check voided before any export carried it is in neither file. Reversals come last in the file, so a check exported and voided within one period is posted before it is reversed. Sending a period again (`include_exported`) reproduces what was sent for it: a check voided since still has its original entry in that period's file.
+  - **One export at a time** _(2026-10-11)_. Two exports running together would each pick the payments the other had not stamped yet. `_begin_export` takes the department's `quickbooks_export` lock (`app/utils/org_locks.py`) and refuses (**409** "Another QuickBooks export is still being prepared…", `ExportInProgressError`) while a `pending` transactions export younger than `QB_EXPORT_IN_PROGRESS_WINDOW` (15 minutes) exists; its read is a locking read, so it sees one committed while it waited (CLAUDE.md pitfall #27). An export a crashed process left pending stops blocking after the window.
+  - **Upgrade backfill.** The migration stamps what earlier successful exports carried: for each, oldest first, every payment paid (or check issued) in its date range no later than the export itself, and a check voided since only if it was voided after that export — its reversal then goes out with the next export covering the void date. `voided_at` is filled from `updated_at` for checks already voided. Partial and failed exports stamp nothing.
+  - **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward
 
@@ -440,7 +1220,13 @@ Pages:
 
 - `FinanceDashboardPage` (enhance from Phase 1) — budget gauges, approval queue, dues health, recent activity
 - `FinanceReportsPage` — `/finance/reports` — report selector with filters and export buttons
-- `ExportSettingsPage` — `/finance/export` — QB mapping configuration + export wizard (protected: `finance.manage`)
+- `QuickBooksExportSettingsPage` — `/finance/settings/quickbooks` _(built 2026-10-09)_ — QB mapping configuration (protected: `finance.manage`). Two tables:
+  - **Budget categories** — every category with the account it posts to (and whether the category or its mapping supplies it), the account it is paid from, and a status: Ready, No account, No paid-from account, or More than one mapping. This is `GET /finance/export/readiness`, computed by `_classify_category_accounts` — the same function the export runs — so a category shown Ready is one the export accepts; the page decides nothing itself. Each row offers Add mapping or Edit mapping.
+  - **Mappings** — every mapping, with edit and delete (confirmed first). A mapping whose `internal_category` names no budget category is flagged from the readiness report's `unmatchedMappingIds`, since the export never uses it.
+  - The mapping dialog picks the category from the department's categories rather than taking typed text (the export matches by name, so a misspelling matches nothing) and requires the paid-from account, which the export cannot do without even though the API accepts a mapping lacking one.
+  - The budget category dialog on Finance Settings carries the category's own **QuickBooks account** (`qbAccountName`), which takes precedence over its mapping's account.
+  - A checklist of QuickBooks' own import requirements closes the page _(2026-10-09)_, and a category posting to Accounts Payable or Receivable is shown as **Payable/receivable account**.
+- Export wizard (run an export for a date range, export history) — not built; see `docs/KNOWN_LIMITATIONS.md`
 
 ---
 

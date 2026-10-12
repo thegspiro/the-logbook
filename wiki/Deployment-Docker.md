@@ -81,6 +81,34 @@ FRONTEND_PORT=3000
 BACKEND_PORT=3001
 ```
 
+### How `.env` reaches the backend
+
+`.env` is read by Docker Compose, not by the backend: it is not copied into
+the image. Compose hands the backend only the variables named in the backend
+service's `environment:` block. Since 2026-10-06 that block in each shipped
+compose file names every backend setting, defaulting each one to the
+application's own default, so any backend setting in `.env.example.full` can be
+set from `.env`. Before that, only about a fifth of them reached the backend
+and the rest were silently ignored — see `docs/UPGRADING.md` before upgrading
+an existing install.
+
+The exceptions are pinned by the compose file: `DB_HOST`, `DB_PORT`,
+`REDIS_HOST` and `REDIS_PORT` point at the bundled `mysql` and `redis`
+services whatever `.env` says, and `VERSION` comes from the image. To use a
+database and Redis outside the stack instead, layer
+`docker-compose.external-services.yml` — see
+[External database and Redis](#external-database-and-redis) below.
+Variables that are not backend settings (`MYSQL_ROOT_PASSWORD`, `MINIO_*`,
+`ELASTIC_PASSWORD`) go only to their own services.
+
+Apply a change to `.env` with `docker compose up -d`, which recreates the
+containers whose configuration changed. `docker compose restart` keeps the
+old environment. To see what the backend will receive:
+
+```bash
+docker compose config | grep SMTP_HOST
+```
+
 ### Frontend Environment
 
 Create `frontend/.env`:
@@ -101,6 +129,7 @@ VITE_API_URL=/api/v1
 | Backend  | logbook-backend  | 3001            | FastAPI application       |
 | MySQL    | logbook-db       | 3306 (internal) | Database                  |
 | Redis    | logbook-redis    | 6379 (internal) | Cache & sessions          |
+| ClamAV   | logbook-clamav   | 3310 (internal) | Malware scanning          |
 
 ### Optional Services (Profiles)
 
@@ -113,6 +142,14 @@ VITE_API_URL=/api/v1
 
 Enable a profile: `docker compose --profile with-search up -d`
 
+> **ClamAV is not optional** _(2026-10-08)_. Every uploaded file is scanned
+> before it is stored, so the `clamav` service starts with the rest of the
+> stack and `CLAMAV_ENABLED` defaults to `true`. clamd keeps its signatures in
+> memory (budget 1.5–3 GB of RAM) in the `clamav_data` volume and takes a few
+> minutes to become healthy on first start; until then uploads get a retryable 503. Its port is not published. Setting `CLAMAV_ENABLED=false` accepts files
+> unscanned behind a standing administrator warning. Details:
+> [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+
 > **The `production` profile's nginx** _(2026-09-30)_ reads
 > `infrastructure/nginx/docker.conf` and will not start without
 > `fullchain.pem` and `privkey.pem` in `infrastructure/nginx/ssl/`. On its own
@@ -121,7 +158,9 @@ Enable a profile: `docker compose --profile with-search up -d`
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
 > in `.env`; `install.sh` and `universal-install.sh` respect that pin and stop
 > before building if the certificate is missing. Every proxy in the stack now
-> allows 60 MB uploads, matching the backend. Full steps, including Let's
+> allows 60 MB uploads, matching the backend, and bounds each client address at
+> 400 concurrent requests and 50 API requests a second (burst 600, first 100
+> undelayed) — sized for a station's members sharing one address. Full steps, including Let's
 > Encrypt: [DEPLOYMENT.md](../docs/DEPLOYMENT.md#docker-compose-production-profile).
 
 > **Note:** Optional services use default values for credentials. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in `.env` if you enable the `with-s3` profile in production.
@@ -221,6 +260,53 @@ docker-compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 ```
 
 Uses MariaDB 10.11+ instead of MySQL 8.0 for ARM compatibility.
+
+---
+
+## External Database and Redis
+
+To run against MySQL and Redis that this stack does not start — Amazon RDS and
+ElastiCache, another managed service, or servers elsewhere on your network —
+layer `docker-compose.external-services.yml` last:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.external-services.yml up -d
+```
+
+or pin it, so every later command applies it too:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
+```
+
+Add `docker-compose.proxy.yml` before it if you use the bundled nginx. The
+override:
+
+- passes `DB_HOST`, `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` from `.env` to the
+  backend. They have no default here: a missing one stops `docker compose` with
+  a message naming it. Set them to the real endpoints — `localhost` (the
+  `.env.example.full` value) or `mysql` / `redis` (the `.env.example` values)
+  name the backend's own container or services that no longer start;
+- drops the backend's dependency on the bundled `mysql` and `redis`;
+- keeps `mysql`, `redis` and the production `backup` sidecar from starting.
+  Back the database up with the provider's own backups, and the `uploads` and
+  `audit_archives` volumes separately — see "Backups" in the
+  [AWS guide](../docs/deployment/aws.md#method-2-rds).
+
+`MYSQL_ROOT_PASSWORD` must still have a value, because compose reads the
+unused `mysql` definition; it is used for nothing. `REDIS_PASSWORD` is sent to
+the external Redis, so the server must require a password (on ElastiCache, an
+AUTH token). Use TLS to both: `DB_SSL=true`, `REDIS_SSL=true` and their CA
+files (`DB_SSL_CA`, `REDIS_SSL_CA`) as container paths under
+`/etc/ssl/logbook`, which mounts `./infrastructure/certs` (or `SSL_CERTS_DIR`).
+The backend applies migrations to the external database on start, with the
+same TLS settings. Check what will start with
+`docker compose config --services` — `backend` and `frontend`, plus `nginx` or
+`clamav` if you enabled them.
+
+Full AWS walkthrough:
+[AWS Deployment Guide, Method 2](../docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
 
 ---
 

@@ -3,6 +3,11 @@
  *
  * Displays detailed info for a single expense report including
  * line items, approval timeline, and action buttons.
+ *
+ * Each line carries its receipt. On a draft the requester attaches one per
+ * line, and the report cannot be submitted until every line has one (the
+ * API refuses; the page says so beside the button). The report's approvers
+ * read it here too, receipts included.
  */
 
 import React, { useEffect } from 'react';
@@ -10,7 +15,10 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { ReceiptControl } from '../components/ReceiptControl';
+import { expenseReportService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -74,6 +82,7 @@ const ExpenseReportDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { busy, run } = useSubmitGuard();
   const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
+  const access = useFinanceRequestAccess();
 
   useEffect(() => {
     if (id) {
@@ -128,7 +137,19 @@ const ExpenseReportDetailPage: React.FC = () => {
     );
   }
 
-  const canSubmit = er.status === ExpenseReportStatus.DRAFT;
+  // Submitting is the requester's action (or the finance office's).
+  const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
+  // Every line needs an uploaded receipt before the report is submitted;
+  // the API refuses otherwise, and this says why beside the button.
+  const missingReceipts = er.lineItems.filter((item) => !item.receiptDocumentId).length;
+  // Mirrors _ER_RECEIPT_OPEN_TO_REQUESTER / _ER_RECEIPT_CLOSED in
+  // backend/app/api/v1/endpoints/finance.py: a requester changes receipts only
+  // while the report is editable; the finance office until it is closed out.
+  const canAttachReceipt =
+    access.canActAsRequester(er.submittedBy) &&
+    (access.canManage
+      ? er.status !== ExpenseReportStatus.DENIED && er.status !== ExpenseReportStatus.CANCELLED
+      : er.status === ExpenseReportStatus.DRAFT || er.status === ExpenseReportStatus.SUBMITTED);
 
   return (
     <div className="space-y-6">
@@ -165,10 +186,17 @@ const ExpenseReportDetailPage: React.FC = () => {
             <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canSubmit && missingReceipts > 0 && (
+              <p id="expense-receipts-needed" className="text-xs text-amber-800 dark:text-amber-300">
+                Attach a receipt to {missingReceipts === 1 ? 'the remaining line' : `${String(missingReceipts)} lines`}{' '}
+                before submitting.
+              </p>
+            )}
             {canSubmit && (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || missingReceipts > 0}
+                aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -206,6 +234,12 @@ const ExpenseReportDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm capitalize">{er.paymentMethod}</p>
             </div>
           )}
+          {er.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
+            </div>
+          )}
         </div>
 
         {er.description && (
@@ -237,6 +271,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
                     Type
                   </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                    Receipt
+                  </th>
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
                     Amount
                   </th>
@@ -249,6 +286,23 @@ const ExpenseReportDetailPage: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
                       {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
+                        <ReceiptControl
+                          subject={item.description}
+                          receiptFileUrl={item.receiptFileUrl}
+                          receiptUrl={item.receiptUrl}
+                          canAttach={canAttachReceipt}
+                          onUpload={async (file) => {
+                            await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
+                            await fetchExpenseReport(er.id);
+                          }}
+                          onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
+                        />
+                      ) : (
+                        <span className="text-theme-text-muted">--</span>
+                      )}
+                    </td>
                     <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
                       {formatCurrency(item.amount)}
                     </td>
@@ -257,7 +311,7 @@ const ExpenseReportDetailPage: React.FC = () => {
               </tbody>
               <tfoot>
                 <tr className="border-theme-surface-border border-t-2">
-                  <td colSpan={2} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
+                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
                     Total
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
@@ -275,6 +329,8 @@ const ExpenseReportDetailPage: React.FC = () => {
         entityId={er.id}
         status={er.status}
         approvalStepCount={er.approvalSteps.length}
+        awaitingSecondApproval={er.awaitingSecondApproval}
+        firstApprovedBy={er.firstApprovedBy}
         requesterId={er.submittedBy}
         onDecided={() => void fetchExpenseReport(er.id)}
       />

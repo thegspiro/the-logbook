@@ -39,7 +39,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
 from app.schemas.documents import FoldersListResponse
 from app.schemas.facilities import (  # Facility Type; Facility Status; Main Facility; Photos; Documents; Maintenance Types; Maintenance Records; Systems; Inspections; Utility Accounts; Access Keys; Rooms; Emergency Contacts; Shutoff Locations; Capital Projects; Insurance Policies; Occupants; Compliance Checklists
@@ -130,6 +130,27 @@ _SENSITIVE_READ_PERMISSIONS = (
     "facilities.edit",
     "facilities.manage",
 )
+
+
+async def _is_own_general_upload(
+    documents: DocumentsService, document, current_user: User, organization_id
+) -> bool:
+    """Whether *document* is the caller's own upload sitting in General.
+
+    The facility Files tab uploads through the Documents module with no folder
+    and then files the reference here, which moves the document behind the
+    facility's rights. An upload with no folder now lands in General
+    Documents rather than staying unfiled, so that upload has to be
+    recognised here too or every facility file would stay readable org-wide.
+    Limited to the caller's own upload: moving it is a write the caller could
+    already make through PATCH /documents, and a shared library document
+    someone else filed is never pulled behind facility rights by being
+    referenced.
+    """
+    if document.folder_id is None or str(document.uploaded_by) != str(current_user.id):
+        return False
+    general = await documents.general_root(organization_id)
+    return general is not None and str(document.folder_id) == str(general.id)
 
 
 async def _validate_shared_document_reference(
@@ -243,7 +264,9 @@ async def _validate_shared_document_reference(
         # Deliberately indistinguishable from a missing same-org document.
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if document.folder_id is None:
+    if document.folder_id is None or await _is_own_general_upload(
+        documents, document, current_user, organization_id
+    ):
         document.folder_id = folder.id
         # FAC-31: flush, never commit -- a commit here would release the
         # document's FOR UPDATE lock before the caller has actually filed
@@ -271,7 +294,7 @@ def _facility_response_for(facility, current_user: User) -> FacilityResponse:
     even those currently reachable only with edit/manage — so a future
     relaxation of a route's permission gate cannot silently reopen the leak.
     """
-    payload = FacilityResponse.model_validate(facility)
+    payload: FacilityResponse = FacilityResponse.model_validate(facility)
     if not any(
         user_has_permission(current_user, permission)
         for permission in _SENSITIVE_READ_PERMISSIONS
@@ -711,7 +734,7 @@ async def create_facility(
     service = FacilitiesService(db)
 
     try:
-        facility = await service.create_facility(
+        created = await service.create_facility(
             facility_data=facility_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
@@ -722,9 +745,12 @@ async def create_facility(
         )
 
     # Reload with relations
-    facility = await service.get_facility(
-        facility_id=facility.id,
-        organization_id=current_user.organization_id,
+    facility = ensure_found(
+        await service.get_facility(
+            facility_id=created.id,
+            organization_id=current_user.organization_id,
+        ),
+        "Facility",
     )
 
     return _facility_response_for(facility, current_user)
@@ -1330,7 +1356,7 @@ async def create_facility_maintenance_record(
     service = FacilitiesService(db)
 
     try:
-        record = await service.create_maintenance_record(
+        created = await service.create_maintenance_record(
             maintenance_data=maintenance_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
@@ -1341,12 +1367,13 @@ async def create_facility_maintenance_record(
         )
 
     # Reload with relationships for response serialization
-    record = await service.get_maintenance_record(
-        record_id=record.id,
-        organization_id=current_user.organization_id,
+    return ensure_found(
+        await service.get_maintenance_record(
+            record_id=created.id,
+            organization_id=current_user.organization_id,
+        ),
+        "Maintenance record",
     )
-
-    return record
 
 
 @router.get(

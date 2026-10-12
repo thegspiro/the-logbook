@@ -185,7 +185,10 @@ class DocumensoService:
                 json=payload,
             )
             if 200 <= response.status_code < 300:
-                return response.json()
+                body = response.json()
+                if not isinstance(body, dict):
+                    raise Exception("Documenso returned an unexpected document body")
+                return body
             logger.error(
                 "Documenso create document failed {}: {}",
                 response.status_code,

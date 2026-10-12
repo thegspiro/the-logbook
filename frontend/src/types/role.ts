@@ -16,6 +16,8 @@ export interface Role {
   priority: number;
   created_at: string;
   updated_at: string;
+  /** How many members hold the position; sent by `GET /roles` (`include_user_count`, default on). */
+  user_count?: number | undefined;
 }
 
 export interface Permission {

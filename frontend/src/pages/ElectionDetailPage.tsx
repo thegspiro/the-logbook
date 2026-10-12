@@ -21,7 +21,6 @@ import type {
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
-import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
@@ -32,6 +31,7 @@ import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
+import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
@@ -45,6 +45,7 @@ import {
   getStatusBadgeClass,
   getVictoryDescription,
   describePackageSendError,
+  electionCanEmailBallots,
 } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
@@ -97,10 +98,10 @@ export const ElectionDetailPage: React.FC = () => {
   // A CLOSED -> OPEN rollback with no recorded votes regenerates the anonymity
   // salt and expires every issued ballot token, so the "Ballots sent" stamp
   // beside Resend is true and useless at once: the links in those emails are
-  // dead. Neither the rollback response nor GET /elections/{id} carries
-  // `ballots_must_be_resent` (it lives in rollback_history, exposed only via
-  // forensics), so the page derives it from the same facts the backend
-  // decides on and holds it until ballots go out again or the page reloads.
+  // dead. GET /elections/{id} now reports `ballots_must_be_resent` (W50-47),
+  // but the rollback response is the election before that fetch, so the
+  // page also derives it from the same facts the backend decides on and
+  // holds it until ballots go out again.
   const [ballotsMustBeResent, setBallotsMustBeResent] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
@@ -236,7 +237,13 @@ export const ElectionDetailPage: React.FC = () => {
     if (!electionId) return;
 
     try {
-      setLoading(true);
+      // The skeleton replaces the whole page, which unmounts every tab panel
+      // and the state it holds — including the vote receipt ElectionBallot has
+      // just shown (W50-53). Show it only until this election has loaded
+      // once; a refetch after a vote, a close or a publish updates in place.
+      if (!election || election.id !== electionId) {
+        setLoading(true);
+      }
       setError(null);
       const data = await electionService.getElection(electionId);
       setElection(data);
@@ -366,9 +373,19 @@ export const ElectionDetailPage: React.FC = () => {
     // ahead, moves it to now (W50-56) — say so before the click, and say
     // that ballots are a separate send, which the manual once got wrong.
     const startIsAhead = new Date(election.start_date).getTime() > Date.now();
-    const openMessage = startIsAhead
-      ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
-      : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.';
+    // The emailed ballot carries ballot items and plain positions; an
+    // election with neither (candidates with no race) cannot mail a ballot,
+    // and the ballot locks on opening — say so while it can still be changed
+    // (W50-11, owner decision 2026-10-05).
+    const emailBallotsImpossible = !electionCanEmailBallots(election);
+    const emailWarning = emailBallotsImpossible
+      ? ' This election has no ballot items or positions, so ballot emails cannot be sent once it opens and members can vote in the app only. To email ballots, add the races in the Ballot Builder before opening.'
+      : '';
+    const openMessage =
+      (startIsAhead
+        ? `Open voting now? The scheduled start (${formatDateTime(election.start_date, tz)}) moves to now, the voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.`
+        : 'Open voting now? The voter roll is frozen and the ballot locks. Ballot emails are not sent by this step — use Send Ballot Emails afterwards.') +
+      emailWarning;
     if (
       !(await confirm({
         title: 'Open election',
@@ -458,7 +475,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.closeNominations(electionId);
       setElection(updated);
-      toast.success('Nominations closed — finalize the ballot, then open voting');
+      toast.success('Nominations closed — the slate is final. Order the ballot, then open voting');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close nominations'));
     }
@@ -1018,7 +1035,7 @@ export const ElectionDetailPage: React.FC = () => {
   const isDraft = election.status === ElectionStatus.DRAFT;
   const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
-  const hasBallotItems = (election.ballot_items?.length ?? 0) > 0;
+  const canEmailBallots = electionCanEmailBallots(election);
 
   // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
@@ -1205,26 +1222,51 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Dead ballot links after a rollback — persists until ballots are resent */}
-        {canManage && ballotsMustBeResent && election.status === ElectionStatus.OPEN && (
-          <div className="alert-warning mb-6" role="alert" data-testid="rollback-resend-banner">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                  Every ballot link already sent was invalidated by the rollback
-                </h3>
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
-                  {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer work.
-                  Resend ballots so members can vote.
-                </p>
+        {/* Dead ballot links — persists until ballots are resent. The server
+            reports it (ballots_must_be_resent) for a reopen (W50-36) or a
+            ballot change (W50-47); the local flag covers the moment between
+            the rollback response and the next fetch. */}
+        {canManage &&
+          (ballotsMustBeResent || election.ballots_must_be_resent) &&
+          (election.status === ElectionStatus.OPEN || election.status === ElectionStatus.DRAFT) && (
+            <div className="alert-warning mb-6" role="alert" data-testid="rollback-resend-banner">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex-1">
+                  {!ballotsMustBeResent && election.ballots_resend_reason === 'ballot_changed' ? (
+                    <>
+                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        Every ballot link already sent was invalidated because the ballot changed
+                      </h3>
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        The links in the ballot emails sent{' '}
+                        {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} showed the old
+                        ballot, so they no longer work.{' '}
+                        {election.status === ElectionStatus.OPEN
+                          ? 'Resend ballots so members get the current ballot.'
+                          : 'Send ballots again once voting is open.'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        Every ballot link already sent was invalidated by the rollback
+                      </h3>
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
+                        {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer
+                        work. Resend ballots so members can vote.
+                      </p>
+                    </>
+                  )}
+                </div>
+                {election.status === ElectionStatus.OPEN && (
+                  <button type="button" onClick={() => setShowSendEmailModal(true)} className="btn-primary text-sm">
+                    Resend Ballot Emails
+                  </button>
+                )}
               </div>
-              <button type="button" onClick={() => setShowSendEmailModal(true)} className="btn-primary text-sm">
-                Resend Ballot Emails
-              </button>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Skipped Voters Banner — persists until dismissed */}
         {canManage && lastSkippedDetails.length > 0 && (
@@ -1311,6 +1353,14 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="text-theme-text-muted text-sm">Winner</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">{getVictoryDescription(election)}</div>
             </div>
+            {(election.seats_per_position ?? 1) > 1 && (
+              <div>
+                <div className="text-theme-text-muted text-sm">Seats per Race</div>
+                <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                  {`${election.seats_per_position} elected per race`}
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
               <div className="text-theme-text-primary mt-1 text-sm font-medium">
@@ -1461,6 +1511,16 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Lifecycle Actions */}
               <div>
                 <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Lifecycle</h4>
+                {/* open_election refuses a draft with no accepted candidate or
+                    ballot item, and opening never emails ballots, so a first
+                    election stalls at one or the other without this. */}
+                {election.status === ElectionStatus.DRAFT && (
+                  <p className="text-theme-text-secondary mb-3 text-sm">
+                    Next: add at least one candidate on the Candidates tab, or a ballot item on the Ballot tab, then
+                    select Open Election. Opening does not email ballots; send them with Send Ballot Emails once voting
+                    is open.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {election.ballot_items && election.ballot_items.length > 0 && (
                     <button
@@ -1636,21 +1696,29 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && (
                       <button
                         onClick={() => setShowSendEmailModal(true)}
-                        disabled={!hasBallotItems}
-                        aria-describedby={hasBallotItems ? undefined : 'send-ballot-unavailable'}
+                        disabled={!canEmailBallots}
+                        aria-describedby={canEmailBallots ? undefined : 'send-ballot-unavailable'}
                         className="btn-primary text-sm"
                       >
                         {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                       </button>
                     )}
-                    {/* The emailed ballot page votes on ballot items only, and the
-                        ballot is locked while voting is open. The reason used to
-                        be a hover title on a disabled button, which a phone, a
-                        keyboard and a screen reader never show. */}
-                    {election.status === ElectionStatus.OPEN && !hasBallotItems && (
+                    {/* The emailed ballot carries ballot items and plain positions.
+                        The reason used to be a hover title on a disabled button,
+                        which a phone, a keyboard and a screen reader never show. */}
+                    {/* The sent stamp below only appears after a send; without
+                        this an opened election looks finished while no member
+                        has been told voting is open. */}
+                    {election.status === ElectionStatus.OPEN && canEmailBallots && !election.email_sent && (
+                      <p className="text-theme-text-secondary w-full text-sm">
+                        Ballots have not been emailed yet. Members can already vote on this page; Send Ballot Emails
+                        tells them voting is open and gives each a ballot link.
+                      </p>
+                    )}
+                    {election.status === ElectionStatus.OPEN && !canEmailBallots && (
                       <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
-                        Ballot emails need ballot items, and the ballot cannot change while voting is open. Members can
-                        vote in the app.
+                        Ballot emails need ballot items or positions, and the ballot cannot change while voting is open.
+                        Members can vote in the app.
                       </p>
                     )}
                     {/* email_sent_at is the ballot-send stamp only: a reminder
@@ -1697,7 +1765,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Danger Zone */}
               {election.status !== ElectionStatus.CANCELLED && (
                 <div>
-                  <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-500 uppercase dark:text-red-400">
+                  <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-800 uppercase dark:text-red-300">
                     Danger Zone
                   </h4>
                   <button
@@ -1720,9 +1788,7 @@ export const ElectionDetailPage: React.FC = () => {
         <RunoffChain election={election} />
 
         {/* Publish Results Panel (secretary - open/closed elections) */}
-        {canManage && electionId && (
-          <PublishResultsPanel electionId={electionId} election={election} onUpdate={setElection} />
-        )}
+        {canManage && electionId && <PublishResultsPanel electionId={electionId} election={election} />}
 
         {/* Live turnout dashboard (secretary, meeting night) */}
         {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (
@@ -2009,6 +2075,19 @@ export const ElectionDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {/* A sanctioned void stays in the chain and is verified
+                          with it, so it is listed here rather than reading as
+                          a broken chain (W50-31). */}
+                      {(integrityResult.voids ?? []).length > 0 && (
+                        <ul className="text-theme-text-secondary mt-3 space-y-1 text-sm" data-testid="integrity-voids">
+                          {(integrityResult.voids ?? []).map((v) => (
+                            <li key={`${v.voided_by ?? ''}-${v.reason}-${v.voided_at ?? ''}`}>
+                              {v.count} vote(s) voided by {v.voided_by_name || 'an officer'}:{' '}
+                              {v.reason || 'no reason recorded'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {integrityResult.tampered_vote_ids.length > 0 && (
                         <div className="mt-3 rounded-sm bg-red-500/20 p-3">
                           <p className="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">
@@ -2247,7 +2326,7 @@ export const ElectionDetailPage: React.FC = () => {
                         ) : (
                           <div className="max-h-64 overflow-x-auto overflow-y-auto">
                             <table className="min-w-full text-sm" aria-label="Audit log entries">
-                              <thead className="bg-theme-surface-secondary sticky top-0">
+                              <thead className="surface-secondary-opaque sticky top-0">
                                 <tr>
                                   <th
                                     scope="col"

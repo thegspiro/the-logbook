@@ -91,9 +91,11 @@ So an officer excusing a member from meetings also excused every shift, and noth
   - the four history filters (28px);
   - member-name links (16–40px).
 
-### W13-5 — LOW — Whether a waiver should cover meetings and shifts separately — FLAGGED
+### W13-5 — LOW — Whether a waiver should cover meetings and shifts separately — ACCEPTED
 
 W13-1 made the form honest about what a leave does. Whether a department should be able to excuse meetings without excusing shifts (or the reverse) is a product decision. It would need a field on `member_leaves_of_absence` and a migration, plus a change to each reader that consults leaves. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+**Owner decision (2026-10-05): leave as is — one combined waiver.** The UI already says what a leave covers, and no department has asked for the split. No code change.
 
 Seen and left:
 

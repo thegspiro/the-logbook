@@ -11,7 +11,16 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -40,13 +49,15 @@ from app.models.election import (
 )
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     AttendeeListResponse,
     AttestManualBallotsResponse,
+    BallotCandidateResponse,
     BallotElectionResponse,
+    BallotItem,
     BallotPreviewResponse,
     BallotSubmission,
     BallotSubmissionResponse,
@@ -77,8 +88,11 @@ from app.schemas.election import (
     ManualBallotBatchListResponse,
     ManualBallotsRequest,
     ManualBallotsResponse,
+    MemberBallotResponse,
+    MemberBallotSubmission,
     MergeWriteInsRequest,
     MergeWriteInsResponse,
+    MyProxyAuthorizationsResponse,
     NominationActionResponse,
     NominationCreate,
     NonVotersResponse,
@@ -103,15 +117,23 @@ from app.schemas.election import (
     VoteResponse,
     VoterOverrideListResponse,
     VoterOverrideRecord,
+    seat_rule_error,
 )
 from app.services.election_service import (
     ElectionService,
     ballot_item_candidate_positions,
     office_ineligible_message,
+    position_ballot_items,
 )
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 router = APIRouter()
+
+# ELEC-12 (owner decision 2026-10-05): every Ballot Builder load returns the
+# whole list, so the bound is on creation rather than on the response — a cap
+# leaves the list contract untouched. 200 is far above any department's real
+# use and keeps the unpaginated list cheap.
+MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200
 
 
 # Rate-limit factories for public ballot endpoints (no auth required).
@@ -169,26 +191,56 @@ async def _load_meeting_for_election(db: AsyncSession, election: Election) -> No
 
 
 async def _validate_election_links(
-    db: AsyncSession, organization_id, meeting_id, event_id
+    db: AsyncSession, organization_id, meeting_id, event_id, eligible_voters=None
 ) -> None:
     """Reject a client-supplied meeting_id/event_id that isn't in the caller's org.
 
     Without this, an admin could point their election at another org's meeting
     or event id and read that org's attendee roster back through the
     import-attendees and election-detail endpoints (XC-1 cross-tenant leak).
+
+    ``eligible_voters`` is a JSON list of member ids. Every reader re-filters it
+    by organization, so a foreign id reaches no one — but it would still be
+    stored as a dangling reference and counted nowhere, silently shrinking the
+    roster the officer believes they set (XC-1).
     """
     if meeting_id:
         await assert_in_org(db, Meeting, meeting_id, organization_id, label="meeting")
     if event_id:
         await assert_in_org(db, Event, event_id, organization_id, label="event")
+    await assert_all_in_org(
+        db, User, eligible_voters, organization_id, label="eligible voter"
+    )
+
+
+def _withholds_live_detail(election: Election, viewer: Optional[User]) -> bool:
+    """Whether ``viewer`` must not see who was sent a ballot or how many
+    have voted (W50-70, owner decision 2026-10-08).
+
+    While voting is open those are the election managers' alone: a member
+    reading the turnout mid-vote (or which named members got a ballot) can
+    act on it, which is why ``/results`` is already refused to them. A
+    ``results_visible_immediately`` election deliberately shows its tally,
+    so its counts stay; the recipient list never does.
+    """
+    return (
+        viewer is not None
+        and election.status == ElectionStatus.OPEN
+        and not user_has_permission(viewer, "elections.manage")
+    )
 
 
 async def _build_election_response(
-    db: AsyncSession, election: Election
+    db: AsyncSession, election: Election, viewer: Optional[User] = None
 ) -> ElectionResponse:
-    """Build an ElectionResponse with meeting details populated."""
+    """Build an ElectionResponse with meeting details populated.
+
+    ``viewer`` is the caller on a route an ``elections.view`` member can
+    reach; the open election's recipient list, voter list and (unless the
+    results are public) live counts are then withheld (W50-70).
+    """
     await _load_meeting_for_election(db, election)
-    response = ElectionResponse.model_validate(election)
+    response: ElectionResponse = ElectionResponse.model_validate(election)
     # `total_votes`, `total_voters` and `voter_turnout_percentage` are declared
     # on the response but are not columns, so validating off the ORM row left
     # all three null on every detail fetch. The Publish Results panel reads
@@ -201,6 +253,10 @@ async def _build_election_response(
         election, UUID(str(election.organization_id))
     )
     response.closed_by_name = await ElectionService(db).closed_by_name(election)
+    (
+        response.ballots_must_be_resent,
+        response.ballots_resend_reason,
+    ) = await ElectionService(db).ballot_resend_state(election)
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
@@ -208,6 +264,15 @@ async def _build_election_response(
             if hasattr(election.meeting.meeting_type, "value")
             else election.meeting.meeting_type
         )
+    if _withholds_live_detail(election, viewer):
+        response.email_recipients = None
+        response.eligible_voters = None
+        response.ballots_must_be_resent = False
+        response.ballots_resend_reason = None
+        if not election.results_visible_immediately:
+            response.total_votes = None
+            response.total_voters = None
+            response.voter_turnout_percentage = None
     return response
 
 
@@ -298,8 +363,14 @@ async def list_elections(
                 start_date=election.start_date,
                 end_date=election.end_date,
                 status=election.status.value,
+                closed_at=election.closed_at,
                 positions=election.positions,
-                total_votes=vote_counts_map.get(election.id, 0),
+                total_votes=(
+                    None
+                    if _withholds_live_detail(election, current_user)
+                    and not election.results_visible_immediately
+                    else vote_counts_map.get(election.id, 0)
+                ),
                 meeting_id=election.meeting_id,
                 meeting_title=meeting_info.get("title"),
                 meeting_date=meeting_info.get("meeting_date"),
@@ -343,6 +414,7 @@ async def create_election(
             current_user.organization_id,
             election_data.get("meeting_id"),
             election_data.get("event_id"),
+            election_data.get("eligible_voters"),
         )
     except ValueError as e:
         raise HTTPException(
@@ -442,6 +514,28 @@ async def save_ballot_template(
     result fields, preventing a template from becoming a route for copying
     sensitive or stateful election data.
     """
+    # Pitfall #27: lock the organization row so two saves arriving together
+    # cannot both read 199 and land at 201, and count with a locking read so
+    # the count is not answered from a snapshot older than the lock.
+    await db.execute(
+        select(Organization.id)
+        .where(Organization.id == str(current_user.organization_id))
+        .with_for_update()
+    )
+    existing = await db.execute(
+        select(SavedBallotTemplate.id)
+        .where(SavedBallotTemplate.organization_id == str(current_user.organization_id))
+        .with_for_update()
+    )
+    if len(existing.scalars().all()) >= MAX_SAVED_BALLOT_TEMPLATES_PER_ORG:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This organization has reached the maximum of "
+                f"{MAX_SAVED_BALLOT_TEMPLATES_PER_ORG} saved ballot templates. "
+                "Delete one you no longer use before saving another."
+            ),
+        )
     template = SavedBallotTemplate(
         id=str(uuid4()),
         organization_id=str(current_user.organization_id),
@@ -528,7 +622,7 @@ class BallotLookupResponse(BaseModel):
     """Election view + candidates for a token holder, in one round-trip."""
 
     election: BallotElectionResponse
-    candidates: list[CandidateResponse] = []
+    candidates: list[BallotCandidateResponse] = []
     # True for a token minted by send-test-ballot: the page shows a TEST
     # BALLOT banner so a preview is never mistaken for the real thing.
     is_test: bool = False
@@ -561,8 +655,11 @@ async def lookup_ballot_by_token(
     service = ElectionService(db)
     election, voting_token, error = await service.get_ballot_by_token(payload.token)
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or election is None or voting_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     response = BallotElectionResponse.model_validate(election)
 
@@ -641,6 +738,19 @@ async def lookup_ballot_by_token(
     # with a plain `election.positions` entry (ELEC-29): then it is a
     # plain-positional candidate too, and must not be exempted from this
     # filter just because a same-named ballot item also happens to exist.
+    # A plain position is served as a ballot item too, so the page renders
+    # it as a race (ballot convergence, 2026-10-05); before, a voter
+    # eligible only for a plain position opened an empty ballot. Only the
+    # positions this token may vote for are added.
+    position_items = [
+        BallotItem.model_validate(item)
+        for item in position_ballot_items(election)
+        if voting_token.eligible_positions is None
+        or item["position"] in voting_token.eligible_positions
+    ]
+    if position_items:
+        response.ballot_items = list(response.ballot_items or []) + position_items
+
     if voting_token.eligible_positions is not None:
         allowed_positions = set(voting_token.eligible_positions)
         if response.positions is not None:
@@ -659,7 +769,7 @@ async def lookup_ballot_by_token(
 
     return BallotLookupResponse(
         election=response,
-        candidates=[CandidateResponse.model_validate(c) for c in candidates],
+        candidates=[BallotCandidateResponse.model_validate(c) for c in candidates],
         is_test=bool(voting_token.is_test),
     )
 
@@ -705,8 +815,11 @@ async def cast_vote_with_token(
         vote_rank=vote_data.vote_rank,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or vote is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     # Return vote without revealing voter information. The receipt hash lets
     # the voter verify their vote was recorded via GET /{id}/verify-receipt.
@@ -767,8 +880,11 @@ async def submit_ballot_with_token(
             detail="This ballot has already been submitted",
         )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or result is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
 
     return BallotSubmissionResponse(**result)
 
@@ -841,7 +957,6 @@ async def get_election_settings(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    from app.models.user import Organization
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(current_user.organization_id))
@@ -907,7 +1022,6 @@ async def update_election_settings(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    from app.models.user import Organization
 
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(current_user.organization_id))
@@ -1027,7 +1141,19 @@ async def get_election(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    return await _build_election_response(db, election)
+    return await _build_election_response(db, election, viewer=current_user)
+
+
+def _as_update_value(field: str, stored: Any) -> Any:
+    """The stored value in the shape ``ElectionUpdate`` dumps it, so a save
+    that resubmits an unchanged ballot compares equal and does not retire
+    every issued link (W50-47). A stored value the schema no longer accepts
+    compares unequal, which errs toward retiring links — never toward
+    serving a ballot that no longer matches."""
+    try:
+        return ElectionUpdate(**{field: stored}).model_dump(exclude_unset=True)[field]
+    except (ValueError, TypeError, KeyError):
+        return stored
 
 
 @router.patch("/{election_id}", response_model=ElectionResponse)
@@ -1169,6 +1295,7 @@ async def update_election(
         "anonymous_voting",
         "allow_write_ins",
         "max_votes_per_position",
+        "seats_per_position",
         "results_visible_immediately",
         "eligible_voters",
         "voting_method",
@@ -1193,13 +1320,18 @@ async def update_election(
     # Validate a re-pointed meeting/event link is in-org before applying it,
     # so an admin can't repoint their election at another org's meeting/event
     # id and read that org's roster back (XC-1).
-    if update_data.get("meeting_id") or update_data.get("event_id"):
+    if (
+        update_data.get("meeting_id")
+        or update_data.get("event_id")
+        or update_data.get("eligible_voters")
+    ):
         try:
             await _validate_election_links(
                 db,
                 election.organization_id,
                 update_data.get("meeting_id"),
                 update_data.get("event_id"),
+                update_data.get("eligible_voters"),
             )
         except ValueError as e:
             raise HTTPException(
@@ -1229,6 +1361,26 @@ async def update_election(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Percentage quorum cannot exceed 100",
+            )
+
+    # The seat count is checked against the stored half of a partial
+    # update, like quorum above: switching a two-seat race to ranked choice
+    # is refused even when the PATCH names only the method.
+    if {
+        "seats_per_position",
+        "max_votes_per_position",
+        "voting_method",
+        "ballot_items",
+    } & set(update_data):
+        seat_error = seat_rule_error(
+            update_data.get("seats_per_position", election.seats_per_position),
+            update_data.get("max_votes_per_position", election.max_votes_per_position),
+            update_data.get("voting_method", election.voting_method),
+            update_data.get("ballot_items", election.ballot_items),
+        )
+        if seat_error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=seat_error
             )
 
     # A nominee keeps a position string the election no longer lists: the
@@ -1269,11 +1421,24 @@ async def update_election(
                 ),
             )
 
+    # A link serves the ballot snapshotted when it was minted, so a changed
+    # ballot retires every outstanding link and the detail page prompts a
+    # resend (W50-47). Compared by value: the edit form resubmits fields it
+    # did not change.
+    ballot_changed = any(
+        field in update_data
+        and update_data[field] != _as_update_value(field, getattr(election, field))
+        for field in service.BALLOT_SHAPE_FIELDS
+    )
+
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
             setattr(election, field, value)
 
     election.updated_at = datetime.now(timezone.utc)
+    links_invalidated = 0
+    if ballot_changed:
+        links_invalidated = await service.invalidate_tokens_for_ballot_change(election)
 
     await db.commit()
     await db.refresh(election)
@@ -1282,11 +1447,12 @@ async def update_election(
         db=db,
         event_type="election_updated",
         event_category="elections",
-        severity="info",
+        severity="warning" if links_invalidated else "info",
         event_data={
             "election_id": str(election_id),
             "title": election.title,
             "updated_fields": list(update_data.keys()),
+            "ballot_links_invalidated": links_invalidated,
         },
         user_id=str(current_user.id),
     )
@@ -1323,6 +1489,9 @@ async def delete_election(
     election_title = election.title
     election_status = election.status.value
     reason = delete_data.reason if delete_data else None
+    # Set only once the non-draft reason check below has passed; the
+    # leadership alert is sent for exactly those elections.
+    deletion_reason = ""
     notifications_sent = 0
     vote_count = 0
 
@@ -1359,6 +1528,7 @@ async def delete_election(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A reason of at least 10 characters is required to delete a non-draft election",
             )
+        deletion_reason = reason
 
         # Count active votes for audit context
         votes_result = await db.execute(
@@ -1399,7 +1569,7 @@ async def delete_election(
                 election=election,
                 performed_by=current_user.id,
                 organization_id=current_user.organization_id,
-                reason=reason,
+                reason=deletion_reason,
                 vote_count=vote_count,
             )
         except Exception as e:
@@ -1467,11 +1637,12 @@ def _service_error_status(error: str) -> int:
     Rollback while every by-id GET said 404. One definition, so the string
     comparison cannot drift between call sites (Pitfall #29).
     """
-    return (
+    code: int = (
         status.HTTP_404_NOT_FOUND
         if "not found" in error.lower()
         else status.HTTP_400_BAD_REQUEST
     )
+    return code
 
 
 @router.post("/{election_id}/open", response_model=ElectionResponse)
@@ -1491,8 +1662,11 @@ async def open_election(
         election_id, current_user.organization_id
     )
 
-    if error:
-        raise HTTPException(status_code=_service_error_status(error), detail=error)
+    if error or election is None:
+        raise HTTPException(
+            status_code=_service_error_status(error or "An unexpected error occurred"),
+            detail=error or "An unexpected error occurred",
+        )
 
     return await _build_election_response(db, election)
 
@@ -1514,13 +1688,15 @@ async def close_election(
         election_id, current_user.organization_id, closed_by=current_user.id
     )
 
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
 
     return await _build_election_response(db, election)
 
@@ -1547,13 +1723,15 @@ async def open_nominations(
         current_user.organization_id,
         acting_user_id=str(current_user.id),
     )
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, election)
 
 
@@ -1574,13 +1752,15 @@ async def close_nominations(
     election, error = await service.close_nominations(
         election_id, current_user.organization_id
     )
-    if error:
+    if error or election is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, election)
 
 
@@ -1889,13 +2069,15 @@ async def clone_election(
         nomination_deadline=payload.nomination_deadline,
         include_candidates=payload.include_candidates,
     )
-    if error:
+    if error or clone is None:
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if "not found" in error.lower()
+            if error and "not found" in error.lower()
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=error)
+        raise HTTPException(
+            status_code=status_code, detail=error or "An unexpected error occurred"
+        )
     return await _build_election_response(db, clone)
 
 
@@ -2329,6 +2511,28 @@ async def update_candidate(
         )
 
     previous = {field: getattr(candidate, field) for field in CANDIDATE_IDENTITY_FIELDS}
+    # Acceptance goes through the service: it is refused once Close
+    # Nominations has frozen the slate, and a manager accepting a member's
+    # nomination for them is labelled and notified (W50-38).
+    if "accepted" in update_data:
+        accepted = update_data.pop("accepted")
+        if accepted is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="accepted cannot be null",
+            )
+        acceptance_error = await service.set_candidate_acceptance(
+            election, candidate, accepted, str(current_user.id)
+        )
+        if acceptance_error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=acceptance_error
+            )
+    accepted_on_behalf = (
+        previous["accepted"] is False
+        and candidate.accepted
+        and candidate.accepted_on_behalf_by is not None
+    )
     for field, value in update_data.items():
         setattr(candidate, field, value)
 
@@ -2336,6 +2540,10 @@ async def update_candidate(
 
     await db.commit()
     await db.refresh(candidate)
+    if accepted_on_behalf:
+        await service.after_acceptance_on_behalf(
+            election, candidate, str(current_user.id)
+        )
 
     await log_audit_event(
         db=db,
@@ -2421,6 +2629,125 @@ async def delete_candidate(
 # ============================================
 # Voting Endpoints
 # ============================================
+
+
+@router.get("/{election_id}/ballot", response_model=MemberBallotResponse)
+async def get_member_ballot(
+    election_id: UUID,
+    proxy_authorization_id: Optional[str] = Query(default=None, max_length=64),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The in-app ballot for the current member: every ballot item and plain
+    position, the candidates, and per item whether the member may vote on
+    it and whether they already have. With ``proxy_authorization_id`` it is
+    the ballot of the member whose proxy the caller holds.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ballot, error = await service.get_member_ballot(
+        current_user.id,
+        election_id,
+        current_user.organization_id,
+        proxy_authorization_id=proxy_authorization_id,
+    )
+    if error == "Election not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or ballot is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
+
+    election_view = BallotElectionResponse.model_validate(ballot["election"])
+    election_view.ballot_items = [
+        BallotItem.model_validate(item) for item in ballot["ballot_items"]
+    ]
+    return MemberBallotResponse(
+        election=election_view,
+        candidates=[
+            BallotCandidateResponse.model_validate(c) for c in ballot["candidates"]
+        ],
+        items=ballot["items"],
+        proxy=ballot["proxy"],
+    )
+
+
+@router.post(
+    "/{election_id}/ballot",
+    response_model=BallotSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_member_ballot(
+    election_id: UUID,
+    ballot: MemberBallotSubmission,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cast the current member's in-app ballot, or a proxy ballot, atomically.
+
+    Takes the emailed ballot's submission shape (one entry per ballot item).
+    Every selection is recorded through the same checks as a single in-app
+    vote; one refused selection records nothing. An item left on Abstain
+    stays open to vote on later.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    try:
+        result, error = await service.submit_member_ballot(
+            user_id=current_user.id,
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            votes=[v.model_dump() for v in ballot.votes],
+            proxy_authorization_id=ballot.proxy_authorization_id,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except IntegrityError:
+        # The dedup hash caught a vote the checks did not (a race with the
+        # emailed link, say); nothing from this ballot was kept (W50-6).
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Database integrity check: a vote on this ballot was already "
+                "recorded — no votes were recorded"
+            ),
+        )
+    if error == "Election not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return result
+
+
+@router.get(
+    "/{election_id}/ballot/proxies", response_model=MyProxyAuthorizationsResponse
+)
+async def list_my_proxy_authorizations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The proxies the current member holds in this election, for the Cast
+    Vote tab's "voting for" choice.
+
+    **Authentication required**
+    """
+    result = await ElectionService(db).get_my_proxy_authorizations(
+        election_id, current_user.organization_id, current_user.id
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    return result
 
 
 @router.get("/{election_id}/eligibility", response_model=VoterEligibility)
@@ -3291,8 +3618,11 @@ async def check_in_attendee(
         checked_in_by=current_user.id,
     )
 
-    if error:
-        raise HTTPException(status_code=_service_error_status(error), detail=error)
+    if error or attendee is None:
+        raise HTTPException(
+            status_code=_service_error_status(error or "An unexpected error occurred"),
+            detail=error or "An unexpected error occurred",
+        )
 
     # Get updated total
     attendees = await service.get_attendees(election_id, current_user.organization_id)
@@ -3531,8 +3861,9 @@ async def add_voter_override(
     and meeting attendance restrictions.
 
     The override is recorded with a reason and the identity of the officer
-    who granted it.  This does NOT bypass election-level eligible_voters
-    lists, position-specific role requirements, or double-vote prevention.
+    who granted it. On an election restricted to an ``eligible_voters`` list
+    it also admits the member as though they were on it (W50-13). It does
+    NOT bypass double-vote prevention.
 
     Requires `elections.manage` permission.
     """
@@ -3836,6 +4167,11 @@ async def add_proxy_authorization(
     When ballot emails are sent, the proxy holder is automatically CC'd
     on the delegating member's ballot notification.
 
+    On an anonymous election a proxy ballot is attributable: it stores whom
+    it was cast for, and the proxy holder sees the choices. The request must
+    carry `anonymity_acknowledged: true`, recording that the delegating
+    member was told and accepts this; the member is also emailed the notice.
+
     Requires `elections.manage` permission.
     """
     service = ElectionService(db)
@@ -3847,6 +4183,7 @@ async def add_proxy_authorization(
         proxy_type=body.proxy_type,
         reason=body.reason,
         authorized_by=current_user.id,
+        anonymity_acknowledged=body.anonymity_acknowledged,
     )
 
     if error:
@@ -4171,21 +4508,16 @@ async def preview_ballot_for_user(
 # ============================================
 
 
-@router.get("/{election_id}/verify-receipt", response_model=VoteReceiptResponse)
-async def verify_vote_receipt(
-    election_id: UUID,
-    receipt: str,
-    db: AsyncSession = Depends(get_db),
-    _rate: None = Depends(_ballot_read_rate_limit),
-):
-    """
-    Verify a vote receipt hash.
+class VoteReceiptVerifyRequest(BaseModel):
+    """Receipt carried in the request body, so it never lands in an access
+    log, a proxy log or browser history the way a query string does (R-D3,
+    ELEC-14)."""
 
-    This is a public endpoint — voters can check that their vote was recorded
-    without revealing the vote content.
+    receipt: str = Field(..., min_length=1, max_length=128)
+    model_config = ConfigDict(extra="forbid")
 
-    **No authentication required**
-    """
+
+async def _verify_receipt(db: AsyncSession, election_id: UUID, receipt: str) -> dict:
     # Voided rows are fetched too: a voter whose ballot an officer voided
     # was otherwise told no such vote existed, which reads as a bogus
     # receipt rather than the sanctioned action it was (W50-54).
@@ -4235,3 +4567,52 @@ async def verify_vote_receipt(
         "voted_at": vote.voted_at.isoformat(),
         "position": vote.position,
     }
+
+
+@router.post("/{election_id}/verify-receipt", response_model=VoteReceiptResponse)
+async def verify_vote_receipt_post(
+    election_id: UUID,
+    payload: VoteReceiptVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
+):
+    """
+    Verify a vote receipt hash, with the receipt in the request body.
+
+    This is a public endpoint — voters can check that their vote was recorded
+    without revealing the vote content. Preferred over the deprecated GET,
+    which carries the receipt in the URL.
+
+    **No authentication required**
+    """
+    return await _verify_receipt(db, election_id, payload.receipt)
+
+
+@router.get(
+    "/{election_id}/verify-receipt",
+    response_model=VoteReceiptResponse,
+    deprecated=True,
+)
+async def verify_vote_receipt(
+    election_id: UUID,
+    receipt: str,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
+):
+    """
+    Verify a vote receipt hash (deprecated — use the POST form).
+
+    Kept so external callers written against the documented GET keep working
+    through the transition (owner decision 2026-10-05, ELEC-14). The receipt
+    travels in the query string here, so it can land in server and proxy
+    logs; the response says so with a ``Deprecation`` header and a ``Link``
+    to the POST form.
+
+    **No authentication required**
+    """
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = (
+        f'</api/v1/elections/{election_id}/verify-receipt>; rel="successor-version"'
+    )
+    return await _verify_receipt(db, election_id, receipt)

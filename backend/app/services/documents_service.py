@@ -19,7 +19,7 @@ from sqlalchemy import and_, case
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import aliased, defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
@@ -28,13 +28,17 @@ from app.core.permissions import (
     permission_matches_any_write,
 )
 from app.models.document import (
+    FACILITY_FOLDER_PERMISSIONS,
     Document,
     DocumentFolder,
     DocumentStatus,
     FolderVisibility,
+    system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -45,8 +49,12 @@ from app.utils.org_timezone import (
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
-# Permissions that grant leadership-level access to all folders
-LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
+# Decision 10 (docs/FILE_STORAGE_HARDENING.md): only a full administrator
+# sees every folder. documents.manage no longer overrides a module's rights or
+# a member's personal folder; it admits the library's leadership-only folders
+# and nothing else.
+FULL_ADMIN_PERMISSION = "*"
+LIBRARY_MANAGER_PERMISSIONS = ["documents.manage"]
 
 # The facilities module gates its sensitive records — access codes, utility
 # accounts, capital projects, insurance policies, lease terms — on this set,
@@ -54,11 +62,7 @@ LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
 # carry the same gate or the record is protected and the file it points at is
 # not. Kept identical to _SENSITIVE_READ_PERMISSIONS in the facilities
 # endpoint; tests/test_facility_folder_access.py asserts the two agree.
-FACILITY_SENSITIVE_PERMISSIONS = [
-    "facilities.view_sensitive",
-    "facilities.edit",
-    "facilities.manage",
-]
+FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 
 # ============================================================================
 # FAC-35: canonical lock order for facility document/photo references
@@ -124,9 +128,8 @@ def _get_user_role_slugs(user: User) -> Set[str]:
     return {role.slug for role in user.roles}
 
 
-def _is_leadership(user_permissions: Set[str]) -> bool:
-    """Check if the user has any leadership-level permission."""
-    return bool(user_permissions & LEADERSHIP_PERMISSIONS)
+def _is_full_admin(user_permissions: Set[str]) -> bool:
+    return FULL_ADMIN_PERMISSION in user_permissions
 
 
 def _json_has_value(column):
@@ -143,7 +146,7 @@ def _json_has_value(column):
     )
 
 
-def restricted_folders_query(organization_id: str):
+def restricted_folders_query(organization_id: str | UUID):
     """The org's folders that carry any restriction of their own.
 
     Only these can turn a caller away; an organization-visible folder with no
@@ -201,8 +204,6 @@ async def reachable_folder_ids(
 class DocumentsService:
     """Service for document management used by the documents endpoint"""
 
-    UPLOAD_DIR = "/app/uploads/documents"
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -252,8 +253,9 @@ class DocumentsService:
 
         Access rules:
         - visibility='organization' → visible to all org members
-        - visibility='leadership'   → only users with leadership permissions
-        - visibility='owner'        → only the owner_user_id + leadership
+        - visibility='leadership'   → only the library managers (documents.manage)
+        - visibility='owner'        → only the owner_user_id
+        - a full administrator (*)  → every folder
         - allowed_roles (if set)    → only users with a matching role slug
         - required_permissions      → only users holding one of them
 
@@ -328,6 +330,45 @@ class DocumentsService:
             .where(DocumentFolder.id == str(folder_id))
             .where(DocumentFolder.organization_id == str(organization_id))
         )
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
+
+    async def general_folder(
+        self, organization_id: UUID, created_by: UUID
+    ) -> DocumentFolder:
+        """The organization's General Documents root.
+
+        Where a document is filed when no folder is chosen. Every document
+        lives in a folder so that a folder's rights decide who can read it; an
+        unfiled document used to be readable by every documents.view holder,
+        outside any folder's rules. Created with the rest of the system roots
+        if the organization does not have it yet.
+        """
+        folder = await self.general_root(organization_id)
+        if folder is None:
+            # Imported here: document_service builds the system roots and is
+            # the heavier module; nothing else here needs it.
+            from app.services.document_service import DocumentService
+
+            await DocumentService(self.db).initialize_system_folders(
+                organization_id, created_by
+            )
+            folder = await self.general_root(organization_id)
+        if folder is None:
+            raise RuntimeError("General Documents folder could not be created")
+        return folder
+
+    async def general_root(self, organization_id: UUID) -> Optional[DocumentFolder]:
+        """The General Documents root if it exists; never creates it."""
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "general")
+            .where(DocumentFolder.is_system.is_(True))
+            .where(DocumentFolder.parent_id.is_(None))
+            .order_by(DocumentFolder.created_at, DocumentFolder.id)
+            .limit(1)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -336,15 +377,13 @@ class DocumentsService:
     ) -> bool:
         """Apply one folder's restrictions, without considering its parent.
 
-        ``required_permissions`` is checked *before* the leadership bypass and
-        is the one rule leadership does not override. Every other restriction
-        here answers "is this person senior enough", which documents.manage
-        legitimately settles. This one answers "does this person hold the
-        module grant the data is gated on" — a facility's insurance policies
-        and lease terms are readable with facilities.view_sensitive and not
-        otherwise, and a documents administrator holding no facilities grant is
-        exactly who that contract excludes. Letting the bypass win here would
-        reopen the leak this field exists to close, one module at a time.
+        A full administrator (``*``) passes every folder; nothing else is an
+        override. ``required_permissions`` carries a module's rights — a
+        facility's lease terms are readable with facilities.view_sensitive,
+        a vehicle's registration with apparatus.view — and a documents
+        administrator holding none of them is exactly who that excludes. A
+        member's personal folder admits its owner alone, and a leadership-only
+        library folder admits the library managers.
 
         ``require_write``: ``required_permissions`` lists every permission
         that admits a *reader* — for a sensitive facility folder, that
@@ -363,11 +402,13 @@ class DocumentsService:
         """
         user_perms = _get_user_permissions(user)
 
+        if _is_full_admin(user_perms):
+            return True
+
         if folder.required_permissions:
             # permission_matches_any, not a raw set intersection: a member
             # granted `facilities.*` holds every facilities permission, and an
-            # intersection sees none of them. It also subsumes the global "*"
-            # case this previously special-cased by hand.
+            # intersection sees none of them.
             matcher = (
                 permission_matches_any_write
                 if require_write
@@ -376,20 +417,16 @@ class DocumentsService:
             if not matcher(folder.required_permissions, user_perms):
                 return False
 
-        if _is_leadership(user_perms):
-            return True
-
         vis = folder.visibility or FolderVisibility.ORGANIZATION
 
         if vis == FolderVisibility.LEADERSHIP:
-            return False
+            return permission_matches_any(LIBRARY_MANAGER_PERMISSIONS, user_perms)
 
         if vis == FolderVisibility.OWNER:
             return folder.owner_user_id is not None and str(
                 folder.owner_user_id
             ) == str(user.id)
 
-        # organization visibility - check allowed_roles if set
         if folder.allowed_roles:
             user_roles = _get_user_role_slugs(user)
             return bool(user_roles & set(folder.allowed_roles))
@@ -410,8 +447,8 @@ class DocumentsService:
         Restrictions compose with logical AND: every folder from the requested
         folder through the root must admit the caller.  Missing ancestors,
         ancestors belonging to another organization, and ancestry cycles all
-        fail closed.  The per-folder leadership bypass still cannot override
-        ``required_permissions``.
+        fail closed.  Only a full administrator passes a folder regardless of
+        its restrictions.
 
         ``folders_by_id`` may contain an already org-scoped folder snapshot for
         callers authorizing many folders.  A missing id in such a snapshot is
@@ -465,7 +502,9 @@ class DocumentsService:
         boundary the folder/document list enforces — so a direct by-id fetch
         cannot bypass a leadership-only, owner-only (a member's personal files),
         or role-restricted folder. Documents with no folder are organization
-        level and visible to anyone holding documents.view.
+        level and visible to anyone holding documents.view. None should
+        exist: uploads and moves file into General Documents instead, and
+        migration dcb8a46ac50c filed the ones already there.
         """
         if not document.folder_id:
             return True
@@ -483,7 +522,7 @@ class DocumentsService:
     ) -> Set[str]:
         """Return exactly the folder ids whose complete hierarchy is accessible.
 
-        An explicit set is returned even for leadership because corrupt or
+        An explicit set is returned even for a full administrator because corrupt or
         cross-organization ancestry must never be converted into an unrestricted
         document query. This keeps unfiltered listings consistent with direct
         folder and document authorization.
@@ -564,6 +603,16 @@ class DocumentsService:
         # at the same layer as the other folder-specific validation below.
         if folder.is_system and "parent_id" in update_data:
             raise ValueError("Cannot move a system folder")
+        # W53-4 (owner decision): a system folder cannot be renamed either.
+        # Its name is how the module that created it, and every member told
+        # "it's in Member Files", finds it. Re-sending the same name is not a
+        # rename, so a form that posts every field it owns still saves.
+        if (
+            folder.is_system
+            and "name" in update_data
+            and update_data["name"] != folder.name
+        ):
+            raise ValueError("Cannot rename a system folder")
 
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
@@ -831,10 +880,20 @@ class DocumentsService:
         await self.db.commit()
 
         # Best-effort file cleanup — a missing file is not an error, and the DB
-        # rows are already gone.
+        # rows are already gone. Only paths inside this organization's upload
+        # subtree are ever unlinked (same boundary as the download, DOC-24).
         for file_path in file_paths:
+            confined = file_storage.resolve(
+                file_path, organization_id, StorageArea.DOCUMENTS
+            )
+            if confined is None:
+                logger.warning(
+                    "Not removing a backing file outside the organization's "
+                    f"upload storage for deleted folder {folder_id}"
+                )
+                continue
             try:
-                await asyncio.to_thread(os.remove, file_path)
+                await asyncio.to_thread(os.remove, confined)
             except OSError:
                 logger.warning(
                     "Could not remove backing file for a document in deleted "
@@ -877,7 +936,8 @@ class DocumentsService:
             )
             .with_for_update()
         )
-        return rows.all()
+        items: List[Tuple[str, Optional[str]]] = rows.all()
+        return items
 
     async def _delete_facility_document_references(
         self,
@@ -957,7 +1017,7 @@ class DocumentsService:
 
     async def _match_facility_document_references(
         self,
-        model: type,
+        model: type[FacilityDocument] | type[FacilityPhoto],
         target_document_ids: Set[str],
         organization_id: UUID,
     ) -> List[str]:
@@ -1040,10 +1100,10 @@ class DocumentsService:
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination.
 
-        When *accessible_folder_ids* is provided (non-leadership callers), the
-        result is restricted to documents in those folders (or with no folder),
-        so an unfiltered listing can't leak documents from restricted folders.
-        Pass None to impose no folder restriction (leadership).
+        When *accessible_folder_ids* is provided, the result is restricted to
+        documents in those folders (or with no folder), so an unfiltered
+        listing can't leak documents from restricted folders. Pass None to
+        impose no folder restriction.
 
         *defer_content* leaves ``content_html`` (a LONGTEXT) unloaded, for a
         caller that renders metadata only; touching the attribute afterwards
@@ -1122,7 +1182,8 @@ class DocumentsService:
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        document: Optional[Document] = result.scalar_one_or_none()
+        return document
 
     async def attach_document_names(
         self, organization_id: UUID, documents: List[Document]
@@ -1269,9 +1330,19 @@ class DocumentsService:
         # Remove the backing file so a delete doesn't leave the (potentially
         # sensitive) upload orphaned on disk. Best-effort — a missing file is
         # not an error, and the DB row is already gone.
-        if file_path:
+        # Only paths inside this organization's upload subtree are ever
+        # unlinked (same boundary as the download, DOC-24).
+        confined = file_storage.resolve(
+            file_path, organization_id, StorageArea.DOCUMENTS
+        )
+        if file_path and confined is None:
+            logger.warning(
+                f"Not removing backing file for deleted document {document_id}: "
+                "stored path is outside the organization's upload storage"
+            )
+        elif confined:
             try:
-                await asyncio.to_thread(os.remove, file_path)
+                await asyncio.to_thread(os.remove, confined)
             except OSError:
                 logger.warning(
                     f"Could not remove backing file for deleted document "
@@ -1304,7 +1375,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_members_root(
         self, organization_id: UUID
@@ -1325,7 +1397,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_member_personal_folder(
         self, members_root_id: str, user_id: str
@@ -1354,7 +1427,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_member_personal_folder(
         self, members_root_id: str, user_id: str
@@ -1375,7 +1449,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_member_folder(
         self, organization_id: UUID, user: User
@@ -1383,7 +1458,7 @@ class DocumentsService:
         """
         Get or create a personal folder for a member under the
         'Member Files' system folder.  The folder is access-controlled
-        so only the member and leadership can see it.
+        so only the member (and a full administrator) can see it.
 
         Folder hierarchy:
           Member Files/              (system, visibility=organization)
@@ -1447,19 +1522,9 @@ class DocumentsService:
 
         if not members_root:
             # Auto-create if missing (e.g. org created before this feature)
-            from app.models.document import SYSTEM_FOLDERS
-
-            members_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "members")
             members_root = DocumentFolder(
                 organization_id=organization_id,
-                name=members_def["name"],
-                slug=members_def["slug"],
-                description=members_def["description"],
-                icon=members_def["icon"],
-                color=members_def["color"],
-                sort_order=members_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
+                **system_folder_fields("members"),
             )
             self.db.add(members_root)
             await self.db.flush()
@@ -1509,7 +1574,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_apparatus_root(
         self, organization_id: UUID
@@ -1529,7 +1595,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_apparatus_folder(
         self, apparatus_root_id: str, apparatus_id_str: str
@@ -1548,7 +1615,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_apparatus_folder(
         self, apparatus_root_id: str, apparatus_id_str: str
@@ -1568,7 +1636,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_apparatus_folder(
         self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
@@ -1578,7 +1647,7 @@ class DocumentsService:
         under the 'Apparatus Files' system folder.
 
         Folder hierarchy:
-          Apparatus Files/                      (system, visibility=leadership)
+          Apparatus Files/                      (system, apparatus rights)
             └── Engine 1 (unit_number)/         (visibility=organization)
                 ├── Photos/
                 ├── Registration & Insurance/
@@ -1635,19 +1704,9 @@ class DocumentsService:
 
         if not apparatus_root:
             # Auto-create if missing (e.g. org created before this feature)
-            from app.models.document import SYSTEM_FOLDERS
-
-            apparatus_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "apparatus")
             apparatus_root = DocumentFolder(
                 organization_id=organization_id,
-                name=apparatus_def["name"],
-                slug=apparatus_def["slug"],
-                description=apparatus_def["description"],
-                icon=apparatus_def["icon"],
-                color=apparatus_def["color"],
-                sort_order=apparatus_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                **system_folder_fields("apparatus"),
             )
             self.db.add(apparatus_root)
             await self.db.flush()
@@ -1780,7 +1839,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_facility_folder(
         self, facilities_root_id: str, facility_id_str: str
@@ -1806,7 +1866,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_facility_folder(
         self, facilities_root_id: str, facility_id_str: str
@@ -1835,7 +1896,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_folder_by_id(self, folder_id: str) -> Optional[DocumentFolder]:
         """Locking read for one already-known folder row, by primary key.
@@ -1856,7 +1918,8 @@ class DocumentsService:
             .where(DocumentFolder.id == folder_id)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_facilities_root(
         self, organization_id: UUID
@@ -1892,7 +1955,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_facility_folder(
         self, organization_id: UUID, facility_id: str, facility_display_name: str
@@ -2030,22 +2094,9 @@ class DocumentsService:
         facilities_root = await self._lock_facilities_root(organization_id)
 
         if not facilities_root:
-            from app.models.document import SYSTEM_FOLDERS
-
-            facilities_def = next(
-                s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_FACILITIES
-            )
             facilities_root = DocumentFolder(
                 organization_id=organization_id,
-                name=facilities_def["name"],
-                slug=facilities_def["slug"],
-                description=facilities_def["description"],
-                icon=facilities_def["icon"],
-                color=facilities_def["color"],
-                sort_order=facilities_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
-                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
+                **system_folder_fields(FOLDER_FACILITIES),
             )
             self.db.add(facilities_root)
             await self.db.flush()
@@ -2183,7 +2234,91 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
+
+    FINANCE_ROOT_SLUG = "finance"
+    FINANCE_RECEIPTS_SLUG = "finance-receipts"
+
+    async def _finance_receipts_folder(
+        self, organization_id: UUID, *, lock: bool
+    ) -> Optional[DocumentFolder]:
+        root = aliased(DocumentFolder)
+        query = (
+            select(DocumentFolder)
+            .join(root, DocumentFolder.parent_id == root.id)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == self.FINANCE_RECEIPTS_SLUG)
+            .where(root.slug == self.FINANCE_ROOT_SLUG)
+            .where(root.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        if lock:
+            query = query.with_for_update()
+        return (await self.db.execute(query)).scalar_one_or_none()
+
+    async def ensure_finance_receipts_folder(
+        self, organization_id: UUID
+    ) -> DocumentFolder:
+        """Get or create Finance > Receipts.
+
+        Finance/          (system, finance.view / .manage / .approve)
+          └── Receipts/   (inherits the Finance gate)
+
+        Same read-then-write shape as ``ensure_event_folder``: no uniqueness
+        constraint backs either slug, so creation happens under the
+        organization row lock and re-checks there (Pitfall #27).
+        """
+        folder = await self._finance_receipts_folder(organization_id, lock=False)
+        if folder is not None:
+            return folder
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
+        folder = await self._finance_receipts_folder(organization_id, lock=True)
+        if folder is not None:
+            return folder
+
+        root = (
+            await self.db.execute(
+                select(DocumentFolder)
+                .where(DocumentFolder.organization_id == str(organization_id))
+                .where(DocumentFolder.slug == self.FINANCE_ROOT_SLUG)
+                .where(DocumentFolder.is_system.is_(True))
+                .order_by(DocumentFolder.id)
+                .limit(1)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if root is None:
+            root = DocumentFolder(
+                organization_id=organization_id,
+                **system_folder_fields(self.FINANCE_ROOT_SLUG),
+            )
+            self.db.add(root)
+            await self.db.flush()
+
+        folder = DocumentFolder(
+            organization_id=organization_id,
+            parent_id=root.id,
+            name="Receipts",
+            slug=self.FINANCE_RECEIPTS_SLUG,
+            description="Receipts uploaded to purchase requests and expense reports",
+            icon="receipt",
+            color="text-lime-400",
+            visibility=FolderVisibility.ORGANIZATION,
+            is_system=False,
+        )
+        self.db.add(folder)
+        await self.db.flush()
+        return folder
 
     async def _lock_events_root(
         self, organization_id: UUID
@@ -2203,7 +2338,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _peek_event_folder(
         self, events_root_id: str, event_id_str: str
@@ -2222,7 +2358,8 @@ class DocumentsService:
             .order_by(DocumentFolder.id)
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def _lock_event_folder(
         self, events_root_id: str, event_id_str: str
@@ -2242,7 +2379,8 @@ class DocumentsService:
             .limit(1)
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        document_folder: Optional[DocumentFolder] = result.scalar_one_or_none()
+        return document_folder
 
     async def ensure_event_folder(
         self, organization_id: UUID, event_id: str, event_title: str
@@ -2302,19 +2440,9 @@ class DocumentsService:
         events_root = await self._lock_events_root(organization_id)
 
         if not events_root:
-            from app.models.document import SYSTEM_FOLDERS
-
-            events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == FOLDER_EVENTS)
             events_root = DocumentFolder(
                 organization_id=organization_id,
-                name=events_def["name"],
-                slug=events_def["slug"],
-                description=events_def["description"],
-                icon=events_def["icon"],
-                color=events_def["color"],
-                sort_order=events_def["sort_order"],
-                is_system=True,
-                visibility=FolderVisibility.ORGANIZATION,
+                **system_folder_fields(FOLDER_EVENTS),
             )
             self.db.add(events_root)
             await self.db.flush()

@@ -121,7 +121,8 @@ def _balance_due(order: StoreOrder) -> Decimal:
     )
 
 
-_METHOD_LABELS = {
+# Keyed by StorePaymentMethod, a str enum, so a raw stored string looks up too.
+_METHOD_LABELS: Dict[str, str] = {
     StorePaymentMethod.VENMO: "Venmo",
     StorePaymentMethod.PAYPAL: "PayPal",
     StorePaymentMethod.CASH_APP: "Cash App",
@@ -171,7 +172,8 @@ class StorefrontNotificationService:
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        organization: Optional[Organization] = result.scalar_one_or_none()
+        return organization
 
     async def get_member_recipients(self, organization_id: str) -> List[str]:
         """Every active member of the org with an email address."""

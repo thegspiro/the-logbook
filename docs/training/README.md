@@ -1,8 +1,10 @@
 # The Logbook - Training Documentation
 
-> **The August and September 2026 release lessons have been folded into the guides below.** Each module guide now describes how its screens work today. [August 12–31, 2026 workflow updates](./19-august-2026-release-changes.md) and [August 31 – October 4, 2026 workflow updates](./20-september-2026-release-changes.md) remain as indexes of where each of their topics went. **Upgrading an existing installation?** Every upgrade step either lesson carried — the permission removals, the migrations that do not reverse, the fourteen retired addresses and the Gmail and Microsoft 365 email repair — is in [`docs/UPGRADING.md`](../UPGRADING.md).
+> **The August, September and early October 2026 release lessons have been folded into the guides below.** Each module guide now describes how its screens work today. [August 12–31, 2026 workflow updates](./19-august-2026-release-changes.md), [August 31 – October 4, 2026 workflow updates](./20-september-2026-release-changes.md) and [October 5–6, 2026 workflow updates](./21-october-2026-release-changes.md) remain as indexes of where each of their topics went. **Upgrading an existing installation?** Every upgrade step either lesson carried — the permission removals, the migrations that do not reverse, the fourteen retired addresses and the Gmail and Microsoft 365 email repair — is in [`docs/UPGRADING.md`](../UPGRADING.md).
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
+
+**New to the app's vocabulary?** The [Glossary](./GLOSSARY.md) explains the words The Logbook uses, such as _position_, _permission_ and _module_, and spells out abbreviations such as MFA, NFPA and EVOC.
 
 > **Maintainers:** See the [training materials review and screenshot plan](./TRAINING_MATERIALS_REVIEW.md)
 > for the current learning-design recommendations, screenshot priorities, and
@@ -89,12 +91,18 @@ All guides in their entirety, with special attention to:
 
 ## Screenshot Placeholders
 
-Throughout these guides you will find screenshot placeholder lines formatted as:
+Where a screenshot is still to be taken, the guide holds a hidden note
+describing it. The note is an HTML comment, so it does not appear when you
+read the guide; open the file's source to see it:
 
-> **Screenshot placeholder:** or **Screenshot needed:**
-> _[Description of what the screenshot should show]_
+```markdown
+<!-- Screenshot needed:
+[Description of what the screenshot should show]
+-->
+```
 
-These indicate where a screenshot should be inserted. The description explains what should be captured. Lines marked **Screenshot needed:** are newly added sections that particularly require visual documentation.
+Some older branches still use a visible blockquote (`> **Screenshot needed:**`);
+both are counted and filled the same way.
 
 Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled; [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) tracks whether what was captured still matches the application, which is a different question and the one that goes stale silently.
 
@@ -102,7 +110,7 @@ If you are adding one by hand instead:
 
 1. Take the screenshot as described.
 2. Save it to the `docs/training/images/` directory.
-3. Replace the placeholder with: `![Alt text](./images/filename.png)`
+3. Replace the whole comment, from `<!--` to `-->`, with: `![Alt text](./images/filename.png)`
 
 ---
 

@@ -51,7 +51,8 @@ class CourseSyllabusService:
                 TrainingCourse.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        training_course: Optional[TrainingCourse] = result.scalar_one_or_none()
+        return training_course
 
     async def _get_class(
         self, class_id: UUID, organization_id: UUID
@@ -63,7 +64,8 @@ class CourseSyllabusService:
                 CourseClass.organization_id == str(organization_id),
             )
         )
-        return result.scalar_one_or_none()
+        course_class: Optional[CourseClass] = result.scalar_one_or_none()
+        return course_class
 
     async def _validate_references(self, data: object, organization_id: UUID) -> None:
         """Reject any client-supplied foreign key that is not in the caller's org.

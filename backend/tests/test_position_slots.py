@@ -470,81 +470,70 @@ class TestSeatNameCanonicalization:
 
 
 class TestSeatVocabularyMatchesTheWire:
-    """A seat outside ``ShiftPosition`` cannot be signed up for by anyone.
+    """The built-in seat vocabulary is one set, named three times.
 
-    ``signup_for_shift`` sends a ``ShiftPosition`` and refuses anything the
-    member's eligible set does not contain, so a stored seat with no matching
-    enum member is unfillable no matter how the department is configured. The
-    two lists must not drift apart again.
+    ``CANONICAL_POSITIONS``, the request-schema ``ShiftPosition`` and the model
+    ``ShiftPosition`` must agree. Since SCHED-CUSTOM-SEAT none of them closes
+    the vocabulary — a department's own seats are stored verbatim — but each is
+    what the code means by "a built-in seat".
     """
 
     def test_canonical_set_is_exactly_the_signup_enum(self):
         assert CANONICAL_POSITIONS == {p.value for p in ShiftPosition}
 
-    def test_the_stored_enum_matches_the_wire_enum(self):
-        """A third copy of this vocabulary backs the ENUM columns.
-
-        ``app.models.training.ShiftPosition`` is what SQLAlchemy emits into the
-        MySQL ``ENUM(...)`` DDL for ``shift_assignments.position`` and
-        ``standing_shift_claims.position``. It is a separate class from the
-        request-schema enum asserted above, and the two had drifted: the medic
-        seat was added to the schema and to ``CANONICAL_POSITIONS`` while this
-        one still listed nine values.
-
-        The failure that causes is invisible until the write. A paramedic
-        signup passes request validation, passes the eligibility union, and
-        then fails when the ORM flushes a label the column does not allow --
-        so the seat looks fillable everywhere except where it counts.
-        """
+    def test_the_model_enum_matches_the_schema_enum(self):
         from app.models.training import ShiftPosition as StoredShiftPosition
 
         assert {p.value for p in StoredShiftPosition} == {
             p.value for p in ShiftPosition
-        }, (
-            "the stored enum backing the position ENUM columns has drifted "
-            "from the one the signup API accepts"
-        )
+        }
 
-    def test_every_enum_backed_position_column_is_normalized_at_startup(self):
-        """Adding a seat widens the ENUM DDL only for listed columns.
+    def test_no_position_column_is_an_enum(self):
+        """A department's own seat has to fit the column it is written to.
 
-        ``enum_normalization`` compares each listed column's labels against its
-        model enum and rewrites the DDL when they differ. That is this
-        deployment's delivery mechanism for existing databases, since schema is
-        built by ``create_all`` and Alembic is stamped rather than upgraded. A
-        ``Enum(ShiftPosition)`` column missing from that list keeps the older
-        label set forever, and the seat stays unwritable on exactly the
-        installations that already exist.
+        Both position columns were MySQL ENUMs of the built-in seats, so a
+        custom seat was refused at the flush even once the request schema
+        admitted it (SCHED-CUSTOM-SEAT). They are VARCHAR, sized for the
+        longest seat name the Position Names screen accepts.
         """
-        import re
-        from pathlib import Path as _Path
+        from sqlalchemy import String
 
+        from app.models.training import SeatName, ShiftAssignment, StandingShiftClaim
+        from app.schemas.scheduling_module_config import CustomPositionSchema
+        from app.utils.positions import SEAT_NAME_MAX_LENGTH
+
+        width = CustomPositionSchema.model_fields["value"].metadata
+        assert any(
+            getattr(m, "max_length", None) == SEAT_NAME_MAX_LENGTH for m in width
+        )
+        for model in (ShiftAssignment, StandingShiftClaim):
+            column_type = model.__table__.c.position.type
+            assert isinstance(column_type, SeatName), model.__tablename__
+            assert isinstance(column_type.impl, String)
+            assert column_type.impl.length == SEAT_NAME_MAX_LENGTH
+
+    def test_startup_normalization_leaves_the_position_columns_alone(self):
+        """The startup ENUM pass converts any non-ENUM column it lists back
+        into an ENUM. Listing a position column would re-close the vocabulary
+        on every boot, or fail on the first custom seat."""
         from app.utils.enum_normalization import _TARGET_COLUMNS
 
-        model_source = (
-            _Path(__file__).resolve().parents[1] / "app" / "models" / "training.py"
-        ).read_text()
+        listed = {(spec.table, spec.column) for spec in _TARGET_COLUMNS}
+        assert ("shift_assignments", "position") not in listed
+        assert ("standing_shift_claims", "position") not in listed
 
-        # Tables declaring a column typed Enum(ShiftPosition).
-        backed = set()
-        table = None
-        for line in model_source.splitlines():
-            match = re.search(r'__tablename__\s*=\s*"([^"]+)"', line)
-            if match:
-                table = match.group(1)
-            if "Enum(ShiftPosition" in line and table:
-                backed.add(table)
+    def test_a_builtin_enum_member_binds_as_its_value(self):
+        """A str-mixin enum is not bound as its value by the MySQL driver: it
+        renders through ``str()`` as ``'ShiftPosition.OFFICER'``. The ENUM
+        column converted it for us; ``SeatName`` has to do the same."""
+        from app.models.training import SeatName
+        from app.models.training import ShiftPosition as StoredShiftPosition
 
-        assert backed, "no Enum(ShiftPosition) column found — did the type move?"
-        listed = {
-            spec.table
-            for spec in _TARGET_COLUMNS
-            if spec.enum_class.__name__ == "ShiftPosition"
-        }
-        assert backed <= listed, (
-            "these tables have an Enum(ShiftPosition) column that startup "
-            f"normalization never widens: {sorted(backed - listed)}"
-        )
+        bind = SeatName().process_bind_param(StoredShiftPosition.OFFICER, None)
+        assert bind == "officer"
+        assert type(bind) is str
+        assert SeatName().process_bind_param("rescue_tech", None) == "rescue_tech"
+        assert SeatName().process_bind_param(None, None) is None
 
     def test_apparatus_page_seat_values_are_all_canonical(self):
         # The frontend list that caused this bug, asserted from source so a

@@ -5,6 +5,7 @@ import { adminHubService } from '../../services/adminHubService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { ADMIN_METRIC_OPEN_SLOTS } from '../../types/adminHub';
 import type { AdminMetricOption, AdminMetricSettings as Settings } from '../../types/adminHub';
+import { PHONE_METRIC_SLOTS } from './metricSlots';
 
 /**
  * Choosing the four headline metrics for one administration page.
@@ -32,10 +33,8 @@ interface AdminMetricsSettingsProps {
   onSaved?: (() => void) | undefined;
 }
 
-/** Slots that survive the two-column phone strip. */
-const PHONE_SLOTS = 2;
-
-const slotNote = (index: number): string => (index < PHONE_SLOTS ? `Slot ${index + 1} · phone` : `Slot ${index + 1}`);
+const slotNote = (index: number): string =>
+  index < PHONE_METRIC_SLOTS ? `Slot ${index + 1} · phone` : `Slot ${index + 1}`;
 
 export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
   moduleKey,

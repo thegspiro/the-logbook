@@ -94,6 +94,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/facilities': {},
   '/finance': { permissions: ['finance.view'] },
   '/grants': { permissions: ['fundraising.view'] },
+  '/integrations': { permissions: ['settings.manage'] },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
   '/learning': {},
@@ -114,15 +115,25 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // An ancestor only because the public tokenized approval page sits beneath
   // it; gated like the in-app Approvals route.
   '/finance/approvals': { permissions: ['finance.approve'] },
+  // An ancestor of the Treasurer's review; the owner's screen needs only a
+  // session, like My Budgets.
+  '/finance/budget-requests': {},
   '/finance/budgets': { permissions: ['finance.view'] },
-  '/finance/check-requests': { permissions: ['finance.view'] },
+  '/finance/check-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   // Registered for its label: the segment is "expenses" while the page's own
   // heading, the detail page's back link and the testing registry all call it
   // Expense Reports.
-  '/finance/expenses': { label: 'Expense Reports', permissions: ['finance.view'] },
-  '/finance/purchase-requests': { permissions: ['finance.view'] },
+  '/finance/expenses': {
+    label: 'Expense Reports',
+    permissions: ['finance.request', 'finance.view', 'finance.manage'],
+  },
+  '/finance/purchase-requests': { permissions: ['finance.request', 'finance.view', 'finance.manage'] },
   '/finance/settings': { permissions: ['finance.manage'] },
+  // Label only: the segment reads "Quickbooks"; the page is the export's settings.
+  '/finance/settings/quickbooks': { label: 'QuickBooks Export', permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },
+  '/grants/donations': { permissions: ['fundraising.view'] },
+  '/grants/opportunities': { permissions: ['fundraising.view'] },
   '/inventory/admin/checklists': { permissions: ['inventory.check_manage'] },
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },
   // Registered for their labels, and so the hub-card agreement test covers
@@ -145,6 +156,8 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // the heading two different names for one screen.
   '/scheduling/admin/closeout': { label: 'Shift Close-Out', permissions: ['scheduling.manage'] },
   '/scheduling/admin/planning': { label: 'Shift Planning', permissions: ['scheduling.manage'] },
+  // Registered for its label: the segment is "history-import".
+  '/scheduling/admin/history-import': { label: 'Shift History Import', permissions: ['scheduling.manage'] },
   // A leaf, registered only for its label: the segment is "positions" and the
   // page calls itself "Who Can Fill What", so the fallback would give the trail
   // and the heading two different names for one screen.
@@ -160,6 +173,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training/cohorts': { permissions: ['training.manage'] },
   '/training/programs': {},
   '/training/skills-testing': {},
+  '/training/knowledge-tests': {},
 };
 
 /**

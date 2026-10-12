@@ -712,6 +712,25 @@ FINANCE_CONFIGURE_APPROVALS = Permission(
     "Manage approval chains and routing configuration",
     PermissionCategory.FINANCE,
 )
+# Senior leadership's part in adopting next year's budget: adjusting the
+# amounts the Treasurer decided while a draft year is in leadership review.
+# Seeded to no position; a department grants it to the positions that sit in
+# that review (typically the President and the Chief).
+FINANCE_BUDGET_REVIEW = Permission(
+    "finance.budget_review",
+    "Adjust next year's budget requests during leadership review",
+    PermissionCategory.FINANCE,
+)
+# The member-side grant. It opens the requester's own purchase requests,
+# expense reports and check requests and nothing else: the list and detail
+# endpoints confine a holder without finance.view/finance.manage to records
+# they raised, and the budget pages stay finance.view.
+FINANCE_REQUEST = Permission(
+    "finance.request",
+    "Create, submit and track your own purchase requests, expense reports "
+    "and check requests",
+    PermissionCategory.FINANCE,
+)
 
 # ============================================
 # All Permissions Registry
@@ -857,6 +876,8 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_MANAGE,
     FINANCE_APPROVE,
     FINANCE_CONFIGURE_APPROVALS,
+    FINANCE_REQUEST,
+    FINANCE_BUDGET_REVIEW,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
@@ -1384,6 +1405,11 @@ _LINE_MEMBER_PERMISSIONS = [
     MINUTES_VIEW.name,
     DOCUMENTS_VIEW.name,
     LOCATIONS_VIEW.name,
+    # No finance.request — it lives on the `member` position only, which every
+    # member holds. A rank default resolves at runtime and no department can
+    # withdraw it, while a position grant can be removed on the positions
+    # screen; departments that do not want members raising requests must be
+    # able to say so.
     # No apparatus.view — the fleet record is a maintenance and compliance
     # workspace (inspection expirations, out-of-service status, deficiency
     # flags, driver qualifications), not a member amenity. Engineer keeps it
@@ -1775,7 +1801,8 @@ def get_rank_default_permissions(rank: str) -> list[str]:
     """
     rank_def = OPERATIONAL_RANKS.get(rank)
     if rank_def:
-        return rank_def["default_permissions"]
+        permissions: list[str] = rank_def["default_permissions"]
+        return permissions
     return []
 
 
@@ -2664,6 +2691,12 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
             LOCATIONS_VIEW.name,
+            # Raising your own purchase requests, expense reports and check
+            # requests. Own-records-only: a holder without finance.view sees
+            # and acts on only the requests they raised (endpoints/finance.py).
+            # Seeded here and not on the rank lists, so a department can
+            # withdraw it by editing this one position.
+            FINANCE_REQUEST.name,
             # apparatus.view is deliberately absent — see
             # _LINE_MEMBER_PERMISSIONS. The fleet pages are a maintenance
             # and compliance workspace; the crew work a member does on a rig

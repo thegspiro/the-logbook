@@ -1013,6 +1013,22 @@ re-time Chapter 7. Use RFC 5737 addresses on screen.]**
 > the error log, see what happened, and either fix it or report it to the
 > community."
 
+**[SCREEN: Error Monitoring list with a row whose source reads "Scheduled
+task", opened to show the task name and traceback]**
+
+> "One more source to know about. When a scheduled job fails for your
+> department — a reminder run, an end-of-shift summary, a report, a sync — it
+> now lands on this page too, labelled **Scheduled task**, with the task's name
+> and the traceback. Before, those reached the server logs and Sentry and never
+> the page you read."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 20 seconds (c951388c); needs a
+failed task to film — force one in a demo department, don't invent a row.
+Rows are per organization. Separately, the end-of-shift summary is now retried
+on the next run until its email actually goes out (a failed send used to count
+as delivered), so a member can occasionally get the in-app notice twice — the
+accepted cost.]**
+
 **[CALLOUT: "As of August 2026 this page actually receives things"]**
 
 > "Be straight with your audience about one thing here: before August 2026 this
@@ -1264,6 +1280,31 @@ delivery pass that compresses this chapter must not drop either.]**
 > "Two: register your label printers, and check the address is reachable from
 > the server."
 
+**[SCREEN: Members → select several → Print ID Cards: orientation, front only or
+front and back, Code 128 or QR; then the "Accept old badges" switch at the
+bottom of the page]**
+
+> "And a badge change to know about. A member's badge no longer carries their
+> membership number — anyone can read that in the directory, which meant anyone
+> could print a badge that scanned as a colleague. Badges now carry a random
+> code the server issues, like MB-7KQ2W9HXRT, unique to the member. Labels,
+> printed ID cards and the phone card all encode it. Cards you printed before
+> keep scanning until you turn off **Accept old badges** — do that once everyone
+> has a reprinted card. A lost badge is cancelled with **Reissue badge** on the
+> member's ID card page."
+
+> "Printing a badge for someone else now needs `members.manage` or
+> `members.manage_id_cards`, the same as opening their ID card — plain
+> membership view no longer covers it. And **Print ID Cards** makes plastic-card
+> sized pages — 3.375 by 2.125 inches — that print through any card printer's
+> normal driver."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 50 seconds; new footage for
+Print ID Cards and the Accept old badges switch (0549b7e0, 5273c49a). Never film
+a real badge code; reissue one first. Nothing stops scanning on upgrade: every
+existing member gets a code and old badges keep working until the switch is
+turned off.]**
+
 > "Three: check who holds `medical_screening.view`. Officers who could
 > previously see screening compliance on the Members administration page will
 > find it reading 'unknown' until somebody grants it — that was health
@@ -1507,6 +1548,36 @@ purchase request's detail page showing the same two buttons]**
 > **Approve** and **Deny** for whoever holds the permission — including a
 > request no approval chain applies to."
 
+**[SCREEN: Finance → Approvals: "Requests waiting on you.", the Waiting on
+column, and a row badged "Not assigned to you" on an admin's screen; click
+through to the "Approve as approvals admin" dialog and its Override reason
+box]**
+
+> "One correction to that, and it matters for how you set the chains up. A step
+> in an approval chain names its approver — a position, a permission, a
+> specific person or an email address — and **only that approver can act on
+> it.** The Approvals screen lists the steps waiting on you, and every pending
+> step says who it's waiting on. Someone who holds the configure-approvals
+> permission can still act on a step that isn't theirs — but they have to type
+> an **override reason**, and the override is logged. A step with no named
+> approver falls back to anyone holding the approve permission."
+
+**[SCREEN: Finance → Approval chains: the warning chip on a step nobody can
+act on, and the page banner reading "N approval steps have no one who can act
+on them…"]**
+
+> "And the chains page now checks your work: a step whose position has nobody
+> in it, or whose person has left, gets a warning chip with a count of the
+> requests stuck behind it."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 45 seconds; re-time this
+chapter and re-record both [SCREEN] cues (finance approvals, backend fbab5716 +
+frontend cfa518ca). The earlier take said everyone holding the approve
+permission can act on any step; that is no longer true wherever a step names an
+approver. SoD still blocks approving your own request. Emailed one-click
+approval links stop working once a step is no longer an Email-approver step.
+UPGRADING.md carries the operator note; check it before filming.]**
+
 **[PRODUCTION NOTE — 2026-10-04. Rewritten. "With no approval chain configured
 at all, requests skip approval entirely" was wrong: such a request waits in
 Pending Approval. Until 2026-09-30 nothing in the app could move it; the
@@ -1746,6 +1817,21 @@ production ends up running a development value with nothing saying so."]**
 > and public endpoint. Production refuses to start with it disabled."
 
 **[CALLOUT: "The app failing to start IS the safety feature"]**
+
+> "One related thing, if you front The Logbook with your own proxy or you've
+> tuned the bundled one. The bundled nginx now allows 400 concurrent requests
+> per address, and the API zone is fifty requests a second with a burst of six
+> hundred — the first hundred of a burst go straight through and the rest queue
+> rather than being refused. The old limit was ten, and one dashboard load makes
+> about twenty API calls, so a single member could be refused just opening the
+> page, and a station full of people behind one address more so. The sign-in
+> limits did **not** change; they're brute-force controls."
+
+**[PRODUCTION NOTE — 2026-10-06. New beat, about 30 seconds, voice-over only
+(43582b39). A host-installed copy of the old config keeps the old limits —
+tell viewers to compare. The sign-in limits are an open decision in
+KNOWN_LIMITATIONS: the sixth member to sign in at one station within a minute
+is refused.]**
 
 ### UPDATING THE LOGBOOK (31:30 – 33:00)
 

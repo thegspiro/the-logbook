@@ -123,6 +123,13 @@ Shift"]**
 > "And **Open Swap** in that same dialog doesn't post your shift anywhere — no
 > member sees it. An officer finds cover; it stays yours until then."
 
+**[SCREEN: The same dialog, third card — "Exchange With a Member" — and its
+list of seats. ADDED 2026-10-06: a seat-for-seat trade only lists pairs where
+both members are cleared for each other's seat.]**
+
+> "Third option: **Exchange With a Member** — you take their seat, they take
+> yours. The list only shows swaps you're both cleared for."
+
 **[SCREEN: Click "Submit Request".]**
 
 > "One thing to know: while your offer is sitting with somebody, you can't
@@ -2452,3 +2459,199 @@ apparatus from the lists.]**
 
 **[0:30 — CALLOUT: "Unit not listed? Ask a scheduling officer to add it under
 Outside Apparatus."]**
+
+---
+
+## SHORT 8BO: Your Badge Has a New Code
+
+**Length:** 45 seconds
+**Extracted From:** Script 3 (upgrade actions) and Script 4, Member ID Cards
+**Audience:** Administrators, membership coordinators, quartermasters
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: A printed badge beside a member's ID card page; the code
+reads like MB-7KQ2W9HXRT.]**
+
+> "Your badges used to carry the membership number — and anyone can read that
+> in the directory. So anyone could print a badge that scanned as a colleague.
+> Now every member has a random code the server issues."
+
+**[0:15 — SCREEN: Members → select → Print ID Cards; then the **Accept old
+badges** switch at the bottom of the page.]**
+
+> "Reprint cards from Print ID Cards. Badges you printed before keep scanning
+> until you turn off Accept old badges — do that when everyone's been
+> reprinted."
+
+**[0:30 — SCREEN: A member's ID card page → **Reissue badge** → the confirmation.]**
+
+> "Lost one? Reissue badge cancels every badge printed for that member."
+
+**Production:** use a demo member; never film a real badge code. Needs new
+footage — Print ID Cards, Accept old badges and Reissue are all new screens.
+
+---
+
+## SHORT 8BP: "Not Eligible" Before You Tap
+
+**Length:** 30 seconds
+**Extracted From:** Script 6, Dashboard
+**Audience:** Members
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: Dashboard → Next 30 Days. One open shift offers Sign Up;
+another reads **Not eligible**.]**
+
+> "See an open shift you can't take? It now says Not eligible right there —
+> instead of offering Sign Up and turning you down a tap later."
+
+**[0:15 — SCREEN: The shift's position requirement or the member's
+qualifications page.]**
+
+> "If you think that's wrong, it's about your rank and qualifications — ask a
+> scheduling officer what the position needs."
+
+**Production:** needs a member who isn't cleared for one open shift. If the
+eligibility lookup fails the label doesn't appear; don't film that.
+
+---
+
+## SHORT 8BQ: Offline Items On Hold — Send As Me or Discard
+
+**Length:** 40 seconds
+**Extracted From:** Script 6, Mobile Access
+**Audience:** Members, shift officers, station-tablet users
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: The banner "3 offline items are on hold" with Send as me and
+Discard.]**
+
+> "Saved a check or a report with no signal, and now there's a banner saying
+> it's on hold? Items are tagged to the member who saved them, and only that
+> member's device session sends them. Older ones, saved before the tagging,
+> are held until somebody decides."
+
+**[0:20 — SCREEN: Tap Send as me; the confirmation states the consequence.]**
+
+> "If they're yours, Send as me. If they aren't, Discard — that deletes them
+> from this device for good, and nobody is told."
+
+**Production:** the notice only shows for untagged entries from before the
+upgrade; stage it on a test device and never film a real member's report.
+
+---
+
+## SHORT 8BR: Sign-Out Didn't Go Through
+
+**Length:** 30 seconds
+**Extracted From:** Script 6, Mobile Access
+**Audience:** Members on shared computers
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: The full-screen "Sign-out could not be confirmed" notice.]**
+
+> "If The Logbook can't confirm your sign-out after three tries, it covers the
+> screen. Close every browser window — your session may still be live — then
+> try signing out again."
+
+**Production:** block the logout request in dev tools to stage it.
+
+---
+
+## SHORT 8BS: Added a Recruit Late? Decide the Classes They Missed
+
+**Length:** 50 seconds
+**Extracted From:** Script 14, Chapter 4
+**Audience:** Training officers
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: Cohort Detail → Roster → **Add member**; the row reads "N
+classes held before they joined — decide".]**
+
+> "A recruit joins two weeks in. Add them on the Roster tab, and the cohort
+> tells you how many classes they missed."
+
+**[0:20 — SCREEN: The decision panel: **Credit as completed** on one class,
+schedule a make-up for another.]**
+
+> "For each one, credit it as completed, or schedule a make-up just for them.
+> Credit writes the training record now; a make-up credits them once its
+> attendance is finalized."
+
+**Production:** new footage; seed a cohort with at least two held classes.
+
+---
+
+## SHORT 8BT: Who Is This Approval Waiting On?
+
+**Length:** 45 seconds
+**Extracted From:** Script 3 (finance upgrade changes) and Script 4
+**Audience:** Treasurers, approvers, administrators
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: Finance → Approvals: "Requests waiting on you." and the
+Waiting on column.]**
+
+> "Each step in an approval chain names its approver — and only that approver
+> can act on it. Approvals lists what's waiting on you, and every pending step
+> says who it's waiting on."
+
+**[0:20 — SCREEN: An approvals admin opens a row badged **Not assigned to
+you**: **Approve as approvals admin**, the Override reason box.]**
+
+> "An approvals admin can still step in — with a reason, which is logged."
+
+**[0:35 — SCREEN: Approval chains page: the warning chip on a step nobody can
+act on.]**
+
+> "And the chains page flags any step nobody can act on, with a count of the
+> requests stuck behind it."
+
+**Production:** new footage of the Approvals screen and chains page; seed a step
+with an empty position.
+
+---
+
+## SHORT 8BU: Fix a Typo on a Finalized Event
+
+**Length:** 40 seconds
+**Extracted From:** Script 4, Events
+**Audience:** Event organizers
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: A finalized event → **Edit**; the notice explaining what's
+locked; type, schedule and check-in rules disabled.]**
+
+> "Attendance is finalized, and you've spotted a typo in the title. Edit is
+> still there. The things the credited hours came from — type, times, check-in
+> rules — are locked; everything else you can fix."
+
+**[0:25 — SCREEN: Change the title; Save succeeds.]**
+
+> "And if you need to change those, reopen the attendance first."
+
+**Production:** new footage of the edit form's locked state. For a repeating
+event, a "this and all future events" save is refused only if it would change a
+finalized occurrence.
+
+---
+
+## SHORT 8BV: Tick the Checklist, Then Advance
+
+**Length:** 35 seconds
+**Extracted From:** Script 4, Prospective Members Pipeline
+**Audience:** Membership coordinators
+**Added:** 2026-10-06
+
+**[0:00 — SCREEN: An applicant's drawer on a checklist stage — items as
+checkboxes, "2 of 5 items done".]**
+
+> "A checklist stage with items can't be passed until they're done. Tick them in
+> the drawer, then Advance — the ticks go with it."
+
+**[0:20 — SCREEN: Pipeline Settings → **Automatic Transfer to Membership**.]**
+
+> "And in the pipeline's settings, you can finally see and change whether
+> finishing the last stage makes them a member."
+
+**Production:** new footage; drag-advancing a card on the board sends no ticks.

@@ -72,25 +72,38 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
+**Where applicants with no chosen pipeline go.** A guest signing in at an
+event, or anything else that creates an applicant without naming a pipeline,
+lands on your **default** pipeline. If none is marked default, it lands on the
+oldest active pipeline that is not a template — so a department with one
+pipeline never has to mark it. Applicants who arrived before 2026-10-11 with no
+pipeline were placed the same way on upgrade, at the first stage; their
+activity log says so.
+
 ![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
 
 ![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
 
 ### Pipeline Settings
 
-| Setting                                 | Description                                                                                                                                                                                                       |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Is Default**                          | New applicants automatically enter this pipeline                                                                                                                                                                  |
-| **Auto-Transfer on Approval**           | Automatically convert applicant when they complete the final stage. **No screen sets it** — it is off for any pipeline created in the app and can be turned on only through the API (`auto_transfer_on_approval`) |
-| **Inactivity Config**                   | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout))                                                                                                                           |
-| **When an Applicant Becomes a Member**  | Member class and starting status for operational and for administrative applicants on conversion (see [What Happens on Conversion](#what-happens-on-conversion))                                                  |
-| **Public Application Status Page**      | "Let applicants check their application status through a public link" — see [Public Application Status Page](#public-application-status-page)                                                                     |
-| **Show upcoming stages** _(2026-09-24)_ | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default, which is what the page always did     |
+| Setting                                                            | Description                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Is Default**                                                     | New applicants automatically enter this pipeline                                                                                                                                                                                                                                                                                                                        |
+| **Automatic Transfer to Membership** (`auto_transfer_on_approval`) | Whether completing the final stage converts the applicant into a member with nobody clicking **Convert**. Set it on its own card in **Pipeline Settings** _(2026-10-05; before that no screen showed or set it)_. Off by default; a recorded vote or sign-off on the final stage then creates the member, a skip never does, and required stages must be complete first |
+| **Inactivity Config**                                              | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout))                                                                                                                                                                                                                                                                                 |
+| **When an Applicant Becomes a Member**                             | Member class and starting status for operational and for administrative applicants on conversion (see [What Happens on Conversion](#what-happens-on-conversion))                                                                                                                                                                                                        |
+| **Public Application Status Page**                                 | "Let applicants check their application status through a public link" — see [Public Application Status Page](#public-application-status-page)                                                                                                                                                                                                                           |
+| **Show upcoming stages** _(2026-09-24)_                            | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default, which is what the page always did                                                                                                                                                           |
+
+<!-- Screenshot needed:
+_[Membership Coordinator at /prospective-members/settings with a pipeline selected, clipped to the "Automatic Transfer to Membership" card with its tickbox "Make applicants members automatically when they complete the final stage".]_
+-->
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
+-->
 
 ## Stage Types
 
@@ -330,12 +343,31 @@ The system automatically checks for existing members or applicants with the same
    - **Document Upload (Documenso)**: Applicant signs electronically; a completed signature can auto-advance them
    - Other types: Applicant waits for manual action
 
+**A checklist stage** _(2026-10-05)_ lists its items in the applicant's drawer
+as checkboxes under **Checklist**, with a line such as _"1 of 2 items done — tick
+every item to advance"_. Tick each item as it is done, then **Advance**; the
+ticks are sent with the advance and kept per applicant and stage, so refreshing
+the page does not lose them. Before this nothing ever sent the ticks, so a
+checklist stage with items could not be passed. Dragging the card on the board
+sends no ticks, so advance such a stage from the drawer; **Skip** is unchanged.
+
+<!-- Screenshot needed:
+_[Membership Coordinator at /prospective-members with a demo applicant on a Checklist stage that has two items: the drawer's Checklist block with one item ticked and "1 of 2 items done — tick every item to advance".]_
+-->
+
 ### Moving Back (Regression)
 
 1. Click **Back** in the applicant's drawer
 2. The applicant returns to the previous stage
 3. Progress on the current stage is reset
 4. Optional notes can be added explaining the reason
+
+**An applicant no longer shows stages they have not reached** _(2026-10-05)_.
+Before moving back worked correctly, going back a stage left the stage the
+applicant had left marked in progress, and the drawer drew a chip for every stage
+that was not pending. A one-time upgrade step resets those leftover rows to
+pending: only stages ahead of the applicant's current one, in their own
+pipeline. Their current stage and everything behind it are untouched.
 
 ### Completing a Step
 
@@ -380,8 +412,9 @@ are worked or skipped.
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
+-->
 
 ## The Kanban Board
 
@@ -456,6 +489,10 @@ the sections that do not apply to this applicant are simply absent:
 
 - **Contact Information**: Email and phone, editable in place
 - **Desired Membership Type**: Regular or administrative
+- **How They Found Us**: the referral source (a guest sign-in records
+  "Attended: _event name_"), the member who referred them, and why they want to
+  join — each line only when it is on file, and the section is absent when none
+  is. A referrer from another department is never named.
 - **Application Data**: What they submitted, when there is a linked application
 - **Current Stage**: The stage and when they entered it
 - **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**
@@ -469,7 +506,10 @@ the sections that do not apply to this applicant are simply absent:
 
 The action bar pins to the bottom. Left to right: **Interview**, **Back**,
 then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance** — on the final
-stage **Skip** is not offered and the last button reads **Convert**.
+stage **Skip** is not offered and the last button reads **Convert**. The final
+stage is the one marked final in the pipeline (the stage whose completion can
+transfer the applicant to membership), wherever it sits; a pipeline with no
+stage marked final treats its last stage as final.
 
 Three drawer details changed in this window:
 
@@ -485,8 +525,9 @@ Three drawer details changed in this window:
 
 ![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
+-->
 
 ---
 
@@ -662,16 +703,19 @@ signers and who has signed. It used to report no data after a signature.
 > coordinator could convert an applicant no officer had signed. Applicants
 > already sitting on such a stage stay there until the named officers sign.
 
-> **Screenshot needed:**
-> _[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
+<!-- Screenshot needed:
+_[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
+-->
 
 ---
 
-> **Screenshot needed:**
-> _[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
+<!-- Screenshot needed:
+_[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
+-->
 
-> **Screenshot needed:**
-> _[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
+<!-- Screenshot needed:
+_[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
+-->
 
 ## Converting to a Full Member
 
@@ -784,7 +828,7 @@ the class/status pair and the password group are both in frame.**]**
 | Email already exists as a member                      | Conversion blocked; shows existing member details. An email or username held by a **deactivated** member now gets a plain explanation instead of a server error _(2026-09-29)_                                                                                                                                                                                                                                                                                                                                                    |
 | A **Required** stage is unfinished or skipped         | Conversion refused, naming the stage _(2026-09-28)_                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | The Target Role grants more than you hold             | Refused: "This applicant's target position grants permissions beyond your own. Choose positions you can grant, or ask someone who holds them to convert this applicant." _(2026-09-30)_                                                                                                                                                                                                                                                                                                                                           |
-| A typed membership number belonged to a former member | Refused — it is kept for them. See [Membership → Numbers are never reissued](./01-membership.md#numbers-are-never-reissued-2026-09-29)                                                                                                                                                                                                                                                                                                                                                                                            |
+| A typed membership number belonged to a former member | Refused — it is kept for them. See [Membership → Numbers are never reissued](./01-membership.md#numbers-are-never-reissued)                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Auto-transfer enabled on pipeline                     | Conversion happens automatically at final stage — **unless the ballot gate or a Required stage holds it**. It sends the welcome email after the conversion commits when email can send; when none goes out, the applicant's activity log says so and the approver gets an in-app notice _(2026-09-27)_. The Target Role is applied only if whoever chose it is still active and holds every permission it grants; otherwise the member gets the default position and the activity log says a leader must assign it _(2026-09-30)_ |
 | Applicant converted without election vote             | Allowed if pipeline doesn't include an election stage                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Election package reads **Added to Ballot**            | Conversion refused until the election closes and the result is recorded _(2026-09-14)_                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -834,25 +878,32 @@ Pipelines can be configured to automatically flag or deactivate stale applicatio
 
 Navigate to **Settings > Pipeline** and configure:
 
-| Setting                | Options                                   | Description                                                  |
-| ---------------------- | ----------------------------------------- | ------------------------------------------------------------ |
-| **Timeout Preset**     | 3 months, 6 months, 1 year, Never, Custom | How long before an applicant is considered inactive          |
-| **Warning Threshold**  | Percentage (default 80%)                  | Show warning when this percentage of timeout has elapsed     |
-| **Notify Coordinator** | Yes/No                                    | Send notification when applicant approaches timeout          |
-| **Auto-Purge**         | Yes/No                                    | Stored, but **not in effect** — nothing reads it (see below) |
+| Setting                | Options                                    | Description                                                                 |
+| ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| **Timeout Preset**     | 3 months, 6 months, 1 year, Never, Custom  | How long before an applicant is considered inactive                         |
+| **Warning Threshold**  | Percentage (default 80%)                   | Show warning when this percentage of timeout has elapsed                    |
+| **Notify Coordinator** | Yes/No                                     | Send notification when applicant approaches timeout                         |
+| **Auto-Purge**         | Yes/No, plus a grace period (30–1095 days) | Permanently delete inactive applications after the grace period (see below) |
 
 ### How It Works
 
 1. System checks `last_activity_at` for each active applicant nightly
 2. If elapsed time > warning threshold: applicant flagged with warning
 3. If elapsed time > timeout: applicant marked as **Inactive**
-4. ~~If auto-purge enabled and inactive for > purge days: applicant deleted~~ — **not wired.** See below
+4. If Auto-Purge is on and an application has been **Inactive** for at least the grace period: the application and its uploaded documents are permanently deleted (checked once a day)
 
-> **Auto-Purge does nothing yet** _(recorded 2026-09-30)_. The **Auto-Purge**
-> setting and its grace period are stored, but no scheduled task reads them —
-> nothing is ever purged automatically. Purge by hand from the **Inactive
-> Applications** tab (below). Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#prospective-members--purge-is-manual-auto-purge-is-not-wired-2026-09-30).
+> **How the Auto-Purge grace period is counted** _(since 2026-10-09)_. It
+> counts from when the application last became **Inactive**. Reactivating it
+> stops the clock, and if it goes inactive again the period starts over. Only
+> inactive applications are purged — never withdrawn, rejected or on-hold ones.
+> Seven days before an application is deleted, the membership coordinators
+> get one email listing it with its deletion date — reactivate it before then
+> to keep it. Each purge is recorded in the audit log.
+> Applications that were already inactive when your department upgraded to the
+> version that switched Auto-Purge on count from that upgrade, not from their
+> original deactivation date, so nothing was deleted the first night. You can
+> still purge by hand from the **Inactive Applications** tab (below). See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#prospective-members--purge-scope-and-auto-purge-2026-09-30-wired-2026-10-09).
 
 ### Per-Stage Override
 
@@ -992,8 +1043,9 @@ advance to, and **the audit entry is only written after a real advance**.
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
+-->
 
 ## Pipeline Statistics & Reports
 
@@ -1062,7 +1114,7 @@ reached wins; moving them back before it undoes it. The status page, the
 self-withdrawal below and the email stages' tracker link all follow that
 per-applicant answer. Until 2026-09-25 the stage could be configured but
 nothing read it. Full detail in
-[Membership → Enable Status Page Stages](./01-membership.md#enable-status-page-stages-2026-09-25).
+[Membership → Enable Status Page Stages](./01-membership.md#enable-status-page-stages).
 
 ### The applicant can withdraw _(2026-09-24)_
 
@@ -1085,8 +1137,9 @@ department's membership coordinator.") and offers **Withdraw Application** or
 - Applications in any other state (approved, converted, rejected) have no
   button; an applicant at that point contacts the department.
 
-> **Screenshot needed:**
-> _[Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**.]_
+<!-- Screenshot needed:
+_[Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**.]_
+-->
 
 > **You cannot look up an applicant's link from inside the app** _(2026-08-13)_.
 > The token is a credential — anyone holding it can read that applicant's
@@ -1123,8 +1176,9 @@ See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-mo
 
 ---
 
-> **Screenshot needed:**
-> _[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
+<!-- Screenshot needed:
+_[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
+-->
 
 ## Realistic Example: New Firefighter Application
 
@@ -1196,21 +1250,21 @@ Alex Rivera is now a full member of the Oakville Fire Department.
 
 ## Troubleshooting
 
-| Issue                                                | Solution                                                                                                                                                                                                                                            |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Applicant stuck at form submission stage             | Check that the form is linked correctly. Verify the applicant received the form email.                                                                                                                                                              |
-| Election package not created                         | Since 2026-09-30 every route onto an `election_vote` stage creates one. An applicant who reached the stage before then has none: use **Create Package** in the drawer's Election Package section.                                                   |
-| Cannot convert applicant                             | The refusal names the reason: an unfinished or skipped **Required** stage, an unsigned sign-off ("Approval still needed from: …"), the ballot, an existing or deactivated member with the same email, or a Target Role granting more than you hold. |
-| A signer cannot find where to sign                   | **Sign-offs** (`/prospective-members/sign-offs`), linked from their dashboard. It lists only stages asking for a role they hold — check the stage names their position.                                                                             |
-| Converted member cannot sign in                      | If **Set it later** was chosen, or the welcome email failed, they have no password yet: set one with **Reset Password** in Member Management.                                                                                                       |
-| Purge Selected removed nothing (before 2026-09-30)   | Purge matched withdrawn applications by mistake. Purge again; it now deletes the inactive applications you select.                                                                                                                                  |
-| Inactive applications are never purged automatically | Expected: the Auto-Purge setting is not wired. Purge from the Inactive Applications tab.                                                                                                                                                            |
-| Applicant stuck on an automated email stage          | The email did not send. Check Settings → Email and the applicant's address, then complete the stage by hand.                                                                                                                                        |
-| Duplicate detection false positive                   | If the existing member is archived/dropped, you can create the new applicant and note the relationship.                                                                                                                                             |
-| Public status page shows wrong stage                 | Token may be for a different applicant. Verify the token in the applicant's detail view.                                                                                                                                                            |
-| Inactivity warning not triggering                    | Check pipeline inactivity settings. Verify the scheduled task is running.                                                                                                                                                                           |
-| Documents not downloading                            | Check file storage configuration. Verify the document was uploaded successfully.                                                                                                                                                                    |
-| Bulk advance fails for some applicants               | Applicants at the final stage cannot advance further. Check individual error messages.                                                                                                                                                              |
+| Issue                                              | Solution                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Applicant stuck at form submission stage           | Check that the form is linked correctly. Verify the applicant received the form email.                                                                                                                                                                                             |
+| Election package not created                       | Since 2026-09-30 every route onto an `election_vote` stage creates one. An applicant who reached the stage before then has none: use **Create Package** in the drawer's Election Package section.                                                                                  |
+| Cannot convert applicant                           | The refusal names the reason: an unfinished or skipped **Required** stage, an unsigned sign-off ("Approval still needed from: …"), the ballot, an existing or deactivated member with the same email, or a Target Role granting more than you hold.                                |
+| A signer cannot find where to sign                 | **Sign-offs** (`/prospective-members/sign-offs`), linked from their dashboard. It lists only stages asking for a role they hold — check the stage names their position.                                                                                                            |
+| Converted member cannot sign in                    | If **Set it later** was chosen, or the welcome email failed, they have no password yet: set one with **Reset Password** in Member Management.                                                                                                                                      |
+| Purge Selected removed nothing (before 2026-09-30) | Purge matched withdrawn applications by mistake. Purge again; it now deletes the inactive applications you select.                                                                                                                                                                 |
+| An inactive application was not auto-purged        | Auto-Purge must be on for its pipeline, and the grace period counts from when it last became inactive — or from your upgrade to the version that switched Auto-Purge on, if it was already inactive then. Purge it by hand from the Inactive Applications tab if it should go now. |
+| Applicant stuck on an automated email stage        | The email did not send. Check Settings → Email and the applicant's address, then complete the stage by hand.                                                                                                                                                                       |
+| Duplicate detection false positive                 | If the existing member is archived/dropped, you can create the new applicant and note the relationship.                                                                                                                                                                            |
+| Public status page shows wrong stage               | Token may be for a different applicant. Verify the token in the applicant's detail view.                                                                                                                                                                                           |
+| Inactivity warning not triggering                  | Check pipeline inactivity settings. Verify the scheduled task is running.                                                                                                                                                                                                          |
+| Documents not downloading                          | Check file storage configuration. Verify the document was uploaded successfully.                                                                                                                                                                                                   |
+| Bulk advance fails for some applicants             | Applicants at the final stage cannot advance further. Check individual error messages.                                                                                                                                                                                             |
 
 ---
 

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreateMember = vi.fn();
@@ -64,15 +64,21 @@ const fillRequired = async (
   user: ReturnType<typeof userEvent.setup>,
   { membershipNumber = 'FF-001' }: { membershipNumber?: string | null } = {}
 ) => {
-  const type = async (placeholder: string, value: string) => {
-    await user.type(screen.getByPlaceholderText(placeholder), value);
+  // Pasted rather than typed: every keystroke re-renders the whole form, and
+  // eleven typed fields took 2-3s per test unloaded, so a loaded run (the
+  // pre-commit hook runs every related suite at once) crossed the 5s
+  // timeout. What these tests assert is the saved payload, not keystrokes.
+  const fill = async (field: HTMLElement, value: string) => {
+    await user.click(field);
+    await user.paste(value);
   };
+  const type = (placeholder: string, value: string) => fill(screen.getByPlaceholderText(placeholder), value);
   await type('John', 'Dana');
   await type('Doe', 'Reyes');
   // Null leaves it blank, for a department that auto-assigns numbers. Found by
   // label because its placeholder is the previewed number when there is one.
   if (membershipNumber !== null) {
-    await user.type(screen.getByLabelText(/^membership number/i), membershipNumber);
+    await fill(screen.getByLabelText(/^membership number/i), membershipNumber);
   }
   await type('123 Main Street', '1 Main St');
   await type('Springfield', 'Falls Church');
@@ -84,11 +90,14 @@ const fillRequired = async (
   // The member's primary phone and the emergency contact's share a
   // placeholder; they are the first and second in document order.
   const phones = screen.getAllByPlaceholderText('(555) 123-4567');
-  await user.type(phones[0] as HTMLElement, '5550100');
-  await user.type(phones[1] as HTMLElement, '5550101');
+  await fill(phones[0] as HTMLElement, '5550100');
+  await fill(phones[1] as HTMLElement, '5550101');
 };
 
-describe('AddMember', () => {
+// These tests type a whole member record a keystroke at a time, which on a
+// loaded machine — the pre-commit hook runs the suite beside other work —
+// takes longer than the default 5s even though nothing is wrong.
+describe('AddMember', { timeout: 20_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPreviewNextMembershipId.mockResolvedValue({ enabled: false, next_id: null });
@@ -360,12 +369,46 @@ describe('AddMember', () => {
       }
     });
 
-    it('offers no Status or Preferred Contact control, since neither is saved', async () => {
+    it('offers the starting statuses the server accepts, and no Preferred Contact control', async () => {
       renderWithRouter(<AddMember />);
       await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
-      expect(screen.queryByRole('option', { name: 'On Leave' })).not.toBeInTheDocument();
+      const status = screen.getByRole('combobox', { name: /^status$/i });
+      expect(
+        within(status)
+          .getAllByRole('option')
+          .map((o) => o.textContent)
+      ).toEqual(['Active', 'Inactive', 'On Leave']);
       expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
+    });
+
+    // W08-1: the status used to be shown and not sent, so "On Leave" created
+    // an active member.
+    it('sends the status the operator picked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.selectOptions(screen.getByRole('combobox', { name: /^status$/i }), 'leave');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.status).toBe('leave');
+    });
+
+    it('sends Active when the status is left alone', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.status).toBe('active');
     });
 
     it('refuses a password the server would, at the field, and lists the rules', async () => {

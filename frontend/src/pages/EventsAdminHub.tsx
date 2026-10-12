@@ -12,7 +12,8 @@ import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Plus, QrCode, Settings } from 'lucide-react';
 import { AdminHubFrame } from '../components/admin';
-import type { AdminHubAction, AdminHubTab } from '../components/admin';
+import type { AdminHubAction } from '../components/admin';
+import { EVENTS_ADMIN_TABS, type EventsAdminTab } from './eventsAdminTabs';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 const EventCreatePage = lazyWithRetry(() => import('./EventCreatePage').then((m) => ({ default: m.EventCreatePage })));
@@ -22,17 +23,8 @@ const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 
-type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
-
-/** Settings is always last — the frame's rule, on every module. */
-const tabs: AdminHubTab<AdminTab>[] = [
-  { id: 'create', label: 'Create Event' },
-  { id: 'past_events', label: 'Past Events' },
-  { id: 'requests', label: 'Requests' },
-  { id: 'analytics', label: 'QR Code Analytics' },
-  { id: 'community', label: 'Community Engagement' },
-  { id: 'settings', label: 'Settings' },
-];
+type AdminTab = EventsAdminTab;
+const tabs = EVENTS_ADMIN_TABS;
 
 const TabLoading = () => (
   <div className="flex h-64 items-center justify-center">

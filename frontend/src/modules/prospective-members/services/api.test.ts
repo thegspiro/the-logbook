@@ -50,6 +50,13 @@ function makeStepProgressAt(
 /** Helper to build a minimal BackendProspectResponse */
 function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): BackendProspectResponse {
   return {
+    target_role_id: null,
+    target_role_name: null,
+    deactivated_at: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    withdrawn_at: null,
+    withdrawal_reason: null,
     id: 'prospect-1',
     organization_id: 'org-1',
     pipeline_id: 'pipeline-1',
@@ -432,5 +439,35 @@ describe('mapProspectToApplicant — target role and lifecycle stamps', () => {
 
     expect(result.deactivated_at).toBe('2026-06-01T08:00:00Z');
     expect(result.reactivated_at).toBe('2026-07-04T14:15:00Z');
+  });
+});
+
+describe('mapProspectToApplicant referral fields', () => {
+  it('carries referral source, interest reason and the referrer name', () => {
+    const response = makeProspectResponse([]);
+    response.referral_source = 'Attended: Spring Open House';
+    response.interest_reason = 'Grew up next to the station.';
+    response.referred_by = 'user-9';
+    response.referred_by_name = 'Jordan Avery';
+
+    const applicant = mapProspectToApplicant(response);
+
+    expect(applicant.referral_source).toBe('Attended: Spring Open House');
+    expect(applicant.interest_reason).toBe('Grew up next to the station.');
+    expect(applicant.referred_by_name).toBe('Jordan Avery');
+  });
+
+  it('leaves blanks and an unnamed referrer undefined', () => {
+    const response = makeProspectResponse([]);
+    response.referral_source = '';
+    response.interest_reason = null;
+    response.referred_by = 'user-elsewhere';
+    response.referred_by_name = null;
+
+    const applicant = mapProspectToApplicant(response);
+
+    expect(applicant.referral_source).toBeUndefined();
+    expect(applicant.interest_reason).toBeUndefined();
+    expect(applicant.referred_by_name).toBeUndefined();
   });
 });

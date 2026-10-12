@@ -575,9 +575,13 @@ class TestCRUD:
         data = ScreeningRecordCreate(
             screening_type="drug_screening",
             status="scheduled",
+            user_id=str(uuid4()),
         )
 
-        result = await service.create_record(org_id, data)
+        # The in-org check on the subject needs a real query; it has its own
+        # integration coverage (MS-3).
+        with patch("app.services.medical_screening_service.assert_in_org", AsyncMock()):
+            result = await service.create_record(org_id, data)
 
         assert mock_db.add.called
         assert result.organization_id == org_id
@@ -602,7 +606,9 @@ class TestRequestEnumValidation:
         from app.schemas.medical_screening import ScreeningRecordCreate
 
         with pytest.raises(ValidationError):
-            ScreeningRecordCreate(screening_type="physical_exam", status="bogus")
+            ScreeningRecordCreate(
+                screening_type="physical_exam", status="bogus", user_id="u-1"
+            )
 
     def test_record_create_rejects_bad_screening_type(self):
         from pydantic import ValidationError
@@ -610,12 +616,16 @@ class TestRequestEnumValidation:
         from app.schemas.medical_screening import ScreeningRecordCreate
 
         with pytest.raises(ValidationError):
-            ScreeningRecordCreate(screening_type="not_a_type", status="passed")
+            ScreeningRecordCreate(
+                screening_type="not_a_type", status="passed", user_id="u-1"
+            )
 
     def test_record_create_normalizes_case(self):
         from app.schemas.medical_screening import ScreeningRecordCreate
 
-        data = ScreeningRecordCreate(screening_type="PHYSICAL_EXAM", status="Passed")
+        data = ScreeningRecordCreate(
+            screening_type="PHYSICAL_EXAM", status="Passed", user_id="u-1"
+        )
         assert data.screening_type == "physical_exam"
         assert data.status == "passed"
 

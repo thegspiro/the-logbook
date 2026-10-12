@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v1.endpoints.external_training import (
     create_provider,
@@ -142,7 +142,7 @@ class TestTrainingRecordCategoryScoping:
         db.add.assert_not_called()
 
     async def test_update_rejects_foreign_category(self):
-        record = SimpleNamespace(id="r1", organization_id="org-1")
+        record = SimpleNamespace(id="r1", organization_id="org-1", voided_at=None)
         db = MagicMock()
         # 1) record fetch (in-org), 2) category lookup -> not found.
         db.execute = AsyncMock(side_effect=[_one(record), _one(None)])
@@ -150,7 +150,9 @@ class TestTrainingRecordCategoryScoping:
         db.refresh = AsyncMock()
         upd = TrainingRecordUpdate(category_id=uuid4())
         with pytest.raises(HTTPException) as exc:
-            await update_record(uuid4(), upd, db, _user())
+            await update_record(
+                uuid4(), upd, BackgroundTasks(), db=db, current_user=_user()
+            )
         assert exc.value.status_code == 404
         assert "category" in exc.value.detail.lower()
         db.commit.assert_not_awaited()

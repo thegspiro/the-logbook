@@ -177,6 +177,7 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     config: backendConfig ? { ...defaultStageConfig(stageType), ...backendConfig } : defaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    is_final_step: step.is_final_step ?? false,
     inactivity_timeout_days: step.inactivity_timeout_days ?? null,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
     public_visible: step.public_visible ?? true,
@@ -375,6 +376,9 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     // reader and no producer until the columns landed.
     target_role_id: data.target_role_id || undefined,
     target_role_name: data.target_role_name || undefined,
+    referral_source: data.referral_source || undefined,
+    interest_reason: data.interest_reason || undefined,
+    referred_by_name: data.referred_by_name || undefined,
     deactivated_at: data.deactivated_at || undefined,
     deactivated_reason: data.deactivated_reason || undefined,
     reactivated_at: data.reactivated_at || undefined,

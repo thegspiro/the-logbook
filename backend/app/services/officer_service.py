@@ -60,6 +60,21 @@ def build_office_variables() -> List[Dict[str, str]]:
     return variables
 
 
+def _office_slugs(office: Dict[str, object]) -> List[str]:
+    """The position slugs an office auto-detects its holder from.
+
+    ``OFFICE_CATALOG`` is typed as ``dict[str, object]`` because its entries
+    mix strings and lists; every entry's ``position_slugs`` is a list of
+    strings, and this is where that is checked rather than assumed.
+    """
+    slugs = office["position_slugs"]
+    if not isinstance(slugs, list):
+        raise TypeError(
+            f"OFFICE_CATALOG {office['key']!r} position_slugs is not a list"
+        )
+    return [str(slug) for slug in slugs]
+
+
 def _member_name(user: User) -> str:
     """Best available display name for a member record.
 
@@ -107,7 +122,7 @@ def resolve_office(
     position slugs, already in deterministic order.
     """
     key = str(office["key"])
-    slugs: List[str] = list(office["position_slugs"])  # type: ignore[arg-type]
+    slugs = _office_slugs(office)
     auto = candidates[0] if candidates else None
 
     # A record with neither a name override nor a resolvable member is a
@@ -175,11 +190,7 @@ class OfficerService:
 
     async def _load_holders(self, organization_id: str) -> Dict[str, List[User]]:
         """Map each catalogued position slug to the active members holding it."""
-        wanted = {
-            slug
-            for office in OFFICE_CATALOG
-            for slug in office["position_slugs"]  # type: ignore[union-attr]
-        }
+        wanted = {slug for office in OFFICE_CATALOG for slug in _office_slugs(office)}
         result = await self.db.execute(
             select(User)
             .join(User.positions)
@@ -235,7 +246,7 @@ class OfficerService:
             # Candidates the admin can pick from, deduplicated across slugs.
             candidates: List[User] = []
             seen: set = set()
-            for slug in office["position_slugs"]:  # type: ignore[union-attr]
+            for slug in _office_slugs(office):
                 for user in holders.get(slug, []):
                     if str(user.id) not in seen:
                         seen.add(str(user.id))

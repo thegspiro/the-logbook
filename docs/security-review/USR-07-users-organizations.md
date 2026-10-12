@@ -989,6 +989,20 @@ permission or a second, narrower directory endpoint should be split out),
 the same category of call left flagged for FIN-7/ELEC-12/USR-5/MP-10/MS-6.
 Mirrored into `KNOWN_LIMITATIONS.md`.
 
+**Owner decision (2026-10-05): split a narrow directory endpoint for
+Members.tsx's non-manager view; other callers unchanged.** `GET
+/users/directory` (`members.view` / `users.view` / `members.manage`) returns
+`MemberDirectoryEntry` — names, membership number, photo, status, rank, and
+email/phone/mobile under the department ceiling **and** each member's own
+choice — and nothing else: no `username`, `hire_date`, `station`, `platoon`,
+`membership_type`, classification or `organization_id`. `Members.tsx` loads it
+for a viewer without `members.manage`, so what the directory hides is no
+longer in that page's response (`tests/test_member_directory_endpoint.py`,
+`Members.test.tsx`). **Residual, accepted with the decision:** `GET /users`
+keeps its full shape at `members.view` for its 25+ other callers, so a member
+who calls it directly still reads those fields; the owner chose not to change
+that contract.
+
 ## Verified good ✅ (re-confirmed pass 3)
 
 - **Every by-id fetch across all four files org-scopes.** Traced individually
@@ -1470,6 +1484,15 @@ change needing a decision on default page size and whether existing callers
 (the roster page, the leave widget) tolerate a paginated response without a
 frontend change, the same category of judgment call FIN-7's export cap and
 ELEC-12 were left flagged for. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Owner decision (2026-10-05): compute the leave widget's counts in SQL, no
+contract change.** `leave_widget_summary` now issues one aggregate
+`COUNT`/`SUM(CASE …)` query instead of loading every active leave, with the
+same three definitions (`tests/test_leave_widget_summary_counts.py`). The other
+three lists — `list_users_with_roles`, `get_archived_members` and
+`MemberLeaveService.list_leaves` — stay unbounded: the owner chose this option
+over paginating them, which would have changed their response envelopes. That
+remainder is accepted, and recorded as such in `KNOWN_LIMITATIONS.md`.
 
 ### USR-6 — Doc correction — Route inventory omitted a third bare-auth category
 

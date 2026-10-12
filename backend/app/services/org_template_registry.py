@@ -24,6 +24,7 @@ export path does not consume all of them.
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from app.core.database import Base
 from app.models.admin_hours import AdminHoursCategory, EventHourMapping
 from app.models.apparatus import (
     ApparatusCustomField,
@@ -133,7 +134,7 @@ class TableSpec:
         json_id_paths: JSON locations embedding foreign row IDs to remap.
     """
 
-    model: type
+    model: type[Base]
     module: str
     parent_fk: Optional[str] = None
     null_columns: tuple[str, ...] = ()
@@ -146,7 +147,8 @@ class TableSpec:
 
     @property
     def tablename(self) -> str:
-        return self.model.__tablename__
+        name: str = self.model.__tablename__
+        return name
 
 
 def _no_owner(row: object) -> bool:

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { GraduationCap, RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings } from 'lucide-react';
 import { trainingService } from '../services/api';
 import type { TrainingDashboardSummary } from '../services/trainingServices';
 import {
@@ -99,16 +99,9 @@ const TrainingOfficerDashboard: React.FC = () => {
 
   return (
     <div data-page-main className="py-8">
-      <header className="mb-8 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold sm:text-3xl">
-            <GraduationCap className="h-8 w-8 shrink-0 text-red-700" aria-hidden="true" />
-            Training Officer Dashboard
-          </h1>
-          <p className="text-theme-text-muted">
-            Compliance, expiring certifications, hours, and what needs your attention
-          </p>
-        </div>
+      {/* The hub's section nav already names this page and says what it is for; the title stays for screen-reader heading navigation only. */}
+      <header className="mb-6 flex items-start justify-end gap-4">
+        <h2 className="sr-only">Training Officer Dashboard</h2>
         <div className="flex shrink-0 gap-2">
           <button
             type="button"

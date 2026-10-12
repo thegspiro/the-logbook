@@ -236,8 +236,8 @@ fixed or flagged. One produced a finding:
   the create dialog instead and pinned it with
   `ScreeningRecordForm.linkageNotice.test.tsx`. The underlying gap is the
   existing
-  [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md#medical-screening--the-add-record-form-attaches-to-nobody-2026-08-08)
-  entry, filed 2026-08-08 and still open.
+  [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08)
+  entry, filed 2026-08-08 (the Add Record half was resolved 2026-10-05).
 
 **The rotation's bookkeeping changed** ([#2644](https://github.com/thegspiro/the-logbook/pull/2644)).
 It had been opening a docs-only PR to record each feature PR's merge — eighteen

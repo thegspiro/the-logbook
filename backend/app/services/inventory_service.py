@@ -424,6 +424,17 @@ class ItemOutsideDomainError(LookupError):
     """
 
 
+class ItemNameTakenOutsideDomainError(LookupError):
+    """A domain-scoped create-if-absent found the name filed in another domain.
+
+    Raised rather than handing the row back: the caller asked for an item in
+    its own domain, and linking a gear row from the medical page would leave
+    the supply officer with a check position they cannot see on their own
+    list. Carries no details of the other row on purpose — a medical-only
+    officer is told the name is in use, not what it is.
+    """
+
+
 def storage_area_paths(areas) -> Dict[str, str]:
     """Map each area id to "Parent > Child", walking ``parent_id``.
 
@@ -935,7 +946,7 @@ class InventoryService:
         query = query.order_by(InventoryCategory.name).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_category_by_id(
         self, category_id: UUID, organization_id: UUID
@@ -946,7 +957,8 @@ class InventoryService:
             .where(InventoryCategory.id == str(category_id))
             .where(InventoryCategory.organization_id == str(organization_id))
         )
-        return result.scalar_one_or_none()
+        inventory_category: Optional[InventoryCategory] = result.scalar_one_or_none()
+        return inventory_category
 
     async def update_category(
         self,
@@ -1041,7 +1053,8 @@ class InventoryService:
         if exclude_vendor_id:
             query = query.where(InventoryVendor.id != str(exclude_vendor_id))
         result = await self.db.execute(query.limit(1))
-        return result.scalars().first()
+        inventory_vendor: Optional[InventoryVendor] = result.scalars().first()
+        return inventory_vendor
 
     async def get_vendor_stats(
         self, organization_id: UUID, vendor_ids: List[str]
@@ -1149,7 +1162,8 @@ class InventoryService:
             .where(InventoryVendor.organization_id == str(organization_id))
             .options(selectinload(InventoryVendor.contacts))
         )
-        return result.scalars().first()
+        inventory_vendor: Optional[InventoryVendor] = result.scalars().first()
+        return inventory_vendor
 
     async def create_vendor(
         self,
@@ -1335,7 +1349,10 @@ class InventoryService:
             .where(InventoryVendorContact.id == str(contact_id))
             .where(InventoryVendorContact.organization_id == str(organization_id))
         )
-        return result.scalars().first()
+        inventory_vendor_contact: Optional[InventoryVendorContact] = (
+            result.scalars().first()
+        )
+        return inventory_vendor_contact
 
     async def update_vendor_contact(
         self,
@@ -1585,7 +1602,7 @@ class InventoryService:
     async def _check_serial_number_unique(
         self,
         serial_number: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         exclude_item_id: Optional[UUID] = None,
     ) -> Optional[str]:
         """Check that serial_number is unique within the organization."""
@@ -1616,7 +1633,7 @@ class InventoryService:
     )
 
     async def _assert_item_fks_in_org(
-        self, data: Dict[str, Any], organization_id: UUID
+        self, data: Dict[str, Any], organization_id: UUID | str
     ) -> None:
         for field, model, label in self._ITEM_FK_CHECKS:
             if field in data:
@@ -1667,7 +1684,10 @@ class InventoryService:
         data["style"] = GarmentStyle(primary) if primary else None
 
     async def create_item(
-        self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        item_data: Dict[str, Any],
+        created_by: UUID | str,
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
         """Create a new inventory item"""
         try:
@@ -1872,7 +1892,7 @@ class InventoryService:
 
     @staticmethod
     def _category_ids_of_type(
-        organization_id: UUID, item_types: Set[ItemType]
+        organization_id: UUID | str, item_types: Set[ItemType]
     ) -> "Select":
         """Org-scoped select of category ids in the given domains.
 
@@ -2522,7 +2542,7 @@ class InventoryService:
                 InventoryItemPin.item_id == str(item_id),
             )
         )
-        pin = existing.scalar_one_or_none()
+        pin: InventoryItemPin | None = existing.scalar_one_or_none()
         if pin is not None:
             return pin
 
@@ -2631,8 +2651,8 @@ class InventoryService:
 
     async def get_item_by_id(
         self,
-        item_id: UUID,
-        organization_id: UUID,
+        item_id: UUID | str,
+        organization_id: UUID | str,
         attach_lot_stock: bool = False,
     ) -> Optional[InventoryItem]:
         """Get item by ID with all relationships.
@@ -2660,13 +2680,13 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        item = result.scalar_one_or_none()
+        item: Optional[InventoryItem] = result.scalar_one_or_none()
         if item and attach_lot_stock:
             await self._attach_lot_stock(str(organization_id), [item])
         return item
 
     async def _get_item_locked(
-        self, item_id: UUID, organization_id: UUID
+        self, item_id: UUID, organization_id: UUID | str
     ) -> Optional[InventoryItem]:
         """Get item by ID with a row-level lock (SELECT FOR UPDATE).
 
@@ -2696,7 +2716,8 @@ class InventoryService:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
+        inventory_item: Optional[InventoryItem] = result.scalar_one_or_none()
+        return inventory_item
 
     async def update_item(
         self,
@@ -3001,7 +3022,7 @@ class InventoryService:
         item_id: UUID,
         user_id: UUID,
         organization_id: UUID,
-        assigned_by: UUID,
+        assigned_by: UUID | str,
         assignment_type: AssignmentType = AssignmentType.PERMANENT,
         reason: Optional[str] = None,
         expected_return_date: Optional[datetime] = None,
@@ -3185,7 +3206,7 @@ class InventoryService:
         )
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ============================================
     # Pool Item Issuance Management
@@ -3420,8 +3441,8 @@ class InventoryService:
         self,
         item_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
-        issued_by: UUID,
+        organization_id: UUID | str,
+        issued_by: UUID | str,
         quantity: int = 1,
         reason: Optional[str] = None,
         override_allowance: bool = False,
@@ -3709,7 +3730,7 @@ class InventoryService:
         query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_user_issuances(
         self,
@@ -3733,7 +3754,7 @@ class InventoryService:
         query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ============================================
     # Check-Out/Check-In Management
@@ -3743,8 +3764,8 @@ class InventoryService:
         self,
         item_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
-        checked_out_by: UUID,
+        organization_id: UUID | str,
+        checked_out_by: UUID | str,
         expected_return_at: Optional[datetime] = None,
         reason: Optional[str] = None,
     ) -> Tuple[Optional[CheckOutRecord], Optional[str]]:
@@ -3805,8 +3826,8 @@ class InventoryService:
     async def checkin_item(
         self,
         checkout_id: UUID,
-        organization_id: UUID,
-        checked_in_by: UUID,
+        organization_id: UUID | str,
+        checked_in_by: UUID | str,
         return_condition: ItemCondition,
         damage_notes: Optional[str] = None,
     ) -> Tuple[bool, Optional[str]]:
@@ -3943,7 +3964,7 @@ class InventoryService:
         )
 
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_overdue_checkouts(
         self,
@@ -3983,7 +4004,7 @@ class InventoryService:
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     @staticmethod
     def checkout_is_overdue(record: CheckOutRecord) -> bool:
@@ -4004,7 +4025,7 @@ class InventoryService:
         if due.tzinfo is None:
             # MySQL hands back naive datetimes; every stored value is UTC.
             due = due.replace(tzinfo=timezone.utc)
-        return due < datetime.now(timezone.utc)
+        return bool(due < datetime.now(timezone.utc))
 
     async def mark_overdue_checkouts(self, organization_id: UUID) -> int:
         """Batch-mark overdue checkouts.  Call from a scheduled task, not from
@@ -4022,7 +4043,7 @@ class InventoryService:
             .values(is_overdue=True)
         )
         await self.db.commit()
-        return result.rowcount
+        return int(result.rowcount)
 
     # ============================================
     # Maintenance Management
@@ -4286,7 +4307,7 @@ class InventoryService:
             .options(selectinload(InventoryItem.category))
             .order_by(InventoryItem.next_inspection_due)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_item_maintenance_history(
         self,
@@ -4305,7 +4326,7 @@ class InventoryService:
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # ============================================
     # Reporting & Analytics
@@ -4322,18 +4343,52 @@ class InventoryService:
         rather than a simple row count, and include the names of low-stock items.
         ``exclude_item_types`` leaves out categories of those domains;
         ``skip`` / ``limit`` page the categories (by name) — the default is
-        every category, as the dashboard reads it."""
-        org_id = str(organization_id)
+        every category, as the dashboard reads it.
 
-        # Sum the quantity field per category (handles pool items correctly)
-        query = (
+        An item's on-hand is read the way :meth:`get_low_stock_items_for_alerts`
+        reads it: from its in-date stock lots when it has any lot at all, and
+        from ``InventoryItem.quantity`` otherwise. Lot bookkeeping never
+        touches ``quantity``, so summing that column alone read a category of
+        lot-stocked supplies as empty whatever its lots held (W47-6)."""
+        org_id = str(organization_id)
+        today = await resolve_org_today(self.db, org_id)
+
+        # Ready units per lot-stocked item. An item with only expired lots is
+        # still present here with zero, so it reads as empty rather than
+        # falling back to a quantity column nobody maintains.
+        lot_totals = (
             select(
-                InventoryCategory,
-                func.coalesce(func.sum(InventoryItem.quantity), 0).label(
-                    "current_stock"
-                ),
+                InventoryLot.inventory_item_id.label("item_id"),
+                func.sum(
+                    case(
+                        (
+                            or_(
+                                InventoryLot.expiration_date.is_(None),
+                                InventoryLot.expiration_date >= today,
+                            ),
+                            InventoryLot.quantity,
+                        ),
+                        else_=0,
+                    )
+                ).label("ready"),
             )
+            .where(InventoryLot.organization_id == org_id)
+            .group_by(InventoryLot.inventory_item_id)
+            .subquery()
+        )
+        on_hand = case(
+            (
+                lot_totals.c.item_id.isnot(None),
+                func.coalesce(lot_totals.c.ready, 0),
+            ),
+            else_=func.coalesce(InventoryItem.quantity, 0),
+        )
+        current_stock = func.coalesce(func.sum(on_hand), 0)
+
+        query = (
+            select(InventoryCategory, current_stock.label("current_stock"))
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
+            .outerjoin(lot_totals, lot_totals.c.item_id == InventoryItem.id)
             .where(InventoryCategory.organization_id == org_id)
             .where(InventoryCategory.active.is_(True))
             .where(InventoryItem.active.is_(True))
@@ -4345,10 +4400,7 @@ class InventoryService:
             )
         query = (
             query.group_by(InventoryCategory.id)
-            .having(
-                func.coalesce(func.sum(InventoryItem.quantity), 0)
-                <= InventoryCategory.low_stock_threshold
-            )
+            .having(current_stock <= InventoryCategory.low_stock_threshold)
             .order_by(InventoryCategory.name, InventoryCategory.id)
         )
         if skip:
@@ -4367,7 +4419,7 @@ class InventoryService:
                 func.row_number()
                 .over(
                     partition_by=InventoryItem.category_id,
-                    order_by=(InventoryItem.quantity.asc(), InventoryItem.id.asc()),
+                    order_by=(on_hand.asc(), InventoryItem.id.asc()),
                 )
                 .label("rank")
             )
@@ -4375,9 +4427,10 @@ class InventoryService:
                 select(
                     InventoryItem.category_id,
                     InventoryItem.name,
-                    InventoryItem.quantity,
+                    on_hand.label("quantity"),
                     rank,
                 )
+                .outerjoin(lot_totals, lot_totals.c.item_id == InventoryItem.id)
                 .where(
                     InventoryItem.category_id.in_(
                         [category.id for category, _ in categories]
@@ -4393,7 +4446,7 @@ class InventoryService:
             )
             for row in items_result.all():
                 item_details.setdefault(row.category_id, []).append(
-                    {"name": row.name, "quantity": row.quantity}
+                    {"name": row.name, "quantity": int(row.quantity)}
                 )
 
         return [
@@ -4401,11 +4454,11 @@ class InventoryService:
                 "category_id": category.id,
                 "category_name": category.name,
                 "item_type": category.item_type,
-                "current_stock": int(current_stock),
+                "current_stock": int(stock),
                 "threshold": category.low_stock_threshold,
                 "items": item_details.get(category.id, []),
             }
-            for category, current_stock in categories
+            for category, stock in categories
         ]
 
     async def get_inventory_summary(
@@ -5219,7 +5272,7 @@ class InventoryService:
                     )
 
                 elif (
-                    operation == "permanent_assignment"
+                    operation in ("permanent_assignment", "temporary_assignment")
                     and item.status == ItemStatus.AVAILABLE
                 ):
                     # AVAILABLE only, deliberately. `assign_item_to_user`
@@ -5236,13 +5289,20 @@ class InventoryService:
                         user_id=user_id,
                         organization_id=organization_id,
                         assigned_by=performed_by,
-                        assignment_type=AssignmentType.PERMANENT,
+                        assignment_type=(
+                            AssignmentType.TEMPORARY
+                            if operation == "temporary_assignment"
+                            else AssignmentType.PERMANENT
+                        ),
                         reason=reason,
+                        expected_return_date=(
+                            expected_return_at
+                            if operation == "temporary_assignment"
+                            else None
+                        ),
                     )
                     results.append(
-                        self._batch_result(
-                            code, item, "permanent_assignment", not err, err
-                        )
+                        self._batch_result(code, item, operation, not err, err)
                     )
                     successful, failed = (
                         (successful + 1, failed)
@@ -5788,9 +5848,9 @@ class InventoryService:
 
     async def put_away_items(
         self,
-        area_id: UUID,
-        item_ids: List[UUID],
-        organization_id: UUID,
+        area_id: UUID | str,
+        item_ids: Iterable[UUID | str],
+        organization_id: UUID | str,
     ) -> Optional[Dict[str, Any]]:
         """File scanned items under one storage area.
 
@@ -6569,19 +6629,19 @@ class InventoryService:
             )
         )
         for p in print_result.scalars().all():
-            user_name = self._format_user_name(p.printer) if p.printer else None
+            printed_by = self._format_user_name(p.printer) if p.printer else None
             events.append(
                 {
                     "type": "label_printed",
                     "id": p.id,
                     "date": p.printed_at.isoformat(),
                     "summary": (
-                        f"Label printed by {user_name}"
-                        if user_name
+                        f"Label printed by {printed_by}"
+                        if printed_by
                         else "Label printed"
                     ),
                     "details": {
-                        "user_name": user_name,
+                        "user_name": printed_by,
                         "label_value": p.label_value,
                     },
                 }
@@ -6773,7 +6833,7 @@ class InventoryService:
     # Size Variant Quick-Create
     # ------------------------------------------------------------------
 
-    async def _known_colors(self, organization_id: UUID) -> List[str]:
+    async def _known_colors(self, organization_id: UUID | str) -> List[str]:
         """The colour spellings this organization already stocks.
 
         Distinct over active items, which is both the vocabulary new writes fold
@@ -6843,7 +6903,8 @@ class InventoryService:
         else:
             query = query.where(ItemVariantGroup.category_id == category_id)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        item_variant_group: Optional["ItemVariantGroup"] = result.scalar_one_or_none()
+        return item_variant_group
 
     async def _existing_variant_keys(
         self,
@@ -7437,9 +7498,9 @@ class InventoryService:
                 )
             qty = 1
         else:
-            qty = received_quantity
-            if qty is None:
+            if received_quantity is None:
                 return False, "Received quantity is required for pool items"
+            qty = received_quantity
             if qty != req.quantity_returning:
                 return False, "Received quantity must match the quantity being returned"
 
@@ -7717,19 +7778,47 @@ class InventoryService:
         if not candidates:
             return []
 
-        lot_totals = await self._in_date_lot_totals(
-            str(organization_id), [i.id for i in candidates]
-        )
+        ready = await self.ready_on_hand(str(organization_id), candidates)
 
         low: List[Tuple[InventoryItem, int, bool]] = []
         for item in candidates:
-            from_lots = item.id in lot_totals
-            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
-            if on_hand <= (item.reorder_point or 0):
+            on_hand, from_lots = ready[item.id]
+            if self.is_at_or_below_reorder_point(on_hand, item.reorder_point):
                 low.append((item, on_hand, from_lots))
 
         low.sort(key=lambda row: row[1])
         return low
+
+    async def ready_on_hand(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> Dict[str, Tuple[int, bool]]:
+        """Ready units per item, as ``{item_id: (on_hand, from_lots)}``.
+
+        The one definition of shelf stock that both the daily low-stock alert
+        and the equipment-check auto-reorder read, so the two can never
+        disagree about whether an item is low. See
+        ``get_low_stock_items_for_alerts`` for why lot-stocked items are
+        counted from in-date lots and never from ``quantity``.
+        """
+        lot_totals = await self._in_date_lot_totals(
+            organization_id, [i.id for i in items]
+        )
+        ready: Dict[str, Tuple[int, bool]] = {}
+        for item in items:
+            from_lots = item.id in lot_totals
+            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            ready[item.id] = (on_hand, from_lots)
+        return ready
+
+    @staticmethod
+    def is_at_or_below_reorder_point(
+        on_hand: int, reorder_point: Optional[int]
+    ) -> bool:
+        """At or below, not strictly below: the reorder point is the last
+        quantity the department is willing to hold before ordering."""
+        if reorder_point is None:
+            return False
+        return on_hand <= reorder_point
 
     # ------------------------------------------------------------------
     # Stock Lots (ready replacement stock with lot # + expiration)
@@ -7739,12 +7828,13 @@ class InventoryService:
         self, item_id: str, organization_id: str
     ) -> Optional[InventoryItem]:
         """Fetch an item scoped to the organization."""
-        return await self.db.scalar(
+        item: Optional[InventoryItem] = await self.db.scalar(
             select(InventoryItem).where(
                 InventoryItem.id == item_id,
                 InventoryItem.organization_id == organization_id,
             )
         )
+        return item
 
     async def category_in_domain(
         self,
@@ -7942,12 +8032,13 @@ class InventoryService:
         self, lot_id: str, organization_id: str
     ) -> Optional[InventoryLot]:
         """Fetch a lot scoped to the organization."""
-        return await self.db.scalar(
+        lot: Optional[InventoryLot] = await self.db.scalar(
             select(InventoryLot).where(
                 InventoryLot.id == lot_id,
                 InventoryLot.organization_id == organization_id,
             )
         )
+        return lot
 
     async def list_lots(self, item_id: str, organization_id: str) -> List[InventoryLot]:
         """List all stock lots for an item, soonest-to-expire first."""
@@ -8273,7 +8364,11 @@ class InventoryService:
         )
 
     async def create_item_if_absent(
-        self, organization_id: str, item_data: Dict[str, Any], created_by: str
+        self,
+        organization_id: str,
+        item_data: Dict[str, Any],
+        created_by: str,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[Optional[InventoryItem], bool, Optional[str]]:
         """Create a catalog row, or hand back the one already carrying the name.
 
@@ -8298,6 +8393,12 @@ class InventoryService:
         landing in the same instant can still both find nothing. Closing that
         needs the constraint and a backfill for the duplicate names already on
         file, which is a schema change rather than a caller fix.
+
+        ``item_types`` scopes the caller to one domain (the medical supplies
+        route passes ``MEDICAL_ITEM_TYPES``). The name is still looked up
+        across the whole catalog — that is what stops the duplicate — but a
+        match filed outside the domain raises
+        ``ItemNameTakenOutsideDomainError`` instead of being handed back.
         """
         name = (item_data.get("name") or "").strip()
         if not name:
@@ -8314,6 +8415,10 @@ class InventoryService:
         if item_data.get("tracking_type") == "pool":
             existing_id = await self._item_id_by_name(organization_id, name)
             if existing_id:
+                if item_types is not None and not await self.item_in_domain(
+                    existing_id, organization_id, item_types
+                ):
+                    raise ItemNameTakenOutsideDomainError(name)
                 return (
                     await self.get_item_by_id(existing_id, organization_id),
                     False,
@@ -8575,7 +8680,8 @@ class InventoryService:
         if refresh_loaded:
             query = query.execution_options(populate_existing=True)
         result = await self.db.execute(query)
-        return result.scalars().first()
+        reorder_request: Optional[ReorderRequest] = result.scalars().first()
+        return reorder_request
 
     async def _assert_reorder_fks_in_org(
         self, data: Dict[str, Any], organization_id: UUID
@@ -8921,7 +9027,8 @@ class InventoryService:
             .options(selectinload(ItemVariantGroup.items))
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        item_variant_group: Optional[ItemVariantGroup] = result.scalar_one_or_none()
+        return item_variant_group
 
     async def update_variant_group(
         self, group_id: UUID, organization_id: UUID, data: dict
@@ -9071,7 +9178,8 @@ class InventoryService:
             .options(selectinload(EquipmentKit.line_items))
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        equipment_kit: Optional[EquipmentKit] = result.scalar_one_or_none()
+        return equipment_kit
 
     async def update_equipment_kit(
         self, kit_id: UUID, organization_id: UUID, data: dict
@@ -9152,7 +9260,7 @@ class InventoryService:
         kit_id: UUID,
         user_id: UUID,
         organization_id: UUID,
-        issued_by: Optional[UUID] = None,
+        issued_by: UUID,
     ) -> Tuple[Optional[List[ItemIssuance]], Optional[str]]:
         """Issue all items in a kit to a member."""
         try:
@@ -9705,7 +9813,7 @@ class InventoryService:
         return [{"id": cid, "name": name} for cid, name in offered.items()]
 
     async def _member_may_request(
-        self, item: InventoryItem, organization_id: UUID, user: User
+        self, item: InventoryItem, organization_id: UUID | str, user: User
     ) -> bool:
         """Whether *user* clears an item's rank/position restriction.
 
@@ -9719,7 +9827,7 @@ class InventoryService:
         )
 
     async def member_clears_restrictions(
-        self, item: InventoryItem, organization_id: UUID, user: User
+        self, item: InventoryItem, organization_id: UUID | str, user: User
     ) -> bool:
         """Public form of the rank/position restriction rule, for callers
         outside this service that hand an item to a member themselves (the
@@ -9731,7 +9839,7 @@ class InventoryService:
         self,
         min_rank_order: Optional[int],
         restricted_positions: Optional[List[str]],
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
     ) -> bool:
         """The restriction rule itself, over the two columns that carry it.
@@ -9758,7 +9866,7 @@ class InventoryService:
         return False
 
     async def _member_rank_order(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> Optional[int]:
         """The caller's rank sort order, resolved once per request."""
         cached = self._rank_order_cache
@@ -9778,7 +9886,7 @@ class InventoryService:
         return order
 
     async def _member_position_slugs(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> Set[str]:
         """The caller's position slugs, resolved once per request."""
         cached = self._position_slug_cache
@@ -10294,7 +10402,10 @@ class InventoryService:
             MemberSizePreferences.organization_id == str(organization_id),
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        member_size_preferences: Optional[MemberSizePreferences] = (
+            result.scalar_one_or_none()
+        )
+        return member_size_preferences
 
     async def upsert_member_size_preferences(
         self,
@@ -10399,8 +10510,9 @@ class InventoryService:
         if ss is not None:
             val = ss.value if hasattr(ss, "value") else ss
             if val and val != "custom":
-                return val
-        return item.size
+                return str(val)
+        size: Optional[str] = item.size
+        return size
 
     # Conditions that mark a held item as no longer serviceable — a member
     # holding only these still needs a replacement.
@@ -10602,9 +10714,9 @@ class InventoryService:
         if prefs is None:
             return None
         if prefs.garment_fit in FIT_VALUES:
-            return prefs.garment_fit
+            return str(prefs.garment_fit)
         if prefs.shirt_style in FIT_VALUES:
-            return prefs.shirt_style
+            return str(prefs.shirt_style)
         return None
 
     @staticmethod
@@ -10631,7 +10743,7 @@ class InventoryService:
                 return None
             if prefs.boot_width:
                 return f"{prefs.boot_size} ({prefs.boot_width})"
-            return prefs.boot_size
+            return str(prefs.boot_size)
         if size_field == "pant":
             waist = prefs.pant_waist
             inseam = prefs.pant_inseam
@@ -10940,7 +11052,7 @@ class InventoryService:
         stock_map: Dict[str, int] = {}
         unit_cost_map: Dict[str, float] = {}
         avg_unit_cost: Optional[float] = None
-        if stock_checked:
+        if stock_checked and stock_category_id:
             (
                 stock_map,
                 unit_cost_map,
@@ -11031,7 +11143,7 @@ class InventoryService:
         if category is None:
             raise ValueError("Stock category not found")
         base_name = category.name
-        size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
+        size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field") or "", "")
 
         vendor = reorder_meta.get("vendor")
         vendor_id = reorder_meta.get("vendor_id")
@@ -11209,11 +11321,12 @@ class InventoryService:
         self, plan_id, organization_id
     ) -> Optional[InventoryImpactPlan]:
         """Fetch a single saved plan scoped to the organization."""
-        return await self.db.scalar(
+        plan: Optional[InventoryImpactPlan] = await self.db.scalar(
             select(InventoryImpactPlan)
             .where(InventoryImpactPlan.id == str(plan_id))
             .where(InventoryImpactPlan.organization_id == str(organization_id))
         )
+        return plan
 
     async def create_impact_plan(
         self, organization_id, data: Dict[str, Any], created_by: str

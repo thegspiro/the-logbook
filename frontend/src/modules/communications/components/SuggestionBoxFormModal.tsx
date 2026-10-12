@@ -14,18 +14,28 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
+import { type EditableQuestion, withEditorIds } from '../utils/suggestionRouting';
+import IntakeQuestionsEditor from './IntakeQuestionsEditor';
 import ReviewerChecklist from './ReviewerChecklist';
 
 interface SuggestionBoxFormModalProps {
   box: SuggestionBoxAdmin | null;
   options: ReviewerOptions;
+  /** Every box in the department, for the questions' routing choices. */
+  boxes?: SuggestionBoxAdmin[] | undefined;
   onClose: () => void;
   onSaved: (box: SuggestionBoxAdmin) => void;
 }
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
 
-const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, options, onClose, onSaved }) => {
+const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
+  box,
+  options,
+  boxes = [],
+  onClose,
+  onSaved,
+}) => {
   const [name, setName] = useState(box?.name ?? '');
   const [description, setDescription] = useState(box?.description ?? '');
   const [anonymityMode, setAnonymityMode] = useState<SuggestionAnonymityMode>(
@@ -40,7 +50,9 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   const [watcherPositionIds, setWatcherPositionIds] = useState<string[]>(box?.watcherPositions.map((p) => p.id) ?? []);
   const [watcherMemberIds, setWatcherMemberIds] = useState<string[]>(box?.watcherMembers.map((m) => m.id) ?? []);
   const [watcherFilter, setWatcherFilter] = useState('');
+  const [questions, setQuestions] = useState<EditableQuestion[]>(() => withEditorIds(box?.intakeQuestions));
   const [isSaving, setIsSaving] = useState(false);
+  const routeTargets = useMemo(() => boxes.filter((b) => b.id !== box?.id), [boxes, box]);
 
   const hasReviewers = positionIds.length + memberIds.length > 0;
   // A reviewer removed from the org since the box was saved still needs to be
@@ -74,6 +86,12 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
       watcherPositionIds,
       watcherMemberIds,
       publicBoardEnabled,
+      intakeQuestions: questions.map((q) => ({
+        ...q,
+        label: q.label.trim(),
+        helpText: blankToNull(q.helpText ?? ''),
+        options: q.options.map((o) => ({ ...o, label: o.label.trim() })),
+      })),
     };
     try {
       const saved = box
@@ -89,171 +107,17 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={box ? 'Edit suggestion box' : 'New suggestion box'} size="lg">
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-4">
-          <div>
-            <label htmlFor="box-name" className="form-label">
-              Name
-            </label>
-            <input
-              id="box-name"
-              className="form-input"
-              value={name}
-              maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Training ideas"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="box-description" className="form-label">
-              Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
-            </label>
-            <textarea
-              id="box-description"
-              className="form-input"
-              rows={2}
-              maxLength={2000}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="box-anonymity" className="form-label">
-              Anonymity
-            </label>
-            <select
-              id="box-anonymity"
-              className="form-input"
-              value={anonymityMode}
-              onChange={(e) => setAnonymityMode(e.target.value as SuggestionAnonymityMode)}
-            >
-              {ANONYMITY_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {SUGGESTION_ANONYMITY_LABELS[mode] ?? mode}
-                </option>
-              ))}
-            </select>
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Anonymous submissions store no record of who sent them — reviewers cannot find out, and neither can an
-              administrator.
-            </p>
-          </div>
-          <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox mt-0.5"
-              checked={followUpEnabled}
-              onChange={(e) => setFollowUpEnabled(e.target.checked)}
-            />
-            <span>
-              Allow follow-up
-              <span className="text-theme-text-muted block text-xs">
-                Reviewers and the submitter can exchange replies, and the submitter sees the disposition. Off makes the
-                box one-way. Anonymous submitters follow up with a private key.
-              </span>
-            </span>
-          </label>
-          <label className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-            Accepting submissions
-          </label>
-          <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox mt-0.5"
-              checked={publicBoardEnabled}
-              onChange={(e) => setPublicBoardEnabled(e.target.checked)}
-            />
-            <span>
-              Public idea board
-              <span className="text-theme-text-muted block text-xs">
-                Reviewers can publish a rewritten copy of a submission for every member to see and vote on. Nothing is
-                published automatically, and the original submission, its screenshots and its author are never shown.
-              </span>
-            </span>
-          </label>
-
-          <div className="alert-info text-sm">
-            <p className="text-theme-text-primary">
-              Only reviewers can read this box&apos;s submissions and set their disposition. They get a notification and
-              an email when something new arrives. Managing boxes does not by itself let you read them.
-            </p>
-          </div>
-          <ReviewerChecklist
-            legend="Reviewer positions"
-            items={options.positions}
-            selected={positionIds}
-            onChange={setPositionIds}
-          />
-          <div>
-            <label htmlFor="box-member-filter" className="form-label">
-              Find members
-            </label>
-            <input
-              id="box-member-filter"
-              className="form-input mb-2"
-              value={memberFilter}
-              onChange={(e) => setMemberFilter(e.target.value)}
-              placeholder="Filter by name"
-            />
-            <ReviewerChecklist
-              legend="Reviewer members"
-              items={memberItems}
-              selected={memberIds}
-              onChange={setMemberIds}
-              filter={memberFilter}
-            />
-          </div>
-
-          <section
-            aria-labelledby="box-watchers-heading"
-            className="border-theme-surface-border space-y-4 border-t pt-4"
-          >
-            <div>
-              <h3 id="box-watchers-heading" className="text-theme-text-primary text-sm font-semibold">
-                Also notify
-              </h3>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                These people are told when a submission arrives but cannot read it: the notice says only which box
-                received something. Anyone who is also a reviewer gets the reviewer&apos;s notice instead.
-              </p>
-            </div>
-            <ReviewerChecklist
-              legend="Notified positions"
-              items={options.positions}
-              selected={watcherPositionIds}
-              onChange={setWatcherPositionIds}
-            />
-            <div>
-              <label htmlFor="box-watcher-filter" className="form-label">
-                Find members to notify
-              </label>
-              <input
-                id="box-watcher-filter"
-                className="form-input mb-2"
-                value={watcherFilter}
-                onChange={(e) => setWatcherFilter(e.target.value)}
-                placeholder="Filter by name"
-              />
-              <ReviewerChecklist
-                legend="Notified members"
-                items={watcherItems}
-                selected={watcherMemberIds}
-                onChange={setWatcherMemberIds}
-                filter={watcherFilter}
-              />
-            </div>
-          </section>
-        </div>
-
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={box ? 'Edit suggestion box' : 'New suggestion box'}
+      size="lg"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" className="btn-primary" disabled={isSaving || !name.trim()}>
+            {isSaving ? 'Saving…' : 'Save box'}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -261,11 +125,174 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({ box, op
           >
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={isSaving || !name.trim()}>
-            {isSaving ? 'Saving…' : 'Save box'}
-          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="box-name" className="form-label">
+            Name
+          </label>
+          <input
+            id="box-name"
+            className="form-input"
+            value={name}
+            maxLength={100}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Training ideas"
+            required
+          />
         </div>
-      </form>
+        <div>
+          <label htmlFor="box-description" className="form-label">
+            Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
+          </label>
+          <textarea
+            id="box-description"
+            className="form-input"
+            rows={2}
+            maxLength={2000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="box-anonymity" className="form-label">
+            Anonymity
+          </label>
+          <select
+            id="box-anonymity"
+            className="form-input"
+            value={anonymityMode}
+            onChange={(e) => setAnonymityMode(e.target.value as SuggestionAnonymityMode)}
+          >
+            {ANONYMITY_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {SUGGESTION_ANONYMITY_LABELS[mode] ?? mode}
+              </option>
+            ))}
+          </select>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Anonymous submissions store no record of who sent them — reviewers cannot find out, and neither can an
+            administrator.
+          </p>
+        </div>
+        <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox mt-0.5"
+            checked={followUpEnabled}
+            onChange={(e) => setFollowUpEnabled(e.target.checked)}
+          />
+          <span>
+            Allow follow-up
+            <span className="text-theme-text-muted block text-xs">
+              Reviewers and the submitter can exchange replies, and the submitter sees the disposition. Off makes the
+              box one-way. Anonymous submitters follow up with a private key.
+            </span>
+          </span>
+        </label>
+        <label className="text-theme-text-primary touch:min-h-[44px] flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+          />
+          Accepting submissions
+        </label>
+        <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox mt-0.5"
+            checked={publicBoardEnabled}
+            onChange={(e) => setPublicBoardEnabled(e.target.checked)}
+          />
+          <span>
+            Public idea board
+            <span className="text-theme-text-muted block text-xs">
+              Reviewers can publish a rewritten copy of a submission for every member to see and vote on. Nothing is
+              published automatically, and the original submission, its screenshots and its author are never shown.
+            </span>
+          </span>
+        </label>
+
+        <div className="alert-info text-sm">
+          <p className="text-theme-text-primary">
+            Only reviewers can read this box&apos;s submissions and set their disposition. They get a notification and
+            an email when something new arrives. Managing boxes does not by itself let you read them.
+          </p>
+        </div>
+        <ReviewerChecklist
+          legend="Reviewer positions"
+          items={options.positions}
+          selected={positionIds}
+          onChange={setPositionIds}
+        />
+        <div>
+          <label htmlFor="box-member-filter" className="form-label">
+            Find members
+          </label>
+          <input
+            id="box-member-filter"
+            className="form-input mb-2"
+            value={memberFilter}
+            onChange={(e) => setMemberFilter(e.target.value)}
+            placeholder="Filter by name"
+          />
+          <ReviewerChecklist
+            legend="Reviewer members"
+            items={memberItems}
+            selected={memberIds}
+            onChange={setMemberIds}
+            filter={memberFilter}
+          />
+        </div>
+
+        <section aria-labelledby="box-watchers-heading" className="border-theme-surface-border space-y-4 border-t pt-4">
+          <div>
+            <h3 id="box-watchers-heading" className="text-theme-text-primary text-sm font-semibold">
+              Also notify
+            </h3>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              These people are told when a submission arrives but cannot read it: the notice says only which box
+              received something. Anyone who is also a reviewer gets the reviewer&apos;s notice instead.
+            </p>
+          </div>
+          <ReviewerChecklist
+            legend="Notified positions"
+            items={options.positions}
+            selected={watcherPositionIds}
+            onChange={setWatcherPositionIds}
+          />
+          <div>
+            <label htmlFor="box-watcher-filter" className="form-label">
+              Find members to notify
+            </label>
+            <input
+              id="box-watcher-filter"
+              className="form-input mb-2"
+              value={watcherFilter}
+              onChange={(e) => setWatcherFilter(e.target.value)}
+              placeholder="Filter by name"
+            />
+            <ReviewerChecklist
+              legend="Notified members"
+              items={watcherItems}
+              selected={watcherMemberIds}
+              onChange={setWatcherMemberIds}
+              filter={watcherFilter}
+            />
+          </div>
+        </section>
+
+        <IntakeQuestionsEditor
+          questions={questions}
+          onChange={setQuestions}
+          routeTargets={routeTargets}
+          anonymityMode={anonymityMode}
+        />
+      </div>
     </Modal>
   );
 };

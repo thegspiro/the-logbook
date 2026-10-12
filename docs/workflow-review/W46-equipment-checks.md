@@ -222,7 +222,7 @@ Not driven:
 - The attributes go on the drag handle with the listeners (`handleProps`).
 - New builder case. Re-driven: the field is no longer inside a `role="button"`.
 
-### W46-11 — MED — Checks on basic apparatus are stored with no apparatus, so check reports show nothing by truck — FLAGGED
+### W46-11 — MED — Checks on basic apparatus are stored with no apparatus, so check reports show nothing by truck — ✅ FIXED (2026-10-11)
 
 **Did:** Two checks filed on Engine 1 (a basic apparatus). Then Check reports as `scheduling_officer`.
 **Saw:**
@@ -241,7 +241,11 @@ Not driven:
 
 Whether basic apparatus should become first-class for checks, or reports should resolve through the shift, is the owner's call. Mirrored in `KNOWN_LIMITATIONS.md`.
 
-### W46-12 — MED — A check filed before its shift's date is invisible on the fleet board and log until that date — FLAGGED
+**Fixed (2026-10-11), owner decision: resolve reports through the shift, no
+backfill.** The compliance report and failure log read the unit from the
+check's shift; a basic-apparatus department's units are listed by unit number.
+
+### W46-12 — MED — A check filed before its shift's date is invisible on the fleet board and log until that date — ✅ FIXED (2026-10-11)
 
 **Did:** `member` filed tomorrow's check at 23:09 Chicago time, with a failed camera and SCBA at 3 of 4. Then opened the fleet board as `scheduling_officer`.
 **Saw:**
@@ -255,6 +259,10 @@ Whether basic apparatus should become first-class for checks, or reports should 
 - or let the board read shifts up to the start of the next one.
 
 Mirrored in `KNOWN_LIMITATIONS.md`.
+
+**Fixed (2026-10-11), owner decision: widen the readiness window.** The board
+and log read a shift up to seven days ahead once a check has been filed against
+it, so the failed camera reaches the board the evening it is found.
 
 ### W46-13 — LOW — Fail and Out of service need no note — FLAGGED
 

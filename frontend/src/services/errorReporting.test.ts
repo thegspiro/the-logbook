@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { AxiosError } from 'axios';
+import { AxiosHeaders, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import {
   reportError,
   reportApiError,
@@ -16,13 +16,19 @@ import {
 const mockFetch = vi.fn();
 
 /** Minimal axios-error shape; only the fields the classifier reads. */
-function axiosError(overrides: Partial<AxiosError> & { status?: number }): AxiosError {
-  const { status, ...rest } = overrides;
+type AxiosErrorOverrides = Omit<Partial<AxiosError>, 'config'> & {
+  status?: number;
+  /** The request as the reporter reads it; headers are filled in. */
+  config?: Omit<InternalAxiosRequestConfig, 'headers'>;
+};
+
+function axiosError(overrides: AxiosErrorOverrides): AxiosError {
+  const { status, config = { url: '/events', method: 'get', baseURL: '/api/v1' }, ...rest } = overrides;
   return {
     name: 'AxiosError',
     message: 'Request failed',
     isAxiosError: true,
-    config: { url: '/events', method: 'get', baseURL: '/api/v1' },
+    config: { headers: new AxiosHeaders(), ...config },
     ...(status !== undefined ? { response: { status, data: {}, statusText: '', headers: {}, config: {} } } : {}),
     ...rest,
   } as AxiosError;

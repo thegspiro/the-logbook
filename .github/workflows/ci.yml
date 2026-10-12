@@ -853,6 +853,15 @@ jobs:
         if: "!cancelled()"
         run: npm run build
 
+      # The build's typecheck uses tsconfig.json, which excludes test files on
+      # purpose (it carries no Node types). Tests get their own program,
+      # tsconfig.test.json, which adds them; without this step a stale fixture
+      # or untyped mock compiles nowhere until somebody notices. 459 had built
+      # up by the time it was first run (#3047).
+      - name: Typecheck tests
+        if: "!cancelled()"
+        run: npm run typecheck:tests
+
       - name: Validate production PWA artifacts
         if: "!cancelled()"
         run: node scripts/validate-pwa.mjs

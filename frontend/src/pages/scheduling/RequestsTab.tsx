@@ -19,6 +19,7 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { EXCHANGE_NOT_QUALIFIED_CODE, REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import type { SwapRequestReview } from '../../modules/scheduling/types';
+import { OpenSwapPickups } from './OpenSwapPickups';
 
 const REQUESTS_PAGE_SIZE = 20;
 
@@ -317,167 +318,183 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
-        visibleSwapRequests.length === 0 ? (
-          <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
-            <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-            <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
-            <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
-              {canManage
-                ? 'No swap requests to review. Pending requests from members will appear here.'
-                : 'Your swap requests will appear here. Go to My Shifts to request a swap for an upcoming shift.'}
-            </p>
-            {statusFilter && (
-              <p className="text-theme-text-muted mx-auto mt-2 max-w-sm text-sm">
-                Showing {statusFilter} requests only. Choose All Statuses to see the rest.
+        <div className="space-y-4">
+          <OpenSwapPickups
+            onPickedUp={() => {
+              void loadData();
+            }}
+          />
+          {visibleSwapRequests.length === 0 ? (
+            <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+              <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
+              <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
+                {canManage
+                  ? 'No swap requests to review. Pending requests from members will appear here.'
+                  : 'Your swap requests will appear here. Go to My Shifts to request a swap for an upcoming shift.'}
               </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleSwapRequests.map((req) => {
-              const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
-              return (
-                <div key={req.id} className="card p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3 sm:items-center">
-                    <div className="flex min-w-0 items-start gap-3 sm:items-center">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 sm:h-10 sm:w-10">
-                        <ArrowLeftRight className="h-4 w-4 text-orange-500 sm:h-5 sm:w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-theme-text-primary text-sm font-semibold">
-                            {(req.requesting_user_id ?? req.user_id) === currentUser?.id
-                              ? 'Your swap request'
-                              : `${req.requesting_user_name || req.user_name || 'Member'} requests swap`}
+              {statusFilter && (
+                <p className="text-theme-text-muted mx-auto mt-2 max-w-sm text-sm">
+                  Showing {statusFilter} requests only. Choose All Statuses to see the rest.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleSwapRequests.map((req) => {
+                const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
+                return (
+                  <div key={req.id} className="card p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                      <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 sm:h-10 sm:w-10">
+                          <ArrowLeftRight className="h-4 w-4 text-orange-500 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-theme-text-primary text-sm font-semibold">
+                              {(req.requesting_user_id ?? req.user_id) === currentUser?.id
+                                ? 'Your swap request'
+                                : `${req.requesting_user_name || req.user_name || 'Member'} requests swap`}
+                            </p>
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:text-xs ${statusColor}`}
+                            >
+                              {req.status}
+                            </span>
+                          </div>
+                          <p className="text-theme-text-muted mt-0.5 text-xs">
+                            {req.offering_shift_date ? (
+                              <>
+                                Offering:{' '}
+                                {formatDateCustom(
+                                  req.offering_shift_date + 'T12:00:00',
+                                  { month: 'short', day: 'numeric' },
+                                  tz
+                                )}
+                                {req.offering_shift_start_time
+                                  ? ` ${formatTime(req.offering_shift_start_time, tz)}`
+                                  : ''}
+                              </>
+                            ) : (
+                              <>Offering shift (details unavailable)</>
+                            )}
+                            {req.requesting_shift_date ? (
+                              <>
+                                {' '}
+                                {' \u2192 '}{' '}
+                                {formatDateCustom(
+                                  req.requesting_shift_date + 'T12:00:00',
+                                  { month: 'short', day: 'numeric' },
+                                  tz
+                                )}
+                                {req.requesting_shift_start_time
+                                  ? ` ${formatTime(req.requesting_shift_start_time, tz)}`
+                                  : ''}
+                                {req.target_user_id ? ` with ${req.target_user_name || 'a member'}` : ''}
+                              </>
+                            ) : req.requesting_shift_id ? (
+                              <> {' \u2192 '} Requested shift (details unavailable)</>
+                            ) : req.target_user_id ? (
+                              // A one-way offer of the seat to a named member —
+                              // what the board's give-up flow creates — or an
+                              // open swap a member picked up, which records the
+                              // member as its target. Approved, the seat is theirs.
+                              <>
+                                {' \u2192 '} {req.status === RequestStatus.APPROVED ? 'Taken by' : 'Offered to'}{' '}
+                                {req.target_user_name || 'a member'}
+                              </>
+                            ) : (
+                              <> {' \u2192 '} Open to any member cleared for the seat</>
+                            )}
                           </p>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:text-xs ${statusColor}`}
-                          >
-                            {req.status}
-                          </span>
+                          {req.reason && (
+                            <p className="text-theme-text-secondary mt-1 line-clamp-2 text-xs">{req.reason}</p>
+                          )}
+                          <p className="text-theme-text-muted mt-1 text-xs">{formatDate(req.created_at, tz)}</p>
                         </div>
-                        <p className="text-theme-text-muted mt-0.5 text-xs">
-                          {req.offering_shift_date ? (
-                            <>
-                              Offering:{' '}
-                              {formatDateCustom(
-                                req.offering_shift_date + 'T12:00:00',
-                                { month: 'short', day: 'numeric' },
-                                tz
-                              )}
-                              {req.offering_shift_start_time ? ` ${formatTime(req.offering_shift_start_time, tz)}` : ''}
-                            </>
-                          ) : (
-                            <>Offering shift (details unavailable)</>
-                          )}
-                          {req.requesting_shift_date ? (
-                            <>
-                              {' '}
-                              {' \u2192 '}{' '}
-                              {formatDateCustom(
-                                req.requesting_shift_date + 'T12:00:00',
-                                { month: 'short', day: 'numeric' },
-                                tz
-                              )}
-                              {req.requesting_shift_start_time
-                                ? ` ${formatTime(req.requesting_shift_start_time, tz)}`
-                                : ''}
-                              {req.target_user_id ? ` with ${req.target_user_name || 'a member'}` : ''}
-                            </>
-                          ) : req.requesting_shift_id ? (
-                            <> {' \u2192 '} Requested shift (details unavailable)</>
-                          ) : req.target_user_id ? (
-                            // A one-way offer of the seat to a named member —
-                            // what the board's give-up flow creates. Approving
-                            // it hands the seat to them.
-                            <>
-                              {' \u2192 '} Offered to {req.target_user_name || 'a member'}
-                            </>
-                          ) : (
-                            <> {' \u2192 '} Open swap</>
-                          )}
-                        </p>
-                        {req.reason && (
-                          <p className="text-theme-text-secondary mt-1 line-clamp-2 text-xs">{req.reason}</p>
-                        )}
-                        <p className="text-theme-text-muted mt-1 text-xs">{formatDate(req.created_at, tz)}</p>
                       </div>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-1">
-                      {canManage && req.status === RequestStatus.PENDING && (
-                        <>
-                          <button
-                            onClick={() => {
-                              void handleQuickReview('swap', req.id, 'approved');
-                            }}
-                            disabled={quickReviewing === req.id}
-                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                            aria-label={`Approve swap for ${req.requesting_user_name || req.user_name || 'member'}`}
-                          >
-                            <Check className="h-3.5 w-3.5" /> Approve
-                          </button>
-                          <button
-                            onClick={() => {
-                              void handleQuickReview('swap', req.id, 'denied');
-                            }}
-                            disabled={quickReviewing === req.id}
-                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                            aria-label={`Deny swap for ${req.requesting_user_name || req.user_name || 'member'}`}
-                          >
-                            <X className="h-3.5 w-3.5" /> Deny
-                          </button>
-                          <button
-                            onClick={() => {
-                              setReviewing({ type: 'swap', id: req.id });
-                              setReviewNotes('');
-                            }}
-                            className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
-                            aria-label="Review with notes"
-                            title="Add reviewer notes"
-                          >
-                            + Notes
-                          </button>
-                        </>
-                      )}
-                      {req.status === RequestStatus.PENDING &&
-                        (req.requesting_user_id ?? req.user_id) === currentUser?.id &&
-                        confirmingCancel?.id !== req.id && (
-                          <button
-                            onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
-                            className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
-                            aria-label="Cancel swap request"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1">
+                        {canManage && req.status === RequestStatus.PENDING && (
+                          <>
+                            {/* An open swap names nobody to move the seat to, so
+                              there is nothing to approve: an eligible member
+                              completes it by picking it up. Deny stays. */}
+                            {(req.target_user_id || req.requesting_shift_id) && (
+                              <button
+                                onClick={() => {
+                                  void handleQuickReview('swap', req.id, 'approved');
+                                }}
+                                disabled={quickReviewing === req.id}
+                                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                                aria-label={`Approve swap for ${req.requesting_user_name || req.user_name || 'member'}`}
+                              >
+                                <Check className="h-3.5 w-3.5" /> Approve
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                void handleQuickReview('swap', req.id, 'denied');
+                              }}
+                              disabled={quickReviewing === req.id}
+                              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                              aria-label={`Deny swap for ${req.requesting_user_name || req.user_name || 'member'}`}
+                            >
+                              <X className="h-3.5 w-3.5" /> Deny
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReviewing({ type: 'swap', id: req.id });
+                                setReviewNotes('');
+                              }}
+                              className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
+                              aria-label="Review with notes"
+                              title="Add reviewer notes"
+                            >
+                              + Notes
+                            </button>
+                          </>
                         )}
-                      {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
-                          <button
-                            onClick={() => {
-                              void handleCancel('swap', req.id);
-                            }}
-                            className="btn-primary rounded-md px-2 py-1 text-xs"
-                            aria-label="Confirm cancellation"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={() => setConfirmingCancel(null)}
-                            className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
-                            aria-label="Keep request"
-                          >
-                            No
-                          </button>
-                        </div>
-                      )}
+                        {req.status === RequestStatus.PENDING &&
+                          (req.requesting_user_id ?? req.user_id) === currentUser?.id &&
+                          confirmingCancel?.id !== req.id && (
+                            <button
+                              onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
+                              className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                              aria-label="Cancel swap request"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
+                            <button
+                              onClick={() => {
+                                void handleCancel('swap', req.id);
+                              }}
+                              className="btn-primary rounded-md px-2 py-1 text-xs"
+                              aria-label="Confirm cancellation"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmingCancel(null)}
+                              className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+                              aria-label="Keep request"
+                            >
+                              No
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : /* Time Off Requests */
       visibleTimeOffRequests.length === 0 ? (
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">

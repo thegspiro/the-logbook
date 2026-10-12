@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 import type { TestingCheckEntry } from '../services/api';
+import { TESTING_GROUPS } from '../testingRegistry';
 
 let currentPermissions = ['settings.manage'];
 const mockAuthState: Record<string, unknown> = {
@@ -165,8 +166,11 @@ describe('TestingReportPrintPage', () => {
 
     await screen.findByText('Coverage by area');
 
-    // Area | Pages | Checked | Passed | Failed | Blocked
-    expect(cellsOfRowNamed('Events')).toEqual(['Events', '11', '1', '0', '1', '0']);
+    // Area | Pages | Checked | Passed | Failed | Blocked. The page count is
+    // read from the registry rather than written down: it is not what this
+    // test is about, and a hard-coded one went stale with every new route.
+    const eventsPages = TESTING_GROUPS.find((group) => group.id === 'events')?.pages.length ?? 0;
+    expect(cellsOfRowNamed('Events')).toEqual(['Events', String(eventsPages), '1', '0', '1', '0']);
   });
 
   it('counts pages nobody opened as not tested rather than as passing', async () => {

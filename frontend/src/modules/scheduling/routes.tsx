@@ -31,6 +31,14 @@ const SchedulingCloseoutPage = lazyWithRetry(
   () => import('../../pages/scheduling/admin/closeout/SchedulingCloseoutPage')
 );
 
+const ShiftHistoryImportPage = lazyWithRetry(
+  () => import('../../pages/scheduling/admin/historyImport/ShiftHistoryImportPage')
+);
+
+const ShiftHistoryImportReviewPage = lazyWithRetry(
+  () => import('../../pages/scheduling/admin/historyImport/ShiftHistoryImportReviewPage')
+);
+
 const SchedulingAdminReportsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingAdminReportsPage'));
 
 const SchedulingSettingsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingSettingsPage'));
@@ -118,6 +126,29 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingCloseoutPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      {/* Shift history import: a department's shifts from before it used this
+          system, uploaded as a draft, reviewed, then committed. The review page
+          is addressable so a long clean-up can be resumed from a bookmark. */}
+      <Route
+        path="/scheduling/admin/history-import"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <ShiftHistoryImportPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/admin/history-import/:importId"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <ShiftHistoryImportReviewPage />
             </ProtectedRoute>
           </Suspense>
         }

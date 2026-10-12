@@ -8,6 +8,7 @@ Post-Onboarding Role Management endpoints for:
 - Role cloning
 """
 
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -42,7 +43,7 @@ from app.schemas.role import (
     RoleWithUserCount,
     UserPermissionsResponse,
 )
-from app.services.role_service import role_service
+from app.services.role_service import DuplicatePositionNameError, role_service
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.utils.member_names import format_legal_name
 
@@ -206,6 +207,15 @@ async def list_roles(
     return roles
 
 
+@asynccontextmanager
+async def _duplicate_name_409():
+    """A reused position name is a conflict, not a malformed request (W05-5)."""
+    try:
+        yield
+    except DuplicatePositionNameError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: RoleCreate,
@@ -233,7 +243,7 @@ async def create_role(
         current_user, role_data.permissions, db, get_client_ip(request)
     )
 
-    async with handle_service_errors("Failed to create role"):
+    async with handle_service_errors("Failed to create role"), _duplicate_name_409():
         role = await role_service.create_role(
             db=db,
             organization_id=str(current_user.organization_id),
@@ -341,7 +351,7 @@ async def update_role(
             current_user, existing_role.permissions, db, get_client_ip(request)
         )
 
-    async with handle_service_errors("Failed to update role"):
+    async with handle_service_errors("Failed to update role"), _duplicate_name_409():
         role = await role_service.update_role(
             db=db,
             role_id=str(role_id),
@@ -479,6 +489,8 @@ async def clone_role(
         )
 
         return role
+    except DuplicatePositionNameError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(

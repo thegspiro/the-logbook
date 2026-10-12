@@ -16,14 +16,21 @@ vi.mock('../store/schedulingStore', () => ({
 
 import { ReportContentDisplay } from './ReportContentDisplay';
 
-const report = (callTypes: string[], source?: string): ShiftCompletionReport =>
-  ({
-    id: 'r1',
-    hours_on_shift: 12,
-    calls_responded: callTypes.length,
-    call_types: callTypes,
-    ...(source ? { data_sources: { call_types: source } } : {}),
-  }) as ShiftCompletionReport;
+const report = (callTypes: string[], source?: string): ShiftCompletionReport => ({
+  id: 'r1',
+  organization_id: 'org-1',
+  shift_date: '2026-09-04',
+  trainee_id: 'trainee-1',
+  officer_id: 'officer-1',
+  hours_on_shift: 12,
+  calls_responded: callTypes.length,
+  call_types: callTypes,
+  ...(source ? { data_sources: { call_types: source } } : {}),
+  review_status: 'approved',
+  trainee_acknowledged: false,
+  created_at: '2026-09-04T00:00:00Z',
+  updated_at: '2026-09-04T00:00:00Z',
+});
 
 beforeEach(() => {
   storeState.callTypeLabels = {};

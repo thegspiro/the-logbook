@@ -312,20 +312,60 @@ Tom fails this requirement.
 
 A member must complete a minimum number of shifts or calls.
 
+**Shifts are counted from shifts worked (2026-10-06, owner decision
+"shifts-three-sources").** A `shifts` requirement used to be counted three
+ways: the training screens counted every completed _training record_ in the
+window (or every record of the requirement's training type) as a shift, the
+scheduling Shift Compliance report counted attendance rows whether or not the
+shift had been closed out, and a training program counted shift completion
+reports. The department chose `ShiftAttendance` — the measured figure the hours
+reports already use — as the one source. One shift worked is:
+
+- an attendance row on one of the department's own shifts that an officer has
+  **finalized** (the rule the member hours report and My Hours apply before
+  hours become credit), or
+- a **counted** external shift logged on another jurisdiction's apparatus
+  (a rejected one counts for nothing),
+
+dated by the shift's date and counted inside the requirement's own window
+(frequency window narrowed by any freshness cutoff, as of the requirement's
+cut-off — exactly the window a training record is held to). The requirement's
+`training_type`, if any, does not filter shifts: a shift has none. The shared
+code is `load_credited_shift_dates` and `credited_shifts_in_window` in
+`app/services/training_compliance.py`; every grader — the compliance matrix,
+the dashboard percentage, the Department Compliance card, the period roster,
+the profile card, My Training, `/training/requirements/progress` (and the MCP
+tool on it), the annual and monthly reports, the competency matrix, the
+compliance exports and forecast, and the scheduling Shift Compliance report —
+reads it.
+
+`shift_credited` decides it. It defaults on for a `shifts` requirement (and the
+2026-10-05 migration set it on every existing one). An officer who unticks
+"Shift attendance satisfies this requirement" keeps that requirement on
+training records on every screen instead, and it stays off the Shift
+Compliance report, as before. `calls` requirements still count matching
+training records.
+
 ```
-count = COUNT(records matching requirement filters within period)
+shifts (shift_credited):
+  count = shifts worked inside completion_window(requirement, as_of)
+shifts (not shift_credited), calls:
+  count = COUNT(records matching requirement filters within period)
 required = requirement.required_shifts OR requirement.required_calls
     (adjusted for waivers, see §4)
 
 is_complete = count >= required
 ```
 
+A rolling `shifts` requirement's due date on My Training is anchored on the
+member's latest shift worked, not on a training record.
+
 #### Example: Maria vs. Jake on Annual Shift Requirement
 
 Riverside FD requires **12 shifts per year** for all members.
 
-Maria has logged 11 shift completion reports so far this year. Jake, who
-started in March, has logged 7.
+Maria has worked 11 finalized shifts so far this year. Jake, who started in
+March, has worked 7.
 
 ```
 Maria:  count = 11, required = 12 → is_complete = false (11 < 12)
@@ -894,7 +934,8 @@ ELSE                                   → "not_started"
 **Shifts / Calls:**
 
 ```
-count = COUNT(matching records within period)
+count = shifts worked in the window (shift-credited shifts, §2c)
+     OR COUNT(matching records within period) (calls, other shifts)
 required = adjusted for waivers
 
 IF count >= required  → "completed"
@@ -1253,6 +1294,30 @@ Danielle's waived months from 5 to 4 and increasing her requirement from
 21.0 to 24.0 hours.
 
 ---
+
+### Program Progress for a Linked Requirement (2026-10-06)
+
+A department requirement linked into a training program (the wizard's
+"Link existing") is not a separate tally. Its progress row is the
+member's compliance result, mapped by `compliance_projection` in
+`training_program_service.py`:
+
+```
+ev = evaluate_member_requirement_detail(requirement, records, today,
+        waivers, include_current_month, join_date, shift_dates)
+met                  → completed, 100%
+counted, not met     → value = progress_current,
+                       % = progress_current / progress_required
+                       (0% when the evaluation is "expired")
+status-only, not met → not started, 0%
+```
+
+So a member with 4 of 6 annual Hazmat hours enrolled today reads 4 of 6
+(67%) in the program, exactly as on My Training. The window is the
+requirement's own compliance window, not the enrollment date. A requirement
+a program created for itself keeps the program's own ledger. Completed,
+withdrawn, failed and expired enrollments keep the progress they finished
+with.
 
 ## Appendix: Integration Points
 

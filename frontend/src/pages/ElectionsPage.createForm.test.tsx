@@ -84,4 +84,22 @@ describe('ElectionsPage create form', () => {
     expect(input).toHaveValue('');
     expect(screen.getByText('Engineer')).toBeInTheDocument();
   });
+
+  // Five switches decide how a vote runs, and none said what it did. "Show
+  // Results Immediately" in particular reveals the live tally and is locked
+  // once voting opens, so a newcomer had to guess before it was too late.
+  it('describes each voting option', async () => {
+    await openCreateDialog();
+    expect(screen.getByLabelText('Enable Automatic Runoffs')).toHaveAccessibleDescription(
+      /a runoff election is created automatically/
+    );
+    expect(screen.getByLabelText('Anonymous Voting')).toHaveAccessibleDescription(/without the voter's name/);
+    expect(screen.getByLabelText('Allow Write-in Candidates')).toHaveAccessibleDescription(/not on the ballot/);
+    expect(screen.getByLabelText('Show Results Immediately')).toHaveAccessibleDescription(
+      /cannot be changed after voting opens/
+    );
+    expect(screen.getByLabelText('Open Automatically at Start Time')).toHaveAccessibleDescription(
+      /Ballot emails are still sent separately/
+    );
+  });
 });

@@ -134,6 +134,146 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A duplicate migration revision stops a production boot (2026-10-11)
+
+When two files in `backend/alembic/versions/` declare the same `revision`,
+startup used to rename one of them to `.stale` in every environment and carry
+on, logging "Migrations completed successfully" while that file's schema
+change was silently skipped. With `ENVIRONMENT=production` the backend now
+refuses to start instead, naming the revision id and both files:
+
+```
+MIGRATION FAILURE: duplicate Alembic revision id(s) found: 'abc123' in 20261001_0100_x.py, 20261001_0100_y.py ...
+```
+
+The usual cause is a stale copy left by a cached Docker layer or a
+half-finished checkout. Rebuild the image without cache
+(`docker compose build --no-cache backend`) or delete the copy that does not
+belong to the release, so each revision id appears in exactly one file, then
+start again. Development and staging keep the old rename-and-continue
+behaviour.
+
+### Every backend setting in `.env` now reaches the container (2026-10-06)
+
+**Review your `.env` before you upgrade.** Until this release the backend's
+`environment:` block in each shipped compose file listed only about a fifth of
+the backend's settings (33 of 170 in `docker-compose.yml`, 44 in
+`unraid/docker-compose-unraid.yml`). Anything else you put in `.env` never
+reached the application: the block is a whitelist, `.env` is not copied into
+the image, and the backend kept its built-in default without a word. The
+shipped files — `docker-compose.yml`, `unraid/docker-compose-unraid.yml` and
+`unraid/docker-compose-build-from-source.yml` — now pass every setting through.
+
+A line in `.env` that has been doing nothing will start doing something on the
+first restart. The groups most likely to carry such a line:
+
+- **Email** — `EMAIL_ENABLED`, `SMTP_*`, `CLOUDFLARE_*`. A stale
+  `EMAIL_ENABLED=true` with old or placeholder SMTP credentials now tries to
+  send, and fails.
+- **Sign-in** — `GOOGLE_*`, `AZURE_AD_*`, `AUTHENTIK_*`, `OAUTH_*`,
+  `SALESFORCE_*`. A provider switched on in `.env` becomes available. A
+  `SALESFORCE_OAUTH_REDIRECT_URI` left at the `.env.example.full` placeholder
+  (`https://your-domain/...`) replaces the address the backend used to derive
+  from the request, and "Connect Salesforce" fails. Set it to your real
+  callback URL or remove the line.
+- **SMS and push** — `TWILIO_*`, `PUSH_ENABLED`, `VAPID_*`.
+- **Password and session policy** — `PASSWORD_*`, `HIPAA_*`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`. These apply from
+  the restart; a stricter password rule binds the next password set. A `.env` copied
+  from `.env.example.full` carries `ACCESS_TOKEN_EXPIRE_MINUTES=480`, which
+  replaces the 30-minute default.
+- **Abuse controls** — `CAPTCHA_*`, `BREACHED_PASSWORD_*`, `MAX_LOGIN_ATTEMPTS`,
+  `ACCOUNT_LOCKOUT_*`, `SUSPICIOUS_IP_*`, `RATE_LIMIT_*`,
+  `PUBLIC_FORM_DAILY_LIMIT`, `GUEST_CHECK_IN_DAILY_LIMIT`.
+- **Geo-blocking** — `GEOIP_*`, `BLOCKED_COUNTRIES`, `IP_LOGGING_ENABLED`.
+  `BLOCKED_COUNTRIES=` (empty) now means "block no countries".
+- **Storage and paths** — `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`,
+  `GCS_*`, `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. Paths are read **inside
+  the container**. A host path left over from a non-Docker install would now
+  send archives somewhere no volume is mounted, and they would be lost with the
+  container. (`STORAGE_TYPE`, `UPLOAD_DIR` and `MAX_FILE_SIZE` were retired on
+  2026-10-08 — nothing read them; uploads always go to `/app/uploads`.)
+- **Audit shipping and signing keys** — `AUDIT_SHIP_*`,
+  `AUDIT_ALLOW_CHAIN_REHASH`, `ENCRYPTION_KEYS_LEGACY`, `AUDIT_LOG_SIGNING_KEY`,
+  and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph if
+  either signing key is in your `.env`.
+- **Monitoring and startup** — `SENTRY_*`, `LOG_FORMAT`, `DB_ECHO`,
+  `REDIS_REQUIRED`, `SECURITY_BLOCK_INSECURE_DEFAULTS`, `REGISTRATION_ENABLED`.
+
+**A signing key that never arrived signed nothing, and the old records keep
+verifying.** Production startup warns when `AUDIT_LOG_SIGNING_KEY` is unset,
+so many installs added it to `.env` — where it did not reach the backend, and
+every audit row since was signed with the fallback, `SECRET_KEY`. The same
+applies to `VOTE_SIGNING_KEY` and ballots on the Unraid files
+(`docker-compose.yml` already passed that one through). Leave the key in
+`.env`; there is nothing to comment out. Once it arrives:
+
+- New audit rows and ballots are signed with the dedicated key, and each
+  records a short fingerprint of the key that signed it (migration
+  `01f36743137a` adds `signing_key_id` to `audit_logs` and `votes`; it is
+  never the key, nor anything the key can be recovered from).
+- Rows signed before the key arrived still verify: a row with no fingerprint
+  is checked against the dedicated key, then against `SECRET_KEY`. The
+  integrity check logs one `WARNING` per run saying how many it verified with
+  `SECRET_KEY`.
+- `SECRET_KEY` is accepted only for rows written **before the first row signed
+  with the dedicated key** — for ballots, cast no later than the first ballot
+  signed with it. A row after that point signed with `SECRET_KEY` is reported
+  as tampered, as is a row that matches neither key.
+
+Two things follow. **Keep `SECRET_KEY` unchanged** for as long as you need the
+pre-upgrade audit rows and ballots to verify: rotating it makes them read as
+tampered, exactly as rotating the dedicated key would. And an off-host audit
+collector (`AUDIT_SHIP_*`) verifying the shipped batches' HMAC must be given
+the dedicated key, since shipping signs with it from the first restart. To see
+whether a key was reaching the container before the upgrade:
+
+```bash
+docker compose exec backend printenv AUDIT_LOG_SIGNING_KEY VOTE_SIGNING_KEY
+```
+
+A key that printed nothing there but is set in `.env` had never been used,
+and the rows written meanwhile are the ones `SECRET_KEY` now verifies. See
+`docs/KNOWN_LIMITATIONS.md`, "Audit and ballot signing — `SECRET_KEY` still
+verifies rows from before the dedicated key".
+
+**What can stop the boot.** A value that never reached the app was never
+validated either. A typo such as `EMAIL_ENABLED=ture` or `SMTP_PORT=587x`
+now fails settings validation and the backend refuses to start. A newly
+honoured value can also fail a production check that blocks startup:
+`RATE_LIMIT_ENABLED=false`, `DB_ECHO=true`, or an `ALGORITHM` other than
+`HS256`. `REDIS_REQUIRED=true` refuses to start without Redis, and
+`SECURITY_BLOCK_INSECURE_DEFAULTS=true` makes a development stack refuse to
+start on a critical warning.
+
+**One template line reads differently under Compose.** Older copies of
+`.env.example.full` have `CAPTCHA_SITE_KEY=` followed by spaces and a
+`# Public …` comment. Compose takes that whole comment as the value. It does
+nothing while CAPTCHA is off; with CAPTCHA on, the browser is given a key that
+does not exist and every protected form fails. Delete the comment from that
+line.
+
+**Before you upgrade:**
+
+1. Read your `.env` line by line, and delete or correct anything you did not
+   mean to run with. Settings you never set keep the same values they had
+   before: every new line in the compose files defaults to the application's
+   own default, and an empty value for an optional setting counts as unset.
+2. Run preflight against the new version, as at the top of this page. It
+   validates every setting that will now arrive.
+3. After the restart, confirm the values you care about landed:
+
+   ```bash
+   docker compose config | grep -E 'EMAIL_ENABLED|SMTP_HOST|PASSWORD_MIN_LENGTH'
+   ```
+
+A compose file you maintain yourself, such as one kept by Unraid's Compose
+Manager, does not change on upgrade. It keeps its old allowlist, and settings
+missing from it still do nothing — see
+[Find the gaps before an upgrade gates on them](#find-the-gaps-before-an-upgrade-gates-on-them).
+The Unraid Community Apps template (`unraid/the-logbook.xml`) is unaffected:
+it has no allowlist, and every variable it defines goes to the container.
+
 ### The `production` profile's nginx needs a certificate in `infrastructure/nginx/ssl/` (2026-09-30)
 
 Only deployments started with `--profile production` are affected. That
@@ -291,6 +431,669 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Each document's file gets its own folder on disk (2026-10-11)
+
+Documents uploaded from this release on — through the Documents page, and the
+apparatus and finance screens that store documents — are written to
+`/app/uploads/<organization_id>/documents/<document_id>/`, like every other
+kind of upload, instead of flat in `…/documents/`. Nothing changes for anyone
+using the app, and files already stored keep downloading where they are.
+
+To tidy the ones already stored flat, run the relocation command; its dry run
+now lists them alongside any legacy files, and `--apply`, `--rollback` and
+`--finalize` treat them the same way:
+
+```bash
+docker exec -it intranet-backend python scripts/relocate_uploads.py
+```
+
+### Documents with no folder are filed into General Documents (2026-10-11)
+
+The upgrade moves every document that had no folder into its department's
+**General Documents** folder (creating that folder if the department never
+had one). Who can open each one does not change — General Documents is open
+to everyone who could see the document before — but its folder now governs
+it. From now on:
+
+- An upload with no folder chosen goes to General Documents; the upload form
+  says so.
+- Moving a document "out of its folder" moves it to General Documents, and
+  needs write access there like any other move. A document can no longer be
+  taken out of a restricted folder into a place the whole department can read.
+
+The migration is reversible: a downgrade returns each moved document to no
+folder unless somebody has filed it elsewhere since.
+
+### Pre-shift work is on by default, and the Compliance box gains a question (2026-10-11)
+
+- **Pre-shift work.** Migration `46c55e6a3330` adds `shift_pre_work_sessions`;
+  nothing existing is touched. The department setting
+  `scheduling.pre_shift_work_enabled` is **on** unless an organization has set it,
+  so members scanning a vehicle before check-in opens are offered "Doing pre-shift
+  work?" the moment you upgrade. Time counts only once a shift officer or
+  `scheduling.manage` approves it, and it adds hours, never shifts. To keep the
+  old behaviour, turn off **Allow pre-shift work** in Shift Settings.
+- **Shift history import.** Migrations `c6c4ffcfdfb3` and `376ec2fef6d3` add the
+  draft, row and remembered-decision tables. Additive; the feature is reached from
+  Administration → Scheduling and needs `scheduling.manage`. A committed import is
+  final and writes finalized shifts that count toward hours and compliance.
+- **Suggestion intake questions.** Migration `778c3de73086` adds three nullable
+  columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
+  still an unedited seed a required "What kind of concern is this?" question; an
+  edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
+
+Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+Nothing here stops the stack from starting. Every file uploaded from now on
+is encrypted with a key derived from `ENCRYPTION_KEY` and `ENCRYPTION_SALT`,
+which compose already refuses to start without. Migration `7e1a3c94d2b6`
+adds one table, `encryption_key_custody`. Three things to do:
+
+1. **Store the key somewhere other than the server and its backups**, then
+   confirm it. Administrators (`settings.manage`) see a red notice with a
+   **Confirm the key is stored safely** button until somebody does. Without
+   the key, neither the database's encrypted fields nor any uploaded file
+   can be recovered from a backup. With the key kept beside the backups,
+   anyone holding a backup can read them.
+2. **Encrypt the files already on disk.** They keep working as they are, and
+   administrators see a "not yet encrypted" notice until this is done:
+   ```bash
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py            # dry run
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py --apply    # encrypt; originals kept
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
+       --finalize /app/uploads/.encryption/encryption-<stamp>.json              # delete the originals
+   ```
+   `--rollback <manifest>` undoes an `--apply` until it is finalized. The
+   originals sit beside each file as `.<name>.plaintext` until finalize, and
+   the backup sidecar archives them, so finalize once you have checked a few
+   downloads.
+3. **Treat older `uploads.tar.gz` archives as plaintext.** They were made
+   before encryption.
+
+**A setup still in progress** when you upgrade gains a required Encryption Key
+step. Its last page reports "Required step 'key_custody' has not been
+completed" until the administrator visits `/onboarding/encryption-key`.
+
+**Do not downgrade the code past this change** once files have been uploaded:
+earlier releases serve an encrypted file's raw bytes. The database part does
+roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
+`encryption_key_custody`, and the notice returns after a re-upgrade.
+
+### Large finance requests can require two approvers (2026-10-11)
+
+Migration `3c9c5025a380` adds `first_approved_by` and `first_approved_at` to
+purchase requests, check requests and expense reports. Nothing is backfilled.
+
+- **Nothing changes until you turn it on.** The new organization setting
+  `finance.dual_approval_threshold` is off by default. A member with
+  `settings.manage` sets it on **Finance > Settings > Approval Chains**; at or
+  above that amount, a request waits after its first approval until a
+  second, different person approves it.
+- **The manual approve and deny actions now also act on a request held for its
+  second approver**, even though it has approval steps. A request whose chain
+  is still running is refused (409) as before.
+- **The detail panel's approve message now reads "Approval recorded"** rather
+  than "Request approved", since an approval may be the first of two.
+- **Downgrading** drops the columns. A request held for its second approver at
+  that point stays waiting for approval, and the previous version lets any
+  approver approve it alone.
+
+### QuickBooks exports send each payment once, and reverse voided checks (2026-10-11)
+
+Migration `3f3bd6f3c7e4` records which payments an export has carried.
+
+- **Payments an earlier export already carried are left out** of later
+  exports. The upgrade marks what your past successful exports carried (every
+  payment in an export's date range made before that export ran), so the first
+  export afterwards sends only what is new. To send a period again, pass
+  `includeExported: true`. Partial or failed exports mark nothing.
+- **A check voided after it was exported now gets a reversing entry**
+  (`CR-…-V`) in the next export covering the day it was voided. Before this
+  change a voided check stayed in QuickBooks as an expense. The upgrade dates
+  checks already voided from their last change, and a check the backfill finds
+  was exported before it was voided gets its reversal in the next export
+  covering that date. **Review voided checks in QuickBooks before your next
+  export:** if you already reversed or deleted one there by hand, delete the
+  `CR-…-V` entry after importing, or it will be reversed twice.
+- **A second export while one is still being prepared is refused** (409).
+
+### QuickBooks exports follow Intuit's import limits (2026-10-09)
+
+- **An export that would reach 1,000 rows is refused** (400), since QuickBooks
+  Online does not import a file that long. That is about 499 transactions;
+  export a shorter period. The limit was 10,000 transactions, which produced
+  files QuickBooks rejected.
+- **Accounts Payable and Accounts Receivable are refused** as a category's
+  QuickBooks account or a mapping's account or paid-from account, because the
+  import needs a vendor or customer on those lines. A mapping already saved
+  with one shows **Payable/receivable account** on **Finance › QuickBooks
+  Export**, and an export using it is refused until it is changed to the bank
+  or card account the money is paid from.
+
+### Budget amendments wait for a second officer; adopted amounts change only by amendment (2026-10-09)
+
+Migration `0a55dae43a0a` adds a status and the confirmer's details to
+`budget_amendments`. Every amendment already recorded is marked **confirmed**,
+so no budget moves on upgrade. Downgrading deletes pending and rejected
+amendments — which never moved a budget — before dropping the columns.
+
+- **A new amendment, or a reversal, no longer changes the budget when it is
+  entered.** It is saved _Pending confirmation_ and moves the line's budget
+  only when someone holding `finance.budget_review` or `finance.manage`, other
+  than whoever entered it, clicks **Confirm** on the line's page.
+- **Grant `finance.budget_review` to the second officer** (the President, for
+  example) if only one member holds `finance.manage`. Without a second
+  holder, amendments stay pending.
+- **A closing year cannot be locked while an amendment is pending.** Confirm
+  or reject each one first; the lock dialog lists them.
+- **A line's amount can no longer be edited directly once the budget goes
+  before the board** — board review, adopted, active and closing years — and a
+  new line in such a year starts at zero. Use an amendment. Owner, station and
+  notes stay editable. Scripts or integrations calling
+  `PUT /finance/budgets/{id}` with a changed `amountBudgeted` on such a line now
+  get 400.
+
+### Expense reports need a receipt on every line (2026-10-09)
+
+Builds on the uploaded receipts below (migration `c0bf0b155719`); no
+migration of its own.
+
+- **Submitting an expense report now refuses (400)** until every line has an
+  uploaded receipt. Members attach them on the report's page after saving it.
+  Drafts saved before the upgrade need receipts before they are submitted;
+  reports already submitted, approved or paid are unaffected.
+- **Approvers can now open the reports they decide on.** An approver without
+  `finance.manage` was linked from the approvals queue to a report that
+  answered 404; the report and its receipts now open for the people its chain
+  names (and for any `finance.approve` holder on a report no chain applies
+  to). Other members' reports stay hidden as before.
+- **A closing year takes no new receipts from members**, and a locked year
+  none at all; the finance office can still attach receipts in a closing year
+  for what it is settling.
+
+### Adopting, starting and closing a fiscal year are separate steps (2026-10-09)
+
+The year-end close is now a period the Treasurer begins, and the budget's
+adoption no longer starts the year. Migration `af92f1496c43`. This supersedes
+the activate behaviour described in the next entry:
+
+- **Adoption has its own endpoint.** `POST /finance/fiscal-years/{id}/adopt`
+  takes the board's vote (`{"adoptedOn", "adoptionReference",
+"adoptionNotes"?}`) on a draft in board review and moves it to a new
+  `adopted` stage. The year stays a draft; nobody is emailed yet.
+- **`POST /finance/fiscal-years/{id}/activate` takes no body.** On a draft it
+  now refuses (400) unless the year was adopted and the department's today is
+  on or after its start date; starting it emails the line owners. A client
+  still sending the adoption body to `activate` gets that refusal — send it to
+  `adopt` first.
+- **Starting a year no longer closes the active one.** It is refused while
+  another year is active: `POST /finance/fiscal-years/{id}/begin-close` on the
+  current year first. A year in its close can be reopened with `activate`.
+- **A closing year takes nothing new.** Purchase requests, expense reports and
+  check requests can no longer be created, edited, given line items or
+  submitted against a closed year (400). Approving, paying, issuing, voiding
+  and cancelling what is already in it still work, as do budget amendments. A
+  **locked** year refuses all of those.
+- **`POST /finance/fiscal-years/{id}/lock` needs a body and a clear year:**
+  `{"notes": "..."}` (the reconciliation sign-off, required), only from a year
+  in its close, and refused (400) while any request is still submitted or
+  approved-but-unpaid — `GET /finance/fiscal-years/{id}/open-items` lists them.
+  Locking an active year directly is no longer possible.
+- **Years closed before the upgrade but never locked** — the ones a newer year
+  replaced — now show as **Closing** and take no new requests. Lock them from
+  _Finance › Settings_ once their open items are cleared, or reopen one if it
+  was closed by mistake. They have no close date recorded, and years locked
+  before the upgrade have no sign-off; none is invented.
+- **Downgrading** drops the close date and sign-off columns and returns any
+  adopted draft to board review (its adoption record stays).
+
+### Prospective members: Auto-Purge now deletes — the clock starts at this upgrade (2026-10-09)
+
+The pipeline **Auto-Purge** setting (Pipeline Settings → inactivity) used to be
+stored and never read. It is now in effect: a daily task
+(`membership_auto_purge`) permanently deletes, with their uploaded documents,
+the **inactive** applications in each pipeline that has Auto-Purge on, once
+they have been inactive for the configured number of days (30–1095; a value
+outside that range is treated as the nearest bound, and an unreadable one
+skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
+audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
+the purged ids. Seven days before an application is purged, the department's
+prospect coordinators (the withdrawal notice's recipients) get one email per
+run listing the applications due and their deletion dates; each application is
+warned once per inactive spell, and a failed send is retried on the next run.
+
+**Nothing already inactive is deleted straight away.** Migration
+`feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the
+time the migration runs for every application inactive at that moment — not
+to the date it actually went inactive. So an application that has sat
+inactive for years in a pipeline with Auto-Purge switched on is purged only
+after a full grace period has passed **after the upgrade**. The **Deactivated**
+date shown on the application is unchanged. An application with no
+`inactive_since` is never auto-purged.
+
+If a pipeline had Auto-Purge switched on without anyone expecting it to act,
+review it during that grace period: turn it off, or reactivate the
+applications you want to keep. Reactivating an application stops its clock;
+if it goes inactive again, the clock starts afresh.
+
+### Document folders open to module rights; who sees what changes (2026-10-09)
+
+Phase 3 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+Nothing here stops the stack from starting, but people will find folders
+appear and disappear, so tell the department before you upgrade.
+
+**Only a full administrator (`*`) still sees every folder.** Holding
+`documents.manage` or `members.manage` no longer opens everything. Browsing
+Documents still needs `documents.view`; on top of that, a folder now asks for
+its module's rights. Computed from the seeded positions alone — a member who
+also holds the **Member** position (every member does, by default) keeps
+`training.view` and `events.view` from it:
+
+| Folder                              | Opens to (any one)                                     | Changes, seeded positions on their own                                                                                                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus Files                     | `apparatus.view`, `apparatus.edit`, `apparatus.manage` | Gained by lieutenant, engineer and training officer. Lost by treasurer, historian, compliance officer and assistant secretary. The apparatus officer and quartermaster have no `documents.view`; they reach vehicle files on the apparatus screens, which now upload and open them |
+| Training Materials                  | `training.view`, `training.manage`                     | Lost by treasurer, board of directors, communications officer, historian, fundraising chair and assistant secretary, unless they also hold Member                                                                                                                                  |
+| Event Attachments                   | `events.view`, `events.edit`, `events.manage`          | Lost by treasurer and board of directors, unless they also hold Member                                                                                                                                                                                                             |
+| Member Separations                  | `members.manage`                                       | Lost by treasurer, historian, safety officer and compliance officer                                                                                                                                                                                                                |
+| Finance (new), with Receipts        | `finance.view`, `finance.manage`, `finance.approve`    | Opens to the treasurer. A member opens their own receipt from the purchase request or expense report, not from Documents                                                                                                                                                           |
+| A member's personal folder          | that member                                            | Lost by captains, chiefs, president, vice president, secretaries, membership coordinator and every other `members.manage` or `documents.manage` holder                                                                                                                             |
+| A custom "leadership only" folder   | `documents.manage`                                     | Lost by `members.manage` holders without `documents.manage`                                                                                                                                                                                                                        |
+| A custom folder restricted to roles | holders of those roles                                 | `documents.manage` no longer passes the role check                                                                                                                                                                                                                                 |
+
+Changing what is in a module folder (upload, move, rename, delete through
+Documents) still needs `documents.manage` **and** a non-view right from that
+folder's list. Facility folders are unchanged.
+
+**Apparatus files and finance receipts are uploaded, not typed:**
+
+- `POST /apparatus/{id}/photos` and `/documents` no longer accept a URL in
+  `file_path`; it must be `document:<id>` of a stored document, or use the new
+  `.../photos/upload` and `.../documents/upload`. Rows already on file keep
+  their link; responses now carry `fileUrl`, which is the link only if it is
+  HTTP(S). A stored `javascript:` or other value is no longer handed to the
+  page.
+- `receipt_url` on purchase requests and expense lines must be an HTTP(S)
+  URL; anything else is a 422. Existing values that are not are withheld from
+  responses, and left in the database untouched.
+
+**Migrations.** `b38df38d849b` stamps the rights onto each department's
+existing system folders, `6c25b7d68965` adds `document_id` to apparatus
+photos and documents, `c0bf0b155719` adds `receipt_document_id` to purchase
+requests and expense lines. All three run on `alembic upgrade head` and are
+reversible: `alembic downgrade 5c8be05f2f0f`, then redeploy the previous
+image. Downgrading closes the Finance folder to leadership-only (the earlier
+code has no finance gate) and drops the receipt and apparatus links; the
+uploaded files remain in Documents.
+
+### A draft fiscal year is adopted through board review, not activated directly (2026-10-09)
+
+Next year's budget now passes through stages — taking requests, leadership
+review, board review — and activating a **draft** year is its adoption:
+
+- **`POST /finance/fiscal-years/{id}/activate` on a draft now refuses (400)**
+  unless the year is in board review and the body records the board's vote:
+  `{"adoptedOn": "YYYY-MM-DD", "adoptionReference": "..."}`. The **Activate**
+  button on a draft is replaced by stage buttons and **Record adoption**.
+  Re-activating a year that is not a draft is unchanged.
+- **Lock** now refuses a draft year.
+- **Existing draft years** are set to the taking-requests stage by migration
+  `5c8be05f2f0f`; nothing about them changes until the Treasurer moves them.
+  Years activated before the upgrade have no adoption record, and none is
+  invented. The downgrade drops the new columns and the stages, adoption
+  records and leadership changes in them; amounts already written into lines
+  stay.
+- **Grant `finance.budget_review`** to the positions that sit in leadership
+  review (typically the President and the Chief) in **Role Management**
+  (`/settings/roles`).
+  It is seeded to no position, so until it is granted nobody can change amounts
+  in leadership review.
+
+### Every upload is malware-scanned, and the scanner starts with the stack (2026-10-08)
+
+Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+
+- **A ClamAV container now starts with everything else.** `docker compose up
+-d` pulls `clamav/clamav-debian:1.4.3` (multi-arch — ARM hosts included) and
+  `CLAMAV_ENABLED` now defaults to `true`. **Budget roughly 1.5–3 GB of extra
+  RAM.** On first start clamd spends a few minutes downloading signatures;
+  until it is healthy, **uploads are refused** with a retryable 503
+  (`LB-UPLD-005`). The rest of the application works meanwhile.
+- **If the scanner is not running, uploads are refused** — by design (fail
+  closed). That bites a deployment built from its own compose file or run with
+  `--scale clamav=0`: add the `clamav` service, or point `CLAMAV_HOST` at a
+  clamd you run, with `StreamMaxLength` of at least 60M.
+- **A `.env` that already says `CLAMAV_ENABLED=false` keeps scanning off** —
+  the upgrade does not override it. Files are then accepted unscanned, and you
+  will see a `WARNING: CLAMAV_ENABLED is false` line in the startup log and in
+  `python -m app.preflight`, and every administrator with `settings.manage`
+  sees a red notice in the app until it is turned back on.
+- **Small hosts.** The `minimal` profile's floor is now about 3 GB: ClamAV is
+  required on every profile, and on a 1–2 GB host it is killed for memory,
+  after which uploads are refused. The installer warns below 3 GB.
+- **Scanning now covers every upload**, not just self-reported certificates:
+  documents, all attachments, applicant files, email-template attachments,
+  suggestion screenshots, member photos, logos, storefront and equipment-check
+  photos, and every CSV import. Files already stored are not rescanned.
+- **New uploads use a new folder layout**:
+  `/app/uploads/<organization_id>/<area>/<record_id>/<uuid><ext>`. Existing
+  files keep working where they are. To move them, run (dry run first — it
+  changes nothing without `--apply`):
+
+  ```bash
+  docker exec -it intranet-backend python scripts/relocate_uploads.py
+  docker exec -it intranet-backend python scripts/relocate_uploads.py --apply
+  # check the app, then delete the old copies:
+  docker exec -it intranet-backend python scripts/relocate_uploads.py \
+      --finalize /app/uploads/.relocation/relocation-<stamp>.json
+  ```
+
+  `--apply` copies and checksum-verifies every file and keeps the originals;
+  `--rollback <manifest>` undoes it until you finalize. Disk use doubles for
+  the moved files until `--finalize`.
+
+- **Downloads have descriptive names**, built from the record:
+  `2026-10-08_Smith-John_EMT-Recertification.pdf` for a training certificate
+  (member name, last name first), the event date and title for an event
+  attachment, the date and name for a document. Emailed template attachments
+  reach recipients under the name they were uploaded with, not a UUID.
+- **Smaller behaviour changes:** an email-template attachment that is too large
+  is now refused with 400 rather than 413, like every other upload; a training
+  history CSV that is not UTF-8 is decoded as Latin-1 as intended instead of
+  being reported as "exceeds the 10MB limit".
+
+### Uploaded files: tighter access, and email attachments move onto the uploads volume (2026-10-08)
+
+Phase 1 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
+
+- **Email-template attachments now persist.** They were written to
+  `/app/storage/email_attachments`, which no compose file mounts, so every
+  container rebuild lost them and backups never included them. New uploads go
+  to `/app/uploads/email-attachments/<org_id>/`, and migration `2be075025403`
+  moves the files that still exist (copy, checksum, rename, then remove the
+  original; safe to re-run). **Attachments already lost to an earlier rebuild
+  cannot be recovered** — they still list on the template but are skipped when
+  the email is sent, exactly as before. Re-upload them. A file the migration
+  cannot move is logged (`Email attachment relocation …`) and stays sendable
+  from its old location.
+- **Event attachments need `events.view`** to list or download (or
+  `events.manage`), and a draft event's attachments are visible to organizers
+  only. Every seeded rank carries `events.view`, so only a member with a
+  custom position and no rank can lose access.
+- **Equipment-check photos** can only be added by the member who performed
+  the check, or by holders of `inventory.check_manage`.
+- **Training-record, self-reported certificate, applicant and document files**
+  are now served and deleted only from inside their own organization's
+  directory. Nothing moves; every file the application wrote is already there.
+- **Event and email-template uploads** whose extension disagrees with the
+  file's contents (a PDF named `.png`) are refused, and the stored type is the
+  detected one rather than the browser's claim.
+
+The migration's downgrade moves relocated email attachments back to the old,
+unpersisted path.
+
+### A locked fiscal year's budget amounts are frozen (2026-10-08)
+
+`PUT /finance/budgets/{id}` that **changes** `amountBudgeted` on a line in a
+**locked** fiscal year is now refused with 400 "This fiscal year is locked.
+Budget amounts can no longer be changed or amended." It used to succeed, though
+the training guide already called a locked year read-only. Notes, station and
+owner still save, as does a request that sends the unchanged amount. An
+integration that adjusts locked-year amounts through the API will start getting
+the 400.
+
+The same upgrade adds **budget amendments** — logged increases to a line, with
+who approved them and when (Finance › Budgets › a line › **Add amendment**).
+Migration `ca564ba5a9ad` creates the `budget_amendments` table on an
+installation that has a `budgets` table; one that does not yet gets it from
+`create_all` with the rest of the finance tables. Existing lines are untouched
+and report their current amount as their original until amended.
+
+### The QuickBooks export is a journal-entry import, and needs accounts first (2026-10-08)
+
+`POST /finance/export/transactions` now produces a file QuickBooks Online's
+**Journal Entries** import accepts. Before this, every row had an empty
+Account and a debit with no matching credit, so QuickBooks rejected the file.
+
+- **New columns:** `Journal No, Journal Date, Memo, Account Name, Debits,
+Credits, Description`. Each transaction is two lines (two per expense line on
+  an expense report) under one Journal No: a debit to the category's account
+  and a credit to the account it was paid from. Update anything that reads the
+  old `Date, Type, Num, Name, Memo, Account, Debit, Credit` header.
+- **Journal No is the request number** (`PR-…`, `CR-…`, `ER-…`). A check's
+  number moves into Description.
+- **The export now refuses** (HTTP 400, naming what to fix) when any
+  transaction in the range has no budget line, or its budget category has no
+  QuickBooks account, or no **offset account**. The account comes from the
+  category's `qb_account_name`, or else from the export mapping whose
+  `internal_category` matches the category name. The offset account comes only
+  from that mapping's new `qbOffsetAccountName` field. Nothing is backfilled,
+  so **existing installations must set offset accounts before their next
+  export**, on **Finance › QuickBooks Export** (`/finance/settings/quickbooks`,
+  added 2026-10-09), which lists each budget category and what it is missing.
+- A migration adds the nullable `finance_export_mappings.qb_offset_account_name`
+  column. Its downgrade drops the column and the values stored in it.
+
+### Training provider imports credit members automatically (2026-10-08)
+
+A **Target Solutions** sync or report upload now credits matched members as it
+stages them; completions that match nobody wait under **Imports**. Vector
+Solutions, Lexipol, iAmResponding and Custom API keep the officer's review step
+until each is reviewed (the list is `AUTO_CREDIT_PROVIDERS` in
+`external_training_service.py`). The Import and Bulk Import buttons now honour
+the category and credit hours the officer chose.
+
+Five migrations land after head `8c4f2a6e1d93`, ending at `7db20aa49329`:
+
+- `9bb4af123ebc` makes `(provider_id, external_record_id)` unique on staged
+  imports. Existing duplicates are settled first and **nothing is deleted**: the
+  imported row (else the earliest) is kept; others get `#dup:<id>` on their
+  record id and, if never imported, status `duplicate`. The downgrade restores
+  them exactly.
+- `6cf89b44dc08` adds the `policy_acknowledgment` training type.
+- `95dbdfb6591d` creates `external_course_mappings`, seeded with unmapped rows;
+  nobody is emailed and nothing is mapped until an officer does it. Downgrading
+  loses the mappings.
+- `26ca07c56d0f` adds `voided_at`, `voided_by`, `void_reason` to training records.
+
+**Check after upgrading:** the HIPAA, Bloodborne Pathogens and Hazmat requirement
+templates now create **Courses** requirements. Existing requirements are not
+rewritten; an hours requirement with one of those codes and no category or course
+scope shows a warning on its card. Fix them in **Training Admin › Requirements**.
+
+### Every member can raise their own finance requests (2026-10-07)
+
+A new permission, **`finance.request`** — "Create, submit and track your own
+purchase requests, expense reports and check requests" — is **granted to every
+member** by this upgrade. Migration `7db20aa49329` adds it to each
+department's seeded **Member** position, which every member holds; a position
+your department created is not touched. Until now raising a request
+needed `finance.manage`, so only the Treasurer and the IT Manager could.
+
+What a member can do with it, and nothing more:
+
+- raise a purchase request, expense report or check request, edit it until it
+  is submitted, submit it, and withdraw it while it is still a draft;
+- see **only the requests they raised** — another member's is "not found";
+- pick a budget line by its name and the amount left on it, without seeing
+  the budget pages.
+
+Requests from members go through your approval chains like any other, and
+nobody can approve or pay their own. A new **Finance** entry appears in the
+navigation when the module is on; a member sees **My Purchase Requests**,
+**My Expense Reports** and **My Check Requests** under it.
+
+Two smaller changes come with it. A holder of `finance.view` alone still reads
+every purchase and check request but is no longer offered the New / Edit
+forms, which it could never save. And the Mark Ordered / Received / Paid,
+Issue Check and Void buttons are now shown only to `finance.manage` holders,
+who were the only people the server ever accepted them from.
+
+**If your department does not want members raising requests**, remove
+`finance.request` from the **Member** position on the positions screen. It is
+not a rank default, so that one edit withdraws it from everybody who holds it
+only through Member. Downgrading past this revision removes it from the seeded
+Member positions.
+
+### Member badges carry a server-issued code; old badges keep scanning until you turn them off (2026-10-05)
+
+Migration `ad3b979746f1` adds `users.badge_code` and gives **every existing
+member** a random code such as `MB-7KQ2W9HXRT` (unique per organization; new
+members get one by default). Labels, CR80 ID cards and the digital ID card now
+encode that code instead of the membership number or short member id, which any
+member could read in the directory.
+
+- **Nothing stops working on upgrade.** Both scanners resolve through
+  `POST /member-badges/resolve`, which still accepts the membership number, the
+  short id and the old phone-card QR until an officer turns **Accept old badges**
+  off (Members → select → **Print ID Cards**, switch at the bottom). Absent means
+  accepted. Turn it off only after every member holds a reprinted card; it stops
+  every pre-badge-code card at every station and the inventory issue-by-badge
+  scanner.
+- **A badge printed after the upgrade is only as good as the code.** **Reissue
+  badge** on a member's ID card page cancels a lost badge and prints a new code.
+  The code is shown only to the member and to `members.manage` /
+  `members.manage_id_cards` holders, and is not in rosters, profile responses,
+  exports or anonymized records.
+- Scripts or integrations that built a badge from the membership number must
+  fetch the code (`GET /member-badges/{id}`) or keep Accept old badges on.
+- Rollback: the downgrade drops the column, and badges printed with a code stop
+  scanning on a version below this one.
+
+### Training and compliance figures move (2026-10-05)
+
+Nothing blocks a restart, but percentages a department already published or
+reads on the dashboard can change. Check them after the upgrade.
+
+- **Certification name matching is now legacy-only** (`60aaf273de27`). A
+  completed record whose course name merely contained a certification
+  requirement's name (a "CPR Refresher" crediting "CPR") used to count.
+  The migration sets `training_requirements.name_match_until` on every
+  requirement that exists to **the day it runs (UTC)**: records completed on or
+  before it still match by name, so published standings do not move on upgrade
+  day. From then on a record needs a linked course, the training type or the
+  registry code. Requirements created afterwards, and every requirement on a fresh
+  install, never match by name. Downgrade drops the column and every record name-
+  matches again.
+- **Required roles match the member's rank.** `required_roles` holds rank slugs,
+  but every screen compared it with position ids, so a requirement scoped only by
+  role applied to nobody. It now grades the members of those ranks on My
+  Training, the matrix, the dashboard percentage, the roster, the profile card,
+  the competency matrix, the annual report and Scheduling's Shift Compliance
+  report: **their standings, and the department percentages that include them,
+  move.** Stored values were already rank slugs; there is no data migration.
+  Compliance-profile `role_ids` are unchanged (position ids).
+- **One definition of who is graded.** The dashboard's Department Compliance
+  card and the annual and monthly compliance reports now use compliance profiles
+  (narrowed requirement lists, threshold overrides) and the org's own thresholds,
+  as the matrix always did. Departments with profiles, or a compliant threshold
+  under 100%, see those figures change; **stored annual reports keep the
+  figures they were generated with.**
+- **Members nothing grades are "not applicable", not 100%.** A member with no
+  applicable requirement (none applies, a profile selects none, or all are in
+  catch-up) used to count as compliant at 100% and now shows N/A and leaves every
+  percentage's denominator. Percentages can fall for a department with many
+  such members, and read blank when nobody is graded. A compliance attestation
+  records the server's figure as of the period's last day, not a typed one.
+- **Shift Compliance grades only shift-credited requirements** (`f16b004db34e`).
+  A SHIFTS requirement is shift-credited by default (existing ones are
+  backfilled); an HOURS requirement is not. **Every existing HOURS requirement
+  drops off Scheduling Reports → Shift Compliance until an officer ticks Shift
+  Credit** on it. The cards are now Requirement Checks, Checks Met and Checks Not
+  Met; the numbers are unchanged. Downgrade drops the column.
+- **Skills testing:** `GET /training/skills-testing/tests` returns
+  `{ items, total }` (it was a bare list), and the CSV export needs `date_from`
+  and `date_to` at most 366 days apart. `GET /training/records` is paged
+  (limit 500, `X-Total-Count`). Scripts reading these must page.
+
+### Self-reported certificate files can now expire — default is keep (2026-10-05)
+
+`cdb725bb1d12` adds `self_report_configs.attachment_retention_days`. **NULL, the
+default, keeps files indefinitely and nothing is backfilled, so an upgrade
+deletes nothing.** When a department sets a period (Review Submissions →
+Settings → Certificate Files; 90 days minimum), the daily
+`self_report_attachment_retention` task **permanently deletes** the certificate
+files of submissions decided longer ago than that, and removes the references
+from the submission and the member's training records; the rows stay. It is not
+reversible — back up first, and set the period only after the department's
+records policy says so. Audited as `self_report_attachment_retention` per
+organization run and `self_report_attachment_retention_updated` per change.
+
+### Proxy per-address limits are sized for a department (2026-10-05)
+
+The bundled nginx configs (`infrastructure/nginx/nginx.conf` and `docker.conf`)
+allowed 10 concurrent requests per address and 10 API requests a second (burst
+20, refused beyond it). Under HTTP/2 every in-flight request counts, and one
+dashboard load is about 20 API calls, so one member could lose most of a page to
+503, and a station whose members share one public address lost most requests.
+Now `limit_conn 400` and the API zone at **50/s with `burst=600 delay=100`** (the
+first 100 requests of a burst pass at once, the rest queue at 50/s rather than
+being refused). The sign-in limits (`login_limit`, 5 a minute, burst 3, and the
+backend's `rate_limit_login`) are **unchanged** brute-force controls. **A reverse
+proxy you run yourself keeps whatever limits it was given:** raise its per-address
+connection and rate limits the same way, or a station sees 503 at shift change.
+No migration; a container rebuild or `nginx -s reload` picks the bundled change
+up.
+
+### Events: finalized events can be edited; series saves are checked per occurrence (2026-10-06)
+
+A **finalized** event can be saved from the edit form: the attendance lock now
+refuses a changed value of a locked field (type, category, start, end, check-in
+rules), not the mere presence of one, and the form disables those fields with an
+explanation. **This and all future events** is decided per finalized later
+occurrence and now refuses with "(N of M finalized occurrences would change)"
+(it used to count every occurrence in the series). A description-only series edit
+from an open occurrence is refused when a finalized later occurrence differs in
+type, **category** or check-in rules; the category part is new. A series save no
+longer copies the edited occurrence's `attendance_finalized`, `reminders_sent`
+and `validation_notification_sent` markers onto later occurrences. No migration;
+an occurrence a previous series save wrongly marked finalized or unmarked is not
+repaired.
+
+### Smaller behaviour changes in this release (2026-10-05)
+
+- **Rank vocabulary.** Once a department has any rank rows, the built-in rank
+  codes (`firefighter`, …) are no longer accepted for a _new_ assignment by the
+  member API, CSV import or prospect conversion unless the department's own
+  ladder has that rung (ONBOARD-3); members already holding one keep their
+  seats. A department that deleted a seeded rank during setup and still imports
+  members with it must re-add the rung first.
+- **Two-way shift exchanges** need both members cleared for the seat they would
+  take; an unqualified exchange is refused when submitted. A request that lapsed
+  while pending is refused at approval with `LB-SCHED-002`, and a duty officer can
+  **Approve anyway** (audited).
+- **Alert email wording and subjects changed.** Low stock says "at or below
+  reorder point"; the certification alert subject reads "Expires Today" /
+  "Expires Tomorrow" (it read "Expiring in 0 Days"); the weekly supply alert is
+  "Supplies to Replace" with a Status column; the NFPA alert says "approaching or
+  past". Five more emails (property return reminder, member-dropped notice,
+  election results, low stock, NFPA retirement) were reflowed to fit phones. A
+  mail rule that filters on an old subject needs updating.
+- **Sessions survive a two-tab refresh.** A refresh that loses a rotation race is
+  answered 409 `LB-AUTH-012` and revokes nothing; it no longer logs the member out
+  everywhere. A refresh arriving after the first has committed is still treated
+  as replay.
+- **Sign-out is confirmed.** A failed sign-out is retried and then blocks the
+  screen until the server confirms; offline queue entries are owned by the member
+  who queued them, and entries from before the upgrade are held behind **Send as
+  me** / **Discard**.
+- **Scheduled-task failures** now appear on Error Monitoring ("Scheduled task"),
+  so a department that never saw them may suddenly see a backlog of recurring
+  ones. The end-of-shift summary is retried until its email is sent.
+- **Integrations.** Every integration sender (teams, webhook, slack, discord,
+  calcom, documenso, audit shipping) resolves the destination once and connects
+  to that address; DNS rebinding between check and connect no longer works.
+  `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` still lifts the public-address rule only.
+  Proxy-mounted clients are not pinned (KNOWN_LIMITATIONS). Google Calendar
+  responses are capped at 10 MB with 5 s connect and 10 s socket timeouts.
+- **Migrations `99b16109d44c`** resets stale `in_progress` prospect stage rows
+  that sit ahead of the applicant's current stage (idempotent, logs the count,
+  **no downgrade effect**), **`d4d0a483cdd5`** adds cohort missed-class decisions
+  (downgrade drops the table and loses every decision) and **`c56303befb2c`**
+  adds indexed `document_id` columns to facility documents and photos and two
+  folder indexes (backfilled from `file_path`; downgrade drops them). `15802f3df5c4`
+  is a no-op merge. The chain has a single head.
+
 ### Finance approvals now go to the approver each step names (2026-10-04)
 
 Until this release an approval chain step's approver — "Treasurer position",
@@ -363,7 +1166,7 @@ rule applies with more force than usual.
 - **No downgrade at all:** `b795d1b3401b` (untouched email templates moved to
   the then-current default) and `6394fbf42581` (clears the duplicate-vote hash
   on voided ballots so the member can vote again — irreversible by design).
-- **Downgrade loses data:** `34d3d56d1479` (every preferred name entered), the inventory NFC revisions `b713c2e8ee26`
+- **Downgrade loses data:** `34d3d56d1479` (every preferred name entered), `d4d0a483cdd5` (every cohort missed-class decision; 2026-10-05), `cdb725bb1d12` (every department's chosen certificate-file retention period), the inventory NFC revisions `b713c2e8ee26`
   (storage-area tags and every recorded scan), `7ad83f52735c` (shelf audits)
   and `45b36bae9098` (compartment tags), and the suggestion-box revisions
   `0010291816fd` (status history and responses to submitters) and
@@ -576,7 +1379,8 @@ inactive, removes their uploaded documents from the server, and records the
 purge in the audit log (count and ids only); the message reports how many were
 really deleted. Withdrawn, rejected and on-hold applications are never purged.
 The pipeline's **Auto-Purge** setting is still stored but nothing reads it, so
-no application is ever deleted automatically.
+no application is ever deleted automatically. _(Wired on 2026-10-09 — see
+"Auto-Purge now deletes" above.)_
 
 ### Each pipeline decides what a converted applicant becomes (2026-09-30)
 
@@ -1448,8 +2252,10 @@ network."
 A department that registered printers before this upgrade loses direct
 printing until the setting is made. Add the printers' subnet to `.env`, for
 example `LABEL_PRINTER_ALLOWED_NETWORKS=192.168.10.0/24`. The shipped
-`docker-compose.yml` passes it through. **The Unraid compose files in `unraid/`
-do not**, and neither does a compose file of your own: add
+`docker-compose.yml` passes it through, and since 2026-10-06 so do the Unraid
+compose files in `unraid/` (see
+[Every backend setting in `.env` now reaches the container](#every-backend-setting-in-env-now-reaches-the-container-2026-10-06)).
+A compose file of your own does not: add
 `LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}` to the
 backend's `environment:` block, or the value in `.env` never reaches the
 container. Loopback, link-local and

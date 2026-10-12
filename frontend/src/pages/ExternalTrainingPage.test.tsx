@@ -15,6 +15,19 @@ const mockGetUsers = vi.fn();
 const mockDeleteProvider = vi.fn();
 const mockCreateProvider = vi.fn();
 const mockUpdateProvider = vi.fn();
+const mockUploadReport = vi.fn();
+const mockGetCourseMappings = vi.fn();
+const mockUpdateCourseMapping = vi.fn();
+const mockGetCourses = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...a: unknown[]) => mockToastSuccess(...a) as unknown,
+    error: (...a: unknown[]) => mockToastError(...a) as unknown,
+  },
+}));
 
 vi.mock('../services/api', () => ({
   externalTrainingService: {
@@ -27,9 +40,13 @@ vi.mock('../services/api', () => ({
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
     createProvider: (...a: unknown[]) => mockCreateProvider(...a) as unknown,
     updateProvider: (...a: unknown[]) => mockUpdateProvider(...a) as unknown,
+    uploadReport: (...a: unknown[]) => mockUploadReport(...a) as unknown,
+    getCourseMappings: (...a: unknown[]) => mockGetCourseMappings(...a) as unknown,
+    updateCourseMapping: (...a: unknown[]) => mockUpdateCourseMapping(...a) as unknown,
   },
   trainingService: {
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
+    getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
@@ -74,6 +91,10 @@ beforeEach(() => {
   mockUpdateCategoryMapping.mockImplementation((_p: string, _m: string, updates: Record<string, unknown>) =>
     Promise.resolve({ ...unmapped, ...updates, is_mapped: true })
   );
+  mockGetCourseMappings.mockReset();
+  mockGetCourseMappings.mockResolvedValue([]);
+  mockGetCourses.mockReset();
+  mockGetCourses.mockResolvedValue([]);
 });
 
 const openMappings = async () => {
@@ -350,5 +371,158 @@ describe('ExternalTrainingPage — hourly pulls with a daily review', () => {
     renderWithRouter(<ExternalTrainingPage />);
 
     expect(await screen.findByText('Every 1h · review daily at 02:00')).toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — manual report upload', () => {
+  const targetSolutions = { ...provider, provider_type: 'target_solutions', name: 'Target Solutions' };
+  const report = new File(['Employee ID,Email\n'], 'report_completionsall.csv', { type: 'text/csv' });
+
+  beforeEach(() => {
+    mockUploadReport.mockReset();
+    mockUploadReport.mockResolvedValue({
+      sync_log_id: 'log-1',
+      status: 'completed',
+      message: '2 training record(s) added; 1 waiting for a member match under Imports',
+      rows_in_report: 3,
+      new_rows: 3,
+      updated_rows: 0,
+      failed_rows: 0,
+      training_records_created: 2,
+      awaiting_member: 1,
+    });
+  });
+
+  it('offers an upload on a Target Solutions provider, even with no key or secret', async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByLabelText(/Upload a Target Solutions completions report/)).toBeInTheDocument();
+  });
+
+  it('offers no upload for other providers', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+
+    expect(await screen.findByRole('button', { name: /Sync Now/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Upload a Target Solutions completions report/)).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen file and reports what it added', async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await userEvent.upload(await screen.findByLabelText(/Upload a Target Solutions completions report/), report);
+
+    await waitFor(() => expect(mockUploadReport).toHaveBeenCalledWith('prov-1', report));
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        'Report uploaded: 2 training record(s) added; 1 waiting for a member match under Imports'
+      )
+    );
+  });
+
+  it("shows the server's reason when the file is refused", async () => {
+    mockGetProviders.mockResolvedValue([targetSolutions]);
+    mockUploadReport.mockRejectedValue(new Error('This file is not a Target Solutions completions report'));
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await userEvent.upload(await screen.findByLabelText(/Upload a Target Solutions completions report/), report);
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Upload failed: This file is not a Target Solutions completions report'
+      )
+    );
+  });
+});
+
+describe('ExternalTrainingPage — course mappings', () => {
+  const newVersion = {
+    id: 'cm-1',
+    provider_id: 'prov-1',
+    organization_id: 'org-1',
+    external_course_id: '4123987',
+    external_course_name: 'CAPCE HIPAA Awareness (4123987)',
+    internal_course_id: null,
+    internal_course_name: null,
+    is_mapped: false,
+    suggested_course_id: 'course-hipaa',
+    suggested_course_name: 'HIPAA Awareness',
+    members_completed: 3,
+  };
+  const library = [
+    { id: 'course-hipaa', organization_id: 'org-1', name: 'HIPAA Awareness', training_type: 'continuing_education' },
+    { id: 'course-sepsis', organization_id: 'org-1', name: 'Sepsis', training_type: 'continuing_education' },
+  ];
+
+  beforeEach(() => {
+    mockGetCourseMappings.mockReset();
+    mockGetCourseMappings.mockResolvedValue([newVersion]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue(library);
+    mockUpdateCourseMapping.mockReset();
+    mockUpdateCourseMapping.mockResolvedValue({
+      ...newVersion,
+      internal_course_id: 'course-hipaa',
+      internal_course_name: 'HIPAA Awareness',
+      is_mapped: true,
+      suggested_course_id: null,
+      suggested_course_name: null,
+      records_updated: 3,
+    });
+  });
+
+  const openCourses = async () => {
+    await openMappings();
+    await userEvent.click(await screen.findByRole('tab', { name: /Courses \(1 unmapped\)/ }));
+  };
+
+  it('shows the suggestion without applying it', async () => {
+    await openCourses();
+
+    expect(await screen.findByText(/likely a new version of it/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Library course for CAPCE HIPAA Awareness (4123987)')).toHaveValue('');
+    expect(screen.getByText(/3 members completed/)).toBeInTheDocument();
+    expect(mockUpdateCourseMapping).not.toHaveBeenCalled();
+  });
+
+  it('maps to the suggestion in one click and says how many records moved', async () => {
+    await openCourses();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Map to HIPAA Awareness' }));
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: 'course-hipaa' });
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        '"CAPCE HIPAA Awareness (4123987)" now counts as HIPAA Awareness; 3 training records updated'
+      )
+    );
+    expect(screen.queryByRole('button', { name: 'Map to HIPAA Awareness' })).not.toBeInTheDocument();
+  });
+
+  it('lets the officer choose a different course than the suggestion', async () => {
+    await openCourses();
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Library course for CAPCE HIPAA Awareness (4123987)'),
+      'course-sepsis'
+    );
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: 'course-sepsis' });
+  });
+
+  it('sends an explicit null to unmap', async () => {
+    mockGetCourseMappings.mockResolvedValue([
+      { ...newVersion, internal_course_id: 'course-hipaa', internal_course_name: 'HIPAA Awareness', is_mapped: true },
+    ]);
+    await openMappings();
+    await userEvent.click(await screen.findByRole('tab', { name: /Courses \(0 unmapped\)/ }));
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Library course for CAPCE HIPAA Awareness (4123987)'),
+      ''
+    );
+
+    expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: null });
   });
 });

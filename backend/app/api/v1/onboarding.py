@@ -50,18 +50,20 @@ from app.models.onboarding import (
 )
 from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
+from app.schemas.system_notices import KeyCustodyConfirm, KeyCustodyStatus
+from app.services import key_custody_service
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
+from app.services.upload_scanning import scan_and_validate_logo
 from app.utils.email_providers import (
     MICROSOFT_AUTH_METHODS,
     invalid_for_enabled,
     missing_for_enabled,
     required_field_message,
 )
-from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -202,7 +204,7 @@ def _validated_microsoft_auth_method(value: Any) -> Optional[str]:
     """
     if value is None or value == "":
         return None
-    if value not in MICROSOFT_AUTH_METHODS:
+    if not isinstance(value, str) or value not in MICROSOFT_AUTH_METHODS:
         raise ValueError(
             "Microsoft 365 authentication method must be one of: "
             f"{', '.join(MICROSOFT_AUTH_METHODS)}"
@@ -774,7 +776,7 @@ async def get_or_create_session(
                 OnboardingSessionModel.expires_at > datetime.now(timezone.utc),
             )
         )
-        session = result.scalar_one_or_none()
+        session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
         if session:
             # Update expiration on activity
@@ -837,7 +839,7 @@ async def validate_session(
             OnboardingSessionModel.session_id == session_id
         )
     )
-    session = result.scalar_one_or_none()
+    session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
     if not session:
         raise CodedHTTPException(
@@ -1383,7 +1385,8 @@ async def create_organization(
             # Additional info
             county=org_data.county,
             founded_year=org_data.founded_year,
-            logo=validate_logo_image(org_data.logo),
+            # Before an account exists, so no user is recorded with a detection.
+            logo=await scan_and_validate_logo(db, org_data.logo, user=None),
             settings_dict=_membership_id_settings(org_data),
         )
 
@@ -1780,7 +1783,7 @@ async def save_department_info(
         )
 
     # Validate and sanitize logo before storing
-    validated_logo = validate_logo_image(data.logo)
+    validated_logo = await scan_and_validate_logo(db, data.logo, user=None)
 
     # Update session data with department info
     session.data = session.data or {}
@@ -2078,6 +2081,83 @@ async def save_session_stations(
     )
 
 
+@router.get("/session/key-custody", response_model=KeyCustodyStatus)
+async def get_session_key_custody(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    The encryption key's fingerprint (an HMAC, never the key) and whether it
+    has been confirmed as stored separately.
+    """
+    await validate_session(request, db)
+    record = await key_custody_service.confirmation_for_current_key(db)
+    return KeyCustodyStatus(
+        key_fingerprint=key_custody_service.current_fingerprint(),
+        confirmed=record is not None,
+        confirmed_at=record.confirmed_at if record else None,
+        confirmed_via=record.confirmed_via if record else None,
+    )
+
+
+@router.post("/session/key-custody", response_model=SessionDataResponse)
+async def save_session_key_custody(
+    request: Request, data: KeyCustodyConfirm, db: AsyncSession = Depends(get_db)
+):
+    """
+    Confirm the encryption key is stored apart from the server and its
+    backups. Required before setup can finish
+    (docs/FILE_STORAGE_HARDENING.md decision 25); recorded against the system
+    owner created in the step before, and audited.
+    """
+    session = await validate_session(request, db)
+    service = OnboardingService(db)
+    if not await service.needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+    onboarding_status = await service.get_onboarding_status()
+    organization_id = (session.data or {}).get("department", {}).get("organization_id")
+    if (
+        not onboarding_status
+        or not organization_id
+        or not onboarding_status.admin_username
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Create the system owner account before confirming the key",
+        )
+    owner = (
+        await db.execute(
+            select(User).where(
+                User.organization_id == organization_id,
+                User.username == onboarding_status.admin_username,
+            )
+        )
+    ).scalar_one_or_none()
+
+    try:
+        await key_custody_service.confirm(
+            db,
+            key_fingerprint=data.key_fingerprint,
+            user_id=str(owner.id) if owner else None,
+            username=onboarding_status.admin_username,
+            via="onboarding",
+            ip_address=get_client_ip(request),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    await service._mark_step_completed(onboarding_status, "key_custody")
+    await db.commit()
+
+    return SessionDataResponse(
+        success=True,
+        message="Encryption key safekeeping confirmed",
+        step="key_custody",
+    )
+
+
 @router.post("/session/apparatus", response_model=SessionDataResponse)
 async def save_session_apparatus(
     request: Request, data: ApparatusListRequest, db: AsyncSession = Depends(get_db)
@@ -2268,7 +2348,8 @@ async def save_session_organization(
             # Additional info
             county=data.county,
             founded_year=data.founded_year,
-            logo=validate_logo_image(data.logo),  # Validate and sanitize logo
+            # Scanned, validated and re-encoded.
+            logo=await scan_and_validate_logo(db, data.logo, user=None),
             settings_dict=_membership_id_settings(data),
         )
 
@@ -2392,8 +2473,9 @@ def _merge_default_permissions(
             module_perms = submitted[owning_module]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)
-    seen: set[str] = set()
-    return [perm for perm in merged if not (perm in seen or seen.add(perm))]
+    # dict keys keep first-seen order, so this drops repeats without
+    # reordering the grants.
+    return list(dict.fromkeys(merged))
 
 
 def registry_checkboxes(default_perms: Iterable[str], module_id: str) -> tuple:
@@ -2865,18 +2947,28 @@ async def reset_onboarding(
         # Commit all deletions
         await db.commit()
 
-        # Log successful completion of reset
-        await log_audit_event(
-            db=db,
-            event_type="onboarding.reset_completed",
-            event_category="onboarding",
-            severity="warning",
-            ip_address=client_ip,
-            event_data={
-                "action": "full_reset",
-                "message": "Onboarding reset completed - all data cleared successfully",
-            },
-        )
+        # The deletions above are already committed and irreversible. A
+        # failure to log their completion must not fall into the except
+        # block below: that would both report this request as a 500 and
+        # write a "reset_failed - nothing was deleted" audit entry (via
+        # _audit_reset_durably) that is false — everything WAS deleted.
+        # Log-and-continue instead; the response below is accurate either way.
+        try:
+            await log_audit_event(
+                db=db,
+                event_type="onboarding.reset_completed",
+                event_category="onboarding",
+                severity="warning",
+                ip_address=client_ip,
+                event_data={
+                    "action": "full_reset",
+                    "message": "Onboarding reset completed - all data cleared successfully",
+                },
+            )
+        except Exception as log_error:
+            logger.error(
+                f"Onboarding reset succeeded but completion audit log failed: {log_error}"
+            )
 
         # The caller's auth cookies name a user this reset just deleted. Left
         # in place they make every later request fail authentication, and

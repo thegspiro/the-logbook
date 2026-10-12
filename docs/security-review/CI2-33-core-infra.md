@@ -264,6 +264,23 @@ exist to prevent.
 **Fix:** added the same `WARNING` treatment `VOTE_SIGNING_KEY` already gets.
 Regression tests: `tests/test_core_infra_boot_checks.py::TestAuditLogSigningKeyIsWarnedLikeItsSibling`.
 
+**Follow-up (2026-10-06) — the warning was answered, and the answer never
+arrived.** Operators who heeded this warning added the key to `.env`, but the
+shipped compose files did not pass `AUDIT_LOG_SIGNING_KEY` (or, on the Unraid
+files, `VOTE_SIGNING_KEY`) through, so their rows went on being signed with
+`SECRET_KEY`. Once the compose files passed every setting, the arriving key
+would have made every such row read as tampered. Owner decision: those rows
+keep verifying, bounded. `audit_logs` and `votes` now record `signing_key_id`
+(a truncated HMAC fingerprint of the signing key; migration `01f36743137a`),
+a row is verified only against the key it names, and `SECRET_KEY` is accepted
+for a row without one — or one naming `SECRET_KEY` — only before the first
+row recording the dedicated key (for ballots, the earliest `voted_at` of
+one). Verification, `rehash_chain` and retention-archive attestations share
+the rule; each run logs one `WARNING` when it used `SECRET_KEY`. The residual
+— an attacker holding both `SECRET_KEY` and audit-table write access can move
+the database-held cut-over — is recorded in `docs/KNOWN_LIMITATIONS.md`.
+Tests: `tests/test_signing_key_cutover.py`.
+
 ### CI2-33-6 — MED — `CAPTCHA_ENABLED=True` with an empty secret was only caught per-request, never at boot — ✅ FIXED
 
 **What:** `app/core/captcha.py`'s `is_captcha_configured()` already treats

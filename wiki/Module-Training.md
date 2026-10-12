@@ -78,17 +78,27 @@ The Training module tracks courses, certifications, training requirements, progr
 
 ### Training Admin Tabs
 
-_(Rewritten 2026-10-04: this table listed thirteen flat tabs from before the
-hub gained its page/tab layout. `?page=` selects the group and `&tab=` the tab.)_
+_(Rewritten 2026-10-09: the hub's six sections, three of them behind a "More"
+menu, became seven areas shown as cards. `?page=` selects the area and `&tab=`
+the destination; the areas are declared in
+`frontend/src/components/training/trainingAdminAreas.ts`.)_
 
-| Page (`?page=`)                         | Tabs (`&tab=`)                                                                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Dashboard** (`dashboard`)             | Overview (Training Officer Dashboard, with the first-run setup guide), Compliance Matrix, Expiring Certs, Training Waivers |
-| **Records** (`records`)                 | Submissions, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                       |
-| **Setup** (`setup`)                     | Requirements, Course Library, Pipelines, Manual Entry, Integrations, Import History, Headline Metrics                      |
-| **Skills Testing** (`skills-testing`)   | Templates, Test Records                                                                                                    |
-| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                             |
-| **Compliance** (`compliance`)           | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                                       |
+| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                            |
+| **Records** (`records`)                 | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                         |
+| **Curriculum** (`curriculum`)           | Requirements, Course Library, Programs (`pipelines`)                                                   |
+| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
+| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
+| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
+| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import History, Headline Metrics (`metrics`)                         |
+
+Destination ids are unique across the hub, so a link is resolved by its
+`&tab=` first. Links that name the retired `setup` and `skills-testing`
+sections, or carry only a flat `?tab=`, open the area that now holds that
+destination. A bare `?page=setup` opens Curriculum and `?page=skills-testing`
+opens Evaluations. A red count on an area card or destination is the number of
+open items in the hub's Needs Attention queue that link to it.
 
 ### Legacy Redirects
 
@@ -109,12 +119,12 @@ hub gained its page/tab layout. `?page=` selects the group and `&tab=` the tab.)
 ### Core Training
 
 ```
-GET    /api/v1/training/records                            # List training records (filterable)
+GET    /api/v1/training/records                            # List training records (filterable); paged: skip/limit (max 500), X-Total-Count header (2026-10-05)
 POST   /api/v1/training/records                            # Create a training record
 POST   /api/v1/training/records/bulk                       # Bulk create (up to 500, with duplicate detection)
 POST   /api/v1/training/records/import-csv                 # CSV import with parse and preview
-PATCH  /api/v1/training/records/{id}                       # Update a training record
-DELETE /api/v1/training/records/{id}                       # Void a record (cancels + un-applies pipeline credit)
+PATCH  /api/v1/training/records/{id}                       # Update a training record (member is told what changed; optional ?reason=)
+DELETE /api/v1/training/records/{id}?reason=…              # Void a record, reason required (cancels, un-applies pipeline credit, tells the member)
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # All members x requirements grid
 GET    /api/v1/training/competency-matrix                  # Department readiness heat-map
@@ -241,12 +251,15 @@ POST   /api/v1/training/cohorts                            # Generate: N events 
 GET    /api/v1/training/cohorts/{id}                       # Cohort with its class timeline and roster
 PATCH  /api/v1/training/cohorts/{id}                       # Update cohort details (not the schedule)
 POST   /api/v1/training/cohorts/{id}/regenerate            # Create events for classes that have none; idempotent
-POST   /api/v1/training/cohorts/{id}/shift                 # Shift upcoming classes by N local days; refused whole if any has finalized attendance (2026-10-04)
-POST   /api/v1/training/cohorts/{id}/cancel                # Cancel the cohort and its remaining classes
+POST   /api/v1/training/cohorts/{id}/shift                 # Shift upcoming classes by N local days; all-or-nothing: refused whole if any class is finalized or its room is taken (2026-10-05)
+POST   /api/v1/training/cohorts/{id}/cancel                # Cancel the cohort and its remaining classes; all-or-nothing, leaves a class already cancelled from the calendar alone (2026-10-05)
 POST   /api/v1/training/cohorts/{id}/classes               # Add an ad-hoc class (make-up session)
 PATCH  /api/v1/training/cohorts/{id}/classes/{class_id}    # Reschedule one class; the linked event moves with it
 POST   /api/v1/training/cohorts/{id}/classes/{class_id}/cancel  # Cancel one class (cancels the event, never deletes it)
-POST   /api/v1/training/cohorts/{id}/members               # Add roster members (enrolled + invited to remaining classes) — no UI caller yet (W27-3)
+POST   /api/v1/training/cohorts/{id}/members               # Add roster members (enrolled + invited to remaining classes); Roster tab "Add member" (2026-10-05)
+GET    /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes   # Classes held before the member joined, and what was decided
+POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{class_id}/credit   # Credit it: writes a completed record
+POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{class_id}/makeup   # Schedule a make-up session for that member alone
 DELETE /api/v1/training/cohorts/{id}/members/{user_id}     # Withdraw a member; clears their upcoming RSVPs
 ```
 
@@ -254,7 +267,7 @@ DELETE /api/v1/training/cohorts/{id}/members/{user_id}     # Withdraw a member; 
 
 ```
 GET    /api/v1/training/submissions/config                 # Get submission config
-PUT    /api/v1/training/submissions/config                 # Update submission config
+PUT    /api/v1/training/submissions/config                 # Update submission config, including attachment_retention_days (2026-10-05)
 POST   /api/v1/training/submissions                        # Submit training
 GET    /api/v1/training/submissions/my                     # My submissions
 GET    /api/v1/training/submissions/{id}                   # Get submission detail
@@ -553,15 +566,15 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 
 ### Key Enums
 
-| Enum                   | Values                                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `TrainingType`         | certification, continuing_education, skills_practice, orientation, refresher, specialty          |
-| `TrainingStatus`       | scheduled, in_progress, completed, cancelled, failed                                             |
-| `RequirementType`      | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test       |
-| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time                                                   |
-| `DueDateType`          | calendar_period, rolling, certification_period, fixed_date                                       |
-| `ProgramStructureType` | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible |
-| `EnrollmentStatus`     | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed |
+| Enum                   | Values                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `TrainingType`         | certification, continuing_education, skills_practice, orientation, refresher, specialty, policy_acknowledgment |
+| `TrainingStatus`       | scheduled, in_progress, completed, cancelled, failed                                                           |
+| `RequirementType`      | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test                     |
+| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time                                                                 |
+| `DueDateType`          | calendar_period, rolling, certification_period, fixed_date                                                     |
+| `ProgramStructureType` | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible               |
+| `EnrollmentStatus`     | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed               |
 
 | `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
 | `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |
@@ -594,9 +607,49 @@ joined after. Join date is hire date, else account creation. Migration
 
 Adding a requirement to a program can **waive** it for members already enrolled.
 Every screen that decides which requirements grade a member goes through the
-shared helper with the join date and role ids; a sweep test fails on a call that
-omits the join date. Splits and grandfathering changes are audited. Exports and
+shared helper with the join date and rank (`required_roles` holds rank slugs,
+matched since 2026-10-05); a sweep test fails on a call that omits the join date. Splits and grandfathering changes are audited. Exports and
 the forecast print N/A where a requirement does not apply.
+
+### Training Requirement Changes _(2026-10-05)_
+
+- **Shift Credit.** A requirement form gains a **Shift Credit** checkbox
+  (`training_requirements.shift_credited`, migration `f16b004db34e`). Scheduling's
+  Shift Compliance report grades only shift-credited requirements. A SHIFTS
+  requirement is shift-credited by default (existing ones by the migration's
+  backfill); an HOURS requirement only when an officer ticks the box. **An
+  existing HOURS requirement drops off Shift Compliance until it is ticked**, so
+  a training-hours requirement no longer reads compliant from ordinary duty
+  shifts while the training matrix grades it from records.
+- **Certification name matching** is limited to legacy records
+  (`training_requirements.name_match_until`, migration `60aaf273de27`); see
+  [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
+- **Self-report certificate files** can expire: **Review Submissions → Settings
+  → Certificate Files** sets how many days after a decision (90 minimum) an
+  approved or rejected submission's files are deleted. Unset (the default) keeps
+  them indefinitely, and the upgrade deletes nothing. The daily
+  `self_report_attachment_retention` task unlinks the files and removes the
+  references from the submission and the member's training records; the
+  submission and record rows stay. Audited per organization as
+  `self_report_attachment_retention`; changes to the period as
+  `self_report_attachment_retention_updated`.
+- **Training records are paged** (`GET /training/records`, `skip`/`limit`,
+  `X-Total-Count`); **My Training** keeps records awaiting approval visible
+  (undated records pass the date range and sort first).
+- **Import validates per row.** A bad `training_type` or `status` fails that row
+  with "Row N: Invalid <field> 'x'. Valid values: …" instead of failing the
+  batch; case and spacing are forgiven. A bad `default_training_type` or
+  `default_status` on the historical-import request fails the whole import.
+- **Effectiveness tab: Submit Evaluation.** Pick a member, then enter only the
+  chosen Kirkpatrick level's measure (a reaction rating, pre and post scores, a
+  behavior rating with observations, or a results note) and an optional course.
+- **Cohorts.** The Roster tab has **Add member**; a member added late with
+  classes already held gets "N classes held before they joined — decide", where
+  each missed class is either **credited** (a completed record) or given a
+  **make-up** session for that member alone. **Shift** and **Cancel** on a cohort
+  are all-or-nothing: a finalized class or a taken room refuses the whole
+  operation and nothing moves. Table `course_cohort_missed_classes` and
+  `course_cohort_classes.makeup_for_class_id` (migration `d4d0a483cdd5`).
 
 ### Enrollment Expiry and Reopen _(2026-08-09)_
 
@@ -1553,14 +1606,36 @@ because a submission is deletable in `draft`, `pending_review` and
 `TrainingRecord` also references the same file. **If that guard is ever
 widened, the delete must stop unlinking.**
 
-Three open items are recorded in
+Three open items were recorded in
 [`docs/KNOWN_LIMITATIONS.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md):
-no retention policy (approved certificates are kept indefinitely, and expiring
-them needs a records-retention decision from the department before it needs
-code), **no malware scanning** (a file served back to an officer is whatever
-the member uploaded), and voided records keeping their file by design — a
-`DELETE` marks the record `cancelled` rather than removing it, so the
-correction stays auditable and its evidence stays with it.
+no retention policy (since resolved — a department-set period, 2026-10-05),
+**no malware scanning** (since resolved as an opt-in ClamAV scan, 2026-10-06 —
+below), and voided records keeping their file by design — a `DELETE` marks the
+record `cancelled` rather than removing it, so the correction stays auditable
+and its evidence stays with it.
+
+### Malware scanning of certificates _(2026-10-06)_
+
+With `CLAMAV_ENABLED=true` both certificate upload routes
+(`POST /training/submissions/with-attachment` and
+`POST /training/submissions/{id}/attachments`) stream the file to a ClamAV
+daemon (`app/services/malware_scan_service.py`, clamd `INSTREAM` over TCP)
+after the magic-byte check and **before anything is written to disk**.
+
+| Outcome                    | Response                                 | Stored? | Audit                                                      |
+| -------------------------- | ---------------------------------------- | ------- | ---------------------------------------------------------- |
+| Clean                      | as before                                | yes     | —                                                          |
+| Infected                   | `400`, `LB-UPLD-004`                     | no      | `upload_malware_detected` — signature, type, size, SHA-256 |
+| clamd unreachable/slow/err | `503` + `Retry-After: 60`, `LB-UPLD-005` | no      | — (logged at ERROR)                                        |
+| Scanning disabled          | as before; clamd never called            | yes     | —                                                          |
+
+The outage row **fails closed** (owner's decision): accepting unscanned files
+whenever the scanner is down is the state an attacker wants (the same reasoning
+as CAPTCHA). Scanning is on by default since 2026-10-08 and covers every upload
+path, not only certificates; the bundled daemon is the `clamav` service every
+compose file starts. See
+[Security Configuration](Configuration-Security#malware-scanning-of-uploads).
+Files already stored before scanning was enabled are not rescanned.
 
 ### The start time is kept
 

@@ -6,7 +6,7 @@ Request and response schemas for election-related endpoints.
 
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
 from pydantic import (
@@ -28,8 +28,16 @@ VALID_TIE_POLICIES = {"co_winners", "runoff", "revote", "chair_decides"}
 VALID_BALLOT_ITEM_TYPES = {"membership_approval", "officer_election", "general_vote"}
 VALID_VOTE_TYPES = {"approval", "candidate_selection"}
 
+# The field validators below return exactly what they were given, so the
+# helpers are generic over it: a required field stays ``str``, an optional one
+# ``Optional[str]``, and a saved-template item list keeps its item type.
+_ChoiceT = TypeVar("_ChoiceT", bound=Optional[str])
+_BallotItemsT = TypeVar("_BallotItemsT", bound="Optional[Sequence[BallotItemInput]]")
 
-def _validate_choice(value, valid_set, label):
+
+def _validate_choice(
+    value: _ChoiceT, valid_set: AbstractSet[str], label: str
+) -> _ChoiceT:
     """Shared validation: reject values not in the allowed set, pass through None."""
     if value is not None and value not in valid_set:
         raise ValueError(
@@ -65,6 +73,77 @@ def _empty_roster_means_everyone(
     if values is not None and len(values) == 0:
         return None
     return values
+
+
+def _validate_ballot_item_identities(items: _BallotItemsT) -> _BallotItemsT:
+    """Ids are unique, and no item's alias names a different item (ELEC-40).
+
+    A stored ``Candidate`` or ``Vote`` records only a position string. A
+    legacy item is matched by its title *or* its id and an explicit one by
+    its ``position``, so an item whose title or position equals another
+    item's id makes every row stored under that string ambiguous — the
+    schema has no ``ballot_item_id`` to settle which item it belongs to.
+    The owner chose (2026-10-05) to make that state unreachable when a
+    ballot is written rather than migrate the tables, so both are refused
+    here, on every write path (create, update, saved template).
+    """
+    if items is None:
+        return items
+    ids = [item.id for item in items]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Ballot item IDs must be unique")
+    for item in items:
+        for label, alias in (("title", item.title), ("position", item.position)):
+            if alias and alias != item.id and alias in ids:
+                raise ValueError(
+                    f"Ballot item '{item.id}' has a {label} '{alias}' that is "
+                    "another ballot item's id; votes stored under it could "
+                    "not be told apart. Rename the item or change its id."
+                )
+    return items
+
+
+MAX_SEATS_PER_POSITION = 50
+
+
+def seat_rule_error(
+    seats: Optional[int],
+    max_votes: Optional[int],
+    voting_method: Optional[str],
+    ballot_items: Optional[List[Any]] = None,
+) -> Optional[str]:
+    """Why a seat count cannot work with the rest of the configuration.
+
+    Shared by create (schema) and update (endpoint, against the stored half
+    of a partial update). Instant-runoff counting elects one candidate, so a
+    multi-seat race needs plurality, majority, supermajority or approval
+    voting; and unless the method is approval (no cap), a voter must be able
+    to pick as many candidates as there are seats.
+    """
+    seats = seats or 1
+    if seats <= 1:
+        return None
+    methods = {voting_method or "simple_majority"}
+    for item in ballot_items or []:
+        override = (
+            item.get("voting_method")
+            if isinstance(item, dict)
+            else getattr(item, "voting_method", None)
+        )
+        if override:
+            methods.add(override)
+    if "ranked_choice" in methods:
+        return (
+            "A race with more than one seat cannot use ranked-choice voting, "
+            "which elects one candidate per race"
+        )
+    if (voting_method or "simple_majority") != "approval" and (max_votes or 1) < seats:
+        return (
+            f"Voters must be able to choose as many candidates as there are "
+            f"seats: max votes per position ({max_votes or 1}) is below "
+            f"seats per position ({seats})"
+        )
+    return None
 
 
 # Ballot Item Schemas
@@ -275,6 +354,7 @@ class ElectionBase(BaseModel):
     anonymous_voting: bool = Field(default=True)
     allow_write_ins: bool = Field(default=False)
     max_votes_per_position: int = Field(default=1, ge=1)
+    seats_per_position: int = Field(default=1, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: bool = Field(default=False)
     eligible_voters: Optional[List[UUID]] = Field(
         default=None,
@@ -410,11 +490,7 @@ class ElectionBase(BaseModel):
     def validate_unique_ballot_item_ids(
         cls, values: Optional[List[BallotItemInput]]
     ) -> Optional[List[BallotItemInput]]:
-        if values is not None:
-            ids = [item.id for item in values]
-            if len(set(ids)) != len(ids):
-                raise ValueError("Ballot item IDs must be unique")
-        return values
+        return _validate_ballot_item_identities(values)
 
     @model_validator(mode="after")
     def validate_election_configuration(self):
@@ -428,6 +504,14 @@ class ElectionBase(BaseModel):
             and self.quorum_value > 100
         ):
             raise ValueError("Percentage quorum cannot exceed 100")
+        seat_error = seat_rule_error(
+            self.seats_per_position,
+            self.max_votes_per_position,
+            self.voting_method,
+            self.ballot_items,
+        )
+        if seat_error:
+            raise ValueError(seat_error)
         return self
 
 
@@ -458,6 +542,7 @@ class ElectionUpdate(BaseModel):
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
     max_votes_per_position: Optional[int] = Field(None, ge=1)
+    seats_per_position: Optional[int] = Field(None, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: Optional[bool] = None
     eligible_voters: Optional[List[UUID]] = None
     voting_method: Optional[str] = None
@@ -530,11 +615,18 @@ class ElectionUpdate(BaseModel):
     def validate_unique_ballot_item_ids(
         cls, values: Optional[List[BallotItemInput]]
     ) -> Optional[List[BallotItemInput]]:
-        if values is not None:
-            ids = [item.id for item in values]
-            if len(set(ids)) != len(ids):
-                raise ValueError("Ballot item IDs must be unique")
-        return values
+        return _validate_ballot_item_identities(values)
+
+
+class ResultsRevision(BaseModel):
+    """One correction made to a closed election's result (W50-9)."""
+
+    at: datetime
+    by: Optional[str] = None
+    by_name: Optional[str] = None
+    # vote_voided | paper_batch_voided | write_ins_merged
+    action: str
+    detail: Optional[str] = None
 
 
 class ElectionResponse(UTCResponseBase):
@@ -559,6 +651,7 @@ class ElectionResponse(UTCResponseBase):
     anonymous_voting: bool = True
     allow_write_ins: bool = False
     max_votes_per_position: int = 1
+    seats_per_position: int = 1
     results_visible_immediately: bool = False
     eligible_voters: Optional[List[UUID]] = None
     voting_method: str = "simple_majority"
@@ -574,6 +667,13 @@ class ElectionResponse(UTCResponseBase):
     reminder_hours_before_close: Optional[int] = None
     reminder_sent_at: Optional[datetime] = None
     nomination_deadline: Optional[datetime] = None
+    # Set by Close Nominations; the slate is frozen while it is (W50-38).
+    nominations_closed_at: Optional[datetime] = None
+    # Ballot links already sent were retired — by a ballot change (W50-47)
+    # or a reopen (W50-36) — and no ballot email has gone out since.
+    # Resolved by the endpoint; reason is "ballot_changed" or "reopened".
+    ballots_must_be_resent: bool = False
+    ballots_resend_reason: Optional[str] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
@@ -583,6 +683,9 @@ class ElectionResponse(UTCResponseBase):
     closed_at: Optional[datetime] = None
     closed_by: Optional[UUID] = None
     closed_by_name: Optional[str] = None
+    # Each change to the result after close (W50-9), oldest first, so the
+    # Results tab can mark the result "revised <when> by <who>".
+    results_revisions: Optional[List[ResultsRevision]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -648,6 +751,7 @@ class BallotElectionResponse(UTCResponseBase):
     allow_write_ins: bool = False
     voting_method: str = "simple_majority"
     max_votes_per_position: int = 1
+    seats_per_position: int = 1
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -892,12 +996,43 @@ class CandidateResponse(UTCResponseBase):
     # results count its votes under the target candidate.
     merged_into_candidate_id: Optional[str] = None
     accepted: bool
+    # A manager accepted for the nominee (W50-38): the list labels it
+    # "Accepted by manager". None when the nominee accepted themselves.
+    accepted_on_behalf_by: Optional[UUID] = None
+    accepted_on_behalf_at: Optional[datetime] = None
     is_write_in: bool
     created_at: datetime
     updated_at: datetime
 
     # Include vote count if results are visible
     vote_count: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BallotCandidateResponse(UTCResponseBase):
+    """A candidate as a ballot shows it (W50-70): no member ids.
+
+    The emailed ballot's lookup and the in-app ballot served every
+    candidate's ``user_id`` and ``nominated_by`` to whoever held a token or
+    opened the Cast Vote tab — who nominated whom, and which member account
+    each name is, while voting is open. The owner decided ids are withheld
+    from everyone but election managers; a ballot needs only what it shows.
+    """
+
+    id: UUID
+    election_id: UUID
+    name: str = Field(..., min_length=1, max_length=200)
+    position: Optional[str] = Field(None, max_length=100)
+    statement: Optional[str] = None
+    photo_url: Optional[str] = Field(None, max_length=500)
+    display_order: int = 0
+    nomination_date: datetime
+    merged_into_candidate_id: Optional[str] = None
+    accepted: bool
+    is_write_in: bool
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -966,6 +1101,12 @@ class PositionResults(BaseModel):
     # Set for a ballot-item contest, whose ``position`` is the item's id;
     # the screen, email and certified PDF show this instead.
     label: Optional[str] = None
+    # The ballot item this contest is (None for a plain position with no
+    # item) and how it is answered — "candidate_selection" for a race,
+    # "approval" for a motion. Each contest is graded on its own (W50-7);
+    # the runoff check reads vote_type to leave motions alone.
+    ballot_item_id: Optional[str] = None
+    vote_type: Optional[str] = None
     total_votes: int
     candidates: List[CandidateResult]
     is_tie: bool = False
@@ -980,7 +1121,15 @@ class ElectionResults(BaseModel):
     total_votes: int
     total_eligible_voters: int
     voter_turnout_percentage: float
+    # One entry per contest — each position and each ballot item — graded
+    # on its own. This is the result.
     results_by_position: List[PositionResults]
+    # Only candidates that belong to no contest (a legacy election whose
+    # candidates carry no position). Before W50-7 this pooled every
+    # contest's candidates into one ranking — one motion's Approve against
+    # another's Deny, percentages over the whole ballot — and the results
+    # screen, PDF and runoff check read that pool for item-only ballots.
+    # Empty whenever every candidate is in a contest.
     overall_results: List[CandidateResult]
     # None means the election has no quorum rule at all (quorum_type
     # "none"), so no surface can honestly say "met" — a default of True
@@ -1227,12 +1376,28 @@ class BallotTemplatesResponse(BaseModel):
     templates: List[BallotTemplate]
 
 
+class SavedBallotTemplateItemInput(BallotItemInput):
+    """A ballot item inside a saved template, which rejects unknown keys.
+
+    WHY only here: the template body already forbids extras at its top level,
+    and an item carrying ``candidates`` was answered 201 and stored without
+    them, so the caller believed the candidates were saved. Election
+    create/update keep the shared, extra-tolerant :class:`BallotItemInput`
+    (owner decision 2026-10-05) — tightening that would reject requests other
+    clients send today.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SavedBallotTemplateCreate(BaseModel):
     """Persisted ballot definition that can be reused by the organization."""
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2_000)
-    ballot_items: List[BallotItemInput] = Field(..., min_length=1, max_length=250)
+    ballot_items: List[SavedBallotTemplateItemInput] = Field(
+        ..., min_length=1, max_length=250
+    )
     voting_method: str = Field(default="simple_majority", max_length=50)
     allow_write_ins: bool = False
     model_config = ConfigDict(extra="forbid")
@@ -1252,11 +1417,10 @@ class SavedBallotTemplateCreate(BaseModel):
 
     @field_validator("ballot_items")
     @classmethod
-    def unique_item_ids(cls, values: List[BallotItemInput]) -> List[BallotItemInput]:
-        ids = [item.id for item in values]
-        if len(set(ids)) != len(ids):
-            raise ValueError("Ballot item IDs must be unique")
-        return values
+    def unique_item_ids(
+        cls, values: List[SavedBallotTemplateItemInput]
+    ) -> List[SavedBallotTemplateItemInput]:
+        return _validate_ballot_item_identities(values)
 
 
 class SavedBallotTemplateResponse(UTCResponseBase):
@@ -1379,6 +1543,48 @@ class BallotSubmissionResponse(BaseModel):
     receipt_hashes: List[str] = []
 
 
+class MemberBallotSubmission(BallotSubmission):
+    """A signed-in member's ballot (the in-app Cast Vote tab): the emailed
+    ballot's shape, optionally cast as the holder of a proxy."""
+
+    proxy_authorization_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class MemberBallotItemStatus(BaseModel):
+    """Whether the voter may vote on one ballot item, and whether they have."""
+
+    ballot_item_id: str
+    eligible: bool
+    reason: Optional[str] = None
+    voted: bool = False
+
+
+class MemberBallotProxy(BaseModel):
+    authorization_id: str
+    delegating_user_id: Optional[str] = None
+    delegating_user_name: Optional[str] = None
+
+
+class MemberBallotResponse(BaseModel):
+    """The in-app ballot: every contest the emailed ballot carries (plain
+    positions included, served as ballot items), the candidates, and this
+    voter's per-item standing."""
+
+    election: BallotElectionResponse
+    candidates: List[BallotCandidateResponse] = []
+    items: List[MemberBallotItemStatus] = []
+    proxy: Optional[MemberBallotProxy] = None
+
+
+class MyProxyAuthorizationsResponse(BaseModel):
+    """The live authorizations naming the caller as proxy holder."""
+
+    proxies: List[MemberBallotProxy] = []
+    # Set when the caller holds proxies that cannot be voted here (proxy
+    # voting off for the department, or an anonymous election).
+    unavailable_reason: Optional[str] = None
+
+
 # Proxy Voting Schemas
 
 
@@ -1400,6 +1606,14 @@ class ProxyAuthorizationCreate(BaseModel):
         min_length=1,
         max_length=500,
         description="Why the proxy is being authorized",
+    )
+    anonymity_acknowledged: bool = Field(
+        default=False,
+        description=(
+            "Required on an anonymous election: the delegating member has "
+            "been told, and accepts, that their proxy holder sees how they "
+            "vote and that the proxy ballot is stored linked to them."
+        ),
     )
 
     @field_validator("proxy_type")
@@ -1424,6 +1638,9 @@ class ProxyAuthorizationResponse(BaseModel):
     authorized_by_name: str
     authorized_at: str
     revoked_at: Optional[str] = None
+    # Set when the delegating member acknowledged that this proxy ballot is
+    # attributable (anonymous elections only; W50-2 / ELEC-43).
+    anonymity_acknowledged_at: Optional[str] = None
 
 
 class ProxyAuthorizationListResponse(BaseModel):
@@ -1432,6 +1649,7 @@ class ProxyAuthorizationListResponse(BaseModel):
     election_id: str
     election_title: str
     proxy_voting_enabled: bool
+    anonymous_voting: bool = False
     authorizations: List[ProxyAuthorizationResponse]
 
 
@@ -1525,6 +1743,23 @@ class VoteIntegrityResponse(BaseModel):
     chain_break_at: Optional[str] = None
     integrity_status: str
     error: Optional[str] = None
+    # Voided votes stay in the chain and are verified with it (W50-31);
+    # they are reported here rather than reading as a broken chain.
+    voided_votes: int = 0
+    voids: List["VoteVoidSummary"] = []
+
+
+class VoteVoidSummary(BaseModel):
+    """Voided votes sharing one officer and reason (W50-31)."""
+
+    count: int
+    voided_by: Optional[str] = None
+    voided_by_name: Optional[str] = None
+    reason: str = ""
+    voided_at: Optional[str] = None
+
+
+VoteIntegrityResponse.model_rebuild()
 
 
 class SoftDeleteVoteResponse(BaseModel):

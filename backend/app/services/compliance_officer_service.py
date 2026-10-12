@@ -9,7 +9,7 @@ validation for the compliance officer dashboard.
 import calendar
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +44,7 @@ from app.services.training_compliance import (
     _load_compliance_config,
     compute_org_compliance_pct,
     evaluate_member_requirement,
+    load_credited_shift_dates,
     load_graded_records,
     member_join_date,
     tally_standing,
@@ -51,6 +52,15 @@ from app.services.training_compliance import (
 from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.hours import hours_from_minutes, round_hours_exact
 from app.utils.org_timezone import resolve_org_today
+
+
+class IsoCategory(TypedDict):
+    name: str
+    nfpa_standard: str
+    required_hours: int
+    training_types: List[str]
+    category_keywords: List[str]
+
 
 # ISO/FSRS training hour requirements per category (annual, per member).
 #
@@ -67,7 +77,8 @@ from app.utils.org_timezone import resolve_org_today
 # training_type, so that is what this reads. The old lists are kept because a
 # department may carry legacy imported records whose type came from an external
 # provider's vocabulary.
-ISO_CATEGORIES = [
+
+ISO_CATEGORIES: List[IsoCategory] = [
     {
         "name": "Company Training",
         "nfpa_standard": "NFPA 1001",
@@ -955,6 +966,14 @@ class AnnualComplianceReportService:
         else:
             year_records = []
             all_records = []
+        shifts_by_user = await load_credited_shift_dates(
+            self.db,
+            organization_id,
+            member_ids,
+            requirements,
+            today,
+            org_include_current,
+        )
 
         # A period that ended in the past is graded on what was known then.
         if as_of_cap is not None:
@@ -963,6 +982,10 @@ class AnnualComplianceReportService:
                 for r in all_records
                 if r.completion_date is None or r.completion_date <= today
             ]
+            shifts_by_user = {
+                uid: [d for d in dates if d <= today]
+                for uid, dates in shifts_by_user.items()
+            }
 
         # Build per-user record lookup
         records_by_user: Dict[str, list] = defaultdict(list)
@@ -1013,6 +1036,7 @@ class AnnualComplianceReportService:
                     waivers=user_waivers,
                     org_include_current_month=org_include_current,
                     join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(member.id), []),
                 )[0]
                 for req in applicable_reqs
             )
@@ -1103,6 +1127,7 @@ class AnnualComplianceReportService:
                     waivers=waivers_by_user.get(str(member.id), []),
                     org_include_current_month=org_include_current,
                     join_date=member_join_date(member),
+                    shift_dates=shifts_by_user.get(str(member.id), []),
                 )[0]
                 for member in applicable_members
             )

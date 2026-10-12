@@ -121,4 +121,53 @@ describe('ElectionResults ballot-item labels (W50 S05)', () => {
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.queryByText('Results by Position')).not.toBeInTheDocument();
   });
+
+  // W50-7: contests are graded per item and never pooled.
+  it('heads an item ballot "Results by Ballot Item" and shows no pooled list', async () => {
+    mockGetResults.mockResolvedValue({
+      ...baseResults,
+      results_by_position: [
+        {
+          position: 'budget',
+          label: 'Approve the budget',
+          ballot_item_id: 'budget',
+          vote_type: 'approval',
+          total_votes: 4,
+          candidates: [candidate('c1', 'Approve', { is_winner: true, vote_count: 3, percentage: 75 })],
+        },
+        {
+          position: 'bylaws',
+          label: 'Amend the bylaws',
+          ballot_item_id: 'bylaws',
+          vote_type: 'approval',
+          total_votes: 3,
+          candidates: [candidate('c2', 'Deny', { is_winner: true, vote_count: 2, percentage: 66.7 })],
+        },
+      ],
+      overall_results: [],
+    });
+    render(<ElectionResults electionId="e1" election={election} />);
+    expect(await screen.findByRole('heading', { name: 'Results by Ballot Item' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Approve the budget' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Amend the bylaws' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Other candidates' })).not.toBeInTheDocument();
+  });
+
+  it('lists candidates outside every contest under "Other candidates"', async () => {
+    mockGetResults.mockResolvedValue({
+      ...baseResults,
+      results_by_position: [
+        {
+          position: 'Chief',
+          label: null,
+          total_votes: 2,
+          candidates: [candidate('c1', 'Jane Doe', { is_winner: true })],
+        },
+      ],
+      overall_results: [candidate('c9', 'Casey Cole')],
+    });
+    render(<ElectionResults electionId="e1" election={election} />);
+    expect(await screen.findByRole('heading', { name: 'Other candidates' })).toBeInTheDocument();
+    expect(screen.getByText('Casey Cole')).toBeInTheDocument();
+  });
 });

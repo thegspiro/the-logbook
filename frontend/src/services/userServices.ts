@@ -139,6 +139,8 @@ export const userService = {
     // backend derives `membership_type` back from it.
     member_class?: string | undefined;
     member_status?: string | undefined;
+    /** Initial account status (W08-1): active (default), inactive or leave. */
+    status?: 'active' | 'inactive' | 'leave' | undefined;
     rank?: string | undefined;
     station?: string | undefined;
     platoon?: string | undefined;
@@ -592,6 +594,20 @@ export const organizationService = {
       settings
     );
     return response.data;
+  },
+
+  /**
+   * Update the department-email settings. Goes through the general settings
+   * PATCH, which replaces only the keys it is sent.
+   */
+  async updateDepartmentEmailSettings(
+    settings: import('../types/user').DepartmentEmailSettings
+  ): Promise<import('../types/user').DepartmentEmailSettings> {
+    const response = await api.patch<{ department_email: import('../types/user').DepartmentEmailSettings }>(
+      '/organization/settings',
+      { department_email: settings }
+    );
+    return response.data.department_email;
   },
 
   /**

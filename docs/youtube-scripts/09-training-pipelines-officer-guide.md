@@ -106,6 +106,13 @@ to the Roster step.]**
 > usually what you want. If it isn't, reset their enrollment with Start new
 > cycle."
 
+**[PRODUCTION NOTE — 2026-10-06. Optional 15-second addition (W27-3): a recruit
+added to the cohort **late** isn't enrolled in the classes already held; the
+officer decides each one on the Roster tab — credit it as completed (applied to
+the pipeline requirement the class feeds, once only) or schedule a make-up for
+that member. See Script 14. A pipeline refusal on a credit leaves the training
+record in place and comes back as a warning.]**
+
 **[TRANSITION: How progress updates]**
 
 ---
