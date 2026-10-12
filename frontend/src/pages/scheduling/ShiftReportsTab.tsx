@@ -47,6 +47,7 @@ import type {
   CrewMemberEvaluation,
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
+  ShiftCompletionReportUpdate,
   ShiftCrewMember,
   TrainingModuleConfig,
   TraineeShiftStats,
@@ -67,6 +68,7 @@ import { CallTypeChips } from '../../modules/scheduling/components/CallTypeChips
 import { labelCallTypeChoices, orgCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { blankToNull } from '../../utils/formValues';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
   enqueueShiftReport,
@@ -843,14 +845,20 @@ export const ShiftReportsTab: React.FC = () => {
     if (!editingDraftId) return;
     setSavingDraft(true);
     try {
-      const payload: Record<string, unknown> = {
-        ...draftForm,
-        performance_rating: draftForm.performance_rating || undefined,
-        areas_of_strength: draftForm.areas_of_strength || undefined,
-        areas_for_improvement: draftForm.areas_for_improvement || undefined,
-        officer_narrative: draftForm.officer_narrative || undefined,
-        skills_observed: draftForm.skills_observed?.length ? draftForm.skills_observed : undefined,
-        tasks_performed: draftForm.tasks_performed?.filter((t) => t.task.trim()) || undefined,
+      // An update, not a create: the backend leaves an omitted key alone, so
+      // every field the form owns is sent, and an emptied one goes out as
+      // null (text, rating) or [] (lists) so the clear actually persists.
+      const payload: ShiftCompletionReportUpdate = {
+        hours_on_shift: draftForm.hours_on_shift,
+        calls_responded: draftForm.calls_responded,
+        call_types: draftForm.call_types ?? [],
+        // `||`, not numberOrNull: 0 is the unrated star value and is off the 1-5 scale.
+        performance_rating: draftForm.performance_rating || null,
+        areas_of_strength: blankToNull(draftForm.areas_of_strength),
+        areas_for_improvement: blankToNull(draftForm.areas_for_improvement),
+        officer_narrative: blankToNull(draftForm.officer_narrative),
+        skills_observed: draftForm.skills_observed ?? [],
+        tasks_performed: (draftForm.tasks_performed ?? []).filter((t) => t.task.trim()),
       };
       if (submit) {
         payload.review_status = config?.report_review_required ? 'pending_review' : 'approved';
@@ -1484,7 +1492,12 @@ export const ShiftReportsTab: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <StarRating
                       value={draftForm.performance_rating ?? 0}
-                      onChange={(val) => setDraftForm((p) => ({ ...p, performance_rating: val }))}
+                      onChange={(val) =>
+                        setDraftForm((p) => ({
+                          ...p,
+                          performance_rating: p.performance_rating === val ? undefined : val,
+                        }))
+                      }
                       label={ratingLabel}
                     />
                     {draftForm.performance_rating && ratingScaleType === 'competency' && (
@@ -1531,10 +1544,14 @@ export const ShiftReportsTab: React.FC = () => {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                    <label
+                      htmlFor={`draft-strength-${report.id}`}
+                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                    >
                       Areas of Strength
                     </label>
                     <textarea
+                      id={`draft-strength-${report.id}`}
                       rows={2}
                       value={draftForm.areas_of_strength || ''}
                       onChange={(e) => setDraftForm((p) => ({ ...p, areas_of_strength: e.target.value }))}
@@ -1542,10 +1559,14 @@ export const ShiftReportsTab: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                    <label
+                      htmlFor={`draft-improvement-${report.id}`}
+                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                    >
                       Areas for Improvement
                     </label>
                     <textarea
+                      id={`draft-improvement-${report.id}`}
                       rows={2}
                       value={draftForm.areas_for_improvement || ''}
                       onChange={(e) => setDraftForm((p) => ({ ...p, areas_for_improvement: e.target.value }))}
