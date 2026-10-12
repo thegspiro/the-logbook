@@ -123,6 +123,29 @@ done
 
 echo -e "${GREEN}✓${NC} ${#WIKI_FILES[@]} pages staged for publication"
 
+# Pages merged into others and deleted here. The copy above is additive and the
+# wiki clone persists between runs, so a page deleted from wiki/ would otherwise
+# stay published forever with its last, stale content. This is a named list and
+# not "remove whatever wiki/ lacks", because pages can also be created directly
+# on the live wiki and a sweep would silently delete them. Add a page here in
+# the same change that deletes it from wiki/.
+WIKI_RETIRED=(
+    "Unraid-Quick-Start.md"
+    "Deployment-Guide.md"
+)
+
+for file in "${WIKI_RETIRED[@]}"; do
+    if [ -f "$file" ]; then
+        echo -e "${RED}✗${NC} $file is listed in WIKI_RETIRED but exists in wiki/."
+        echo -e "  Remove it from WIKI_RETIRED or delete the page, then publish."
+        exit 1
+    fi
+    if [ -f "$WIKI_DIR/$file" ]; then
+        rm "$WIKI_DIR/$file"
+        echo -e "${GREEN}✓${NC} Removed retired page $file"
+    fi
+done
+
 # Images travel with the pages.
 #
 # This script copied *.md and nothing else until 2026-09-06, which meant a wiki
