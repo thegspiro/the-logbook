@@ -13,6 +13,7 @@ screens are unreachable.
 | ----- | ----- |
 | `16-08-mcp-connect-form` (re-shot) | Now shows the fourth switch, **Let members connect with their own account**; viewport raised to 1500px to keep the Connect button in frame |
 | `16-10-mcp-member-signin-switch` | Connect form opened unsaved and the switch ticked in the browser only, clipped to that one control |
+| `16-15-mcp-settings` | The connected card's **Settings** form: connected with the member sign-in switch off, opened, the switch ticked in the browser and Save never pressed. `cleanup` disconnects |
 | `16-11-mcp-oauth-register-client` | Connected read-only with the department switch on; the panel's prefilled claude.ai form. The authorization server reads `http://localhost:3000/api/oauth` — the demo's address, which the guide's text says stands for the department's own. `cleanup` revokes every client and disconnects |
 | `16-12-mcp-oauth-client-secret` | The register request is a route mock; the ID and secret are visible placeholders with the real `lbmcp_` / `lbmcs_` prefixes |
 | `16-13-claude-consent` | As `nbelhaj`, through a genuine `/api/oauth/authorize` request for `mcp:read mcp:write` on a real registered client, so the read row reaches tools and the write row reaches nothing (the department is read-only) |

@@ -145,9 +145,9 @@ on the integration.
    manage yourself works without the extra rule.
 
 3. **Department** — Integrations → Claude (MCP) → Connect, and tick **Let
-   members connect with their own account**. The switch is only on the
-   connect form: to turn it on for an integration that is already connected,
-   disconnect and connect again, which also revokes the service key.
+   members connect with their own account**. On an integration that is
+   already connected, use **Settings** on its card instead: it saves the
+   change in place and keeps the service key and member connections.
 
 4. **Register each client** — on the connected card, the **Member sign-in
    (OAuth)** panel (needs `integrations.mcp_keys`). Give it a name and its

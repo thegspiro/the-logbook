@@ -1230,13 +1230,15 @@ switches as usual, and tick **Let members connect with their own account**.
 
 ![The Claude (MCP) connect form's Let members connect with their own account switch, ticked, with its note that it needs the server's OAuth setting and a registered client](./images/16-10-mcp-member-signin-switch.png)
 
-> **Already connected without it?** The switch is only offered on the connect
-> form — a connected Claude (MCP) card has no settings button. To turn it on
-> later, **Disconnect** and **Connect** again with the box ticked. Disconnecting
-> **revokes the service key** and ends every member connection, so issue a new
-> key afterwards if a client was using one. Until the switch is on, the panel in
-> step 2 shows a blue notice saying so, and a member who tries to connect is
-> sent straight back to claude.ai with the sign-in refused.
+**Already connected?** Select **Settings** on the connected Claude (MCP) card,
+tick the switch and select **Save settings**. The form opens with what is
+already stored, so nothing else changes. The service key and every member
+connection are kept, and the change applies to the next request a client makes.
+Until the switch is on, the panel in step 2 shows a blue notice saying so, and a
+member who tries to connect is sent straight back to claude.ai with the sign-in
+refused.
+
+![The Claude (MCP) settings form opened from the connected card: the stored access mode and switches with Let members connect with their own account ticked, a note that saving keeps the service key and members' connections, and a Save settings button](./images/16-15-mcp-settings.png)
 
 #### Step 2 — Register claude.ai as a client (IT administrator)
 
@@ -1318,7 +1320,7 @@ them.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | _Couldn't register with The Logbook's sign-in service … add an OAuth Client ID in the connector settings_                                                           | claude.ai                    | The connector has no client ID, so claude.ai tried to register itself; The Logbook allows only administrator-registered clients | Remove the connector and add it again with the client ID and secret in **Advanced settings** (step 4) |
 | Yellow _Member sign-in is off on this server_                                                                                                                       | Member sign-in (OAuth) panel | `MCP_OAUTH_ENABLED` is not set, or `MCP_OAUTH_ISSUER_URL` is missing or not an `https://` origin                                | Operator: set both and restart; check the backend startup log for the warning                         |
-| Blue _Turn on Let members connect with their own account_                                                                                                           | Member sign-in (OAuth) panel | The department switch is off                                                                                                    | Step 1 — disconnect and connect again with the box ticked                                             |
+| Blue _Turn on Let members connect with their own account_                                                                                                           | Member sign-in (OAuth) panel | The department switch is off                                                                                                    | Step 1 — **Settings** on the connected card                                                           |
 | _Unknown client_                                                                                                                                                    | Logbook error page           | The client ID in claude.ai does not match a registered, unrevoked client                                                        | Re-copy the ID, or register a new client                                                              |
 | _The redirect URI is not registered for this client_                                                                                                                | Logbook error page           | The client was registered with a different redirect URI                                                                         | Register a client with exactly `https://claude.ai/api/mcp/auth_callback`                              |
 | The connection is refused before any Logbook sign-in page appears (`access_denied`, _Connecting Claude with a member account is not enabled for this organization_) | claude.ai                    | The department switch is off                                                                                                    | Step 1                                                                                                |

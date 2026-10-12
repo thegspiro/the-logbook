@@ -33,13 +33,16 @@ interface McpOAuthPanelProps {
    *  (a new client's secret is shown once), so the parent can hold the
    *  control that would unmount this panel. */
   onBusyChange?: ((busy: boolean) => void) | undefined;
+  /** Changes when the integration's settings are saved, so the panel
+   *  re-reads whether the department allows member sign-in. */
+  configVersion?: number | undefined;
 }
 
 const labelClass = 'form-label';
 
 const CLAUDE_AI_CALLBACK = 'https://claude.ai/api/mcp/auth_callback';
 
-export const McpOAuthPanel: React.FC<McpOAuthPanelProps> = ({ onBusyChange }) => {
+export const McpOAuthPanel: React.FC<McpOAuthPanelProps> = ({ onBusyChange, configVersion }) => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.mcp_keys');
   const tz = useTimezone();
@@ -77,7 +80,7 @@ export const McpOAuthPanel: React.FC<McpOAuthPanelProps> = ({ onBusyChange }) =>
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, configVersion]);
 
   useEffect(() => {
     onBusyChange?.(registering);

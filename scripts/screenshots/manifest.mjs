@@ -2267,7 +2267,7 @@ async function apiCall(page, method, path, body) {
   );
 }
 
-async function connectMcpForMemberSignIn(page) {
+async function connectMcpForMemberSignIn(page, { oauthEnabled = true } = {}) {
   const listed = await apiCall(page, "GET", "integrations");
   const rows = Array.isArray(listed.json)
     ? listed.json
@@ -2285,7 +2285,7 @@ async function connectMcpForMemberSignIn(page) {
       expose_finance: false,
       expose_medical_screening: false,
       expose_full_schedule: false,
-      oauth_enabled: true,
+      oauth_enabled: oauthEnabled,
     },
   });
   const status = await apiCall(
@@ -2387,6 +2387,21 @@ async function showRegisteredClientSecret(page) {
   );
   await page.getByTestId("mcp-oauth-register").click();
   await page.getByTestId("mcp-oauth-created").waitFor({ timeout: 10_000 });
+}
+
+async function openMcpSettings(page) {
+  await connectMcpForMemberSignIn(page, { oauthEnabled: false });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Claude (MCP) settings" }).click();
+  const modal = page
+    .locator('.modal-panel:has-text("Claude (MCP) settings")')
+    .first();
+  await modal.waitFor({ timeout: 10_000 });
+  await modal
+    .getByRole("checkbox", {
+      name: /Let members connect with their own account/,
+    })
+    .check();
 }
 
 function pkcePair() {
@@ -14718,6 +14733,22 @@ export const SHOTS = [
         })
         .check();
     },
+  },
+  {
+    id: "16-15-mcp-settings",
+    doc: "16-integrations.md",
+    line: 1241,
+    anchor: "The Claude (MCP) settings form opened from a connected card",
+    alt: "The Claude (MCP) settings form opened from the connected card: the stored access mode and switches with Let members connect with their own account ticked, a note that saving keeps the service key and members' connections, and a Save settings button",
+    route: "/integrations",
+    viewport: { width: 1440, height: 1500 },
+    selector: '.modal-panel:has-text("Claude (MCP) settings")',
+    expect: "Save settings",
+    // Connected with the switch off, as a department that connected before
+    // member sign-in existed would be; the switch is ticked in the browser
+    // and Save is never pressed.
+    prepare: openMcpSettings,
+    cleanup: tearDownMemberSignIn,
   },
   {
     id: "16-11-mcp-oauth-register-client",
