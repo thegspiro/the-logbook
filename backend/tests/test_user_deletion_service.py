@@ -11,6 +11,7 @@ suite needs no MySQL.
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.core.database import Base
 from app.services import user_deletion_service as svc
@@ -135,7 +136,10 @@ class TestReleaseUserReferences:
         )
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[MagicMock(rowcount=2), MagicMock(rowcount=1)]
+            side_effect=[
+                MagicMock(spec=CursorResult, rowcount=2),
+                MagicMock(spec=CursorResult, rowcount=1),
+            ]
         )
 
         assert await svc.release_user_references(db, "u1") == 3
@@ -146,7 +150,7 @@ class TestReleaseUserReferences:
             svc, "_classify_references", lambda: ((("events", "created_by"),), ())
         )
         db = MagicMock()
-        db.execute = AsyncMock(return_value=MagicMock(rowcount=None))
+        db.execute = AsyncMock(return_value=MagicMock(spec=CursorResult, rowcount=None))
 
         assert await svc.release_user_references(db, "u1") == 0
 
@@ -155,7 +159,7 @@ class TestReleaseUserReferences:
             svc, "_classify_references", lambda: ((("events", "created_by"),), ())
         )
         db = MagicMock()
-        db.execute = AsyncMock(return_value=MagicMock(rowcount=1))
+        db.execute = AsyncMock(return_value=MagicMock(spec=CursorResult, rowcount=1))
 
         await svc.release_user_references(db, "u1")
 

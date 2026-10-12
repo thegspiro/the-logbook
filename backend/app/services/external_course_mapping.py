@@ -38,6 +38,7 @@ from app.models.training import (
     TrainingRecord,
 )
 from app.models.user import Organization, User
+from app.utils.sql_results import rows_affected
 
 # Where an officer maps courses: Training Admin → Setup → Integrations.
 MAPPINGS_PATH = "/training/admin?page=setup&tab=integrations"
@@ -304,7 +305,7 @@ async def apply_course_mapping(
                 .values(category_id=category_id)
                 .execution_options(synchronize_session=False)
             )
-    return int(result.rowcount or 0)
+    return int(rows_affected(result) or 0)
 
 
 async def completion_counts(

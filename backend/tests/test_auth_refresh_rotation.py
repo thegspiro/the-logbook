@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.engine import CursorResult
 
 from app.core.security import create_refresh_token
 from app.models.user import Session as UserSession
@@ -20,7 +21,7 @@ async def test_previous_refresh_token_is_rejected_as_replay():
 
     missing_session_result = MagicMock()
     missing_session_result.scalar_one_or_none.return_value = None
-    revoke_result = MagicMock(rowcount=1)
+    revoke_result = MagicMock(spec=CursorResult, rowcount=1)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=[missing_session_result, revoke_result])
@@ -49,7 +50,7 @@ async def test_replay_revocation_is_committed_before_the_401():
 
     missing_session_result = MagicMock()
     missing_session_result.scalar_one_or_none.return_value = None
-    revoke_result = MagicMock(rowcount=1)
+    revoke_result = MagicMock(spec=CursorResult, rowcount=1)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=[missing_session_result, revoke_result])
@@ -106,7 +107,7 @@ def _live_session_mocks(token: str, rowcount: int) -> MagicMock:
     user.is_active = True
     user_result = MagicMock()
     user_result.scalar_one_or_none.return_value = user
-    rotation_result = MagicMock(rowcount=rowcount)
+    rotation_result = MagicMock(spec=CursorResult, rowcount=rowcount)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=[session_result, user_result, rotation_result])

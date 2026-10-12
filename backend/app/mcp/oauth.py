@@ -59,6 +59,7 @@ from app.mcp.keys import McpAuthError, resolve_department_access
 from app.mcp.principal import McpPrincipal
 from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuthGrant
 from app.models.user import User
+from app.utils.sql_results import rows_affected
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1129,7 +1130,7 @@ class McpOAuthService:
             )
             .execution_options(synchronize_session="fetch")
         )
-        return int(result.rowcount or 0)
+        return int(rows_affected(result) or 0)
 
     async def list_grants(
         self, organization_id: str, *, user_id: Optional[str] = None
