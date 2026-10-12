@@ -25,7 +25,7 @@ built by ``create_all`` are both no-ops. The downgrade drops the four columns;
 what they recorded is bookkeeping only, so nothing else is lost.
 
 Revision ID: 5372d41aaf3e
-Revises: a51a4e1d2443
+Revises: 7a849409c1d0
 Create Date: 2026-10-12 19:16:43.062614
 
 """
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5372d41aaf3e"
-down_revision: Union[str, None] = "a51a4e1d2443"
+down_revision: Union[str, None] = "7a849409c1d0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

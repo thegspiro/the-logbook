@@ -2,7 +2,7 @@
  * Training type definitions
  */
 
-import type { RequirementChangeScope } from '../constants/enums';
+import type { PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -2055,6 +2055,9 @@ export interface TrainingModuleConfig {
   /** Department default for when a result becomes visible:
    *  'on_completion' | 'on_release' (an officer must release it first). */
   skills_result_release: string;
+  /** Which practical-skills system the department runs. The server reports
+   *  'skills_testing' for a department that never chose. */
+  practical_skills_method: PracticalSkillsMethod;
   allow_member_report_export: boolean;
   report_review_required: boolean;
   report_review_role: string;

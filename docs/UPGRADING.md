@@ -452,6 +452,31 @@ To see which requirements are affected before upgrading, check the
 `notification_message` set; an officer can clear either on the program's
 **Edit requirement** modal.
 
+### A department runs one practical-skills system (2026-10-12)
+
+Training had two ways to record practical skills: **Skills Testing** (station
+sheets, scored by an examiner and validated by an officer) and **shift-report
+sign-offs** (skills a shift officer ticks as demonstrated, which raise the
+member's competency). A department now runs one of them, chosen under
+**Training Administration → Settings & Data → Practical Skills**, and the
+other's screens are hidden from the hub, both navigation bars, My Training,
+the shift report form and the command palette.
+
+What the upgrade picks for each department:
+
+- **Sign-offs and no skills tests ever run** → shift-report sign-offs. Nothing
+  it uses disappears.
+- **Everyone else** → Skills Testing. This includes a department that used
+  both: its shift report form loses the skills list, and approving a shift
+  report no longer records sign-offs or raises competency.
+
+Nothing is deleted. Past sign-offs, competency levels and skills-test results
+stay on file, and switching the setting back shows them again. If a department
+used both, check its choice after the upgrade.
+
+Migration `bde76b481a16` adds `training_module_configs.practical_skills_method`.
+Downgrading drops the column and with it only the choice.
+
 ### Each document's file gets its own folder on disk (2026-10-11)
 
 Documents uploaded from this release on — through the Documents page, and the

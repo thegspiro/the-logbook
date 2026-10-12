@@ -93,6 +93,10 @@ class PublicPortalAPIKeyResponse(UTCResponseBase):
     key_prefix: str
     name: str
     rate_limit_override: Optional[int]
+    # Read-only: the override, or the org's default_rate_limit when unset. The
+    # endpoints serving this schema eager-load ``config`` for it, because the
+    # property reads that relationship and an AsyncSession refuses a lazy load.
+    effective_rate_limit: int
     expires_at: Optional[datetime]
     last_used_at: Optional[datetime]
     is_active: bool

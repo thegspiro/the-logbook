@@ -34,6 +34,7 @@ import toast from 'react-hot-toast';
 import { Link } from 'react-router';
 import { organizationService } from '../../../services/api';
 import { trainingModuleConfigService } from '../../../services/trainingServices';
+import { offersShiftSignoffs } from '../../../stores/practicalSkillsStore';
 import { schedulingService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import EditableTagList from './EditableTagList';
@@ -783,31 +784,43 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   label: 'Tasks Performed',
                   desc: 'Track tasks completed during the shift.',
                 },
-              ].map(({ field, label, desc }) => (
-                <label key={field} className="mobile-touch-row cursor-pointer gap-3">
-                  <input
-                    type="checkbox"
-                    checked={trainingConfig[field] ?? true}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      void runSaveTraining(
-                        async () => {
-                          const result = await trainingModuleConfigService.updateConfig({ [field]: checked });
-                          setTrainingConfig(result);
-                        },
-                        `${label} ${checked ? 'enabled' : 'disabled'}`,
-                        'Failed to update'
-                      );
-                    }}
-                    disabled={savingTraining}
-                    className={checkboxClass}
-                  />
-                  <div>
-                    <span className="text-theme-text-primary text-sm font-medium">{label}</span>
-                    <p className="text-theme-text-muted text-xs">{desc}</p>
-                  </div>
-                </label>
-              ))}
+              ].map(({ field, label, desc }) => {
+                // The skills list is a sign-off record, so under Skills Testing
+                // it is off whatever this switch says. Shown that way rather
+                // than as a live switch that changes nothing.
+                const lockedOff =
+                  field === 'form_show_skills_observed' &&
+                  !offersShiftSignoffs(trainingConfig.practical_skills_method ?? null);
+                return (
+                  <label key={field} className={`mobile-touch-row gap-3 ${lockedOff ? '' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={lockedOff ? false : (trainingConfig[field] ?? true)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        void runSaveTraining(
+                          async () => {
+                            const result = await trainingModuleConfigService.updateConfig({ [field]: checked });
+                            setTrainingConfig(result);
+                          },
+                          `${label} ${checked ? 'enabled' : 'disabled'}`,
+                          'Failed to update'
+                        );
+                      }}
+                      disabled={savingTraining || lockedOff}
+                      className={checkboxClass}
+                    />
+                    <div>
+                      <span className="text-theme-text-primary text-sm font-medium">{label}</span>
+                      <p className="text-theme-text-muted text-xs">
+                        {lockedOff
+                          ? 'Off: the department records practical skills with Skills Testing. Change it under Training Administration → Settings & Data → Practical Skills.'
+                          : desc}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         );

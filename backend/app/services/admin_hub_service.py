@@ -109,6 +109,9 @@ from app.services.training_compliance import (
     compute_org_compliance_tally,
     count_active_requirements,
 )
+from app.services.training_module_config_service import (
+    get_practical_skills_method,
+)
 from app.utils.org_timezone import scheduling_timezone
 
 #: The always-on fourth slot. Reported by every module, chosen by none.
@@ -719,6 +722,10 @@ async def _training_skills_passed(ctx: MetricContext) -> tuple[str, str]:
 
 
 async def _skills_testing_available(ctx: MetricContext) -> Optional[str]:
+    if await get_practical_skills_method(ctx.db, ctx.organization_id) != (
+        "skills_testing"
+    ):
+        return "The department records skills on shift reports"
     templates = await _scalar(
         ctx.db,
         select(func.count(SkillTemplate.id)).where(
@@ -860,8 +867,13 @@ async def _skill_test_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     """Official skills tests a member scored that no officer has signed off.
 
     Until it is validated a pass credits nothing — not the pipeline step, not
-    the attempt count — so the candidate is waiting on this queue.
+    the attempt count — so the candidate is waiting on this queue. Left out for
+    a department on shift-report sign-offs: the records tab it opens is hidden.
     """
+    if await get_practical_skills_method(ctx.db, ctx.organization_id) != (
+        "skills_testing"
+    ):
+        return []
     count, oldest = await _count_and_oldest(
         ctx.db,
         SkillTest,
