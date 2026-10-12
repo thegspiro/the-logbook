@@ -89,7 +89,7 @@ export const ReactivateMemberModal: React.FC<ReactivateMemberModalProps> = ({
         </div>
       }
     >
-      <div className="modal-body space-y-3">
+      <div className="space-y-3">
         <p className="text-theme-text-secondary text-sm">
           <span className="text-theme-text-primary font-medium">{member?.name}</span> will be restored to{' '}
           <span className="font-medium">Active</span> status. Their profile, training and history are kept as they were.

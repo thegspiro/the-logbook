@@ -18,7 +18,7 @@ Downgrade drops the column, which loses only which history rows were automatic;
 the rows themselves stay.
 
 Revision ID: 43b88e6ec431
-Revises: e1a5bfe7a2ed
+Revises: 3c9c5025a380
 Create Date: 2026-10-11 23:02:31.865508
 """
 
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "43b88e6ec431"
-down_revision: Union[str, None] = "e1a5bfe7a2ed"
+down_revision: Union[str, None] = "3c9c5025a380"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

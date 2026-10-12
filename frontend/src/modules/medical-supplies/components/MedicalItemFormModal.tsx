@@ -136,7 +136,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit medical supply' : 'Add medical supply'} size="lg">
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           {/*
            * A failed category load is reported whether or not options survived
            * it. With options retained the list is not empty, but it is out of

@@ -820,6 +820,18 @@ export interface UnroutedApproval {
   entityAmount: MonetaryAmount;
   requesterName: string;
   submittedAt: string;
+  /** Held for a second, different approver by the dual-approval threshold. */
+  awaitingSecondApproval?: boolean;
+  firstApprovedBy?: string | null;
+}
+
+/** `GET /finance/settings`: the finance rules the server applies. */
+export interface FinanceSettings {
+  /**
+   * Requests of this amount or more need two different approvers; null is off.
+   * Changed through organization settings (`settings.manage`), not here.
+   */
+  dualApprovalThreshold: MonetaryAmount | null;
 }
 
 export interface PurchaseRequest {
@@ -838,6 +850,14 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   orderedAt?: string;
   receivedAt?: string;
@@ -884,6 +904,14 @@ export interface ExpenseReport {
   status: ExpenseReportStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   paidAt?: string;
   paymentMethod?: string;
@@ -911,6 +939,14 @@ export interface CheckRequest {
   status: CheckRequestStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   checkNumber?: string;
   checkDate?: string;

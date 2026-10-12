@@ -512,6 +512,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
         entityId={pr.id}
         status={pr.status}
         approvalStepCount={pr.approvalSteps.length}
+        awaitingSecondApproval={pr.awaitingSecondApproval}
+        firstApprovedBy={pr.firstApprovedBy}
         requesterId={pr.requestedBy}
         onDecided={() => void fetchPurchaseRequest(pr.id)}
       />

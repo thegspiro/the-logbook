@@ -98,6 +98,15 @@ sites were enumerated from the AST, not grepped (app-review A9 pass 3,
 | Driver exceptions | approve (checked twice: against the requester **and** the exception's subject)                    | reviewer vs. requester / subject          |
 | Course cohorts    | `credit_missed_class`                                                                             | crediting officer vs. the credited member |
 
+**Dual approval** _(2026-10-11)_ is a second, separate control on finance
+requests and is not one of the call sites above: at or above a
+department-set threshold (`finance.dual_approval_threshold`, off by default,
+written only with `settings.manage`), a purchase request, check request or
+expense report needs two different approvers, and someone who has already
+approved a held request cannot give its second approval
+(`FinanceService._held_for_second_approver`, `manual_approve`). See
+`docs/FINANCE_MODULE.md`, "Dual approval".
+
 **Deliberately not guarded**, each for a stated reason — this half is the part
 worth keeping current:
 

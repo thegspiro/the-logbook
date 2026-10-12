@@ -132,7 +132,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
         </div>
       }
     >
-      <div className="modal-body space-y-3">
+      <div className="space-y-3">
         {message && <div className="text-theme-text-secondary text-sm">{message}</div>}
         <div>
           <label htmlFor={fieldId} className="form-label">

@@ -461,6 +461,22 @@ upgrade for longer than that gets "Your onboarding session reached its
 the saved answers, as after a 30-minute idle lapse. Signed-in members'
 sessions are not affected.
 
+### Each document's file gets its own folder on disk (2026-10-11)
+
+Documents uploaded from this release on — through the Documents page, and the
+apparatus and finance screens that store documents — are written to
+`/app/uploads/<organization_id>/documents/<document_id>/`, like every other
+kind of upload, instead of flat in `…/documents/`. Nothing changes for anyone
+using the app, and files already stored keep downloading where they are.
+
+To tidy the ones already stored flat, run the relocation command; its dry run
+now lists them alongside any legacy files, and `--apply`, `--rollback` and
+`--finalize` treat them the same way:
+
+```bash
+docker exec -it intranet-backend python scripts/relocate_uploads.py
+```
+
 ### Documents with no folder are filed into General Documents (2026-10-11)
 
 The upgrade moves every document that had no folder into its department's
@@ -533,6 +549,25 @@ completed" until the administrator visits `/onboarding/encryption-key`.
 earlier releases serve an encrypted file's raw bytes. The database part does
 roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
 `encryption_key_custody`, and the notice returns after a re-upgrade.
+
+### Large finance requests can require two approvers (2026-10-11)
+
+Migration `3c9c5025a380` adds `first_approved_by` and `first_approved_at` to
+purchase requests, check requests and expense reports. Nothing is backfilled.
+
+- **Nothing changes until you turn it on.** The new organization setting
+  `finance.dual_approval_threshold` is off by default. A member with
+  `settings.manage` sets it on **Finance > Settings > Approval Chains**; at or
+  above that amount, a request waits after its first approval until a
+  second, different person approves it.
+- **The manual approve and deny actions now also act on a request held for its
+  second approver**, even though it has approval steps. A request whose chain
+  is still running is refused (409) as before.
+- **The detail panel's approve message now reads "Approval recorded"** rather
+  than "Request approved", since an approval may be the first of two.
+- **Downgrading** drops the columns. A request held for its second approver at
+  that point stays waiting for approval, and the previous version lets any
+  approver approve it alone.
 
 ### QuickBooks exports send each payment once, and reverse voided checks (2026-10-11)
 

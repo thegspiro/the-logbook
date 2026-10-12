@@ -939,6 +939,15 @@ class PurchaseRequest(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ordered_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -1074,6 +1083,15 @@ class ExpenseReport(Base):
         nullable=True,
     )
     approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1230,6 +1248,15 @@ class CheckRequest(Base):
         nullable=True,
     )
     approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

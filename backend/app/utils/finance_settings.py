@@ -1,0 +1,71 @@
+"""
+Per-department finance rules.
+
+Stored in the organization settings as the ``finance`` section and written
+through ``PATCH /organization/settings`` (``settings.manage``), never by a
+``finance.manage`` holder alone. The threshold below is a separation-of-duties
+control on the finance officers themselves, so the person it binds must not be
+the only one able to lift it — the rule ``admin_hours_settings`` follows for
+self-approval.
+
+Pitfall #19: this module is the reader. ``FinanceService`` consults it whenever
+an approval would complete a request, and ``GET /finance/settings`` reports
+what it resolved, so the screen shows the server's reading rather than a copy
+of these defaults.
+
+``dual_approval_threshold``
+    Whole dollars. A purchase request, check request or expense report of this
+    amount or more is approved only once two different people have approved
+    it. Absent, ``null``, zero, negative or malformed reads as off: the rule is
+    one a department turns on, and an exception here would stop every approval
+    over one mistyped setting (Pitfall #19, "read free-form JSON
+    defensively").
+"""
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.user import Organization
+
+FINANCE_SETTINGS_KEY = "finance"
+DUAL_APPROVAL_THRESHOLD_KEY = "dual_approval_threshold"
+
+# The largest amount a request column holds (Numeric(12, 2)); a threshold above
+# it could never be reached.
+MAX_DUAL_APPROVAL_THRESHOLD = 9_999_999_999
+
+
+@dataclass(frozen=True)
+class FinanceSettings:
+    dual_approval_threshold: Optional[Decimal]
+
+
+def finance_settings_in(settings: Any) -> FinanceSettings:
+    """Resolve the finance rules out of an organization's settings JSON."""
+    section = settings.get(FINANCE_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        section = {}
+
+    raw = section.get(DUAL_APPROVAL_THRESHOLD_KEY)
+    threshold: Optional[Decimal] = None
+    # bool is an int subclass; a stray ``true`` must not read as $1.
+    if (
+        isinstance(raw, int)
+        and not isinstance(raw, bool)
+        and 0 < raw <= MAX_DUAL_APPROVAL_THRESHOLD
+    ):
+        threshold = Decimal(raw)
+    return FinanceSettings(dual_approval_threshold=threshold)
+
+
+async def load_finance_settings(
+    db: AsyncSession, organization_id: str
+) -> FinanceSettings:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return finance_settings_in(result.scalar_one_or_none())

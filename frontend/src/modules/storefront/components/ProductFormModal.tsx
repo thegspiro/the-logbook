@@ -272,7 +272,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
         </div>
       }
     >
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <div className="form-grid-2">
           <div>
             <label htmlFor="product-name" className="form-label">

@@ -46,7 +46,7 @@ const SuggestionPublishModal: React.FC<SuggestionPublishModalProps> = ({ detail,
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit published copy' : 'Publish to the idea board'} size="lg">
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <div className="alert-info text-sm">
             <p className="text-theme-text-primary">
               Every member can read this and vote on it. Write it in your own words: the submission itself, its

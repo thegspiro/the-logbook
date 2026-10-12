@@ -933,8 +933,55 @@ Approve and deny check the caller against the step's named approver, in addition
 - `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
 - `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
 - `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; 403 when the caller is not the step's named approver — see above)
-- `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
-- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log) and `.../deny` (body `{reason}`, required) — only for a request with no approval steps; a request with steps returns 409
+- `GET /finance/approvals/unrouted` (requests in `pending_approval` with no approval step still pending: no chain applied, or held for a second approver — `awaitingSecondApproval`, `firstApprovedBy`; see **Dual approval** below)
+- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log, with `completed` false when the approval was the first of two) and `.../deny` (body `{reason}`, required) — only for a request with no approval step still pending; a request whose chain is still running returns 409
+- `GET /finance/settings` (`finance.view`, `finance.approve`, `finance.manage` or `finance.configure_approvals`) — `{dualApprovalThreshold}` as the approval path reads it, null when off
+
+#### Dual approval _(2026-10-11)_
+
+Owner decision, 2026-10-09: at or above a department-set threshold, a purchase
+request, check request or expense report is approved only once **two
+different people** have approved it, and the request waits for the second
+rather than refusing the first.
+
+- **Where it is set.** Organization settings, `finance.dual_approval_threshold`
+  (whole dollars; `FinanceSettingsUpdate`, 1 to 9,999,999,999), written only by
+  `PATCH /organization/settings` (`settings.manage`). It binds the finance
+  officers, so the people it applies to cannot lift it — the arrangement
+  `admin_hours.allow_self_approval` uses. `app/utils/finance_settings.py` is the
+  reader; absent, null, zero, negative, a boolean or any non-integer reads as
+  **off**, the default, so no existing installation changes on upgrade.
+- **Where it bites.** `_finalize_approval`, the one place both paths reach —
+  the end of an approval chain (including email-token approvals and chains
+  whose steps all auto-approved) and a manual approval.
+  `_held_for_second_approver` counts the people who have approved: each chain
+  step approved in the app as the member who approved it, one approved from an
+  emailed link as the address the step names, an auto-approved step as nobody,
+  plus a first approval recorded on the request. With fewer than two, the
+  request stays `pending_approval`; a first approval given outside a chain is
+  recorded as `first_approved_by` / `first_approved_at` (migration
+  `3c9c5025a380`, on all three tables). Budget encumbrance happens once, on
+  the approval that completes the request.
+- **How the second approver acts.** A held request has nothing left in its
+  chain, so the manual path decides it: `_lock_unrouted_entity` now refuses
+  only a request with a step **still pending** (`_has_pending_step_records`),
+  and the unrouted listing uses the same predicate. Any `finance.approve`
+  holder may give the second approval — not only a chain step's named approver
+  — except the requester (FIN-4) and anyone who has already approved it
+  (400, "You have already approved this request…"). A held request can still
+  be denied.
+- **Reported, not re-derived.** Detail responses carry `firstApprovedBy`,
+  `firstApprovedAt` and `awaitingSecondApproval`
+  (`FinanceService.is_awaiting_second_approval`: waiting for approval, no step
+  pending, and either a chain that has run or a first approval recorded).
+- **Screens.** The approval chains settings page shows the rule
+  (`DualApprovalSettingsCard`, reading `GET /finance/settings`), editable only
+  with `settings.manage`. `ManualApprovalPanel` also appears on a held request
+  — _"This request needs a second approval from someone who has not approved it
+  yet."_ — and offers whoever gave the first approval only Deny; its approve
+  toast is now "Approval recorded". The Approvals page lists, below the step
+  rows, the requests decided on their own page (`GET /finance/approvals/unrouted`),
+  each marked "A second approver" or "An approver (no chain applies)".
 
 ### Frontend
 
@@ -947,7 +994,7 @@ Components:
 
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
 - **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
-- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. These requests are not on the Approvals page, which lists step records; `GET /finance/approvals/unrouted` lists them but no screen reads it yet
+- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. Since 2026-10-11 it also shows on a request held for a second approver (`awaitingSecondApproval`), and the Approvals page lists both kinds below its step rows, from `GET /finance/approvals/unrouted`
 - **ApprovalChainPreview** — _planned, not built._ `GET /finance/approval-chains/preview` and `approvalChainService.preview()` exist, but no component calls them; request forms show no chain preview and the settings page has no preview tool
 
 **Request bodies accept camelCase and snake_case** _(2026-09-30)_. Every request schema in `app/schemas/finance.py` uses `_REQUEST_CONFIG` (`alias_generator=to_camel`, `populate_by_name=True`, `loc_by_alias=False`). Before this the pages sent camelCase and no schema carried an alias: creates were refused with a 422 for "missing" required fields (`POST /finance/fiscal-years` with `startDate`), and updates silently dropped every multi-word key, so clearing a purchase request's `budgetId` returned 200 and changed nothing. Dumps stay by field name, `exclude_unset` keeps "omitted = leave alone, null = clear", and 422 field names stay snake_case. `tests/test_finance_request_camelcase.py` fails if a new request schema lacks the config.

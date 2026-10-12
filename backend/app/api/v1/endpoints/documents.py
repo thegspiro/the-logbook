@@ -18,7 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
+from app.core.utils import (
+    ensure_found,
+    generate_uuid,
+    handle_service_errors,
+    safe_error_detail,
+)
 from app.models.document import Document, DocumentStatus
 from app.models.user import Position, User
 from app.schemas.documents import (
@@ -434,13 +439,17 @@ async def upload_document(
 
     # Size cap, content-type detection, malware scan and an org-scoped write,
     # in that order. The stored extension comes from the detected type, never
-    # the uploader's filename (no report.pdf.exe).
+    # the uploader's filename (no report.pdf.exe). The id is chosen here rather
+    # than by the column default so the file is filed under its own document
+    # (<org>/documents/<document_id>/), like every other area's records.
+    document_id = generate_uuid()
     stored = await FileStorageService(db).store_upload(
         file,
         organization_id=current_user.organization_id,
         area=StorageArea.DOCUMENTS,
         rules=DOCUMENT_FILE_RULES,
         user=current_user,
+        record_id=document_id,
         upload_kind="document",
     )
     file_path = stored.path
@@ -448,6 +457,7 @@ async def upload_document(
 
     # Create document record
     doc_data = {
+        "id": document_id,
         "name": name,
         "description": description,
         "folder_id": str(folder.id),
