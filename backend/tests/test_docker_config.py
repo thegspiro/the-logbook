@@ -157,6 +157,15 @@ class TestBackendDockerfile:
         assert "main.py" in copy_text, "Production stage must COPY main.py"
         assert "app/" in copy_text, "Production stage must COPY app/ directory"
 
+    def test_production_copies_operator_scripts(self):
+        """docs/UPGRADING.md tells operators to `docker exec ... python
+        scripts/encrypt_uploads.py`; the production image must carry them."""
+        prod = next(s for s in self.stages if s["name"] == "production")
+        copies = _get_instructions(prod, "COPY")
+        assert any(
+            c.split()[0].rstrip("/") == "scripts" for c in copies
+        ), f"Production stage must COPY scripts/ directory, got: {copies}"
+
     def test_production_has_cmd(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         cmds = _get_instructions(prod, "CMD")
