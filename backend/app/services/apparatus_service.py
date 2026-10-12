@@ -1399,8 +1399,10 @@ class ApparatusService:
                 maintenance.completed_date = today
             maintenance.is_overdue = False
 
-        for field, value in update_data.items():
-            setattr(maintenance, field, value)
+        # `maintenance_type_id` and `is_completed` are Optional in the request
+        # schema but NOT NULL columns, so an explicit null has to be refused here
+        # as a 400; a bare setattr let it reach the commit as an IntegrityError.
+        apply_updates(maintenance, update_data)
 
         # Recheck overdue status
         if (

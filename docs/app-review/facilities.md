@@ -147,7 +147,42 @@ sentinel for "is null". The same change should add `search` and real pagination
 to both cross-facility list endpoints, which would also close FAC2-4's two
 residuals. Recorded in `KNOWN_LIMITATIONS.md`.
 
-### FAC2-6 — MED, cross-module — apparatus has the identical payload bug, and pass B2-5 missed it — 🚩 FLAGGED
+### FAC2-6 — MED, cross-module — apparatus has the identical payload bug, and pass B2-5 missed it — ✅ CLOSED (2026-10-12)
+
+**Status, corrected.** This entry was written as 🚩 FLAGGED / open, and the
+description below is what was true on 2026-10-08 when the defect was found. It
+was **not** still true when this pass was committed:
+
+- **The frontend half was fixed on 2026-10-09** by a separate session
+  (`f4e16fa0`, with tests for all three apparatus edit modals) — after this
+  pass found it, and two days before this pass was rebuilt and pushed.
+- **My claim on 2026-10-11 that it was "still present" was wrong.** The check
+  that backed it was `grep -c "f.vendor ? { vendor: f.vendor }"` returning `1`.
+  That string still exists in the modal — in the **create** branch, where
+  omitting a blank is correct. The grep could not tell the create branch from
+  the edit branch, and I read a count of one as "bug live". It went into a
+  merged PR as an open finding and into the hand-off as a bug to fix. A
+  verification that cannot fail in the direction being tested is not a
+  verification; the re-check that should have been run was reading the edit
+  branch's payload, which the 2026-10-09 commit had already moved to
+  `blankToNull` / `numberOrNull`.
+- **The backend half was real and is fixed in the change that corrects this
+  entry.** `ApparatusService.update_maintenance_record` now uses
+  `apply_updates` in place of the bare `setattr` loop. Reproduced against real
+  SQL first: an explicit `null` for `is_completed` (or `maintenance_type_id`)
+  reached the commit and died as `IntegrityError: Column 'is_completed' cannot be
+null` — a 500 — and both now raise `ValueError` → 400.
+  `tests/test_apparatus_maintenance_update_integration.py` (4 tests, `integration`
+  marker) pairs the two NOT NULL cases with two nullable cases (a null clears;
+  an omitted field is untouched), so a guard that rejected every null would not
+  pass.
+- **Overstated here:** the original text below says the raw loop would also set
+  "an unknown field silently". That is not reachable — every key
+  `ApparatusMaintenanceUpdate` can produce is a real column on the model — so
+  the only live consequence of the raw loop was the NOT NULL 500, and only for a
+  direct API client; the form always sends a maintenance type and a boolean.
+
+Original text, as written on 2026-10-08:
 
 Chasing FAC2-3 across the other maintenance surfaces found the same defect in
 **apparatus**, which this rotation reviewed three iterations ago and passed:
@@ -169,10 +204,10 @@ fix alone would work — but it has none of `apply_updates`' protections: a null
 against a NOT NULL column fails at flush as an `IntegrityError` → 500 instead of
 a clean 400, and an unknown field is set silently. Any fix should do both halves.
 
-**Not fixed here, deliberately:** it is another module and another iteration of
-this rotation, and the skill's rule is one feature per run. Fixing it blind
-would also widen a facilities PR into apparatus. `docs/app-review/apparatus.md`
-has been corrected to say pass 5 missed it.
+**Not fixed in the facilities PR, deliberately:** it is another module and
+another iteration of this rotation, and the skill's rule is one feature per run.
+Fixing it blind would also widen a facilities PR into apparatus.
+`docs/app-review/apparatus.md` records that pass 5 missed it.
 
 **Checked and clean, so not re-reported:** inventory's own
 `MaintenanceRecordCreate` payload (`InventoryMaintenancePage.tsx`) has the same
