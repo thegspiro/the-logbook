@@ -83,6 +83,10 @@ COPY main.py .
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
+# Operator tools run with `docker exec ... python scripts/<name>.py`
+# (encrypt_uploads.py, rotate_encryption_key.py, ...); docs/UPGRADING.md
+# depends on them being present in the running image.
+COPY scripts/ ./scripts/
 
 # Change ownership
 RUN chown -R appuser:appuser /app
