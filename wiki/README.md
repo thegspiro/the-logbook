@@ -14,13 +14,14 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 ### Getting Started
 
 - **Installation.md** - Complete installation guide for all platforms
-- **Unraid-Quick-Start.md** - One-command Unraid installation
 - **Onboarding.md** - First-time setup wizard guide
 - **Quick-Reference.md** - Common commands and quick solutions
 
 ### Deployment & Configuration
 
-- **Deployment-Unraid.md** - Deploying and updating on Unraid
+- **Deployment-Unraid.md** - Installing, updating and troubleshooting on Unraid
+- **Deployment-Docker.md** - Docker Compose installation and operations
+- **Deployment-Production.md** - HTTPS, backups, monitoring and cloud platforms
 - **Configuration-Environment.md** - Environment variables reference
 - **Configuration-Modules.md** - Module configuration
 - **Configuration-Security.md** - Security settings
@@ -332,7 +333,6 @@ docker compose up -d
 Home.md (landing page)
 ├── Getting Started
 │   ├── Installation
-│   ├── Unraid-Quick-Start
 │   ├── Onboarding
 │   └── Quick-Reference
 ├── Deployment

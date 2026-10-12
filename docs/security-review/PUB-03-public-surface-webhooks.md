@@ -1,6 +1,192 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 8 (2026-10-12) — a new OAuth 2.1 authorization server reviewed fresh; PUB-8's 401 half narrowed to one branch
+
+**Watchdog pickup.** No `claude/security-review-*` PR or branch existed
+anywhere in the repo (confirmed via `search_pull_requests`,
+`is:open head:claude/security-review-`, 0 results), roughly 65 minutes after
+PR #3097 (Feature 02, Permissions & roles, pass 8) merged with nothing
+started since.
+
+**Backend:** pass 7's closing merge (`4caded5d`, PR #2937) to current `HEAD`:
+`git diff 4caded5d HEAD -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+touches 6 of the (now) 14 files under `app/api/public/` plus
+`public_portal_security.py`. The other 8 — `branding.py`, `calendar.py`,
+`display.py`, `legal.py`, `portal.py`, `responses.py`, `salesforce_webhook.py`,
+`security_txt.py` — are byte-identical (confirmed by the same diff command
+returning no hunks for each), so their pass 4–7 findings and "Verified good"
+items stand unchanged and are not re-derived here. **Frontend:** none
+modified — Feature 03 declares no frontend files. **Migrations:** none
+written this pass (the one migration in this diff, `2d4304107b77`, landed
+with the new file below, between pass 7 and this pass — not by this pass).
+
+The six changed files, read in full against all seven checklist dimensions:
+
+- **`app/api/public/mcp_oauth.py` (new file, 433 L, 8 route decorators / 7
+  logical endpoints).** The MCP OAuth 2.1 authorization server's public HTTP
+  surface — `/authorize`, `/token`, `/revoke`, and the RFC 8414/9728 metadata
+  documents, each served at the RFC path and the `/api/`-prefixed form this
+  project's reverse-proxy guidance already assumes. Every endpoint 404s
+  while `MCP_OAUTH_ENABLED`/`MCP_OAUTH_ISSUER_URL` are unset
+  (`_origin_or_404`), so an installation that never opted in exposes
+  nothing new. All three endpoints rate-limit (60–120/min per IP,
+  scope-isolated) before any form parsing or DB work. Collaborators read in
+  full to verify the HTTP layer's claims against the actual decisions:
+  `app/mcp/oauth.py` (1330 L — the whole authorization-server state
+  machine), `app/api/v1/endpoints/mcp_oauth.py` (the CSRF-protected,
+  session-authenticated consent screen and a member's own connections),
+  `app/api/v1/endpoints/mcp_oauth_admin.py` (client registration/revocation,
+  gated on `integrations.mcp_keys`), and `app/models/mcp_oauth.py` plus its
+  migration `2d4304107b77`.
+  - **Redirect URIs cannot be used as an open redirector.** Mechanism:
+    `start_authorization` matches `redirect_uri` byte-for-byte against the
+    client's stored list (`stored_redirect_uris`, itself read defensively —
+    anything but a list of strings counts as none registered) and reports an
+    unknown/mismatched URI to the browser rather than redirecting to it
+    (`oauth.py:716-724`); only after that check does an error become
+    eligible for `redirect=True`. `normalize_redirect_uris` additionally
+    refuses a non-https scheme off loopback, a fragment, embedded
+    credentials, and a wildcard at registration time.
+  - **PKCE is mandatory and verified against the stored challenge, not
+    merely present.** `S256` is the only method accepted
+    (`code_challenge_method != "S256"` refuses), and `exchange_code`
+    recomputes the challenge from the presented `code_verifier` and compares
+    it to `row.code_challenge` with `hmac.compare_digest` (`oauth.py:934-937`).
+  - **A code or refresh token cannot be replayed without revoking the
+    connection it belongs to.** `exchange_code` locks the authorization row
+    (`.with_for_update()`) and, on a second presentation of an
+    already-`consumed`/`failed` code, revokes the grant that code minted
+    before answering `invalid_grant` (`oauth.py:910-919`); `refresh`
+    recognises a non-current refresh token for a _live_ grant the same way
+    and revokes it (`oauth.py:1000-1010`). Both commit the revocation despite
+    the response being an error (`CodeReplayed`/`RefreshReplayed`), so the
+    attacker's and the legitimate holder's copies are both cut off.
+  - **A token minted here cannot be used against this server with a
+    different audience, or re-presented as another resource's.**
+    `canonical_resource` requires an explicit `resource` to name this
+    server's own MCP endpoint exactly (RFC 8707); `authenticate_access_token`
+    re-checks `grant.resource == resource_url(base)` on every call
+    (`oauth.py:1257-1259`), not only at issuance.
+  - **A token is never issued, revoked, or consented-to without a traceable
+    audit row.** `token()`'s handler rolls back and answers 503 if
+    `log_audit_event` returns `None` (`mcp_oauth.py:383-391`), and the
+    consent/registration/revocation endpoints in the two v1 files use the
+    equivalent `require_audit`/`require_audit_entry` helpers — the same
+    trade this codebase's service-key path (`mcp_keys.require_audit_entry`)
+    already makes.
+  - **What a token can do is re-derived every call, never cached from
+    issuance.** `authenticate_access_token` re-reads the department's
+    switches, the member's current permissions
+    (`collect_user_permissions`), and the grant's own scopes on every
+    request, and refuses outright if the member is no longer active or the
+    department's `oauth_enabled` switch is off (`oauth.py:1271-1286`) — a
+    revoked position or a disabled integration takes effect on the very
+    next call, with no token to separately chase.
+  - **Client secrets and token/code digests are compared in constant time.**
+    `_same` (`hmac.compare_digest`) gates every secret/token comparison in
+    the service (`authenticate_client`, `exchange_code`, `refresh`,
+    `revoke_token`, `authenticate_access_token`); only SHA-256 digests are
+    stored, which is the correct tool here precisely because what is hashed
+    is always 256 bits of `secrets.token_urlsafe` output, never a
+    human-chosen secret — the same reasoning the module's own docstring and
+    this codebase's `nfc_tag_service.hash_tag_uid` both state.
+  - **Every by-id and by-FK operation is org-scoped, including under
+    `require_permission` (CLAUDE.md pitfall 14b).** `get_pending` filters
+    `organization_id == str(user.organization_id)` so a request from another
+    department answers the identical `LookupError` as one that does not
+    exist (`oauth.py:805-813`); `revoke_grant`/`revoke_client` take
+    `organization_id` as a hard filter, not merely a permission gate; a
+    member revoking their own connection additionally filters `user_id`
+    (`mcp_oauth.py` v1 endpoint, `revoke_my_connection`).
+  - **Registered and stored bounds prevent unauthenticated storage growth
+    (CLAUDE.md pitfall 9).** `MAX_PENDING_PER_CLIENT` (100, pruned first),
+    `MAX_REDIRECT_URIS` (10), `MAX_CLIENTS_PER_ORG` (25),
+    `MAX_GRANTS_PER_MEMBER_CLIENT` (5, oldest superseded), `MAX_STATE_CHARS`
+    (1024) all cap what an unauthenticated `/authorize` caller, or an
+    authenticated client, can make the server store; `_prune_authorizations`
+    deletes finished rows past their retention window on every
+    `/authorize` call.
+  - **The model/migration pair satisfies pitfall 2 and the create_all-table
+    rule.** Every `ondelete="SET NULL"` column (`grant_id`, `created_by`,
+    `revoked_by`) is `nullable=True` in both the model and the migration;
+    the migration guards each `create_table` on the table's own existence
+    and is listed as reversible (drops cleanly; no other table references
+    these three).
+- **`app/core/public_portal_security.py` (+95/-18 over pass 7's baseline,
+  all landed between pass 7 and this pass by other work — re-verified
+  fresh, not trusted from commit messages).** Two already-shipped fixes
+  confirmed sound: (1) the public-portal hourly/per-IP rate limiters moved
+  from a per-process dict (ceiling = workers × limit) to a Redis `INCR`/
+  `EXPIRE` fixed-window counter shared across workers
+  (`_shared_window_hit`), falling back to the old per-process cache only
+  when Redis is unreachable — the same degrade-not-fail policy
+  `public_rate_limit` already uses elsewhere, and the fallback path itself
+  is unchanged and still exercised by the existing test suite; (2)
+  `_last_used_is_stale` and the two `detect_anomalies` queries now compare
+  `last_used_at`/`timestamp` as `datetime` objects rather than
+  `.isoformat()` strings, closing a regression where a `fromisoformat` call
+  on an already-`datetime` value raised, was swallowed by a bare `except`,
+  and answered "stale" (so the throttle never throttled) on every request.
+  **One new fix, this pass:** see PUB-8 below — the revoked- and
+  expired-key 401 branches in `authenticate_api_key` had every piece of
+  information the already-fixed 429 branch has (the key is resolved before
+  either 401 is raised) and simply never got the same `_log_refusal` call.
+- **`app/api/public/finance_approvals.py`, `forms.py`,
+  `integrations_webhook.py`, `paypal_webhook.py` — small, already-landed
+  fixes, re-verified.** `_load_record` now also refuses a token whose step
+  was reassigned away from an email approver
+  (`step_type != APPROVAL or approver_type != EMAIL`), closing a narrow
+  window where a since-repurposed token could still answer as if it
+  authorized a pending approval; `forms.py` treats a `None` result the same
+  as an explicit `error` string rather than returning an unhandled `None`;
+  `integrations_webhook.py` gained a type annotation only; `paypal_webhook.py`
+  now reads `auto_apply_payments` through the shared `paypal_auto_apply`
+  helper the backfill script also uses, so the webhook and the backfill
+  cannot settle a capture differently depending on which path recorded it.
+  None of the four changes anything this feature's checklist review had not
+  already covered; no new findings.
+
+### Findings
+
+**PUB-8, narrowed further — see the finding's own entry below.** One new
+fix this pass: the revoked- and expired-key 401 branches in
+`authenticate_api_key` now write an access-log row before raising, using the
+same `_log_refusal` mechanism the 429 branch already used. Only the
+"unknown key" 401 remains flagged, blocked on the nullable-column decision
+described in the finding. No other new findings — the new OAuth
+authorization-server surface and the four small already-landed fixes above
+were all read fresh against every checklist dimension and found sound, not
+spot-checked against their own docstrings.
+
+### Guard tests added
+
+- `tests/test_public_portal_usage_stats.py::TestRevokedAndExpiredKeysAreRecordedToo`
+  (4 tests) — a revoked key's 401 and an expired key's 401 each write an
+  access-log row (asserted through `status_4xx_24h`), and one test confirms
+  the row survives the rollback the raise causes, mirroring
+  `TestTheRefusalIsRecorded`'s coverage of the same mechanism for the 429
+  branch. Reverting either new `_log_refusal` call fails its test.
+
+### Completion gate
+
+| Check                                                                                                                                                                                                                                                                                      | Result                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                                                                                      | ✅ 0 violations                                                  |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                                                                                                                                                                              | ✅ 2179 files unchanged                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                                                                                                                                                                                          | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                          | ✅ single head `3c9c5025a380`, 572 revisions                     |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                      | ✅ 265 routes, 0 errors, 0 warnings                              |
+| `python3 scripts/check_docs_links.py`                                                                                                                                                                                                                                                      | ✅ 454 files, 0 broken links                                     |
+| scoped pytest, unit (`-k "public or portal or webhook or salesforce or paypal or finance_approval or legal or display or calendar or security_txt or forms or kiosk or badge_tap or application_self_withdraw or branding or mcp_oauth" -m "not integration and not slow and not docker"`) | ✅ 837 passed, 1 skipped (`py_vapid`, pre-existing)              |
+| scoped pytest, integration (same `-k`, `-m "integration"`)                                                                                                                                                                                                                                 | ✅ 211 passed, 1 skipped (pre-existing)                          |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants)                                                                                                                                              | ✅ 153 passed                                                    |
+| **full backend unit suite** (`-m "not integration and not slow and not docker"`)                                                                                                                                                                                                           | ✅ 14,243 passed, 1 skipped (`py_vapid`, pre-existing), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                         | ✅ 0 errors (aliased 7.0.2 compiler)                             |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                              | ✅ 0 errors, 0 warnings                                          |
 
 ---
 
@@ -868,7 +1054,30 @@ covers both halves: that the row is written, and that it survives a rollback
 standing in for the request teardown. Removing the `_log_refusal` call fails
 both.
 
-The 401 half is unchanged and still correctly flagged.
+**Narrowed 2026-10-12 (pass 8) — the revoked- and expired-key 401s are now
+recorded too.** Re-reading `authenticate_api_key` for this pass surfaced that
+the 429 fix's own reasoning — "the key is already resolved, so
+`organization_id`/`config_id` are in hand" — applies just as directly to two
+of the three 401 branches, not only to the 429 one. Only the "unknown key"
+401 (`api_key_obj` is still `None`) is genuinely unattributable; the
+"revoked" and "expired" branches run after the same `select` that resolves
+the key, so they had every piece of information the 429 branch had and were
+simply never given the same `_log_refusal` call. Before this, revoking a
+compromised key and watching it keep getting hammered left **zero** trace in
+`public_portal_access_log` — invisible to `detect_anomalies`'s per-IP 401
+counter and to the `status_4xx_24h` / `error_rate_percentage` dashboard
+tiles alike. Both branches in `authenticate_api_key` now call `_log_refusal`
+before raising, exactly as the 429 branch does. Covered by
+`TestRevokedAndExpiredKeysAreRecordedToo` in
+`tests/test_public_portal_usage_stats.py` (four tests: each branch writes its
+row, and one confirms the row survives the rollback the raise causes —
+mirroring `TestTheRefusalIsRecorded`'s own coverage of that mechanism).
+
+**The 401 half is now narrowed to a single branch.** Only the "unknown API
+key" 401 — where no key resolved at all — remains blocked on the
+`organization_id`/`config_id` nullable-column migration described above; it
+is the one case with nothing to attribute the row to. `docs/KNOWN_LIMITATIONS.md`'s
+PUB-8 row is updated to match.
 
 #### PUB-9 — LOW — `response_model_exclude_unset` was missing, so the PUB-6 defaults round-tripped as explicit `null`s — ✅ FIXED
 
