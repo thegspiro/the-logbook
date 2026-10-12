@@ -6,43 +6,43 @@ inventory module. What the module does and how departments use it is on
 
 ## Pages
 
-| URL                                         | Page                                  | Permission                                                              |
-| ------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
-| `/inventory`                                | Inventory Items List                  | `inventory.manage`                                                      |
-| `/inventory/items`                          | Inventory Items List (breadcrumb)     | `inventory.manage`                                                      |
-| `/inventory/my-equipment`                   | My Issued Gear                        | Authenticated                                                           |
-| `/inventory/items/:id`                      | Item Detail                           | Authenticated                                                           |
-| `/inventory/storage-areas`                  | Storage Areas                         | `inventory.manage`                                                      |
-| `/inventory/storage-areas/print-labels`     | Storage Area Labels                   | `inventory.manage`                                                      |
-| `/inventory/checkouts`                      | Temporary Loans (active checkouts)    | `inventory.manage`                                                      |
-| `/inventory/import`                         | CSV Import                            | `inventory.manage`                                                      |
-| `/inventory/print-labels`                   | Barcode Label Printing                | `inventory.manage`                                                      |
-| `/inventory/admin`                          | Inventory Administration (hub)        | `inventory.manage`, `inventory.check_manage` or `storefront.manage`     |
-| `/inventory/admin/setup`                    | Setup Guide                           | `inventory.manage`                                                      |
-| `/inventory/admin/items`                    | Manage Items                          | `inventory.manage`                                                      |
-| `/inventory/admin/pool`                     | Pool Items                            | `inventory.manage`                                                      |
-| `/inventory/admin/categories`               | Categories                            | `inventory.manage`                                                      |
-| `/inventory/admin/maintenance`              | Maintenance Records                   | `inventory.manage`                                                      |
-| `/inventory/admin/members`                  | Member Equipment                      | `inventory.manage`                                                      |
-| `/inventory/admin/charges`                  | Charges & Fees                        | `inventory.manage`                                                      |
-| `/inventory/admin/returns`                  | Return Requests                       | `inventory.manage`                                                      |
-| `/inventory/admin/requests`                 | Gear Requests                         | `inventory.manage`                                                      |
-| `/inventory/admin/clearances/:clearanceId`  | Departure Clearance                   | `inventory.manage`                                                      |
-| `/inventory/admin/write-offs`               | Write-Off Requests                    | `inventory.manage`                                                      |
-| `/inventory/admin/reorder`                  | Reorder Requests                      | `inventory.manage`                                                      |
-| `/inventory/admin/vendors`                  | Vendors                               | `inventory.manage`                                                      |
-| `/inventory/admin/allowances`               | Issuance Allowances                   | `inventory.manage`                                                      |
-| `/inventory/admin/impact-planner`           | Impact Planner                        | `inventory.manage`                                                      |
-| `/inventory/admin/kits`                     | Gear Kits Management                  | `inventory.manage`                                                      |
-| `/inventory/admin/variant-groups`           | Variant Groups Management             | `inventory.manage`                                                      |
-| `/inventory/admin/store`                    | Department Store console (`?tab=`)    | `storefront.manage` (Department Store module)                           |
-| `/inventory/admin/nfc`                      | NFC Tag Settings                      | `settings.manage` or `organization.update_settings`                     |
-| `/inventory/admin/nfc/enroll`               | Tag Items in Bulk                     | `inventory.manage`                                                      |
-| `/inventory/admin/not-seen`                 | Items Not Seen                        | `inventory.manage`                                                      |
-| `/inventory/put-away`                       | Put Away by NFC                       | `inventory.manage`                                                      |
-| `/inventory/shelf-audit`                    | Shelf Audit                           | `inventory.manage`                                                      |
-| `/inventory/kiosk`                          | Self-Service Kiosk                    | `inventory.kiosk`                                                       |
-| `/inventory/tag/:code`                      | NFC tag link (redirect)               | `inventory.view`                                                        |
+| URL                                        | Page                               | Permission                                                          |
+| ------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------- |
+| `/inventory`                               | Inventory Items List               | `inventory.manage`                                                  |
+| `/inventory/items`                         | Inventory Items List (breadcrumb)  | `inventory.manage`                                                  |
+| `/inventory/my-equipment`                  | My Issued Gear                     | Authenticated                                                       |
+| `/inventory/items/:id`                     | Item Detail                        | Authenticated                                                       |
+| `/inventory/storage-areas`                 | Storage Areas                      | `inventory.manage`                                                  |
+| `/inventory/storage-areas/print-labels`    | Storage Area Labels                | `inventory.manage`                                                  |
+| `/inventory/checkouts`                     | Temporary Loans (active checkouts) | `inventory.manage`                                                  |
+| `/inventory/import`                        | CSV Import                         | `inventory.manage`                                                  |
+| `/inventory/print-labels`                  | Barcode Label Printing             | `inventory.manage`                                                  |
+| `/inventory/admin`                         | Inventory Administration (hub)     | `inventory.manage`, `inventory.check_manage` or `storefront.manage` |
+| `/inventory/admin/setup`                   | Setup Guide                        | `inventory.manage`                                                  |
+| `/inventory/admin/items`                   | Manage Items                       | `inventory.manage`                                                  |
+| `/inventory/admin/pool`                    | Pool Items                         | `inventory.manage`                                                  |
+| `/inventory/admin/categories`              | Categories                         | `inventory.manage`                                                  |
+| `/inventory/admin/maintenance`             | Maintenance Records                | `inventory.manage`                                                  |
+| `/inventory/admin/members`                 | Member Equipment                   | `inventory.manage`                                                  |
+| `/inventory/admin/charges`                 | Charges & Fees                     | `inventory.manage`                                                  |
+| `/inventory/admin/returns`                 | Return Requests                    | `inventory.manage`                                                  |
+| `/inventory/admin/requests`                | Gear Requests                      | `inventory.manage`                                                  |
+| `/inventory/admin/clearances/:clearanceId` | Departure Clearance                | `inventory.manage`                                                  |
+| `/inventory/admin/write-offs`              | Write-Off Requests                 | `inventory.manage`                                                  |
+| `/inventory/admin/reorder`                 | Reorder Requests                   | `inventory.manage`                                                  |
+| `/inventory/admin/vendors`                 | Vendors                            | `inventory.manage`                                                  |
+| `/inventory/admin/allowances`              | Issuance Allowances                | `inventory.manage`                                                  |
+| `/inventory/admin/impact-planner`          | Impact Planner                     | `inventory.manage`                                                  |
+| `/inventory/admin/kits`                    | Gear Kits Management               | `inventory.manage`                                                  |
+| `/inventory/admin/variant-groups`          | Variant Groups Management          | `inventory.manage`                                                  |
+| `/inventory/admin/store`                   | Department Store console (`?tab=`) | `storefront.manage` (Department Store module)                       |
+| `/inventory/admin/nfc`                     | NFC Tag Settings                   | `settings.manage` or `organization.update_settings`                 |
+| `/inventory/admin/nfc/enroll`              | Tag Items in Bulk                  | `inventory.manage`                                                  |
+| `/inventory/admin/not-seen`                | Items Not Seen                     | `inventory.manage`                                                  |
+| `/inventory/put-away`                      | Put Away by NFC                    | `inventory.manage`                                                  |
+| `/inventory/shelf-audit`                   | Shelf Audit                        | `inventory.manage`                                                  |
+| `/inventory/kiosk`                         | Self-Service Kiosk                 | `inventory.kiosk`                                                   |
+| `/inventory/tag/:code`                     | NFC tag link (redirect)            | `inventory.view`                                                    |
 
 A member without `inventory.manage` reaches the catalogue only through
 **Request Equipment** on My Issued Gear. `/store/admin` redirects to
@@ -120,25 +120,25 @@ that module's own gate.
 
 ### Core Tables
 
-| Table                         | Purpose                                                                                                                                                                                |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_categories`        | Item categories with item type, requirements, low-stock thresholds, `allow_self_checkout` / `self_checkout_loan_days` for the kiosk                                                   |
+| Table                         | Purpose                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_categories`        | Item categories with item type, requirements, low-stock thresholds, `allow_self_checkout` / `self_checkout_loan_days` for the kiosk                                                                                                                                                         |
 | `inventory_items`             | Items with serial/barcode/asset tag, condition, status, tracking type, `reorder_point`, `standard_size` / `size`, `style` / `style_attributes`, `vendor_id`. `label_printed_at` / `label_printed_by` record the latest confirmed label print and are cleared when the printed value changes |
-| `inventory_lots`              | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots**                            |
-| `item_assignments`            | Permanent/temporary assignments of individual items to members                                                                                                                         |
-| `item_issuances`              | Pool item issuance records (quantity tracking, replacement-cost snapshot)                                                                                                              |
-| `checkout_records`            | Temporary loan records with expected return dates                                                                                                                                      |
-| `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                            |
-| `storage_areas`               | Hierarchical storage areas with `SA-` barcodes and `audit_frequency`                                                                                                                   |
-| `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags                                                 |
-| `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag                                                                          |
-| `inventory_item_pins`         | Per-member pinned items, unique on `(user_id, item_id)`                                                                                                                                |
-| `inventory_label_prints`      | One row per confirmed label print                                                                                                                                                      |
-| `inventory_nfc_tags`          | NFC tags on items, storage areas or equipment-check compartments (`check_compartment_id`): hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization |
-| `inventory_nfc_scans`         | Staff NFC taps on items (lookups, put-aways, audits): who, when, which tag, to and from which storage area                                                                             |
-| `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items, `client_submission_id` for offline resends |
-| `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved                                                                      |
-| `inventory_nfc_audit_digests` | One row per weekly "shelf audits overdue" email sent: when, how many areas, how many recipients                                                                                        |
+| `inventory_lots`              | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots**                                                                                                                                  |
+| `item_assignments`            | Permanent/temporary assignments of individual items to members                                                                                                                                                                                                                              |
+| `item_issuances`              | Pool item issuance records (quantity tracking, replacement-cost snapshot)                                                                                                                                                                                                                   |
+| `checkout_records`            | Temporary loan records with expected return dates                                                                                                                                                                                                                                           |
+| `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                                                                                 |
+| `storage_areas`               | Hierarchical storage areas with `SA-` barcodes and `audit_frequency`                                                                                                                                                                                                                        |
+| `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags                                                                                                                                                      |
+| `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag                                                                                                                                                                               |
+| `inventory_item_pins`         | Per-member pinned items, unique on `(user_id, item_id)`                                                                                                                                                                                                                                     |
+| `inventory_label_prints`      | One row per confirmed label print                                                                                                                                                                                                                                                           |
+| `inventory_nfc_tags`          | NFC tags on items, storage areas or equipment-check compartments (`check_compartment_id`): hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization                                                                                             |
+| `inventory_nfc_scans`         | Staff NFC taps on items (lookups, put-aways, audits): who, when, which tag, to and from which storage area                                                                                                                                                                                  |
+| `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items, `client_submission_id` for offline resends                                                                                                       |
+| `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved                                                                                                                                                                           |
+| `inventory_nfc_audit_digests` | One row per weekly "shelf audits overdue" email sent: when, how many areas, how many recipients                                                                                                                                                                                             |
 
 ### Workflow Tables
 
@@ -156,42 +156,42 @@ that module's own gate.
 
 ### Variant, Kit & Purchasing Tables
 
-| Table                     | Purpose                                                                  |
-| ------------------------- | ------------------------------------------------------------------------ |
-| `item_variant_groups`     | Groups related items that differ by size/colour/style                    |
-| `equipment_kits`          | Named bundles of items for single-operation issuance                     |
-| `equipment_kit_items`     | Component items within a kit with per-component quantity and `optional` |
+| Table                     | Purpose                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `item_variant_groups`     | Groups related items that differ by size/colour/style                                |
+| `equipment_kits`          | Named bundles of items for single-operation issuance                                 |
+| `equipment_kit_items`     | Component items within a kit with per-component quantity and `optional`              |
 | `member_size_preferences` | Member garment sizes (shirt, garment fit, pants, jacket, boots, gloves, hat, custom) |
-| `reorder_requests`        | Reorder request workflow with status lifecycle                           |
-| `reorder_receipts`        | Stock received against a reorder request                                 |
+| `reorder_requests`        | Reorder request workflow with status lifecycle                                       |
+| `reorder_receipts`        | Stock received against a reorder request                                             |
 
 ### NFPA Tables
 
-| Table                     | Purpose                                         |
-| ------------------------- | ----------------------------------------------- |
-| `nfpa_item_compliance`    | Per-item NFPA 1851/1852 compliance record       |
-| `nfpa_inspection_details` | Structured NFPA Ch. 6–8 inspection results      |
-| `nfpa_exposure_records`   | Exposure events logged against an item          |
+| Table                     | Purpose                                    |
+| ------------------------- | ------------------------------------------ |
+| `nfpa_item_compliance`    | Per-item NFPA 1851/1852 compliance record  |
+| `nfpa_inspection_details` | Structured NFPA Ch. 6–8 inspection results |
+| `nfpa_exposure_records`   | Exposure events logged against an item     |
 
 ### Key Enums
 
-| Enum                     | Values                                                                                                                                                               |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ItemType                 | uniform, ppe, tool, equipment, vehicle, electronics, consumable, other, medical                                                                                     |
-| ItemStatus               | available, assigned, checked_out, in_maintenance, lost, stolen, retired                                                                                             |
-| ItemCondition            | excellent, good, fair, poor, damaged, out_of_service, retired                                                                                                       |
-| TrackingType             | individual, pool                                                                                                                                                     |
+| Enum                     | Values                                                                                                                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ItemType                 | uniform, ppe, tool, equipment, vehicle, electronics, consumable, other, medical                                                                                                  |
+| ItemStatus               | available, assigned, checked_out, in_maintenance, lost, stolen, retired                                                                                                          |
+| ItemCondition            | excellent, good, fair, poor, damaged, out_of_service, retired                                                                                                                    |
+| TrackingType             | individual, pool                                                                                                                                                                 |
 | MaintenanceType          | inspection, repair, cleaning, testing, calibration, replacement, preventive, routine_inspection, advanced_inspection, independent_inspection, advanced_cleaning, decontamination |
-| ClearanceStatus          | initiated, in_progress, completed, closed_incomplete                                                                                                                |
-| ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived                                                                                                            |
-| RequestType              | checkout, issuance, purchase, return                                                                                                                                |
-| RequestStatus            | pending, approved, denied, fulfilled                                                                                                                                |
-| ReturnRequestStatus      | requested, received, inspected, denied, completed                                                                                                                   |
-| WriteOffStatus           | pending, approved, denied                                                                                                                                           |
-| StandardSize             | xxs–xxxxl, one_size, custom, boot/glove sizes 6–15 (half sizes to 12.5), waist sizes 28–46                                                                         |
-| GarmentStyle             | short_sleeve, long_sleeve, mens, womens, unisex, v_neck, crew_neck, polo, button_down, quarter_zip                                                                  |
-| ReorderStatus            | pending, approved, ordered, partially_received, received, cancelled                                                                                                 |
-| InventoryAuditFrequency  | weekly, monthly, quarterly, yearly                                                                                                                                  |
+| ClearanceStatus          | initiated, in_progress, completed, closed_incomplete                                                                                                                             |
+| ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived                                                                                                                         |
+| RequestType              | checkout, issuance, purchase, return                                                                                                                                             |
+| RequestStatus            | pending, approved, denied, fulfilled                                                                                                                                             |
+| ReturnRequestStatus      | requested, received, inspected, denied, completed                                                                                                                                |
+| WriteOffStatus           | pending, approved, denied                                                                                                                                                        |
+| StandardSize             | xxs–xxxxl, one_size, custom, boot/glove sizes 6–15 (half sizes to 12.5), waist sizes 28–46                                                                                       |
+| GarmentStyle             | short_sleeve, long_sleeve, mens, womens, unisex, v_neck, crew_neck, polo, button_down, quarter_zip                                                                               |
+| ReorderStatus            | pending, approved, ordered, partially_received, received, cancelled                                                                                                              |
+| InventoryAuditFrequency  | weekly, monthly, quarterly, yearly                                                                                                                                               |
 
 ---
 
@@ -814,20 +814,20 @@ Request status labels are `EQUIPMENT_REQUEST_STATUS_LABELS` in
 
 ### Key Components
 
-| Component                | Purpose                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `InventoryItemsPage`     | Items list: filters, location cards, pins, grouping, bulk actions, label selection                                      |
-| `InventoryAdminHub`      | Inventory Administration hub (cards in `inventoryHubCards.ts`)                                                          |
-| `InventoryMembersPage`   | Per-member inventory view with sorting and expandable details                                                           |
-| `ItemDetailPage`         | Item detail with barcode sidebar and tabs                                                                               |
-| `MyEquipmentPage`        | My Issued Gear                                                                                                          |
-| `RequestEquipmentModal`  | Member request form over the requestable catalog                                                                        |
-| `MemberIdScannerModal`   | Camera-based member ID scanning, resolved through `POST /member-badges/resolve`                                        |
-| `InventoryScanModal`     | Barcode/QR scanning + live search for distribution and return (native BarcodeDetector with html5-qrcode fallback, **Tap NFC**) |
-| `ReturnItemsModal`       | List-based return workflow for a member's held items                                                                    |
-| `VariantCapsules`        | Size/colour/style pills                                                                                                 |
-| `LabelScopePicker`       | Choose a label batch by filter                                                                                          |
-| `useInventoryWebSocket`  | Hook for real-time WebSocket updates with auto-reconnect                                                                |
+| Component               | Purpose                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `InventoryItemsPage`    | Items list: filters, location cards, pins, grouping, bulk actions, label selection                                             |
+| `InventoryAdminHub`     | Inventory Administration hub (cards in `inventoryHubCards.ts`)                                                                 |
+| `InventoryMembersPage`  | Per-member inventory view with sorting and expandable details                                                                  |
+| `ItemDetailPage`        | Item detail with barcode sidebar and tabs                                                                                      |
+| `MyEquipmentPage`       | My Issued Gear                                                                                                                 |
+| `RequestEquipmentModal` | Member request form over the requestable catalog                                                                               |
+| `MemberIdScannerModal`  | Camera-based member ID scanning, resolved through `POST /member-badges/resolve`                                                |
+| `InventoryScanModal`    | Barcode/QR scanning + live search for distribution and return (native BarcodeDetector with html5-qrcode fallback, **Tap NFC**) |
+| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                                           |
+| `VariantCapsules`       | Size/colour/style pills                                                                                                        |
+| `LabelScopePicker`      | Choose a label batch by filter                                                                                                 |
+| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                                       |
 
 ### Test Coverage
 

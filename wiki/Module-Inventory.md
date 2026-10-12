@@ -482,12 +482,12 @@ resolves by apparatus.
 `PATCH /organizations/settings` — which is why the page is gated on
 `settings.manage` or `organization.update_settings`, not `check_manage`:
 
-| Setting                      | Default | Range  |
-| ---------------------------- | ------- | ------ |
-| `start_of_shift_enabled`     | true    | —      |
-| `end_of_shift_enabled`       | true    | —      |
-| `checkin_opens_hours_before` | 2       | 0–24   |
-| `checkin_closes_hours_after` | 12      | 0–72   |
+| Setting                      | Default | Range |
+| ---------------------------- | ------- | ----- |
+| `start_of_shift_enabled`     | true    | —     |
+| `end_of_shift_enabled`       | true    | —     |
+| `checkin_opens_hours_before` | 2       | 0–24  |
+| `checkin_closes_hours_after` | 12      | 0–72  |
 
 Absence means the defaults, never "off".
 
@@ -533,17 +533,17 @@ new issue end to end and acts on the result. Saved plans live in
 
 ### Capabilities
 
-| Capability                      | Description                                                                                                                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capability                      | Description                                                                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Stock-aware shortfall**       | Per-size demand netted against available on-hand stock (pool `quantity − quantity_issued` and available individual units). Sizes match by a normalized key (drops boot-width/parenthetical notes; canonicalizes aliases like `3XL`↔`XXXL`) |
-| **Cost estimation**             | Per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback)                                                                         |
-| **One-click reorder**           | One pending, pre-priced `ReorderRequest` per size with a shortfall                                                                                                                                                   |
-| **Replacement-aware targeting** | Members whose only held items are worn (poor/damaged/out of service) or past NFPA retirement count as needing a replacement                                                                                          |
-| **Bulk-issue**                  | Issues matching on-hand pool stock through `issue_from_pool`; skips are reported with reasons; respects allowances; publishes a WebSocket event                                                                       |
-| **Allowance-aware warnings**    | Flags members at or over their per-category `issuance_allowances` cap (a role-specific allowance beats an org-wide one); bulk-issue skips them                                                                       |
-| **Request sizes**               | In-app notification to members with no size on file, linking to self-service preferences                                                                                                                            |
-| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export                                                               |
-| **Saved plans**                 | Named filter sets for reuse (annual refresh, seasonal cycles)                                                                                                                                                         |
+| **Cost estimation**             | Per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback)                                                                                              |
+| **One-click reorder**           | One pending, pre-priced `ReorderRequest` per size with a shortfall                                                                                                                                                                         |
+| **Replacement-aware targeting** | Members whose only held items are worn (poor/damaged/out of service) or past NFPA retirement count as needing a replacement                                                                                                                |
+| **Bulk-issue**                  | Issues matching on-hand pool stock through `issue_from_pool`; skips are reported with reasons; respects allowances; publishes a WebSocket event                                                                                            |
+| **Allowance-aware warnings**    | Flags members at or over their per-category `issuance_allowances` cap (a role-specific allowance beats an org-wide one); bulk-issue skips them                                                                                             |
+| **Request sizes**               | In-app notification to members with no size on file, linking to self-service preferences                                                                                                                                                   |
+| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export                                                                                     |
+| **Saved plans**                 | Named filter sets for reuse (annual refresh, seasonal cycles)                                                                                                                                                                              |
 
 Member contact details follow the org's `contact_info_visibility` settings
 (enabled + per-field), matching the member list.
@@ -584,10 +584,10 @@ it speaks — instead of typing the host at every print.
 
 ### Two command languages
 
-| Language | Printers                                                                    | Note                                     |
-| -------- | --------------------------------------------------------------------------- | ---------------------------------------- |
-| `zpl`    | Zebra, and the many printers with ZPL emulation                             | The default for the `language` column    |
-| `escpos` | Receipt-class thermal printers, several of which take linerless label media | —                                        |
+| Language | Printers                                                                    | Note                                  |
+| -------- | --------------------------------------------------------------------------- | ------------------------------------- |
+| `zpl`    | Zebra, and the many printers with ZPL emulation                             | The default for the `language` column |
+| `escpos` | Receipt-class thermal printers, several of which take linerless label media | —                                     |
 
 **The choice changes more than the bytes**: the renderer, the stock sizes
 offered, and the status query all branch on it. A ZPL-emulating printer
@@ -653,12 +653,12 @@ somebody signed for, and its condition, is quartermaster business.
 
 ## Scheduled Tasks
 
-| Task                         | Frequency                     | Does                                                                                                                                                         |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inventory_low_stock_alerts` | daily                         | Emails low-stock and reorder-point alerts                                                                                                                    |
-| `inventory_overdue_alerts`   | daily                         | Reports overdue temporary loans                                                                                                                              |
-| `inventory_audit_digest`     | daily check, weekly send      | Emails overdue shelf audits (see [NFC Tags](Module-Inventory-Developer#nfc-tags))                                                                                                      |
-| `property_return_reminders`  | daily (cron `45 7 * * *`)     | Emails dropped members still holding property a 30-day and then a 90-day reminder, copying the notify roles; one reminder per member per run, the latest threshold passed |
+| Task                         | Frequency                 | Does                                                                                                                                                                      |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_low_stock_alerts` | daily                     | Emails low-stock and reorder-point alerts                                                                                                                                 |
+| `inventory_overdue_alerts`   | daily                     | Reports overdue temporary loans                                                                                                                                           |
+| `inventory_audit_digest`     | daily check, weekly send  | Emails overdue shelf audits (see [NFC Tags](Module-Inventory-Developer#nfc-tags))                                                                                         |
+| `property_return_reminders`  | daily (cron `45 7 * * *`) | Emails dropped members still holding property a 30-day and then a 90-day reminder, copying the notify roles; one reminder per member per run, the latest threshold passed |
 
 All four run in the in-process scheduler (86400 s) per organization through
 `_for_each_org`; the cron expressions serve an external scheduler. Property
