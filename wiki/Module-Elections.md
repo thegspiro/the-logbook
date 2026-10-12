@@ -92,12 +92,12 @@ they can vote on.
 
 ### Standing Is Two Fields
 
-| Concept             | Field                  | Purpose                                                                  | Example                                                             |
-| ------------------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility       | operational, administrative, social                                 |
-| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary` | prospective, probationary, regular, life, retired, honorary, junior |
-| **Membership type** | `User.membership_type` | Legacy single classification, **derived** from the pair; also holds an org-configured tier id | active, administrative, life, probationary, senior |
-| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief                                |
+| Concept             | Field                  | Purpose                                                                                       | Example                                                             |
+| ------------------- | ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility                            | operational, administrative, social                                 |
+| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary`                      | prospective, probationary, regular, life, retired, honorary, junior |
+| **Membership type** | `User.membership_type` | Legacy single classification, **derived** from the pair; also holds an org-configured tier id | active, administrative, life, probationary, senior                  |
+| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                                             | EMT, Quartermaster, Secretary, Chief                                |
 
 **What each built-in category requires**, per
 `ElectionService._user_has_role_type`:
@@ -213,16 +213,16 @@ Override**) and expandable per-member detail rows (Enter/Space).
 
 ### Eligibility Edge Cases
 
-| Scenario                                                         | Behavior                                                                                                                                                                                       |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member with role `emt` but member class `administrative`         | Not eligible for `operational` ballot items                                                                                                                                                    |
-| Neither class/status nor membership type set on member           | **Treated as operational + regular.** `split_membership_type(None)` returns the defaults, so an entirely blank standing qualifies for `operational` **and** `regular` — not just `all`        |
-| Member on an org-configured tier (e.g. the shipped `senior`)     | Matches **no** class and no status — eligible for `all` (and any role-slug rule) only                                                                                                          |
-| Life member, on an `operational` ballot item                     | **Not** eligible — `operational` requires regular status. They are eligible for `regular` and `life` items                                                                                     |
-| Life member, on a `regular` ballot item                          | **Eligible**                                                                                                                                                                                   |
-| Administrative member with regular standing, on a `regular` item | **Not** eligible — status categories also require the operational class                                                                                                                        |
-| Secretary override on an ineligible member                       | Blue roster row with override badge; eligible for all items                                                                                                                                    |
-| Eligibility roster with 0 members                                | Empty state with message                                                                                                                                                                       |
+| Scenario                                                         | Behavior                                                                                                                                                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member with role `emt` but member class `administrative`         | Not eligible for `operational` ballot items                                                                                                                                            |
+| Neither class/status nor membership type set on member           | **Treated as operational + regular.** `split_membership_type(None)` returns the defaults, so an entirely blank standing qualifies for `operational` **and** `regular` — not just `all` |
+| Member on an org-configured tier (e.g. the shipped `senior`)     | Matches **no** class and no status — eligible for `all` (and any role-slug rule) only                                                                                                  |
+| Life member, on an `operational` ballot item                     | **Not** eligible — `operational` requires regular status. They are eligible for `regular` and `life` items                                                                             |
+| Life member, on a `regular` ballot item                          | **Eligible**                                                                                                                                                                           |
+| Administrative member with regular standing, on a `regular` item | **Not** eligible — status categories also require the operational class                                                                                                                |
+| Secretary override on an ineligible member                       | Blue roster row with override badge; eligible for all items                                                                                                                            |
+| Eligibility roster with 0 members                                | Empty state with message                                                                                                                                                               |
 
 ---
 
@@ -256,13 +256,13 @@ Enforced on create and update:
 
 ### Methods and Conditions
 
-| Setting           | Values                                                            |
-| ----------------- | ----------------------------------------------------------------- |
-| Voting method     | `simple_majority`, `ranked_choice`, `approval`, `supermajority`   |
-| Victory condition | `most_votes`, `majority`, `supermajority`, `threshold`            |
-| Runoff type       | `top_two`, `eliminate_lowest`                                     |
-| Quorum type       | `none`, `percentage`, `count`                                     |
-| Tie policy        | `co_winners` (default), `runoff`, `revote`, `chair_decides`       |
+| Setting           | Values                                                          |
+| ----------------- | --------------------------------------------------------------- |
+| Voting method     | `simple_majority`, `ranked_choice`, `approval`, `supermajority` |
+| Victory condition | `most_votes`, `majority`, `supermajority`, `threshold`          |
+| Runoff type       | `top_two`, `eliminate_lowest`                                   |
+| Quorum type       | `none`, `percentage`, `count`                                   |
+| Tie policy        | `co_winners` (default), `runoff`, `revote`, `chair_decides`     |
 
 The election card describes the method in plain words — "One choice per
 voter", "Ranked choice" or "Approval" — with a **Winner** row from
@@ -443,15 +443,15 @@ with `{"receipt": …}` in the body verifies one publicly (rate-limited); the
 
 ### Voting Edge Cases
 
-| Scenario                                                               | Behavior                                                                                                    |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Token vote on an item the voter isn't eligible for                     | Rejected with the item title in the error; abstaining on it is allowed                                      |
-| Token holder votes for a position their standing can't vote for        | Rejected ("You are not eligible to vote for …"); omitting `position` falls back to the candidate's position |
-| Test ballot vote followed by the sender's real vote                    | Both succeed; only the real vote counts                                                                     |
-| Approval voter approves two candidates for one position                | Both votes recorded; duplicate candidate rejected                                                           |
-| Ranked-choice voter submits ranks 1–3                                  | All recorded atomically; duplicate rank or candidate rejected                                               |
-| Ranked-choice election by email ballot                                 | Voter assigns unique ranks per candidate; submission order defines rank 1..n                                |
-| `?token=` ballot link                                                  | Accepted; the page scrubs the URL                                                                           |
+| Scenario                                                        | Behavior                                                                                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Token vote on an item the voter isn't eligible for              | Rejected with the item title in the error; abstaining on it is allowed                                      |
+| Token holder votes for a position their standing can't vote for | Rejected ("You are not eligible to vote for …"); omitting `position` falls back to the candidate's position |
+| Test ballot vote followed by the sender's real vote             | Both succeed; only the real vote counts                                                                     |
+| Approval voter approves two candidates for one position         | Both votes recorded; duplicate candidate rejected                                                           |
+| Ranked-choice voter submits ranks 1–3                           | All recorded atomically; duplicate rank or candidate rejected                                               |
+| Ranked-choice election by email ballot                          | Voter assigns unique ranks per candidate; submission order defines rank 1..n                                |
+| `?token=` ballot link                                           | Accepted; the page scrubs the URL                                                                           |
 
 ---
 
@@ -562,14 +562,14 @@ candidate tallies before close.
 
 ### Closing Edge Cases
 
-| Scenario                                            | Behavior                                                                                        |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Election closed before its end date with no winner  | Runoff still created (when runoffs enabled)                                                     |
-| Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now"; draft dates are also editable via **Edit Dates**        |
-| Opening an election whose end date already passed   | Refused — update the dates first                                                                |
-| Reopen closed anonymous election with votes         | Refused — create a new election instead                                                         |
-| Runoff chain for standalone election                | Shows single-node chain                                                                         |
-| Results tab auto-select                             | Navigates to Results when the election is closed                                                |
+| Scenario                                            | Behavior                                                                                 |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Election closed before its end date with no winner  | Runoff still created (when runoffs enabled)                                              |
+| Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now"; draft dates are also editable via **Edit Dates** |
+| Opening an election whose end date already passed   | Refused — update the dates first                                                         |
+| Reopen closed anonymous election with votes         | Refused — create a new election instead                                                  |
+| Runoff chain for standalone election                | Shows single-node chain                                                                  |
+| Results tab auto-select                             | Navigates to Results when the election is closed                                         |
 
 ---
 
@@ -680,12 +680,12 @@ with status badges and links.
 
 `/elections/settings` (`elections.manage`) has four sections:
 
-| Section          | Contents                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| **Proxy Voting** | Enable/disable proxy voting; **Max Proxies Per Person** (1–10)                                 |
-| **Features**     | Per-department feature toggles (below)                                                         |
-| **Test Ballot**  | **Send Test Ballot** to preview the voting experience                                          |
-| **Security**     | The integrity guarantees in force                                                              |
+| Section          | Contents                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| **Proxy Voting** | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
+| **Features**     | Per-department feature toggles (below)                         |
+| **Test Ballot**  | **Send Test Ballot** to preview the voting experience          |
+| **Security**     | The integrity guarantees in force                              |
 
 Every election's voting options (method, victory condition, anonymity,
 write-ins, results visibility, runoffs) are chosen on its own create form;

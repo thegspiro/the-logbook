@@ -6,12 +6,12 @@ elections module. What the module does and how departments use it is on
 
 ## Pages
 
-| URL                       | Page              | Permission                                                   |
-| ------------------------- | ----------------- | ------------------------------------------------------------ |
-| `/elections`              | Elections List    | Authenticated, module enabled (API requires `elections.view`) |
-| `/elections/:electionId`  | Election Detail   | Authenticated, module enabled (API requires `elections.view`) |
-| `/elections/settings`     | Election Settings | `elections.manage`                                           |
-| `/ballot`                 | Ballot Voting     | Public (token-based, rate-limited)                           |
+| URL                      | Page              | Permission                                                    |
+| ------------------------ | ----------------- | ------------------------------------------------------------- |
+| `/elections`             | Elections List    | Authenticated, module enabled (API requires `elections.view`) |
+| `/elections/:electionId` | Election Detail   | Authenticated, module enabled (API requires `elections.view`) |
+| `/elections/settings`    | Election Settings | `elections.manage`                                            |
+| `/ballot`                | Ballot Voting     | Public (token-based, rate-limited)                            |
 
 The elections list shows four summary cards — **Active Elections**, **Need
 Attention** (drafts and overdue elections), **Completed** and **Total Votes
@@ -165,34 +165,34 @@ Models live in `backend/app/models/election.py`; schemas in
 `backend/app/schemas/election.py`; business logic in
 `backend/app/services/election_service.py`.
 
-| Model                      | Table                        | Purpose                                                                                                   |
-| -------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `Election`                 | `elections`                  | The election: type, positions, `ballot_items`, `position_eligibility`, dates, status, rules, runoff links |
-| `Candidate`                | `candidates`                 | A candidate or nominee; `accepted`, `is_write_in`, `merged_into_candidate_id`, `statement`                |
-| `VotingToken`              | `voting_tokens`              | Hashed ballot token with `voter_hash`, `is_test`, `eligible_item_ids`, `eligible_positions`, `superseded_at` |
-| `Vote`                     | `votes`                      | One vote row: `candidate_id`, `position`, `vote_rank`, signature, chain/receipt hashes, `vote_dedup_hash` |
-| `ManualBallotBatch`        | `manual_ballot_batches`      | A paper-tally batch: `status`, `required_attestations`, `ballots_cast`, void fields                       |
-| `ManualBallotAttestation`  | `manual_ballot_attestations` | One officer's attestation of a batch                                                                      |
-| `SavedBallotTemplate`      | `saved_ballot_templates`     | Org-scoped reusable ballot structure; `name_key` for case-insensitive uniqueness                          |
+| Model                     | Table                        | Purpose                                                                                                      |
+| ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Election`                | `elections`                  | The election: type, positions, `ballot_items`, `position_eligibility`, dates, status, rules, runoff links    |
+| `Candidate`               | `candidates`                 | A candidate or nominee; `accepted`, `is_write_in`, `merged_into_candidate_id`, `statement`                   |
+| `VotingToken`             | `voting_tokens`              | Hashed ballot token with `voter_hash`, `is_test`, `eligible_item_ids`, `eligible_positions`, `superseded_at` |
+| `Vote`                    | `votes`                      | One vote row: `candidate_id`, `position`, `vote_rank`, signature, chain/receipt hashes, `vote_dedup_hash`    |
+| `ManualBallotBatch`       | `manual_ballot_batches`      | A paper-tally batch: `status`, `required_attestations`, `ballots_cast`, void fields                          |
+| `ManualBallotAttestation` | `manual_ballot_attestations` | One officer's attestation of a batch                                                                         |
+| `SavedBallotTemplate`     | `saved_ballot_templates`     | Org-scoped reusable ballot structure; `name_key` for case-insensitive uniqueness                             |
 
 Notable `Election` columns:
 
-| Column                                                      | Purpose                                                              |
-| ----------------------------------------------------------- | -------------------------------------------------------------------- |
-| `status`                                                    | `draft`, `nominations`, `open`, `closed`, `cancelled`                |
-| `voting_method`, `victory_condition`, `victory_threshold`, `victory_percentage` | How winners are decided                          |
-| `max_votes_per_position`, `seats_per_position`, `tie_policy` | Multi-vote, multi-seat and tie rules                                |
-| `anonymous_voting`, `voter_anonymity_salt`                  | Secret ballot; salt destroyed at close                               |
-| `eligible_voters`, `eligible_roster_snapshot`               | Restricted voter list; roll frozen at open                           |
-| `attendees`, `voter_overrides`, `proxy_authorizations`      | JSON lists managed through their endpoints                           |
-| `quorum_type`, `quorum_value`                               | Quorum rule                                                          |
-| `enable_runoffs`, `runoff_type`, `max_runoff_rounds`, `is_runoff`, `parent_election_id`, `runoff_round` | Runoff chain   |
-| `meeting_id`, `event_id`, `meeting_date`                    | Meeting or event link                                                |
-| `auto_open`, `reminder_hours_before_close`, `reminder_sent_at`, `nomination_deadline`, `nominations_closed_at` | Lifecycle automation |
-| `email_sent`, `email_sent_at`, `email_recipients`, `email_skipped_details` | Ballot send record                                    |
-| `closed_at`, `closed_by`                                    | Actual close time and actor                                          |
-| `results_visible_immediately`, `results_revisions`          | Results visibility and post-close revisions                          |
-| `last_chain_hash`, `rollback_history`                       | Integrity chain head and rollback log                                |
+| Column                                                                                                         | Purpose                                               |
+| -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `status`                                                                                                       | `draft`, `nominations`, `open`, `closed`, `cancelled` |
+| `voting_method`, `victory_condition`, `victory_threshold`, `victory_percentage`                                | How winners are decided                               |
+| `max_votes_per_position`, `seats_per_position`, `tie_policy`                                                   | Multi-vote, multi-seat and tie rules                  |
+| `anonymous_voting`, `voter_anonymity_salt`                                                                     | Secret ballot; salt destroyed at close                |
+| `eligible_voters`, `eligible_roster_snapshot`                                                                  | Restricted voter list; roll frozen at open            |
+| `attendees`, `voter_overrides`, `proxy_authorizations`                                                         | JSON lists managed through their endpoints            |
+| `quorum_type`, `quorum_value`                                                                                  | Quorum rule                                           |
+| `enable_runoffs`, `runoff_type`, `max_runoff_rounds`, `is_runoff`, `parent_election_id`, `runoff_round`        | Runoff chain                                          |
+| `meeting_id`, `event_id`, `meeting_date`                                                                       | Meeting or event link                                 |
+| `auto_open`, `reminder_hours_before_close`, `reminder_sent_at`, `nomination_deadline`, `nominations_closed_at` | Lifecycle automation                                  |
+| `email_sent`, `email_sent_at`, `email_recipients`, `email_skipped_details`                                     | Ballot send record                                    |
+| `closed_at`, `closed_by`                                                                                       | Actual close time and actor                           |
+| `results_visible_immediately`, `results_revisions`                                                             | Results visibility and post-close revisions           |
+| `last_chain_hash`, `rollback_history`                                                                          | Integrity chain head and rollback log                 |
 
 `Vote` also records `is_test`, `is_manual` / `recorded_by` / `manual_batch_id`
 for paper votes, `is_proxy_vote` / `proxy_voter_id` /
@@ -204,18 +204,18 @@ soft-delete fields `deleted_at` / `deleted_by` / `deletion_reason`.
 
 ## Frontend Architecture
 
-| Location                                         | Contents                                                                                       |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `modules/elections/routes.tsx`                   | `getElectionsRoutes()` (protected) and `getElectionsPublicRoutes()` (`/ballot`)                |
-| `pages/ElectionsPage.tsx`                        | List, summary cards and create form                                                            |
-| `pages/ElectionDetailPage.tsx`                   | Detail page, workflow tabs, panels and modals                                                  |
-| `pages/ElectionsSettingsPage.tsx`                | Election Settings, rendered through `SettingsLayout`                                           |
-| `pages/BallotVotingPage.tsx`                     | Public token ballot                                                                            |
-| `services/electionService.ts`                    | API client for every elections endpoint                                                        |
-| `types/election.ts`                              | Election, ballot, candidate and result types                                                   |
-| `utils/electionHelpers.ts`                       | `getVictoryDescription` and other display helpers                                              |
-| `utils/electionForensics.ts`                     | Forensics report formatting                                                                    |
-| `constants/enums.ts`                             | `VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType`                 |
+| Location                          | Contents                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `modules/elections/routes.tsx`    | `getElectionsRoutes()` (protected) and `getElectionsPublicRoutes()` (`/ballot`) |
+| `pages/ElectionsPage.tsx`         | List, summary cards and create form                                             |
+| `pages/ElectionDetailPage.tsx`    | Detail page, workflow tabs, panels and modals                                   |
+| `pages/ElectionsSettingsPage.tsx` | Election Settings, rendered through `SettingsLayout`                            |
+| `pages/BallotVotingPage.tsx`      | Public token ballot                                                             |
+| `services/electionService.ts`     | API client for every elections endpoint                                         |
+| `types/election.ts`               | Election, ballot, candidate and result types                                    |
+| `utils/electionHelpers.ts`        | `getVictoryDescription` and other display helpers                               |
+| `utils/electionForensics.ts`      | Forensics report formatting                                                     |
+| `constants/enums.ts`              | `VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType`  |
 
 Module components (`modules/elections/components/`):
 

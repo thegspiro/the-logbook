@@ -158,13 +158,13 @@ The detail page of a recurring occurrence shows its position in the series
 All** link listing the series, and the series actions. The events list shows a
 recurrence badge.
 
-| Action                         | Endpoint                                   | Behavior                                                                                                                                                                                           |
-| ------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **This and all future events** | `PATCH /events/{id}/update-future`         | Updates the anchor occurrence and every later one (`start_datetime >= anchor`). Earlier occurrences are unchanged — the boundary is the anchor, not today                                          |
-| Delete series                  | `DELETE /events/{id}/series`               | Confirmation shows the count of events to be removed. Deletes every occurrence, past and future, unless `delete_future_only` is set                                                                |
-| Cancel series                  | `POST /events/{id}/cancel-series`          | Cancels the series, or only future occurrences with `cancel_future_only`. The dialog's keep button reads **Keep Series**                                                                           |
-| RSVP to series                 | `POST /events/{id}/rsvp-series`            | "Apply to all future events" — goes through the same guarded write path as a single RSVP, so capacity, guests and deadlines are enforced on every occurrence. Works on optional series too         |
-| Transfer                       | `POST /events/{id}/transfer` scope `future` | See [Organizer, Alternate and Transfer](#organizer-alternate-and-transfer)                                                                                                                        |
+| Action                         | Endpoint                                    | Behavior                                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **This and all future events** | `PATCH /events/{id}/update-future`          | Updates the anchor occurrence and every later one (`start_datetime >= anchor`). Earlier occurrences are unchanged — the boundary is the anchor, not today                                  |
+| Delete series                  | `DELETE /events/{id}/series`                | Confirmation shows the count of events to be removed. Deletes every occurrence, past and future, unless `delete_future_only` is set                                                        |
+| Cancel series                  | `POST /events/{id}/cancel-series`           | Cancels the series, or only future occurrences with `cancel_future_only`. The dialog's keep button reads **Keep Series**                                                                   |
+| RSVP to series                 | `POST /events/{id}/rsvp-series`             | "Apply to all future events" — goes through the same guarded write path as a single RSVP, so capacity, guests and deadlines are enforced on every occurrence. Works on optional series too |
+| Transfer                       | `POST /events/{id}/transfer` scope `future` | See [Organizer, Alternate and Transfer](#organizer-alternate-and-transfer)                                                                                                                 |
 
 **How "This and all future events" applies times.** Times are applied as a
 change, not copied: each occurrence moves by the anchor's own wall-clock shift
@@ -184,14 +184,14 @@ days), so they can extend or close it. Each series is reminded once
 
 ### Edge cases
 
-| Scenario                                   | Behavior                                                                                       |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Monthly-by-weekday with "5th" week         | Months with no 5th occurrence of the weekday are skipped; use "last" for the final one        |
-| Annual events on Feb 29                    | Fall on Feb 28 in non-leap years and return to the 29th in leap years                         |
-| Delete single occurrence                   | Does not affect other occurrences in the series                                                |
-| Skip dates                                 | Tracked per occurrence; removing a skip date restores the occurrence                           |
-| Rolling recurrence with no end date        | Generates 12 months ahead, extended daily                                                      |
-| Series spanning a DST change               | Occurrences keep their local wall-clock time                                                   |
+| Scenario                            | Behavior                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------- |
+| Monthly-by-weekday with "5th" week  | Months with no 5th occurrence of the weekday are skipped; use "last" for the final one |
+| Annual events on Feb 29             | Fall on Feb 28 in non-leap years and return to the 29th in leap years                  |
+| Delete single occurrence            | Does not affect other occurrences in the series                                        |
+| Skip dates                          | Tracked per occurrence; removing a skip date restores the occurrence                   |
+| Rolling recurrence with no end date | Generates 12 months ahead, extended daily                                              |
+| Series spanning a DST change        | Occurrences keep their local wall-clock time                                           |
 
 ---
 
@@ -302,10 +302,10 @@ nobody new.
 
 What an ordinary member may see of the attendee list is configurable:
 
-| Setting                               | Where                                                     | Default        |
-| ------------------------------------- | --------------------------------------------------------- | -------------- |
-| `events.defaults.attendee_visibility` | Organization settings (**Event settings → Attendance**)   | `managers`     |
-| `events.attendee_visibility`          | Per event, overrides the default in either direction      | NULL = inherit |
+| Setting                               | Where                                                   | Default        |
+| ------------------------------------- | ------------------------------------------------------- | -------------- |
+| `events.defaults.attendee_visibility` | Organization settings (**Event settings → Attendance**) | `managers`     |
+| `events.attendee_visibility`          | Per event, overrides the default in either direction    | NULL = inherit |
 
 Values are `managers` and `members`. NULL is a real third state meaning
 "inherit". With `members`, `GET /events/{id}/attendees` returns a going-only
@@ -339,8 +339,8 @@ Attendance, Monitoring, Create Meeting, Cancel, Delete). The roster supports:
 
 | `check_in_window_type` | Window                                                                                         |
 | ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `flexible` (default)   | From `check_in_minutes_before` (default 60) before start through the actual or scheduled end  |
-| `strict`               | From the actual/scheduled start through the end — a hard gate with no grace period            |
+| `flexible` (default)   | From `check_in_minutes_before` (default 60) before start through the actual or scheduled end   |
+| `strict`               | From the actual/scheduled start through the end — a hard gate with no grace period             |
 | `window`               | `check_in_minutes_before` / `check_in_minutes_after` around the event, default 15 on each side |
 
 For Flexible and Window events a member may check in up to **one hour before
@@ -437,11 +437,11 @@ rather than a bare "unavailable". QR remains the universal path.
 page (`RoomCheckInPage`) asks the org-scoped `GET /locations/{id}/display` what
 is in its check-in window:
 
-| Events in the window | Result                                                    |
-| -------------------- | --------------------------------------------------------- |
-| One                  | Forwards to its `/events/:id/check-in`                    |
-| Several              | Asks "Which event are you here for?"                      |
-| None                 | Says "Nothing to check in to" with **Check again**        |
+| Events in the window | Result                                             |
+| -------------------- | -------------------------------------------------- |
+| One                  | Forwards to its `/events/:id/check-in`             |
+| Several              | Asks "Which event are you here for?"               |
+| None                 | Says "Nothing to check in to" with **Check again** |
 
 Attendance is still the event's own self check-in. Room cards on **Check-In QR
 Codes** (Locations) offer **Write NFC tag** with the room link; the kiosk
@@ -450,11 +450,11 @@ display code is never written to a tag. The endpoint redacts
 
 ### Who writes tags
 
-| Permission                  | Seeded on                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `apparatus.manage_nfc_tags` | President, Vice President, Chief, Deputy Chief, Assistant Chief, Apparatus Officer         |
-| `locations.manage_nfc_tags` | The same leadership and the Facilities Manager                                             |
-| `members.manage_id_cards`   | Includes the Membership Coordinator and Assistant Membership Coordinator                  |
+| Permission                  | Seeded on                                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `apparatus.manage_nfc_tags` | President, Vice President, Chief, Deputy Chief, Assistant Chief, Apparatus Officer |
+| `locations.manage_nfc_tags` | The same leadership and the Facilities Manager                                     |
+| `members.manage_id_cards`   | Includes the Membership Coordinator and Assistant Membership Coordinator           |
 
 Both tag grants gate only the app's writer — writing never reaches the server
 and a tag carries no secret.
@@ -496,10 +496,10 @@ Both switches are in **Check-In Settings** on the event form, and both default
 to off (except on new recruitment events — see
 [Recruitment Events](#recruitment-events-and-prospect-provenance)).
 
-| Setting (form label)                            | Field                             | Effect                                                                        |
-| ----------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
-| Allow guest (non-member) sign-in                | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page |
-| Add guests to the prospective members pipeline  | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email             |
+| Setting (form label)                           | Field                             | Effect                                                                        |
+| ---------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
+| Allow guest (non-member) sign-in               | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page |
+| Add guests to the prospective members pipeline | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email             |
 
 > **Off by default is deliberate.** Turning the first one on exposes an
 > **unauthenticated write path**. It belongs on outreach events and should stay
@@ -556,17 +556,17 @@ details). They are not counted in member attendance.
 
 ### Edge cases
 
-| Situation                                                       | Behavior                                                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Guest arrives before the check-in window opens                  | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither                                                                                                                      |
-| Guest taps the QR code twice                                    | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row                                                                                                                                                                                           |
-| Two guests with the same name and no email                      | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk                                                                                                                                                                       |
-| Staff pre-registered the guest                                  | The sign-in fills blanks only; anything staff deliberately typed is kept                                                                                                                                                                                                                                        |
-| Guest is already in the pipeline                                | The existing active prospect is linked to the event instead of a duplicate being opened                                                                                                                                                                                                                         |
-| The prospect cannot be created                                  | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do                                                                                                                                                                       |
-| The prospect is later purged                                    | The attendance row survives with `prospect_id` set to NULL                                                                                                                                                                                                                                                      |
-| Guest leaves no email                                           | Attendance is recorded; no prospect is opened, because there is no way to follow up                                                                                                                                                                                                                             |
-| The new prospect's pipeline has an "attend a meeting" stage     | The sign-in that opened the record counts for a meeting stage the applicant is on **at that event**, but not for a later stage — that needs a second meeting. A check-in advances nobody by itself: the stage moves when the event's attendance is **finalized**, or 7 days after it ends (`PIPELINE_ATTENDANCE_SETTLE_DAYS`) |
+| Situation                                                   | Behavior                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guest arrives before the check-in window opens              | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither                                                                                                                                    |
+| Guest taps the QR code twice                                | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row                                                                                                                                                                                                         |
+| Two guests with the same name and no email                  | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk                                                                                                                                                                                     |
+| Staff pre-registered the guest                              | The sign-in fills blanks only; anything staff deliberately typed is kept                                                                                                                                                                                                                                                      |
+| Guest is already in the pipeline                            | The existing active prospect is linked to the event instead of a duplicate being opened                                                                                                                                                                                                                                       |
+| The prospect cannot be created                              | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do                                                                                                                                                                                     |
+| The prospect is later purged                                | The attendance row survives with `prospect_id` set to NULL                                                                                                                                                                                                                                                                    |
+| Guest leaves no email                                       | Attendance is recorded; no prospect is opened, because there is no way to follow up                                                                                                                                                                                                                                           |
+| The new prospect's pipeline has an "attend a meeting" stage | The sign-in that opened the record counts for a meeting stage the applicant is on **at that event**, but not for a later stage — that needs a second meeting. A check-in advances nobody by itself: the stage moves when the event's attendance is **finalized**, or 7 days after it ends (`PIPELINE_ATTENDANCE_SETTLE_DAYS`) |
 
 ---
 
@@ -733,6 +733,7 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
     `override_check_in_at`).
 
   Requested times cannot be in the future.
+
 - **Approval writes the same manager override Edit Times writes** onto the
   RSVP, so crediting stays on one path — finalize credits it. Approval is
   therefore refused while attendance is finalized
@@ -802,11 +803,11 @@ Event and template forms persist the reminder schedule (`reminder_schedule`,
 multi-tier, e.g. 24 hours and 1 hour before) and the audience
 (`reminder_target`) separately:
 
-| `reminder_target` | Audience                                          |
-| ----------------- | ------------------------------------------------- |
-| `going`           | Active members who RSVP'd Going                   |
-| `all`             | All active members in the organization            |
-| `none`            | No reminders                                      |
+| `reminder_target` | Audience                               |
+| ----------------- | -------------------------------------- |
+| `going`           | Active members who RSVP'd Going        |
+| `all`             | All active members in the organization |
+| `none`            | No reminders                           |
 
 Optional events default to `going`; mandatory events default to `all` until an
 organizer makes an explicit choice. Email follows each recipient's
@@ -818,9 +819,9 @@ notification preference.
 (`POST /events/{id}/notify`), delivered in-app (the notification bell) and by
 email.
 
-| Notification types                                                                    | Audiences                                                                                     |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `announcement`, `reminder`, `follow_up`, `missed_event`, `check_in_confirmation`      | `all`, `going` (RSVP'd yes), `not_responded`, `checked_in`, `not_checked_in` (RSVP'd but absent) |
+| Notification types                                                               | Audiences                                                                                        |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `announcement`, `reminder`, `follow_up`, `missed_event`, `check_in_confirmation` | `all`, `going` (RSVP'd yes), `not_responded`, `checked_in`, `not_checked_in` (RSVP'd but absent) |
 
 Cancelling an event offers "Notify members who RSVP'd Going or Maybe".
 
@@ -950,17 +951,17 @@ Any active status → declined / cancelled
 `SettingsLayout`: a section sidebar with descriptions on desktop and a
 scrollable tab strip on phones. A deep-linked Settings tab scrolls into view.
 
-| Section          | Holds                                                                       |
-| ---------------- | --------------------------------------------------------------------------- |
-| Visibility       | Event type visibility (primary filter categories)                           |
-| Categories       | Custom event categories (`{id, label, color}`)                              |
-| Attendance       | Attendee visibility default; attendance-request fallback positions          |
-| Outreach Types   | Public outreach event types                                                 |
-| Hour Tracking    | Event → admin hours category mappings                                       |
-| Pipeline         | Request pipeline: Accept Public Requests, daily limit, coordinator, tasks   |
-| Email            | Email triggers and templates                                                |
-| Public Form      | The public event request form                                               |
-| Headline Metrics | The four cards at the top of the admin hub                                  |
+| Section          | Holds                                                                     |
+| ---------------- | ------------------------------------------------------------------------- |
+| Visibility       | Event type visibility (primary filter categories)                         |
+| Categories       | Custom event categories (`{id, label, color}`)                            |
+| Attendance       | Attendee visibility default; attendance-request fallback positions        |
+| Outreach Types   | Public outreach event types                                               |
+| Hour Tracking    | Event → admin hours category mappings                                     |
+| Pipeline         | Request pipeline: Accept Public Requests, daily limit, coordinator, tasks |
+| Email            | Email triggers and templates                                              |
+| Public Form      | The public event request form                                             |
+| Headline Metrics | The four cards at the top of the admin hub                                |
 
 Settings are stored in `organization.settings.events`; nested JSON writes use
 `copy.deepcopy()` so changes persist.
@@ -969,16 +970,16 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 
 ## Permissions
 
-| Permission                  | Grants                                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| (authenticated)             | List and view events, RSVP, self check-in, attendance requests, decide requests as organizer/alternate |
-| `events.view`               | Attendee list (subject to attendee visibility), attachments, event folder                          |
-| `events.manage`             | Create, edit, delete, cancel, templates, rosters, check-in, finalize, settings, outreach pipeline, decide any attendance request |
-| `events.reopen_attendance`  | Reopen finalized attendance (deliberately not part of `events.manage`)                             |
-| `analytics.view`            | Event analytics pages                                                                              |
-| `locations.manage_nfc_tags` | Write room NFC tags; switch kiosk badge check-in                                                   |
-| `apparatus.manage_nfc_tags` | Write apparatus NFC tags                                                                           |
-| `notifications.manage` / `settings.manage` | Clear persistent department messages                                                |
+| Permission                                 | Grants                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| (authenticated)                            | List and view events, RSVP, self check-in, attendance requests, decide requests as organizer/alternate                           |
+| `events.view`                              | Attendee list (subject to attendee visibility), attachments, event folder                                                        |
+| `events.manage`                            | Create, edit, delete, cancel, templates, rosters, check-in, finalize, settings, outreach pipeline, decide any attendance request |
+| `events.reopen_attendance`                 | Reopen finalized attendance (deliberately not part of `events.manage`)                                                           |
+| `analytics.view`                           | Event analytics pages                                                                                                            |
+| `locations.manage_nfc_tags`                | Write room NFC tags; switch kiosk badge check-in                                                                                 |
+| `apparatus.manage_nfc_tags`                | Write apparatus NFC tags                                                                                                         |
+| `notifications.manage` / `settings.manage` | Clear persistent department messages                                                                                             |
 
 ---
 

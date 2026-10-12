@@ -8,21 +8,21 @@ events module. What the module does and how departments use it is on
 
 ### Member and manager pages
 
-| URL                               | Page                                                                                                                        | Permission       |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `/events`                         | Events List (the sidebar entry for managers is labeled **Manage Events** and also points here)                              | Authenticated    |
-| `/events/:id`                     | Event Detail                                                                                                                | Authenticated    |
-| `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                          | Authenticated    |
-| `/events/:id/check-in`            | Self Check-In                                                                                                               | Authenticated    |
+| URL                               | Page                                                                                                                          | Permission       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `/events`                         | Events List (the sidebar entry for managers is labeled **Manage Events** and also points here)                                | Authenticated    |
+| `/events/:id`                     | Event Detail                                                                                                                  | Authenticated    |
+| `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                            | Authenticated    |
+| `/events/:id/check-in`            | Self Check-In                                                                                                                 | Authenticated    |
 | `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests on the viewer's events; **All events** for `events.manage` | Authenticated    |
-| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                           | Authenticated    |
-| `/events/:id/edit`                | Edit Event                                                                                                                  | `events.manage`  |
-| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                         | `events.manage`  |
-| `/events/:id/analytics`           | Per-event analytics dashboard                                                                                               | `analytics.view` |
-| `/events/analytics`               | Event Analytics Dashboard                                                                                                   | `analytics.view` |
-| `/events/templates`               | Event Templates Management                                                                                                  | `events.manage`  |
-| `/events/admin`                   | Events Admin Hub; Create/Settings deep-link here via `?tab=create` / `?tab=settings`                                        | `events.manage`  |
-| `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                     | `events.manage`  |
+| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                             | Authenticated    |
+| `/events/:id/edit`                | Edit Event                                                                                                                    | `events.manage`  |
+| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                           | `events.manage`  |
+| `/events/:id/analytics`           | Per-event analytics dashboard                                                                                                 | `analytics.view` |
+| `/events/analytics`               | Event Analytics Dashboard                                                                                                     | `analytics.view` |
+| `/events/templates`               | Event Templates Management                                                                                                    | `events.manage`  |
+| `/events/admin`                   | Events Admin Hub; Create/Settings deep-link here via `?tab=create` / `?tab=settings`                                          | `events.manage`  |
+| `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                       | `events.manage`  |
 
 The Events Admin Hub has six tabs: **Create Event**, **Past Events**,
 **Requests** (outreach requests), **QR Code Analytics**, **Community
@@ -30,12 +30,12 @@ Engagement** and **Settings**.
 
 ### Public pages (no login)
 
-| URL                                    | Page                                                          |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `/display/:code`                       | Room kiosk display (shows the event QR codes for the room)    |
-| `/display/:code/events/:eventId/guest` | Guest sign-in form — see [Guest Check-In](Module-Events#guest-check-in)    |
-| `/f/:slug`                             | Public outreach request form (served by the Forms module)     |
-| `/event-request/status/:token`         | Public outreach request status page                           |
+| URL                                    | Page                                                                    |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| `/display/:code`                       | Room kiosk display (shows the event QR codes for the room)              |
+| `/display/:code/events/:eventId/guest` | Guest sign-in form — see [Guest Check-In](Module-Events#guest-check-in) |
+| `/f/:slug`                             | Public outreach request form (served by the Forms module)               |
+| `/event-request/status/:token`         | Public outreach request status page                                     |
 
 ---
 
@@ -194,36 +194,36 @@ serialized with an explicit UTC offset.
 
 ## Data Model
 
-| Table                        | Purpose                                                                                                   |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `events`                     | The event                                                                                                 |
-| `event_rsvps`                | One RSVP per member per event (unique `event_id, user_id`), with check-in, override and duration fields  |
-| `rsvp_history`               | RSVP status changes                                                                                       |
-| `event_templates`            | Reusable event defaults                                                                                   |
-| `event_external_attendees`   | Guests and non-member attendees                                                                           |
-| `event_attendance_petitions` | "I was there" requests (unique `event_id, user_id`)                                                       |
-| `event_hour_mappings`        | Event type / custom category → admin hours category, with percentage                                     |
+| Table                        | Purpose                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `events`                     | The event                                                                                               |
+| `event_rsvps`                | One RSVP per member per event (unique `event_id, user_id`), with check-in, override and duration fields |
+| `rsvp_history`               | RSVP status changes                                                                                     |
+| `event_templates`            | Reusable event defaults                                                                                 |
+| `event_external_attendees`   | Guests and non-member attendees                                                                         |
+| `event_attendance_petitions` | "I was there" requests (unique `event_id, user_id`)                                                     |
+| `event_hour_mappings`        | Event type / custom category → admin hours category, with percentage                                    |
 
 ### `events` — notable columns
 
-| Column                                                                                | Notes                                                                                     |
-| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `event_type`                                                                          | `business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment` (order is load-bearing — see above) |
-| `custom_category`                                                                     | Organization-defined category id (indexed)                                                |
-| `location_id`, `location`, `location_details`                                         | Booked location or free text                                                              |
-| `start_datetime`, `end_datetime`, `actual_start_time`, `actual_end_time`              | UTC                                                                                       |
-| `requires_rsvp`, `rsvp_deadline`, `max_attendees`, `allowed_rsvp_statuses`            | RSVP rules                                                                                |
-| `attendee_visibility`                                                                 | `managers` / `members` / NULL (inherit)                                                   |
-| `is_mandatory`, `mandatory_membership_types`                                          | Mandatory audience                                                                        |
-| `allow_guests`                                                                        | Members may bring guests; guests occupy seats                                             |
-| `send_reminders`, `reminder_schedule`, `reminder_target`                              | Reminders                                                                                 |
-| `check_in_window_type`, `check_in_minutes_before`, `check_in_minutes_after`, `require_checkout` | Check-in rules (locked once finalized)                                          |
-| `allow_guest_check_in`, `guest_check_in_creates_prospect`                             | Guest check-in                                                                            |
-| `is_recurring`, `recurrence_pattern`, `recurrence_end_date`, `recurrence_custom_days`, `recurrence_weekday`, `recurrence_week_ordinal`, `recurrence_month`, `recurrence_exceptions`, `rolling_recurrence`, `recurrence_parent_id` | Recurrence |
-| `template_id`, `custom_fields`, `attachments`                                         | `custom_fields` also holds lifecycle markers                                              |
-| `attendance_finalized_at`, `attendance_finalized_by`                                  | Finalization                                                                              |
-| `is_draft`, `is_cancelled`, `cancellation_reason`, `cancelled_at`                     | Lifecycle                                                                                 |
-| `organizer_id`, `alternate_organizer_id`                                              | Responsibility (indexed)                                                                  |
+| Column                                                                                                                                                                                                                            | Notes                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `event_type`                                                                                                                                                                                                                      | `business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment` (order is load-bearing — see above) |
+| `custom_category`                                                                                                                                                                                                                 | Organization-defined category id (indexed)                                                                                                         |
+| `location_id`, `location`, `location_details`                                                                                                                                                                                     | Booked location or free text                                                                                                                       |
+| `start_datetime`, `end_datetime`, `actual_start_time`, `actual_end_time`                                                                                                                                                          | UTC                                                                                                                                                |
+| `requires_rsvp`, `rsvp_deadline`, `max_attendees`, `allowed_rsvp_statuses`                                                                                                                                                        | RSVP rules                                                                                                                                         |
+| `attendee_visibility`                                                                                                                                                                                                             | `managers` / `members` / NULL (inherit)                                                                                                            |
+| `is_mandatory`, `mandatory_membership_types`                                                                                                                                                                                      | Mandatory audience                                                                                                                                 |
+| `allow_guests`                                                                                                                                                                                                                    | Members may bring guests; guests occupy seats                                                                                                      |
+| `send_reminders`, `reminder_schedule`, `reminder_target`                                                                                                                                                                          | Reminders                                                                                                                                          |
+| `check_in_window_type`, `check_in_minutes_before`, `check_in_minutes_after`, `require_checkout`                                                                                                                                   | Check-in rules (locked once finalized)                                                                                                             |
+| `allow_guest_check_in`, `guest_check_in_creates_prospect`                                                                                                                                                                         | Guest check-in                                                                                                                                     |
+| `is_recurring`, `recurrence_pattern`, `recurrence_end_date`, `recurrence_custom_days`, `recurrence_weekday`, `recurrence_week_ordinal`, `recurrence_month`, `recurrence_exceptions`, `rolling_recurrence`, `recurrence_parent_id` | Recurrence                                                                                                                                         |
+| `template_id`, `custom_fields`, `attachments`                                                                                                                                                                                     | `custom_fields` also holds lifecycle markers                                                                                                       |
+| `attendance_finalized_at`, `attendance_finalized_by`                                                                                                                                                                              | Finalization                                                                                                                                       |
+| `is_draft`, `is_cancelled`, `cancellation_reason`, `cancelled_at`                                                                                                                                                                 | Lifecycle                                                                                                                                          |
+| `organizer_id`, `alternate_organizer_id`                                                                                                                                                                                          | Responsibility (indexed)                                                                                                                           |
 
 ### `event_rsvps` — notable columns
 
@@ -247,27 +247,27 @@ serialized with an explicit UTC offset.
 
 ### Related columns elsewhere
 
-| Table                  | Column                        | Notes                                                       |
-| ---------------------- | ----------------------------- | ----------------------------------------------------------- |
-| `locations`            | `nfc_badge_check_in_enabled`  | Per-room kiosk ID-card check-in, default off               |
-| `meeting_minutes`      | `event_id`                    | `ON DELETE SET NULL` — deleting an event keeps its minutes |
-| `department_messages`  | `is_persistent`               | Messages only admins can clear                              |
+| Table                 | Column                       | Notes                                                      |
+| --------------------- | ---------------------------- | ---------------------------------------------------------- |
+| `locations`           | `nfc_badge_check_in_enabled` | Per-room kiosk ID-card check-in, default off               |
+| `meeting_minutes`     | `event_id`                   | `ON DELETE SET NULL` — deleting an event keeps its minutes |
+| `department_messages` | `is_persistent`              | Messages only admins can clear                             |
 
 ---
 
 ## Frontend Architecture
 
-| Area                    | Files                                                                                                                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes                  | `modules/events/routes.tsx` (`getEventsRoutes`, `getEventsPublicRoutes`); room check-in and kiosk/guest routes in `modules/facilities/routes.tsx`                             |
-| List                    | `pages/EventsPage.tsx`, `components/events/NeedsYouBand.tsx`, `EventListCard.tsx`, `eventUrgencyPresentation.tsx`, `components/CalendarView.tsx`                              |
-| Detail                  | `pages/EventDetailPage.tsx` and `components/event-detail/` — `EventRSVPSection`, `EventRSVPModal`, `EventAttendeesCard`, `EventGuestsCard`, `EventProspectsCard`, `EventAttachmentsList`, `EventNotificationPanel`, `EventRecurrenceInfo`, `EventCheckInModal`, `EventOverrideAttendanceModal`, `EventRecordTimesModal`, `EventEndConfirmModal`, `EventCancelModal`, `EventCancelSeriesModal`, `EventDeleteConfirmModal`, `EventSaveTemplateModal`, `EventTransferModal`, `EventAttendancePetitionPrompt`, `EventAttendancePetitionsCard`, `AttendancePetitionDecisionDialogs`, `TrainingSessionLinkageCard` |
-| Forms                   | `components/EventForm.tsx`, `components/EventOrganizerPickers.tsx`, `components/EventTemplateForm.tsx`, `components/ux/DateTimeQuarterHour.tsx`, `pages/EventCreatePage.tsx`, `pages/EventEditPage.tsx` |
-| Check-in                | `pages/EventQRCodePage.tsx`, `pages/EventSelfCheckInPage.tsx`, `pages/EventCheckInMonitoringPage.tsx`, `pages/RoomCheckInPage.tsx`, `pages/GuestCheckInPage.tsx`, `pages/LocationKioskPage.tsx` |
-| NFC                     | `components/nfc/NfcTagWriter.tsx`, `NfcTagWriteButton.tsx`, `NfcTapButton.tsx`, `constants/nfc.ts`                                                                           |
-| Admin                   | `pages/EventsAdminHub.tsx`, `pages/eventsAdminTabs.ts`, `pages/PastEventsTab.tsx`, `pages/EventRequestsTab.tsx`, `pages/EventsSettingsTab.tsx`, `pages/events-settings/*`   |
-| Other pages             | `pages/AttendanceRequestsPage.tsx`, `pages/EventTemplatesPage.tsx`, `pages/EventAnalyticsPage.tsx`, `pages/EventRequestStatusPage.tsx`                                     |
-| Services and utilities  | `services/eventServices.ts`, `utils/eventHelpers.ts` (`isRsvpClosed`), `utils/eventAttendanceLock.ts`, `utils/genericOfflineQueue.ts`                                        |
+| Area                   | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes                 | `modules/events/routes.tsx` (`getEventsRoutes`, `getEventsPublicRoutes`); room check-in and kiosk/guest routes in `modules/facilities/routes.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| List                   | `pages/EventsPage.tsx`, `components/events/NeedsYouBand.tsx`, `EventListCard.tsx`, `eventUrgencyPresentation.tsx`, `components/CalendarView.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Detail                 | `pages/EventDetailPage.tsx` and `components/event-detail/` — `EventRSVPSection`, `EventRSVPModal`, `EventAttendeesCard`, `EventGuestsCard`, `EventProspectsCard`, `EventAttachmentsList`, `EventNotificationPanel`, `EventRecurrenceInfo`, `EventCheckInModal`, `EventOverrideAttendanceModal`, `EventRecordTimesModal`, `EventEndConfirmModal`, `EventCancelModal`, `EventCancelSeriesModal`, `EventDeleteConfirmModal`, `EventSaveTemplateModal`, `EventTransferModal`, `EventAttendancePetitionPrompt`, `EventAttendancePetitionsCard`, `AttendancePetitionDecisionDialogs`, `TrainingSessionLinkageCard` |
+| Forms                  | `components/EventForm.tsx`, `components/EventOrganizerPickers.tsx`, `components/EventTemplateForm.tsx`, `components/ux/DateTimeQuarterHour.tsx`, `pages/EventCreatePage.tsx`, `pages/EventEditPage.tsx`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Check-in               | `pages/EventQRCodePage.tsx`, `pages/EventSelfCheckInPage.tsx`, `pages/EventCheckInMonitoringPage.tsx`, `pages/RoomCheckInPage.tsx`, `pages/GuestCheckInPage.tsx`, `pages/LocationKioskPage.tsx`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| NFC                    | `components/nfc/NfcTagWriter.tsx`, `NfcTagWriteButton.tsx`, `NfcTapButton.tsx`, `constants/nfc.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Admin                  | `pages/EventsAdminHub.tsx`, `pages/eventsAdminTabs.ts`, `pages/PastEventsTab.tsx`, `pages/EventRequestsTab.tsx`, `pages/EventsSettingsTab.tsx`, `pages/events-settings/*`                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Other pages            | `pages/AttendanceRequestsPage.tsx`, `pages/EventTemplatesPage.tsx`, `pages/EventAnalyticsPage.tsx`, `pages/EventRequestStatusPage.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Services and utilities | `services/eventServices.ts`, `utils/eventHelpers.ts` (`isRsvpClosed`), `utils/eventAttendanceLock.ts`, `utils/genericOfflineQueue.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 Backend counterparts: `api/v1/endpoints/events.py`,
 `event_attendance_petitions.py`, `event_requests.py`, `locations.py`,
