@@ -9,8 +9,8 @@ new page. The engineering audit behind each pass is in
 
 This wiki handoff can be read without the repository's `docs/` tree. The
 deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md).
-Previous handoff: [September 15 – 23](Recent-Changes-2026-09-15-to-09-23).
+[`docs/CHANGE_AUDIT_2026-09.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09.md#change-audit-september-24--october-4-2026).
+Previous handoff: [September 15 – 23](#recent-changes-september-15--23-2026).
 
 **The headline:** the busiest window so far, with 250 pull requests. Most of
 them are fixes found by a new **workflow review**, which drives each job in
@@ -290,8 +290,8 @@ will meet first:
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-09-15_TO_09-23.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09-15_TO_09-23.md).
-Predecessor: [September 12 – 15](Recent-Changes-2026-09-12-to-09-15).
+[`docs/CHANGE_AUDIT_2026-09.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09.md#change-audit-september-15--23-2026).
+Predecessor: [September 12 – 15](#recent-changes-september-12--15-2026).
 
 **The headline:** **suggestion boxes** — the first new screens since early
 September — and a membership pipeline that moves applicants off a meeting stage
@@ -609,8 +609,8 @@ Both holds carry a Dependabot ignore and a lift condition in
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-09-12_TO_09-15.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09-12_TO_09-15.md).
-Predecessor: [September 6 – 12](Recent-Changes-2026-09-06-to-09-12).
+[`docs/CHANGE_AUDIT_2026-09.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09.md#change-audit-september-12--15-2026).
+Predecessor: [September 6 – 12](#recent-changes-september-6--12-2026).
 
 **The headline:** **nothing moved address, and nothing new was added to move
 to.** No screen was created and none retired, so there is no bookmark to
@@ -796,8 +796,8 @@ Carried forward unchanged from the last three windows:
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-09-06_TO_09-12.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09-06_TO_09-12.md).
-Predecessor: [August 31 – September 6](Recent-Changes-2026-08-31-to-09-06).
+[`docs/CHANGE_AUDIT_2026-09.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-09.md#change-audit-september-6--12-2026).
+Predecessor: [August 31 – September 6](Recent-Changes-2026-08#recent-changes-august-31--september-6-2026).
 
 **The headline:** **nothing moved address and no bookmark breaks** — the
 opposite of last window, which retired fourteen. This window is additive.

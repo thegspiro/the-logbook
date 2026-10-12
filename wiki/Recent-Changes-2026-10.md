@@ -9,8 +9,8 @@ new page. The engineering audit behind each pass is in
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering
 audit is
-[`docs/CHANGE_AUDIT_2026-10-11_TO_10-12.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-11_TO_10-12.md).
-Predecessor: [October 8 – 11](Recent-Changes-2026-10-08-to-10-11).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
+Predecessor: [October 8 – 11](#recent-changes-october-8--11-2026).
 
 **The headline:** many screens that guides described but the app lacked now exist:
 **dues administration**, **grant opportunities, donations, pledges and fundraising
@@ -90,8 +90,8 @@ repository's `docs/training/SCREENSHOT_CURRENCY.md` and
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering
 audit is
-[`docs/CHANGE_AUDIT_2026-10-08_TO_10-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-08_TO_10-11.md).
-Predecessor: [October 7 – 8](Recent-Changes-2026-10-07-to-10-08).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-8--11-2026).
+Predecessor: [October 7 – 8](#recent-changes-october-7--8-2026).
 
 **The headline:** members can **time pre-shift work** from the vehicle scan,
 departments can **import past shifts**, **suggestion boxes ask questions and route
@@ -165,8 +165,8 @@ Not re-captured. The queue is in `docs/training/SCREENSHOT_CURRENCY.md` and
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-10-07_TO_10-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-07_TO_10-08.md).
-Predecessor: [October 6 – 7](Recent-Changes-2026-10-06-to-10-07).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-7--8-2026).
+Predecessor: [October 6 – 7](#recent-changes-october-6--7-2026).
 
 **The headline:** **every member can raise their own finance requests**,
 **Target Solutions imports credit members automatically** (with a manual report
@@ -260,8 +260,8 @@ the repository's `docs/training/11-finance.md`, `16-integrations.md`,
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-10-06_TO_10-07.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-06_TO_10-07.md).
-Predecessor: [October 5 – 6](Recent-Changes-2026-10-05-to-10-06).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-6--7-2026).
+Predecessor: [October 5 – 6](#recent-changes-october-5--6-2026).
 
 **The headline:** every setting in your `.env` now actually reaches the server
 (some that were silently ignored will start working), **open shift swaps are
@@ -375,8 +375,8 @@ its own security pass yet.
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-10-05_TO_10-06.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-05_TO_10-06.md).
-Predecessor: [October 4 – 5](Recent-Changes-2026-10-04-to-10-05).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-5--6-2026).
+Predecessor: [October 4 – 5](#recent-changes-october-4--5-2026).
 
 **The headline:** member badges now carry a **server-issued code** and ID cards
 print on a plastic-card printer; **finance approvals go to the named approver**;
@@ -475,9 +475,9 @@ kiosk pass 3 (6 fixes), medical screening pass 5 (2 fixes), apparatus pass 5 (2 
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-10-04_TO_10-05.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-04_TO_10-05.md).
-Predecessor: [October 3 – 4](Recent-Changes-2026-10-03-to-10-04), and the wider
-[September 24 – October 4](Recent-Changes-2026-09-24-to-10-04) page.
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-4--5-2026).
+Predecessor: [October 3 – 4](#recent-changes-october-3--4-2026), and the wider
+[September 24 – October 4](Recent-Changes-2026-09#recent-changes-september-24--october-4-2026) page.
 
 **The headline:** members can **go by a preferred name**, **shift reports** got
 clearer ownership and department totals behind a new permission, and a
@@ -562,8 +562,8 @@ Workflow review: Action items, Documents, org chart and legal documents.
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-10-03_TO_10-04.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10-03_TO_10-04.md).
-Predecessor: [September 15 – 23](Recent-Changes-2026-09-15-to-09-23). **The
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-3--4-2026).
+Predecessor: [September 15 – 23](Recent-Changes-2026-09#recent-changes-september-15--23-2026). **The
 September 23 – October 3 window has no handoff page yet** — this one covers the
 last 25 hours only.
 

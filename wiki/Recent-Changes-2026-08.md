@@ -9,8 +9,8 @@ new page. The engineering audit behind each pass is in
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-31_TO_09-06.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-31_TO_09-06.md).
-Predecessor: [August 24–31](Recent-Changes-2026-08-24-to-31).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-31--september-6-2026).
+Predecessor: [August 24–31](#recent-changes-august-2431-2026).
 
 **The headline:** **equipment checklists moved out of Shift Scheduling into
 Inventory**, and **everything an officer administers about the schedule moved
@@ -530,8 +530,8 @@ Three knock-on fixes went with it:
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-24_TO_31.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-24_TO_31.md).
-Predecessor: [August 23–24](Recent-Changes-2026-08-23-to-24).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-2431-2026).
+Predecessor: [August 23–24](#recent-changes-august-2324-2026).
 
 **The headline:** your department now has an **organizational chart** any
 member can open, membership records now say **what kind of member** somebody is
@@ -747,8 +747,8 @@ you draw your own, and testing runs start empty.
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-23_TO_24.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-23_TO_24.md).
-Predecessor: [August 19–23](Recent-Changes-2026-08-19-to-23).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-2324-2026).
+Predecessor: [August 19–23](#recent-changes-august-1923-2026).
 
 **The headline:** members can now claim a shift from the calendar in one tap,
 and commit to a recurring one. Officers can issue NFC ID cards and leave a
@@ -907,8 +907,8 @@ Full detail in
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-19_TO_23.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-19_TO_23.md).
-Predecessor: [August 17–19](Recent-Changes-2026-08-17-to-19).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-1923-2026).
+Predecessor: [August 17–19](#recent-changes-august-1719-2026).
 
 **The headline:** departments can now write and publish their own privacy
 notice and terms, with publishing held behind a second permission. Equipment
@@ -1029,8 +1029,8 @@ Both are in
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-17_TO_19.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-17_TO_19.md).
-Predecessor: [August 15–16](Recent-Changes-2026-08-15-to-16).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-1719-2026).
+Predecessor: [August 15–16](#recent-changes-august-1516-2026).
 
 **The headline:** a department that does not run incident reporting can now
 record call volume — enough for a grant application or an ISO rating, and
@@ -1126,8 +1126,8 @@ single composite action rather than two verbatim copies.
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is available in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-16_TO_17.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-16_TO_17.md).
-Predecessor: [August 15–16](Recent-Changes-2026-08-15-to-16).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-1617-2026).
+Predecessor: [August 15–16](#recent-changes-august-1516-2026).
 
 **The headline for administrators:** three new anti-brute-force controls (two
 of them opt-in), one permission that tightened and **will** lock people out
@@ -1237,8 +1237,8 @@ exactly one result, then upgrade.
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is available in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-15_TO_16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-15_TO_16.md).
-Predecessor: [August 12–14](Recent-Changes-2026-08-12-to-14).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#change-audit-august-1516-2026).
+Predecessor: [August 12–14](#recent-changes-august-1214-2026).
 
 ### Pages and connection points
 
@@ -1265,7 +1265,7 @@ the application re-parents sub-rooms before deletion ever reaches it. Back up,
 require one `alembic heads` result, run `alembic upgrade head`. (Later
 same-day merges appended `20260816_0002`/`_0003` — storage-area barcode and
 inventory-vendor backfills — so the head today is `20260816_0003`; see the
-[Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16).)
+[Aug 10–16 rollup](#recent-changes-august-1016-2026).)
 
 ### Deployment notes
 
@@ -1299,7 +1299,7 @@ queue with per-script details is
 
 This wiki handoff is intentionally usable without the repository `docs/` tree.
 The deeper engineering audit is available in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-12_TO_14.md).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14).
 
 ### Pages and connection points
 
@@ -1350,25 +1350,25 @@ all later timestamps after inserting a chapter.
 
 This is the six-day handoff, written to be usable without the repository `docs/`
 tree. It is the wider frame around
-**[Recent changes: August 12–14](Recent-Changes-2026-08-12-to-14)**, which stays
+**[Recent changes: August 12–14](#recent-changes-august-1214-2026)**, which stays
 authoritative for the middle of the window and carries the per-area connection
 map. Read this page for the days on either side of it, for the routes and
 storage views that a three-day frame could not show, and for the August 15–16
 changes that appear nowhere else.
 
 The engineering audit lives in the source repository at
-[`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08-10_TO_16.md).
+[`docs/CHANGE_AUDIT_2026-08.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-08.md#six-day-change-and-connection-audit--2026-08-10-through-2026-08-16).
 
 **Window:** 504 non-merge commits · 1,517 changed paths · 28 Alembic revisions ·
 5 new routes · 3 new models · 37 new endpoint handlers.
 
 ### What changed, by sub-window
 
-| Days          | Character                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Aug 10–11** | The supply loop (shelf ↔ truck arithmetic), the email footer library, the Learning Center, skills-testing printing and return-for-correction, and a phone-width sweep across every page                                                                                                                                                                                                           |
-| **Aug 12–14** | Security, permissions, elections, the dashboard personal/organization split, storefront, QR, scheduling settings — see [that page](Recent-Changes-2026-08-12-to-14)                                                                                                                                                                                                                               |
-| **Aug 15–16** | Onboarding session hardening, the dark-mode canvas move, nested facility rooms (migration `20260816_0001`), a nine-fix security/privacy batch, and the coverage-measurement correction — see [that page](Recent-Changes-2026-08-15-to-16). Post-audit merges the same day added storage-area barcodes (`20260816_0002`), inventory vendors (`20260816_0003`), and the silent-error surfacing pass |
+| Days          | Character                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Aug 10–11** | The supply loop (shelf ↔ truck arithmetic), the email footer library, the Learning Center, skills-testing printing and return-for-correction, and a phone-width sweep across every page                                                                                                                                                                                                            |
+| **Aug 12–14** | Security, permissions, elections, the dashboard personal/organization split, storefront, QR, scheduling settings — see [that page](#recent-changes-august-1214-2026)                                                                                                                                                                                                                               |
+| **Aug 15–16** | Onboarding session hardening, the dark-mode canvas move, nested facility rooms (migration `20260816_0001`), a nine-fix security/privacy batch, and the coverage-measurement correction — see [that page](#recent-changes-august-1516-2026). Post-audit merges the same day added storage-area barcodes (`20260816_0002`), inventory vendors (`20260816_0003`), and the silent-error surfacing pass |
 
 ### New pages and their permissions
 

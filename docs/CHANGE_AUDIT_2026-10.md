@@ -8,7 +8,7 @@ new file. The plain-language handoff for each pass is in
 ## Change audit: October 11 – 12, 2026
 
 Net changes merged to `main` from 2026-10-11 ~12:00 UTC (the tail of the
-[October 8 – 11 pass](./CHANGE_AUDIT_2026-10-08_TO_10-11.md)) to 2026-10-12 13:00
+[October 8 – 11 pass](#change-audit-october-8--11-2026)) to 2026-10-12 13:00
 UTC, written against `89ea4d6a`. About 90 non-merge commits, most of them
 "owner decision" builds that turned documented click-paths into real screens.
 The feature pull requests updated their own training guides and module docs; this
@@ -16,7 +16,7 @@ pass records what they changed, fills the gaps that remained (two training notes
 and queues screenshots and script beats.
 
 Wiki handoff:
-[`Recent-Changes-2026-10-11-to-10-12`](../wiki/Recent-Changes-2026-10-11-to-10-12.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-11--12-2026).
 
 **Migration route.** Six new revisions: `2cfc5a75105e` (meeting types),
 `edb445ae5806` (voting tokens carry the voter), `7adc810c57f9` (candidate accepted
@@ -129,14 +129,14 @@ mypy and test-fixture clean-ups; reminder CC buttons raised to AAA contrast and 
 
 ### Documentation changes in this pass
 
-| File                                                             | Change                             |
-| ---------------------------------------------------------------- | ---------------------------------- |
-| `docs/training/03-scheduling.md`                                 | Give everyone all calls            |
-| `docs/training/07-documents-forms.md`                            | Publish warning                    |
-| `docs/training/21-october-2026-release-changes.md`               | Fifth-window index                 |
-| `docs/training/SCREENSHOT_CURRENCY.md`                           | Queue of new and stale screenshots |
-| `docs/youtube-scripts/SCRIPT_CURRENCY.md`                        | Beats to rewrite or re-record      |
-| `wiki/Recent-Changes-2026-10-11-to-10-12.md`, `Home`, `_Sidebar` | Wiki handoff                       |
+| File                                                 | Change                             |
+| ---------------------------------------------------- | ---------------------------------- |
+| `docs/training/03-scheduling.md`                     | Give everyone all calls            |
+| `docs/training/07-documents-forms.md`                | Publish warning                    |
+| `docs/training/21-october-2026-release-changes.md`   | Fifth-window index                 |
+| `docs/training/SCREENSHOT_CURRENCY.md`               | Queue of new and stale screenshots |
+| `docs/youtube-scripts/SCRIPT_CURRENCY.md`            | Beats to rewrite or re-record      |
+| `wiki/Recent-Changes-2026-10.md`, `Home`, `_Sidebar` | Wiki handoff                       |
 
 `CHANGELOG.md` is closed to new entries; the pull requests are the record.
 
@@ -152,14 +152,14 @@ mypy and test-fixture clean-ups; reminder CC buttons raised to AAA contrast and 
 ## Change audit: October 8 – 11, 2026
 
 Net changes merged to `main` from 2026-10-08 13:13 UTC (the end of the
-[October 7 – 8 pass](./CHANGE_AUDIT_2026-10-07_TO_10-08.md)) to 2026-10-11 11:40
+[October 7 – 8 pass](#change-audit-october-7--8-2026)) to 2026-10-11 11:40
 UTC, written against `56e88f49` (PR #3070). About 130 non-merge commits.
 This pass also covers the gap between the last two passes: the October 9 work
 was largely documented by the commits that shipped it, so this audit records
 what they changed and names the guides that gained text here.
 
 Wiki handoff:
-[`Recent-Changes-2026-10-08-to-10-11`](../wiki/Recent-Changes-2026-10-08-to-10-11.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-8--11-2026).
 
 **Migration route.** Twenty new revisions in this window. Run `alembic heads`; it
 must report a single head. The newest are `46c55e6a3330` (pre-shift work),
@@ -285,18 +285,18 @@ readers (`docs/training` placeholders stay for the capture tools).
 
 ### Documentation changes in this pass
 
-| File                                                                                                           | Change                                            |
-| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `docs/training/03-scheduling.md`                                                                               | New: Pre-Shift Work and Importing Shift History   |
-| `docs/training/06-apparatus-facilities.md`                                                                     | New: Deficiency, status reason, shifts on a rig   |
-| `docs/training/07-documents-forms.md`                                                                          | New: suggestion-box intake questions and routing  |
-| `docs/training/08-admin-reports.md`                                                                            | New: Administration hubs section                  |
-| `docs/training/10-mobile-pwa.md`                                                                               | New: hubs and checklist builder on a phone        |
-| `docs/training/21-october-2026-release-changes.md`                                                             | Fourth-window index                               |
-| `docs/training/SCREENSHOT_CURRENCY.md`                                                                         | Queue of new and stale screenshots                |
-| `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                                      | Beats to rewrite or re-record                     |
-| `docs/UPGRADING.md`                                                                                            | Pre-shift work, history import, suggestion intake |
-| `wiki/Recent-Changes-2026-10-08-to-10-11.md`, `Home`, `_Sidebar`, `Module-Scheduling`, `Module-Communications` | Wiki handoff                                      |
+| File                                                                                               | Change                                            |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `docs/training/03-scheduling.md`                                                                   | New: Pre-Shift Work and Importing Shift History   |
+| `docs/training/06-apparatus-facilities.md`                                                         | New: Deficiency, status reason, shifts on a rig   |
+| `docs/training/07-documents-forms.md`                                                              | New: suggestion-box intake questions and routing  |
+| `docs/training/08-admin-reports.md`                                                                | New: Administration hubs section                  |
+| `docs/training/10-mobile-pwa.md`                                                                   | New: hubs and checklist builder on a phone        |
+| `docs/training/21-october-2026-release-changes.md`                                                 | Fourth-window index                               |
+| `docs/training/SCREENSHOT_CURRENCY.md`                                                             | Queue of new and stale screenshots                |
+| `docs/youtube-scripts/SCRIPT_CURRENCY.md`                                                          | Beats to rewrite or re-record                     |
+| `docs/UPGRADING.md`                                                                                | Pre-shift work, history import, suggestion intake |
+| `wiki/Recent-Changes-2026-10.md`, `Home`, `_Sidebar`, `Module-Scheduling`, `Module-Communications` | Wiki handoff                                      |
 
 `CHANGELOG.md` is closed to new entries; the pull requests are the record.
 
@@ -313,7 +313,7 @@ readers (`docs/training` placeholders stay for the capture tools).
 
 Net changes merged to `main` in the 25 hours ending 2026-10-08 ~09:00 ET,
 written against `832609f7` (PR #2995). It picks up where the
-[October 6 – 7 audit](./CHANGE_AUDIT_2026-10-06_TO_10-07.md) stopped, at
+[October 6 – 7 audit](#change-audit-october-6--7-2026) stopped, at
 `021fecc6` (PR #2980). Sixteen pull requests merged (#2981 – #2996). Six
 carry user-visible work: **#2985** and **#2987** (training-provider imports and
 training records), **#2989** (Add Member fix), **#2991** (finance requests),
@@ -323,7 +323,7 @@ member visibility layout). Eight are security-review records (#2981, #2983,
 #2996). #2982 was the previous documentation pass.
 
 Wiki handoff:
-[`Recent-Changes-2026-10-07-to-10-08`](../wiki/Recent-Changes-2026-10-07-to-10-08.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-7--8-2026).
 
 **Migration head.** Five new revisions follow the previous window's head
 `8c4f2a6e1d93` as one chain (see _Migration route_). Run `alembic heads`: it must
@@ -414,7 +414,7 @@ report a single head, `7db20aa49329`.
   apparatus page.
 - An empty fleet reads **No apparatus yet** with a sentence on what a record is
   for; a search or filter with no match still reads **No Apparatus Found**.
-- Add form: "Only the fields marked \* are needed to start." The NFPA checkbox says
+- Add form: "Only the fields marked * are needed to start." The NFPA checkbox says
   tracking is per vehicle and off by default, even when the department switch is
   on. Fuel type reads **CNG**, not "Cng".
 - Equipment tab explains that crew shift checks come from a separately built
@@ -537,7 +537,7 @@ registries by #2991; no other route was added or retired.
 
 Net changes merged to `main` in the 25 hours ending 2026-10-07 ~09:00 ET,
 written against `021fecc6` (PR #2980). It picks up where the
-[October 5 – 6 audit](./CHANGE_AUDIT_2026-10-05_TO_10-06.md) stopped, at
+[October 5 – 6 audit](#change-audit-october-5--6-2026) stopped, at
 `09f24912` (PR #2964). Ten pull requests merged (#2965, #2967, #2973 – #2980).
 One of them, **#2965, is the whole story**: 82 commits, 457 files, eleven
 migrations, and the owner-decision docket for medical screening, deployment,
@@ -547,7 +547,7 @@ one test fix (#2979) and six security-review records (#2973, #2975 – #2978,
 #2980). **No code outside #2965, #2967 and #2979 changed.**
 
 Wiki handoff:
-[`Recent-Changes-2026-10-06-to-10-07`](../wiki/Recent-Changes-2026-10-06-to-10-07.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-6--7-2026).
 
 **Migration head.** Eleven new revisions follow the previous window's merge head
 `15802f3df5c4` as one chain (see _Migration route_). Run `alembic heads`: it must
@@ -828,7 +828,7 @@ registered in all three registries by #2965.
 
 Net changes merged to `main` in the 25 hours ending 2026-10-06 08:10 ET, written
 against `09f24912` (PR #2964). It picks up where the
-[October 4 – 5 audit](./CHANGE_AUDIT_2026-10-04_TO_10-05.md) stopped, at
+[October 4 – 5 audit](#change-audit-october-4--5-2026) stopped, at
 `01b1bc26` (PR #2940). **About 90 non-merge commits in roughly 30 pull requests**
 (#2941 – #2972), a third of them security- and app-review records. **Seven
 migrations plus one merge revision** land in the window (the head is now
@@ -837,7 +837,7 @@ scheduled task, two new error codes and one operator-visible nginx change. No
 route was added or retired.
 
 Wiki handoff:
-[`Recent-Changes-2026-10-05-to-10-06`](../wiki/Recent-Changes-2026-10-05-to-10-06.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-5--6-2026).
 
 Review passes in the window (records live in `docs/security-review/`,
 `docs/app-review/`): security reviews of finance-approvals (1 fix), users-
@@ -1054,8 +1054,8 @@ the mobile ratchet in `61e21fe7`).
 
 Net changes merged to `main` in the 25 hours ending 2026-10-05, written against
 `01b1bc26` (PR #2940). It picks up where the
-[September 24 – October 4 audit](./CHANGE_AUDIT_2026-09-24_TO_10-04.md) and the
-[October 3 – 4 audit](./CHANGE_AUDIT_2026-10-03_TO_10-04.md) stopped, at the
+[September 24 – October 4 audit](./CHANGE_AUDIT_2026-09.md#change-audit-september-24--october-4-2026) and the
+[October 3 – 4 audit](#change-audit-october-3--4-2026) stopped, at the
 documentation commits of 2026-10-04 evening (`d2348fa8`). **About 50 non-merge
 commits, roughly 25 pull requests** (#2904 – #2940), most of them following that
 documentation pass. **Three migrations** land in the window (the head is now
@@ -1063,7 +1063,7 @@ documentation pass. **Three migrations** land in the window (the head is now
 operator-run repair script. No route was added or retired.
 
 Wiki handoff:
-[`Recent-Changes-2026-10-04-to-10-05`](../wiki/Recent-Changes-2026-10-04-to-10-05.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-4--5-2026).
 
 Roughly a third of the commits are review passes whose records live in
 `docs/security-review/`, `docs/app-review/` and `docs/workflow-review/`:
@@ -1189,16 +1189,16 @@ job reports drift, run `cd backend && python scripts/generate_schema_docs.py`.
 
 **Corrected in this pass**
 
-| Document                                                               | Change                                                                                                                        |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `UPGRADING.md`                                                         | Four entries (preferred name, department shift-report totals, call-type fold, category-credit repair); revision list extended |
-| `training/08-admin-reports.md`                                         | Editing a role that holds a wildcard; `training.view_analytics` in the permission notes                                       |
-| `training/10-mobile-pwa.md`                                            | Administration hub gutter, alert contrast, red primary actions, date/time picker, expiring-supplies email                     |
-| `training/02-training.md`                                              | Multi-category requirements repair                                                                                            |
-| `wiki/Recent-Changes-2026-10-04-to-10-05.md`, `Home.md`, `_Sidebar.md` | New handoff page and links                                                                                                    |
-| `wiki/Role-System.md`                                                  | `training.view_analytics` and wildcard editing                                                                                |
-| `training/SCREENSHOT_CURRENCY.md`                                      | Shots to create and replace                                                                                                   |
-| `youtube-scripts/SCRIPT_CURRENCY.md`                                   | Beats now incomplete or stale                                                                                                 |
+| Document                                                   | Change                                                                                                                        |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `UPGRADING.md`                                             | Four entries (preferred name, department shift-report totals, call-type fold, category-credit repair); revision list extended |
+| `training/08-admin-reports.md`                             | Editing a role that holds a wildcard; `training.view_analytics` in the permission notes                                       |
+| `training/10-mobile-pwa.md`                                | Administration hub gutter, alert contrast, red primary actions, date/time picker, expiring-supplies email                     |
+| `training/02-training.md`                                  | Multi-category requirements repair                                                                                            |
+| `wiki/Recent-Changes-2026-10.md`, `Home.md`, `_Sidebar.md` | New handoff page and links                                                                                                    |
+| `wiki/Role-System.md`                                      | `training.view_analytics` and wildcard editing                                                                                |
+| `training/SCREENSHOT_CURRENCY.md`                          | Shots to create and replace                                                                                                   |
+| `youtube-scripts/SCRIPT_CURRENCY.md`                       | Beats now incomplete or stale                                                                                                 |
 
 **Already current before this pass** (written by the commits themselves):
 `training/01-membership.md` (preferred names), `training/02-training.md` and
@@ -1227,14 +1227,14 @@ date columns).
 > **Gap:** the previous audit stops at 2026-09-23. Commits from 2026-09-24 to
 > 2026-10-02 have no audit page, wiki handoff or currency note. This page does
 > not cover them. _(Closed 2026-10-04: the
-> [September 24 – October 4 audit](./CHANGE_AUDIT_2026-09-24_TO_10-04.md),
+> [September 24 – October 4 audit](./CHANGE_AUDIT_2026-09.md#change-audit-september-24--october-4-2026),
 > written in parallel, covers the whole window including these two days.)_
 
 Roughly half the commits are security-review and app-review passes (forms,
 messaging, integrations, reports, onboarding, security-audit IP, scheduled
 tasks, locations, course cohorts) whose records live in
 `docs/security-review/` and `docs/app-review/`. Wiki handoff:
-[`Recent-Changes-2026-10-03-to-10-04`](../wiki/Recent-Changes-2026-10-03-to-10-04.md).
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-3--4-2026).
 
 ### Read this first
 
@@ -1283,7 +1283,7 @@ PROBATIONARY)` in Python and SQL, shift eligibility, three scheduling rosters
 | `training/10-mobile-pwa.md`                                              | Phone and tablet layout pass                                                     |
 | `UPGRADING.md`                                                           | Three entries: probationary sign-in, requirement exemption, scheduler duplicates |
 | `wiki/Module-Training.md`, `Module-Scheduling.md`, `Module-Inventory.md` | Engineering notes                                                                |
-| `wiki/Recent-Changes-2026-10-03-to-10-04.md`, `Home.md`, `_Sidebar.md`   | New handoff page and links                                                       |
+| `wiki/Recent-Changes-2026-10.md`, `Home.md`, `_Sidebar.md`               | New handoff page and links                                                       |
 | `training/SCREENSHOT_CURRENCY.md`                                        | Shots to create and replace                                                      |
 | `youtube-scripts/SCRIPT_CURRENCY.md`                                     | Beats now incomplete or stale (scripts 03, 05, 06, 07, 08, 14, 16)               |
 

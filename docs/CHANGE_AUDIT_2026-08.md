@@ -8,7 +8,7 @@ new file. The plain-language handoff for each pass is in
 ## Change audit: August 31 – September 6, 2026
 
 Net changes merged to `main` in the seven days ending 2026-09-06, picking up
-where the [August 24–31 audit](./CHANGE_AUDIT_2026-08-24_TO_31.md) stopped at
+where the [August 24–31 audit](#change-audit-august-2431-2026) stopped at
 `9445bc44` (PR #2083, 2026-08-31 00:10 EDT).
 
 **213 pull requests (#2078 – #2306).** Thirty-four schema migrations, head
@@ -27,7 +27,7 @@ to quote when somebody asks how much moved; the release map below groups them.
 Companion operator lesson:
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
 Wiki handoff:
-[`Recent-Changes-2026-08-31-to-09-06`](../wiki/Recent-Changes-2026-08-31-to-09-06.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-31--september-6-2026).
 Media disposition — which screenshots must be created, which replaced, and
 which YouTube takes need rewriting — is in [Documentation and media
 disposition](#documentation-and-media-disposition) below.
@@ -529,7 +529,7 @@ python3 scripts/screenshots/status_report.py          # screenshot coverage
 
 Net changes merged to `main` in the seven days ending 2026-08-31 00:10 EDT
 (merge `9445bc44`, PR #2083), picking up where the
-[August 23–24 audit](./CHANGE_AUDIT_2026-08-23_TO_24.md) stopped at
+[August 23–24 audit](#change-audit-august-2324-2026) stopped at
 `2107bb9a` (PR #1771, 2026-08-24 07:02 EDT).
 
 **274 pull requests. 1,207 files, ~132,400 insertions.** Forty-five schema
@@ -550,7 +550,7 @@ groups them.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 24–31 section). Wiki handoff:
-[`Recent-Changes-2026-08-24-to-31`](../wiki/Recent-Changes-2026-08-24-to-31.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-2431-2026).
 Media disposition — which screenshots must be created, which replaced, and
 which YouTube takes need rewriting — is in [Documentation and media
 disposition](#documentation-and-media-disposition) below.
@@ -900,7 +900,7 @@ cadence and content rather than a drive-by fix.
 #### The equipment-check lap is still not wired
 
 Carried forward unchanged from the
-[August 23–24 audit](./CHANGE_AUDIT_2026-08-23_TO_24.md#the-equipment-check-lap-is-built-but-unreferenced).
+[August 23–24 audit](#the-equipment-check-lap-is-built-but-unreferenced).
 The four canonical item types and the lap UI are built and tested; the live
 check screen still renders the previous flat compartment list. The template
 builder rebuild in this window is the **authoring** side and does not change
@@ -1010,7 +1010,7 @@ python3 scripts/screenshots/status_report.py          # screenshot coverage
 
 Net changes merged to `main` in the 19 hours ending 2026-08-24 07:02 EDT
 (merge `2107bb9a`, PR #1771), picking up where the
-[August 19–23 audit](./CHANGE_AUDIT_2026-08-19_TO_23.md) stopped at
+[August 19–23 audit](#change-audit-august-1923-2026) stopped at
 `630b4769` (PR #1723, 2026-08-23 12:38 EDT).
 
 **46 pull requests. 477 files, ~59,500 insertions.** Twelve schema
@@ -1025,7 +1025,7 @@ authorization gaps closed** — four of them reachable by an ordinary member.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 23–24 section). Wiki handoff:
-[`Recent-Changes-2026-08-23-to-24`](../wiki/Recent-Changes-2026-08-23-to-24.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-2324-2026).
 Media disposition — which screenshots must be created, which replaced, and
 which YouTube takes need rewriting — is in [Documentation and media
 disposition](#documentation-and-media-disposition) below.
@@ -1373,7 +1373,7 @@ python3 scripts/screenshots/status_report.py          # screenshot coverage
 
 Net changes merged to `main` in the 4 days ending 2026-08-23 12:38 EDT
 (merge `630b4769`, PR #1723), picking up where the
-[August 17–19 audit](./CHANGE_AUDIT_2026-08-17_TO_19.md) stopped at
+[August 17–19 audit](#change-audit-august-1719-2026) stopped at
 `2777e004` (PR #1571, 2026-08-19 18:04 EDT).
 
 **147 pull requests.** Eight schema migrations, one new module
@@ -1386,7 +1386,7 @@ revision-id collisions that had been silently skipping upgrades.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 19–23 section). Wiki handoff:
-[`Recent-Changes-2026-08-19-to-23`](../wiki/Recent-Changes-2026-08-19-to-23.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-1923-2026).
 Media disposition — which screenshots are now wrong and which YouTube takes
 need rewriting — is in [Documentation and media
 disposition](#documentation-and-media-disposition) below.
@@ -1718,7 +1718,7 @@ All five were green at `630b4769`.
 
 Net changes merged to `main` in the 72 hours ending 2026-08-19 18:04 EDT
 (merge `2777e004`, PR #1571), picking up where the
-[August 15–16 audit](./CHANGE_AUDIT_2026-08-15_TO_16.md) stopped.
+[August 15–16 audit](#change-audit-august-1516-2026) stopped.
 
 Two schema migrations, one substantial new feature (PII-free call volume
 tracking with a resumable shift close-out wizard), a cross-module NFC tag
@@ -1729,7 +1729,7 @@ that had been letting the backend suite report _skipped_ rather than failed.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 17–19 section). Wiki handoff:
-[`Recent-Changes-2026-08-17-to-19`](../wiki/Recent-Changes-2026-08-17-to-19.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-1719-2026).
 Media disposition — which screenshots are now wrong and which YouTube takes
 need rewriting — is in [Documentation and media
 disposition](#documentation-and-media-disposition) below.
@@ -2051,7 +2051,7 @@ behavioural from this window is left sitting in the queue:
 ## Change audit: August 16–17, 2026
 
 Net changes merged to `main` in the 24 hours after the
-[August 15–16 audit](./CHANGE_AUDIT_2026-08-15_TO_16.md) snapshot — from
+[August 15–16 audit](#change-audit-august-1516-2026) snapshot — from
 2026-08-16 17:30 ET through PR #1532 at 2026-08-17 17:28 ET. Sixty non-merge
 commits: three new security subsystems (challenge-response, breached-password
 detection, suspicious-IP throttling), nine authorization and data-exposure
@@ -2062,7 +2062,7 @@ pass.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 16–17 section). Wiki handoff:
-[`Recent-Changes-2026-08-16-to-17`](../wiki/Recent-Changes-2026-08-16-to-17.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-1617-2026).
 Media disposition:
 [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md) and
 [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
@@ -2464,7 +2464,7 @@ will now behave differently on camera. Full disposition in
 ## Change audit: August 15–16, 2026
 
 Net changes merged to `main` after the
-[August 12–14 audit](./CHANGE_AUDIT_2026-08-12_TO_14.md) snapshot (post
+[August 12–14 audit](#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14) snapshot (post
 PR #1456), through PR #1471 on 2026-08-16. One schema migration, one
 feature (nested facility rooms), nine security/privacy fixes with a
 follow-up red-team review, a coverage-measurement correction, and two
@@ -2473,7 +2473,7 @@ frontend session/rendering fixes.
 Companion operator lesson:
 [`training/19-august-2026-release-changes.md`](./training/19-august-2026-release-changes.md)
 (August 15–16 section). Wiki handoff:
-[`Recent-Changes-2026-08-15-to-16`](../wiki/Recent-Changes-2026-08-15-to-16.md).
+[`Recent-Changes-2026-08`](../wiki/Recent-Changes-2026-08.md#recent-changes-august-1516-2026).
 
 ### Release map
 
@@ -2800,7 +2800,7 @@ handlers in 1 new endpoint module plus existing ones.
 
 This is the six-day rollup the release asked for. It **supersedes nothing** — it
 is the wider frame around the
-[three-day audit](./CHANGE_AUDIT_2026-08-12_TO_14.md), which remains the
+[three-day audit](#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14), which remains the
 authoritative record for 08-12 → 08-14 and holds the per-area connection map,
 its 879-path manifest, and its own verification checklist. Read that document
 for the middle of the window; read this one for the two days on either side of
@@ -2820,11 +2820,11 @@ route) that a three-day frame could not show.
 
 ### Window at a glance
 
-| Sub-window        | Character                                                                                                                                                                                                       | Where it is recorded                                                                     |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **08-10 → 08-11** | Feature weight: the supply loop (shelf ↔ truck), the email footer library, the Learning Center, skills-testing print/return-for-correction, a phone-width sweep across every page, the split TypeScript install | CHANGELOG entries dated 08-10 / 08-11; this document's release map                       |
-| **08-12 → 08-14** | Security, permissions, elections, dashboard split, storefront, QR, scheduling settings                                                                                                                          | [`CHANGE_AUDIT_2026-08-12_TO_14.md`](./CHANGE_AUDIT_2026-08-12_TO_14.md) — authoritative |
-| **08-15 → 08-16** | Client-side hardening and one global style ownership move; no backend, schema, route, or permission change                                                                                                      | This document; CHANGELOG entry dated 2026-08-15                                          |
+| Sub-window        | Character                                                                                                                                                                                                       | Where it is recorded                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **08-10 → 08-11** | Feature weight: the supply loop (shelf ↔ truck), the email footer library, the Learning Center, skills-testing print/return-for-correction, a phone-width sweep across every page, the split TypeScript install | CHANGELOG entries dated 08-10 / 08-11; this document's release map                                                 |
+| **08-12 → 08-14** | Security, permissions, elections, dashboard split, storefront, QR, scheduling settings                                                                                                                          | [`CHANGE_AUDIT_2026-08.md`](#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14) — authoritative |
+| **08-15 → 08-16** | Client-side hardening and one global style ownership move; no backend, schema, route, or permission change                                                                                                      | This document; CHANGELOG entry dated 2026-08-15                                                                    |
 
 ### 2026-08-15 → 08-16 in full
 

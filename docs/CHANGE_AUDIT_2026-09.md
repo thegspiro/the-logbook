@@ -8,7 +8,7 @@ new file. The plain-language handoff for each pass is in
 ## Change audit: September 24 – October 4, 2026
 
 Net changes merged to `main` in the window ending 2026-10-04. It picks up where
-the [September 15 – 23 audit](./CHANGE_AUDIT_2026-09-15_TO_09-23.md) stopped,
+the [September 15 – 23 audit](#change-audit-september-15--23-2026) stopped,
 at `da7d28479` (PR #2650), and was written against `9a1198e79` (PR #2903,
 2026-10-04 17:23 UTC).
 
@@ -47,7 +47,7 @@ Alongside it, a plain-language pass rewrote the wording of every module, so
 queues 122 screenshots. Training guides and scripts quote labels, and many of
 those labels are now different.
 
-A narrower [October 3 – 4 audit](./CHANGE_AUDIT_2026-10-03_TO_10-04.md) was
+A narrower [October 3 – 4 audit](./CHANGE_AUDIT_2026-10.md#change-audit-october-3--4-2026) was
 written in parallel and covers the window's last day in more detail; the two
 agree, and where both added an `UPGRADING.md` entry for the same change
 (probationary sign-in) the entries were merged into one.
@@ -55,7 +55,7 @@ agree, and where both added an `UPGRADING.md` entry for the same change
 Companion operator lesson: the **September 24 – October 4** section of
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md),
 which indexes where each topic now lives in the module guides. Wiki handoff:
-[`Recent-Changes-2026-09-24-to-10-04`](../wiki/Recent-Changes-2026-09-24-to-10-04.md).
+[`Recent-Changes-2026-09`](../wiki/Recent-Changes-2026-09.md#recent-changes-september-24--october-4-2026).
 Screenshots to create and replace are listed in
 [Documentation and media disposition](#documentation-and-media-disposition).
 
@@ -620,7 +620,7 @@ Results against `9a1198e79` plus this pass's documentation:
 ## Change audit: September 15 – 23, 2026
 
 Net changes merged to `main` in the window ending 2026-09-23, picking up where
-the [September 12 – 15 audit](./CHANGE_AUDIT_2026-09-12_TO_09-15.md) stopped at
+the [September 12 – 15 audit](#change-audit-september-12--15-2026) stopped at
 `4c291192d` (2026-09-15 22:30 UTC, PR #2594). Written against `da7d28479`
 (PR #2650, 2026-09-24 01:26 UTC).
 
@@ -644,7 +644,7 @@ something the database does not store, rather than something the screen hides.
 Companion operator lesson: the **September 15–23** section of
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md#september-1523-2026-changes).
 Wiki handoff:
-[`Recent-Changes-2026-09-15-to-09-23`](../wiki/Recent-Changes-2026-09-15-to-09-23.md).
+[`Recent-Changes-2026-09`](../wiki/Recent-Changes-2026-09.md#recent-changes-september-15--23-2026).
 Media disposition — which screenshots must be created, which replaced — is in
 [Documentation and media disposition](#documentation-and-media-disposition)
 below.
@@ -1000,7 +1000,7 @@ tests under `scripts/` pass.
 ## Change audit: September 12 – 15, 2026
 
 Net changes merged to `main` in the three days ending 2026-09-15, picking up
-where the [September 6 – 12 audit](./CHANGE_AUDIT_2026-09-06_TO_09-12.md)
+where the [September 6 – 12 audit](#change-audit-september-6--12-2026)
 stopped at `ae789019d` (2026-09-12 01:47 UTC).
 
 **46 pull requests (#2493 – #2594).** One schema migration, head
@@ -1032,7 +1032,7 @@ away.
 Companion operator lesson: the **September 12–15** section of
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
 Wiki handoff:
-[`Recent-Changes-2026-09-12-to-09-15`](../wiki/Recent-Changes-2026-09-12-to-09-15.md).
+[`Recent-Changes-2026-09`](../wiki/Recent-Changes-2026-09.md#recent-changes-september-12--15-2026).
 Media disposition — which screenshots must be created, which replaced — is in
 [Documentation and media disposition](#documentation-and-media-disposition)
 below.
@@ -1347,7 +1347,7 @@ regenerated to 265 tables and 4,484 columns with no diff.
 ## Change audit: September 6 – 12, 2026
 
 Net changes merged to `main` in the six days ending 2026-09-12, picking up
-where the [August 31 – September 6 audit](./CHANGE_AUDIT_2026-08-31_TO_09-06.md)
+where the [August 31 – September 6 audit](./CHANGE_AUDIT_2026-08.md#change-audit-august-31--september-6-2026)
 stopped at `14c43813` (2026-09-06 02:26 UTC).
 
 **139 pull requests (#2251 – #2492).** Twelve schema migrations, head
@@ -1374,7 +1374,7 @@ event-request form get a flag set to match what that form was already doing.
 Companion operator lesson: the **September 6–12** section of
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
 Wiki handoff:
-[`Recent-Changes-2026-09-06-to-09-12`](../wiki/Recent-Changes-2026-09-06-to-09-12.md).
+[`Recent-Changes-2026-09`](../wiki/Recent-Changes-2026-09.md#recent-changes-september-6--12-2026).
 Media disposition — which screenshots must be created, which replaced — is in
 [Documentation and media disposition](#documentation-and-media-disposition)
 below.
