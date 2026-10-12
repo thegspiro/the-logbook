@@ -13170,9 +13170,9 @@ class Seeder:
     # Applicants whose stage a scenario decides, rather than the one-per-stage
     # spread below.
     #
-    # An election package is attached to an APPLICANT, and the drawer renders
+    # An election package is attached to an APPLICANT, and the dialog renders
     # its panel only while that applicant is on an `election_vote` stage
-    # (`ApplicantDetailDrawer.tsx`: `isOnElectionStage`). The spread moves
+    # (`ApplicantDetailDialog.tsx`: `isOnElectionStage`). The spread moves
     # applicants back as well as forward on every run, so without this it
     # eventually drags a voted-on applicant off the vote stage and the panel
     # the vote exists to fill stops rendering. That is not hypothetical: the
