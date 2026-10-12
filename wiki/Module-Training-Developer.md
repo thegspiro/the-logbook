@@ -6,37 +6,37 @@ training module. What the module does and how departments use it is on
 
 ## Pages
 
-| URL                                                | Page                                         | Permission                               |
-| -------------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
-| `/training`                                        | My Training                                  | Authenticated                            |
-| `/training/my-training`                            | My Training (alias)                          | Authenticated                            |
-| `/training/submit`                                 | Submit Training                              | Authenticated                            |
-| `/training/courses`                                | Course Library                               | Authenticated                            |
-| `/training/programs`                               | Training Programs                            | Authenticated                            |
-| `/training/programs/:programId`                    | Program Detail                               | Authenticated                            |
-| `/training/my-progress/:enrollmentId`              | My Program Progress (read-only student view) | Authenticated                            |
-| `/training/my-skill-tests/:testId`                 | My Skill Test result (read-only)             | Authenticated                            |
-| `/training/knowledge-tests`                        | My Knowledge Tests                           | Authenticated                            |
-| `/training/knowledge-tests/attempts/:attemptId`    | Knowledge Test attempt                       | Authenticated                            |
-| `/training/cohorts`                                | Course Cohorts                               | `training.manage`                        |
-| `/training/cohorts/:cohortId`                      | Cohort Detail                                | `training.manage`                        |
-| `/training/admin`                                  | Training Admin Hub                           | `training.manage`                        |
-| `/training/skills-testing`                         | Skills Testing Hub                           | Authenticated                            |
-| `/training/skills-testing/templates/new`           | Template Builder (new)                       | `training.manage`                        |
-| `/training/skills-testing/templates/:id`           | Template Builder (view)                      | `training.manage`                        |
-| `/training/skills-testing/templates/:id/edit`      | Template Builder (edit)                      | `training.manage`                        |
-| `/training/skills-testing/test/new`                | Start Skill Test                             | Authenticated                            |
-| `/training/skills-testing/test/:testId`            | Active Skill Test                            | Authenticated                            |
-| `/training/skills-testing/test/:testId/active`     | Active Skill Test (alias)                    | Authenticated                            |
-| `/training/skills-testing/print/template`          | Skill sheet print                            | Authenticated                            |
-| `/training/skills-testing/print/scorecard`         | Skill test scorecard print                   | Authenticated                            |
-| `/training/log-shift`                              | Manual Shift Report                          | `training.manage`                        |
-| `/training/approve/:token`                         | Approve training credit (emailed link)       | `training.manage`                        |
-| `/training/compliance-config`                      | Compliance Requirements Config               | `compliance.manage` or `settings.manage` |
-| `/training/print/member`                           | Member Training History print                | Authenticated                            |
-| `/training/print/program`                          | Training Program print                       | Authenticated                            |
-| `/training/print/compliance`                       | Compliance Matrix print                      | `training.manage`                        |
-| `/members/:userId/training`                        | Member Training History                      | Authenticated                            |
+| URL                                             | Page                                         | Permission                               |
+| ----------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| `/training`                                     | My Training                                  | Authenticated                            |
+| `/training/my-training`                         | My Training (alias)                          | Authenticated                            |
+| `/training/submit`                              | Submit Training                              | Authenticated                            |
+| `/training/courses`                             | Course Library                               | Authenticated                            |
+| `/training/programs`                            | Training Programs                            | Authenticated                            |
+| `/training/programs/:programId`                 | Program Detail                               | Authenticated                            |
+| `/training/my-progress/:enrollmentId`           | My Program Progress (read-only student view) | Authenticated                            |
+| `/training/my-skill-tests/:testId`              | My Skill Test result (read-only)             | Authenticated                            |
+| `/training/knowledge-tests`                     | My Knowledge Tests                           | Authenticated                            |
+| `/training/knowledge-tests/attempts/:attemptId` | Knowledge Test attempt                       | Authenticated                            |
+| `/training/cohorts`                             | Course Cohorts                               | `training.manage`                        |
+| `/training/cohorts/:cohortId`                   | Cohort Detail                                | `training.manage`                        |
+| `/training/admin`                               | Training Admin Hub                           | `training.manage`                        |
+| `/training/skills-testing`                      | Skills Testing Hub                           | Authenticated                            |
+| `/training/skills-testing/templates/new`        | Template Builder (new)                       | `training.manage`                        |
+| `/training/skills-testing/templates/:id`        | Template Builder (view)                      | `training.manage`                        |
+| `/training/skills-testing/templates/:id/edit`   | Template Builder (edit)                      | `training.manage`                        |
+| `/training/skills-testing/test/new`             | Start Skill Test                             | Authenticated                            |
+| `/training/skills-testing/test/:testId`         | Active Skill Test                            | Authenticated                            |
+| `/training/skills-testing/test/:testId/active`  | Active Skill Test (alias)                    | Authenticated                            |
+| `/training/skills-testing/print/template`       | Skill sheet print                            | Authenticated                            |
+| `/training/skills-testing/print/scorecard`      | Skill test scorecard print                   | Authenticated                            |
+| `/training/log-shift`                           | Manual Shift Report                          | `training.manage`                        |
+| `/training/approve/:token`                      | Approve training credit (emailed link)       | `training.manage`                        |
+| `/training/compliance-config`                   | Compliance Requirements Config               | `compliance.manage` or `settings.manage` |
+| `/training/print/member`                        | Member Training History print                | Authenticated                            |
+| `/training/print/program`                       | Training Program print                       | Authenticated                            |
+| `/training/print/compliance`                    | Compliance Matrix print                      | `training.manage`                        |
+| `/members/:userId/training`                     | Member Training History                      | Authenticated                            |
 
 All routes also require the Training module to be enabled for the
 organization.
@@ -504,56 +504,56 @@ Every route here other than `contributed-hours` requires `training.manage`.
 
 ### Database Tables
 
-| Table                          | Model                     | Description                                                                                                                                                                                                       |
-| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_categories`          | TrainingCategory          | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage                                                                                                |
-| `training_courses`             | TrainingCourse            | Course definitions with hours, certification flag, expiration months. `program_id` (nullable) records the pipeline this course's cohorts enrol into                                                              |
-| `course_classes`               | CourseClass               | Syllabus of a multi-class course: ordered classes, each linked to a catalog course (`class_course_id`, NOT NULL) and timed by `day_offset` + local `start_time`. Unique on (`course_id`, `sequence`)             |
-| `course_cohorts`               | CourseCohort              | One scheduled run of a multi-class course: start date, meeting days, date-roll policy, blackout dates, linked pipeline                                                                                            |
-| `course_cohort_classes`        | CourseCohortClass         | A syllabus row materialized onto real UTC dates, linked to its `event_id` (`SET NULL`, unique) and `training_session_id`; `makeup_for_class_id` marks a make-up. Unique on (`cohort_id`, `course_class_id`)      |
-| `course_cohort_members`        | CourseCohortMember        | Cohort roster; `enrollment_id` ties each member to the ProgramEnrollment tracking their progress. Unique on (`cohort_id`, `user_id`)                                                                              |
-| `course_cohort_missed_classes` | CohortMissedClass         | The decision (credit or make-up) for each class held before a late joiner was added                                                                                                                               |
-| `training_records`             | TrainingRecord            | Individual completions with rank/station snapshots, `category_id`, `start_time`, `source_event_id`, `attachments` JSON and `alert_{90,60,30,7}_sent_at` / `escalation_sent_at` expiry-alert stamps               |
-| `training_requirements`        | TrainingRequirement       | Requirement definitions with type, frequency, targeting, `recency_days`, `include_current_month`, `shift_credited`, `name_match_until`, grandfathering dates, `allows_external_credit`                            |
-| `training_sessions`            | TrainingSession           | Scheduled training events with instructor assignment, location, `counts_toward_certification`                                                                                                                     |
-| `training_approvals`           | TrainingApproval          | Session approval workflow with token-based email approval                                                                                                                                                         |
-| `training_programs`            | TrainingProgram           | Structured curricula (phases, flexible; sequential as a legacy stored value)                                                                                                                                      |
-| `program_phases`               | ProgramPhase              | Ordered phases within programs; `requires_manual_advancement`                                                                                                                                                     |
-| `program_requirements`         | ProgramRequirement        | Requirements linked to program phases                                                                                                                                                                             |
-| `program_milestones`           | ProgramMilestone          | Key checkpoints in program progression                                                                                                                                                                            |
-| `program_enrollments`          | ProgramEnrollment         | Member enrollment in programs with status tracking and `target_completion_date`                                                                                                                                  |
-| `requirement_progress`         | RequirementProgress       | Per-member progress toward program requirements; `started_at` stamps the move to in progress                                                                                                                     |
-| `requirement_progress_credits` | RequirementProgressCredit | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id)                                                                                                                  |
-| `skill_evaluations`            | SkillEvaluation           | Skill evaluation definitions (also the target of shift-report skill linkage)                                                                                                                                      |
-| `skill_checkoffs`              | SkillCheckoff             | Individual skill check-off completions                                                                                                                                                                            |
-| `skill_templates`              | SkillTemplate             | Skills testing template definitions (sections, criteria, scoring, disclosure overrides)                                                                                                                           |
-| `skill_tests`                  | SkillTest                 | Skills test sessions with scores, results, template snapshot, `version`, validation stamps                                                                                                                        |
-| `skill_test_viewers`           | SkillTestViewer           | Named viewers granted sight of one test's result                                                                                                                                                                  |
-| `knowledge_tests`              | KnowledgeTest             | Online written tests                                                                                                                                                                                              |
-| `knowledge_test_questions`     | KnowledgeTestQuestion     | A test's question bank                                                                                                                                                                                            |
-| `knowledge_test_attempts`      | KnowledgeTestAttempt      | One member's sitting of a test                                                                                                                                                                                    |
-| `training_module_configs`      | TrainingModuleConfig      | Member visibility (`show_*`), report form toggles (`form_show_*`), apparatus-type skills/tasks, rating scale, `report_review_required`, `allow_member_report_export`                                             |
-| `self_report_configs`          | SelfReportConfig          | Self-report form configuration, including `attachment_retention_days`                                                                                                                                            |
-| `training_submissions`         | TrainingSubmission        | Self-reported training awaiting review, with `start_time` and attachments                                                                                                                                         |
-| `shift_completion_reports`     | ShiftCompletionReport     | Post-shift trainee reports                                                                                                                                                                                        |
-| `training_waivers`             | TrainingWaiver            | Waivers (type, period — `end_date` NULL = permanent, `requirement_ids` NULL = all)                                                                                                                                |
-| `external_training_providers`  | ExternalTrainingProvider  | External provider configurations                                                                                                                                                                                  |
-| `external_category_mappings`   | ExternalCategoryMapping   | Map external categories to internal                                                                                                                                                                               |
-| `external_course_mappings`     | ExternalCourseMapping     | Map external courses to internal                                                                                                                                                                                  |
-| `external_user_mappings`       | ExternalUserMapping       | Map external users to internal members                                                                                                                                                                            |
-| `external_training_sync_logs`  | ExternalTrainingSyncLog   | Sync history and status (including Target Solutions `review` runs)                                                                                                                                                |
-| `external_training_imports`    | ExternalTrainingImport    | Individual import records with status and `credit_hours` for CE credit preservation                                                                                                                              |
-| `recertification_pathways`     | RecertificationPathway    | Recertification pathway definitions                                                                                                                                                                               |
-| `renewal_tasks`                | RenewalTask               | Per-member renewal tasks                                                                                                                                                                                          |
-| `competency_matrices`          | CompetencyMatrix          | Competency matrix definitions                                                                                                                                                                                     |
-| `member_competencies`          | MemberCompetency          | Per-member competency levels                                                                                                                                                                                      |
-| `instructor_qualifications`    | InstructorQualification   | Instructor qualifications                                                                                                                                                                                         |
-| `training_effectiveness_evaluations` | TrainingEffectivenessEvaluation | Kirkpatrick-level evaluations                                                                                                                                                                       |
-| `multi_agency_trainings`       | MultiAgencyTraining       | Joint training exercises                                                                                                                                                                                          |
-| `xapi_statements`              | XAPIStatement             | Queued and sent xAPI statements                                                                                                                                                                                   |
-| `shifts`                       | Shift                     | Shift definitions (used by shift completion reports)                                                                                                                                                              |
-| `shift_attendance`             | ShiftAttendance           | Shift attendance records                                                                                                                                                                                          |
-| `shift_calls`                  | ShiftCall                 | Calls responded during shifts                                                                                                                                                                                     |
+| Table                                | Model                           | Description                                                                                                                                                                                                 |
+| ------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_categories`                | TrainingCategory                | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage                                                                                          |
+| `training_courses`                   | TrainingCourse                  | Course definitions with hours, certification flag, expiration months. `program_id` (nullable) records the pipeline this course's cohorts enrol into                                                         |
+| `course_classes`                     | CourseClass                     | Syllabus of a multi-class course: ordered classes, each linked to a catalog course (`class_course_id`, NOT NULL) and timed by `day_offset` + local `start_time`. Unique on (`course_id`, `sequence`)        |
+| `course_cohorts`                     | CourseCohort                    | One scheduled run of a multi-class course: start date, meeting days, date-roll policy, blackout dates, linked pipeline                                                                                      |
+| `course_cohort_classes`              | CourseCohortClass               | A syllabus row materialized onto real UTC dates, linked to its `event_id` (`SET NULL`, unique) and `training_session_id`; `makeup_for_class_id` marks a make-up. Unique on (`cohort_id`, `course_class_id`) |
+| `course_cohort_members`              | CourseCohortMember              | Cohort roster; `enrollment_id` ties each member to the ProgramEnrollment tracking their progress. Unique on (`cohort_id`, `user_id`)                                                                        |
+| `course_cohort_missed_classes`       | CohortMissedClass               | The decision (credit or make-up) for each class held before a late joiner was added                                                                                                                         |
+| `training_records`                   | TrainingRecord                  | Individual completions with rank/station snapshots, `category_id`, `start_time`, `source_event_id`, `attachments` JSON and `alert_{90,60,30,7}_sent_at` / `escalation_sent_at` expiry-alert stamps          |
+| `training_requirements`              | TrainingRequirement             | Requirement definitions with type, frequency, targeting, `recency_days`, `include_current_month`, `shift_credited`, `name_match_until`, grandfathering dates, `allows_external_credit`                      |
+| `training_sessions`                  | TrainingSession                 | Scheduled training events with instructor assignment, location, `counts_toward_certification`                                                                                                               |
+| `training_approvals`                 | TrainingApproval                | Session approval workflow with token-based email approval                                                                                                                                                   |
+| `training_programs`                  | TrainingProgram                 | Structured curricula (phases, flexible; sequential as a legacy stored value)                                                                                                                                |
+| `program_phases`                     | ProgramPhase                    | Ordered phases within programs; `requires_manual_advancement`                                                                                                                                               |
+| `program_requirements`               | ProgramRequirement              | Requirements linked to program phases                                                                                                                                                                       |
+| `program_milestones`                 | ProgramMilestone                | Key checkpoints in program progression                                                                                                                                                                      |
+| `program_enrollments`                | ProgramEnrollment               | Member enrollment in programs with status tracking and `target_completion_date`                                                                                                                             |
+| `requirement_progress`               | RequirementProgress             | Per-member progress toward program requirements; `started_at` stamps the move to in progress                                                                                                                |
+| `requirement_progress_credits`       | RequirementProgressCredit       | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id)                                                                                                            |
+| `skill_evaluations`                  | SkillEvaluation                 | Skill evaluation definitions (also the target of shift-report skill linkage)                                                                                                                                |
+| `skill_checkoffs`                    | SkillCheckoff                   | Individual skill check-off completions                                                                                                                                                                      |
+| `skill_templates`                    | SkillTemplate                   | Skills testing template definitions (sections, criteria, scoring, disclosure overrides)                                                                                                                     |
+| `skill_tests`                        | SkillTest                       | Skills test sessions with scores, results, template snapshot, `version`, validation stamps                                                                                                                  |
+| `skill_test_viewers`                 | SkillTestViewer                 | Named viewers granted sight of one test's result                                                                                                                                                            |
+| `knowledge_tests`                    | KnowledgeTest                   | Online written tests                                                                                                                                                                                        |
+| `knowledge_test_questions`           | KnowledgeTestQuestion           | A test's question bank                                                                                                                                                                                      |
+| `knowledge_test_attempts`            | KnowledgeTestAttempt            | One member's sitting of a test                                                                                                                                                                              |
+| `training_module_configs`            | TrainingModuleConfig            | Member visibility (`show_*`), report form toggles (`form_show_*`), apparatus-type skills/tasks, rating scale, `report_review_required`, `allow_member_report_export`                                        |
+| `self_report_configs`                | SelfReportConfig                | Self-report form configuration, including `attachment_retention_days`                                                                                                                                       |
+| `training_submissions`               | TrainingSubmission              | Self-reported training awaiting review, with `start_time` and attachments                                                                                                                                   |
+| `shift_completion_reports`           | ShiftCompletionReport           | Post-shift trainee reports                                                                                                                                                                                  |
+| `training_waivers`                   | TrainingWaiver                  | Waivers (type, period — `end_date` NULL = permanent, `requirement_ids` NULL = all)                                                                                                                          |
+| `external_training_providers`        | ExternalTrainingProvider        | External provider configurations                                                                                                                                                                            |
+| `external_category_mappings`         | ExternalCategoryMapping         | Map external categories to internal                                                                                                                                                                         |
+| `external_course_mappings`           | ExternalCourseMapping           | Map external courses to internal                                                                                                                                                                            |
+| `external_user_mappings`             | ExternalUserMapping             | Map external users to internal members                                                                                                                                                                      |
+| `external_training_sync_logs`        | ExternalTrainingSyncLog         | Sync history and status (including Target Solutions `review` runs)                                                                                                                                          |
+| `external_training_imports`          | ExternalTrainingImport          | Individual import records with status and `credit_hours` for CE credit preservation                                                                                                                         |
+| `recertification_pathways`           | RecertificationPathway          | Recertification pathway definitions                                                                                                                                                                         |
+| `renewal_tasks`                      | RenewalTask                     | Per-member renewal tasks                                                                                                                                                                                    |
+| `competency_matrices`                | CompetencyMatrix                | Competency matrix definitions                                                                                                                                                                               |
+| `member_competencies`                | MemberCompetency                | Per-member competency levels                                                                                                                                                                                |
+| `instructor_qualifications`          | InstructorQualification         | Instructor qualifications                                                                                                                                                                                   |
+| `training_effectiveness_evaluations` | TrainingEffectivenessEvaluation | Kirkpatrick-level evaluations                                                                                                                                                                               |
+| `multi_agency_trainings`             | MultiAgencyTraining             | Joint training exercises                                                                                                                                                                                    |
+| `xapi_statements`                    | XAPIStatement                   | Queued and sent xAPI statements                                                                                                                                                                             |
+| `shifts`                             | Shift                           | Shift definitions (used by shift completion reports)                                                                                                                                                        |
+| `shift_attendance`                   | ShiftAttendance                 | Shift attendance records                                                                                                                                                                                    |
+| `shift_calls`                        | ShiftCall                       | Calls responded during shifts                                                                                                                                                                               |
 
 `include_current_month` is also an organization default on
 `compliance_configs` (NOT NULL, default true); the per-requirement column
@@ -744,27 +744,27 @@ The training module's service objects live in
 `shiftCompletionService` and the waiver calls in
 `frontend/src/services/adminServices.ts`:
 
-| Service                       | API Prefix                  | Key Operations                                                                        |
-| ----------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
-| `trainingService`             | `/training`                 | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats |
-| `externalTrainingService`     | `/training/external`        | Provider CRUD, connection testing, sync, mappings, imports                            |
-| `trainingProgramService`      | `/training/programs`        | Programs, phases, milestones, enrollments, progress, registry import, export/import   |
-| `trainingSessionService`      | `/training/sessions`        | Session calendar, creation, finalization, token-based approval                        |
-| `trainingSubmissionService`   | `/training/submissions`     | Self-reported submissions, attachments, config, review workflow                       |
-| `trainingModuleConfigService` | `/training/module-config`   | Module visibility and configuration                                                   |
-| `skillsTestingService`        | `/training/skills-testing`  | Templates, tests, completion, validation, viewers, practice mode                      |
-| `recertificationService`      | `/training/recertification` | Pathways, renewal tasks                                                               |
-| `competencyService`           | `/training/competency`      | Competency matrices, member competencies                                              |
-| `instructorService`           | `/training/instructors`     | Qualifications, validation, qualified instructor lookup                               |
-| `effectivenessService`        | `/training/effectiveness`   | Evaluations, course summaries                                                         |
-| `multiAgencyService`          | `/training/multi-agency`    | Joint session CRUD                                                                    |
-| `reportExportService`         | `/training/reports`         | Report export, compliance forecast                                                    |
-| `documentService`             | `/training/records/{id}`    | Record attachments                                                                    |
-| `complianceOfficerService`    | `/compliance`               | ISO readiness, attestations, annual report, record completeness                       |
-| `complianceConfigService`     | `/compliance/config`        | Compliance thresholds and profiles                                                    |
-| `courseSyllabusService`       | `/training/courses/{id}/classes` | Syllabus classes, reorder, autofill                                              |
-| `courseCohortService`         | `/training/cohorts`         | Cohort preview, generation, schedule changes, roster, missed classes                  |
-| `shiftCompletionService`      | `/training/shift-reports`   | Shift report filing, review, drafts, preview (in `adminServices.ts`)                  |
+| Service                       | API Prefix                       | Key Operations                                                                        |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `trainingService`             | `/training`                      | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats |
+| `externalTrainingService`     | `/training/external`             | Provider CRUD, connection testing, sync, mappings, imports                            |
+| `trainingProgramService`      | `/training/programs`             | Programs, phases, milestones, enrollments, progress, registry import, export/import   |
+| `trainingSessionService`      | `/training/sessions`             | Session calendar, creation, finalization, token-based approval                        |
+| `trainingSubmissionService`   | `/training/submissions`          | Self-reported submissions, attachments, config, review workflow                       |
+| `trainingModuleConfigService` | `/training/module-config`        | Module visibility and configuration                                                   |
+| `skillsTestingService`        | `/training/skills-testing`       | Templates, tests, completion, validation, viewers, practice mode                      |
+| `recertificationService`      | `/training/recertification`      | Pathways, renewal tasks                                                               |
+| `competencyService`           | `/training/competency`           | Competency matrices, member competencies                                              |
+| `instructorService`           | `/training/instructors`          | Qualifications, validation, qualified instructor lookup                               |
+| `effectivenessService`        | `/training/effectiveness`        | Evaluations, course summaries                                                         |
+| `multiAgencyService`          | `/training/multi-agency`         | Joint session CRUD                                                                    |
+| `reportExportService`         | `/training/reports`              | Report export, compliance forecast                                                    |
+| `documentService`             | `/training/records/{id}`         | Record attachments                                                                    |
+| `complianceOfficerService`    | `/compliance`                    | ISO readiness, attestations, annual report, record completeness                       |
+| `complianceConfigService`     | `/compliance/config`             | Compliance thresholds and profiles                                                    |
+| `courseSyllabusService`       | `/training/courses/{id}/classes` | Syllabus classes, reorder, autofill                                                   |
+| `courseCohortService`         | `/training/cohorts`              | Cohort preview, generation, schedule changes, roster, missed classes                  |
+| `shiftCompletionService`      | `/training/shift-reports`        | Shift report filing, review, drafts, preview (in `adminServices.ts`)                  |
 
 ---
 
@@ -774,18 +774,18 @@ The training module's service objects live in
 
 **File:** `frontend/src/stores/skillsTestingStore.ts`
 
-| State                | Type                          | Description                                          |
-| -------------------- | ----------------------------- | ---------------------------------------------------- |
-| `templates`          | `SkillTemplateListItem[]`     | All templates for the org                            |
-| `currentTemplate`    | `SkillTemplate \| null`       | Currently viewed/edited template                     |
-| `tests`              | `SkillTestListItem[]`         | The current page of tests                            |
-| `testsTotal`         | `number`                      | Total matching tests (for paging)                    |
-| `currentTest`        | `SkillTest \| null`           | Currently active test session                        |
-| `activeTestTimer`    | `number`                      | Timer seconds for active test                        |
-| `activeTestRunning`  | `boolean`                     | Whether timer is running                             |
-| `activeSectionIndex` | `number`                      | Current section in active test                       |
-| `summary`            | `SkillTestingSummary \| null` | Department statistics                                |
-| `offlineState`       | `SkillsOfflineState \| null`  | Whether the test on screen has work waiting to sync  |
+| State                | Type                          | Description                                         |
+| -------------------- | ----------------------------- | --------------------------------------------------- |
+| `templates`          | `SkillTemplateListItem[]`     | All templates for the org                           |
+| `currentTemplate`    | `SkillTemplate \| null`       | Currently viewed/edited template                    |
+| `tests`              | `SkillTestListItem[]`         | The current page of tests                           |
+| `testsTotal`         | `number`                      | Total matching tests (for paging)                   |
+| `currentTest`        | `SkillTest \| null`           | Currently active test session                       |
+| `activeTestTimer`    | `number`                      | Timer seconds for active test                       |
+| `activeTestRunning`  | `boolean`                     | Whether timer is running                            |
+| `activeSectionIndex` | `number`                      | Current section in active test                      |
+| `summary`            | `SkillTestingSummary \| null` | Department statistics                               |
+| `offlineState`       | `SkillsOfflineState \| null`  | Whether the test on screen has work waiting to sync |
 
 **30 actions** covering template/test CRUD, scoring, validation (single and
 bulk), return, void, release, timer management, summary loading and offline

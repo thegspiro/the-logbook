@@ -155,18 +155,18 @@ Selecting a template pre-fills the create form, so officers confirm hours, due
 dates and assignment before a requirement starts counting against members. The
 ten built-in templates:
 
-| Template                                       | Target                                     |
-| ---------------------------------------------- | ------------------------------------------ |
-| NFPA 1001 Firefighter Annual Training          | 36 hrs, annual                             |
-| NFPA 1500 Occupational Safety Training         | 8 hrs, annual                              |
-| NREMT EMT Recertification                      | 40 hrs, 24-month rolling                   |
-| CPR/BLS Certification                          | 24-month rolling                           |
-| Hazmat Operations Refresher                    | OSHA 29 CFR 1910.120                       |
-| Bloodborne Pathogens Annual Refresher          | OSHA 29 CFR 1910.1030                      |
-| HIPAA Privacy & Security Awareness             | 45 CFR 164.530(b)                          |
-| SCBA Fit Test & Respiratory Protection         | Checklist, OSHA 29 CFR 1910.134            |
-| NIMS/ICS Initial Certification                 | Courses: ICS-100/200, IS-700/800           |
-| New Member Orientation Checklist               | Checklist, probationary members            |
+| Template                               | Target                           |
+| -------------------------------------- | -------------------------------- |
+| NFPA 1001 Firefighter Annual Training  | 36 hrs, annual                   |
+| NFPA 1500 Occupational Safety Training | 8 hrs, annual                    |
+| NREMT EMT Recertification              | 40 hrs, 24-month rolling         |
+| CPR/BLS Certification                  | 24-month rolling                 |
+| Hazmat Operations Refresher            | OSHA 29 CFR 1910.120             |
+| Bloodborne Pathogens Annual Refresher  | OSHA 29 CFR 1910.1030            |
+| HIPAA Privacy & Security Awareness     | 45 CFR 164.530(b)                |
+| SCBA Fit Test & Respiratory Protection | Checklist, OSHA 29 CFR 1910.134  |
+| NIMS/ICS Initial Certification         | Courses: ICS-100/200, IS-700/800 |
+| New Member Orientation Checklist       | Checklist, probationary members  |
 
 Standards-based templates carry `source: national` with the registry name
 (NFPA, NREMT, OSHA, HIPAA, FEMA) and the standard or CFR citation as
@@ -527,10 +527,10 @@ and the member can be re-enrolled later.
 
 An enrollment past its `target_completion_date` moves to `expired`.
 
-| Transition           | Trigger                                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Transition           | Trigger                                                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `active` → `expired` | **On read** — the progress endpoint transitions an overdue enrollment the moment anyone opens it (as `auto_reset_if_due` does) — and in the daily `enrollment_expiry` task (05:15), which covers records nobody opens |
-| `expired` → `active` | `POST /enrollments/{id}/reopen` (`training.manage`), with an optional new `target_completion_date`                                                                                          |
+| `expired` → `active` | `POST /enrollments/{id}/reopen` (`training.manage`), with an optional new `target_completion_date`                                                                                                                    |
 
 - Both the member and the training officers are notified on expiry.
 - Recertification treats `expired` as a renewable state.
@@ -594,15 +594,15 @@ so later cohorts of the same course reuse it.
 
 ### Running a cohort
 
-| Action                     | Effect                                                                                                                       |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Reschedule a class         | Moves the class _and_ its event; RSVPs are preserved                                                                         |
-| Cancel a class             | Cancels the event rather than deleting it, so anyone signed up sees the change; the class stays on the cohort for the record |
-| Add class                  | An ad-hoc make-up session that was never on the syllabus; the roster is invited automatically                                |
-| Shift remaining            | Slides upcoming classes by N local days; past and cancelled classes are left alone                                           |
-| Cancel cohort              | Cancels the cohort and its remaining classes; a class already cancelled from the calendar is left alone                     |
-| Create N missing events    | Shown only when classes lack an event. Repairs a class whose event failed to create or was deleted; idempotent              |
-| Add member (Roster tab)    | Enrols the member and invites them to the classes still to come                                                              |
+| Action                  | Effect                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Reschedule a class      | Moves the class _and_ its event; RSVPs are preserved                                                                         |
+| Cancel a class          | Cancels the event rather than deleting it, so anyone signed up sees the change; the class stays on the cohort for the record |
+| Add class               | An ad-hoc make-up session that was never on the syllabus; the roster is invited automatically                                |
+| Shift remaining         | Slides upcoming classes by N local days; past and cancelled classes are left alone                                           |
+| Cancel cohort           | Cancels the cohort and its remaining classes; a class already cancelled from the calendar is left alone                      |
+| Create N missing events | Shown only when classes lack an event. Repairs a class whose event failed to create or was deleted; idempotent               |
+| Add member (Roster tab) | Enrols the member and invites them to the classes still to come                                                              |
 
 **Shift** and **Cancel** on a cohort are all-or-nothing: a finalized class or a
 taken room refuses the whole operation and nothing moves.
@@ -940,11 +940,11 @@ A descriptive scale with no labels falls back to numeric display (1–5).
 
 ### Other behaviour
 
-| Scenario                                        | Behavior                                                     |
-| ----------------------------------------------- | ------------------------------------------------------------ |
-| Trainee list when linked to a shift             | Filters to shift members; ad-hoc reports show the full list  |
-| Report `shift_date` vs linked shift date        | Mismatch is a validation error                               |
-| Trainee with shift assignment but no attendance | Manual hour entry allowed; auto-populate returns zeros       |
+| Scenario                                        | Behavior                                                    |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| Trainee list when linked to a shift             | Filters to shift members; ad-hoc reports show the full list |
+| Report `shift_date` vs linked shift date        | Mismatch is a validation error                              |
+| Trainee with shift assignment but no attendance | Manual hour entry allowed; auto-populate returns zeros      |
 
 ### Manual shift report page
 
@@ -1093,14 +1093,14 @@ as a printable grid:
 - Per-requirement cells carrying one mark each — **glyphs, not colour and not
   percentages** — with a legend printed under the table:
 
-  | Cell  | Means                                                         |
-  | ----- | ------------------------------------------------------------- |
-  | `✓`   | `completed`                                                   |
-  | `◐`   | `in_progress`                                                 |
-  | `✗`   | `not_started` (or any other unmet status)                     |
-  | `Exp` | `expired`                                                     |
+  | Cell  | Means                                                          |
+  | ----- | -------------------------------------------------------------- |
+  | `✓`   | `completed`                                                    |
+  | `◐`   | `in_progress`                                                  |
+  | `✗`   | `not_started` (or any other unmet status)                      |
+  | `Exp` | `expired`                                                      |
   | `Due` | `catch_up` — an existing member before their catch-up deadline |
-  | `—`   | **only** "does not apply to this member" — no cell was sent   |
+  | `—`   | **only** "does not apply to this member" — no cell was sent    |
 
   A dash means the member is not graded on that requirement (a compliance
   profile, membership type, role or join-date rule excluded it)
@@ -1127,40 +1127,40 @@ allowance behind it.
 
 ## Cross-Module Connections
 
-| Source            | Target             | Connection                                                                                                                                         | Mechanism                                                            |
-| ----------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Events            | Training           | Finalizing a Training event's attendance writes each attendee's training record                                                                     | `training_session.event_id`, `training_records.source_event_id`      |
-| Course Cohorts    | Events             | Generating a cohort creates one Event per syllabus class, in one transaction                                                                       | `course_cohort_classes.event_id` (`SET NULL`)                        |
-| Course Cohorts    | Training Sessions  | Each generated event carries a linked session with the class's credit hours and pipeline linkage                                                   | `course_cohort_classes.training_session_id`                          |
-| Course Cohorts    | Training Pipelines | The roster is enrolled in the cohort's program; a generated pipeline mirrors the syllabus (phases = sections, one `courses` requirement per class) | `course_cohort_members.enrollment_id`, `training_courses.program_id` |
-| Course Cohorts    | Events (RSVP)      | Roster members are RSVP'd to every class so it lands on their calendar; a late joiner gets only the classes still to come                          | `event_rsvps` written at generation / add-member                     |
-| Events            | Training           | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning                                           | Pipeline phase gate                                                  |
-| Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category)                                         | `training_session.program_id` / `requirement_id` / `category_id`     |
-| Skills Testing    | Training Pipelines | A validated pass on a skills test linked to a requirement completes that pipeline requirement                                                      | Requirement linkage                                                  |
-| Knowledge Tests   | Training Pipelines | A graded attempt records its score on the linked `knowledge_test` requirement                                                                      | `update_requirement_progress`                                        |
-| Training          | Users              | Compliance per member                                                                                                                              | `GET /training/compliance-summary/{user_id}`                         |
-| Training          | Scheduling         | Shift completion reports → Training credit; Shift Compliance grades shift-credited requirements                                                    | `POST /training/shift-reports`, `shift_credited`                     |
-| Training          | Apparatus          | EVOC levels link to the training program that certifies them                                                                                       | `evoc_levels.training_program_id`                                    |
-| Locations         | Training           | Training session location                                                                                                                          | `training_session.location` FK                                       |
-| Member Leaves     | Training Waivers   | Auto-create waiver from LOA                                                                                                                        | `leave.exempt_from_training_waiver` → auto-link                      |
-| Training          | Dashboard          | Training compliance metrics, expiring certs                                                                                                        | `GET /dashboard/stats` includes training data                        |
-| Training          | Reports            | Cross-module report generation                                                                                                                     | `POST /reports/generate` with training report types                  |
-| Training          | Notifications      | Submission, approval, cert expiry alerts                                                                                                           | In-app + email notifications                                         |
-| Training          | Multi-Agency       | Joint sessions across organizations                                                                                                                | `POST /training/multi-agency`                                        |
+| Source            | Target             | Connection                                                                                                                                         | Mechanism                                                               |
+| ----------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Events            | Training           | Finalizing a Training event's attendance writes each attendee's training record                                                                    | `training_session.event_id`, `training_records.source_event_id`         |
+| Course Cohorts    | Events             | Generating a cohort creates one Event per syllabus class, in one transaction                                                                       | `course_cohort_classes.event_id` (`SET NULL`)                           |
+| Course Cohorts    | Training Sessions  | Each generated event carries a linked session with the class's credit hours and pipeline linkage                                                   | `course_cohort_classes.training_session_id`                             |
+| Course Cohorts    | Training Pipelines | The roster is enrolled in the cohort's program; a generated pipeline mirrors the syllabus (phases = sections, one `courses` requirement per class) | `course_cohort_members.enrollment_id`, `training_courses.program_id`    |
+| Course Cohorts    | Events (RSVP)      | Roster members are RSVP'd to every class so it lands on their calendar; a late joiner gets only the classes still to come                          | `event_rsvps` written at generation / add-member                        |
+| Events            | Training           | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning                                           | Pipeline phase gate                                                     |
+| Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category)                                         | `training_session.program_id` / `requirement_id` / `category_id`        |
+| Skills Testing    | Training Pipelines | A validated pass on a skills test linked to a requirement completes that pipeline requirement                                                      | Requirement linkage                                                     |
+| Knowledge Tests   | Training Pipelines | A graded attempt records its score on the linked `knowledge_test` requirement                                                                      | `update_requirement_progress`                                           |
+| Training          | Users              | Compliance per member                                                                                                                              | `GET /training/compliance-summary/{user_id}`                            |
+| Training          | Scheduling         | Shift completion reports → Training credit; Shift Compliance grades shift-credited requirements                                                    | `POST /training/shift-reports`, `shift_credited`                        |
+| Training          | Apparatus          | EVOC levels link to the training program that certifies them                                                                                       | `evoc_levels.training_program_id`                                       |
+| Locations         | Training           | Training session location                                                                                                                          | `training_session.location` FK                                          |
+| Member Leaves     | Training Waivers   | Auto-create waiver from LOA                                                                                                                        | `leave.exempt_from_training_waiver` → auto-link                         |
+| Training          | Dashboard          | Training compliance metrics, expiring certs                                                                                                        | `GET /dashboard/stats` includes training data                           |
+| Training          | Reports            | Cross-module report generation                                                                                                                     | `POST /reports/generate` with training report types                     |
+| Training          | Notifications      | Submission, approval, cert expiry alerts                                                                                                           | In-app + email notifications                                            |
+| Training          | Multi-Agency       | Joint sessions across organizations                                                                                                                | `POST /training/multi-agency`                                           |
 | Training          | External LRS       | xAPI statement delivery                                                                                                                            | `POST /training/xapi/statements`, sent by `POST /training/xapi/process` |
-| Training          | Compliance         | ISO readiness, attestations, annual reports                                                                                                        | `GET /compliance/iso-readiness`                                      |
+| Training          | Compliance         | ISO readiness, attestations, annual reports                                                                                                        | `GET /compliance/iso-readiness`                                         |
 
 ---
 
 ## Permissions
 
-| Permission                | Scope                                                                                                                         |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `training.view`           | View training records, courses, programs (own data); skills-test candidate lookup                                             |
+| Permission                | Scope                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `training.view`           | View training records, courses, programs (own data); skills-test candidate lookup                                              |
 | `training.manage`         | Full training admin: requirements, sessions approval, submissions review, compliance, skills templates and validation, exports |
-| `training.view_all`       | View all members' training data (enrollments, cohort rosters, instructor qualifications, multi-agency)                        |
-| `training.configure`      | Configure module settings (chiefly member visibility); `PUT /module-config/config` accepts it or `training.manage`            |
-| `training.view_analytics` | Department-wide shift report analytics (`officer-analytics?scope=department`)                                                 |
+| `training.view_all`       | View all members' training data (enrollments, cohort rosters, instructor qualifications, multi-agency)                         |
+| `training.configure`      | Configure module settings (chiefly member visibility); `PUT /module-config/config` accepts it or `training.manage`             |
+| `training.view_analytics` | Department-wide shift report analytics (`officer-analytics?scope=department`)                                                  |
 
 Session creation, finalize and relinking use `events.manage`; reopening uses
 `events.reopen_attendance`.
