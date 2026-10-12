@@ -472,3 +472,129 @@ describe('InventoryMaintenancePage — completing open work', () => {
     expect(screen.getByRole('button', { name: 'Save Record' })).toBeDisabled();
   });
 });
+
+/**
+ * INV-17 follow-on (owner decision 2026-10-12): "Record inspection" closes the
+ * item's scheduled inspection, mirroring Complete work, instead of recording a
+ * second inspection and leaving the scheduled one open forever.
+ */
+describe('InventoryMaintenancePage — recording a scheduled inspection', () => {
+  const openInspection = (overrides: Partial<MaintenanceRecord> = {}): MaintenanceRecord => {
+    const record = makeRecord({
+      id: 'insp-1',
+      maintenance_type: 'routine_inspection',
+      is_completed: false,
+      scheduled_date: '2026-09-01',
+      description: 'Annual NFPA 1851 inspection',
+    });
+    delete record.passed;
+    delete record.completed_date;
+    return { ...record, ...overrides };
+  };
+
+  beforeEach(() => {
+    mockGetMaintenanceDueItems.mockReset();
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetItemMaintenanceHistory.mockReset();
+    mockGetItemMaintenanceHistory.mockResolvedValue([]);
+    mockCreateMaintenanceRecord.mockReset();
+    mockCreateMaintenanceRecord.mockResolvedValue({});
+    mockUpdateMaintenanceRecord.mockReset();
+    mockUpdateMaintenanceRecord.mockResolvedValue({});
+    mockGetOpenMaintenanceRecords.mockReset();
+    mockGetOpenMaintenanceRecords.mockResolvedValue([]);
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
+  });
+
+  const openInspectionForm = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Record inspection' }));
+  };
+
+  it('closes the single scheduled inspection with its result', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([openInspection({ notes: 'Booked with vendor' })]);
+    const user = userEvent.setup();
+    await openInspectionForm(user);
+
+    expect(await screen.findByText(/closes the scheduled routine inspection/)).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Describe the maintenance task...'), 'Liner intact');
+    await user.click(screen.getByLabelText(/fail/i));
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockUpdateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockGetOpenMaintenanceRecords).toHaveBeenCalledWith('it-1');
+    expect(mockCreateMaintenanceRecord).not.toHaveBeenCalled();
+    const [itemId, recordId, payload] = mockUpdateMaintenanceRecord.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(itemId).toBe('it-1');
+    expect(recordId).toBe('insp-1');
+    expect(payload).toMatchObject({
+      is_completed: true,
+      passed: false,
+      notes: 'Booked with vendor\nInspection notes: Liner intact',
+    });
+    expect(payload['completed_date']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(payload).not.toHaveProperty('description');
+    expect(mockToastSuccess).toHaveBeenCalledWith('Inspection recorded');
+    // A failed inspection is not offered a return to service.
+    expect(screen.queryByRole('button', { name: 'Return to service' })).not.toBeInTheDocument();
+  });
+
+  it('lets the officer pick among several scheduled inspections, defaulting to the earliest', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([
+      openInspection(),
+      openInspection({ id: 'insp-2', maintenance_type: 'advanced_inspection', scheduled_date: '2026-09-20' }),
+    ]);
+    const user = userEvent.setup();
+    await openInspectionForm(user);
+
+    const picker = await screen.findByRole('combobox', { name: /Scheduled inspection being recorded/ });
+    expect(picker).toHaveValue('insp-1');
+    await user.selectOptions(picker, 'insp-2');
+    await user.type(screen.getByPlaceholderText('Describe the maintenance task...'), 'Seams checked');
+    await user.click(screen.getByLabelText(/pass/i));
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockUpdateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockUpdateMaintenanceRecord.mock.calls[0]?.[1]).toBe('insp-2');
+    expect(mockUpdateMaintenanceRecord.mock.calls[0]?.[2]).toMatchObject({ passed: true });
+    expect(await screen.findByRole('button', { name: 'Return to service' })).toBeInTheDocument();
+  });
+
+  it('records a new inspection when none is scheduled, never closing open repairs', async () => {
+    mockGetOpenMaintenanceRecords.mockResolvedValue([
+      openInspection({ id: 'rep-1', maintenance_type: 'repair', description: 'Replace strap' }),
+    ]);
+    const user = userEvent.setup();
+    await openInspectionForm(user);
+
+    expect(await screen.findByText(/no scheduled inspection open/)).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Describe the maintenance task...'), 'Safety inspection');
+    await user.click(screen.getByLabelText(/pass/i));
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+
+    await waitFor(() => expect(mockCreateMaintenanceRecord).toHaveBeenCalledTimes(1));
+    expect(mockUpdateMaintenanceRecord).not.toHaveBeenCalled();
+    expect(mockCreateMaintenanceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ maintenance_type: 'inspection', is_completed: true, passed: true })
+    );
+  });
+
+  it('does not save while it cannot tell whether an inspection is scheduled', async () => {
+    mockGetOpenMaintenanceRecords.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    await openInspectionForm(user);
+
+    expect(await screen.findByText(/scheduled inspections could not be loaded/)).toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save Record' })).toBeDisabled();
+  });
+});

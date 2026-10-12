@@ -2965,12 +2965,24 @@ closed directly; several show a picker defaulting to the earliest; none falls
 back to creating a completed record as before. The record keeps its task
 description, and the performed work is appended to its notes.
 `update_maintenance_record` now reads the record `FOR UPDATE` so two officers
-completing the same record update the item once. **Narrowing that remains:**
-open _inspection_ records are deliberately not offered (Complete work carries
-no pass/fail, and completing an inspection moves the inspection clock), and
-**Record inspection** still creates a new record rather than closing a
-scheduled inspection — the same permanent-open shape for scheduled
-inspections, not covered by this decision. Pinned by
+completing the same record update the item once. Open _inspection_ records
+are deliberately not offered to Complete work (it carries no pass/fail, and
+completing an inspection moves the inspection clock).
+
+**Scheduled inspections (owner decision, 2026-10-12):** "Record inspection
+closes the item's open scheduled inspection record, mirroring Complete work".
+Record inspection now reads the same open-record list, keeps only the
+inspection types, and closes the chosen one through the same PATCH with the
+pass/fail, completion date and notes ("Inspection notes: …" appended, the
+original description kept): one is closed directly, several show a picker
+defaulting to the earliest scheduled, none records a new completed inspection
+as before. So that closing moves the item exactly as recording a new
+inspection does, both paths now go through one helper
+(`InventoryService._apply_completion_to_item`); the PATCH path had never
+applied the create path's failed-inspection quarantine, so a scheduled
+inspection closed as failed would have left the item available. The PATCH
+path also now refuses to complete an inspection with no pass/fail result or
+no completion date, as the create validator does. Pinned by
 `tests/test_inventory_maintenance_close_open.py` and
 `InventoryMaintenancePage.test.tsx`.
 

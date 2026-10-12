@@ -4203,6 +4203,56 @@ class InventoryService:
             else False
         )
 
+    @classmethod
+    def _apply_completion_to_item(
+        cls,
+        item: InventoryItem,
+        *,
+        maintenance_type: Any,
+        completed: Any,
+        next_due_date: Any,
+        passed: Optional[bool],
+        condition_after: Any,
+    ) -> None:
+        """Apply a completed maintenance record's effects to its item.
+
+        The one definition both ways of completing a record go through:
+        creating it already completed, and completing a scheduled one by
+        PATCH. They drifted twice -- #2479 gated the inspection clock on the
+        create path only, and the PATCH path never quarantined an item whose
+        inspection failed -- and INV-17 made the PATCH path the ordinary route
+        for both Complete work and Record inspection.
+        """
+        if condition_after:
+            item.condition = condition_after
+        # Only an INSPECTION may move the inspection clock. This ran for any
+        # completed record, so a repair or a cleaning rewrote
+        # last_inspection_date and pushed next_inspection_due out by a whole
+        # interval -- a coat repaired in August had its annual NFPA 1851
+        # inspection silently rescheduled from April, and the department read
+        # as compliant four months longer than it was.
+        if completed and is_inspection_type(maintenance_type):
+            item.last_inspection_date = completed
+            if item.inspection_interval_days:
+                if isinstance(completed, str):
+                    completed = date.fromisoformat(completed)
+                item.next_inspection_due = completed + timedelta(
+                    days=item.inspection_interval_days
+                )
+            elif next_due_date:
+                item.next_inspection_due = next_due_date
+
+        # Completion never silently returns equipment to service. A failed
+        # inspection must remain unavailable; successful work has a separate,
+        # deliberate "Return to service" action.
+        if passed is False:
+            item.status = ItemStatus.IN_MAINTENANCE
+            item.condition = ItemCondition.OUT_OF_SERVICE
+        # `passed` is absent on a plain repair log, so the branch above does
+        # not fire and an unsafe condition_after would otherwise be written
+        # against an AVAILABLE item.
+        cls._enforce_state_invariant(item)
+
     async def create_maintenance_record(
         self,
         item_id: UUID,
@@ -4273,42 +4323,14 @@ class InventoryService:
             if maintenance_data.get("is_completed"):
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
-                    if maintenance_data.get("condition_after"):
-                        item.condition = maintenance_data["condition_after"]
-                    completed = maintenance_data.get("completed_date")
-                    # Only an INSPECTION may move the inspection clock. This
-                    # ran for any completed record, so a repair or a cleaning
-                    # rewrote last_inspection_date and pushed
-                    # next_inspection_due out by a whole interval -- a coat
-                    # repaired in August had its annual NFPA 1851 inspection
-                    # silently rescheduled from April, and the department read
-                    # as compliant four months longer than it was. Nothing
-                    # raised, nothing logged: the only sign was two dates on
-                    # the item page disagreeing.
-                    if completed and is_inspection_type(
-                        maintenance_data.get("maintenance_type")
-                    ):
-                        item.last_inspection_date = completed
-                        # Auto-calculate next_inspection_due from interval
-                        if item.inspection_interval_days:
-                            if isinstance(completed, str):
-                                completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(
-                                days=item.inspection_interval_days
-                            )
-                        elif maintenance_data.get("next_due_date"):
-                            item.next_inspection_due = maintenance_data["next_due_date"]
-
-                    # Completion never silently returns equipment to service. A
-                    # failed inspection must remain unavailable; successful work
-                    # has a separate, deliberate "Return to service" action.
-                    if maintenance_data.get("passed") is False:
-                        item.status = ItemStatus.IN_MAINTENANCE
-                        item.condition = ItemCondition.OUT_OF_SERVICE
-                    # `passed` is absent on a plain repair log, so the branch
-                    # above does not fire and an unsafe condition_after would
-                    # otherwise be written against an AVAILABLE item.
-                    self._enforce_state_invariant(item)
+                    self._apply_completion_to_item(
+                        item,
+                        maintenance_type=maintenance_data.get("maintenance_type"),
+                        completed=maintenance_data.get("completed_date"),
+                        next_due_date=maintenance_data.get("next_due_date"),
+                        passed=maintenance_data.get("passed"),
+                        condition_after=maintenance_data.get("condition_after"),
+                    )
             elif maintenance_data.get("maintenance_type") == "repair":
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
@@ -4370,41 +4392,49 @@ class InventoryService:
                     label="performed_by",
                 )
 
+            completing = (
+                bool(safe_data.get("is_completed")) and not was_completed_before
+            )
+            if completing:
+                # INV-17: "Record inspection" now closes a scheduled inspection
+                # through this path, so it must refuse what the create
+                # validator refuses -- an inspection completed with no result
+                # or no date would close the record without moving the
+                # inspection clock or quarantining a failed item. Judged on the
+                # values the record will hold once the update applies.
+                final_type = safe_data.get("maintenance_type", record.maintenance_type)
+                final_passed = (
+                    safe_data["passed"] if "passed" in safe_data else record.passed
+                )
+                if is_inspection_type(final_type):
+                    if final_passed is None:
+                        return None, "A pass/fail result is required for inspections"
+                    if not (safe_data.get("completed_date") or record.completed_date):
+                        return None, "Completion date is required for completed work"
+
             for key, value in safe_data.items():
                 setattr(record, key, value)
 
-            # If is_completed just changed to True, update item inspection dates.
-            # Lock the item row to prevent concurrent updates from racing.
-            if safe_data.get("is_completed") and not was_completed_before:
+            # If is_completed just changed to True, update the item exactly as
+            # creating an already-completed record does. Lock the item row to
+            # prevent concurrent updates from racing.
+            if completing:
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
-                    if safe_data.get("condition_after"):
-                        item.condition = safe_data["condition_after"]
-                    completed = safe_data.get("completed_date") or record.completed_date
-                    # Only an INSPECTION may move the inspection clock -- the
-                    # same rule the create path applies, which #2479 fixed there
-                    # and only there. This is the likelier route to it: a
-                    # quartermaster schedules a repair and marks it complete
-                    # later, which is a PATCH, so the coat's annual NFPA 1851
-                    # deadline still slid a year on the commonest flow.
-                    #
-                    # `record`, not `safe_data`: the type is read AFTER the
-                    # update is applied, so a call that completes a record and
-                    # corrects its type in one go is judged on what it ends up
-                    # being, not on what it was.
-                    if completed and is_inspection_type(record.maintenance_type):
-                        item.last_inspection_date = completed
-                        if item.inspection_interval_days:
-                            if isinstance(completed, str):
-                                completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(
-                                days=item.inspection_interval_days
-                            )
-                        elif safe_data.get("next_due_date") or record.next_due_date:
-                            item.next_inspection_due = (
-                                safe_data.get("next_due_date") or record.next_due_date
-                            )
-                    self._enforce_state_invariant(item)
+                    # `record`, not `safe_data`: the type and result are read
+                    # AFTER the update is applied, so a call that completes a
+                    # record and corrects its type in one go is judged on what
+                    # it ends up being, not on what it was.
+                    self._apply_completion_to_item(
+                        item,
+                        maintenance_type=record.maintenance_type,
+                        completed=safe_data.get("completed_date")
+                        or record.completed_date,
+                        next_due_date=safe_data.get("next_due_date")
+                        or record.next_due_date,
+                        passed=record.passed,
+                        condition_after=safe_data.get("condition_after"),
+                    )
 
             await self.db.commit()
             await self.db.refresh(record)

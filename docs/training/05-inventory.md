@@ -1693,6 +1693,28 @@ open records have loaded; if they cannot be loaded, close the form and try again
 rather than logging a duplicate. The item still stays out of service until you
 choose **Return to service**.
 
+### Record inspection closes the scheduled inspection _(2026-10-12)_
+
+**Record inspection** used to record a new inspection every time, so an
+inspection scheduled with **Schedule maintenance** stayed open forever beside
+the one that was actually done. It now closes the scheduled inspection, the
+same way Complete work closes open work:
+
+- **One scheduled inspection** — the form says "This closes the scheduled
+  inspection (due …)" and saving marks it complete with the pass or fail and
+  completion date you enter. Its task description is kept; what you type under
+  **Task Description** is added to its notes as "Inspection notes: …".
+- **Several scheduled inspections** — a **Scheduled inspection being recorded**
+  picker lists them, with the earliest selected. The others stay open.
+- **None scheduled** — a new, completed inspection is recorded, as before.
+
+Only open inspections are offered here; open repairs and other work are closed
+with **Complete work**. Closing a scheduled inspection does exactly what
+recording a new one does: the item's last inspection becomes the completion
+date and its next inspection due is worked out from the inspection interval,
+and a **Fail** marks the item out of service. As with Complete work, **Save
+Record** waits until the scheduled inspections have loaded.
+
 ### Only an inspection moves the inspection clock _(2026-09-13)_
 
 An item on an inspection interval carries two dates: **last inspection** and
