@@ -23,7 +23,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 
 Then access: `http://YOUR-UNRAID-IP:7880`
 
-**[→ Full Unraid Quick Start Guide](Unraid-Quick-Start)**
+**[→ Full Unraid Guide](Deployment-Unraid)**
 
 ### Docker Compose
 
@@ -44,7 +44,6 @@ docker compose up -d
 ### 🎯 Getting Started
 
 - **[Installation Guide](Installation)** - Complete setup instructions
-- **[Unraid Quick Start](Unraid-Quick-Start)** - One-command Unraid deployment
 - **[Onboarding Guide](Onboarding)** - First-time setup wizard
 - **[Quick Reference](Quick-Reference)** - Common commands and tasks
 
@@ -637,4 +636,4 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 ---
 
-**Ready to get started?** → **[Installation Guide](Installation)** or **[Unraid Quick Start](Unraid-Quick-Start)**
+**Ready to get started?** → **[Installation Guide](Installation)** or **[Unraid Deployment](Deployment-Unraid)**

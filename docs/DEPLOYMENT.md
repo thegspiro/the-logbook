@@ -723,7 +723,7 @@ sudo nginx -t
 
 ### Load Balancing
 
-For high-traffic deployments, see the scaling notes in the [production deployment wiki page](../wiki/Deployment-Production.md).
+For high-traffic deployments, see the scaling notes in the [production deployment wiki page](../wiki/Deployment-Production.md#scaling).
 
 ### Multi-Region Deployment
 
