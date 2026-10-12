@@ -56,6 +56,24 @@ print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
 }
 
+# The documented install is `curl ... | bash`, where bash reads this script
+# from stdin. A bare `read` would then take its answer from the next line of
+# the script itself instead of from the person at the keyboard, and the
+# skipped line would never run. Answers are read from the terminal instead
+# whenever stdin is not one; PROMPT_TTY is overridable so the tests can stand
+# in for a terminal. Without any terminal (an unattended run) stdin is used,
+# as before.
+PROMPT_TTY="${PROMPT_TTY:-/dev/tty}"
+ask() {
+    local __var="$1" __prompt="$2" __reply=""
+    if [ ! -t 0 ] && { : < "$PROMPT_TTY"; } 2>/dev/null; then
+        read -r -p "$__prompt" __reply < "$PROMPT_TTY"
+    else
+        read -r -p "$__prompt" __reply
+    fi
+    printf -v "$__var" '%s' "$__reply"
+}
+
 # ============================================
 # Pre-flight Checks
 # ============================================
@@ -98,7 +116,7 @@ echo "2) Update Existing Installation"
 echo "3) Clean Install (removes all data)"
 echo "4) Uninstall / Remove Application"
 echo ""
-read -p "Choose option [1-4]: " INSTALL_TYPE
+ask INSTALL_TYPE "Choose option [1-4]: "
 
 # ============================================
 # Clean Up Existing Containers
@@ -247,7 +265,7 @@ create_directories() {
 prompt_https_origin() {
     while :; do
         if [ -z "${HTTPS_ORIGIN:-}" ]; then
-            read -r -p "Public HTTPS URL (for example, https://logbook.example.com): " HTTPS_ORIGIN
+            ask HTTPS_ORIGIN "Public HTTPS URL (for example, https://logbook.example.com): "
         fi
         case "$HTTPS_ORIGIN" in
             https://?*)
@@ -682,7 +700,7 @@ uninstall_application() {
     echo "1) Remove containers only (keep data for reinstall)"
     echo "2) Remove everything (containers, images, and all data)"
     echo ""
-    read -p "Choose option [1-2]: " UNINSTALL_TYPE
+    ask UNINSTALL_TYPE "Choose option [1-2]: "
 
     # Stop and remove containers via compose if available
     if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
