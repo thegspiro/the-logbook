@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { renderWithRouter } from '../../../test/utils';
+import { createMockApiError, renderWithRouter } from '../../../test/utils';
 import type { LegalDocumentsOverview } from '../types/legal';
 
 const mockGetOverview = vi.fn();
@@ -23,6 +23,11 @@ vi.mock('../services/api', () => ({
     revertToDefault: (...args: unknown[]) => mockRevertToDefault(...args) as unknown,
     listRevisions: (...args: unknown[]) => mockListRevisions(...args) as unknown,
   },
+}));
+
+const mockToastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: (...args: unknown[]) => mockToastError(...args) as unknown },
 }));
 
 vi.mock('../../../stores/authStore', () => ({
@@ -167,6 +172,23 @@ describe('LegalDocumentsPage', () => {
     expect(payload.documentType).toBe('privacy_policy');
     expect(payload.changeNote).toBe('Matches Article IV.');
     expect(mockPublishRevision).not.toHaveBeenCalled();
+  });
+
+  it('tells the member why a proposal over the open-draft cap was refused', async () => {
+    const user = userEvent.setup();
+    const refusal = 'You already have 10 open proposals for the privacy policy. Publish or withdraw one first.';
+    mockCreateRevision.mockReset();
+    mockCreateRevision.mockRejectedValue(createMockApiError(refusal, 400));
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByRole('heading', { name: 'Legal Documents' });
+    await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
+
+    await user.type(await screen.findByLabelText(/What does this change/), 'Matches Article IV.');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    // The server's reason, not a generic "Could not save": the member has to
+    // learn that publishing or withdrawing one of their drafts unblocks them.
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(refusal));
   });
 
   it('clears the effective date with an explicit null rather than omitting it', async () => {

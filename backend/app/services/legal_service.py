@@ -46,6 +46,19 @@ EFFECTIVE_DATE_KEY = {
 }
 LEGACY_SHARED_DATE_KEY = "last_updated"
 
+# Owner decision DOC-8 (2026-10-12): at most this many open drafts per member
+# per document type. "Open" means status DRAFT — the only state in which a
+# proposal is still pending. Publishing moves it to PUBLISHED (later ARCHIVED)
+# and withdrawing deletes the row, so either frees a slot; nothing else takes a
+# member's draft out of DRAFT.
+MAX_OPEN_DRAFTS_PER_MEMBER = 10
+
+# How the refusal names a document type to the member.
+DOCUMENT_LABEL = {
+    LegalDocumentType.PRIVACY_POLICY: "the privacy policy",
+    LegalDocumentType.TERMS_OF_SERVICE: "the terms of service",
+}
+
 PUBLIC_PATH = {
     LegalDocumentType.PRIVACY_POLICY: "/privacy",
     LegalDocumentType.TERMS_OF_SERVICE: "/terms",
@@ -205,12 +218,22 @@ class LegalDocumentService:
     async def create_draft(
         self,
         organization_id: str,
-        created_by: str,
+        created_by: Optional[str],
         document_type: LegalDocumentType,
         body: str,
         change_note: str,
         effective_date: Optional[str] = None,
     ) -> LegalDocumentRevision:
+        """Save a proposal as a draft, within the per-member open-draft cap.
+
+        ``created_by`` is ``None`` only for an internal caller with no member
+        behind it; the endpoint always passes the caller. Such a draft has no
+        member to count against, so the cap does not apply to it.
+        """
+        if created_by is not None:
+            await self._assert_under_draft_cap(
+                organization_id, created_by, document_type
+            )
         revision = LegalDocumentRevision(
             organization_id=organization_id,
             document_type=document_type,
@@ -223,6 +246,62 @@ class LegalDocumentService:
         self.db.add(revision)
         await self.db.flush()
         return revision
+
+    async def _assert_under_draft_cap(
+        self,
+        organization_id: str,
+        created_by: str,
+        document_type: LegalDocumentType,
+    ) -> None:
+        """Refuse a new draft once the member has the maximum open (DOC-8).
+
+        A count followed by an insert, so it needs both halves of pitfall #27.
+
+        The parent lock is the proposer's own ``users`` row: the narrowest
+        existing row that every request by this member for this document type
+        shares. The organization row would serialize them too, but publish and
+        revert already lock it, so it would queue every member's proposal
+        behind every other member's and behind publishing. The user row also
+        serializes one member's proposals across both document types, which
+        costs nothing — a member does not propose in parallel at volume. The
+        organization filter keeps the lookup tenant-scoped (pitfall #14).
+
+        The count is itself a locking read: under REPEATABLE READ a plain
+        SELECT answers from the snapshot taken at this transaction's first
+        read, which predates the lock, so a request that waited on the lock
+        would still count the tally from before the one ahead of it committed.
+        """
+        proposer = (
+            await self.db.execute(
+                select(User.id)
+                .where(
+                    User.id == created_by,
+                    User.organization_id == organization_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if proposer is None:
+            raise ValueError("Member not found")
+
+        open_drafts = (
+            await self.db.execute(
+                select(func.count(LegalDocumentRevision.id))
+                .where(
+                    LegalDocumentRevision.organization_id == organization_id,
+                    LegalDocumentRevision.document_type == document_type,
+                    LegalDocumentRevision.created_by == created_by,
+                    LegalDocumentRevision.status == LegalRevisionStatus.DRAFT,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+        if open_drafts >= MAX_OPEN_DRAFTS_PER_MEMBER:
+            raise ValueError(
+                f"You already have {MAX_OPEN_DRAFTS_PER_MEMBER} open proposals "
+                f"for {DOCUMENT_LABEL[document_type]}. Publish or withdraw one "
+                f"first."
+            )
 
     async def update_draft(
         self,

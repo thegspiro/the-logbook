@@ -9,6 +9,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { LEGAL_SECTIONS, toPlainText } from '../../../pages/legal/legalContent';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { RevisionEditorModal } from '../components/RevisionEditorModal';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
@@ -199,8 +200,8 @@ const LegalDocumentsPage: React.FC = () => {
       }
       toast.success('Draft saved. It is not public until it is published.');
       setEditor(null);
-    } catch {
-      toast.error('Could not save the draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save the draft'));
     }
   };
 
@@ -217,8 +218,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await publishRevision(revision.id);
       toast.success(`${label} published`);
-    } catch {
-      toast.error('Could not publish the revision');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not publish the revision'));
     }
   };
 
@@ -234,8 +235,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await deleteRevision(revision.id);
       toast.success('Draft discarded');
-    } catch {
-      toast.error('Could not discard the draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not discard the draft'));
     }
   };
 
@@ -252,8 +253,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await revertToDefault(doc.documentType);
       toast.success(`${label} reverted to the built-in text`);
-    } catch {
-      toast.error('Could not revert the document');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not revert the document'));
     }
   };
 

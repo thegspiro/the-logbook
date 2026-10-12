@@ -3237,8 +3237,25 @@ appends it with **Load more proposals** / **Load more versions**, skipping any
 revision already shown. Tested in `tests/test_legal_documents_paging.py`,
 `legalDocumentsStore.test.ts` and `LegalDocumentsPage.test.tsx`.
 
-**What remains:** draft creation is still uncapped per user and per
-organization; only the cost of _reading_ them is now bounded. (Security review
+~~**What remains:** draft creation is still uncapped per user and per
+organization; only the cost of _reading_ them is now bounded.~~
+
+✅ **Draft creation capped 2026-10-12 (owner decision: at most 10 open drafts
+per member per document type).** `LegalDocumentService.create_draft` refuses
+an eleventh with a 400 — "You already have 10 open proposals for the privacy
+policy. Publish or withdraw one first." — and the screen shows that message.
+An **open** draft is one in status `draft`: publishing moves it to
+`published` (later `archived`) and withdrawing deletes it, so either frees the
+slot; `archived` and `published` rows never count. The check locks the
+proposer's own `users` row (org-scoped) and counts with a locking read
+(pitfall #27) — the user row rather than the organization row, because publish
+already locks the organization and would otherwise queue every member's
+proposal behind every other member's. The decision sets a per-member cap
+only, so there is **no separate per-organization cap**: an organization's open
+drafts are bounded by 10 × 2 document types × its number of members who can
+propose. Tested in
+`tests/test_legal_documents_draft_cap.py` (including a two-connection race at
+nine) and `tests/test_capacity_locking.py::TestLegalDraftCap`. (Security review
 DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
 
 ## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)

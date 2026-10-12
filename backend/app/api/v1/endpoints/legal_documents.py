@@ -204,6 +204,9 @@ async def create_revision(
     """
     Propose a revision to a public legal document. Saved as a draft, not published.
 
+    A member may hold at most ``MAX_OPEN_DRAFTS_PER_MEMBER`` open drafts per
+    document type; one more is refused with a 400 naming the limit (DOC-8).
+
     Requires: legal.propose, legal.publish or settings.manage permission.
     """
     service = LegalDocumentService(db)

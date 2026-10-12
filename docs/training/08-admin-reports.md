@@ -3110,6 +3110,12 @@ publish; publishing to the second group only._
   every proposal, and below the list "Showing 10 of _N_" sits beside **Load
   more proposals** (or **Load more versions**), which adds the next ten. A
   publish, edit or discard reloads the screen back to the first ten.
+- **Ten open proposals per person, per document** _(2026-10-12)_. A member can
+  have at most ten drafts open against the privacy notice and ten against the
+  terms at once. An eleventh is refused with "You already have 10 open
+  proposals for … Publish or withdraw one first." Publishing one of them, or
+  discarding it, frees the slot. The limit counts only your own drafts: another
+  officer's proposals never count against you.
 
 ![The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out](./images/08-78-legal-revision-history.png)
 

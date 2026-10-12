@@ -826,3 +826,29 @@ class TestProgramEnrollmentLocking:
         assert source.index("lock_organization_scope(") < source.index(
             "with_for_update()"
         )
+
+
+class TestLegalDraftCap:
+    """A member's open legal drafts are capped per type (DOC-8): a count then
+    an insert. ``test_legal_documents_draft_cap.py`` drives the race on real
+    connections."""
+
+    def test_the_proposer_row_is_locked_before_counting(self):
+        from app.services.legal_service import LegalDocumentService
+
+        source = _source_of(LegalDocumentService._assert_under_draft_cap)
+        assert source.count("with_for_update()") == 2
+        assert source.index("select(User.id)") < source.index("func.count(")
+
+    def test_the_open_draft_count_is_a_locking_read(self):
+        from app.services.legal_service import LegalDocumentService
+
+        _assert_every_count_locks(
+            LegalDocumentService._assert_under_draft_cap, expected=1
+        )
+
+    def test_create_draft_runs_the_check(self):
+        from app.services.legal_service import LegalDocumentService
+
+        source = _source_of(LegalDocumentService.create_draft)
+        assert source.index("_assert_under_draft_cap(") < source.index("self.db.add(")
