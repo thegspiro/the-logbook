@@ -4999,6 +4999,23 @@ server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
 
+## Notifications — Rules Cannot Be Renamed or Deleted From the Screen (2026-10-12)
+
+Found driving W56 (`docs/workflow-review/W56-notifications.md`, W56-4).
+
+- **What the screen offers:** the rules tab creates a rule and switches it on
+  or off, and nothing else. A rule with a typo in its name, or on the wrong
+  trigger, stays on the list for good.
+- **What the API already supports:** `PATCH /notifications/rules/{id}` and
+  `DELETE /notifications/rules/{id}`, both behind `notifications.manage`.
+- **Why it is not simply a Delete button:** with no rule for a trigger, that
+  trigger's notifications go out with their default settings (pitfall 19). So
+  deleting the one switched-off rule for, say, event reminders turns the
+  reminders back on, with nothing on the screen to say so.
+- **Decisions needed before building it:**
+  - whether to offer edit only, or delete as well;
+  - if delete, whether it warns that the trigger reverts to sending.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

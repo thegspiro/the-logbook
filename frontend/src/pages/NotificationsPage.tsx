@@ -954,7 +954,10 @@ const NotificationsPage: React.FC = () => {
                               void toggleRule(rule.id, rule.enabled);
                             }}
                             disabled={togglingRuleId === rule.id}
-                            className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
+                            role="switch"
+                            aria-checked={rule.enabled}
+                            aria-label={`${rule.name}: notifications ${rule.enabled ? 'on' : 'off'}`}
+                            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center transition-colors disabled:opacity-50"
                           >
                             {togglingRuleId === rule.id ? (
                               <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
@@ -1013,7 +1016,8 @@ const NotificationsPage: React.FC = () => {
                   <button
                     key={value}
                     onClick={() => setLogChannelFilter(value)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    aria-pressed={logChannelFilter === value}
+                    className={`touch:min-h-11 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       logChannelFilter === value
                         ? 'bg-orange-700 text-white'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -1171,7 +1175,10 @@ const NotificationsPage: React.FC = () => {
                     </button>
                   </div>
                   {createError && (
-                    <div className="mb-4 flex items-start space-x-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                    <div
+                      role="alert"
+                      className="mb-4 flex items-start space-x-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3"
+                    >
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
                       <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
                     </div>
@@ -1193,8 +1200,14 @@ const NotificationsPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Trigger Event</label>
+                      <label
+                        htmlFor="rule-trigger"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
+                        Trigger Event
+                      </label>
                       <select
+                        id="rule-trigger"
                         value={createTrigger}
                         onChange={(e) => setCreateTrigger(e.target.value)}
                         className="form-input"

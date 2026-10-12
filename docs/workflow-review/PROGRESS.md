@@ -109,7 +109,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ✅     |
-| W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
+| W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ✅     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
 | W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
 | W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
@@ -213,6 +213,46 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W56 — Notification rules and logs, the in-app bell — 2026-10-12
+
+Driven as:
+
+- `admin` creating a rule on an empty install, switching it off, and reading
+  the Send Log and Email Templates tabs;
+- `member` in the inbox (opening a stack, pinning, reading, following a
+  notification for a message deleted in W55), the bell, the Send Log, and the
+  rules API;
+- the inbox and Send Log repeated at 390×844.
+
+Database continued from W55.
+
+Held:
+
+- a double-clicked create made one rule;
+- the switch, a pin and a read each survived a reload;
+- the bell followed the inbox;
+- the member was refused every rules call;
+- `?tab=` was honoured only where allowed;
+- a deleted message's notification lands on "Message unavailable".
+
+Fixed:
+
+- W56-1 (MED — Tab reached the hidden buttons of a closed notification
+  card);
+- W56-2 (LOW — the rule switch had no name, the Trigger Event label was
+  linked to nothing, and the create error was not announced);
+- W56-3 (LOW — the Send Log filter showed its selection by colour alone, at
+  28px on a phone).
+
+Flagged: W56-4 (MED — a rule cannot be renamed or deleted from the screen,
+and deleting one quietly turns that trigger's notifications back on; in
+KNOWN_LIMITATIONS).
+
+Gate: typecheck and lint are clean. 72 notification frontend tests pass (4
+new). No backend change.
+
+Next: W57.
 
 ### W55 — Messages: send to a group, the member's inbox, message administration — 2026-10-05
 
