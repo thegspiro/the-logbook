@@ -61,6 +61,7 @@ def _keys(monkeypatch, dedicated: str) -> None:
 def _row(log_id: int, key_id: str | None) -> SimpleNamespace:
     return SimpleNamespace(
         id=log_id,
+        chain_seq=log_id,
         timestamp="2026-10-01T00:00:00.000000+00:00",
         timestamp_nanos=log_id,
         event_type="user_login",
@@ -93,7 +94,7 @@ def _chain(spec: list[tuple[str, str | None]]) -> list[SimpleNamespace]:
 
 
 class _ChainDB:
-    """Rows on the first execute(), no checkpoint on the second."""
+    """Rows on the first execute(); nothing pending, no checkpoint after."""
 
     def __init__(self, rows):
         self._rows = rows
@@ -107,7 +108,8 @@ class _ChainDB:
                     return_value=MagicMock(all=MagicMock(return_value=self._rows))
                 )
             )
-        return SimpleNamespace(scalar_one_or_none=lambda: None)
+        # The pending-seal count, then the checkpoint lookup.
+        return SimpleNamespace(scalar=lambda: 0, scalar_one_or_none=lambda: None)
 
     async def flush(self):
         pass
@@ -300,6 +302,9 @@ class TestAuditKeyCutoverInDatabase:
             )
             assert row is not None
             rows.append(row)
+        # Seals in this session: the rows are uncommitted, so no other
+        # session could. The key in effect now is the one that signs them.
+        await audit_logger.seal_pending(db)
         return rows
 
     async def test_upgrade_path_verifies_and_new_rows_record_the_key(

@@ -134,6 +134,40 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Audit rows are sealed onto the hash chain after they commit (2026-10-12)
+
+This does not stop a boot, but it changes what the audit-integrity screens and
+the off-host collector see, and it makes one migration refuse to downgrade.
+
+Migration `bcd688674099` adds `audit_logs.chain_seq`, makes
+`previous_hash`/`current_hash` nullable and creates `audit_chain_head`. It
+backfills every existing row, so the chain carries on from where it was; on a
+large audit table the backfill `UPDATE` and the new unique index take a while
+on the first start.
+
+From then on an audit row is written without hashes and joined to the chain a
+moment later, by a sealer that runs after the commit, at startup, and as the
+new `audit_chain_seal` scheduled task every minute. Nothing needs configuring.
+What you may notice:
+
+- **The integrity check reports `pending_seal`.** Those rows are waiting for
+  their seal and are not verified yet; they are not tampering. A count that
+  stays above zero for more than a couple of minutes means sealing is failing —
+  look for `Audit chain sealing failed` or `After-commit audit sealing failed`
+  in the backend log.
+- **Off-host shipping sends a row only once it is sealed**, in chain order, and
+  its watermark now counts chain positions (the same numbers as ids for every
+  row written before the upgrade). Each batch also carries
+  `X-Logbook-First-Seq` / `X-Logbook-Last-Seq`; deduplicate on those, since the
+  ids in a batch are no longer guaranteed to be contiguous or ascending.
+- **Exports and archives gain a `chain_seq` field.** An offline verifier must
+  walk rows by `chain_seq`, not by `id`.
+- **Downgrading past this revision refuses while any row is unsealed.** Run the
+  `audit_chain_seal` task (`/api/v1/scheduled/run-task?task=audit_chain_seal`)
+  and retry. After a downgrade the previous code verifies in id order, so the
+  few rows that were sealed out of id order read as broken links until you
+  upgrade again.
+
 ### A duplicate migration revision stops a production boot (2026-10-11)
 
 When two files in `backend/alembic/versions/` declare the same `revision`,

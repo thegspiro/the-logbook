@@ -29877,3 +29877,19 @@ Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
 **Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — the one new
 finding was fixed, not flagged. Rotation row 18 → ✅ (pending PR merge).
 Next: Feature 19 (Skills testing).
+
+### 2026-10-12 — Feature 28 (Security, audit & IP): SEC2-28-10 resolved by owner decision
+
+**SEC2-28-10 (HIGH) — fixed.** Owner decision: "keep rows in the caller's
+transaction and seal the chain in a separate step". `create_log_entry` now
+inserts the audit row unsealed in the caller's transaction and never reads
+the chain; `AuditLogger.seal_pending`, in its own short transaction, locks the
+single `audit_chain_head` row `FOR UPDATE` and assigns chain position and
+hashes, so concurrent sealers serialize and the chain cannot fork. It runs
+after every commit carrying audit rows, at startup, and as the
+`audit_chain_seal` scheduled task (every minute). Verification, rehash,
+shipping (SEC2-28-9) and retention follow `chain_seq`; unsealed rows are
+reported as `pending_seal`, not tampering. Migration `bcd688674099`. Guard
+tests: `backend/tests/test_audit_chain_sealing.py`. Details:
+[`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md) →
+SEC2-28-10; the `KNOWN_LIMITATIONS.md` row is marked resolved.

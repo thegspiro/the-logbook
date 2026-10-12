@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5005 columns · 1011 foreign keys**
+**304 tables · 5011 columns · 1011 foreign keys**
 
 ---
 
@@ -110,8 +110,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`audit_chain_head`](#audit_chain_head) | `AuditChainHead` | 5 | The sealed end of the audit hash chain: one row (id=1). |
 | [`audit_log_checkpoints`](#audit_log_checkpoints) | `AuditLogCheckpoint` | 13 | Periodic integrity checkpoints for audit logs |
-| [`audit_logs`](#audit_logs) | `AuditLog` | 19 | Tamper-proof audit log entries |
+| [`audit_logs`](#audit_logs) | `AuditLog` | 20 | Tamper-proof audit log entries |
 | [`audit_ship_state`](#audit_ship_state) | `AuditShipState` | 5 | High-water mark for off-host audit-log shipping. |
 
 ### Call_Tracking
@@ -1827,6 +1828,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Audit & Compliance Logging
 
+### `audit_chain_head`
+
+**AuditChainHead** · `app/models/audit.py`
+
+> The sealed end of the audit hash chain: one row (id=1). AuditLogger.seal_pending locks this row (SELECT ... FOR UPDATE) for the length of one short sealing transaction, so two sealers serialize here and can never both extend the chain from the same tail. It is the only lock the chain takes, and no caller's transaction ever touches it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | INTEGER | no | PK |  |  |
+| `last_seq` | BIGINT | no |  | `0` |  |
+| `last_hash` | VARCHAR(64) | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
 ### `audit_log_checkpoints`
 
 **AuditLogCheckpoint** · `app/models/audit.py`
@@ -1875,8 +1890,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_agent` | TEXT | yes |  |  |  |
 | `geo_location` | JSON | yes |  |  |  |
 | `event_data` | JSON | no |  |  |  |
-| `previous_hash` | VARCHAR(64) | no |  |  |  |
-| `current_hash` | VARCHAR(64) | no | IDX |  |  |
+| `chain_seq` | BIGINT | yes | UQ-IDX |  |  |
+| `previous_hash` | VARCHAR(64) | yes |  |  |  |
+| `current_hash` | VARCHAR(64) | yes | IDX |  |  |
 | `hash_version` | INTEGER | yes |  |  |  |
 | `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -1889,12 +1905,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_audit_user_id` (`user_id`)
 - `ix_audit_logs_event_category` (`event_category`)
 - `ix_audit_logs_organization_id` (`organization_id`)
+- UNIQUE `uq_audit_chain_seq` (`chain_seq`)
 
 ### `audit_ship_state`
 
 **AuditShipState** · `app/models/audit.py`
 
-> High-water mark for off-host audit-log shipping. A single row (id=1) tracking the last AuditLog.id successfully delivered to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The watermark only advances after the collector acknowledges a batch, so a failed delivery is retried on the next scheduled run.
+> High-water mark for off-host audit-log shipping. A single row (id=1) tracking the last chain position (AuditLog.chain_seq) successfully delivered to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The watermark only advances after the collector acknowledges a batch, so a failed delivery is retried on the next scheduled run. The column is still called ``last_shipped_id`` because it held an AuditLog.id until SEC2-28-10. It switched to chain_seq because only sealed rows can be shipped and they are not sealed in id order, so an id watermark would step over a row sealed late. Every row sealed before the switch has chain_seq = id, so a stored watermark kept its meaning.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -12173,6 +12190,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 |---|---|
 | `approval_chain_steps` | `approval_chains`, `email_templates` |
 | `approval_step_records` | `approval_chain_steps`, `approval_chains`, `users` |
+| `audit_chain_head` | — _(root table)_ |
 | `audit_log_checkpoints` | — _(root table)_ |
 | `audit_ship_state` | — _(root table)_ |
 | `blocked_access_attempts` | `users` |

@@ -949,6 +949,7 @@ class TestSchemaCrossReferences:
             "onboarding_sessions",  # Temporary session storage
             "security_alerts",  # Append-only, references user by string ID
             "audit_ship_state",  # Singleton watermark for off-host shipping
+            "audit_chain_head",  # Singleton lock row for audit-chain sealing
         }
 
         # Build a set of tables that are referenced by FKs

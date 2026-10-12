@@ -58,6 +58,9 @@ Recommended crontab (add to host or container cron):
 # Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
 0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
 
+# Every minute — seal audit-log rows that commit-time sealing missed
+* * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_chain_seal
+
 # Daily at 7:00 AM — inventory low stock alerts
 0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_low_stock_alerts
 
@@ -318,6 +321,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Sunday 02:00",
         "cron": "0 2 * * 0",
+    },
+    "audit_chain_seal": {
+        "description": "Seal committed audit-log rows onto the hash chain (order, previous_hash, current_hash). Rows are normally sealed right after the commit that wrote them; this is the backstop for any that commit-time sealing missed.",
+        "frequency": "every minute",
+        "recommended_time": "* * * * *",
+        "cron": "* * * * *",
     },
     "audit_log_ship": {
         "description": "Ship new audit log entries to the off-host collector configured via AUDIT_SHIP_WEBHOOK_URL (HMAC-signed NDJSON batches). No-op when not configured.",
@@ -3599,6 +3608,32 @@ async def run_audit_log_ship(db: AsyncSession) -> Dict[str, Any]:
     result = await ship_new_audit_logs(db)
     result["task"] = "audit_log_ship"
     return result
+
+
+async def run_audit_chain_seal(db: AsyncSession) -> Dict[str, Any]:
+    """Seal audit rows that commit-time sealing missed (SEC2-28-10).
+
+    Every audited commit asks for a seal in the background, but that request
+    lives in the committing process: a worker that exits first, or a sealing
+    attempt that fails, leaves rows unsealed. They stay out of verification
+    and shipping until sealed, so this sweeps them up. Each batch commits on
+    its own, keeping the chain-head lock short.
+    """
+    from app.core.audit import _SEAL_BATCH_SIZE, audit_logger
+
+    sealed = 0
+    try:
+        while True:
+            batch = await audit_logger.seal_pending(db)
+            await db.commit()
+            sealed += batch
+            if batch < _SEAL_BATCH_SIZE:
+                break
+    except Exception as e:
+        logger.error(f"Audit chain sealing failed: {e}")
+        await db.rollback()
+        return {"task": "audit_chain_seal", "total_processed": sealed, "error": str(e)}
+    return {"task": "audit_chain_seal", "total_processed": sealed}
 
 
 async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
@@ -7063,6 +7098,7 @@ TASK_RUNNERS = {
     "end_of_shift_summary": run_end_of_shift_summary,
     "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
+    "audit_chain_seal": run_audit_chain_seal,
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
@@ -7114,6 +7150,9 @@ TASK_RUNNERS = {
 # how end_of_shift_summary, shift_auto_checkout, trainee_report_escalation and
 # others were defined and documented but never actually fired.
 TASK_INTERVALS_SECONDS: Dict[str, int] = {
+    # Every loop tick: the backstop for commit-time audit sealing, so it
+    # bounds how long a missed row stays out of verification and shipping.
+    "audit_chain_seal": 60,
     # Every 5 minutes: the first retry of a failed message delivery is due 5
     # minutes after it (MSG-12).
     "retry_message_deliveries": 300,
