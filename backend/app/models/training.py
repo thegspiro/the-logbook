@@ -1563,7 +1563,7 @@ class TrainingProgram(Base):
     )  # probationary, driver_candidate, officer, aic, etc.
     target_roles: Mapped[Optional[list[str]]] = mapped_column(
         JSON
-    )  # Role slugs this program applies to
+    )  # Position ids this program applies to (the API accepts UUIDs only)
 
     # Structure
     structure_type: Mapped[ProgramStructureType] = mapped_column(

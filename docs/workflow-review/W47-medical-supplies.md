@@ -96,7 +96,7 @@ otherwise reached only by a tag icon with no visible label.
 **Where:** `frontend/src/modules/medical-supplies/components/MedicalItemFormModal.tsx:159`.
 **Fix:** the page name is a link. Covered by an added assertion in `MedicalSuppliesPage.test.tsx`.
 
-### W47-6 — MED — The dashboard's Low stock counts a lot-stocked medical category as empty — 🚩 FLAGGED
+### W47-6 — MED — The dashboard's Low stock counts a lot-stocked medical category as empty — ✅ FIXED (2026-10-11)
 
 **Did:** `quartermaster`, with Trauma's threshold at 5 and the tourniquet's lots holding 3 in date. Read `/dashboard/asset-widgets` and the query behind it.
 **Saw:**
@@ -110,6 +110,10 @@ otherwise reached only by a tag icon with no visible label.
 **Flagged:** what "low" means for a lot-stocked category, and whether the
 dashboard counts medical categories, is a reporting definition shared by three
 screens (CLAUDE.md pitfall 29). Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+**Fixed (2026-10-11), owner decision:** sum lots for lot-stocked items and
+exclude medical to match the list. `get_low_stock_items` reads an item's
+in-date lots when it has any, and the dashboard passes
+`exclude_item_types=MEDICAL_ITEM_TYPES` (`tests/test_low_stock_lot_totals.py`).
 
 ### W47-7 — NIT — A delivery accepts a lot that has already expired — OPEN
 

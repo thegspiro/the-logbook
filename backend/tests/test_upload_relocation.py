@@ -117,7 +117,8 @@ class TestRelocation:
         )
 
         doc = await _reload(db_session, Document, document)
-        assert doc.file_path == str(root / org_id / "documents" / "a1.pdf")
+        # Under its own document, like every other area's records.
+        assert doc.file_path == str(root / org_id / "documents" / document / "a1.pdf")
         # Both recurring copies point at one moved file, under the event that
         # was found first.
         new_shared = {
@@ -220,3 +221,62 @@ class TestRelocation:
 
         assert again.moves == []
         assert again.already_current >= 3
+
+
+class TestFlatDocumentFiles:
+    """Library and module documents written before 2026-10-11 sit in the
+    org-first layout but flat in ``<org>/documents/``; they move into their
+    document's own directory through the same verified copy."""
+
+    async def _flat(self, db_session, org_id, root):
+        path = _legacy(root, org_id, "documents", "flat.pdf")
+        document = Document(organization_id=org_id, name="Pump test", file_path=path)
+        db_session.add(document)
+        await db_session.flush()
+        return str(document.id), path
+
+    async def test_a_flat_file_moves_under_its_document(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, _admin_id = setup_org_and_admin
+        document, path = await self._flat(db_session, org_id, root)
+
+        report = await upload_relocation.apply(
+            db_session, organization_id=org_id, dry_run=False
+        )
+
+        expected = str(root / org_id / "documents" / document / "flat.pdf")
+        assert [m.new_path for m in report.moves] == [expected]
+        assert (await _reload(db_session, Document, document)).file_path == expected
+        assert os.path.isfile(path)  # apply never deletes
+
+    async def test_rollback_returns_it_to_the_area_root(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, _admin_id = setup_org_and_admin
+        document, path = await self._flat(db_session, org_id, root)
+        report = await upload_relocation.apply(
+            db_session, organization_id=org_id, dry_run=False
+        )
+
+        await upload_relocation.rollback(db_session, report.manifest_path)
+
+        assert (await _reload(db_session, Document, document)).file_path == path
+
+    async def test_a_file_already_under_its_document_stays(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, _admin_id = setup_org_and_admin
+        document_id = str(uuid4())
+        path = _legacy(root, org_id, "documents", document_id, "placed.pdf")
+        db_session.add(
+            Document(
+                id=document_id, organization_id=org_id, name="Placed", file_path=path
+            )
+        )
+        await db_session.flush()
+
+        report = await upload_relocation.apply(db_session, organization_id=org_id)
+
+        assert report.moves == []
+        assert report.already_current == 1

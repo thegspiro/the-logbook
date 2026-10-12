@@ -144,8 +144,9 @@ Navigate to **Medical Screening > Requirements** tab to view all requirements.
 > unlinked. Records already lost to an earlier delete are not recoverable from
 > the application; restore them from a backup if they matter.
 
-> **Screenshot needed:**
-> _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
+<!-- Screenshot needed:
+_[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
+-->
 
 ### Role-Based Requirements
 
@@ -326,14 +327,23 @@ Navigate to **Medical Screening > Compliance** tab.
 
 ### Compliance Summary
 
-The top of the Compliance tab displays four summary metrics:
+The top of the Compliance tab, under **Department compliance**, displays four
+summary metrics counted over every current member and open prospect:
 
-| Metric                 | Description                                                           |
-| ---------------------- | --------------------------------------------------------------------- |
-| **Total Requirements** | Count of active screening requirements                                |
-| **Compliant**          | Number of members who meet all applicable requirements                |
-| **Non-Compliant**      | Number of members missing one or more required screenings             |
-| **Expiring Soon**      | Number of members with at least one screening expiring within 60 days |
+| Metric            | Description                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Requirements**  | Count of active screening requirements                                               |
+| **Compliant**     | Members and prospects who meet every requirement, none lapsing within 30 days        |
+| **Not compliant** | Members and prospects with any requirement unmet — expired or never recorded         |
+| **Expiring soon** | Members and prospects who meet every requirement but have one lapsing within 30 days |
+
+Below them is one row per member and open prospect — "_n_ of _m_ met", how many
+are not met or expiring, and the standing. The **Show** filter narrows the rows
+to **Not compliant (overdue or missing)**, **Expiring within 30 days** or
+**Compliant**; the four counts always describe everyone. **View** on a row opens
+that person's detail (below). With no active requirements the tab says nobody
+is graded rather than reporting the department compliant. Each load is recorded
+in the audit trail with the people it listed.
 
 ### What Members See on Their Own Dashboard
 
@@ -388,7 +398,7 @@ The grace period provides a buffer after a screening expires. During the grace p
 
 ### Per-Member Compliance
 
-Click on any member row in the compliance matrix to view their individual compliance detail, or use the API endpoint:
+Click **View** on any row of the department roster to open that person's compliance detail, or use the API endpoint:
 
 ```
 GET /api/v1/medical-screening/compliance/{user_id}
@@ -403,10 +413,15 @@ This returns a `ComplianceSummary` for the specified member:
 | `non_compliant_count` | Integer | Number of requirements the member does not satisfy      |
 | `expiring_soon_count` | Integer | Number of compliant screenings expiring within 60 days  |
 
-> **Corrected 2026-08-12.** There is no per-member compliance view.
-> `fetchUserCompliance` and `fetchProspectCompliance` are defined in
-> `medicalScreeningStore` and called by no component; `ComplianceDashboard`
-> lists expiring screenings and nothing else. Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
+> **The per-member view _(2026-10-11)_.** On the **Compliance** tab, click
+> **View** on a member's or prospect's row. The panel shows "_n_ of
+> _m_ requirements met", how many are not met and how many expire within 30
+> days, then each requirement with its screening type, the status and date of
+> the record it is graded on, its expiry, and **Met**, **Expires in _n_
+> days**, **Expired** or **No qualifying record**. A record the member filed
+> themself carries the **Self-recorded** mark. With no active requirements it
+> says so rather than reporting the person compliant. Each opening is recorded
+> in the audit trail, like every other compliance read.
 
 ---
 
@@ -591,9 +606,11 @@ Captain Alvarez takes action:
 - **Kim and Washington:** New members who need their first department physical. Schedules both.
 - **Larson:** On leave — Captain Alvarez notes the record but the physical will be required upon return to duty.
 
-> **Corrected 2026-08-12.** The Compliance tab has **no filter controls of any
-> kind**, and no per-member breakdown to filter — it lists expiring screenings.
-> Recorded in [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
+> **How Captain Alvarez gets this list _(2026-10-11)_.** On the Compliance
+> tab she sets **Show** to **Not compliant (overdue or missing)** and clicks
+> **View** on each row for the detail. The grace period described above is not
+> yet applied by the compliance calculation, so Martinez reads **Expired** on
+> her row even inside it.
 
 ---
 

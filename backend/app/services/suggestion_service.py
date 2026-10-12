@@ -34,6 +34,7 @@ Anonymity invariants — every one is load-bearing, and the tests in
 """
 
 import asyncio
+import copy
 import hashlib
 import html
 import os
@@ -67,9 +68,12 @@ from app.models.user import Organization, Position, User, user_positions
 from app.schemas.suggestion import (
     MAX_DETAILS_LENGTH,
     MAX_TITLE_LENGTH,
+    IntakeQuestion,
     SuggestionBoxWrite,
 )
 from app.services import file_storage_service as file_storage
+from app.services import suggestion_intake as intake
+from app.services.apparatus_options import department_apparatus_options
 from app.services.file_storage_service import StorageArea
 from app.utils.image_processing import optimize_image
 from app.utils.mime_validation import detect_mime_type
@@ -103,6 +107,61 @@ COMPLIANCE_BOX_DESCRIPTION = (
     "regulatory issue. Reviewed by the Compliance Officer."
 )
 COMPLIANCE_REVIEWER_SLUG = "compliance_officer"
+# The question the Compliance box starts with, in the stored (canonical) shape.
+# It sorts reports for the reviewer and routes nowhere: Compliance is the only
+# box a department starts with, so there is no other box to send one to. An
+# administrator can add a route on any option later. Migration ``4b7e1f0c9a2d``
+# carries a frozen copy for departments onboarded before it.
+COMPLIANCE_INTAKE_QUESTIONS: List[Dict[str, Any]] = [
+    {
+        "id": "compliance_concern_type",
+        "label": "What kind of concern is this?",
+        "help_text": None,
+        "type": "radio",
+        "required": True,
+        "options": [
+            {
+                "value": "policy",
+                "label": "Policy or procedure",
+                "route_to_box_id": None,
+            },
+            {"value": "safety", "label": "Safety", "route_to_box_id": None},
+            {
+                "value": "training_record",
+                "label": "Training record",
+                "route_to_box_id": None,
+            },
+            {
+                "value": "regulatory",
+                "label": "Regulatory or legal",
+                "route_to_box_id": None,
+            },
+            {"value": "other", "label": "Other", "route_to_box_id": None},
+        ],
+        "condition_question_id": None,
+        "condition_operator": None,
+        "condition_value": None,
+    },
+    {
+        "id": "compliance_immediate_risk",
+        "label": "Is anyone at immediate risk?",
+        # A suggestion box is read when a reviewer next opens it, which may be
+        # days later; it must not look like a way to report an emergency.
+        "help_text": (
+            "This box is not watched around the clock. If someone is in danger "
+            "now, contact the officer on duty or emergency services directly."
+        ),
+        "type": "radio",
+        "required": True,
+        "options": [
+            {"value": "yes", "label": "Yes", "route_to_box_id": None},
+            {"value": "no", "label": "No", "route_to_box_id": None},
+        ],
+        "condition_question_id": "compliance_concern_type",
+        "condition_operator": "equals",
+        "condition_value": "safety",
+    },
+]
 
 
 def hash_follow_up_key(key: str) -> str:
@@ -242,6 +301,7 @@ class SuggestionService:
             .all()
         )
         paths = [p for p in (self.confined_path(a) for a in attachments) if p]
+        await self._drop_routes_to(box)
         # The database cascades from the box through its submissions and
         # everything under them.
         await self.db.delete(box)
@@ -254,6 +314,9 @@ class SuggestionService:
         self, organization_id: str, data: SuggestionBoxWrite, actor_id: str
     ) -> Dict[str, Any]:
         await self._validate_box_write(organization_id, data, exclude_box_id=None)
+        questions = await self._normalize_intake_questions(
+            organization_id, None, data.anonymity_mode, data.intake_questions
+        )
         box = SuggestionBox(
             organization_id=str(organization_id),
             name=data.name,
@@ -262,6 +325,7 @@ class SuggestionService:
             follow_up_enabled=data.follow_up_enabled,
             is_active=data.is_active,
             public_board_enabled=bool(data.public_board_enabled),
+            intake_questions=questions,
             created_by=str(actor_id),
             # Initialized so _replace_grants never lazy-loads a collection on
             # a new instance, which an async session cannot do.
@@ -282,6 +346,12 @@ class SuggestionService:
         if box is None:
             return None
         await self._validate_box_write(organization_id, data, exclude_box_id=box.id)
+        # None leaves the questions alone, so a client that predates them can
+        # still save the box without clearing them.
+        if data.intake_questions is not None:
+            box.intake_questions = await self._normalize_intake_questions(
+                organization_id, box.id, data.anonymity_mode, data.intake_questions
+            )
         box.name = data.name
         box.description = data.description
         box.anonymity_mode = data.anonymity_mode
@@ -328,6 +398,7 @@ class SuggestionService:
             anonymity_mode=SuggestionAnonymityMode.ALLOWED.value,
             follow_up_enabled=True,
             is_active=position_id is not None,
+            intake_questions=copy.deepcopy(COMPLIANCE_INTAKE_QUESTIONS),
             reviewers=[],
             watchers=[],
         )
@@ -341,6 +412,117 @@ class SuggestionService:
         self.db.add(box)
         await self.db.flush()
         return box
+
+    async def _normalize_intake_questions(
+        self,
+        organization_id: str,
+        box_id: Optional[str],
+        anonymity_mode: str,
+        questions: Optional[Sequence[IntakeQuestion]],
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The canonical stored list, with every route checked.
+
+        A route moves a submission, and with it who can read it, so the target
+        must be another box in this department — never a client-supplied id
+        from elsewhere. A box that requires anonymity cannot route to one that
+        refuses it: every submission taking that answer would be rejected.
+        """
+        stored = intake.normalize_questions(questions or [])
+        targets = intake.route_ids(stored)
+        if not targets:
+            return stored
+        if box_id and str(box_id) in targets:
+            raise ValueError("A question cannot route a submission to its own box.")
+        rows = await self.db.execute(
+            select(SuggestionBox).where(
+                SuggestionBox.organization_id == str(organization_id),
+                SuggestionBox.id.in_(targets),
+            )
+        )
+        found = {b.id: b for b in rows.scalars().all()}
+        if set(targets) - set(found):
+            raise ValueError(
+                "A question routes to a suggestion box that does not exist."
+            )
+        if anonymity_mode == SuggestionAnonymityMode.REQUIRED.value:
+            refusing = [
+                b.name
+                for b in found.values()
+                if b.anonymity_mode == SuggestionAnonymityMode.DISABLED.value
+            ]
+            if refusing:
+                raise ValueError(
+                    f"This box requires anonymity, so it cannot route to "
+                    f"{', '.join(sorted(refusing))}, which does not accept "
+                    "anonymous submissions."
+                )
+        return stored
+
+    async def _drop_routes_to(self, box: SuggestionBox) -> None:
+        """Remove other boxes' routes to ``box`` before it is deleted, so no
+        answer points at a box that is gone."""
+        rows = await self.db.execute(
+            select(SuggestionBox).where(
+                SuggestionBox.organization_id == box.organization_id,
+                SuggestionBox.id != box.id,
+                SuggestionBox.intake_questions.is_not(None),
+            )
+        )
+        for other in rows.scalars().all():
+            if box.id in intake.route_ids(other.intake_questions):
+                other.intake_questions = intake.without_routes_to(
+                    other.intake_questions, [box.id]
+                )
+
+    async def pick_options(
+        self, organization_id: str, kind: str
+    ) -> List[Dict[str, str]]:
+        """What a member- or apparatus-pick question offers: ids and names.
+
+        Nothing beyond what any signed-in member already sees — member names
+        through the forms member lookup, vehicles through the shift-template
+        picker — and no contact details, rank or status.
+        """
+        if kind == "member":
+            members = await self._active_members(organization_id)
+            return [
+                {"id": uid, "name": name}
+                for uid, name in sorted(members.items(), key=lambda m: m[1].lower())
+            ]
+        vehicles, _ = await department_apparatus_options(self.db, organization_id)
+        return [{"id": str(v.id), "name": v.name} for v in vehicles if v.id]
+
+    async def _active_members(
+        self, organization_id: str, ids: Optional[Iterable[str]] = None
+    ) -> Dict[str, str]:
+        query = select(User).where(
+            User.organization_id == str(organization_id), User.is_active
+        )
+        if ids is not None:
+            query = query.where(User.id.in_([str(i) for i in ids]))
+        users = (await self.db.execute(query)).scalars().all()
+        return {u.id: _display_name(u) or u.id for u in users}
+
+    async def _pick_names_for(
+        self, box: SuggestionBox, answers: Dict[str, str]
+    ) -> Dict[str, Dict[str, str]]:
+        """The members and vehicles ``answers`` may name, looked up in the
+        box's own department so an id from elsewhere is never accepted."""
+        questions = box.intake_questions
+        picks: Dict[str, Dict[str, str]] = {}
+        member_ids = intake.answered_pick_ids(questions, answers, "member")
+        if member_ids:
+            picks["member"] = await self._active_members(
+                box.organization_id, member_ids
+            )
+        if intake.has_question_type(questions, "apparatus"):
+            # The whole list, not just the answer: an empty fleet is what tells
+            # resolve_answers to skip a question nobody could answer.
+            vehicles, _ = await department_apparatus_options(
+                self.db, box.organization_id
+            )
+            picks["apparatus"] = {str(v.id): v.name for v in vehicles if v.id}
+        return picks
 
     async def reviewer_options(self, organization_id: str) -> Dict[str, Any]:
         positions = await self.db.execute(
@@ -537,6 +719,7 @@ class SuggestionService:
             "watcher_positions": watcher_positions,
             "watcher_members": watcher_members,
             "public_board_enabled": bool(box.public_board_enabled),
+            "intake_questions": box.intake_questions or [],
             "created_at": box.created_at,
             "updated_at": box.updated_at,
         }
@@ -555,6 +738,33 @@ class SuggestionService:
             .order_by(SuggestionBox.name)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    def public_box_views(boxes: Sequence[SuggestionBox]) -> List[Dict[str, Any]]:
+        """The open boxes as members see them. A route to a box that is not
+        open is left out, as ``submit`` ignores it, so the form never says a
+        submission is going somewhere it will not."""
+        open_ids = [b.id for b in boxes]
+        views = []
+        for box in boxes:
+            closed = [
+                t for t in intake.route_ids(box.intake_questions) if t not in open_ids
+            ]
+            views.append(
+                {
+                    "id": box.id,
+                    "name": box.name,
+                    "description": box.description,
+                    "anonymity_mode": box.anonymity_mode,
+                    "follow_up_enabled": bool(box.follow_up_enabled),
+                    "public_board_enabled": bool(box.public_board_enabled),
+                    "intake_questions": intake.without_routes_to(
+                        box.intake_questions, closed
+                    )
+                    or [],
+                }
+            )
+        return views
 
     async def get_open_box(
         self, organization_id: str, box_id: str
@@ -588,11 +798,15 @@ class SuggestionService:
         details: str,
         anonymous: bool,
         screenshots: Sequence[bytes],
+        answers: Optional[str] = None,
     ) -> Tuple[Suggestion, Optional[str]]:
         """Store a submission. ``screenshots`` are already processed bytes.
 
-        Returns the row and, for an anonymous submission to a follow-up box,
-        the plaintext follow-up key — the only time it exists server-side.
+        ``answers`` is the JSON object of intake answers. When one routes the
+        submission, it is stored in the destination box and that box's rules
+        apply — anonymity and follow-up included. Returns the row and, for an
+        anonymous submission to a follow-up box, the plaintext follow-up key —
+        the only time it exists server-side.
         """
         title = (title or "").strip()
         details = (details or "").strip()
@@ -606,17 +820,39 @@ class SuggestionService:
             )
         if len(screenshots) > MAX_SCREENSHOTS:
             raise ValueError(f"At most {MAX_SCREENSHOTS} screenshots may be attached.")
-        is_anonymous = self.resolve_anonymity(box, anonymous)
+        parsed = intake.parse_answers(answers)
+        picks = await self._pick_names_for(box, parsed)
+        snapshot, route = intake.resolve_answers(box.intake_questions, parsed, picks)
+        destination = await self._route_destination(box, route)
+        target = destination or box
+        # A member who opened an always-anonymous box was promised anonymity
+        # before they answered anything; a route does not take it back.
+        if box.anonymity_mode == SuggestionAnonymityMode.REQUIRED.value:
+            anonymous = True
+        if (
+            destination is not None
+            and anonymous
+            and destination.anonymity_mode == SuggestionAnonymityMode.DISABLED.value
+        ):
+            # Never quietly attach a name to something the member asked to
+            # send anonymously; they decide whether to send it named.
+            raise ValueError(
+                f"Your answers send this to {destination.name}, which does not "
+                "accept anonymous submissions."
+            )
+        is_anonymous = self.resolve_anonymity(target, anonymous)
 
         now = datetime.now(timezone.utc)
         stamp = anonymous_timestamp(now) if is_anonymous else now
         key: Optional[str] = None
-        if is_anonymous and box.follow_up_enabled:
+        if is_anonymous and target.follow_up_enabled:
             key = secrets.token_urlsafe(32)
 
         suggestion = Suggestion(
             organization_id=box.organization_id,
-            box_id=box.id,
+            box_id=target.id,
+            routed_from_box_id=box.id if destination is not None else None,
+            intake_answers=snapshot,
             is_anonymous=is_anonymous,
             submitted_by=None if is_anonymous else str(user_id),
             follow_up_key_hash=hash_follow_up_key(key) if key else None,
@@ -659,6 +895,27 @@ class SuggestionService:
             raise
         return suggestion, key
 
+    async def _route_destination(
+        self, box: SuggestionBox, route: Optional[str]
+    ) -> Optional[SuggestionBox]:
+        """The open box ``route`` names, in ``box``'s department.
+
+        A destination that has since closed or gone is not an error the member
+        can fix, so the submission stays in the box they chose, whose
+        reviewers were going to read it anyway — never anyone else's.
+        """
+        if not route or route == box.id:
+            return None
+        destination = await self.get_open_box(box.organization_id, route)
+        if destination is None:
+            logger.warning(
+                "Suggestion box {} routes to box {}, which is not open; "
+                "keeping the submission in the original box",
+                box.id,
+                route,
+            )
+        return destination
+
     async def _write_screenshot(
         self,
         organization_id: str,
@@ -693,6 +950,7 @@ class SuggestionService:
         # would hand back the thread as it was before the reply.
         return query.options(
             selectinload(Suggestion.box),
+            selectinload(Suggestion.routed_from_box),
             selectinload(Suggestion.attachments),
             selectinload(Suggestion.messages),
         ).execution_options(populate_existing=True)
@@ -776,6 +1034,7 @@ class SuggestionService:
             "attachments": [self._attachment_view(a) for a in suggestion.attachments],
             "messages": messages,
             "timeline": await self.timeline(suggestion) if follow_up else [],
+            "intake_answers": suggestion.intake_answers or [],
             "created_at": suggestion.created_at,
             "timestamp_precision": "day" if suggestion.is_anonymous else "exact",
         }
@@ -1017,6 +1276,12 @@ class SuggestionService:
             "published_title": suggestion.published_title,
             "published_summary": suggestion.published_summary,
             "vote_count": await self._vote_count(suggestion.id),
+            "intake_answers": suggestion.intake_answers or [],
+            "routed_from_box_name": (
+                suggestion.routed_from_box.name
+                if suggestion.routed_from_box is not None
+                else None
+            ),
         }
 
     # ------------------------------------------------------------------

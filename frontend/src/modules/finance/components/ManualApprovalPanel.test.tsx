@@ -92,6 +92,23 @@ describe('ManualApprovalPanel', () => {
       expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     });
 
+    it('shows on a request held for a second approver, despite its approval steps', () => {
+      renderPanel({ approvalStepCount: 1, awaitingSecondApproval: true });
+      expect(
+        screen.getByText('This request needs a second approval from someone who has not approved it yet.')
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    });
+
+    it('offers whoever gave the first approval only Deny', () => {
+      renderPanel({ awaitingSecondApproval: true, firstApprovedBy: 'approver-1' });
+      expect(
+        screen.getByText('You gave the first approval, so someone else has to give the second. You can still deny it.')
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+    });
+
     it('offers the requester only Deny', () => {
       signIn('requester-1', ['finance.approve']);
       renderPanel();
@@ -111,7 +128,7 @@ describe('ManualApprovalPanel', () => {
       await user.click(await dialogButton('Approve'));
 
       await waitFor(() => expect(mockManualApprove).toHaveBeenCalledWith('check_request', 'cr-9', 'Within policy'));
-      expect(mockToastSuccess).toHaveBeenCalledWith('Request approved');
+      expect(mockToastSuccess).toHaveBeenCalledWith('Approval recorded');
       expect(onDecided).toHaveBeenCalledTimes(1);
     });
 

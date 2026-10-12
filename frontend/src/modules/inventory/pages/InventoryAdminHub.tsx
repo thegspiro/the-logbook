@@ -542,7 +542,7 @@ export const InventoryAdminHub: React.FC = () => {
             : ('Medium' as const),
         rank: clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now ? 1 : 4,
         action: 'Review',
-        href: `/inventory/admin/members?user=${clearance.user_id}`,
+        href: `/inventory/admin/clearances/${clearance.id}`,
       })),
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));

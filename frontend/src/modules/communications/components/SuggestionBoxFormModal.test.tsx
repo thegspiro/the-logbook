@@ -65,6 +65,7 @@ describe('SuggestionBoxFormModal', () => {
       watcherPositionIds: ['p-chief'],
       watcherMemberIds: ['u-drew'],
       publicBoardEnabled: false,
+      intakeQuestions: [],
     });
   });
 
@@ -75,5 +76,15 @@ describe('SuggestionBoxFormModal', () => {
     const notified = screen.getByRole('group', { name: 'Notified positions' });
     expect(within(reviewers).getByRole('checkbox', { name: 'Training Officer' })).toBeChecked();
     expect(within(notified).getByRole('checkbox', { name: 'Training Officer' })).not.toBeChecked();
+  });
+
+  it('scrolls the form in one region and keeps the save action pinned outside it', () => {
+    renderWithRouter(<SuggestionBoxFormModal box={existing} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(screen.getByTestId('modal-panel').tagName).toBe('FORM');
+    expect(within(screen.getByTestId('modal-footer')).getByRole('button', { name: 'Save box' })).toHaveAttribute(
+      'type',
+      'submit'
+    );
   });
 });

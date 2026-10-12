@@ -25,7 +25,11 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.models.minute import (
+    DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_BUSINESS_SECTIONS,
+    DEFAULT_EXECUTIVE_SECTIONS,
     DEFAULT_SPECIAL_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS,
     ActionItemPriority,
     MeetingMinutes,
     MinutesActionItemStatus,
@@ -1415,6 +1419,39 @@ class TestCreateFromMeeting:
         created = mock_db.add.call_args[0][0]
         local = created.meeting_date.astimezone(ZoneInfo("America/Chicago"))
         assert local.date() == date(2026, 10, 1)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("meeting_type", "expected", "first_section"),
+        [
+            ("executive", MinutesMeetingType.EXECUTIVE, DEFAULT_EXECUTIVE_SECTIONS),
+            ("trustee", MinutesMeetingType.TRUSTEE, DEFAULT_TRUSTEE_SECTIONS),
+            ("annual", MinutesMeetingType.ANNUAL, DEFAULT_ANNUAL_SECTIONS),
+            ("board", MinutesMeetingType.BOARD, DEFAULT_BUSINESS_SECTIONS),
+        ],
+    )
+    async def test_each_meeting_type_keeps_its_own_minutes_type(
+        self, service, mock_db, org_id, user_id, meeting_type, expected, first_section
+    ):
+        """W51-4: an executive meeting's minutes must stay executive — typed
+        "business" they would be readable by every member once approved."""
+        mock_meeting = MagicMock(
+            title="Closed session",
+            meeting_type=meeting_type,
+            meeting_date=date(2026, 10, 1),
+            start_time=None,
+            attendees=[],
+            event_id=None,
+        )
+        mock_db.execute.return_value = MagicMock(
+            scalar_one_or_none=MagicMock(return_value=mock_meeting)
+        )
+
+        await service.create_from_meeting(uuid4(), org_id, user_id)
+
+        created = mock_db.add.call_args[0][0]
+        assert created.meeting_type == expected
+        assert [s["key"] for s in created.sections] == [s["key"] for s in first_section]
 
     @pytest.mark.unit
     async def test_create_from_meeting_success(self, service, mock_db, org_id, user_id):

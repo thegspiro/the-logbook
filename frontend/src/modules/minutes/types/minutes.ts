@@ -231,6 +231,12 @@ export interface MotionUpdate {
   order?: number;
 }
 
+/** A member an action item may be assigned to (W52-6). */
+export interface ActionItemAssignee {
+  id: string;
+  name: string;
+}
+
 export interface ActionItemCreate {
   description: string;
   assignee_id?: string | undefined;

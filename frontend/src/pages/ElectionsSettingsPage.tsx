@@ -297,7 +297,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                 checked={settings.auto_open_enabled ?? true}
                 onChange={(next) => updateField('auto_open_enabled', next)}
                 label="Scheduled opening"
-                description='Elections flagged "open automatically" open themselves at their start time.'
+                description='Elections flagged "open automatically" open themselves at their start time and email the ballots.'
               />
             </div>
           </div>

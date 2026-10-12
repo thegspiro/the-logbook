@@ -83,6 +83,8 @@ export interface Election {
   reminder_hours_before_close?: number;
   reminder_sent_at?: string;
   nomination_deadline?: string;
+  /** Set by Close Nominations; the slate is frozen while it is (W50-38). */
+  nominations_closed_at?: string | null;
   tie_policy?: TiePolicy;
   created_by?: string;
   // Actual close, distinct from the scheduled end_date. closed_by is null
@@ -90,13 +92,17 @@ export interface Election {
   closed_at?: string | null;
   closed_by?: string | null;
   closed_by_name?: string | null;
+  /** Ballot links already sent were retired and not yet resent (W50-36 / W50-47). */
+  ballots_must_be_resent?: boolean;
+  ballots_resend_reason?: 'ballot_changed' | 'reopened' | null;
   // Corrections to the result after close, oldest first (W50-9)
   results_revisions?: ResultsRevision[] | null;
   created_at: string;
   updated_at: string;
-  total_votes?: number;
-  total_voters?: number;
-  voter_turnout_percentage?: number;
+  // Withheld (null) from non-managers while voting is open (W50-70)
+  total_votes?: number | null;
+  total_voters?: number | null;
+  voter_turnout_percentage?: number | null;
 }
 
 /**
@@ -181,7 +187,7 @@ export interface ElectionListItem {
   closed_at?: string | null;
   status: ElectionStatus;
   positions?: string[];
-  total_votes?: number;
+  total_votes?: number | null; // null for non-managers while open (W50-70)
   meeting_id?: string;
   meeting_title?: string;
   meeting_date?: string;
@@ -264,6 +270,9 @@ export interface Candidate {
   nomination_date: string;
   nominated_by?: string;
   accepted: boolean;
+  /** A manager accepted for the nominee (W50-38) — labelled "Accepted by manager". */
+  accepted_on_behalf_by?: string | null;
+  accepted_on_behalf_at?: string | null;
   is_write_in: boolean;
   display_order: number;
   // Set when this write-in was consolidated into another candidate
@@ -333,6 +342,17 @@ export interface VoteIntegrityResult {
   chain_verified: boolean;
   chain_break_at?: string | null;
   integrity_status: 'PASS' | 'FAIL' | 'CHAIN_BROKEN';
+  /** Voided votes are walked with the chain and reported, not dropped (W50-31). */
+  voided_votes?: number;
+  voids?: VoteVoidSummary[];
+}
+
+export interface VoteVoidSummary {
+  count: number;
+  voided_by?: string | null;
+  voided_by_name?: string | null;
+  reason: string;
+  voided_at?: string | null;
 }
 
 export interface VoterEligibility {
@@ -360,6 +380,9 @@ export interface PositionResults {
   // Set for a ballot-item contest, whose `position` is the item's id; show
   // this instead of the id wherever the contest is named
   label?: string | null;
+  // The ballot item this contest is, and how it is answered (W50-7)
+  ballot_item_id?: string | null;
+  vote_type?: string | null;
   total_votes: number;
   candidates: CandidateResult[];
   is_tie?: boolean;
@@ -647,6 +670,14 @@ export interface ProxyAuthorization {
   authorized_by_name?: string;
   authorized_at: string;
   revoked_at?: string;
+  /** Set when the delegating member acknowledged a proxy ballot on an anonymous election is attributable (W50-2). */
+  anonymity_acknowledged_at?: string | null;
+}
+
+export interface ProxyAuthorizationList {
+  authorizations: ProxyAuthorization[];
+  proxy_voting_enabled: boolean;
+  anonymous_voting?: boolean;
 }
 
 export interface ProxyAuthorizationCreate {
@@ -654,6 +685,8 @@ export interface ProxyAuthorizationCreate {
   proxy_user_id: string;
   proxy_type: 'single_election' | 'regular';
   reason: string;
+  /** Required true on an anonymous election (W50-2). */
+  anonymity_acknowledged?: boolean;
 }
 
 export interface ProxyVoteCreate {

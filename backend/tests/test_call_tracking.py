@@ -2687,3 +2687,78 @@ class TestCloseoutPickerEndToEnd:
             medic.id, org.id
         )
         assert state["attachable_calls"] == []
+
+
+@pytest.mark.integration
+class TestCallVolumeReportModeChangeWarning:
+    """SCHED-14: the report reads one mode for the whole range, so a range
+    reaching back past the mode's adoption is missing the other source's
+    figures. It is flagged, not recalculated."""
+
+    async def _report(self, db_session, org, start):
+        from app.services.reports_service import ReportsService
+
+        return await ReportsService(db_session)._generate_call_volume(
+            org.id, start, date(2026, 8, 31)
+        )
+
+    async def _org(self, db_session, mode_since):
+        org = await _make_org(db_session)
+        tracking = {"mode": CallTrackingMode.COUNT_ONLY}
+        if mode_since is not None:
+            tracking["mode_since"] = mode_since
+        org.settings = {"scheduling": {"call_tracking": tracking}}
+        await db_session.flush()
+        return org
+
+    async def test_a_range_starting_before_the_change_is_flagged(self, db_session):
+        org = await self._org(db_session, "2026-08-15")
+
+        report = await self._report(db_session, org, date(2026, 8, 1))
+
+        assert report["range_predates_mode"] is True
+        assert report["mode_since"] == "2026-08-15"
+        assert report["tracking_mode"] == CallTrackingMode.COUNT_ONLY
+
+    async def test_a_range_starting_on_the_change_is_not(self, db_session):
+        org = await self._org(db_session, "2026-08-15")
+
+        report = await self._report(db_session, org, date(2026, 8, 15))
+
+        assert report["range_predates_mode"] is False
+
+    async def test_no_recorded_change_means_no_warning(self, db_session):
+        org = await self._org(db_session, None)
+
+        report = await self._report(db_session, org, date(2020, 1, 1))
+
+        assert report["range_predates_mode"] is False
+        assert report["mode_since"] is None
+
+
+@pytest.mark.integration
+class TestDetailedCallVolumeIsNamedForWhatItCounts:
+    """SCHED-15: the detailed branch sums calls over per-member completion
+    reports, so the figure is flagged as such and the renderer renames it.
+    The numbers are unchanged."""
+
+    async def test_the_detailed_branch_flags_member_reported_calls(self, db_session):
+        from app.services.reports_service import ReportsService
+
+        org = await _make_org(db_session, mode="detailed")
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+
+        assert report["counts_member_reports"] is True
+        assert report["source"] == "shift_reports"
+
+    async def test_the_count_only_branch_does_not(self, db_session):
+        from app.services.reports_service import ReportsService
+
+        org = await _make_org(db_session)
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+
+        assert "counts_member_reports" not in report

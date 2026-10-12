@@ -26,7 +26,10 @@ from app.schemas.inventory import (
     InventoryLotBulkCreate,
     ItemRetireRequest,
 )
-from app.services.inventory_service import ItemOutsideDomainError
+from app.services.inventory_service import (
+    ItemNameTakenOutsideDomainError,
+    ItemOutsideDomainError,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -432,6 +435,104 @@ class TestSummaryCounts:
 
         assert result["total_items"] == 42
         assert result["low_stock"] == 0
+
+
+class TestCreateIfAbsentDomainPinning:
+    """The checklist builder's create-and-link path for medical stock."""
+
+    async def test_a_gear_category_is_refused(self, svc):
+        svc.create_item_if_absent = AsyncMock()
+
+        with pytest.raises(HTTPException) as err:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(name="Gauze 4x4", category_id=GEAR_CAT),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 404
+        svc.create_item_if_absent.assert_not_awaited()
+
+    async def test_a_missing_category_is_refused(self, svc):
+        """Without one the row would be filed as gear — the bug this fixes."""
+        svc.create_item_if_absent = AsyncMock()
+
+        with pytest.raises(HTTPException) as err:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(name="Gauze 4x4"),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 404
+        svc.create_item_if_absent.assert_not_awaited()
+
+    async def test_the_service_is_scoped_to_the_medical_domain(self, svc):
+        created = MagicMock(id=MEDICAL_ITEM, name="Gauze 4x4")
+        svc.create_item_if_absent = AsyncMock(return_value=(created, True, None))
+
+        with patch.object(ms, "InventoryItemCreateIfAbsentResult") as result:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(
+                    name="Gauze 4x4", category_id=MEDICAL_CAT, tracking_type="pool"
+                ),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        kwargs = svc.create_item_if_absent.await_args.kwargs
+        assert kwargs["item_types"] == MEDICAL_ITEM_TYPES
+        assert str(kwargs["item_data"]["category_id"]) == MEDICAL_CAT
+        result.assert_called_once_with(item=created, created=True)
+
+    async def test_an_existing_medical_row_is_not_audited_as_created(self, svc):
+        existing = MagicMock(id=MEDICAL_ITEM, name="Gauze 4x4")
+        svc.create_item_if_absent = AsyncMock(return_value=(existing, False, None))
+
+        with patch.object(ms, "InventoryItemCreateIfAbsentResult") as result:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(
+                    name="Gauze 4x4", category_id=MEDICAL_CAT, tracking_type="pool"
+                ),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        result.assert_called_once_with(item=existing, created=False)
+        ms.log_audit_event.assert_not_awaited()
+
+    async def test_a_name_filed_as_gear_is_a_conflict(self, svc):
+        """Refused rather than linked, and the gear row is not described."""
+        svc.create_item_if_absent = AsyncMock(
+            side_effect=ItemNameTakenOutsideDomainError("Tourniquet")
+        )
+
+        with pytest.raises(HTTPException) as err:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(
+                    name="Tourniquet", category_id=MEDICAL_CAT, tracking_type="pool"
+                ),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 409
+        assert "outside Medical Supplies" in err.value.detail
+        assert GEAR_ITEM not in err.value.detail
+
+    async def test_a_service_error_is_a_bad_request(self, svc):
+        svc.create_item_if_absent = AsyncMock(
+            return_value=(None, False, "Every item needs a name")
+        )
+
+        with pytest.raises(HTTPException) as err:
+            await ms.create_medical_item_if_absent(
+                InventoryItemCreate(name="x", category_id=MEDICAL_CAT),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 400
 
 
 class TestLotDomainPinning:

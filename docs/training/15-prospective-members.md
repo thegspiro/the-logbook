@@ -72,6 +72,14 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
+**Where applicants with no chosen pipeline go.** A guest signing in at an
+event, or anything else that creates an applicant without naming a pipeline,
+lands on your **default** pipeline. If none is marked default, it lands on the
+oldest active pipeline that is not a template — so a department with one
+pipeline never has to mark it. Applicants who arrived before 2026-10-11 with no
+pipeline were placed the same way on upgrade, at the first stage; their
+activity log says so.
+
 ![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
 
 ![The Add Pipeline Stage dialog with Election / Vote selected, its voting configuration revealed below the type grid, and Add Stage enabled with no validation error](./images/20-12-stage-picker-election-vote.png)
@@ -87,13 +95,15 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 | **Public Application Status Page**                                 | "Let applicants check their application status through a public link" — see [Public Application Status Page](#public-application-status-page)                                                                                                                                                                                                                           |
 | **Show upcoming stages** _(2026-09-24)_                            | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default, which is what the page always did                                                                                                                                                           |
 
-> **Screenshot needed:**
-> _[Membership Coordinator at /prospective-members/settings with a pipeline selected, clipped to the "Automatic Transfer to Membership" card with its tickbox "Make applicants members automatically when they complete the final stage".]_
+<!-- Screenshot needed:
+_[Membership Coordinator at /prospective-members/settings with a pipeline selected, clipped to the "Automatic Transfer to Membership" card with its tickbox "Make applicants members automatically when they complete the final stage".]_
+-->
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
+-->
 
 ## Stage Types
 
@@ -341,8 +351,9 @@ the page does not lose them. Before this nothing ever sent the ticks, so a
 checklist stage with items could not be passed. Dragging the card on the board
 sends no ticks, so advance such a stage from the drawer; **Skip** is unchanged.
 
-> **Screenshot needed:**
-> _[Membership Coordinator at /prospective-members with a demo applicant on a Checklist stage that has two items: the drawer's Checklist block with one item ticked and "1 of 2 items done — tick every item to advance".]_
+<!-- Screenshot needed:
+_[Membership Coordinator at /prospective-members with a demo applicant on a Checklist stage that has two items: the drawer's Checklist block with one item ticked and "1 of 2 items done — tick every item to advance".]_
+-->
 
 ### Moving Back (Regression)
 
@@ -401,8 +412,9 @@ are worked or skipped.
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
+-->
 
 ## The Kanban Board
 
@@ -477,6 +489,10 @@ the sections that do not apply to this applicant are simply absent:
 
 - **Contact Information**: Email and phone, editable in place
 - **Desired Membership Type**: Regular or administrative
+- **How They Found Us**: the referral source (a guest sign-in records
+  "Attended: _event name_"), the member who referred them, and why they want to
+  join — each line only when it is on file, and the section is absent when none
+  is. A referrer from another department is never named.
 - **Application Data**: What they submitted, when there is a linked application
 - **Current Stage**: The stage and when they entered it
 - **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**
@@ -490,7 +506,10 @@ the sections that do not apply to this applicant are simply absent:
 
 The action bar pins to the bottom. Left to right: **Interview**, **Back**,
 then **Withdraw**, **Hold**, **Skip**, **Reject** and **Advance** — on the final
-stage **Skip** is not offered and the last button reads **Convert**.
+stage **Skip** is not offered and the last button reads **Convert**. The final
+stage is the one marked final in the pipeline (the stage whose completion can
+transfer the applicant to membership), wherever it sits; a pipeline with no
+stage marked final treats its last stage as final.
 
 Three drawer details changed in this window:
 
@@ -506,8 +525,9 @@ Three drawer details changed in this window:
 
 ![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
+-->
 
 ---
 
@@ -683,16 +703,19 @@ signers and who has signed. It used to report no data after a signature.
 > coordinator could convert an applicant no officer had signed. Applicants
 > already sitting on such a stage stay there until the named officers sign.
 
-> **Screenshot needed:**
-> _[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
+<!-- Screenshot needed:
+_[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
+-->
 
 ---
 
-> **Screenshot needed:**
-> _[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
+<!-- Screenshot needed:
+_[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
+-->
 
-> **Screenshot needed:**
-> _[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
+<!-- Screenshot needed:
+_[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
+-->
 
 ## Converting to a Full Member
 
@@ -805,7 +828,7 @@ the class/status pair and the password group are both in frame.**]**
 | Email already exists as a member                      | Conversion blocked; shows existing member details. An email or username held by a **deactivated** member now gets a plain explanation instead of a server error _(2026-09-29)_                                                                                                                                                                                                                                                                                                                                                    |
 | A **Required** stage is unfinished or skipped         | Conversion refused, naming the stage _(2026-09-28)_                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | The Target Role grants more than you hold             | Refused: "This applicant's target position grants permissions beyond your own. Choose positions you can grant, or ask someone who holds them to convert this applicant." _(2026-09-30)_                                                                                                                                                                                                                                                                                                                                           |
-| A typed membership number belonged to a former member | Refused — it is kept for them. See [Membership → Numbers are never reissued](./01-membership.md#numbers-are-never-reissued-2026-09-29)                                                                                                                                                                                                                                                                                                                                                                                            |
+| A typed membership number belonged to a former member | Refused — it is kept for them. See [Membership → Numbers are never reissued](./01-membership.md#numbers-are-never-reissued)                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Auto-transfer enabled on pipeline                     | Conversion happens automatically at final stage — **unless the ballot gate or a Required stage holds it**. It sends the welcome email after the conversion commits when email can send; when none goes out, the applicant's activity log says so and the approver gets an in-app notice _(2026-09-27)_. The Target Role is applied only if whoever chose it is still active and holds every permission it grants; otherwise the member gets the default position and the activity log says a leader must assign it _(2026-09-30)_ |
 | Applicant converted without election vote             | Allowed if pipeline doesn't include an election stage                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Election package reads **Added to Ballot**            | Conversion refused until the election closes and the result is recorded _(2026-09-14)_                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -873,7 +896,9 @@ Navigate to **Settings > Pipeline** and configure:
 > counts from when the application last became **Inactive**. Reactivating it
 > stops the clock, and if it goes inactive again the period starts over. Only
 > inactive applications are purged — never withdrawn, rejected or on-hold ones.
-> No email is sent beforehand; each purge is recorded in the audit log.
+> Seven days before an application is deleted, the membership coordinators
+> get one email listing it with its deletion date — reactivate it before then
+> to keep it. Each purge is recorded in the audit log.
 > Applications that were already inactive when your department upgraded to the
 > version that switched Auto-Purge on count from that upgrade, not from their
 > original deactivation date, so nothing was deleted the first night. You can
@@ -1018,8 +1043,9 @@ advance to, and **the audit entry is only written after a real advance**.
 
 ---
 
-> **Screenshot needed:**
-> _[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
+<!-- Screenshot needed:
+_[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
+-->
 
 ## Pipeline Statistics & Reports
 
@@ -1088,7 +1114,7 @@ reached wins; moving them back before it undoes it. The status page, the
 self-withdrawal below and the email stages' tracker link all follow that
 per-applicant answer. Until 2026-09-25 the stage could be configured but
 nothing read it. Full detail in
-[Membership → Enable Status Page Stages](./01-membership.md#enable-status-page-stages-2026-09-25).
+[Membership → Enable Status Page Stages](./01-membership.md#enable-status-page-stages).
 
 ### The applicant can withdraw _(2026-09-24)_
 
@@ -1111,8 +1137,9 @@ department's membership coordinator.") and offers **Withdraw Application** or
 - Applications in any other state (approved, converted, rejected) have no
   button; an applicant at that point contacts the department.
 
-> **Screenshot needed:**
-> _[Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**.]_
+<!-- Screenshot needed:
+_[Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**.]_
+-->
 
 > **You cannot look up an applicant's link from inside the app** _(2026-08-13)_.
 > The token is a credential — anyone holding it can read that applicant's
@@ -1149,8 +1176,9 @@ See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-mo
 
 ---
 
-> **Screenshot needed:**
-> _[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
+<!-- Screenshot needed:
+_[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
+-->
 
 ## Realistic Example: New Firefighter Application
 

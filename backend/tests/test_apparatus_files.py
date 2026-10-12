@@ -175,7 +175,10 @@ class TestUpload:
             "Photos",
         ]
         assert document.file_type == "image/png"
-        assert document.file_path.startswith(str(uploads / org.id / "documents"))
+        # Under its own document's directory, not flat in the area.
+        assert os.path.dirname(document.file_path) == str(
+            uploads / org.id / "documents" / document.id
+        )
         assert os.path.isfile(document.file_path)
 
     async def test_a_registration_is_filed_under_registration_and_insurance(
@@ -261,7 +264,12 @@ class TestTypedLinksAreRefused:
         org = await _org(db_session)
         apparatus = await _apparatus(db_session, org)
         officer = await _user(
-            db_session, org, "apparatus.view", "apparatus.edit", "documents.view"
+            db_session,
+            org,
+            "apparatus.view",
+            "apparatus.edit",
+            "documents.view",
+            "documents.manage",
         )
         loose = Document(organization_id=org.id, name="Loose", uploaded_by=officer.id)
         db_session.add(loose)
@@ -281,6 +289,34 @@ class TestTypedLinksAreRefused:
         await db_session.refresh(loose)
         assert photo.document_id == loose.id
         assert (await _folder_path(db_session, loose.folder_id))[-1] == "Photos"
+
+    async def test_reading_an_unfiled_document_is_not_enough_to_file_it(
+        self, db_session, uploads
+    ):
+        """Filing it moves it behind apparatus rights, which is a write."""
+        org = await _org(db_session)
+        apparatus = await _apparatus(db_session, org)
+        officer = await _user(
+            db_session, org, "apparatus.view", "apparatus.edit", "documents.view"
+        )
+        loose = Document(organization_id=org.id, name="Loose", uploaded_by=officer.id)
+        db_session.add(loose)
+        await db_session.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await create_apparatus_photo(
+                apparatus_id=str(apparatus.id),
+                photo_data=ApparatusPhotoCreate(
+                    apparatus_id=str(apparatus.id),
+                    file_path=f"document:{loose.id}",
+                    file_name="loose.png",
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 403
+        await db_session.refresh(loose)
+        assert loose.folder_id is None
 
 
 @pytest.mark.integration

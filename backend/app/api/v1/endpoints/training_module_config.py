@@ -24,7 +24,9 @@ from app.api.dependencies import (
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.apparatus import Apparatus
 from app.models.training import (
+    BasicApparatus,
     ProgramEnrollment,
     RequirementProgress,
     ShiftCompletionReport,
@@ -70,6 +72,32 @@ async def get_training_module_config(
     return config
 
 
+async def _assert_apparatus_ids_in_org(
+    db: AsyncSession, apparatus_ids: list[str] | None, organization_id: str
+) -> None:
+    """Refuse a manual-entry apparatus list naming another org's units (XC-1).
+
+    The list may hold ids from either the full Apparatus module or the
+    BasicApparatus fallback (whichever ``/scheduling/apparatus-options``
+    served the picker), so an id is accepted when it is in the caller's org
+    in either table. ``assert_all_in_org`` checks one model, which would
+    refuse a legitimate mix.
+    """
+    requested = {str(aid) for aid in (apparatus_ids or []) if aid}
+    if not requested:
+        return
+    found: set[str] = set()
+    for model in (Apparatus, BasicApparatus):
+        rows = await db.execute(
+            select(model.id)
+            .where(model.id.in_(requested))
+            .where(model.organization_id == str(organization_id))
+        )
+        found.update(str(row[0]) for row in rows.all())
+    if requested - found:
+        raise HTTPException(status_code=400, detail="Invalid apparatus")
+
+
 @router.put("/config", response_model=TrainingModuleConfigResponse)
 async def update_training_module_config(
     updates: TrainingModuleConfigUpdate,
@@ -100,6 +128,13 @@ async def update_training_module_config(
                 "training.manage is required to change these settings: "
                 + ", ".join(beyond_disclosure)
             ),
+        )
+
+    if "manual_entry_apparatus_ids" in requested:
+        await _assert_apparatus_ids_in_org(
+            db,
+            requested["manual_entry_apparatus_ids"],
+            str(current_user.organization_id),
         )
 
     service = TrainingModuleConfigService(db)

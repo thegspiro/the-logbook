@@ -204,6 +204,14 @@ const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
   }));
 };
 
+/**
+ * The open row overflow menu. From 640px it is a details popover around its
+ * trigger; on a phone it is a bottom sheet portalled to the body, so the
+ * trigger has no ancestor to search and the sheet is the one open dialog.
+ */
+const rowMenu = (trigger: HTMLElement): HTMLElement =>
+  trigger.closest<HTMLElement>('details') ?? screen.getByRole('dialog');
+
 // Every block starts from no apparatus on record; a test that needs units
 // states them (CLAUDE.md pitfall 28).
 beforeEach(() => {
@@ -403,7 +411,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
 
     // A saved clone's row is keyed by its server id, so naming it by clientKey
     // matches nothing: the copy opened collapsed and the bar kept adding to
@@ -462,7 +470,9 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     });
     renderBuilder();
 
-    await user.click(await screen.findByRole('button', { name: 'Add item to Cab' }));
+    expect(await screen.findByText('Add at least one item to publish')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add item to Cab' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add items' }));
     const input = screen.getByPlaceholderText('Add or search items…');
     await user.type(input, 'Clean windshield{Enter}');
 
@@ -612,7 +622,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getAllByRole('button', { name: 'Works' })).not.toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Delete Radio' })).toBeInTheDocument();
     const actions = screen.getByLabelText('Actions for Radio');
-    expect(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Move down' })).toBeEnabled();
+    expect(within(rowMenu(actions)).getByRole('button', { name: 'Move down' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Select items' })).not.toBeInTheDocument();
   });
 
@@ -676,7 +686,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Radio');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
     expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Template status')).toHaveTextContent('Draft');
@@ -694,10 +704,10 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const original = await screen.findByLabelText('Actions for Radio');
     await user.click(original);
-    await user.click(within(original.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(original)).getByRole('button', { name: 'Duplicate' }));
     const duplicate = await screen.findByLabelText('Actions for Radio (copy)');
     await user.click(duplicate);
-    await user.click(within(duplicate.closest('details') as HTMLElement).getByRole('button', { name: 'Rename' }));
+    await user.click(within(rowMenu(duplicate)).getByRole('button', { name: 'Rename' }));
     const input = await screen.findByDisplayValue('Radio (copy)');
     await user.clear(input);
     await user.type(input, 'Portable radio copy');
@@ -735,7 +745,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Radio');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
     expect(screen.queryByLabelText('Actions for Radio (copy)')).not.toBeInTheDocument();
     expect(reorderItems).not.toHaveBeenCalled();
@@ -752,7 +762,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
     expect(await screen.findByLabelText('Actions for Cab (copy)')).toBeInTheDocument();
     expect(cloneCompartment).toHaveBeenCalledWith('cab', 1);
   });
@@ -763,7 +773,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(cloneCompartment).toHaveBeenCalledWith('cab', 1));
     expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
   });
@@ -773,7 +783,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Radio');
     await user.click(trigger);
-    const menu = trigger.closest('details') as HTMLElement;
+    const menu = rowMenu(trigger);
     expect(within(menu).getByRole('button', { name: 'Rename' })).toBeVisible();
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeVisible();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeVisible();
@@ -781,7 +791,8 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByLabelText(/current destination Cab/i)).toHaveTextContent('Cab / Medical bag');
     expect(within(menu).getByRole('button', { name: 'Delete' })).toHaveClass('text-red-600');
     await user.click(within(menu).getByRole('button', { name: 'Duplicate' }));
-    expect(menu).not.toHaveAttribute('open');
+    expect(menu).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it('offers hierarchy-aware compartment movement and omits section headers', async () => {
@@ -789,7 +800,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Medical bag');
     await user.click(trigger);
-    const menu = trigger.closest('details') as HTMLElement;
+    const menu = rowMenu(trigger);
     expect(within(menu).getByRole('button', { name: 'Rename' })).toBeVisible();
     expect(within(menu).getByRole('button', { name: 'Duplicate' })).toBeVisible();
     const destination = within(menu).getByLabelText(/current destination Cab/i);
@@ -892,6 +903,7 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   });
 
   const moveSelect = async (name: string) => {
+    await userEvent.click(await screen.findByLabelText(`Actions for ${name}`));
     const selects = await screen.findAllByLabelText(new RegExp(`Move ${name} to compartment`));
     return selects[selects.length - 1] as HTMLSelectElement;
   };
@@ -927,7 +939,7 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     renderBuilder();
     const maskActions = await screen.findByLabelText('Actions for Oxygen mask');
     await user.click(maskActions);
-    await user.click(within(maskActions.closest('details') as HTMLElement).getByRole('button', { name: 'Move up' }));
+    await user.click(within(rowMenu(maskActions)).getByRole('button', { name: 'Move up' }));
     expect(reorderItems).toHaveBeenCalledWith('cab', ['mask', 'radio']);
     const names = screen
       .getAllByLabelText(/Actions for (Radio|Oxygen mask)/)
@@ -1152,6 +1164,12 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
       Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
     );
+    // Save draft PATCHes every saved location and item before it publishes;
+    // a bare vi.fn() resolves nothing and the save stops there.
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
   });
 
   it('bulk-pastes atomically and reuses the idempotency key after a failed attempt', async () => {
@@ -1184,12 +1202,34 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
   });
 
+  it('offers to match a bulk paste to the catalog where it landed', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValueOnce({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'mask', name: 'Mask', sortOrder: 2, inventoryItemId: undefined },
+        { ...template.compartments[0]?.items[0], id: 'hood', name: 'Hood', sortOrder: 3, inventoryItemId: undefined },
+      ],
+      createdCount: 2,
+    });
+    mockViewport('laptop');
+    renderBuilder();
+    const paste = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(paste, 'Mask{Shift>}{Enter}{/Shift}Hood');
+    await user.click(screen.getByRole('button', { name: 'Add all' }));
+
+    expect(await screen.findByText(/2 pasted items are not linked/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Match to catalog' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByText(/pasted items are not linked/)).not.toBeInTheDocument();
+  });
+
   it('retains an individually deleted row when persistence fails', async () => {
     deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
     renderBuilder();
     const actions = await screen.findByLabelText('Actions for Radio');
     await userEvent.click(actions);
-    await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(rowMenu(actions)).getByRole('button', { name: 'Delete' }));
     await confirm('Delete');
     await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
@@ -1671,7 +1711,7 @@ describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', (
 
     const trigger = await screen.findByLabelText('Actions for Cab');
     await user.click(trigger);
-    const menu = trigger.closest('details') as HTMLElement;
+    const menu = rowMenu(trigger);
     await user.type(within(menu).getByLabelText('Description for Cab'), 'Front of the rig');
     expect(within(menu).getByLabelText('Description for Cab')).toHaveValue('Front of the rig');
     expect(within(menu).getByLabelText('Image URL for Cab')).toBeInTheDocument();
@@ -1706,6 +1746,66 @@ describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () =>
     expect(await screen.findByRole('button', { name: 'Details' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
     expect(screen.getByLabelText('Tools')).toBeInTheDocument();
+  });
+
+  it('pins only the name and Publish on a phone, and the whole toolbar from 640px', async () => {
+    mockViewport('phone');
+    const view = renderBuilder();
+
+    // The full bar wrapped to five lines on a phone and covered the location
+    // being edited, so everything but the name and Publish scrolls away.
+    const phoneBar = (await screen.findByLabelText('Template name')).closest<HTMLElement>('.sticky');
+    expect(phoneBar).not.toBeNull();
+    const pinned = within(phoneBar as HTMLElement);
+    expect(pinned.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+    expect(pinned.getByRole('button', { name: 'Back to templates' })).toBeInTheDocument();
+    expect(pinned.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(pinned.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+    expect(pinned.queryByText('Applies to')).not.toBeInTheDocument();
+    expect(screen.getByText('Applies to')).toBeInTheDocument();
+    view.unmount();
+
+    mockViewport('laptop');
+    renderBuilder();
+    const laptopBar = (await screen.findByLabelText('Template name')).closest<HTMLElement>('.sticky');
+    const toolbar = within(laptopBar as HTMLElement);
+    expect(toolbar.getByRole('button', { name: 'Details' })).toBeInTheDocument();
+    expect(toolbar.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+    expect(toolbar.getByText('Applies to')).toBeInTheDocument();
+  });
+
+  it('opens a location row menu as a titled bottom sheet on a phone', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    renderBuilder();
+
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await user.click(trigger);
+
+    const sheet = screen.getByRole('dialog', { name: 'Cab' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(within(sheet).getByRole('button', { name: 'Add a header row' })).toBeVisible();
+
+    // Typing in the sheet's own fields must not close it.
+    await user.type(within(sheet).getByLabelText('Description for Cab'), 'Front');
+    expect(within(sheet).getByLabelText('Description for Cab')).toHaveValue('Front');
+
+    await user.click(within(sheet).getByRole('button', { name: 'Close actions' }));
+    expect(screen.queryByRole('dialog', { name: 'Cab' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('stacks an empty location into one add action on a phone', async () => {
+    mockViewport('phone');
+    renderBuilder();
+
+    // Medical bag loads empty. The callout carries the only add button; the
+    // row's own "+ Add" did the same thing beside it.
+    expect(await screen.findByText('Add at least one item to publish')).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Add items' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Add item to Medical bag' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add item to Cab' })).toBeInTheDocument();
   });
 
   // dnd-kit's sortable attributes (role="button", tabindex, aria-disabled) were
@@ -2038,7 +2138,7 @@ describe('EquipmentCheckTemplateBuilder duplication identity', () => {
 
     const trigger = await screen.findByLabelText('Actions for compartment');
     await user.click(trigger);
-    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(rowMenu(trigger)).getByRole('button', { name: 'Duplicate' }));
 
     // clientKey is the identity for the highlight set, the inline-edit target,
     // the phone editor and the preview's item ids. Copying it hands the
@@ -2525,7 +2625,7 @@ describe('EquipmentCheckTemplateBuilder refreshes savedParentByIdRef after a bul
     // local-only, exactly like the indent button does on a wider screen.
     const engineTrigger = await screen.findByLabelText('Actions for Engine Compartment');
     await user.click(engineTrigger);
-    const engineMenu = engineTrigger.closest('details') as HTMLElement;
+    const engineMenu = rowMenu(engineTrigger);
     await user.selectOptions(within(engineMenu).getByLabelText(/current destination Top level/i), 'saved-0');
 
     // Unsaved local reparent -- the backend still has Engine Compartment as
@@ -2534,7 +2634,7 @@ describe('EquipmentCheckTemplateBuilder refreshes savedParentByIdRef after a bul
     // backend to actually remove it.
     const cabTrigger = await screen.findByLabelText('Actions for Cab & Exterior');
     await user.click(cabTrigger);
-    const cabMenu = cabTrigger.closest('details') as HTMLElement;
+    const cabMenu = rowMenu(cabTrigger);
     await user.click(within(cabMenu).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());

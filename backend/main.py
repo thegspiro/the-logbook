@@ -445,10 +445,17 @@ SEED_DATA_FILES = [
 ]
 
 
-def _cleanup_duplicate_revisions(versions_dir):
+def _cleanup_duplicate_revisions(versions_dir, refuse_duplicates=False):
     """
     Detect and remove migration files with duplicate revision IDs, and
     restore previously-staled files that are now needed.
+
+    With ``refuse_duplicates`` (production), a duplicate revision raises
+    instead of being renamed away. Renaming takes one migration silently out
+    of the chain while startup still logs success, so a production database
+    could be left without a schema change nobody knows was skipped. A
+    development checkout keeps the self-healing rename, where the usual cause
+    is a stale Docker layer or a half-finished git operation.
 
     Stale migration files can appear when Docker images cache old COPY layers,
     or from incomplete git operations. Duplicate revision IDs crash Alembic's
@@ -518,6 +525,25 @@ def _cleanup_duplicate_revisions(versions_dir):
     for rev_id, files in rev_to_files.items():
         for _, _, down_revs in files:
             referenced_revisions.update(down_revs)
+
+    duplicates = {
+        rev_id: sorted(f[1] for f in files)
+        for rev_id, files in rev_to_files.items()
+        if len(files) > 1
+    }
+    if duplicates and refuse_duplicates:
+        listing = "; ".join(
+            f"'{rev_id}' in {', '.join(names)}"
+            for rev_id, names in sorted(duplicates.items())
+        )
+        raise RuntimeError(
+            "MIGRATION FAILURE: duplicate Alembic revision id(s) found: "
+            f"{listing}. Production refuses to start rather than rename one "
+            "file to .stale and skip its schema change. Remove the stale "
+            "copy (or rebuild the image without cached layers) so each "
+            "revision id appears in exactly one file, then restart. See "
+            "docs/UPGRADING.md."
+        )
 
     # For each duplicate, keep the file that's referenced by other migrations
     # (i.e., part of the active chain). Remove extras.
@@ -895,7 +921,9 @@ def run_migrations():
     # Stale files can appear when Docker images cache old COPY layers and the
     # bind-mount doesn't fully override them, or from incomplete git operations.
     versions_dir = os.path.join(base_dir, "alembic", "versions")
-    _cleanup_duplicate_revisions(versions_dir)
+    _cleanup_duplicate_revisions(
+        versions_dir, refuse_duplicates=settings.ENVIRONMENT == "production"
+    )
 
     # Retry revision graph loading with backoff.  On union filesystems
     # (e.g. Unraid shfs) recently-created migration files may not be

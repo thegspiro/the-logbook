@@ -25,6 +25,7 @@ import {
   ScanLookupResponse,
   ScanLookupResult,
   DistributeItemsResponse,
+  type BatchScanItem,
   BatchReturnResponse,
 } from '../services/api';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
@@ -138,9 +139,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
-  const [distributionOperation, setDistributionOperation] = useState<'permanent_assignment' | 'temporary_loan' | null>(
-    null
-  );
+  const [distributionOperation, setDistributionOperation] = useState<BatchScanItem['operation'] | null>(null);
+  // Both temporary operations are defined by the date the gear is due back.
+  const needsReturnDate =
+    distributionOperation === 'temporary_loan' || distributionOperation === 'temporary_assignment';
   const [expectedReturnAt, setExpectedReturnAt] = useState('');
   // Whether the native BarcodeDetector is present AND supports our formats.
   // Verified asynchronously on mount; until then we use the html5-qrcode path.
@@ -679,9 +681,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             item_id: si.itemId,
             quantity: si.quantity,
             operation: distributionOperation,
-            ...(distributionOperation === 'temporary_loan'
-              ? { expected_return_at: localToUTC(expectedReturnAt, tz) }
-              : {}),
+            ...(needsReturnDate ? { expected_return_at: localToUTC(expectedReturnAt, tz) } : {}),
           })),
         });
         setResults(response.results);
@@ -770,13 +770,18 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {mode === 'distribute' && !showResults && (
           <fieldset className="border-theme-surface-border space-y-3 rounded-lg border p-3">
             <legend className="text-theme-text-primary px-1 text-sm font-medium">Intended duration</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2">
               {(
                 [
                   [
                     'permanent_assignment',
                     'Ongoing assignment',
                     'Theirs until they return it or leave, like turnouts.',
+                  ],
+                  [
+                    'temporary_assignment',
+                    'Temporary assignment',
+                    'Assigned to them until a return date you choose, such as gear for an acting role.',
                   ],
                   ['temporary_loan', 'Temporary loan', 'Lent for a set time and due back on a date you choose.'],
                 ] as const
@@ -810,7 +815,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 </label>
               ))}
             </div>
-            {distributionOperation === 'temporary_loan' && (
+            {needsReturnDate && (
               <label className="text-theme-text-secondary block text-sm">
                 Expected return
                 <input
@@ -1181,17 +1186,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 so is the difference between a blocked step and a broken one. */}
             {scannedItems.length > 0 && mode === 'distribute' && !distributionOperation && (
               <p className="text-theme-text-muted text-right text-sm" role="status">
-                Choose Ongoing assignment or Temporary loan above to continue.
+                Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue.
               </p>
             )}
-            {scannedItems.length > 0 &&
-              mode === 'distribute' &&
-              distributionOperation === 'temporary_loan' &&
-              !expectedReturnAt && (
-                <p className="text-theme-text-muted text-right text-sm" role="status">
-                  Set the expected return date to continue.
-                </p>
-              )}
+            {scannedItems.length > 0 && mode === 'distribute' && needsReturnDate && !expectedReturnAt && (
+              <p className="text-theme-text-muted text-right text-sm" role="status">
+                Set the expected return date to continue.
+              </p>
+            )}
             {scannedItems.length > 0 && (
               <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-2">
                 <button onClick={onClose} className="btn-secondary text-sm">
@@ -1201,8 +1203,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   onClick={confirmAndSubmit}
                   disabled={
                     submitting ||
-                    (mode === 'distribute' &&
-                      (!distributionOperation || (distributionOperation === 'temporary_loan' && !expectedReturnAt)))
+                    (mode === 'distribute' && (!distributionOperation || (needsReturnDate && !expectedReturnAt)))
                   }
                   className="btn-primary flex items-center gap-2 text-sm"
                 >
@@ -1237,7 +1238,9 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         ? 'pool issuance'
                         : distributionOperation === 'temporary_loan'
                           ? 'temporary loan'
-                          : 'permanent assignment'}
+                          : distributionOperation === 'temporary_assignment'
+                            ? 'temporary assignment'
+                            : 'permanent assignment'}
                     </li>
                   ))}
                 </ul>

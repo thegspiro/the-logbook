@@ -34,6 +34,7 @@ from app.models.inventory import (
     ItemIssuance,
 )
 from app.models.user import User
+from app.utils.org_scoping import assert_in_org
 
 
 class DepartureClearanceService:
@@ -63,6 +64,10 @@ class DepartureClearanceService:
         Returns (clearance, None) on success or (None, error_message).
         """
         try:
+            # The departing member's id is client-supplied: a foreign id would
+            # open a clearance in this org naming another org's member.
+            await assert_in_org(self.db, User, user_id, organization_id, label="member")
+
             # Check for existing open clearance
             existing = await self.db.execute(
                 select(DepartureClearance).where(

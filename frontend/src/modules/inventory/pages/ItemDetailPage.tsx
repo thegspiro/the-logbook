@@ -55,6 +55,7 @@ import { getDisplayName } from '../utils/variantHelpers';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
+import { AssignTermsModal, type AssignTerms } from '../components/AssignTermsModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatHistoryDetails } from './itemHistoryDetails';
 import { onHandQuantity } from '../utils/onHand';
@@ -203,6 +204,10 @@ const ItemDetailPage: React.FC = () => {
 
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
+  // The member picked in the first step, held while the terms step asks
+  // whether the assignment is permanent or temporary.
+  const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
+  const [assigning, setAssigning] = useState(false);
 
   // NFPA compliance + exposure modals
   const [showNfpaModal, setShowNfpaModal] = useState(false);
@@ -306,15 +311,18 @@ const ItemDetailPage: React.FC = () => {
   }, [activeTab, loadTabData]);
 
   /* ---------- assign / unassign ----------------------------------- */
-  const handleAssign = async (userId: string) => {
-    if (!id || !userId) return;
-    setShowAssignModal(false);
+  const handleAssign = async (terms: AssignTerms) => {
+    if (!id || !assignTarget) return;
+    setAssigning(true);
     try {
-      await inventoryService.assignItem(id, userId);
-      toast.success('Item assigned');
+      await inventoryService.assignItem(id, assignTarget.userId, terms);
+      toast.success(terms.assignment_type === 'temporary' ? 'Item assigned temporarily' : 'Item assigned');
+      setAssignTarget(null);
       void loadItem();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to assign item'));
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -644,8 +652,17 @@ const ItemDetailPage: React.FC = () => {
         onClose={() => setShowAssignModal(false)}
         title="Assign Item — Select a Member"
         onSelect={(member) => {
-          void handleAssign(member.userId);
+          setShowAssignModal(false);
+          setAssignTarget(member);
         }}
+      />
+      <AssignTermsModal
+        isOpen={assignTarget !== null}
+        memberName={assignTarget?.memberName ?? ''}
+        itemName={item.name}
+        submitting={assigning}
+        onClose={() => setAssignTarget(null)}
+        onConfirm={(terms) => void handleAssign(terms)}
       />
 
       {/* Edit Item Modal */}

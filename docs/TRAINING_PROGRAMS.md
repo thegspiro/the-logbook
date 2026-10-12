@@ -2439,8 +2439,9 @@ Training sessions can be linked to events via the `training_session.event_id` fo
 - Event QR code check-ins can be used for attendance verification
 - Event location is inherited by the training session
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
+<!-- Screenshot placeholder:
+_[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
+-->
 
 #### Training Session Approval → Pipeline Progress
 

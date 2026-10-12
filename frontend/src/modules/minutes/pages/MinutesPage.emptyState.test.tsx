@@ -77,6 +77,8 @@ describe('MinutesPage — empty state', () => {
     expect(screen.queryByText(INSTRUCTION)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Record First Minutes/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Record Minutes/i })).not.toBeInTheDocument();
+    // The attendance dashboard is a meetings.manage screen.
+    expect(screen.queryByRole('link', { name: /Attendance/ })).not.toBeInTheDocument();
   });
 
   it('keeps the pitch and the prompt for a minutes manager', async () => {

@@ -933,8 +933,55 @@ Approve and deny check the caller against the step's named approver, in addition
 - `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
 - `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
 - `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; 403 when the caller is not the step's named approver — see above)
-- `GET /finance/approvals/unrouted` (requests in `pending_approval` that have no approval steps because no chain applied)
-- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log) and `.../deny` (body `{reason}`, required) — only for a request with no approval steps; a request with steps returns 409
+- `GET /finance/approvals/unrouted` (requests in `pending_approval` with no approval step still pending: no chain applied, or held for a second approver — `awaitingSecondApproval`, `firstApprovedBy`; see **Dual approval** below)
+- `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log, with `completed` false when the approval was the first of two) and `.../deny` (body `{reason}`, required) — only for a request with no approval step still pending; a request whose chain is still running returns 409
+- `GET /finance/settings` (`finance.view`, `finance.approve`, `finance.manage` or `finance.configure_approvals`) — `{dualApprovalThreshold}` as the approval path reads it, null when off
+
+#### Dual approval _(2026-10-11)_
+
+Owner decision, 2026-10-09: at or above a department-set threshold, a purchase
+request, check request or expense report is approved only once **two
+different people** have approved it, and the request waits for the second
+rather than refusing the first.
+
+- **Where it is set.** Organization settings, `finance.dual_approval_threshold`
+  (whole dollars; `FinanceSettingsUpdate`, 1 to 9,999,999,999), written only by
+  `PATCH /organization/settings` (`settings.manage`). It binds the finance
+  officers, so the people it applies to cannot lift it — the arrangement
+  `admin_hours.allow_self_approval` uses. `app/utils/finance_settings.py` is the
+  reader; absent, null, zero, negative, a boolean or any non-integer reads as
+  **off**, the default, so no existing installation changes on upgrade.
+- **Where it bites.** `_finalize_approval`, the one place both paths reach —
+  the end of an approval chain (including email-token approvals and chains
+  whose steps all auto-approved) and a manual approval.
+  `_held_for_second_approver` counts the people who have approved: each chain
+  step approved in the app as the member who approved it, one approved from an
+  emailed link as the address the step names, an auto-approved step as nobody,
+  plus a first approval recorded on the request. With fewer than two, the
+  request stays `pending_approval`; a first approval given outside a chain is
+  recorded as `first_approved_by` / `first_approved_at` (migration
+  `3c9c5025a380`, on all three tables). Budget encumbrance happens once, on
+  the approval that completes the request.
+- **How the second approver acts.** A held request has nothing left in its
+  chain, so the manual path decides it: `_lock_unrouted_entity` now refuses
+  only a request with a step **still pending** (`_has_pending_step_records`),
+  and the unrouted listing uses the same predicate. Any `finance.approve`
+  holder may give the second approval — not only a chain step's named approver
+  — except the requester (FIN-4) and anyone who has already approved it
+  (400, "You have already approved this request…"). A held request can still
+  be denied.
+- **Reported, not re-derived.** Detail responses carry `firstApprovedBy`,
+  `firstApprovedAt` and `awaitingSecondApproval`
+  (`FinanceService.is_awaiting_second_approval`: waiting for approval, no step
+  pending, and either a chain that has run or a first approval recorded).
+- **Screens.** The approval chains settings page shows the rule
+  (`DualApprovalSettingsCard`, reading `GET /finance/settings`), editable only
+  with `settings.manage`. `ManualApprovalPanel` also appears on a held request
+  — _"This request needs a second approval from someone who has not approved it
+  yet."_ — and offers whoever gave the first approval only Deny; its approve
+  toast is now "Approval recorded". The Approvals page lists, below the step
+  rows, the requests decided on their own page (`GET /finance/approvals/unrouted`),
+  each marked "A second approver" or "An approver (no chain applies)".
 
 ### Frontend
 
@@ -947,7 +994,7 @@ Components:
 
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
 - **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
-- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. These requests are not on the Approvals page, which lists step records; `GET /finance/approvals/unrouted` lists them but no screen reads it yet
+- **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. Since 2026-10-11 it also shows on a request held for a second approver (`awaitingSecondApproval`), and the Approvals page lists both kinds below its step rows, from `GET /finance/approvals/unrouted`
 - **ApprovalChainPreview** — _planned, not built._ `GET /finance/approval-chains/preview` and `approvalChainService.preview()` exist, but no component calls them; request forms show no chain preview and the settings page has no preview tool
 
 **Request bodies accept camelCase and snake_case** _(2026-09-30)_. Every request schema in `app/schemas/finance.py` uses `_REQUEST_CONFIG` (`alias_generator=to_camel`, `populate_by_name=True`, `loc_by_alias=False`). Before this the pages sent camelCase and no schema carried an alias: creates were refused with a 422 for "missing" required fields (`POST /finance/fiscal-years` with `startDate`), and updates silently dropped every multi-word key, so clearing a purchase request's `budgetId` returned 200 and changed nothing. Dumps stay by field name, `exclude_unset` keeps "omitted = leave alone, null = clear", and 422 field names stay snake_case. `tests/test_finance_request_camelcase.py` fails if a new request schema lacks the config.
@@ -1084,7 +1131,7 @@ Enums:
 - `GET/POST /finance/dues-schedules`
 - `GET/PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
-- `GET /finance/dues` (list with member/status filters)
+- `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
 - `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
@@ -1147,7 +1194,7 @@ Pages:
 - `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
 - `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category` or `mapping`), the offset account and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own classifier (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range
-- `GET /finance/export/logs` — export history
+- `GET /finance/export/logs` — export history, newest first. Each row carries `exportedByName` _(2026-10-11)_; read by **Export history** on **Finance › QuickBooks Export**
 
 Export format:
 
@@ -1158,7 +1205,11 @@ Export format:
     - **Fewer than 1,000 rows per file**, header included. Each transaction or expense line is two rows, so `generate_export` refuses (400) a period that would reach `QB_IMPORT_MAX_ROWS` (999) and asks for a shorter one. It does not split: a split could separate an expense report's lines into two files, and each file must balance per Journal No.
     - **Accounts Payable and Accounts Receivable need a Name** (a vendor or customer) on every line, which the export has no column for. `_refuse_name_required` refuses them as a category's `qb_account_name` or a mapping's account or offset (400), and `_classify_category_accounts` reports a stored one as `payable_receivable`, so readiness shows it and the export refuses it. It recognizes QuickBooks' standard account names by prefix (`Accounts Payable…`, `Accounts Receivable…`, including their subaccounts); a renamed one is not caught, which the settings page's checklist covers.
     - **Accounts must exist; subaccounts are `Parent:Child`; account numbers should be off during import; the duplicate-journal-number warning must be off** (every entry carries its request number). These are QuickBooks settings, listed on the settings page and in the training guide.
-    - Journal numbers are request numbers (`PR-2026-0001`, 12 characters), well within the 21 characters connector documentation gives as QuickBooks' limit.
+    - Journal numbers are request numbers (`PR-2026-0001`, 12 characters), well within the 21 characters connector documentation gives as QuickBooks' limit. A void's reversing entry adds `-V` (14 characters).
+  - **Sent once** _(2026-10-11, migration `3f3bd6f3c7e4`)_. QuickBooks imports a second copy of an entry without complaint (the duplicate-number warning has to be off for this import), so the export keeps the books single. `purchase_requests`, `expense_reports` and `check_requests` carry `qb_exported_at` and `qb_export_log_id` (`SET NULL` to `finance_export_logs`); `generate_export` leaves out a stamped payment unless `include_exported` (`includeExported` on `POST /finance/export/transactions`) asks to send the period again, which restamps what it sends. Payments are stamped (`_stamp_exported`) only after the last row is produced, in the same commit that marks the log `successful`: an interrupted stream stamps nothing, so its payments go out with the next export. An expense report is stamped as a whole. PR, check and report responses report `qbExportedAt`, and the three detail pages show **Sent to QuickBooks**.
+  - **Voided checks are reversed** _(2026-10-11)_. `void_check` records `voided_at`. A check voided after an export carried it gets a reversing entry in the export whose period covers the void date: Journal No `CR-…-V`, dated the void day, memo `Void: …`, description `… voided`, with the debit and credit swapped so the money goes back to the account the check was drawn on. It posts to the accounts the original entry used, stored on the check when it was exported (`qb_export_account`, `qb_export_offset_account`), not to whatever the category maps to by then; a check exported before this change has none stored and is reversed against the category's current accounts. `qb_void_exported_at` / `qb_void_export_log_id` stamp the reversal so it goes out once. A check voided before any export carried it is in neither file. Reversals come last in the file, so a check exported and voided within one period is posted before it is reversed. Sending a period again (`include_exported`) reproduces what was sent for it: a check voided since still has its original entry in that period's file.
+  - **One export at a time** _(2026-10-11)_. Two exports running together would each pick the payments the other had not stamped yet. `_begin_export` takes the department's `quickbooks_export` lock (`app/utils/org_locks.py`) and refuses (**409** "Another QuickBooks export is still being prepared…", `ExportInProgressError`) while a `pending` transactions export younger than `QB_EXPORT_IN_PROGRESS_WINDOW` (15 minutes) exists; its read is a locking read, so it sees one committed while it waited (CLAUDE.md pitfall #27). An export a crashed process left pending stops blocking after the window.
+  - **Upgrade backfill.** The migration stamps what earlier successful exports carried: for each, oldest first, every payment paid (or check issued) in its date range no later than the export itself, and a check voided since only if it was voided after that export — its reversal then goes out with the next export covering the void date. `voided_at` is filled from `updated_at` for checks already voided. Partial and failed exports stamp nothing.
   - **Date** is the department's calendar day: `paid_at` / `check_date` are converted through `resolve_scheduling_timezone` (the organization's timezone, `America/New_York` when unset) before formatting, so an evening payment no longer books on the next UTC day. The lookup runs inside the export's `try`, so a failure is recorded on the export log like any other interruption
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward

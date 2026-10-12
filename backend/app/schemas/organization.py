@@ -1313,6 +1313,23 @@ class AdminHoursSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class FinanceSettingsUpdate(BaseModel):
+    """Finance rules; read by app/utils/finance_settings.py."""
+
+    dual_approval_threshold: Optional[int] = Field(
+        None,
+        ge=1,
+        le=9_999_999_999,
+        description=(
+            "Whole dollars. A purchase request, check request or expense report "
+            "of this amount or more needs two different approvers. Null turns "
+            "the rule off, which is also the default."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
 
@@ -1333,6 +1350,7 @@ class OrganizationSettingsUpdate(BaseModel):
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
     admin_hours: Optional[AdminHoursSettingsUpdate] = None
+    finance: Optional[FinanceSettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")

@@ -1014,6 +1014,42 @@ export const SUGGESTION_ANONYMITY_LABELS: Record<string, string> = {
   disabled: 'Always named',
 };
 
+/**
+ * The kinds of question a suggestion box can ask on submission. Mirrors
+ * `IntakeQuestionType` in `app/schemas/suggestion.py`. Only `select` and
+ * `radio` can route a submission to another box: a checkbox answer can name
+ * several options, and so several boxes.
+ */
+export const SuggestionIntakeQuestionType = {
+  SELECT: 'select',
+  RADIO: 'radio',
+  CHECKBOX: 'checkbox',
+  TEXT: 'text',
+  TEXTAREA: 'textarea',
+  DATE: 'date',
+  NUMBER: 'number',
+  RATING: 'rating',
+  TIME: 'time',
+  MEMBER: 'member',
+  APPARATUS: 'apparatus',
+} as const;
+export type SuggestionIntakeQuestionType =
+  (typeof SuggestionIntakeQuestionType)[keyof typeof SuggestionIntakeQuestionType];
+
+export const SUGGESTION_INTAKE_QUESTION_TYPE_LABELS: Record<string, string> = {
+  select: 'Dropdown',
+  radio: 'Single choice',
+  checkbox: 'Checkboxes (pick any)',
+  text: 'Short text',
+  textarea: 'Long text',
+  date: 'Date',
+  number: 'Number',
+  rating: 'Rating (1–5)',
+  time: 'Time',
+  member: 'Pick a member',
+  apparatus: 'Pick a vehicle',
+};
+
 /** Which year a membership number's {YYYY} and yearly restart follow. */
 export const MembershipYearBasis = {
   CALENDAR: 'calendar',
@@ -1041,3 +1077,26 @@ export const IdCardSides = {
   BOTH: 'both',
 } as const;
 export type IdCardSides = (typeof IdCardSides)[keyof typeof IdCardSides];
+
+// ============================================
+// Admin Hours
+// ============================================
+
+/** How an admin-hours entry was recorded. Mirrors `AdminHoursEntryMethod` on the backend. */
+export const AdminHoursEntryMethod = {
+  QR_SCAN: 'qr_scan',
+  // An officer-run ID card station, kept apart from a member scanning the
+  // category's QR code: a record that cannot tell the two apart claims
+  // something untrue about who was standing there.
+  NFC_STATION: 'nfc_station',
+  MANUAL: 'manual',
+  EVENT_ATTENDANCE: 'event_attendance',
+} as const;
+export type AdminHoursEntryMethod = (typeof AdminHoursEntryMethod)[keyof typeof AdminHoursEntryMethod];
+
+export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
+  qr_scan: 'QR Scan',
+  nfc_station: 'ID Card Station',
+  manual: 'Manual',
+  event_attendance: 'Event Attendance',
+};

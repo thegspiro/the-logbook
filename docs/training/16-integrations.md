@@ -737,8 +737,9 @@ Split it into three fields rather than pasting it whole:
 | API Key      | the value after `key=`                       |
 | API Secret   | the value after `secret=`                    |
 
-> **Screenshot needed:**
-> _[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
+<!-- Screenshot needed:
+_[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
+-->
 
 The key and secret are stored encrypted and are never returned by the API or
 shown again. A base URL that still contains a key, secret or token is
@@ -788,8 +789,9 @@ same policy twice in one day appears twice. The second one on the same day is
 kept under **Imports** marked **duplicate** and never becomes a training record.
 An acknowledgment on a later day — next year's reading — is recorded as usual.
 
-> **Screenshot needed:**
-> _[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
+<!-- Screenshot needed:
+_[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
+-->
 
 ### Syncing on a schedule
 
@@ -1100,7 +1102,7 @@ Two permissions to grant alongside it — neither is granted by the upgrade:
 | `members.check_in`        | Running a check-in station                        |
 
 Full walkthrough:
-[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
 
 ## Claude (MCP) — asking questions of your Logbook _(2026-09-03)_
 

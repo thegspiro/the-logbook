@@ -42,7 +42,7 @@ from its open list.
 | B1  | medical-screening          | MS2    | ✅     |
 | B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ✅     |
-| B4  | facilities                 | FAC2   | ⬜     |
+| B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ⬜     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
 | B7  | equipment-check            | EC2    | ⬜     |
@@ -2913,3 +2913,68 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   existed throughout. See the correction in inventory.md.) Gate: flake8 0 · black 1,425
   unchanged · isort clean · tsc 0 · eslint 0 · docs links 0 broken · backend
   **1,169 passed**. See inventory.md → Pass 5. Next: B4 facilities.
+- **B4 facilities ✅ (pass 5)** — the pass that went where four earlier ones
+  said "n/a". Passes 1–4 each recorded `tsc --noEmit` as "no frontend change"
+  and none of them read `modules/facilities` — **10,108 lines across 43 files**,
+  about half the module. The backend was deliberately **not** re-derived:
+  `docs/security-review/FAC-12-facilities.md` is a seven-pass review of the same
+  files whose pass 7 (2026-10-06) found 0 new findings, so re-running that lens
+  would have spent the iteration re-reading cleared ground. What was re-verified
+  instead were this file's own two-month-old claims, because the module had grown
+  underneath them: **98/98** endpoints permission-gated (was "95/95"), enumerated
+  by parsing every decorator — and worth recording because a parser that looked
+  right returned **48 of 98**, its block loop having eaten routes it had already
+  passed; a spot-check would not have caught that. **FAC2-3 (MED, fixed)** is the
+  frontend's half of pitfall #1: `useMaintenanceForm` and `useInspectionForm` each
+  built **one** payload with `if (formData.x) payload.x = …` and handed it to both
+  create and update, so on edit every cleared field was omitted — and the backend
+  dumps update payloads `exclude_unset`, so omitted means "leave this alone".
+  Sixteen fields across the two forms: a cost typed in error could not be removed
+  and a vendor who did not do the work stayed attributed, behind a "Record
+  updated" toast. The backend was already right (`apply_updates` clears on an
+  explicit null), so the fix is frontend-only and uses `formCoercions(isEdit)`,
+  the house helper written for this exact shape. Nullability was taken from live
+  SQLAlchemy introspection, not read off the model text — two of my own regex
+  readings were **wrong** (`performed_by`, `attachments`) — so
+  `maintenance_type_id` stays _omitted_ when blank because its column is NOT NULL
+  and nulling it would be a 400, not a clear; the payload types now encode that
+  distinction so a future edit cannot null an un-clearable column without a type
+  error. **FAC2-4 (MED, fixed)**: the dashboard's "Overdue maintenance" card is a
+  true org-wide SQL count and deep-links to a list that loaded `limit=100`
+  ordered `desc(created_at)` and then filtered `isOverdue` in the browser — so the
+  truncation did not lose rows at random, it preferentially discarded the oldest
+  overdue work, which is exactly what the filter was for. An org with 250 records
+  and 12 overdue could see a red "12 — Action required" card linking to "No
+  maintenance records found". The fix needed **no API change**: `is_overdue` and
+  `is_completed` already existed as query parameters and simply were not
+  forwarded (pitfall #29 — the screen reports what the backend decided).
+  **FAC2-5 (flagged)** is what could not be fixed without an API change: the
+  inspections endpoint's `passed: bool | None` cannot express "awaiting a
+  result", so fixing two of three tabs server-side would make correctness vary by
+  tab; that plus client-side-only search and no pagination on either list is in
+  `KNOWN_LIMITATIONS.md`. **FAC2-6 (MED, flagged, cross-module)** is the
+  uncomfortable one: chasing FAC2-3 found the identical defect in
+  `apparatus/components/MaintenanceRecordModal.tsx` — sixteen conditional
+  spreads, one payload, both verbs — which **B2 pass 5 missed three iterations
+  ago**, along with that service's raw `setattr` loop where `apply_updates`
+  belongs. Left unfixed on purpose (different module, one feature per run) and
+  `apparatus.md` corrected to say so. Checked and **not** re-reported: inventory's
+  same-shaped payload is create-only and its update method has no UI caller, so
+  the B3 "no new code defects" claim stands. 7 new tests, each mutation-tested —
+  forcing `isEdit` false fails exactly the null assertions and leaves the create
+  and NOT NULL ones green; removing the filter forwarding fails 3 of 4, with
+  `all` correctly still passing. **Doc corrections (5):**
+  `module-audit/facilities.md`'s FAC-3 heading said FIXED while its body still
+  said "flagged", a contradiction that survived four passes; two different
+  findings were both numbered FAC-P11; FAC-P10 ("photos and documents are
+  API-only") is closed by a `FilesSection` that has existed for some time; and
+  the audit praised `list_facilities` for hand-escaping LIKE wildcards as "the
+  correct pattern" — which pitfall #25 later established is **inert** without the
+  `escape=` kwarg. The code was fixed properly in between, so the claim's
+  conclusion is true for a reason it does not give, which is worse than being
+  wrong: a reader would copy the described pattern into a new module. Gate: tsc 0
+  (repo-wide; the first run failed on `exactOptionalPropertyTypes` and was fixed
+  by widening the target type, not casting) · eslint clean · flake8 0 · black
+  clean · facilities frontend **124 passed** (18 files) · widened-type consumers
+  26 passed · backend n/a (no Python changed). See facilities.md → Pass 5.
+  Next: B5 elections.

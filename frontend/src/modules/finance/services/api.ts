@@ -38,7 +38,11 @@ import type {
   BudgetTransactionPage,
   BudgetUpdatePayload,
   CheckRequest,
+  DuesPayment,
+  DuesPaymentPayload,
   DuesSchedule,
+  DuesScheduleCreatePayload,
+  DuesScheduleUpdatePayload,
   DuesSummary,
   ExpenseLineItem,
   ExpenseReport,
@@ -47,6 +51,7 @@ import type {
   ExportMapping,
   ExportMappingCreatePayload,
   ExportMappingUpdatePayload,
+  ExportLog,
   ExportReadiness,
   FiscalYearOption,
   FiscalYearAdoptionPayload,
@@ -63,6 +68,7 @@ import type {
   MonetaryAmount,
   StartFromLastYearResult,
   UnroutedApproval,
+  FinanceSettings,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -456,6 +462,14 @@ const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
   ...(overrideReason ? { overrideReason } : {}),
 });
 
+export const financeSettingsService = {
+  /** The finance rules as the approval path reads them. */
+  async get(): Promise<FinanceSettings> {
+    const response = await api.get<FinanceSettings>('/finance/settings');
+    return response.data;
+  },
+};
+
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {
     const response = await api.get<PendingApproval[]>('/finance/approvals/pending');
@@ -680,12 +694,12 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async createSchedule(data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async createSchedule(data: DuesScheduleCreatePayload): Promise<DuesSchedule> {
     const response = await api.post<DuesSchedule>('/finance/dues-schedules', data);
     return response.data;
   },
 
-  async updateSchedule(id: string, data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+  async updateSchedule(id: string, data: DuesScheduleUpdatePayload): Promise<DuesSchedule> {
     const response = await api.put<DuesSchedule>(`/finance/dues-schedules/${id}`, data);
     return response.data;
   },
@@ -706,21 +720,23 @@ export const duesService = {
     return asArray(response.data);
   },
 
-  async recordPayment(
-    duesId: string,
-    data: {
-      amountPaid: MonetaryAmount;
-      paymentMethod?: string;
-      transactionReference?: string;
-      notes?: string;
-    }
-  ): Promise<MemberDues> {
+  async recordPayment(duesId: string, data: DuesPaymentPayload): Promise<MemberDues> {
     const response = await api.put<MemberDues>(`/finance/dues/${duesId}`, data);
     return response.data;
   },
 
+  async listPayments(duesId: string): Promise<DuesPayment[]> {
+    const response = await api.get<DuesPayment[]>(`/finance/dues/${duesId}/payments`);
+    return asArray(response.data);
+  },
+
   async waive(duesId: string, reason: string): Promise<MemberDues> {
     const response = await api.post<MemberDues>(`/finance/dues/${duesId}/waive`, { reason });
+    return response.data;
+  },
+
+  async unwaive(duesId: string, reason: string): Promise<MemberDues> {
+    const response = await api.post<MemberDues>(`/finance/dues/${duesId}/unwaive`, { reason });
     return response.data;
   },
 
@@ -731,10 +747,6 @@ export const duesService = {
     return response.data;
   },
 };
-
-// =============================================================================
-// Export
-// =============================================================================
 
 // =============================================================================
 // Dashboard
@@ -777,5 +789,11 @@ export const exportMappingService = {
   async readiness(): Promise<ExportReadiness> {
     const response = await api.get<ExportReadiness>('/finance/export/readiness');
     return response.data;
+  },
+
+  /** Export history, newest first. */
+  async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
+    const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
+    return asArray(response.data);
   },
 };

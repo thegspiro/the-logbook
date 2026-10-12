@@ -1534,3 +1534,7 @@ compartment already at par is untouched and stays one tap.
 ---
 
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus) | [Inventory Module](Module-Inventory)
+
+## Shift History Import _(2026-10-11)_
+
+`scheduling.manage` users bring past shifts in from a CSV (one row per member per shift) at `/scheduling/admin/history-import`. Uploads are drafts (`shift_history_imports`, `shift_history_import_rows`); times are read in a chosen IANA zone; an end at or before the start crosses midnight; entries for one member on one unit within 30 minutes are joined (`keep_separate` splits them); crews group by unit and day with a confidence score (90+ automatic, 60–89 held for review). Exact unit names only; other agencies' units become `ExternalShiftHours`. Former members are created **archived** (`archived_at` set, migration `990e288940bc` moved earlier imports) with no password or email. Commit writes finalized shifts, confirmed assignments and attendance directly (no notifications, equipment-check gate or completion-report drafts) and is final. Member, unit and position decisions persist per department in `shift_history_import_mappings` once a commit succeeds. Routes: `/api/v1/scheduling/history-import`. See also the Pre-shift work section above and `docs/SCHEDULING_MODULE.md`.

@@ -7,6 +7,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   GrantOpportunity,
+  GrantOpportunityCreatePayload,
   GrantApplication,
   GrantBudgetItem,
   GrantExpenditure,
@@ -15,8 +16,13 @@ import type {
   FundraisingCampaign,
   Donor,
   Donation,
+  DonationCreatePayload,
   Pledge,
+  PledgeCreatePayload,
+  PledgeUpdatePayload,
   FundraisingEvent,
+  FundraisingEventCreatePayload,
+  FundraisingEventUpdatePayload,
   GrantsDashboard,
   GrantReport,
   FundraisingReport,
@@ -56,7 +62,7 @@ export const grantsService = {
     return response.data;
   },
 
-  async createOpportunity(data: Partial<GrantOpportunity>): Promise<GrantOpportunity> {
+  async createOpportunity(data: GrantOpportunityCreatePayload): Promise<GrantOpportunity> {
     const response = await api.post<GrantOpportunity>('/grants', data);
     return response.data;
   },
@@ -338,7 +344,7 @@ export const fundraisingService = {
     return asArray(response.data);
   },
 
-  async createDonation(data: Partial<Donation>): Promise<Donation> {
+  async createDonation(data: DonationCreatePayload): Promise<Donation> {
     const response = await api.post<Donation>('/grants/donations', data);
     return response.data;
   },
@@ -369,12 +375,12 @@ export const fundraisingService = {
     return asArray(response.data);
   },
 
-  async createPledge(data: Partial<Pledge>): Promise<Pledge> {
+  async createPledge(data: PledgeCreatePayload): Promise<Pledge> {
     const response = await api.post<Pledge>('/grants/pledges', data);
     return response.data;
   },
 
-  async updatePledge(id: string, data: Partial<Pledge>): Promise<Pledge> {
+  async updatePledge(id: string, data: PledgeUpdatePayload): Promise<Pledge> {
     const response = await api.put<Pledge>(`/grants/pledges/${id}`, data);
     return response.data;
   },
@@ -398,12 +404,12 @@ export const fundraisingService = {
     return asArray(response.data);
   },
 
-  async createFundraisingEvent(data: Partial<FundraisingEvent>): Promise<FundraisingEvent> {
+  async createFundraisingEvent(data: FundraisingEventCreatePayload): Promise<FundraisingEvent> {
     const response = await api.post<FundraisingEvent>('/grants/fundraising-events', data);
     return response.data;
   },
 
-  async updateFundraisingEvent(id: string, data: Partial<FundraisingEvent>): Promise<FundraisingEvent> {
+  async updateFundraisingEvent(id: string, data: FundraisingEventUpdatePayload): Promise<FundraisingEvent> {
     const response = await api.put<FundraisingEvent>(`/grants/fundraising-events/${id}`, data);
     return response.data;
   },

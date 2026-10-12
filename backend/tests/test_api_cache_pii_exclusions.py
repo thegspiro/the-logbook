@@ -141,7 +141,8 @@ PINNED_EXCLUSIONS = {
         "module's own uncached createApiClient() instance"
     ),
     "/inventory/clearances/{clearance_id}": (
-        "one departure clearance in full; no frontend wrapper exists today"
+        "one departure clearance in full, member named; read by the "
+        "clearance screen through getDepartureClearance"
     ),
     "/training/instructors/validate/{user_id}/{course_id}": (
         "a named member's qualification verdict; validateInstructor is "

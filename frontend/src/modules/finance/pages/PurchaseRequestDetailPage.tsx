@@ -466,6 +466,12 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
             </div>
           )}
+          {pr.qbExportedAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.qbExportedAt, tz)}</p>
+            </div>
+          )}
           {(canAttachReceipt || pr.receiptFileUrl || pr.receiptUrl) && (
             <div>
               <p className="text-theme-text-secondary text-xs">Receipt</p>
@@ -506,6 +512,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
         entityId={pr.id}
         status={pr.status}
         approvalStepCount={pr.approvalSteps.length}
+        awaitingSecondApproval={pr.awaitingSecondApproval}
+        firstApprovedBy={pr.firstApprovedBy}
         requesterId={pr.requestedBy}
         onDecided={() => void fetchPurchaseRequest(pr.id)}
       />

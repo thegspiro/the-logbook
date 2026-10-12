@@ -1031,6 +1031,22 @@ export interface AckReportRecipient {
    * act on it, so an unacknowledged one is not an outstanding obligation.
    */
   removed_from_audience?: boolean;
+  /** Null when no send was attempted on that channel (MSG-12). */
+  email_delivery?: DeliveryState | null;
+  sms_delivery?: DeliveryState | null;
+}
+
+/**
+ * One channel's delivery to one member. `retrying` is a failed or held-back
+ * attempt that the server will try again at `next_attempt_at`; `failed` means
+ * the retries are spent (or the message can no longer go out).
+ */
+export interface DeliveryState {
+  status: 'pending' | 'delivered' | 'retrying' | 'failed';
+  attempts: number;
+  next_attempt_at?: string | null;
+  delivered_at?: string | null;
+  error?: string | null;
 }
 
 export interface AcknowledgmentReport {

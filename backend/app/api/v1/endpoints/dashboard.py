@@ -30,6 +30,7 @@ from app.models.facilities import (
     FacilityMaintenance,
 )
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     CheckOutRecord,
     EquipmentRequest,
     InventoryItem,
@@ -163,7 +164,13 @@ async def get_asset_widgets(
     if "inventory" in enabled and user_has_permission(current_user, "inventory.manage"):
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
-        low_stock = await inventory.get_low_stock_items(org_id)
+        # Medical categories are left out to match the `/inventory?stock=low`
+        # list this tile opens, which carves the medical domain out of every
+        # inventory listing; Medical Supplies reports its own low stock from
+        # item reorder points (W47-6).
+        low_stock = await inventory.get_low_stock_items(
+            org_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
         today = await department_today()
         expiring = await db.scalar(
             select(func.count(InventoryLot.id))
@@ -495,6 +502,7 @@ class ActionItemSummary(BaseModel):
     due_date: str | None = None
     status: str
     priority: str | None = None
+    completion_notes: str | None = None
     created_at: str
 
 
@@ -1316,46 +1324,53 @@ async def get_unified_action_items(
             )
 
     # ── Minutes action items (scoped to organization via MeetingMinutes) ──
+    # An item assigned to the caller by member is always theirs to see,
+    # whatever the minutes' state or the caller's minutes.view: they may
+    # update its status (W52-7), and "Assigned to me" must find it (W52-6).
+    # Only the item is disclosed, never the minutes it was recorded in.
+    assigned_to_caller = ActionItem.assignee_id == current_user.id
+    query2 = (
+        select(ActionItem)
+        .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+        .where(MeetingMinutes.organization_id == org_id)
+    )
     if can_view_minutes:
-        query2 = (
-            select(ActionItem)
-            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-            .where(MeetingMinutes.organization_id == org_id)
-        )
-
         restriction = minutes_visibility_filter(current_user)
         if restriction is not None:
-            query2 = query2.where(restriction)
+            query2 = query2.where(or_(restriction, assigned_to_caller))
+    else:
+        query2 = query2.where(assigned_to_caller)
 
-        if status_filter:
-            query2 = query2.where(ActionItem.status == status_filter)
-        if assigned_to_me:
-            query2 = query2.where(ActionItem.assignee_id == current_user.id)
+    if status_filter:
+        query2 = query2.where(ActionItem.status == status_filter)
+    if assigned_to_me:
+        query2 = query2.where(assigned_to_caller)
 
-        result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
-        for item in result2.scalars().all():
-            items.append(
-                ActionItemSummary(
-                    id=item.id,
-                    source="minutes",
-                    source_id=item.minutes_id,
-                    description=item.description,
-                    assignee_id=item.assignee_id,
-                    assignee_name=item.assignee_name,
-                    due_date=item.due_date.isoformat() if item.due_date else None,
-                    status=(
-                        item.status.value
-                        if hasattr(item.status, "value")
-                        else str(item.status)
-                    ),
-                    priority=(
-                        item.priority.value
-                        if hasattr(item.priority, "value")
-                        else str(item.priority) if item.priority else None
-                    ),
-                    created_at=(item.created_at.isoformat() if item.created_at else ""),
-                )
+    result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
+    for item in result2.scalars().all():
+        items.append(
+            ActionItemSummary(
+                id=item.id,
+                source="minutes",
+                source_id=item.minutes_id,
+                description=item.description,
+                assignee_id=item.assignee_id,
+                assignee_name=item.assignee_name,
+                due_date=item.due_date.isoformat() if item.due_date else None,
+                status=(
+                    item.status.value
+                    if hasattr(item.status, "value")
+                    else str(item.status)
+                ),
+                priority=(
+                    item.priority.value
+                    if hasattr(item.priority, "value")
+                    else str(item.priority) if item.priority else None
+                ),
+                completion_notes=item.completion_notes,
+                created_at=(item.created_at.isoformat() if item.created_at else ""),
             )
+        )
 
     # Sort by due date (nulls last)
     items.sort(key=lambda x: x.due_date or "9999-12-31")

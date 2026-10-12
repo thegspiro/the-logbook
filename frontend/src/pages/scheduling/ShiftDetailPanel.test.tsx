@@ -1047,3 +1047,33 @@ describe('ShiftDetailPanel File Shift Report button', () => {
     expect(screen.queryByRole('button', { name: /File Shift Report/ })).not.toBeInTheDocument();
   });
 });
+
+describe('ShiftDetailPanel equipment check hints', () => {
+  afterEach(() => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValue(DEFAULT_CHECKLISTS);
+  });
+
+  // The panel has no Checklists tab; checks open from Complete Checklists.
+  it('points an unstarted check at the Complete Checklists button, not a tab that does not exist', async () => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValue([
+      {
+        templateId: 'start-check',
+        templateName: 'Start check',
+        checkTiming: 'start_of_shift',
+        isCompleted: false,
+        overallStatus: 'incomplete',
+        totalItems: 3,
+        completedItems: 0,
+        failedItems: 0,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Complete Checklists/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Equipment Checks/ }));
+
+    expect(await screen.findByText('Not started — use Complete Checklists above')).toBeInTheDocument();
+    expect(screen.queryByText(/Go to Checklists tab/)).not.toBeInTheDocument();
+  });
+});

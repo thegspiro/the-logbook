@@ -122,8 +122,9 @@ once an officer approves the attendance), **Submit training you did
 elsewhere**, and **Take a skills test** — with **Submit External Training** and
 a link to the Learning Center's training walkthrough.
 
-> **Screenshot needed:**
-> _[My Training → as a brand-new member with no records and no requirements: the **Required Training** card reading **None assigned**, and the "Nothing is on your training record yet" panel with its three numbered ways, **Submit External Training** and **Take the short walkthrough in the Learning Center**.]_
+<!-- Screenshot needed:
+_[My Training → as a brand-new member with no records and no requirements: the **Required Training** card reading **None assigned**, and the "Nothing is on your training record yet" panel with its three numbered ways, **Submit External Training** and **Take the short walkthrough in the Learning Center**.]_
+-->
 
 > **An existing member may see a requirement as "Due by" a date rather than
 > overdue** _(2026-10-03)_. When a department introduces a requirement and
@@ -184,11 +185,13 @@ rebuilt; the certificate now attaches inline.**]**
 
 ---
 
-> **Screenshot needed:**
-> _[Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes — <course>" notice expanded, showing a "• Hours: 3 → 2" line, the officer's notes and the View My Submissions button. Demo data only.]_
+<!-- Screenshot needed:
+_[Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes — <course>" notice expanded, showing a "• Hours: 3 → 2" line, the officer's notes and the View My Submissions button. Demo data only.]_
+-->
 
-> **Screenshot needed:**
-> _[Member at /training/submit with one of their submissions in revision_requested state and a reviewer note: the returned-submission notice at the top of Submit Training showing the officer's note, "Returned <date> · Your hours are not counted yet", and the Fix and Resubmit and Withdraw buttons. Demo data only.]_
+<!-- Screenshot needed:
+_[Member at /training/submit with one of their submissions in revision_requested state and a reviewer note: the returned-submission notice at the top of Submit Training showing the officer's note, "Returned <date> · Your hours are not counted yet", and the Fix and Resubmit and Withdraw buttons. Demo data only.]_
+-->
 
 ## Course Library
 
@@ -206,7 +209,7 @@ The **Certifies** field on the course form names the qualification a completion
 grants the member, dated from the training record's completion and expiry — it
 decides which shift positions they may fill. Qualifications are recorded only
 this way; see
-[Rank and Qualification Are Different Things](./01-membership.md#rank-and-qualification-are-different-things-2026-08-26).
+[Rank and Qualification Are Different Things](./01-membership.md#rank-and-qualification-are-different-things).
 
 ![Course Library showing course cards grouped by category](./images/02-04-course-library.png)
 
@@ -788,8 +791,9 @@ From **Training > My Training**, find your program under **Active Program Enroll
 
 ![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
-> **Screenshot needed:**
-> _[Member enrolled in one program with at least two requirements, at /training/my-training: crop to the Pipeline Progress card — the program name as the card heading, the status chip and overall percentage, each requirement row as "<name> · N%" with its status, and the View full progress link. Demo data only.]_
+<!-- Screenshot needed:
+_[Member enrolled in one program with at least two requirements, at /training/my-training: crop to the Pipeline Progress card — the program name as the card heading, the status chip and overall percentage, each requirement row as "<name> · N%" with its status, and the View full progress link. Demo data only.]_
+-->
 
 ### Attending a session for a phase you have not reached
 
@@ -1053,8 +1057,9 @@ the printed matrix the cell reads **Due**.
 > cutoff earlier than the import. See
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
-> **Screenshot needed:**
-> _[Training Admin → Setup → Requirements → edit a requirement → the **Existing Members** section: the three choices **Apply to everyone**, **Exempt existing members** and **Give a catch-up deadline**, with **Give a catch-up deadline** selected and **Existing members joined before** / **Existing members must meet it by** filled in, and the note beneath them.]_
+<!-- Screenshot needed:
+_[Training Admin → Setup → Requirements → edit a requirement → the **Existing Members** section: the three choices **Apply to everyone**, **Exempt existing members** and **Give a catch-up deadline**, with **Give a catch-up deadline** selected and **Existing members joined before** / **Existing members must meet it by** filled in, and the note beneath them.]_
+-->
 
 ### Shift Credit _(2026-10-05)_
 
@@ -1068,8 +1073,9 @@ shifts should not count toward them. An existing Hours requirement that should
 stay on Shift Compliance needs ticking once. See
 [Shifts & Scheduling](./03-scheduling.md#compliance-report).
 
-> **Screenshot needed:**
-> _[Training Admin → Setup → Requirements → edit an Hours requirement: the "Shift attendance satisfies this requirement" tickbox below the hours fields, unticked, with its help text. Demo requirement.]_
+<!-- Screenshot needed:
+_[Training Admin → Setup → Requirements → edit an Hours requirement: the "Shift attendance satisfies this requirement" tickbox below the hours fields, unticked, with its help text. Demo requirement.]_
+-->
 
 #### "Who does this change apply to?" — saving a change for new members only
 
@@ -1101,8 +1107,9 @@ when:
 **Keep editing** closes the dialog without saving. Setting or changing the
 existing-member dates, and every split, is written to the audit log.
 
-> **Screenshot needed:**
-> _[Training Admin → Setup → Requirements → edit a requirement, change its hours, press save → the **Who does this change apply to?** dialog with **New members only** selected, the **New standard applies to members who joined on or after** date showing, and **Keep editing** / **Save for new members**.]_
+<!-- Screenshot needed:
+_[Training Admin → Setup → Requirements → edit a requirement, change its hours, press save → the **Who does this change apply to?** dialog with **New members only** selected, the **New standard applies to members who joined on or after** date showing, and **Keep editing** / **Save for new members**.]_
+-->
 
 ### Rolling Period Requirements and Leave of Absence
 
@@ -1206,8 +1213,9 @@ three required steps are done — the optional program step never holds it open 
 or when an officer presses the **×** (**Hide the setup guide**). Hiding is
 remembered in that browser only.
 
-> **Screenshot needed:**
-> _[Training Admin → Dashboard → Overview on a fresh department with one course and nothing else: the **Set up training for your department** guide reading "1 of 3 steps done", step 1 ticked, steps 2–4 with their links, and the **Department Compliance** widget reading **Not set up**.]_
+<!-- Screenshot needed:
+_[Training Admin → Dashboard → Overview on a fresh department with one course and nothing else: the **Set up training for your department** guide reading "1 of 3 steps done", step 1 ticked, steps 2–4 with their links, and the **Department Compliance** widget reading **Not set up**.]_
+-->
 
 **No requirements means "Not set up", not 100%.** With no active requirement
 every member is trivially compliant, and a department that had set nothing up
@@ -1298,8 +1306,9 @@ Both actions require `training.manage` and are recorded in the audit log.
 
 ---
 
-> **Screenshot needed:**
-> _[Member holding the Training Officer position at /notifications?tab=inbox: a "Training submission awaiting approval — <demo member>" card expanded to its body with the Review Submission button, or collapsed into an "N training submissions awaiting approval" stack. Seed the submissions after the upgrade so the prompts exist.]_
+<!-- Screenshot needed:
+_[Member holding the Training Officer position at /notifications?tab=inbox: a "Training submission awaiting approval — <demo member>" card expanded to its body with the Review Submission button, or collapsed into an "N training submissions awaiting approval" stack. Seed the submissions after the upgrade so the prompts exist.]_
+-->
 
 ## Finalizing a Training Session
 
@@ -1330,11 +1339,13 @@ redirects there:
   gives that member no credit) before recording it. Approving needs
   `training.manage`.
 
-> **Screenshot needed:**
-> _[Training Officer (training.manage) at /training/approve/:token for a pending approval: the header (event title, Course, Event date, Approve by), the roster with Credited minutes and Approved minutes (one row edited to 0), and the Approval notes field. Never press Approve and record. Capture the page only — no browser address bar, so the token is not visible.]_
+<!-- Screenshot needed:
+_[Training Officer (training.manage) at /training/approve/:token for a pending approval: the header (event title, Course, Event date, Approve by), the roster with Credited minutes and Approved minutes (one row edited to 0), and the Approval notes field. Never press Approve and record. Capture the page only — no browser address bar, so the token is not visible.]_
+-->
 
-> **Screenshot needed:**
-> _[`/training/approve/<token>` for a Training event that requires confirmation: **Approve training credit** above the session title, the **Course** / **Event date** / **Approve by** details, the roster table (**Member**, **Check-in**, **Check-out**, **Credited minutes**, **Approved minutes**, **Note**) with one member's approved minutes edited, and **Approve and record**.]_
+<!-- Screenshot needed:
+_[`/training/approve/<token>` for a Training event that requires confirmation: **Approve training credit** above the session title, the **Course** / **Event date** / **Approve by** details, the roster table (**Member**, **Check-in**, **Check-out**, **Credited minutes**, **Approved minutes**, **Note**) with one member's approved minutes edited, and **Approve and record**.]_
+-->
 
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
@@ -1453,11 +1464,13 @@ the compliance reports and the annual report agrees:
   picked on the requirement, the training type or the registry code. Link the
   course on any requirement you rely on.
 
-> **Screenshot needed:**
-> _[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
+<!-- Screenshot needed:
+_[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
+-->
 
-> **Screenshot needed:**
-> _[Training officer on the Training dashboard Overview: the Department Compliance card beside the matrix it links to, showing the same percentage.]_
+<!-- Screenshot needed:
+_[Training officer on the Training dashboard Overview: the Department Compliance card beside the matrix it links to, showing the same percentage.]_
+-->
 
 > **Compliance is judged on the department's date** _(2026-09-26)_. The server
 > runs in UTC, so for a US department its date rolls over in the evening — from
@@ -1831,8 +1844,9 @@ The shift report system supports a multi-stage review workflow:
 
 ![A trainee's own shift reports with the personal statistics card above them](./images/02-35-shift-reports-my-reports.png)
 
-> **Screenshot needed:**
-> _[Member without training.manage, no shift reports yet, at /scheduling?tab=shift-reports: the "Shift reports about you" heading, the "No shift reports yet" explanation and the three tiles (the shift itself / your officer's feedback / a place to acknowledge it). No view toggle should be visible.]_
+<!-- Screenshot needed:
+_[Member without training.manage, no shift reports yet, at /scheduling?tab=shift-reports: the "Shift reports about you" heading, the "No shift reports yet" explanation and the three tiles (the shift itself / your officer's feedback / a place to acknowledge it). No view toggle should be visible.]_
+-->
 
 ### Officer Analytics Dashboard _(2026-03-29)_
 
@@ -2579,8 +2593,9 @@ was measured (_"as of …"_). A period that has not started is refused, and when
 member is graded the entry shows **N/A**. Attestations made earlier keep the
 figures that were typed.
 
-> **Screenshot needed (replace `02-73-compliance-attestations.png`):**
-> _[Compliance Officer at the Attestations section: New Attestation open with Period Type Quarterly and the Quarter picker visible, the "calculated when you submit" sentence, and one history entry showing "as of <date>". Demo data only.]_
+<!-- Screenshot needed (replace `02-73-compliance-attestations.png`):
+_[Compliance Officer at the Attestations section: New Attestation open with Period Type Quarterly and the Quarter picker visible, the "calculated when you submit" sentence, and one history entry showing "as of <date>". Demo data only.]_
+-->
 
 ### Annual Compliance Report
 
@@ -3241,15 +3256,13 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 | Thermal Imaging Cameras | 2          | Temporary (same-day return) | June 13, 16:00  |
 | Attack Hose (1.75")     | 12 lengths | Pool item issuance          | June 13, 16:00  |
 
-> **No "Temporary" control on the checkout form _(2026-08-12)_.** The
-> assignment types in the table above are real — an assignment is `permanent` or
-> `temporary`, and the member's equipment list groups them accordingly — but
-> nothing in the interface lets you pick one. Assigning from an item's detail
-> page and the bulk distribute-items both create **permanent** assignments with no
-> choice offered. The one way to produce a loan today is to fulfil an equipment
-> request with an expected-return date. Pool issuance (the hose lengths above)
-> is a separate flow and does honour a return date. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#inventory--nothing-in-the-ui-can-choose-a-temporary-assignment-2026-08-12).
+> **Choosing Temporary _(2026-10-11)_.** Serialized gear such as the SCBA
+> units goes out from **Inventory Admin > Members > Assign**: under **Intended
+> duration** choose **Temporary loan** (or **Temporary assignment**, for gear
+> held through a posting) and set the **Expected return**. Assigning a single
+> item from its detail page asks **Permanent** or **Temporary** after you pick
+> the member; Temporary asks for a return date. Pool issuance (the hose lengths
+> above) is issued from stock whichever you choose.
 
 **Edge case — equipment in maintenance:** When Lt. Santos attempts to check out 6 SCBA units, the system reports that SCBA Unit #14 is currently flagged as "In Maintenance" (last inspection failed — regulator issue). Only 5 of the 6 requested units from that batch are available. Lt. Santos substitutes SCBA Unit #22 from a different station's inventory, and the checkout proceeds with 6 available units.
 

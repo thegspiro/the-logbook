@@ -5,6 +5,7 @@ import type { InspectionCreate } from '../../../services/facilitiesServices';
 import type { Inspection } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { formCoercions } from '../../../utils/formValues';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface InspectionFormData {
@@ -57,23 +58,33 @@ function inspectionToForm(insp: Inspection): InspectionFormData {
   };
 }
 
-function formToPayload(formData: InspectionFormData): InspectionCreate {
-  const payload: InspectionCreate = {
+/**
+ * On create a blank optional field is omitted; on edit it goes as an explicit
+ * null, because the backend dumps update payloads with `exclude_unset` and an
+ * omitted key means "leave this alone" — so clearing an inspector name, a
+ * corrective-action deadline or the findings used to be lost behind a success
+ * toast (CLAUDE.md pitfall #1).
+ *
+ * `inspection_type`, `title` and `inspection_date` back NOT NULL columns and
+ * are always sent as values; the form requires the latter two.
+ */
+function formToPayload(formData: InspectionFormData, isEdit: boolean): InspectionCreate {
+  const { text, pick } = formCoercions(isEdit);
+  return {
     facility_id: formData.facility_id,
     inspection_type: formData.inspection_type,
     title: formData.title.trim(),
     inspection_date: formData.inspection_date,
     passed: formData.passed === 'true' ? true : formData.passed === 'false' ? false : null,
+    description: text(formData.description),
+    next_inspection_date: pick(formData.next_inspection_date),
+    inspector_name: text(formData.inspector_name),
+    inspector_organization: text(formData.inspector_organization),
+    findings: text(formData.findings),
+    corrective_actions: text(formData.corrective_actions),
+    corrective_action_deadline: pick(formData.corrective_action_deadline),
+    notes: text(formData.notes),
   };
-  if (formData.description.trim()) payload.description = formData.description.trim();
-  if (formData.next_inspection_date) payload.next_inspection_date = formData.next_inspection_date;
-  if (formData.inspector_name.trim()) payload.inspector_name = formData.inspector_name.trim();
-  if (formData.inspector_organization.trim()) payload.inspector_organization = formData.inspector_organization.trim();
-  if (formData.findings.trim()) payload.findings = formData.findings.trim();
-  if (formData.corrective_actions.trim()) payload.corrective_actions = formData.corrective_actions.trim();
-  if (formData.corrective_action_deadline) payload.corrective_action_deadline = formData.corrective_action_deadline;
-  if (formData.notes.trim()) payload.notes = formData.notes.trim();
-  return payload;
 }
 
 type ResultFilter = 'all' | 'passed' | 'failed' | 'pending';
@@ -157,7 +168,7 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
     }
     setIsSaving(true);
     try {
-      const payload = formToPayload(formData);
+      const payload = formToPayload(formData, Boolean(editingInspection));
       if (editingInspection) {
         await facilitiesService.updateInspection(editingInspection.id, payload);
         toast.success('Inspection updated');

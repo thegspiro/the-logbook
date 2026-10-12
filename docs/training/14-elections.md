@@ -254,7 +254,19 @@ candidates:
      nominee is emailed and must **accept** before they appear on the ballot;
      declining removes the entry (the audit log keeps the record)
 4. Click **Close Nominations** (or let the deadline do it) — the election
-   returns to Draft, where you finalize the ballot and open voting as usual
+   returns to Draft, where you order the ballot and open voting as usual.
+   **Closing freezes the slate** _(2026-10-08, W50-38)_: a nomination still
+   pending stays off the ballot (the Candidates tab marks it _"Not accepted
+   before nominations closed"_), and neither the nominee nor a manager can
+   accept or decline any more. To change the slate, open nominations again.
+
+**Accepting on a nominee's behalf** _(2026-10-08, W50-38)_. While nominations
+are open, an election manager can accept a pending nomination for the nominee
+(**Accept on their behalf** on the Candidates tab) — for a member who agreed in
+person or by phone. The candidate is labelled **Accepted by manager** wherever
+the list is shown, and the nominee is emailed that their nomination was
+accepted for them, with how to decline before nominations close. If the
+nominee later accepts themselves, the label is removed.
 
 Safeguards:
 
@@ -487,7 +499,7 @@ When the election is ready:
 
 1. Review all ballot items and candidates
 2. Click **Open Election** — status changes from Draft to Open, and the voter roll is frozen (see below)
-3. Opening sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution) — a scheduled opening (**Open Automatically at Start Time**) does not send them either
+3. Opening by hand sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution). A scheduled opening (**Open Automatically at Start Time**) does send them _(2026-10-08, W50-72)_: as the election's creator (replies go to them), with links on the department's configured app address. If that send fails or reaches nobody, the election still opens, and every member who can manage elections is emailed _"Action needed: ballots for <election> were not sent"_ — open the election and use **Send Ballot Emails**
 4. Once the ballots are out, voters can cast their votes via the in-app interface or the email ballot link
 
 > **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
@@ -504,6 +516,17 @@ When you click **Send Ballots**, the system:
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
 ![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
+
+**Changing the ballot after ballots went out** _(2026-10-08, W50-47)_. A
+ballot link shows the ballot as it was when the link was sent. So when you
+change the ballot items, the positions or who may vote on which (for example
+after rolling an open election back to draft), every link already sent that
+has not been used is retired. The detail page then shows **"Every ballot link
+already sent was invalidated because the ballot changed"** until ballots go
+out again — with **Resend Ballot Emails** on an open election, or a reminder to
+send once voting is open on a draft. A member who opens an old link reads that
+the ballot changed and a new email is coming. Saving the ballot without
+changing it retires nothing.
 
 Two things report the result. A **toast** gives the counts — "Ballots sent to N
 voter(s)", plus "M failed" and "M skipped (see banner below)" when either
@@ -573,12 +596,12 @@ instructions. Print it, hand it out, then enter the tallies via
 The `election_lifecycle` background task runs every 15 minutes and automates
 the routine timing work:
 
-| Automation                | Trigger                                                                                   | Opt-in?                                                                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auto-close**            | An open election passes its end date                                                      | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
-| **Auto-open**             | A draft election with **Open Automatically at Start Time** enabled reaches its start date | Yes (`auto_open` on the election)                                                                                                                        |
-| **Nomination auto-close** | The nomination deadline passes                                                            | Automatic when a deadline is set                                                                                                                         |
-| **Automatic reminder**    | The configured **Auto-Remind Non-Voters** window before close opens                       | Yes (`reminder_hours_before_close`)                                                                                                                      |
+| Automation                | Trigger                                                                                                                                    | Opt-in?                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-close**            | An open election passes its end date                                                                                                       | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
+| **Auto-open**             | A draft election with **Open Automatically at Start Time** enabled reaches its start date — and the ballots are emailed (since 2026-10-08) | Yes (`auto_open` on the election)                                                                                                                        |
+| **Nomination auto-close** | The nomination deadline passes                                                                                                             | Automatic when a deadline is set                                                                                                                         |
+| **Automatic reminder**    | The configured **Auto-Remind Non-Voters** window before close opens                                                                        | Yes (`reminder_hours_before_close`)                                                                                                                      |
 
 ### Reminding Non-Voters Manually
 
@@ -611,9 +634,12 @@ every ballot item and every position race, answered the same way (Approve /
 Deny, one candidate, "Select up to N", or a ranking).
 
 1. Navigate to **Elections** and open the active election, then **Cast Vote**
-2. Make a selection on the items you are voting on now. An item you leave on
-   **Abstain** stays open — unlike the emailed link, the in-app ballot is not
-   single-use — and an item you have already voted on is shown as done
+2. Make a selection — or choose **Abstain** — on every open item. Nothing is
+   pre-selected _(2026-10-08, W50-25)_, and **Cast Ballot** stays disabled
+   until each item has one, with a line naming the items still waiting. An
+   item you abstain on stays open — unlike the emailed link, the in-app
+   ballot is not single-use — and an item you have already voted on is shown
+   as done
 3. Click **Cast Ballot**, check the summary in the confirmation and confirm.
    Everything you selected is recorded together: if any selection is refused
    (say, you are not eligible for that item), nothing is recorded and the
@@ -796,13 +822,31 @@ Vote** tab:
    recorded as theirs (double-vote prevention applies to them, not you) and
    marked as cast by you as their proxy
 
-**Named elections only.** A proxy vote records whom it was cast for, so on an
-**anonymous** election the proxy ballot is refused — the tab says so instead
-of offering the choice. Whether an anonymous election may accept an
-attributable proxy ballot is an open owner decision (ELEC-43 in
-`docs/KNOWN_LIMITATIONS.md`). Proxy voting must also be enabled in Election
-Settings. The holder can still use the delegating member's emailed link they
-are copied on.
+**A proxy ballot is not anonymous** _(2026-10-08, ELEC-43 / W50-2)_. A
+proxy vote records whom it was cast for, and the proxy holder sees every
+choice. On a named election that changes nothing. On an **anonymous**
+election it is allowed only with the delegating member's acknowledgement:
+
+- **Authorizing** on an anonymous election shows the warning _"a proxy
+  ballot is not anonymous: the proxy holder will see how the member votes,
+  and the ballot cast for them is stored linked to their name"_ and a
+  checkbox — _"The delegating member has been told this and accepts it"_.
+  **Add Authorization** stays disabled until it is ticked, and the server
+  refuses the authorization without it. Tick it only after the member has
+  agreed.
+- On every authorization the **delegating member is emailed** _"Proxy
+  authorized — <election>"_, naming the holder; on an anonymous election the
+  email carries the same warning.
+- An authorization created on an anonymous election **before** this rule
+  carries no acknowledgement, and its ballot is refused with _"Ask the
+  secretary to revoke it and authorize the proxy again"_. Revoke it and
+  authorize it again with the checkbox.
+- The **certified PDF** of an anonymous election that received proxy votes
+  says the salt was destroyed _"except for N proxy vote(s), which are
+  recorded against the member they were cast for"_.
+
+Proxy voting must also be enabled in Election Settings. The holder can still
+use the delegating member's emailed link they are copied on.
 
 ### Edge Cases
 
@@ -840,6 +884,15 @@ If results are hidden until close:
 
 > **Note on early closes** _(2026-10-05)_: closing releases the results. An election closed early at the meeting shows them on the **Results** tab straight away — to the officer who closed it and to every member who can view elections — exactly as it would have at the scheduled end. **Publish Results** is only needed to show results _before_ voting closes, which the app does not allow while voting is open.
 
+**What members see while voting is open** _(2026-10-08, W50-70)_. Only
+election managers see how many votes have been cast and who was sent a ballot
+while an election is open; for everyone else the vote count is left off the
+election list and the detail page until the election closes (or, if **results
+visible immediately** was set, the count shows but the recipient list still
+does not). Ballots — the emailed link and the Cast Vote tab — show each
+candidate's name and statement only, never which member account they are or
+who nominated them.
+
 **The Results & Publishing panel** _(changed 2026-10-05)_ appears once the
 election is open. It no longer carries a **Publish Results** / **Hide
 Results** switch: closing the election is what releases the results, so a
@@ -866,6 +919,12 @@ the marks; the re-close certifies afresh.
   tally and result were reported nowhere — the Results tab, the report email
   and the certified PDF showed position races only. Each item is now reported
   with its own label and percentages.
+- **Nothing is pooled across items** _(2026-10-08, W50-7)_. A ballot of
+  motions with no position races used to be shown as one combined list, where
+  one motion's Approve competed with another motion's Deny for a single
+  "winner". The Results tab now reads **Results by Ballot Item** with one
+  table per item, the certified PDF prints one table per item, and a tied
+  race on such a ballot gets its runoff (a motion never does).
 - **Ties are named.** A tied race's report printed two 50% rows and never said
   "tie"; it now prints "Tie — co-winners per policy" or "Tie — runoff round
   created".
@@ -906,6 +965,14 @@ Navigate to the **Non-Voters** section to see eligible voters who did not partic
 On a named (non-anonymous) election, a member who voted by link used to stay
 on the non-voters list and receive "you have not yet voted" reminders, and
 turnout undercounted them.
+
+**…and named after the election closes** _(2026-10-08, W50-3)_. A link vote
+on a named election now records which member cast it — the ballot link is
+tied to its recipient when it is sent — so the **who-voted** roster still
+names link voters after close, when the election's salt is destroyed. A link
+sent before this change is matched to its member when the ballot is
+submitted. On an **anonymous** election nothing is recorded: link votes stay
+unattributable.
 
 ---
 
@@ -1012,11 +1079,11 @@ deliberate act, not something computed on every page load.
 
 ### Edge Cases
 
-| Scenario                      | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Vote signature mismatch       | Flagged in forensics report; does not auto-delete vote                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Secretary deletes a vote      | Soft-delete with reason required; audit trail preserved. The member may then vote again (since 2026-09-30 — both voting routes used to fail with a server error), and their old receipt reads "This vote was voided by an officer". **Known gap:** an officer's own void currently makes **Run Check** report "Vote Integrity Issue Detected" and the certified PDF print CHAIN_BROKEN — expected after a void until the chain design is settled (`docs/KNOWN_LIMITATIONS.md`) |
-| Election reopened after close | Rollback logged in forensics; leadership notification sent. **Not allowed** for anonymous elections that already have votes — the anonymity salt is destroyed at close, so reopening would let prior voters vote again. Create a new election instead                                                                                                                                                                                                                          |
+| Scenario                      | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vote signature mismatch       | Flagged in forensics report; does not auto-delete vote                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Secretary deletes a vote      | Soft-delete with reason required; audit trail preserved. The member may then vote again (since 2026-09-30 — both voting routes used to fail with a server error), and their old receipt reads "This vote was voided by an officer". Since 2026-10-08 (W50-31) the void stays in the vote chain: **Run Check** reads PASS and lists _"N vote(s) voided by <officer>: <reason>"_, and the certified PDF prints the same line under its integrity verdict |
+| Election reopened after close | Rollback logged in forensics; leadership notification sent. **Not allowed** for anonymous elections that already have votes — the anonymity salt is destroyed at close, so reopening would let prior voters vote again. Create a new election instead                                                                                                                                                                                                  |
 
 ---
 
@@ -1227,9 +1294,13 @@ is still open.
 `docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
 Drive"):
 
-- The emailed ballot pre-selects **Abstain** on every item; an untouched
-  Submit casts no votes and uses up the link.
-- Scheduled opening (**Open Automatically at Start Time**) sends no ballots.
+- ~~The emailed ballot pre-selects **Abstain** on every item~~ — fixed
+  2026-10-08 (W50-25): nothing is pre-selected on either ballot, and
+  **Submit Ballot** stays disabled until every item has a choice or an
+  explicit Abstain.
+- ~~Scheduled opening (**Open Automatically at Start Time**) sends no
+  ballots~~ — fixed 2026-10-08 (W50-72): it sends them, and alerts managers
+  if the send fails.
 - Several screen fixes found in the same review — the delete and close dialog
   wording, a close stamp on the election cards, a test-ballot banner on the
   ballot page, labels in Election Settings — were not yet merged on 4 October 2026.
@@ -1313,8 +1384,9 @@ The fixes above were driven again in a real browser; these are what that found.
 - **The help pop-up on the Elections page** is as wide as its text rather than a
   word or two a line.
 
-> **Screenshot needed:**
-> _[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
+<!-- Screenshot needed:
+_[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
+-->
 
 ---
 

@@ -359,7 +359,7 @@ async def test_the_backfill_query_is_valid_sql(db_session):
         Path(__file__).resolve().parents[1]
         / "alembic"
         / "versions"
-        / "20261011_1008_bde76b481a16_practical_skills_method.py"
+        / "20261012_1535_bde76b481a16_practical_skills_method.py"
     )
     spec = importlib.util.spec_from_file_location("practical_skills_migration", path)
     assert spec is not None

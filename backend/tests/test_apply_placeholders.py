@@ -94,3 +94,71 @@ def test_a_shot_with_no_anchor_still_honours_its_hint():
 def test_a_hint_on_ordinary_prose_finds_nothing_without_an_anchor():
     index = apply_placeholders.locate(GUIDE, {"line": 1, "anchor": ""})
     assert index is None
+
+
+# The current placeholder shape is an HTML comment, so the request is invisible
+# to a member reading the guide. Both shapes must keep working: branches written
+# before the change still carry blockquote placeholders.
+COMMENT_GUIDE = [
+    "## Reviewers",
+    "",
+    "<!-- Screenshot needed:",
+    "[Screenshot of the Flagged tab showing",
+    "previously flagged reports with a Re-Review Report button.]",
+    "-->",
+    "",
+    "Some prose about trainees.",
+    "",
+    "<!-- Screenshot needed: [Screenshot of the review modal on one line] -->",
+    "",
+    "> **Screenshot needed:**",
+    "> _[Screenshot of the legacy blockquote form]_",
+    "",
+]
+
+
+def test_a_comment_placeholder_is_located_by_its_anchor():
+    index = apply_placeholders.locate(
+        COMMENT_GUIDE,
+        {"line": 999, "anchor": "previously flagged reports with a Re-Review"},
+    )
+    assert index == 2
+
+
+def test_a_comment_placeholder_runs_through_the_closing_line():
+    assert apply_placeholders.block_end(COMMENT_GUIDE, 2) == 6
+
+
+def test_a_one_line_comment_placeholder_is_one_line_long():
+    assert apply_placeholders.block_end(COMMENT_GUIDE, 9) == 10
+
+
+def test_an_unclosed_comment_never_swallows_the_rest_of_the_guide():
+    """Deleting to the end of the file would lose every section below it."""
+    lines = ["<!-- Screenshot needed:", "[never closed]", "## Next section", ""]
+    assert apply_placeholders.block_end(lines, 0) == 1
+
+
+def test_comment_and_legacy_placeholders_coexist():
+    index = apply_placeholders.locate(
+        COMMENT_GUIDE,
+        {"line": 999, "anchor": "Screenshot of the legacy blockquote form"},
+    )
+    assert index == 11
+    assert apply_placeholders.block_end(COMMENT_GUIDE, 11) == 13
+
+
+def test_replacing_a_comment_placeholder_leaves_the_prose_around_it():
+    lines = list(COMMENT_GUIDE)
+    start = apply_placeholders.block_start(lines, 2)
+    end = apply_placeholders.block_end(lines, 2)
+    lines[start:end] = apply_placeholders.separated(
+        lines, start, "![Flagged tab](./images/x.png)"
+    )
+    assert lines[:5] == [
+        "## Reviewers",
+        "",
+        "![Flagged tab](./images/x.png)",
+        "",
+        "Some prose about trainees.",
+    ]

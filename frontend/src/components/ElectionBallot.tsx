@@ -23,7 +23,14 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { VerifyReceipt } from './VerifyReceipt';
 import { BallotItemCard } from './ballot/BallotItemCard';
 import { useBallotChoices } from './ballot/useBallotChoices';
-import { candidatesForItem, choiceLabel, choiceToVote, emptyChoice, missingWriteIn } from './ballot/ballotChoices';
+import {
+  candidatesForItem,
+  choiceLabel,
+  choiceToVote,
+  emptyChoice,
+  missingWriteIn,
+  unansweredItems,
+} from './ballot/ballotChoices';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -92,6 +99,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, onVo
     return status?.eligible === true && !status.voted;
   });
   const votedItems = items.filter((item) => statusById.get(item.id)?.voted === true);
+  const unanswered = unansweredItems(choices, openItems);
   const proxyName = ballot?.proxy?.delegating_user_name || 'the member';
 
   const handleSubmit = async () => {
@@ -106,7 +114,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, onVo
       .join('; ');
     const ok = await confirm({
       title: ballot.proxy ? `Cast ${proxyName}'s ballot` : 'Cast your ballot',
-      message: `${summary}. Votes cannot be changed once cast; an item left on Abstain stays open to vote on later.`,
+      message: `${summary}. Votes cannot be changed once cast; an item you abstain on stays open to vote on later.`,
       confirmLabel: 'Cast ballot',
       cancelLabel: 'Change ballot',
     });
@@ -234,7 +242,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, onVo
           </div>
         )}
         <p className="text-theme-text-muted mb-4 text-sm">
-          Make a selection on the items you are voting on now. An item left on Abstain stays open.
+          Make a selection or choose Abstain on each item. An item you abstain on stays open to vote on later.
         </p>
 
         {error && (
@@ -275,10 +283,23 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, onVo
           })}
         </div>
 
-        <div className="mt-6 flex justify-end">
-          <button type="button" onClick={() => void handleSubmit()} disabled={submitting} className="btn-primary">
+        <div className="mt-6 flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={submitting || unanswered.length > 0}
+            aria-describedby="member-ballot-submit-help"
+            className="btn-primary"
+          >
             {submitting ? 'Casting...' : ballot.proxy ? `Cast ${proxyName}'s Ballot` : 'Cast Ballot'}
           </button>
+          {unanswered.length > 0 && (
+            <p id="member-ballot-submit-help" className="text-theme-text-muted text-sm" aria-live="polite">
+              {`${unanswered.length} item${unanswered.length === 1 ? '' : 's'} still need${
+                unanswered.length === 1 ? 's' : ''
+              } a selection or Abstain: ${unanswered.map((i) => i.title).join(', ')}.`}
+            </p>
+          )}
         </div>
         {receiptBlock}
       </div>

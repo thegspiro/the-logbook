@@ -99,7 +99,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 1     | Close the access leaks                                                                                                                          | done (#3009) |
 | 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
 | 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
-| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | this change  |
+| 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
+| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | this change  |
 
 ### Phase 1 — what changed
 
@@ -255,11 +256,41 @@ Not done here:
 
 These are in `docs/KNOWN_LIMITATIONS.md`.
 
+### Phase 5 — every document lives in a folder (2026-10-11)
+
+A document with no folder was organization level: readable and downloadable
+by every `documents.view` holder, outside every folder's rights. Upload let
+the folder be left out, and a move could set it to null, so a document taken
+_out_ of a gated folder (Finance, Member Separations, a personal folder)
+became readable by the whole organization.
+
+| Finding                                                                                                    | Fix                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /documents/upload` with no `folder_id` stored an unfiled document                                    | Files it into General Documents (created with the system roots if missing), behind the same write check as any folder                     |
+| `PATCH /documents/{id}` with `folder_id: null` moved a document out of its folder's rights, unchecked      | `null` means General Documents and goes through the destination write check                                                               |
+| Unfiled documents already stored                                                                           | Migration `dcb8a46ac50c` files them into their organization's General root; reversible, recorded in `document_unfiled_backfill`           |
+| Linking an unfiled document to an apparatus moved it behind apparatus rights with only read access checked | Re-filing it takes `documents.manage`                                                                                                     |
+| The facility Files tab relied on uploading unfiled and re-filing on link                                   | The link also files the caller's _own_ upload out of General into the facility folder; someone else's library document is never pulled in |
+
+Who can read a moved document is unchanged — General Documents is the shared
+library, open to `documents.view` — but its folder now decides it. The upload
+form's "No folder" choice reads "General Documents (default)".
+
+This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
+`990e288940bc`, published with the same parent.
+
 ### Found in passing, not in this change
 
 - `GET /events?include_drafts=true` returns draft events to any member. The
   flag is honoured without a permission check. Belongs with the events
   module, not file storage.
+- Two found by the 2026-10-11 audit for Phase 5, recorded in
+  `docs/KNOWN_LIMITATIONS.md` ("File Storage — Folder Rights Phase 3 Left
+  Open"): files in the `documents` area were stored flat under
+  `<org>/documents/`, not per record (resolved the same day: new uploads go
+  to `<org>/documents/<document_id>/`, and `scripts/relocate_uploads.py`
+  moves the flat ones); and an event's attachment references are confined to
+  the organization, not to that event.
 
 ## Open questions for later phases
 

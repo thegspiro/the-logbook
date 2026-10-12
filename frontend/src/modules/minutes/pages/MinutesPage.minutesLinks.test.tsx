@@ -168,7 +168,7 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     expect(screen.getAllByText('at 7:00 PM').length).toBeGreaterThan(0);
   });
 
-  it('offers only the meeting types a meeting record accepts, in a named dialog', async () => {
+  it('offers every meeting type a meeting record accepts (W51-4), in a named dialog', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesPage />);
 
@@ -177,7 +177,7 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     const types = within(within(dialog).getByLabelText('Meeting Type'))
       .getAllByRole('option')
       .map((o) => o.getAttribute('value'));
-    expect(types).toEqual(['business', 'special', 'committee', 'board', 'other']);
+    expect(types).toEqual(['business', 'special', 'committee', 'board', 'trustee', 'executive', 'annual', 'other']);
   });
 
   it('does not start recording without a date', async () => {

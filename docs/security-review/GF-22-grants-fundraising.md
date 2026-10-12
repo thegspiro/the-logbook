@@ -948,8 +948,16 @@ includes both: `test_grant_report_end_date_includes_records_created_later_that_d
 each fails before the fix (temporarily reverted the `Number`/`datetime.combine`
 change, confirmed the 23:30 record was silently dropped) and passes after.
 
-**Follow-up (Codex review, round 2) — GF-24a — LOW-MED, FLAGGED, not fixed —
+**Follow-up (Codex review, round 2) — GF-24a — LOW-MED, FIXED 2026-10-11 —
 the boundary is hard-coded UTC, not the organization's local timezone.**
+
+**Resolution (owner decision 2026-10-08: org timezone via the org_timezone
+helpers, UTC fallback):** a reporting-specific `reporting_timezone` (UTC
+fallback, not scheduling's America/New_York) and `local_range_utc` /
+`resolve_local_range_utc` now bound every timestamp range in
+`reports_service.py`, `grant_service.get_grant_report` and
+`fundraising_service.get_fundraising_report` / `list_donations` at the
+department's midnights, end-exclusive. The original finding follows.
 Correct: for an org whose `organization.timezone` is not UTC (e.g.
 `Asia/Tokyo`, `America/Los_Angeles`), a report end date of June 15 should
 mean "through June 15 in the department's own timezone," not through

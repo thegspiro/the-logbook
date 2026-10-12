@@ -1007,6 +1007,19 @@ class UnroutedApprovalResponse(UTCResponseBase):
     entity_amount: Decimal
     requester_name: str
     submitted_at: datetime
+    # Held for a second, different approver by the dual-approval threshold.
+    awaiting_second_approval: bool = False
+    first_approved_by: Optional[str] = None
+
+
+class FinanceSettingsResponse(BaseModel):
+    """The finance rules the server applies (app/utils/finance_settings.py)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None: off. Otherwise requests of this amount or more need two different
+    # approvers.
+    dual_approval_threshold: Optional[Decimal] = None
 
 
 class ManualDenyRequest(BaseModel):
@@ -1094,10 +1107,17 @@ class PurchaseRequestResponse(UTCResponseBase):
     priority: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
     receipt_document_id: Optional[str] = None
@@ -1224,9 +1244,16 @@ class ExpenseReportResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     paid_at: Optional[datetime] = None
     payment_method: Optional[str] = None
+    qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1289,9 +1316,19 @@ class CheckRequestResponse(UTCResponseBase):
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+    # A first approval held for a second approver by the dual-approval
+    # threshold, and whether the request is waiting on that second approval
+    # (set on detail responses, from FinanceService.is_awaiting_second_approval).
+    first_approved_by: Optional[str] = None
+    first_approved_at: Optional[datetime] = None
+    awaiting_second_approval: bool = False
     denial_reason: Optional[str] = None
     check_number: Optional[str] = None
     check_date: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    qb_exported_at: Optional[datetime] = None
+    # When the reversing entry for a void went to QuickBooks.
+    qb_void_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1387,6 +1424,8 @@ class MemberDuesResponse(UTCResponseBase):
     waived_at: Optional[datetime] = None
     waive_reason: Optional[str] = None
     notes: Optional[str] = None
+    # Set by the list endpoint only; a single-record write response omits it.
+    member_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1545,6 +1584,9 @@ class ExportRequest(BaseModel):
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+    # Send again payments an earlier export already carried. Off, the export
+    # leaves them out so overlapping periods do not import twice.
+    include_exported: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod
@@ -1589,6 +1631,7 @@ class ExportLogResponse(UTCResponseBase):
     file_format: str
     exported_by: str
     exported_at: datetime
+    exported_by_name: Optional[str] = None
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None

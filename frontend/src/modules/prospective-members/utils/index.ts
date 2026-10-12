@@ -5,7 +5,7 @@
  * runtime logic (validation, formatting) rather than type definitions.
  */
 
-import type { InactivityConfig } from '../types';
+import type { InactivityConfig, PipelineStage } from '../types';
 import { TIMEOUT_PRESET_DAYS } from '../types';
 
 /**
@@ -42,4 +42,26 @@ export function getInitials(firstName: string, lastName: string): string {
 /** Basic email format validation. */
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * Whether the drawer's primary action on this stage is **Convert** rather than
+ * **Advance**.
+ *
+ * The backend decides conversion from `is_final_step`, not from the order, and
+ * a flagged stage can sit anywhere (a stage can be created flagged, and a
+ * reorder only moves the flag in a pipeline that already has one). Labelling
+ * by order let completing a flagged mid-pipeline stage convert the applicant
+ * under a button that said Advance. So the flag decides; a pipeline with no
+ * flagged stage keeps Convert on its highest stage, because the manual
+ * transfer it calls works regardless of the flag and those pipelines would
+ * otherwise have no Convert at all (owner decision).
+ */
+export function isConvertStage(stages: readonly PipelineStage[], stageId: string | undefined): boolean {
+  if (!stageId || stages.length === 0) return false;
+  if (stages.some((s) => s.is_final_step === true)) {
+    return stages.some((s) => s.id === stageId && s.is_final_step === true);
+  }
+  const highest = stages.reduce((top, s) => (s.sort_order > top.sort_order ? s : top));
+  return highest.id === stageId;
 }

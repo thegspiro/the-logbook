@@ -182,11 +182,13 @@ seeded position removes it.
 
 ---
 
-> **Screenshot needed:**
-> _[System Owner during setup at `/onboarding/it-team`: step 7 IT & Backup Contacts with its "Optional. Choose Skip for now if your department has no IT contact." line, one demo IT contact filled in, the Recovery contacts note, and both Continue to Email and Skip for now in frame. Demo names and example.org addresses only; no real phone numbers.]_
+<!-- Screenshot needed:
+_[System Owner during setup at `/onboarding/it-team`: step 7 IT & Backup Contacts with its "Optional. Choose Skip for now if your department has no IT contact." line, one demo IT contact filled in, the Recovery contacts note, and both Continue to Email and Skip for now in frame. Demo names and example.org addresses only; no real phone numbers.]_
+-->
 
-> **Screenshot needed:**
-> _[Anonymous on a fresh install, then the new System Owner (scripts/screenshots/wizard-walk.mjs), at `/onboarding/apparatus`: Engine 1 carrying Officer, Driver, Firefighter, Firefighter and EMT chips — two Firefighter seats visible — and the + EMT add chip. Crop to the unit card; the administrator password from the previous step must not be in frame.]_
+<!-- Screenshot needed:
+_[Anonymous on a fresh install, then the new System Owner (scripts/screenshots/wizard-walk.mjs), at `/onboarding/apparatus`: Engine 1 carrying Officer, Driver, Firefighter, Firefighter and EMT chips — two Firefighter seats visible — and the + EMT add chip. Crop to the unit card; the administrator password from the previous step must not be in frame.]_
+-->
 
 ## Organization Settings
 
@@ -275,8 +277,9 @@ Configure how membership IDs are assigned:
 - Set the ID format (prefix, numeric pattern)
 - View and manage the next available ID number
 
-> **Screenshot needed:**
-> _[Admin holding settings.edit at `/members/admin/settings/ids`: the Membership IDs section with numbering and auto-generation on, pattern `{YYYY}-{SEQ}`, Minimum digits 3, Restart the count each year on, The year follows set to Our fiscal year starting July — so the fiscal-year naming select and the "The next member will be numbered …" line are both visible.]_
+<!-- Screenshot needed:
+_[Admin holding settings.edit at `/members/admin/settings/ids`: the Membership IDs section with numbering and auto-generation on, pattern `{YYYY}-{SEQ}`, Minimum digits 3, Restart the count each year on, The year follows set to Our fiscal year starting July — so the fiscal-year naming select and the "The next member will be numbered …" line are both visible.]_
+-->
 
 ### The rest of Members Administration → Settings _(2026-09-11)_
 
@@ -328,8 +331,9 @@ set its ladder during installation is looking at its own answers here.
 
 ![The Operational Ranks section — the rank ladder with each rank's fillable shift seats](./images/08-79-members-settings-ranks.png)
 
-> **Screenshot needed:**
-> _[Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational Ranks ladder for a rank nobody holds, showing its message and the Keep it / Delete buttons. Press Keep it afterwards; never confirm.]_
+<!-- Screenshot needed:
+_[Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational Ranks ladder for a rank nobody holds, showing its message and the Keep it / Delete buttons. Press Keep it afterwards; never confirm.]_
+-->
 
 **The rank list is the vocabulary once it exists** _(2026-10-05)_. A built-in rank
 such as "firefighter" that your department deleted during setup used to be
@@ -505,10 +509,11 @@ The Logbook uses a **position-based** permission system:
 > **Written by me**. `training.manage` no longer shows department totals by
 > itself. Tick it on any position you build yourself that should.
 
-> **Screenshot needed:**
-> _[Role Management → edit a position that holds `inventory.*`, change one
-> permission and save, showing the success toast. Save as
-> `08-04b-role-save-wildcard.png`.]_
+<!-- Screenshot needed:
+_[Role Management → edit a position that holds `inventory.*`, change one
+permission and save, showing the success toast. Save as
+`08-04b-role-save-wildcard.png`.]_
+-->
 
 > **A permission matches literally.** Holding `X.manage` does not grant
 > `X.view`: a position is granted exactly the names ticked on it, a module
@@ -549,6 +554,42 @@ Permission categories include:
 > member.
 
 ---
+
+## Administration hubs: cards, phone rows and the search palette _(2026-10-11)_
+
+Every administration hub (Training, Events, Members, Inventory, Scheduling and
+the Department Store) now works the same way.
+
+- **Sections are cards.** Each section says what it holds ("Payments that need
+  matching by hand") instead of showing only a name. A card with a red count
+  uses the same numbers as the **Needs attention** list above it, so the two
+  cannot disagree. Training's thirty-one destinations are grouped into seven
+  areas (Overview, Records, Curriculum, Evaluations, Program Management,
+  Compliance Reporting, Settings & Data); old links with `?page=` or `?tab=`
+  still land on the right place.
+- **On a phone** the cards become one row of chips that scrolls sideways, with
+  the chosen section's description under it. A fade and a round arrow on an edge
+  mean there is more that way; tap the arrow to move along. The headline-metrics
+  row shows the two metrics set for **phone** on the settings tab, and drops the
+  attention count when the queue above already shows it.
+- **Four more review queues in Needs attention:** Training shows skills tests
+  waiting for an officer's validation (opens **Skills Test Records** on **Needs
+  Validation**) and shift reports waiting for review or flagged; Events shows
+  members' "I was there" requests department-wide (opens **All events**); the
+  Store shows order windows still open more than an hour after they were meant
+  to close.
+- **Inventory and Scheduling** describe their tabs as cards too, and their
+  Settings tab is now **Headline Metrics**, which is all it holds.
+- **Search finds hub sections.** Open the command palette and type: every
+  Training, Events, Members and Store section you are allowed to see is offered.
+- **Less repetition inside a hub.** Pages that only appear as a hub tab no longer
+  carry a back link to where you already are, a second large title, or (on
+  Members) a second red **Add Member** button. Screen readers still land on each
+  tab's heading.
+
+> **Screenshot needed:** each hub's card row on desktop; the chip row on a phone
+> with the edge cue visible; Training's area cards; **Needs attention** with the
+> new queues.
 
 ## Reports
 
@@ -603,8 +644,10 @@ reporting period set at the top of the page; the others are a snapshot of now.
 **"Today" in a report is the department's date** _(2026-09-26)_ — the
 certification report's expiring/expired flags, apparatus inspection due dates
 and the call-volume year-to-date default no longer run a day ahead in the
-evening. A custom range's end date is still read as a UTC day boundary
-(see [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md), GF-24a).
+evening. Since 2026-10-11 a custom range is read the same way: "June 1 to
+June 15" means midnight June 1 to the end of June 15 on the department's own
+clock, in every report and in the grant and fundraising reports. A department
+with no timezone set reads its ranges in UTC.
 
 ### Pipeline Overview Report (2026-03-15)
 
@@ -698,14 +741,17 @@ department ran the module before this date.
 
 ---
 
-> **Screenshot needed:**
-> _[Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key: the dialog with "Department website" typed into Key Name and the other fields blank. Never submit it, and never capture the API Key Created dialog — it shows a live, full key.]_
+<!-- Screenshot needed:
+_[Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key: the dialog with "Department website" typed into Key Name and the other fields blank. Never submit it, and never capture the API Key Created dialog — it shows a live, full key.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator at `/admin/public-portal`, Statistics tab: the full tab. An unseeded demo showing zeros, with Error Rate reading — / No requests in 24h, is acceptable. If access-log rows can be seeded, include a few 4xx and one 429 so Rate Limits Hit is non-zero; do not trigger the Attention Required banner with made-up data unless the caption says so.]_
+<!-- Screenshot needed:
+_[Administrator at `/admin/public-portal`, Statistics tab: the full tab. An unseeded demo showing zeros, with Error Rate reading — / No requests in 24h, is acceptable. If access-log rows can be seeded, include a few 4xx and one 429 so Rate Limits Hit is non-zero; do not trigger the Attention Required banner with made-up data unless the caption says so.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator at `/admin/public-portal`, Data Control tab on the demo department: the Events, Organization and Stats sections with every toggle off, the yellow PII badges on phone, email, mailing_address and physical_address, and the Sensitive (PII) card reading 0. Do not flip any toggle — a toggle saves immediately and publishes the field.]_
+<!-- Screenshot needed:
+_[Administrator at `/admin/public-portal`, Data Control tab on the demo department: the Events, Organization and Stats sections with every toggle off, the yellow PII badges on phone, email, mailing_address and physical_address, and the Sensitive (PII) card reading 0. Do not flip any toggle — a toggle saves immediately and publishes the field.]_
+-->
 
 ## Integrations _(2026-04-11)_
 
@@ -903,18 +949,24 @@ Scheduled tasks run automatically on a schedule:
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                                                                                                                           |
 | **Self-Report Attachment Retention**  | Daily: deletes approved or rejected self-reported certificate files older than the department's retention period, where one is set _(added 2026-10-05; see [Training](./02-training.md))_ |
 
-**Not yet built:** there is no **Administration > Scheduled Tasks** page. The
-tasks above are real and do run — see the in-process runner below — but the
-only way to inspect them is the API: `GET /scheduled/tasks` lists every task
-with its recommended cron schedule, and `POST /scheduled/run-task?task=<id>`
-triggers one by hand. That last one runs across **every** organization, so it
-is restricted to a platform System Owner (`system.run_tasks`), not a
-department admin.
+There is no **Administration > Scheduled Tasks** page, by design: scheduled
+tasks belong to the platform owner, not to a department administrator. The
+tasks above are real and run on their own — see the in-process runner below.
+Every task works across **every** organization on the installation, so
+running one is a platform operation: `POST /scheduled/run-task?task=<id>`
+triggers one by hand and is restricted to a platform System Owner
+(`system.run_tasks`). `GET /scheduled/tasks` lists each task with its
+recommended cron schedule, and is readable through the API by an administrator
+(`admin.access` or `settings.manage`).
 
-Note that even the API reports only the schedule. Last-run and next-run times
-and a per-task enabled flag — the columns the placeholder describes — are not
-stored anywhere, so a page for this would need backend work first. The
-placeholder stays open.
+The API reports the schedule only; last-run and next-run times and a per-task
+enabled flag are not stored. A department controls what a task does for it
+through that feature's own settings (for example, the membership-tier
+auto-advance switch), not by turning the task off.
+
+> **Decided 2026-10-05.** The owner chose to keep scheduled tasks
+> platform-owner only rather than build a department-facing page; this section
+> previously described that page as not yet built.
 
 ## In-Process Scheduled Task Runner (2026-03-25)
 
@@ -978,8 +1030,10 @@ All audit events are appended to the tamper-proof SHA-256 hash chain in the `aud
 
 Find these under **Administration → Organization Settings → Audit Log** and
 search for `shift_report`. The search box holds its own draft — it does not
-filter until you press **Apply** — while the severity and category dropdowns
-take effect the moment you change them.
+filter until you press **Enter** or **Apply** — while the severity and category
+dropdowns take effect the moment you change them. While the box holds a term
+that has not been applied, **Apply** is enabled and a "Not applied yet" note
+sits under the box; once the table matches the box, Apply greys out again.
 
 ![The audit log searched for shift_report, listing review and update events](./images/08-54-audit-shift-reports.png)
 
@@ -1753,8 +1807,9 @@ pending; it sits in the dashboard's **Needs you** panel with an
 
 ![The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox](./images/08-60-dashboard-notification-cards.png)
 
-> **Screenshot needed:**
-> _[Admin at `/dashboard`: the My Updates card (section[aria-labelledby='my-updates-heading']) with one stacked row such as "3 attendance validations" and "Latest: …" among ordinary notification and message rows.]_
+<!-- Screenshot needed:
+_[Admin at `/dashboard`: the My Updates card (section[aria-labelledby='my-updates-heading']) with one stacked row such as "3 attendance validations" and "Latest: …" among ordinary notification and message rows.]_
+-->
 
 ### Department Messages
 
@@ -2023,11 +2078,13 @@ instead** explains the `FRONTEND_URL` route for Docker, Unraid and AWS.
 | A saved address the server no longer serves    | Ignored, and links fall back to the server's own address             |
 | Any change                                     | Written to the audit log as `email_link_domain_changed`              |
 
-> **Screenshot needed:**
-> _[IT Manager (the demo's System Owner) at `/settings?tab=email`, clipped to section[aria-labelledby="email-link-domain-heading"], with GET /api/v1/organization/settings/email/link-domain route-mocked to a public https address (e.g. https://logbook.oakvillefd.example.org; source frontend_url, is_https true, is_loopback false, is_private_network false, allowed_hosts [that host]): the address with its copy button, "Set by the FRONTEND_URL setting.", the Change address field with Save, and the allowed-host hint. Captured from http://localhost:3000 the "You are viewing this site at…" warning and Use the address I'm on now also appear — keep them and say so in the caption, or capture from a matching origin. Never press Save; do not expose a real department hostname.]_
+<!-- Screenshot needed:
+_[IT Manager (the demo's System Owner) at `/settings?tab=email`, clipped to section[aria-labelledby="email-link-domain-heading"], with GET /api/v1/organization/settings/email/link-domain route-mocked to a public https address (e.g. https://logbook.oakvillefd.example.org; source frontend_url, is_https true, is_loopback false, is_private_network false, allowed_hosts [that host]): the address with its copy button, "Set by the FRONTEND_URL setting.", the Change address field with Save, and the allowed-host hint. Captured from http://localhost:3000 the "You are viewing this site at…" warning and Use the address I'm on now also appear — keep them and say so in the caption, or capture from a matching origin. Never press Save; do not expose a real department hostname.]_
+-->
 
-> **Screenshot needed:**
-> _[IT Manager at `/settings?tab=email` with the same mock: a second allowed address typed into Change address and Save pressed, showing the "Change the email link address?" dialog with its consequence text ("Every email sent from now on — including password resets and ballots — will link to …") and the Change address / Keep current address buttons. Press Keep current address afterwards; nothing is saved.]_
+<!-- Screenshot needed:
+_[IT Manager at `/settings?tab=email` with the same mock: a second allowed address typed into Change address and Save pressed, showing the "Change the email link address?" dialog with its consequence text ("Every email sent from now on — including password resets and ballots — will link to …") and the Change address / Keep current address buttons. Press Keep current address afterwards; nothing is saved.]_
+-->
 
 ---
 
@@ -2107,11 +2164,12 @@ The old header, colours and stylesheet are not brought back. A template created
 after the redesign has no panel. See
 [UPGRADING](../UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27).
 
-> **Screenshot needed:**
-> _[Communications → Email Templates → **Templates**, a template with a
-> backup selected: the **Previous version (before the redesign)** panel above
-> the editor with **Load this wording** and **Show the old wording**, and the
-> solid-tab preview beside it.]_
+<!-- Screenshot needed:
+_[Communications → Email Templates → **Templates**, a template with a
+backup selected: the **Previous version (before the redesign)** panel above
+the editor with **Load this wording** and **Show the old wording**, and the
+solid-tab preview beside it.]_
+-->
 
 > **The blue banner on the Templates tab** _(corrected 2026-10-04)_ reads
 > "Every email uses the current design, including templates your department had
@@ -2180,8 +2238,9 @@ one, the button reports the failure rather than a delivery.
 
 **[SCREENSHOT — REPLACE `08-58-template-send-test.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Send Test to Me** under the preview**]**
 
-> **Screenshot needed:**
-> _[Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL set to a LAN address (e.g. http://192.168.1.50:7880) and EMAIL_ENABLED=true, then restarted: the yellow notice "Emails link to http://192.168.1.50:7880, which only works on your station's network…" with its Change the email link address link, and the Save bar beneath. Crop to the notice and the bar; no credentials in frame.]_
+<!-- Screenshot needed:
+_[Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL set to a LAN address (e.g. http://192.168.1.50:7880) and EMAIL_ENABLED=true, then restarted: the yellow notice "Emails link to http://192.168.1.50:7880, which only works on your station's network…" with its Change the email link address link, and the Save bar beneath. Crop to the notice and the bar; no credentials in frame.]_
+-->
 
 ### Template Search
 
@@ -2322,15 +2381,15 @@ the Footers tab.
 
 **[SCREENSHOT — REPLACE `08-65-template-footer-selector.png`.** The preview pane shows the retired centred-masthead shell (re-shot 2026-09-25); since 2026-09-27 every template renders in the solid-tab shell — accent tab naming the category, title on a tinted card, white message card, centred footer _(#2754)_. Same state: **Closes with** set to Public**]**
 
-> **A template only shows a footer if its body asks for one.** The closing block
-> is delivered as the `{{footer_html}}` variable, so a body that does not contain
-> it renders without a footer no matter what **Closes with** is set to — and the
-> screen gives no sign of that. Most shipped bodies include the variable, but a
-> department that has customised a template, or whose database predates this
-> release, will have bodies that do not: re-seeding never touches a template that
-> already exists by name. If a chosen footer is not appearing, open the body and
-> check for `{{footer_html}}` before looking anywhere else. See
-> `docs/KNOWN_LIMITATIONS.md`.
+> **Closes with always takes effect** _(2026-10-11)_. The closing block is
+> placed wherever the body has the `{{footer_html}}` variable; a body without it
+> — one your department customised, or one from a database older than the
+> footer library — now gets the chosen footer added at the end (inside the
+> message card), and its plain-text version gets the text footer. Before this,
+> such a body mailed with no footer at all whatever **Closes with** said. **If
+> you customised a template to close its own way**, it now carries the footer
+> as well: remove your own closing, or put `{{footer_html}}` where you want the
+> footer to sit.
 
 **Edit and Preview are alternate views of the same panel**, not two halves of one
 screen — choosing a footer and seeing it rendered are two steps, not one.
@@ -3128,14 +3187,17 @@ January 1 to today, not the last 365 days.
   **Categories** tab. What the summary ranks is hours logged, not the limits
   they were logged under.
 
-> **Screenshot needed:**
-> _[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_
+<!-- Screenshot needed:
+_[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_
+-->
 
-> **Screenshot needed:**
-> _[Member at `/admin-hours`, period This month: the My Hours list with one pending manual entry showing Edit and Withdraw, and one rejected entry showing its red "Rejected: <reason> — edit and resubmit it, or withdraw it." line and the Edit & resubmit button. Crop to the list, not the whole page.]_
+<!-- Screenshot needed:
+_[Member at `/admin-hours`, period This month: the My Hours list with one pending manual entry showing Edit and Withdraw, and one rejected entry showing its red "Rejected: <reason> — edit and resubmit it, or withdraw it." line and the Edit & resubmit button. Crop to the list, not the whole page.]_
+-->
 
-> **Screenshot needed:**
-> _[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
+<!-- Screenshot needed:
+_[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
+-->
 
 ### Admin Hours review rules _(2026-10-05)_
 
@@ -3345,7 +3407,7 @@ only seeded (`is_system`) ones move.
 
 **Also:** `User.rank` is **cleared on every administrative member**, and does
 not come back on downgrade. See
-[Membership Management](./01-membership.md#member-class-and-member-status-changed-2026-08-26).
+[Membership Management](./01-membership.md#member-class-and-member-status).
 
 ## Administration changes _(August 31 – September 6, 2026)_
 
@@ -3530,8 +3592,9 @@ order and request numbers (`ORD-YYYY-`, `PR-YYYY-`), which differs only on the
 evening of December 31. Both are recorded in
 [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#today-is-the-departments-date--what-still-reads-utc-2026-09-26).
 
-> **Screenshot needed:**
-> _[Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check.]_
+<!-- Screenshot needed:
+_[Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check.]_
+-->
 
 ## Other Administration Changes _(September 24 – October 4, 2026)_
 
@@ -3590,11 +3653,13 @@ in the server's BLOCKED_COUNTRIES setting are not listed."_ — those are set at
 deploy time and apply to the whole installation (see
 [Configuration → Security](../../wiki/Configuration-Security.md#geoip-country-blocking)).
 
-> **Screenshot needed:**
-> _[Member at `/ip-security/my-requests`: My IP Exceptions with the New Request form open — IP address (203.0.113.x), Select a use case, Duration (days, 1–90) and details — plus the Show expired, rejected, and revoked requests checkbox. Do not submit.]_
+<!-- Screenshot needed:
+_[Member at `/ip-security/my-requests`: My IP Exceptions with the New Request form open — IP address (203.0.113.x), Select a use case, Duration (days, 1–90) and details — plus the Show expired, rejected, and revoked requests checkbox. Do not submit.]_
+-->
 
-> **Screenshot needed:**
-> _[Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its count badge and one pending request showing IP, use case, duration and the Approve / Reject actions. Seed the request with a documentation-range address (203.0.113.x); never capture a real client IP, and do not capture the Blocked Attempts tab with live addresses.]_
+<!-- Screenshot needed:
+_[Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its count badge and one pending request showing IP, use case, duration and the Approve / Reject actions. Seed the request with a documentation-range address (203.0.113.x); never capture a real client IP, and do not capture the Blocked Attempts tab with live addresses.]_
+-->
 
 ### Navigation and layout _(2026-09-25 to 10-04)_
 

@@ -3167,6 +3167,35 @@ def build_items_list_text(
     return "\n".join(lines)
 
 
+_FOOTER_HTML_TOKEN = re.compile(r"\{\{\s*footer_html\s*\}\}")
+_FOOTER_TEXT_TOKEN = re.compile(r"\{\{\s*footer_text\s*\}\}")
+# The tail of the shell build_shell writes: the card's closing </div>, then
+# Outlook's conditional table close. A legacy shell body that lost its
+# {{footer_html}} line still ends this way, and the footer belongs inside it.
+_CARD_TAIL = re.compile(
+    r"</div>\s*(?:<!--\[if mso\]>.*?<!\[endif\]-->\s*)?\Z", re.DOTALL | re.IGNORECASE
+)
+
+
+def _append_footer_html(html_body: str, footer_html: str) -> str:
+    """Close a body that never asked for its footer with the chosen one.
+
+    The owner's decision on the "Closes with" selector: it always takes
+    effect. A body without ``{{footer_html}}`` — customised, or seeded before
+    the footer library — used to mail with no footer at all, whatever the
+    selector said. The footer goes inside the card when the body ends with
+    the shell's card, and after the body otherwise.
+    """
+    if not footer_html.strip():
+        return html_body
+    tail = _CARD_TAIL.search(html_body)
+    if tail:
+        return (
+            html_body[: tail.start()] + footer_html + "\n" + html_body[tail.start() :]
+        )
+    return html_body.rstrip() + "\n" + footer_html
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -3615,11 +3644,23 @@ class EmailTemplateService:
         # Only html_body is.
         subject = self._replace_variables(template.subject, ctx, escape_html=False)
         html_body = self._replace_variables(template.html_body, ctx)
+        # A footer names its department, so with no organization to resolve
+        # it against there is nothing honest to append.
+        append_footer = organization is not None
+        if append_footer and not _FOOTER_HTML_TOKEN.search(template.html_body or ""):
+            html_body = _append_footer_html(html_body, str(ctx.get("footer_html", "")))
         text_body = None
         if template.text_body:
             text_body = self._replace_variables(
                 template.text_body, ctx, escape_html=False
             )
+            footer_text = str(ctx.get("footer_text", "")).strip()
+            if (
+                append_footer
+                and footer_text
+                and not _FOOTER_TEXT_TOKEN.search(template.text_body)
+            ):
+                text_body = text_body.rstrip() + "\n\n" + footer_text
 
         # Always the built-in stylesheet. A template's own css_styles is not
         # consulted: every email is in the one house design, and the stored

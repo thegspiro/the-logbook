@@ -35,7 +35,7 @@ from app.models.training import (
     TrainingType,
     XAPIStatement,
 )
-from app.models.user import User, UserStatus
+from app.models.user import Position, User, UserStatus
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     load_credited_shift_dates,
@@ -360,11 +360,41 @@ class CompetencyService:
         matrix: Optional[CompetencyMatrix] = result.scalar_one_or_none()
         return matrix
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure client-supplied matrix FKs belong to the current tenant (XC-1).
+
+        ``skill_requirements`` is free-form JSON, but each entry's
+        ``skill_evaluation_id`` names a skill the heat-map grades against, so a
+        foreign one is a dangling cross-tenant reference. Only keys present in
+        ``data`` are checked, so a partial update leaves stored values alone.
+        """
+        await assert_in_org(
+            self.db,
+            Position,
+            data.get("role_id"),
+            organization_id,
+            allow_none=True,
+            label="role",
+        )
+        skill_ids = [
+            entry.get("skill_evaluation_id")
+            for entry in (data.get("skill_requirements") or [])
+            if isinstance(entry, dict)
+        ]
+        await assert_all_in_org(
+            self.db,
+            SkillEvaluation,
+            skill_ids,
+            organization_id,
+            label="skill evaluation",
+        )
+
     async def create_matrix(
         self, organization_id: str, data: dict, created_by: str
     ) -> CompetencyMatrix:
         """Create a competency matrix"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         matrix = CompetencyMatrix(
             organization_id=organization_id,
             created_by=created_by,
@@ -384,7 +414,9 @@ class CompetencyService:
         matrix = await self.get_matrix(matrix_id, organization_id)
         if not matrix:
             raise ValueError("Matrix not found")
-        apply_updates(matrix, _stringify_uuids(data))
+        data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
+        apply_updates(matrix, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.

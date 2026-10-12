@@ -113,7 +113,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add several items" size="lg" footer={footer}>
-      <div className="modal-body space-y-4">
+      <div className="space-y-4">
         <div>
           <label className="form-label" htmlFor="bulk-add-list">
             One item per line

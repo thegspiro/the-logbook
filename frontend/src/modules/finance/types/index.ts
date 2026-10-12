@@ -820,6 +820,18 @@ export interface UnroutedApproval {
   entityAmount: MonetaryAmount;
   requesterName: string;
   submittedAt: string;
+  /** Held for a second, different approver by the dual-approval threshold. */
+  awaitingSecondApproval?: boolean;
+  firstApprovedBy?: string | null;
+}
+
+/** `GET /finance/settings`: the finance rules the server applies. */
+export interface FinanceSettings {
+  /**
+   * Requests of this amount or more need two different approvers; null is off.
+   * Changed through organization settings (`settings.manage`), not here.
+   */
+  dualApprovalThreshold: MonetaryAmount | null;
 }
 
 export interface PurchaseRequest {
@@ -838,10 +850,20 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   orderedAt?: string;
   receivedAt?: string;
   paidAt?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   /** A typed link; the server passes it on only if it is HTTP(S). */
   receiptUrl?: string | null;
@@ -882,9 +904,19 @@ export interface ExpenseReport {
   status: ExpenseReportStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   paidAt?: string;
   paymentMethod?: string;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -907,9 +939,22 @@ export interface CheckRequest {
   status: CheckRequestStatus;
   approvedBy?: string;
   approvedAt?: string;
+  /**
+   * A first approval held for a second, different approver by the
+   * department's dual-approval threshold, and whether the request is waiting
+   * on that second approval (detail responses only).
+   */
+  firstApprovedBy?: string | null;
+  firstApprovedAt?: string | null;
+  awaitingSecondApproval?: boolean;
   denialReason?: string;
   checkNumber?: string;
   checkDate?: string;
+  voidedAt?: string | null;
+  /** When a complete QuickBooks export last carried this payment. */
+  qbExportedAt?: string | null;
+  /** When the reversing entry for a void went to QuickBooks. */
+  qbVoidExportedAt?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -951,6 +996,51 @@ export interface MemberDues {
   waivedAt?: string;
   waiveReason?: string;
   notes?: string;
+  /** The member's display name. Sent by the list endpoint only. */
+  memberName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /finance/dues-schedules`. Blank optional fields are omitted. */
+export interface DuesScheduleCreatePayload {
+  name: string;
+  amount: string;
+  frequency: DuesFrequency;
+  /** UTC instant of the due date. */
+  dueDate: string;
+  notes?: string | undefined;
+}
+
+/** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
+export interface DuesScheduleUpdatePayload {
+  name?: string;
+  amount?: string;
+  frequency?: DuesFrequency;
+  dueDate?: string;
+  isActive?: boolean;
+  notes?: string | null;
+}
+
+/** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
+export interface DuesPaymentPayload {
+  amountPaid: string;
+  paymentMethod?: string | undefined;
+  transactionReference?: string | undefined;
+  notes?: string | undefined;
+}
+
+/** One payment in a member's dues ledger (`GET /finance/dues/:id/payments`). */
+export interface DuesPayment {
+  id: string;
+  organizationId: string;
+  memberDuesId: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  transactionReference?: string | null;
+  notes?: string | null;
+  receivedAt: string;
+  recordedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1041,7 +1131,12 @@ export interface ExportLog {
   recordCount: number;
   fileFormat: string;
   exportedBy: string;
+  exportedByName?: string | null;
   exportedAt: string;
+  /** `pending`, `successful`, `partial` (some rows delivered) or `failed`. */
+  status: string;
+  errorMessage?: string | null;
+  completedAt?: string | null;
 }
 
 export interface FinanceDashboard {

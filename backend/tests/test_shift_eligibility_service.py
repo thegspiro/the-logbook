@@ -10,7 +10,7 @@ updates (deepcopy-safe), and the EVOC soft-warning path. DB mocked; no MySQL.
 
 from datetime import date, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1322,3 +1322,66 @@ class TestAccountStatusGate:
             _user_with_status("retired", rank="emt"), "org-1", ["s1", "s2"]
         )
         assert answers == {"s1": [], "s2": []}
+
+
+class TestCallTrackingModeSince:
+    """SCHED-14: a mode change stamps its adoption date in the JSON setting so
+    the call-volume report can warn about a range reaching back past it. Not
+    backfilled - a department that never changes mode gets no date."""
+
+    @staticmethod
+    def _tracking_org(call_tracking):
+        return SimpleNamespace(
+            id="org-1",
+            timezone="America/New_York",
+            settings={"scheduling": {"call_tracking": call_tracking}},
+        )
+
+    async def _save(self, org, call_tracking):
+        db = _db([_one(org)])
+        out = await ShiftEligibilityService(db).update_scheduling_settings(
+            "org-1", call_tracking=call_tracking
+        )
+        return out["call_tracking"]
+
+    async def test_a_mode_change_stamps_the_department_s_today(self):
+        org = self._tracking_org({"mode": "detailed", "call_types": []})
+        with patch(
+            "app.services.shift_eligibility_service.org_today",
+            return_value=date(2026, 10, 11),
+        ) as today:
+            saved = await self._save(org, {"mode": "count_only", "call_types": []})
+        assert saved["mode_since"] == "2026-10-11"
+        assert today.call_args.args[0] is org
+
+    async def test_a_save_keeping_the_mode_carries_the_stamp_forward(self):
+        org = self._tracking_org(
+            {"mode": "count_only", "call_types": [], "mode_since": "2026-03-01"}
+        )
+        saved = await self._save(org, {"mode": "count_only", "call_types": []})
+        assert saved["mode_since"] == "2026-03-01"
+
+    async def test_the_client_cannot_set_the_date(self):
+        org = self._tracking_org({"mode": "count_only", "call_types": []})
+        saved = await self._save(
+            org,
+            {"mode": "count_only", "call_types": [], "mode_since": "2020-01-01"},
+        )
+        assert "mode_since" not in saved
+
+    async def test_a_department_that_never_switched_has_no_date(self):
+        # Absence reads as "detailed", so saving detailed is not a change.
+        org = SimpleNamespace(id="org-1", settings={})
+        saved = await self._save(org, {"mode": "detailed", "call_types": []})
+        assert "mode_since" not in saved
+
+    def test_reader_returns_the_stamped_date(self):
+        org = self._tracking_org({"mode": "count_only", "mode_since": "2026-03-01"})
+        svc = ShiftEligibilityService(MagicMock())
+        assert svc.get_call_tracking_mode_since(org) == date(2026, 3, 1)
+
+    @pytest.mark.parametrize("bad", [None, 12, "not-a-date", ""])
+    def test_reader_degrades_a_bad_value_to_none(self, bad):
+        org = self._tracking_org({"mode": "count_only", "mode_since": bad})
+        svc = ShiftEligibilityService(MagicMock())
+        assert svc.get_call_tracking_mode_since(org) is None

@@ -31,6 +31,7 @@ import {
 import { EmptyState } from '../components/ux';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
+import { useConfirm } from '../contexts/ConfirmContext';
 import {
   formsService,
   type FormDef,
@@ -53,8 +54,15 @@ type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Traini
 // The API stores status and category in lowercase; show them as labels.
 const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
+// The server enforces this on both the in-app and the public submit path
+// (FORM-10), and refuses anonymous submissions for such a form, since "once
+// each" needs to know who is submitting.
+const ONE_PER_PERSON_HINT =
+  'Each member can submit once, whether in the app or through the public link. Submitting then requires signing in.';
+
 const FormsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
+  const { confirm } = useConfirm();
   const canManage = checkPermission('forms.manage');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +89,7 @@ const FormsPage: React.FC = () => {
     description: '',
     category: 'Operations',
     is_public: false,
+    one_per_person: false,
   });
 
   // Form detail view (builder/preview/submissions)
@@ -132,9 +141,10 @@ const FormsPage: React.FC = () => {
         description: formData.description || undefined,
         category: formData.category,
         is_public: formData.is_public,
+        allow_multiple_submissions: !formData.one_per_person,
       });
       setShowCreateModal(false);
-      setFormData({ name: '', description: '', category: 'Operations', is_public: false });
+      setFormData({ name: '', description: '', category: 'Operations', is_public: false, one_per_person: false });
       await loadData();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to create form'));
@@ -177,6 +187,26 @@ const FormsPage: React.FC = () => {
 
   const handlePublish = async (formId: string) => {
     try {
+      // The server says what publishing will not do — today, a public request
+      // form whose submissions file nothing while public intake is off in
+      // Events settings. Read there because that setting needs events.manage.
+      const warnings = await formsService.getPublishWarnings(formId);
+      if (warnings.length > 0) {
+        const proceed = await confirm({
+          title: 'Publish this form?',
+          message: (
+            <div className="space-y-2 text-left">
+              {warnings.map((warning) => (
+                <p key={warning.code}>{warning.message}</p>
+              ))}
+            </div>
+          ),
+          confirmLabel: 'Publish anyway',
+          cancelLabel: 'Not yet',
+          variant: 'warning',
+        });
+        if (!proceed) return;
+      }
       await formsService.publishForm(formId);
       await loadData();
     } catch (err: unknown) {
@@ -222,6 +252,22 @@ const FormsPage: React.FC = () => {
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to update form');
       setError(message);
+    }
+  };
+
+  const [savingOnePerPerson, setSavingOnePerPerson] = useState(false);
+
+  const handleToggleOnePerPerson = async (form: FormDetailDef) => {
+    setSavingOnePerPerson(true);
+    try {
+      const allow = !form.allow_multiple_submissions;
+      await formsService.updateForm(form.id, { allow_multiple_submissions: allow });
+      setEditingForm({ ...form, allow_multiple_submissions: allow });
+      await loadData();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update form'));
+    } finally {
+      setSavingOnePerPerson(false);
     }
   };
 
@@ -1003,9 +1049,30 @@ const FormsPage: React.FC = () => {
 
               {/* Builder Tab */}
               {detailTab === 'builder' && (
-                <div className="card-secondary p-6">
-                  <FormBuilder formId={editingForm.id} />
-                </div>
+                <>
+                  <label
+                    htmlFor="editor-one-per-person"
+                    className="card-secondary mobile-touch-row mb-4 cursor-pointer gap-3 p-4"
+                  >
+                    <input
+                      type="checkbox"
+                      id="editor-one-per-person"
+                      checked={!editingForm.allow_multiple_submissions}
+                      disabled={savingOnePerPerson}
+                      onChange={() => {
+                        void handleToggleOnePerPerson(editingForm);
+                      }}
+                      className="form-checkbox shrink-0"
+                    />
+                    <span className="text-sm">
+                      <span className="text-theme-text-primary block font-medium">One submission per person</span>
+                      <span className="text-theme-text-muted mt-0.5 block text-xs">{ONE_PER_PERSON_HINT}</span>
+                    </span>
+                  </label>
+                  <div className="card-secondary p-6">
+                    <FormBuilder formId={editingForm.id} />
+                  </div>
+                </>
               )}
 
               {/* Preview & Submit Tab */}
@@ -1126,6 +1193,22 @@ const FormsPage: React.FC = () => {
                         </p>
                       </label>
                     </div>
+                    <label
+                      htmlFor="create-one-per-person"
+                      className="card-secondary mobile-touch-row cursor-pointer gap-3 p-3"
+                    >
+                      <input
+                        type="checkbox"
+                        id="create-one-per-person"
+                        checked={formData.one_per_person}
+                        onChange={(e) => setFormData({ ...formData, one_per_person: e.target.checked })}
+                        className="form-checkbox shrink-0"
+                      />
+                      <span className="text-sm">
+                        <span className="text-theme-text-primary block font-medium">One submission per person</span>
+                        <span className="text-theme-text-muted mt-0.5 block text-xs">{ONE_PER_PERSON_HINT}</span>
+                      </span>
+                    </label>
                   </div>
                 </div>
                 <div className="bg-theme-input-bg flex justify-end space-x-3 rounded-b-lg px-6 py-3">

@@ -55,6 +55,8 @@ from app.schemas.suggestion import (
     ForwardCreate,
     MessageCreate,
     MySuggestionSummary,
+    PickKind,
+    PickOption,
     PublishRequest,
     ReviewerOptions,
     ReviewSuggestionDetail,
@@ -169,7 +171,24 @@ async def list_open_boxes(
     current_user: User = Depends(get_current_user),
 ):
     """Boxes currently accepting submissions."""
-    return await SuggestionService(db).list_open_boxes(current_user.organization_id)
+    service = SuggestionService(db)
+    boxes = await service.list_open_boxes(current_user.organization_id)
+    return service.public_box_views(boxes)
+
+
+@router.get("/pick-options", response_model=List[PickOption])
+async def list_pick_options(
+    kind: PickKind = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The members or vehicles a pick question offers, as ids and names.
+
+    The whole list in one request, filtered in the browser: a search request
+    would put what a member typed — the name of the person they are reporting
+    — in the access log beside their own address and the time.
+    """
+    return await SuggestionService(db).pick_options(current_user.organization_id, kind)
 
 
 @router.post(
@@ -183,6 +202,7 @@ async def submit_suggestion(
     title: str = Form(...),
     details: str = Form(...),
     anonymous: bool = Form(False),
+    answers: Optional[str] = Form(None),
     screenshots: List[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -191,6 +211,9 @@ async def submit_suggestion(
 
     Screenshots travel in the same request so an anonymous submission is one
     act, not a submission plus uploads a later request could be tied to.
+    ``answers`` is a JSON object of the box's intake questions; an answer may
+    move the submission to another box, and from then on everything —
+    notifications included — follows the box it landed in.
     """
     service = SuggestionService(db)
     box = ensure_found(
@@ -206,6 +229,17 @@ async def submit_suggestion(
             details=details,
             anonymous=anonymous,
             screenshots=processed,
+            answers=answers,
+        )
+    routed_from = box if suggestion.routed_from_box_id else None
+    if routed_from is not None:
+        # Only the destination's reviewers and watchers hear about it; the
+        # box the member opened has no access to what was routed away.
+        # Not get_open_box: the submission is already stored, so a box
+        # closed a moment later must not turn its receipt into a 404.
+        box = ensure_found(
+            await service.get_box(current_user.organization_id, suggestion.box_id),
+            "Suggestion box",
         )
     if not suggestion.is_anonymous:
         await log_audit_event(
@@ -213,7 +247,11 @@ async def submit_suggestion(
             event_type="suggestion_submitted",
             event_category="suggestions",
             severity="info",
-            event_data={"suggestion_id": suggestion.id, "box_id": box.id},
+            event_data={
+                "suggestion_id": suggestion.id,
+                "box_id": box.id,
+                "routed_from_box_id": routed_from.id if routed_from else None,
+            },
             user_id=str(current_user.id),
             username=current_user.username,
         )
@@ -239,6 +277,7 @@ async def submit_suggestion(
         "id": None if suggestion.is_anonymous else suggestion.id,
         "is_anonymous": bool(suggestion.is_anonymous),
         "follow_up_key": key,
+        "box_name": box.name,
     }
 
 

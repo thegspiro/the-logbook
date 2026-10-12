@@ -286,7 +286,17 @@ run in a savepoint per pipeline, so a pipeline that fails is rolled back and
 reported without stopping the others. Each pipeline that purged anything writes
 a `membership_pipeline.prospects_purged` audit event with `trigger:
 "auto_purge"`, the threshold, the cut-off and the purged ids, in the same
-transaction as the delete. No email is sent beforehand (owner's decision).
+transaction as the delete.
+
+Before purging, the same run calls `warn_upcoming_auto_purges`: it emails the
+coordinators (the withdrawal notice's recipients, through `recipients_for`
+with `EmailKind.MEMBERSHIP_ADMIN`) one list of the applications whose purge
+falls within `AUTO_PURGE_WARNING_DAYS` (7), using the same clamped period and
+`inactive_since` clock, and logs `auto_purge_warning_sent` per application only
+when the send succeeded. An entry dated on or after the current
+`inactive_since` suppresses a repeat, so each inactive spell is warned once. A
+failed warning is reported through the task's error log after the purge has
+run; it never holds the purge up (owner decision 2026-10-08).
 
 `inactive_since` is the purge clock, distinct from the historical
 `deactivated_at` the drawer shows: it is set on every entry into `inactive`

@@ -1,13 +1,16 @@
 /**
  * Manual Approval Panel
  *
- * Approve or deny a finance request that no approval chain applies to.
+ * Approve or deny a finance request that no approval chain applies to, or
+ * one held for a second approver.
  *
  * Submitting a request when no chain matches (or the matching chain has no
  * steps) leaves it waiting for approval with no approval steps — and every
  * step-based action needs a step. This is the only way such a request moves.
- * Renders nothing unless the request is in exactly that state and the viewer
- * holds `finance.approve`.
+ * The same goes for a request the department's dual-approval threshold holds
+ * after its first approval (`awaitingSecondApproval`, the backend's reading):
+ * its chain, if it had one, has nothing left. Renders nothing unless the
+ * request is in one of those states and the viewer holds `finance.approve`.
  */
 
 import React, { useState } from 'react';
@@ -26,6 +29,10 @@ interface ManualApprovalPanelProps {
   entityId: string;
   status: string;
   approvalStepCount: number;
+  /** Held for a second, different approver after its first approval. */
+  awaitingSecondApproval?: boolean | undefined;
+  /** Who gave the first approval, when one was given outside a chain. */
+  firstApprovedBy?: string | null | undefined;
   /** Who raised the request. They cannot approve it (the backend refuses too). */
   requesterId: string;
   /** Called after a decision is recorded, to reload the request. */
@@ -37,6 +44,8 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
   entityId,
   status,
   approvalStepCount,
+  awaitingSecondApproval = false,
+  firstApprovedBy,
   requesterId,
   onDecided,
 }) => {
@@ -45,18 +54,27 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
   const [dialog, setDialog] = useState<'approve' | 'deny' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (status !== PENDING_APPROVAL || approvalStepCount > 0 || !checkPermission('finance.approve')) {
+  if (
+    status !== PENDING_APPROVAL ||
+    (approvalStepCount > 0 && !awaitingSecondApproval) ||
+    !checkPermission('finance.approve')
+  ) {
     return null;
   }
 
   const isRequester = Boolean(userId) && userId === requesterId;
+  // Covers a first approval given here; one given through a chain step is
+  // refused by the backend in the same words.
+  const approvedAlready = Boolean(userId) && userId === firstApprovedBy;
 
   const decide = async (action: 'approve' | 'deny', value: string) => {
     setSaving(true);
     try {
       if (action === 'approve') {
         await approvalService.manualApprove(entityType, entityId, value || undefined);
-        toast.success('Request approved');
+        // Under the dual-approval threshold this may be the first of two; the
+        // reloaded request says which.
+        toast.success('Approval recorded');
       } else {
         await approvalService.manualDeny(entityType, entityId, value);
         toast.success('Request denied');
@@ -79,8 +97,15 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
           <Info className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-theme-text-primary text-sm font-medium">
-              No approval chain applies to this request. Approve or deny it here.
+              {awaitingSecondApproval
+                ? 'This request needs a second approval from someone who has not approved it yet.'
+                : 'No approval chain applies to this request. Approve or deny it here.'}
             </p>
+            {approvedAlready && (
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                You gave the first approval, so someone else has to give the second. You can still deny it.
+              </p>
+            )}
             {isRequester && (
               <p className="text-theme-text-secondary mt-1 text-sm">
                 You submitted this request, so someone else has to approve it. You can still deny it.
@@ -89,7 +114,7 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isRequester && (
+          {!isRequester && !approvedAlready && (
             <button
               type="button"
               disabled={saving}

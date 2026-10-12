@@ -134,6 +134,25 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A duplicate migration revision stops a production boot (2026-10-11)
+
+When two files in `backend/alembic/versions/` declare the same `revision`,
+startup used to rename one of them to `.stale` in every environment and carry
+on, logging "Migrations completed successfully" while that file's schema
+change was silently skipped. With `ENVIRONMENT=production` the backend now
+refuses to start instead, naming the revision id and both files:
+
+```
+MIGRATION FAILURE: duplicate Alembic revision id(s) found: 'abc123' in 20261001_0100_x.py, 20261001_0100_y.py ...
+```
+
+The usual cause is a stale copy left by a cached Docker layer or a
+half-finished checkout. Rebuild the image without cache
+(`docker compose build --no-cache backend`) or delete the copy that does not
+belong to the release, so each revision id appears in exactly one file, then
+start again. Development and staging keep the old rename-and-continue
+behaviour.
+
 ### Every backend setting in `.env` now reaches the container (2026-10-06)
 
 **Review your `.env` before you upgrade.** Until this release the backend's
@@ -168,12 +187,12 @@ first restart. The groups most likely to carry such a line:
   `PUBLIC_FORM_DAILY_LIMIT`, `GUEST_CHECK_IN_DAILY_LIMIT`.
 - **Geo-blocking** — `GEOIP_*`, `BLOCKED_COUNTRIES`, `IP_LOGGING_ENABLED`.
   `BLOCKED_COUNTRIES=` (empty) now means "block no countries".
-- **Storage and paths** — `STORAGE_TYPE`, `UPLOAD_DIR`, `MAX_FILE_SIZE`,
-  `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`, `GCS_*`,
-  `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. These are read **inside the
-  container**. A host path left over from a non-Docker install would now send
-  uploads somewhere no volume is mounted, and they would be lost with the
-  container.
+- **Storage and paths** — `MAX_REQUEST_BODY_SIZE`, `AWS_*`, `AZURE_STORAGE_*`,
+  `GCS_*`, `AUDIT_ARCHIVE_DIR`, `GEOIP_DATABASE_PATH`. Paths are read **inside
+  the container**. A host path left over from a non-Docker install would now
+  send archives somewhere no volume is mounted, and they would be lost with the
+  container. (`STORAGE_TYPE`, `UPLOAD_DIR` and `MAX_FILE_SIZE` were retired on
+  2026-10-08 — nothing read them; uploads always go to `/app/uploads`.)
 - **Audit shipping and signing keys** — `AUDIT_SHIP_*`,
   `AUDIT_ALLOW_CHAIN_REHASH`, `ENCRYPTION_KEYS_LEGACY`, `AUDIT_LOG_SIGNING_KEY`,
   and on the Unraid files `VOTE_SIGNING_KEY`. Read the next paragraph if
@@ -412,7 +431,7 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
-### A department runs one practical-skills system (2026-10-11)
+### A department runs one practical-skills system (2026-10-12)
 
 Training had two ways to record practical skills: **Skills Testing** (station
 sheets, scored by an examiner and validated by an officer) and **shift-report
@@ -434,8 +453,59 @@ Nothing is deleted. Past sign-offs, competency levels and skills-test results
 stay on file, and switching the setting back shows them again. If a department
 used both, check its choice after the upgrade.
 
-The migration adds `training_module_configs.practical_skills_method`.
+Migration `bde76b481a16` adds `training_module_configs.practical_skills_method`.
 Downgrading drops the column and with it only the choice.
+
+### Each document's file gets its own folder on disk (2026-10-11)
+
+Documents uploaded from this release on — through the Documents page, and the
+apparatus and finance screens that store documents — are written to
+`/app/uploads/<organization_id>/documents/<document_id>/`, like every other
+kind of upload, instead of flat in `…/documents/`. Nothing changes for anyone
+using the app, and files already stored keep downloading where they are.
+
+To tidy the ones already stored flat, run the relocation command; its dry run
+now lists them alongside any legacy files, and `--apply`, `--rollback` and
+`--finalize` treat them the same way:
+
+```bash
+docker exec -it intranet-backend python scripts/relocate_uploads.py
+```
+
+### Documents with no folder are filed into General Documents (2026-10-11)
+
+The upgrade moves every document that had no folder into its department's
+**General Documents** folder (creating that folder if the department never
+had one). Who can open each one does not change — General Documents is open
+to everyone who could see the document before — but its folder now governs
+it. From now on:
+
+- An upload with no folder chosen goes to General Documents; the upload form
+  says so.
+- Moving a document "out of its folder" moves it to General Documents, and
+  needs write access there like any other move. A document can no longer be
+  taken out of a restricted folder into a place the whole department can read.
+
+The migration is reversible: a downgrade returns each moved document to no
+folder unless somebody has filed it elsewhere since.
+
+### Pre-shift work is on by default, and the Compliance box gains a question (2026-10-11)
+
+- **Pre-shift work.** Migration `46c55e6a3330` adds `shift_pre_work_sessions`;
+  nothing existing is touched. The department setting
+  `scheduling.pre_shift_work_enabled` is **on** unless an organization has set it,
+  so members scanning a vehicle before check-in opens are offered "Doing pre-shift
+  work?" the moment you upgrade. Time counts only once a shift officer or
+  `scheduling.manage` approves it, and it adds hours, never shifts. To keep the
+  old behaviour, turn off **Allow pre-shift work** in Shift Settings.
+- **Shift history import.** Migrations `c6c4ffcfdfb3` and `376ec2fef6d3` add the
+  draft, row and remembered-decision tables. Additive; the feature is reached from
+  Administration → Scheduling and needs `scheduling.manage`. A committed import is
+  final and writes finalized shifts that count toward hours and compliance.
+- **Suggestion intake questions.** Migration `778c3de73086` adds three nullable
+  columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
+  still an unedited seed a required "What kind of concern is this?" question; an
+  edited box is left alone, and its downgrade removes only an untouched copy.
 
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
@@ -474,6 +544,44 @@ completed" until the administrator visits `/onboarding/encryption-key`.
 earlier releases serve an encrypted file's raw bytes. The database part does
 roll back: `cd backend && alembic downgrade c6c4ffcfdfb3` drops
 `encryption_key_custody`, and the notice returns after a re-upgrade.
+
+### Large finance requests can require two approvers (2026-10-11)
+
+Migration `3c9c5025a380` adds `first_approved_by` and `first_approved_at` to
+purchase requests, check requests and expense reports. Nothing is backfilled.
+
+- **Nothing changes until you turn it on.** The new organization setting
+  `finance.dual_approval_threshold` is off by default. A member with
+  `settings.manage` sets it on **Finance > Settings > Approval Chains**; at or
+  above that amount, a request waits after its first approval until a
+  second, different person approves it.
+- **The manual approve and deny actions now also act on a request held for its
+  second approver**, even though it has approval steps. A request whose chain
+  is still running is refused (409) as before.
+- **The detail panel's approve message now reads "Approval recorded"** rather
+  than "Request approved", since an approval may be the first of two.
+- **Downgrading** drops the columns. A request held for its second approver at
+  that point stays waiting for approval, and the previous version lets any
+  approver approve it alone.
+
+### QuickBooks exports send each payment once, and reverse voided checks (2026-10-11)
+
+Migration `3f3bd6f3c7e4` records which payments an export has carried.
+
+- **Payments an earlier export already carried are left out** of later
+  exports. The upgrade marks what your past successful exports carried (every
+  payment in an export's date range made before that export ran), so the first
+  export afterwards sends only what is new. To send a period again, pass
+  `includeExported: true`. Partial or failed exports mark nothing.
+- **A check voided after it was exported now gets a reversing entry**
+  (`CR-…-V`) in the next export covering the day it was voided. Before this
+  change a voided check stayed in QuickBooks as an expense. The upgrade dates
+  checks already voided from their last change, and a check the backfill finds
+  was exported before it was voided gets its reversal in the next export
+  covering that date. **Review voided checks in QuickBooks before your next
+  export:** if you already reversed or deleted one there by hand, delete the
+  `CR-…-V` entry after importing, or it will be reversed twice.
+- **A second export while one is still being prepared is refused** (409).
 
 ### QuickBooks exports follow Intuit's import limits (2026-10-09)
 
@@ -575,7 +683,10 @@ they have been inactive for the configured number of days (30–1095; a value
 outside that range is treated as the nearest bound, and an unreadable one
 skips the pipeline). Each run writes a `membership_pipeline.prospects_purged`
 audit event marked `trigger: auto_purge`, with the pipeline, the threshold and
-the purged ids. No email is sent before a purge.
+the purged ids. Seven days before an application is purged, the department's
+prospect coordinators (the withdrawal notice's recipients) get one email per
+run listing the applications due and their deletion dates; each application is
+warned once per inactive spell, and a failed send is retried on the next run.
 
 **Nothing already inactive is deleted straight away.** Migration
 `feecd81eef2d` adds `prospective_members.inactive_since` and sets it to the

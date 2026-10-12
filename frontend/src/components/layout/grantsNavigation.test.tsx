@@ -81,6 +81,8 @@ describe('Grants & Fundraising navigation', () => {
       '/grants/campaigns',
       '/grants/donors',
       '/grants/donations',
+      '/grants/pledges',
+      '/grants/events',
       '/grants/reports',
     ]);
   });

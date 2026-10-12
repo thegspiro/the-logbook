@@ -30,7 +30,13 @@ import { BallotChoice } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 import { BallotItemCard } from '../components/ballot/BallotItemCard';
 import { useBallotChoices } from '../components/ballot/useBallotChoices';
-import { candidatesForItem, choiceLabel, choiceToVote, missingWriteIn } from '../components/ballot/ballotChoices';
+import {
+  candidatesForItem,
+  choiceLabel,
+  choiceToVote,
+  missingWriteIn,
+  unansweredItems,
+} from '../components/ballot/ballotChoices';
 
 /**
  * Capture the voting token from the URL (fragment preferred, query-string
@@ -68,6 +74,7 @@ type LoadError = { message: string; hint: string | null };
 
 const CONTACT_SECRETARY_HINT = "If you think this is a mistake, contact your organization's secretary.";
 const REOPENED_PREFIX = 'This election was closed and reopened';
+const BALLOT_CHANGED_PREFIX = 'The ballot changed after this link was sent';
 
 const describeLoadError = (detail: string): LoadError => {
   if (detail === 'This ballot has already been fully submitted') {
@@ -88,6 +95,10 @@ const describeLoadError = (detail: string): LoadError => {
         'This election was closed and reopened, so this ballot link no longer works. Ask your secretary for a new ballot link.',
       hint: null,
     };
+  }
+  // A ballot change retires every outstanding link (W50-47).
+  if (detail.startsWith(BALLOT_CHANGED_PREFIX)) {
+    return { message: detail, hint: null };
   }
   if (detail === 'This link was replaced by a newer ballot email') {
     return {
@@ -173,7 +184,8 @@ export const BallotVotingPage: React.FC = () => {
       setCandidates(candidateData);
       setIsTest(testBallot === true);
 
-      // Every item starts on Abstain
+      // Every item starts with no selection; Submit waits for a choice or
+      // an explicit Abstain on each (W50-25).
       resetChoices(electionData.ballot_items || []);
     } catch (err: unknown) {
       const { message, hint } = describeLoadError(
@@ -312,6 +324,7 @@ export const BallotVotingPage: React.FC = () => {
   if (!election) return null;
 
   const ballotItems = election.ballot_items || [];
+  const unanswered = unansweredItems(choices, ballotItems);
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
@@ -337,8 +350,8 @@ export const BallotVotingPage: React.FC = () => {
 
         <div className="mb-6">
           <p className="text-theme-text-secondary text-sm">
-            Make a selection for each item below. You can vote for an option, write in your own choice where allowed, or
-            abstain on any item.
+            Make a selection for each item below: vote for an option, write in your own choice where allowed, or choose
+            Abstain. Submit becomes available once every item has a selection.
           </p>
         </div>
 
@@ -365,12 +378,18 @@ export const BallotVotingPage: React.FC = () => {
           <button
             type="button"
             onClick={handleSubmitBallot}
-            className="rounded-lg bg-red-700 px-8 py-3 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-red-800"
+            disabled={unanswered.length > 0}
+            aria-describedby="ballot-submit-help"
+            className="rounded-lg bg-red-700 px-8 py-3 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Submit Ballot
           </button>
-          <p className="text-theme-text-muted mt-2 text-sm">
-            You will have a chance to review your choices before they are submitted.
+          <p id="ballot-submit-help" className="text-theme-text-muted mt-2 text-sm" aria-live="polite">
+            {unanswered.length > 0
+              ? `${unanswered.length} item${unanswered.length === 1 ? '' : 's'} still need${
+                  unanswered.length === 1 ? 's' : ''
+                } a selection or Abstain: ${unanswered.map((i) => i.title || i.id).join(', ')}.`
+              : 'You will have a chance to review your choices before they are submitted.'}
           </p>
         </div>
 

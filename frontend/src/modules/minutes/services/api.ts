@@ -11,6 +11,7 @@ import type {
   Motion,
   MotionCreate,
   ActionItem,
+  ActionItemAssignee,
   ActionItemCreate,
   MinutesStats,
   MinutesSearchResult,
@@ -87,6 +88,12 @@ export const minutesService = {
   },
 
   // ── Action Items ──
+
+  /** Every active member, for the assignee picker (minutes.manage). */
+  async getActionItemAssignees(): Promise<ActionItemAssignee[]> {
+    const response = await api.get<ActionItemAssignee[]>('/minutes-records/action-item-assignees');
+    return asArray(response.data);
+  },
 
   async addActionItem(minutesId: string, data: ActionItemCreate): Promise<ActionItem> {
     const response = await api.post<ActionItem>(`/minutes-records/${minutesId}/action-items`, data);

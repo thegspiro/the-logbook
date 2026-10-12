@@ -22,8 +22,8 @@ department has run a test.
 Downgrade drops the column. The choice is lost, which is all the column holds.
 
 Revision ID: bde76b481a16
-Revises: 46c55e6a3330
-Create Date: 2026-10-11 10:08:09.295143
+Revises: 3c9c5025a380
+Create Date: 2026-10-12 15:35:15
 
 """
 
@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "bde76b481a16"
-down_revision: Union[str, None] = "46c55e6a3330"
+down_revision: Union[str, None] = "3c9c5025a380"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

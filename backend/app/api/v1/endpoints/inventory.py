@@ -59,7 +59,7 @@ from app.models.inventory import (
 )
 from app.models.location import Location
 from app.models.operational_rank import OperationalRank
-from app.models.user import User
+from app.models.user import Position, User
 from app.schemas.inventory import (
     AllowanceCheckResponse,
     BatchReturnRequest,
@@ -3744,7 +3744,20 @@ async def get_departure_clearance(
             detail="Clearance not found",
         )
 
-    return clearance
+    member = (
+        await db.execute(
+            select(User.first_name, User.last_name).where(
+                User.id == clearance.user_id,
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).first()
+    response = DepartureClearanceResponse.model_validate(clearance)
+    if member:
+        response.member_name = (
+            f"{member.first_name or ''} {member.last_name or ''}".strip() or None
+        )
+    return response
 
 
 @router.get("/users/{user_id}/clearance", response_model=DepartureClearanceResponse)
@@ -3988,7 +4001,7 @@ async def create_equipment_request(
             # Check position qualification
             passes_position = False
             if has_position_restriction:
-                from app.models.user import Position, user_positions
+                from app.models.user import user_positions
 
                 pos_result = await db.execute(
                     select(Position.slug)
@@ -4009,6 +4022,25 @@ async def create_equipment_request(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="This item is restricted based on rank or position requirements",
                 )
+
+    # XC-1: the item above is resolved in-org, but a category-only request
+    # names its category directly, and the fulfil path compares the chosen
+    # item's category against it — a foreign id would make every item read as
+    # the wrong category.
+    try:
+        await assert_in_org(
+            db,
+            InventoryCategory,
+            request_data.category_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="category",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
 
     req = EquipmentRequest(
         id=generate_uuid(),
@@ -5518,6 +5550,23 @@ async def create_exposure_record(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
+    # XC-1: the exposed member is client-supplied and is the person whose
+    # exposure history this row becomes part of, so it must be one of ours.
+    try:
+        await assert_in_org(
+            db,
+            User,
+            data.user_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="member",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
     record = NFPAExposureRecord(
         id=generate_uuid(),
         item_id=str(item_id),
@@ -5971,6 +6020,31 @@ async def create_allowance(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Create an issuance allowance (e.g. 3 polo shirts/year per firefighter)."""
+    # XC-1: an allowance keyed on another organization's category or position
+    # would never match one of our issuances, so the cap it promises would
+    # silently not apply.
+    try:
+        await assert_in_org(
+            db,
+            InventoryCategory,
+            data.category_id,
+            current_user.organization_id,
+            label="category",
+        )
+        await assert_in_org(
+            db,
+            Position,
+            data.role_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="position",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
     allowance = IssuanceAllowance(
         organization_id=str(current_user.organization_id),
         category_id=str(data.category_id),
@@ -6083,9 +6157,19 @@ async def check_member_allowance(
     user_id: UUID,
     category_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Check a member's remaining issuance allowance for a category."""
+    """
+    Check a member's remaining issuance allowance for a category.
+
+    Members can check their own allowance. Quartermasters (inventory.manage)
+    can check any member's, as on the departure clearance route.
+
+    **Authentication required**
+    """
+    # INV-8: inventory.view is baseline, so it let any member read a
+    # colleague's issuance history by category.
+    _require_self_or_quartermaster(user_id, current_user)
     service = InventoryService(db)
     # Resolve the member's highest-priority position for role-specific allowances
     role_id = await service._get_primary_role_id(user_id, current_user.organization_id)
@@ -7045,14 +7129,19 @@ async def issue_kit_to_member(
 async def get_member_size_preferences(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get a member's size preferences.
 
+    Members can view their own sizes. Quartermasters (inventory.manage) can
+    view any member's, as on the departure clearance route.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    # INV-9: inventory.view is baseline, so it let any member read a
+    # colleague's uniform measurements.
+    _require_self_or_quartermaster(user_id, current_user)
     service = InventoryService(db)
     prefs = await service.get_member_size_preferences(
         user_id, current_user.organization_id

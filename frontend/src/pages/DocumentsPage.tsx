@@ -18,6 +18,7 @@ import {
   Upload,
   Download,
   Lock,
+  Settings,
 } from 'lucide-react';
 import {
   documentsService,
@@ -29,13 +30,14 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { asArray } from '../utils/asArray';
+import { FolderManageDialog } from '../components/documents/FolderManageDialog';
 
 type ViewMode = 'grid' | 'list';
 
-// Pseudo folder id selecting every document the caller can see, including
-// documents with no folder_id at all (org-level uploads, or the "No folder"
-// choice on the upload form) -- otherwise those documents are uploadable but
-// never visible or reachable anywhere in this page (Codex finding on #1827).
+// Pseudo folder id selecting every document the caller can see across every
+// folder they can open. (It once also surfaced documents with no folder at
+// all; uploads and moves now always file into a folder, General Documents by
+// default.)
 const ALL_DOCUMENTS = '__all__';
 const DOCUMENTS_PAGE_SIZE = 50;
 // Folders are cards in a three-column grid, so a page is sized to fill whole
@@ -90,6 +92,7 @@ const DocumentsPage: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [managedFolder, setManagedFolder] = useState<DocFolder | null>(null);
 
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
@@ -617,32 +620,58 @@ const DocumentsPage: React.FC = () => {
             ) : folders.length > 0 ? (
               <div className="card-grid gap-4">
                 {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => handleFolderSelect(folder)}
-                    className="stat-card group hover:bg-theme-surface-hover text-left transition-all hover:border-amber-500/30"
-                  >
-                    <div className="flex items-start space-x-3">
-                      <FolderOpen
-                        className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-text-primary line-clamp-2 font-semibold break-words">
-                          {folder.name}
-                        </h3>
-                        <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
-                        <p className="text-theme-text-muted mt-2 text-xs">
-                          {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
-                        </p>
-                        {folder.visibility && RESTRICTED_FOLDER_LABEL[folder.visibility] && (
-                          <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
-                            <Lock className="h-3 w-3" aria-hidden="true" />
-                            {RESTRICTED_FOLDER_LABEL[folder.visibility]}
+                  <div key={folder.id} className="relative">
+                    <button
+                      onClick={() => handleFolderSelect(folder)}
+                      className="stat-card group hover:bg-theme-surface-hover h-full w-full text-left transition-all hover:border-amber-500/30"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <FolderOpen
+                          className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h3
+                            id={`folder-title-${folder.id}`}
+                            className="text-theme-text-primary line-clamp-2 font-semibold break-words"
+                          >
+                            {folder.name}
+                          </h3>
+                          <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
+                          <p className="text-theme-text-muted mt-2 text-xs">
+                            {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
                           </p>
-                        )}
+                          {folder.visibility && RESTRICTED_FOLDER_LABEL[folder.visibility] ? (
+                            <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                              <Lock className="h-3 w-3" aria-hidden="true" />
+                              {RESTRICTED_FOLDER_LABEL[folder.visibility]}
+                            </p>
+                          ) : (
+                            folder.allowed_roles &&
+                            folder.allowed_roles.length > 0 && (
+                              <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                                <Lock className="h-3 w-3" aria-hidden="true" />
+                                Specific roles only
+                              </p>
+                            )
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                    {/* A sibling of the card, not inside it: a button cannot hold a button. */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => setManagedFolder(folder)}
+                        className="btn-icon-sm text-theme-text-muted hover:text-theme-text-primary absolute top-2 right-2"
+                        // Named "Manage folder" and described by the card's title,
+                        // so the folder's own name stays the card's alone.
+                        aria-label="Manage folder"
+                        aria-describedby={`folder-title-${folder.id}`}
+                      >
+                        <Settings className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -1018,7 +1047,8 @@ const DocumentsPage: React.FC = () => {
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
                         className="form-input focus:ring-amber-500"
                       >
-                        <option value="">No folder</option>
+                        {/* The server files an upload with no folder into General Documents. */}
+                        <option value="">General Documents (default)</option>
                         {currentFolder && <option value={currentFolder.id}>{currentFolder.name} (current)</option>}
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
@@ -1060,6 +1090,19 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Create Folder Modal */}
+        {canManage && (
+          <FolderManageDialog
+            folder={managedFolder}
+            onClose={() => setManagedFolder(null)}
+            onChanged={(change) => {
+              setManagedFolder(null);
+              void fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
+              void fetchSummary();
+              if (change === 'deleted' && selectedFolder) void fetchDocuments(selectedFolder, debouncedSearch);
+            }}
+          />
+        )}
+
         {canManage && showCreateFolder && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto"

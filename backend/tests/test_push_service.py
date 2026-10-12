@@ -89,6 +89,16 @@ def push_service_url():
         server.shutdown()
 
 
+@pytest.fixture(autouse=True)
+def _reach_the_local_push_service(monkeypatch):
+    """The stand-in push service is http://127.0.0.1, which the send-time pin
+    rightly refuses. Pinning is on by default everywhere (MSG-15); this file
+    switches it off through the explicit test-only flag, not by depending on
+    what ENVIRONMENT happens to say."""
+    monkeypatch.setattr("app.services.push_service._UNPINNED_SENDS_FOR_TESTS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+
+
 @pytest.fixture
 def received():
     _PushServiceHandler.received = []

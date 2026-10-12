@@ -939,6 +939,15 @@ class PurchaseRequest(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ordered_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -948,6 +957,17 @@ class PurchaseRequest(Base):
     )
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # When a complete QuickBooks export file last carried this payment, and
+    # which export. The export leaves out what is already stamped, so a
+    # Treasurer who exports overlapping periods does not import it twice.
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -1065,9 +1085,29 @@ class ExpenseReport(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # When a complete QuickBooks export file last carried this payment, and
+    # which export. The export leaves out what is already stamped, so a
+    # Treasurer who exports overlapping periods does not import it twice.
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
     )
     payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1210,10 +1250,49 @@ class CheckRequest(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # An approval given outside an approval chain that did not complete the
+    # request, because the department's dual-approval threshold wants a second,
+    # different approver (app/utils/finance_settings.py).
+    first_approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     check_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     check_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    voided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When a complete QuickBooks export file last carried this payment, and
+    # which export. The export leaves out what is already stamped, so a
+    # Treasurer who exports overlapping periods does not import it twice.
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The accounts the export posted the check to. A void is reversed against
+    # these, not whatever the category maps to by then, so the reversal
+    # cancels exactly the entry QuickBooks holds.
+    qb_export_account: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    qb_export_offset_account: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
+    # When a reversing entry for the void was exported, and in which export.
+    qb_void_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_void_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
