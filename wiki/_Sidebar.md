@@ -106,6 +106,7 @@
 
 - [API Docs](API-Reference)
 - [Database Schema](Database-Schema)
+- [Inventory — Developer](Module-Inventory-Developer)
 - [Role System](Role-System)
 - [Tech Stack](Technology-Stack)
 

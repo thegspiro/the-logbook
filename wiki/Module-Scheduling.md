@@ -5,7 +5,7 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 > **Equipment checklists moved to Inventory on 2026-08-31.** A checklist is a
 > list of inventory items, so the whole feature — authoring it, performing it
 > and reporting on it — lives in the
-> [Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31)
+> [Inventory module](Module-Inventory#equipment-checklists)
 > under `/inventory/checklists`. **Scheduling hosts none of it.**
 >
 > What Scheduling keeps is the shift's own business: a "Start checklist" link

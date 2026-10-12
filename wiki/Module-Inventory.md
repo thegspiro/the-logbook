@@ -2,15 +2,25 @@
 
 > **Structured reference:** data shapes, the route groups with their gates,
 > the self-scoping rules, invariants, edge cases and troubleshooting live in
-> [docs/INVENTORY_MODULE.md](../docs/INVENTORY_MODULE.md). This page carries
-> the exhaustive endpoint paths, per-page walkthroughs and the dated change
-> history.
+> [docs/INVENTORY_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/INVENTORY_MODULE.md).
+> This page carries the exhaustive endpoint paths and the per-feature
+> walkthroughs.
 
-## Quartermaster vocabulary _(settled 2026-08-26)_
+The Inventory module tracks department equipment, member assignments,
+pool/quantity stock, dated consumable lots, batch operations, departure
+clearance, write-off approval, vendors, NFC tags, label printing and the
+apparatus equipment checklists.
 
-The module used several names for the same operations. The canonical set now
-lives in one place (`frontend/src/modules/inventory/terminology.ts`), which
-supplies a glossary and a request-type helper:
+---
+
+> **Developers:** routes, API endpoints, the data model and the frontend
+> architecture are on [Inventory Module — Developer Reference](Module-Inventory-Developer).
+
+## Quartermaster Vocabulary
+
+The canonical terms live in one place
+(`frontend/src/modules/inventory/terminology.ts`), which supplies a glossary
+(`INVENTORY_TERMS`) and a request-type helper (`equipmentRequestTypeLabel`):
 
 | Term               | Means                                                                      |
 | ------------------ | -------------------------------------------------------------------------- |
@@ -22,98 +32,366 @@ supplies a glossary and a request-type helper:
 | **Transfer**       | Moving serialized gear between holders                                     |
 | **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
 
-**"Checkout batch" is now "Item Distribution".** That rename is applied; the
-glossary below is the vocabulary the module is standardising **on**, not a
-description of every label on every screen yet. Some screens still use older
-wording — the expanded member-equipment view still says **Active Checkouts**,
-and the equipment-request fulfilment selector still offers **Checkout —
-returnable individual item**. Treat the table as the target, and the
-distribution rename as the part that has landed.
+The glossary is the target vocabulary, not a description of every label on
+every screen. Some screens still use older wording: the expanded row on
+**Member Equipment** says **Active Checkouts**, and the equipment-request
+fulfilment selector offers **Checkout — returnable individual item**. The
+batch scanner is titled **Distribute Items**.
 
-**API payload values are unchanged** (`checkout`, `assignment`, `issuance`), so
-no integration needs updating.
-
-The Inventory module tracks department equipment, member assignments, pool/quantity items, batch operations, departure clearance, write-off approval, and thermal label printing.
+**API payload values use the older names** (`checkout`, `assignment`,
+`issuance`); integrations send and receive those.
 
 ---
 
 ## Key Features
 
-- **Individual & Pool Items** — Track individual items (assigned to one person) and pool/quantity items (shared stock)
-- **Item Issuances** — Full lifecycle for pool item issue/return with user, quantity, reason, and condition tracking
-- **Batch Operations** — `distribute_items` and `batch_return` for multiple items in a single request
-- **Live Search** — Real-time item lookup by name, barcode, serial number, or asset tag during scan operations
-- **Departure Clearance** — Full lifecycle (initiate → resolve line items → complete) for tracking property return when members depart
-- **Write-Off Approval** — Supervisor-reviewed workflow for lost, stolen, damaged, or obsolete items before they are removed from inventory
-- **Notification Netting** — Offsetting actions (assign→unassign) automatically cancel pending notifications
-- **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API (Chrome/Edge) with html5-qrcode fallback (Firefox/Safari/desktop). Desktop webcam support via environment→user facingMode fallback
-- **Thermal Label Printing** — Dymo (2.25×1.25″), Rollo (4×6″), and sheet (8.5×11″) label generation with Code128 barcodes
-- **Label print tracking** _(2026-09-23)_ — every item records when its label was confirmed printed; the items list filters on **Needs a Label** / **Label Printed**, **Select all N matching** takes a whole filtered set (up to 500) to the print page, and the print page opened with nothing selected offers a category / location / storage-area picker
-- **Category Management** — Organize items by category with low-stock thresholds and maintenance requirements
-- **Gear Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
-- **Org-Scoped Uniqueness** — Serial numbers, barcodes, and asset tags are unique per organization
-- **Row-Level Locking** — `SELECT FOR UPDATE` on mutation operations to prevent race conditions
-- **Overdue Tracking** — Computed at read time; scheduled task for reporting
-- **CSV Export** — Export filtered inventory data to CSV
-- **Sort & Filter** — Members tab supports sort by name, total items, overdue, or most assigned
-- **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card) _(2026-10-05)_ The scanner sends what it reads to `POST /member-badges/resolve`, which answers only within your organization, so the QR on a card names a member only if it is a badge code the server issued (old membership-number and member-id badges keep working until an officer turns off **Accept old badges**). A hand-made QR can no longer book gear to anyone
-- **Charges & Cost Recovery** — _(2026-03-05)_ Attach damage fees or replacement costs to return/write-off events. Pool items support per-unit replacement cost tracking with automatic cost recovery calculation
-- **Return Requests** — _(2026-03-05)_ Members can submit return requests that require admin approval before processing
-- **Stock Alerts & Quarantine** — _(2026-03-05)_ Configurable low-stock email alerts. Quarantine status for items pending inspection before re-issue
-- **Pool Item Enhancements** — _(2026-03-05)_ Size variants (S/M/L/XL with per-size stock), bulk issuance to multiple members, per-member issuance allowances with override capability
-- **Mobile Card Views & FAB** — _(2026-03-05)_ Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
-- **CSV Import** — _(2026-03-02)_ Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
-- **Variant Groups** — _(2026-03-07)_ Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
-- **Gear Kits** — _(2026-03-07)_ Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking. _(2026-08-11)_ Kit components can be flagged **optional** (`equipment_kit_items.optional`) — an optional component that is out of stock no longer blocks issuing the rest of the kit
-- **Member Size Preferences** — _(2026-03-07)_ Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
-- **Reorder Requests** — _(2026-03-07)_ Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
-- **Item Reorder Points** — _(2026-03-07)_ Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
-- **Low Stock SMS Alerts** — _(2026-03-07)_ Twilio SMS notifications for low-stock items alongside existing email alerts
-- **Location Filter Dashboard** — _(2026-03-07)_ Cascading Facility → Room → Storage Area filter on inventory dashboard
-- **Item Detail Page** — _(2026-03-06)_ Dedicated detail page (`/inventory/items/:id`) with two-column layout: barcode sidebar + tabbed content (overview, history, maintenance, NFPA)
-- **Cost Data** — _(2026-03-06)_ Purchase cost, replacement cost, and cost recovery tracking in item views and admin dashboard
-- **Size/Style Auto-Generation** — _(2026-03-14)_ When creating a new uniform or PPE item, toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. Backend creates one pool item per `size × color × style` combination, sets `standard_size` and `style` enum fields, and groups under a new `ItemVariantGroup`. Frontend includes chip-based multi-select for sizes and styles, comma-separated colors input, and live item count preview
-- **Issuance Allowances Admin Page** — _(2026-06-09)_ Dedicated page (`/inventory/admin/allowances`) to configure per-category issue caps by role and period (`annual` / `career` / `one_time`). `role_id` NULL applies to all members; the most specific match (highest-priority position) wins. Enforced on pool issuance unless an admin sets `override_allowance`; all mutations are audit-logged. A category with no rule is unlimited
-- **Size Preferences Modal** — _(2026-06-09)_ `SizePreferencesModal` lets members edit their own sizes (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields (shirt size/style, pant waist/inseam, jacket, boot size/width, glove, hat) plus a `custom_sizes` JSON column; unset sizes return 404 and open the form blank
-- **Equipment Request Fulfillment** — _(2026-06-09)_ `PUT /inventory/requests/{id}/fulfill` turns an approved request into a real issuance, checkout, or assignment (routed by tracking type) and records `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id`. Not idempotent — only `APPROVED` requests can be fulfilled
-- **Sequential Barcodes Assigned at Creation** — _(2026-06-10)_ Item barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, …). The prefix and counter live in `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers. Assigned at item-creation time (no longer lazily on read); migration `20260610_0001` reassigned existing items and seeded each org's counter
-- **Taxonomy Soft-Delete** — _(2026-06-09)_ `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
-- **NFPA 1851 Inspection Detail** — _(2026-06-09)_ Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
-- **Inventory Impact Planner** — _(2026-06-23)_ Quartermaster planning tool (`/inventory/admin/impact-planner`) for scoping a prospective new issue. Filter the roster (status, membership type, rank, station, position) and see who is impacted, the size each needs (from member size preferences), and who already holds a comparable item. Optional layers: net per-size demand against on-hand stock for the exact quantity to buy, estimate cost from item prices, treat worn or NFPA-expired gear as needing replacement, and warn when members are over their issuance allowance. Acts on the result — draft pre-priced per-size **reorder requests**, **bulk-issue** matching on-hand pool stock, **request sizes** from members with none on file (in-app notification), export **PDF/CSV**, and **save/load named plans** (`inventory_impact_plans`). Member contact details honour the org's `contact_info_visibility` settings
-- **Dated Stock Lots** — _(2026-08-10)_ Consumables are held as dated lots (`inventory_lots`) rather than one flat count. **On-hand comes from in-date lots** for any item that has them and from `InventoryItem.quantity` for the rest; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage most in need of ordering. One shared helper backs the reorder alert, the items grid and the CSV export, so the three cannot disagree
-- **Receive Stock (bulk lots)** — _(2026-08-10)_ Record a whole delivery in one pass: item, lot number, expiration and quantity per line, one received date for the lot of it. `POST /inventory/lots/bulk` validates every item is in the caller's org and **applies all lines or none** — a partly applied delivery is worse than a rejected one
-- **Add Several (bulk item create)** — _(2026-08-10)_ Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows; any validation failure writes nothing
-- **Shelf-to-Truck Link** — _(2026-08-10)_ An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction is the [Expiring on Apparatus](#equipment-checklists-moved-here-2026-08-31) worklist
-- **Vendor Cleanup** — _(2026-08-16)_ Two tools for the mess free text leaves behind. **Merge** folds a duplicate into another vendor — items, reorder requests and contacts move across and the duplicate is removed, freeing its name; the target's own details are never overwritten. **Attach** works from the other end: the vendors screen counts supplier names typed onto rows that were never linked ("3 supplier names not on the list — named by 13 items and 3 reorders") and offers each one as either a new vendor or an attachment to an existing one, linking every row carrying that name in a single pass. Names are matched case-insensitively, and rows already linked to some other vendor are left alone — that is a decision, not a leftover
-- **Vendor Tracking** — _(2026-08-16)_ Suppliers are rows (`inventory_vendors`), not a hand-typed name on each item. A vendor carries the company's own details (main line, orders inbox, remit-to address, account number, payment terms) plus a contact list (`inventory_vendor_contacts`) — the rep who quotes turnout gear is rarely the number to call about a warranty claim, so each vendor holds as many named people as it needs, exactly one flagged primary. Items and reorder requests link to a vendor (`vendor_id`), so a vendor card shows live purchasing history — items bought, open reorders, total purchased — and an item's detail page names the supplier to call. The old free-text `vendor` column is kept as a fallback for rows nobody has linked; migration `20260816_0003` turns each distinct name already on file into a vendor (case-folded per organization) and links the items and reorders that named it. Deactivating a vendor keeps those links: "we don't buy from them anymore" must not erase where a helmet in service came from
-- **CSV Import: Unmatched Supplier Report** — _(2026-08-17)_ An import whose `Vendor` cell names a supplier not on file still imports the row and keeps the name as free text; the result now lists those names so they can be attached afterwards. Spelling variants of one name (`Gals`/`gals`/`GALS`) are folded to a single entry, because **Attach all** handles them in one pass and listing three implied three pieces of work. A name is only reported once its row actually imported — `create_item` still rejects rows the CSV parse accepted (duplicate serial, pool item with no quantity), so banking the name earlier sent readers to Attach for rows that were never written. A name matching a **deactivated** vendor now **links to it** rather than being reported as unmatched: vendor creation rejects inactive duplicates, so the previous advice was a dead end, and deactivation deliberately preserves every existing link
-- **Impact Plan PDF: untrusted text is escaped** — _(2026-08-17)_ ReportLab's `Paragraph` parses a mini-HTML dialect, so an organization name, a filter parameter, a member's full name or a contact string containing `<` or `&` was interpreted as markup and corrupted or failed the export. All four are escaped now; cells drawn as plain strings (membership number, rank, station) were never affected
-- **Pinned working set** — _(2026-09-07)_ A member can **pin** an item and it hoists to a **Pinned** section above the list. Pins are **per member, not per department**: two quartermasters running different supply lines front different gear, and one curating their list must not reorder the other's page (`inventory_item_pins`, unique on `(user_id, item_id)` — which is also what keeps the outer join at most 1:1 so hoisting cannot multiply rows and inflate the list's total). Reorder by dragging, or with up/down arrows on a phone where dragging does not work. **Capped at 25 items**, and the cap is enforced server-side with a message naming it
-- **Group by any attribute** — _(2026-09-07)_ The items list regroups by Category, Item Type, colour or any other attribute, with each group in its own `<tbody>`. **Whatever you group by drops out of the rows** — repeating one value on every row inside its own group is noise — and the **Size** column is shown in its place. Grouping is keyed server-side; the export follows the list, filters and grouping included
-- **Size variants fold into one row** — _(2026-09-06)_ A product's sizes collapse into a single expandable row, so a coat in six sizes is one line until opened. A fulfilment acts on **the variant it named**, not on whichever row happened to be expanded
-- **Style is four axes, not one** — _(2026-09-06)_ `inventory_items.style` holds one `GarmentStyle` value, but the enum's ten values are four orthogonal descriptors — sleeve, fit, neckline, closure — so one garment legitimately carries several. A men's long-sleeve polo could not be recorded at all: variant generation resolved the conflict by **creating three separate items**. `style_attributes` (migration `b8e3f1a97c24`) holds the full canonical list; `style` stays, carrying the derived primary, because filters, badges and the requestable catalog read it. Style attributes describe **one garment**, not one item each
-- **A member's fit is read** — _(2026-09-06)_ `member_size_preferences.shirt_style` spanned all four axes at once, so a member could say "Women's" or "Long Sleeve" but not both, and choosing either silently answered "no preference" to the other — and **nothing ever read the column**. The member picked a value, saw it save, and it changed nothing about what they were offered, while `boot_width` beside it in the same form was read and folded into "10 (wide)". `garment_fit` (migration `c4f7a2e91b38`) holds the one axis that is a property of the _person_ rather than of what the department stocks, and the requestable catalog reads it to preselect the right variant. The backfill takes `shirt_style` only where it held a fit value; a stored `long_sleeve` is deliberately left behind, because there is nowhere truthful to put it
-- **RFC 4180 CSV Parsing** — _(2026-08-10)_ CSV import and paste paths use a real parser. `"Gauze Pads, 4x4 Sterile"` is one field; the previous `split(',')` readers shifted every column after it, so the import preview disagreed with what the import would actually do
+### Tracking and stock
+
+- **Individual & Pool Items** — individual items (serialized, assigned to one
+  person) and pool/quantity items (shared stock), selected by `tracking_type`
+- **Item Issuances** — full lifecycle for pool issue/return with user,
+  quantity, reason and condition. Issuing more than is on hand, or returning
+  more than was issued, is refused with the counts rather than silently
+  lowered
+- **Dated Stock Lots** — consumables are held as dated lots (`inventory_lots`)
+  rather than one flat count. **On-hand comes from in-date lots** for any item
+  that has them and from `InventoryItem.quantity` for the rest; expired lots
+  count as zero, because the equipment-check swap refuses them and counting
+  them would hide the shortage most in need of ordering. One shared helper
+  backs the reorder alert, the items grid, the CSV export and the item detail
+  page, so they cannot disagree
+- **Receive Stock (bulk lots)** — record a whole delivery in one pass: item,
+  lot number, expiration and quantity per line, one received date for the lot
+  of it. `POST /inventory/lots/bulk` validates every item is in the caller's
+  org and **applies all lines or none**
+- **Add Several (bulk item create)** — paste a list of catalog items. Names
+  already in the catalog are **skipped and reported, not rejected**, so a list
+  can be re-pasted after it grows; any validation failure writes nothing
+- **Shelf-to-Truck Link** — an item's **Stock Lots** tab lists the apparatus
+  checklist positions it fills and what each truck is carrying now
+  (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a
+  recall or an expiring lot is worked from, because the officer is holding the
+  item. The forward direction is the
+  [Expiring on Apparatus](#equipment-checklists) worklist
+- **Org-Scoped Uniqueness** — serial numbers, barcodes and asset tags are
+  unique per organization
+- **Row-Level Locking** — `SELECT FOR UPDATE` on mutation operations to
+  prevent race conditions
+- **Unissuable stock** — pool stock whose status is `in_maintenance`,
+  `retired`, `lost` or `stolen`, or whose condition is unsafe (poor, damaged,
+  out of service, retired), cannot be issued; every issuance path funnels
+  through `issue_from_pool`, which holds that gate
+- **Category Management** — items organized by category with low-stock
+  thresholds and maintenance requirements; a category's low-stock alert fires
+  when stock is **at or below** its threshold (`<=`)
+- **Item Reorder Points** — a per-item `reorder_point` threshold drives the
+  low-stock dashboard line and the low-stock **email** alert. Low-stock and
+  reorder notices are email-only (see
+  [notification policy](#cross-module-connections))
+- **Cost Data** — purchase price, replacement cost and cost recovery in item
+  views and the admin dashboard
+- **Charges & Cost Recovery** — damage fees or replacement costs attached to
+  return/write-off events; pool items snapshot a per-unit replacement cost on
+  each issuance. **Apply Charge** requires an amount above $0
+- **Overdue Tracking** — computed at read time; the
+  `inventory_overdue_alerts` scheduled task reports it daily
+- **Notification Netting** — offsetting actions (assign → unassign) cancel
+  each other's pending notifications in `inventory_notification_queue`
+
+### Members and issuance
+
+- **Batch Operations** — `distribute-items` and `batch-return` handle
+  multiple items in a single request
+- **Gear Requests** — members request temporary loans, issuances or
+  purchases; quartermasters approve, decline and fulfil (see
+  [Gear Requests](#gear-requests))
+- **Return Requests** — members submit return notices from My Issued Gear;
+  a quartermaster reviews them before processing
+- **Gear Kits** — named bundles (e.g. "New Recruit PPE Kit") issued in one
+  operation with per-component tracking. A component can be flagged
+  **optional** (`equipment_kit_items.optional`), and an optional component
+  that is out of stock does not block issuing the rest of the kit. Issuing a
+  kit asks for confirmation, naming the member
+- **Bulk issuance** — one pool item issued to several members at once
+  (`POST /items/{id}/bulk-issue`)
+- **Issuance Allowances** — `/inventory/admin/allowances` configures
+  per-category issue caps by role and period (`annual` / `career` /
+  `one_time`). `role_id` NULL applies to all members; the most specific match
+  (highest-priority position) wins. Enforced on pool issuance unless an admin
+  sets `override_allowance`; all mutations are audit-logged. A category with
+  no rule is unlimited, and the UI says so in words
+- **Member Size Preferences** — `SizePreferencesModal` lets members edit
+  their own sizes (`/inventory/my/size-preferences`) and quartermasters edit
+  any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields
+  (shirt size, garment fit, pant waist/inseam, jacket, boot size/width, glove,
+  hat) plus a `custom_sizes` JSON column. Unset sizes return 404 and open the
+  form blank. Used for auto-selection during kit issuance, the request form
+  and the impact planner
+- **Departure Clearance** — full lifecycle (initiate → resolve line items →
+  complete) for tracking property return when members depart; each clearance
+  has its own page at `/inventory/admin/clearances/:clearanceId`
+- **Property return reminders** — dropped members still holding property get
+  a 30-day and then a 90-day reminder (see
+  [Scheduled tasks](#scheduled-tasks))
+- **Write-Off Approval** — supervisor-reviewed workflow for lost, stolen,
+  damaged or obsolete items before they are removed from inventory
+- **Retirement** — the retire action is the only way to deactivate an item
+  (see [Retiring an item](#retiring-an-item))
+
+### Scanning, labels and NFC
+
+- **Barcode & QR Scanning** — camera scanning for distribution and return via
+  the BarcodeDetector API (Chrome/Edge) with an html5-qrcode fallback
+  (Firefox/Safari/desktop), through the shared `useHtml5Scanner` hook.
+  Desktop webcams work via an environment → user `facingMode` fallback. A
+  camera error stays on screen, and manual entry remains available
+- **Live Search** — real-time item lookup by name, barcode, serial number,
+  asset tag, size or colour during scan operations (`GET /inventory/lookup`)
+- **Mobile Member ID Scanning** — camera scanning of a member ID card for
+  quick lookup during distribution. The scanner sends what it reads to
+  `POST /member-badges/resolve`, which answers only within the caller's
+  organization, so the QR on a card names a member only if it is a badge code
+  the server issued. Older membership-number and member-id badges resolve
+  until an officer turns off **Accept old badges** on the ID card print page.
+  With the NFC ID Cards integration connected, the scanner also offers **Or
+  tap their ID card**
+- **Sequential barcodes** — item barcodes use one per-organization sequential
+  scheme, `<prefix><zero-padded number>` with a 6-digit minimum (default
+  `INV-000001`). The prefix and counter live in
+  `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for
+  the read-increment so concurrent creates get distinct numbers. Assigned at
+  item creation by `_next_sequential_barcode()`, which item creation, variant
+  generation and label backfill share. Item detail always shows the barcode
+  and asset tag fields, with `--` when empty
+- **Thermal Label Printing** — Avery 5160 sheets (8.5×11″, 3×10) and roll
+  formats for Dymo (30252, 30256, 30334, 30336), Rollo (4×6″, 2×1″), Zebra
+  (2×1″, 3×1″, 4×2″, 4×6″), a 1×1″ thermal square and a custom size, with
+  Code128 or QR codes (see [Labels](Module-Inventory-Developer#labels))
+- **Label print tracking** — every item records when its label was confirmed
+  printed; the items list filters on **Needs a Label** / **Label Printed**
+- **NFC tags** — items, shelves and checklist compartments can carry NFC tags
+  for lookup, put-away, shelf audits and a self-service kiosk (see
+  [NFC Tags](Module-Inventory-Developer#nfc-tags))
+
+### Catalog, variants and the items list
+
+- **CSV Import** — bulk import via CSV upload with a downloadable template,
+  header validation and duplicate-serial detection. The parser is RFC 4180
+  (`"Gauze Pads, 4x4 Sterile"` is one field), so the preview and the import
+  agree. Negative quantities and purchase prices are refused per row. An
+  import whose `Vendor` cell names an unknown supplier still imports the row
+  and lists the name for attaching afterwards (see [Vendors](Module-Inventory-Developer#vendors))
+- **CSV Export** — export of the filtered list to CSV (see
+  [Item Management](Module-Inventory-Developer#item-management))
+- **Variant Groups, sizes and styles** — see
+  [Variants, Sizes & Styles](#variants-sizes--styles)
+- **Pinned working set** — a member can pin items, which hoist to a
+  **Pinned** section above the list (see
+  [The items list](#the-items-list))
+- **Group by any attribute** — the items list regroups by category, item
+  type, colour, size, condition, style, location or vendor
+- **Location Filter** — cascading Facility → Room → Storage Area filter, plus
+  per-location summary cards
+- **Item Detail Page** — `/inventory/items/:id`, two-column layout: barcode
+  sidebar plus tabs for **History** (`inventory.manage` only), **Stock Lots**,
+  **NFPA Compliance** and **Exposures** (NFPA-tracked items) and
+  **Inspections** (items with maintenance requirements). The storage area is
+  shown by name
+- **Mobile Card Views & FAB** — responsive card layouts on mobile, and a
+  floating action button offering **Add Item** and **Distribute Items** to
+  quartermasters
+- **Sort & Filter on Member Equipment** — sort by name, total items, overdue
+  first or most assigned
+- **Taxonomy Soft-Delete** — `DELETE` on categories (blocked while active
+  items reference them), variant groups and kits sets `active = False` and
+  audit-logs rather than hard-deleting
+
+### Planning, compliance and suppliers
+
+- **Inventory Impact Planner** — scoping tool for a prospective new issue
+  (see [Impact Planner](#impact-planner))
+- **Reorder Requests** — workflow (pending → approved → ordered → partially
+  received → received, or cancelled) with vendor/PO tracking, stock receipts
+  (`reorder_receipts`) and audit logging
+- **Vendor Tracking & Cleanup** — suppliers as rows with contacts, merge and
+  attach tools (see [Vendors](Module-Inventory-Developer#vendors))
+- **NFPA 1851/1852 Compliance** — per-item compliance records, exposure
+  logging, a compliance dashboard and 10-year retirement tracking.
+  Maintenance records can persist structured NFPA Ch. 6–8 inspection results
+  (assessment booleans, contamination level, SCBA fields, recommendation) to
+  `nfpa_inspection_details` when supplied
 
 ---
 
-## Equipment Checklists _(moved here 2026-08-31)_
+## The Items List
+
+`/inventory` (also `/inventory/admin/items`):
+
+- **Filters.** Search plus nine dropdowns: category, status, condition, item
+  type, location, size, colour, style and label status. Below 640px the
+  dropdowns sit behind a **Filters** toggle that reports how many are active;
+  search stays visible.
+- **Location panel.** Summary cards per location
+  (`GET /inventory/summary/by-location`) use the same medical-stock carve-out
+  as the list, so a location holding only medical stock gets no card. The
+  **Unassigned** card filters to items with no location
+  (`unassigned_location=true` on `GET /items`); a second click clears it. The
+  header count reads `non_medical_items`, which counts rows, matching the
+  list.
+- **Pinned working set.** Pins are **per member, not per department**
+  (`inventory_item_pins`, unique on `(user_id, item_id)`, which also keeps the
+  outer join at most 1:1 so hoisting cannot inflate the list's total).
+  Reorder by dragging, or with up/down arrows on a phone. **Capped at 25
+  items**, enforced server-side with a message naming the cap.
+- **Group by.** Category, item type, colour, size, condition, style,
+  location or vendor (`InventoryService.GROUPABLE`), each group in its own
+  `<tbody>`. The grouped attribute drops out of the rows, and the **Size**
+  column is shown in its place. Grouping is keyed server-side.
+- **Size variants fold into one row.** A product's sizes collapse into a
+  single expandable row.
+- **Label selection.** **Select all N matching** selects a whole filtered set
+  of up to 500 items (the cap shared with bulk status changes and
+  retirement). Above 500, **Print labels for all N matching** sends the
+  filters (up to 5,000 items) to the print page instead.
+- **Export** follows the list's filters and sort; pinning and grouping are
+  not applied to the file.
+
+---
+
+## Variants, Sizes & Styles
+
+- **Variant Groups** link related items that differ by size, colour or style
+  (`item_variant_groups`). Each variant has its own stock, serials and
+  assignments while sharing a base product description.
+- **Size/style auto-generation.** Creating a uniform or PPE item offers a
+  **Generate Sizes & Styles** toggle: chip-based multi-select for sizes and
+  styles, a comma-separated colours input and a live item-count preview.
+  `POST /inventory/items/create-variants` creates one pool item per
+  combination and groups them under a new variant group. Styles on different
+  axes combine onto one item; only styles on the same axis (short **and**
+  long sleeve) multiply.
+- **Style is four axes.** `GarmentStyle` values describe sleeve
+  (`short_sleeve`, `long_sleeve`), fit (`mens`, `womens`, `unisex`), neckline
+  (`v_neck`, `crew_neck`) and closure/cut (`polo`, `button_down`,
+  `quarter_zip`). `inventory_items.style_attributes` holds the full list for
+  one garment; `style` carries the derived primary, which filters, badges and
+  the requestable catalog read.
+- **A member's fit.** `member_size_preferences.garment_fit` holds the one
+  axis that belongs to the person rather than the stock, and the requestable
+  catalog reads it to preselect the right variant. `shirt_style` is a
+  deprecated column kept only to preserve stored values.
+- **Size picker.** The Edit Item dialog edits size through a picker over the
+  standard-size vocabulary (garment, boot/glove and waist) with a
+  **Custom...** option for a boot width or a chest measurement. One control
+  writes both the structured `standard_size` and the free-text `size`.
+  `one_size` and `xxxl` render as **One Size** and **3XL**.
+- **Variant capsules.** `VariantCapsules` renders size (blue), colour
+  (purple) and style (amber) pills on InventoryItemsPage, ItemDetailPage,
+  MyEquipmentPage, PoolItemsPage and VariantGroupsPage, and renders nothing
+  for an item with no variant attributes. `getDisplayName()` strips the
+  ` — size [— color] [— style]` suffix for lists and cards.
+- **Stock matrix.** VariantGroupsPage shows each group's on-hand quantity by
+  size × colour (or style); a zero cell is highlighted red.
+- **Filters.** `GET /api/v1/inventory/items` accepts `size`, `color` and
+  `style`, offered as dropdowns on the items list.
+
+---
+
+## Gear Requests
+
+The request form (`RequestEquipmentModal`, opened from My Issued Gear):
+
+- **Browses.** The department's gear loads when the form opens, with the real
+  category names as filters. Search matches category and product-group names
+  as well as the item's own.
+- **One row per product.** A shirt kept in seven sizes and two colours is one
+  line, with sizes as a step after the product is chosen; serialized gear
+  collapses the same way ("Portable Radio — 7 on hand").
+- **The size step starts from the member's sizes on file**, matched through
+  the same alias table the impact planner uses, so "Large" selects a row
+  stored as "L".
+- **Out-of-stock and uncatalogued gear can be requested.** Out-of-stock sizes
+  stay selectable and are labelled; a free-text line covers gear that is not
+  in the catalog. `equipment_requests.requested_size` carries the size as its
+  own field.
+- **Rank- and position-restricted gear is filtered by the server**
+  (`GET /inventory/requestable-catalog`), so restricted items are never
+  listed to a member who could not request them.
+
+Review and fulfilment:
+
+- `PUT /inventory/requests/{id}/fulfill` turns an approved request into a
+  real issuance, temporary loan or assignment (routed by tracking type) and
+  records `fulfilled_by` / `fulfilled_at` / `fulfillment_type` /
+  `fulfillment_reference_id`. Only `approved` requests can be fulfilled; the
+  call is not idempotent.
+- **Fulfilment resolves the request to its variant.** The catalog sums
+  availability across rows that share a product and size/colour/style, so
+  `GET /inventory/requests/{id}/fulfillment-options` offers every sibling row
+  of that variant, matching what the member was shown. Rows of a different
+  size, colour, style, product or organization are excluded. The product and
+  variant identity is one definition (`_product_key` / `_variant_key` /
+  `_variant_identity` in `InventoryService`), used by both the catalog
+  grouping and the fulfilment narrowing. Whether anything is on hand in the
+  requested size is decided by the server. Fulfilling pool stock opens on
+  issuance.
+- **The requester is told the outcome.** Review and fulfil queue a background
+  notice (`app/services/equipment_request_notifications.py`): an in-app bell
+  entry linking to `/inventory/my-equipment`, a web push where configured,
+  and an email from the editable `equipment_request_update` template carrying
+  the review note. **Never SMS.** The notice sits behind the
+  `equipment_request_update` notification-rule trigger, enforced and on unless
+  a department switches it off; the email is the optional `inventory_updates`
+  kind in `app/services/email_policy.py` ("Equipment and inventory updates",
+  default on).
+- **Approve & fulfill now** sends `notify_member=false` on the approval so the
+  member hears once, when the item is issued.
+- Both sides show one status vocabulary, `EQUIPMENT_REQUEST_STATUS_LABELS`:
+  pending → **Awaiting review**, approved → **Approved**, denied →
+  **Declined**, fulfilled → **Issued**. Filter values sent to the API use the
+  stored values. The member's request list shows `review_notes`
+  ("Quartermaster: …").
+
+---
+
+## Retiring an Item
+
+The retire action (`POST /inventory/items/{id}/retire`) is the only way to
+deactivate an item. It blocks while the item is assigned, checked out or (for
+pool stock) carries an unreturned issuance, re-checks the current holder
+immediately before deactivating, and keeps the item's other fields consistent
+with being retired. A generic item edit (`PATCH /items/{id}`) refuses to
+deactivate an item, directly or by setting its status and condition to
+retired ("Use the item's retire action to deactivate it").
+
+- Medical supplies have their own retire action,
+  `POST /medical-supplies/items/{id}/retire` (`inventory.manage_medical` or
+  `inventory.manage`).
+- **Maintenance cannot be completed as Retired**: the maintenance form does
+  not offer Retired as the condition after maintenance; retire the item with
+  the retire action, which takes the lock, checks the blockers and writes the
+  audit event.
+
+---
+
+## Equipment Checklists
 
 An equipment checklist is the pass a crew makes over an apparatus — every
-compartment, every position, what should be aboard and what actually is. It was
-part of Shift Scheduling until 2026-08-31 and now belongs to Inventory, because
-a checklist is a list of **inventory items**: a checklist position carries an
-`inventory_item_id` into the catalog, the lots aboard a truck are snapshots of
-`inventory_lots` rows, and the supply worklist is a stock-room job.
+compartment, every position, what should be aboard and what actually is. It
+belongs to Inventory because a checklist is a list of **inventory items**: a
+checklist position carries an `inventory_item_id` into the catalog, the lots
+aboard a truck are snapshots of `inventory_lots` rows, and the supply
+worklist is a stock-room job.
 
 **Inventory owns the whole feature** — authoring a checklist, performing it,
-and reporting on it. Scheduling hosts none of it. What it keeps is the shift's
-own business: a "Start checklist" link on shift check-in and on the shift
-detail panel, the finalize gate on outstanding end-of-shift checks, and the
-picker that lets a shift template name the checklists its shifts carry.
+and reporting on it. Scheduling contributes the shift's own business: a
+"Start checklist" link on shift check-in and on the shift detail panel (both
+open `/inventory/checklists/my?shift=<id>`), the finalize gate on outstanding
+end-of-shift checks, and the picker that lets a shift template name the
+checklists its shifts carry.
 
-Members reach their own checklists from the **My Checklists** nav row, which is
-ungated — walking a truck is the one thing every member does, and the API
+Members reach their own checklists from the **My Checklists** nav row, which
+is ungated — walking a truck is the one thing every member does, and the API
 narrows `/my-checklists` to the caller. **Fleet Readiness** sits beside it for
 officers.
 
@@ -125,17 +403,14 @@ officers.
 | One apparatus's checks                           | `/inventory/checklists/apparatus/{id}`       | `inventory.check_view` or `scheduling.manage`                           |
 | Apparatus inventory (standing view of one truck) | `/inventory/checklists/apparatus-inventory`  | `inventory.check_submit`, `inventory.check_view` or `inventory.view`    |
 | Checklists admin (the list itself)               | `/inventory/admin/checklists`                | `inventory.check_manage`                                                |
+| Checklist builder (new)                          | `/inventory/admin/checklists/templates/new`  | `inventory.check_manage`                                                |
 | Checklist builder                                | `/inventory/admin/checklists/templates/{id}` | `inventory.check_manage`                                                |
 | Check reports                                    | `/inventory/admin/checklists/reports`        | `inventory.check_view`                                                  |
 | Expiring on apparatus                            | `/inventory/admin/checklists/supply`         | `inventory.check_view` or `inventory.manage`                            |
-| Checklist settings                               | `/inventory/admin/checklists/settings`       | `inventory.check_manage`                                                |
+| Checklist settings                               | `/inventory/admin/checklists/settings`       | `settings.manage` or `organization.update_settings`                     |
 
-The API keeps its `/api/v1/equipment-checks` prefix — the paths did not move,
-only ownership — but the router is gated on the **Inventory** module now. A
-department that had switched Inventory off has it switched back on by migration
-`7e2f11397849` if it uses checks at all; if it is later switched off
-deliberately, the Equipment Checks tab disappears from the shift screen rather
-than loading a page that cannot reach its own API.
+The API lives under `/api/v1/equipment-checks` and is gated on the
+**Inventory** module.
 
 ### Which checklists a shift carries
 
@@ -145,37 +420,78 @@ Two routes, and the first one wins outright.
 shift template to the checklists its shifts carry, in the order an officer
 arranged them. Edited on the shift template itself, under the vehicle picker.
 
-**Otherwise, the apparatus decides**, as it always has: checklists assigned to
-that specific apparatus, and failing that, ones written for its apparatus type.
+**Otherwise, the apparatus decides**: checklists assigned to that specific
+apparatus, and failing that, ones written for its apparatus type.
 
 Naming checklists **replaces** apparatus resolution rather than adding to it —
-the officer said what this shift carries, and the apparatus-type default is not
-a second opinion to be merged in. Naming none falls back, which is what every
-shift did before the table existed, so nothing changed for existing
-departments. Clearing every checklist is therefore a real instruction, not a
-no-op: it restores apparatus resolution.
+the officer said what this shift carries, and the apparatus-type default is
+not a second opinion to be merged in. Naming none falls back to apparatus
+resolution, so clearing every checklist on a template is a real instruction:
+it restores apparatus resolution.
 
 One case is easy to get backwards: a template whose links all point at
 **deactivated** checklists resolves to **nothing**, not to the apparatus
-default. The fallback is decided by whether the template named any checklists,
-not by whether the lookup returned rows — falling back there would report a
-crew as missing a check nobody asked them for.
+default. The fallback is decided by whether the template named any
+checklists, not by whether the lookup returned rows — falling back there
+would report a crew as missing a check nobody asked them for.
 
-Resolution happens in three places and they must agree, or a reminder names one
-set of checklists and the crew is shown another:
+Resolution happens in three places and they must agree, or a reminder names
+one set of checklists and the crew is shown another:
 `EquipmentCheckService._resolve_templates` (what the crew is offered),
 `scheduled_tasks.resolve_check_templates` (what the reminders name) and
 `EquipmentReadinessService` (what the fleet board scores against).
 
-**`shifts.template_id`** is what makes this resolvable at all. A shift used to
-copy a template's fields and keep no reference back; it now records which
-template it came from. It cannot be backfilled — nothing on an existing shift
-identifies its originating template — so shifts created before the column carry
-NULL and resolve by apparatus, exactly as they did.
+**`shifts.template_id`** records which shift template a shift came from, which
+is what makes template naming resolvable. A shift with no `template_id`
+resolves by apparatus.
+
+### Authoring and performing a check
+
+- **Builder apparatus.** A checklist can be pinned to an apparatus from the
+  Apparatus module only; the server rejects an apparatus id outside the
+  caller's organization ("Invalid apparatus"). A department running on basic
+  apparatus assigns checklists by apparatus type. The vehicle-type list
+  follows the backend's `DefaultApparatusType` plus custom types and saved
+  values, and the builder names which vehicles a checklist reaches and warns
+  when it reaches none.
+- **Editing a live checklist unpublishes it**; the builder shows a banner
+  with **Publish now** and asks before leaving.
+- **Failure notes.** A **Fail** or **Out of service** the member chose
+  requires a note before submit (one a count, reading or expiry already
+  explains is exempt). Overall Notes is not pinned with Submit.
+- **Submitted state.** My Checklists and Fleet Readiness share one
+  `isChecklistSubmitted` rule; a filed check does not offer **Open
+  checklist**, and a check that took an item out of service counts as
+  expected and completed.
+- **Navigation.** The checklists admin page links to **Fleet readiness** and
+  **Check log**; a member's log links back to My Checklists.
+- **Early checks.** My Checklists offers shifts from today onward. The fleet
+  board and check log also read a shift up to seven days ahead when a check
+  has already been filed against it, so its findings count on the board at
+  once.
+- **Failure log.** `get_failure_log` counts its own rows within the caller's
+  organization.
+- **Reports** attribute a check to the shift's apparatus
+  (`shifts.apparatus_id`), falling back to the check's own column only for a
+  standalone check.
+
+### Checklist settings
+
+`/inventory/admin/checklists/settings` edits four values stored in
+`org.settings["shift_reports"]["checklist_timing"]` and written through
+`PATCH /organizations/settings` — which is why the page is gated on
+`settings.manage` or `organization.update_settings`, not `check_manage`:
+
+| Setting                      | Default | Range  |
+| ---------------------------- | ------- | ------ |
+| `start_of_shift_enabled`     | true    | —      |
+| `end_of_shift_enabled`       | true    | —      |
+| `checkin_opens_hours_before` | 2       | 0–24   |
+| `checkin_closes_hours_after` | 12      | 0–72   |
+
+Absence means the defaults, never "off".
 
 ### Permissions
-
-Renamed on 2026-08-31 from `equipment_check.*`:
 
 | Permission               | Grants                                                |
 | ------------------------ | ----------------------------------------------------- |
@@ -183,859 +499,56 @@ Renamed on 2026-08-31 from `equipment_check.*`:
 | `inventory.check_manage` | Create and edit checklists                            |
 | `inventory.check_submit` | Perform a check (held by the default member position) |
 
-**The Quartermaster holds `inventory.check_manage`** _(2026-09-30)_. The owner
-decided the position that manages a checklist's stock should author it
-(workflow review W46-14). `DEFAULT_POSITIONS["quartermaster"]` carries it for new
-departments, and migration `f73b449bdb8b` writes it onto stored system
-quartermaster rows that still hold `inventory.manage` and do not already cover
-checklist management (the grant, `equipment_check.manage`/`*`, `inventory.*` or
-`*`) — gated on evidence, per pitfall 23. Downgrade removes it. Authoring only:
-`check_view` is not added, and the checklist screens hide the report links from
-a holder of `check_manage` alone.
+**The Quartermaster holds `inventory.check_manage`**
+(`DEFAULT_POSITIONS["quartermaster"]`), so the position that manages a
+checklist's stock also authors it. Authoring only: `check_view` is not
+included, and the checklist screens hide the report links from a holder of
+`check_manage` alone.
 
-**Checklist settings are gated on the settings grant**, not `check_manage`:
-`/inventory/admin/checklists/settings` requires `settings.manage` or
-`organization.update_settings`, because its four values live in
-`org.settings` and are written through `PATCH /organizations/settings`.
-
-`app.core.permissions.LEGACY_PERMISSION_ALIASES` keeps the old names working
-for any stored row migration `ff8076f4987a` could not reach. Being in the
-inventory namespace, all three are now granted by the `inventory.*` module
-wildcard, exactly as `view_medical` / `manage_medical` already were.
+`app.core.permissions.LEGACY_PERMISSION_ALIASES` maps the older
+`equipment_check.view` / `.manage` / `.submit` names onto these for any stored
+row that still carries them. Being in the inventory namespace, all three are
+granted by the `inventory.*` module wildcard, as `view_medical` /
+`manage_medical` are.
 
 ---
 
-### Checklist changes of 2026-10-03
-
-A chosen **Fail** or **Out of service** requires a note before submit; Overall
-Notes is no longer in the sticky submit wrapper. Fleet Readiness and My
-Checklists share the `isChecklistSubmitted` rule, and My Checklists no longer
-adds its own toast. The builder's apparatus-type list follows
-`DefaultApparatusType` plus custom types, readiness names the vehicles reached
-and warns when none, and editing a live checklist unpublishes it with a
-**Publish now** banner. `get_failure_log` counted over a subquery with the table
-beside it in `FROM`, cross-joining every item row across organizations; it now
-counts its own rows.
-
-## Pages
-
-| URL                                     | Page                      | Permission                                          |
-| --------------------------------------- | ------------------------- | --------------------------------------------------- |
-| `/inventory`                            | Inventory Items List      | `inventory.manage`                                  |
-| `/inventory/my-equipment`               | My Issued Gear            | Authenticated                                       |
-| `/inventory/items/:id`                  | Item Detail               | Authenticated                                       |
-| `/inventory/storage-areas`              | Storage Areas             | `inventory.manage`                                  |
-| `/inventory/admin`                      | Admin Dashboard           | `inventory.manage`                                  |
-| `/inventory/admin/items`                | Manage Items              | `inventory.manage`                                  |
-| `/inventory/admin/pool`                 | Pool Items                | `inventory.manage`                                  |
-| `/inventory/admin/categories`           | Categories                | `inventory.manage`                                  |
-| `/inventory/admin/maintenance`          | Maintenance Records       | `inventory.manage`                                  |
-| `/inventory/admin/members`              | Member Equipment          | `inventory.manage`                                  |
-| `/inventory/admin/charges`              | Charges & Fees            | `inventory.manage`                                  |
-| `/inventory/admin/returns`              | Return Requests           | `inventory.manage`                                  |
-| `/inventory/admin/requests`             | Gear Requests             | `inventory.manage`                                  |
-| `/inventory/admin/write-offs`           | Write-Off Requests        | `inventory.manage`                                  |
-| `/inventory/admin/reorder`              | Reorder Requests          | `inventory.manage`                                  |
-| `/inventory/admin/vendors`              | Vendors                   | `inventory.manage`                                  |
-| `/inventory/admin/allowances`           | Issuance Allowances       | `inventory.manage`                                  |
-| `/inventory/admin/impact-planner`       | Impact Planner            | `inventory.manage`                                  |
-| `/inventory/admin/kits`                 | Gear Kits Management      | `inventory.manage`                                  |
-| `/inventory/admin/variant-groups`       | Variant Groups Management | `inventory.manage`                                  |
-| `/inventory/checkouts`                  | Active Checkouts          | `inventory.manage`                                  |
-| `/inventory/import`                     | CSV Import                | `inventory.manage`                                  |
-| `/inventory/admin/kits`                 | Gear Kits Management      | `inventory.manage`                                  |
-| `/inventory/admin/variant-groups`       | Variant Groups Management | `inventory.manage`                                  |
-| `/inventory/admin/allowances`           | Issuance Allowances       | `inventory.manage`                                  |
-| `/inventory/admin/impact-planner`       | Impact Planner            | `inventory.manage`                                  |
-| `/inventory/print-labels`               | Barcode Label Printing    | `inventory.manage`                                  |
-| `/inventory/storage-areas/print-labels` | Storage Area Labels       | `inventory.manage`                                  |
-| `/inventory/admin/setup`                | Setup Guide               | `inventory.manage`                                  |
-| `/inventory/admin/nfc`                  | NFC Tag Settings          | `settings.manage` or `organization.update_settings` |
-| `/inventory/admin/nfc/enroll`           | Tag Items in Bulk         | `inventory.manage`                                  |
-| `/inventory/admin/not-seen`             | Items Not Seen            | `inventory.manage`                                  |
-| `/inventory/put-away`                   | Put Away by NFC           | `inventory.manage`                                  |
-| `/inventory/shelf-audit`                | Shelf Audit               | `inventory.manage`                                  |
-| `/inventory/kiosk`                      | Self-Service Kiosk        | `inventory.kiosk`                                   |
-| `/inventory/tag/:code`                  | NFC tag link (redirect)   | `inventory.view`                                    |
-
-> **Corrected 2026-10-04.** `/inventory` and `/inventory/storage-areas` were
-> listed as open to any signed-in member; both routes require
-> `inventory.manage`. A member reaches the catalogue only through **Request
-> Equipment** on My Issued Gear. The kits, variant-groups, allowances and
-> impact-planner rows appear twice above; the duplicates are harmless. The
-> equipment-checklist pages are in their own table above.
-
----
-
-## Data Model
-
-### Core Tables
-
-| Table                         | Purpose                                                                                                                                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_categories`        | Item categories with type, requirements, low-stock thresholds                                                                                                                                                                         |
-| `inventory_items`             | Items with serial/barcode/asset tag, condition, status, tracking type. `label_printed_at` / `label_printed_by` _(2026-09-23, migration `5a70c5dcd138`)_ record a confirmed label print and are cleared when the printed value changes |
-| `inventory_lots`              | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** _(documented 2026-08-10)_                                                  |
-| `item_assignments`            | Permanent/temporary assignments of individual items to members                                                                                                                                                                        |
-| `item_issuances`              | Pool item issuance records (quantity tracking)                                                                                                                                                                                        |
-| `checkout_records`            | Temporary checkout records with expected return dates                                                                                                                                                                                 |
-| `maintenance_records`         | Maintenance history (inspection, repair, calibration, etc.)                                                                                                                                                                           |
-| `inventory_vendors`           | Suppliers: name (unique per organization), account number, phone/email/fax/website, address, payment terms, preferred and active flags _(2026-08-16)_                                                                                 |
-| `inventory_vendor_contacts`   | Named people at a vendor (rep, service desk, AR) with title, email, phone/extension and a single primary flag _(2026-08-16)_                                                                                                          |
-| `inventory_nfc_tags`          | NFC tags on items, storage areas or equipment-check compartments (`check_compartment_id`, 2026-09-25): hashed identifier, last-four preview, written or serial, label, active/lost. Unique per organization _(2026-09-24)_            |
-| `inventory_nfc_scans`         | Staff NFC taps on items (lookups and put-aways): who, when, which tag, to and from which storage area _(2026-09-24)_                                                                                                                  |
-| `inventory_nfc_audits`        | Shelf audits: the storage area (name snapshotted), who ran it, expected / found / missing / unexpected counts, who confirmed moving items _(2026-09-24)_                                                                              |
-| `inventory_nfc_audit_items`   | One line per item a shelf audit judged: found, missing or unexpected, where it was recorded, whether it was moved _(2026-09-24)_                                                                                                      |
-| `inventory_nfc_audit_digests` | One row per weekly "shelf audits overdue" email sent: when, how many areas, how many recipients _(2026-09-24)_                                                                                                                        |
-
-### Workflow Tables
-
-| Table                          | Purpose                                                           |
-| ------------------------------ | ----------------------------------------------------------------- |
-| `departure_clearances`         | Member departure property return pipeline                         |
-| `departure_clearance_items`    | Per-item resolution within a clearance                            |
-| `equipment_requests`           | Member equipment request/approval workflow                        |
-| `inventory_write_offs`         | Write-off request/approval workflow for lost/damaged items        |
-| `inventory_notification_queue` | Delayed notification consolidation queue                          |
-| `property_return_reminders`    | Tracks reminder notices sent to departed members                  |
-| `inventory_impact_plans`       | Saved impact-planner scenarios (named filter sets) _(2026-06-23)_ |
-
-### Variant & Kit Tables _(2026-03-07)_
-
-| Table                     | Purpose                                                              |
-| ------------------------- | -------------------------------------------------------------------- |
-| `variant_groups`          | Groups related items that differ by size/style                       |
-| `equipment_kits`          | Named bundles of items for single-operation issuance                 |
-| `equipment_kit_items`     | Component items within a kit with per-component quantity             |
-| `member_size_preferences` | Member garment size preferences (coat, pants, gloves, boots, helmet) |
-| `reorder_requests`        | Reorder request workflow with status lifecycle                       |
-
-### Key Enums
-
-| Enum                     | Values                                                                      |
-| ------------------------ | --------------------------------------------------------------------------- |
-| ItemStatus               | available, assigned, checked_out, in_maintenance, lost, stolen, retired     |
-| ItemCondition            | excellent, good, fair, poor, damaged, out_of_service, retired               |
-| TrackingType             | individual, pool                                                            |
-| MaintenanceType          | inspection, repair, cleaning, testing, calibration, replacement, preventive |
-| ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived                    |
-| WriteOffStatus           | pending, approved, denied                                                   |
-| StandardSize             | xs, s, m, l, xl, 2xl, 3xl, 4xl, 5xl                                         |
-| GarmentStyle             | regular, long, short, tall                                                  |
-| ReorderStatus            | pending, approved, ordered, partially_received, received, cancelled         |
-
----
-
-## API Endpoints
-
-### Category Management
-
-```
-GET    /api/v1/inventory/categories                      # List categories
-POST   /api/v1/inventory/categories                      # Create category
-GET    /api/v1/inventory/categories/{id}                 # Get category
-PATCH  /api/v1/inventory/categories/{id}                 # Update category
-```
-
-### Item Management
-
-```
-GET    /api/v1/inventory/items                           # List items (with filters)
-POST   /api/v1/inventory/items                           # Create item
-POST   /api/v1/inventory/items/bulk                      # Create many items; existing names skipped + reported (2026-08-10)
-GET    /api/v1/inventory/items/{id}                      # Get item details
-PATCH  /api/v1/inventory/items/{id}                      # Update item
-POST   /api/v1/inventory/items/{id}/retire               # Retire item
-GET    /api/v1/inventory/items/export                    # Export items as CSV (carries a Ready Lot Stock column)
-```
-
-### Stock Lots _(2026-08-10)_
-
-```
-GET    /api/v1/inventory/items/{item_id}/lots            # Lots held for an item
-POST   /api/v1/inventory/items/{item_id}/lots            # Add one dated lot
-POST   /api/v1/inventory/lots/bulk                       # Receive a delivery — all lines or none (2026-08-10)
-PATCH  /api/v1/inventory/lots/{lot_id}                   # Correct a lot
-DELETE /api/v1/inventory/lots/{lot_id}                   # Remove a lot
-GET    /api/v1/inventory/lots/expiring                   # Shelf lots nearing their date
-```
-
-> **Expired lots are not ready stock.** They are excluded from the on-hand count,
-> flagged in the payload, struck through in the UI and **refused by the
-> equipment-check swap** — putting expired supplies in service would fail the
-> item on the next check.
-
-### Assignments & Issuances
-
-```
-POST   /api/v1/inventory/items/{id}/assign               # Assign to member
-POST   /api/v1/inventory/items/{id}/unassign              # Unassign from member
-POST   /api/v1/inventory/items/{id}/issue                 # Issue from pool
-POST   /api/v1/inventory/issuances/{id}/return            # Return to pool
-GET    /api/v1/inventory/items/{id}/issuances             # Item's issuance records
-GET    /api/v1/inventory/users/{id}/assignments           # User's assignments
-GET    /api/v1/inventory/users/{id}/issuances             # User's issuances
-```
-
-### Checkout / Check-in
-
-```
-POST   /api/v1/inventory/checkout                        # Check out item
-POST   /api/v1/inventory/checkout/{id}/checkin            # Check in item
-PATCH  /api/v1/inventory/checkout/{id}/extend             # Extend return date
-GET    /api/v1/inventory/checkout/active                  # Active checkouts
-GET    /api/v1/inventory/checkout/overdue                 # Overdue checkouts
-```
-
-### Batch & Scan Operations
-
-```
-GET    /api/v1/inventory/lookup                          # Search by code/name
-POST   /api/v1/inventory/distribute-items                  # Item distribution
-POST   /api/v1/inventory/batch-return                    # Batch return
-```
-
-### NFC Tags _(2026-09-24)_
-
-**Setting it up:** see [Inventory NFC Tags](Inventory-NFC-Tags) for which tags to
-buy, which phones can do what, linking, put-away and troubleshooting. This
-section is the technical reference.
-
-Off until an administrator turns it on at **Inventory → Administration → NFC
-Tags** (`/inventory/admin/nfc`, which needs `settings.manage` or
-`organization.update_settings`). The switch is stored as
-`inventory.nfc_tracking_enabled` in the organization settings. While it is off,
-every endpoint below except `GET /nfc/settings` answers 403. The not-seen
-report is the exception: it lives outside the NFC router and works with the
-switch off.
-
-```
-GET    /api/v1/inventory/nfc/settings                    # Is it on? (inventory.view, check_submit or check_manage)
-POST   /api/v1/inventory/nfc/resolve                     # Tapped tag -> item, exact match (inventory.view)
-GET    /api/v1/inventory/items/{id}/nfc-tags             # Tags on an item (inventory.manage)
-POST   /api/v1/inventory/items/{id}/nfc-tags             # Link a tag (inventory.manage)
-PATCH  /api/v1/inventory/nfc-tags/{tag_id}               # Relabel, mark lost/found (inventory.manage; check_manage for a compartment tag)
-DELETE /api/v1/inventory/nfc-tags/{tag_id}               # Unlink (inventory.manage; check_manage for a compartment tag)
-POST   /api/v1/inventory/nfc/resolve-any                 # Tapped tag -> item or storage area (inventory.view)
-POST   /api/v1/inventory/nfc/put-away                    # Move an item onto a storage area (inventory.manage)
-GET    /api/v1/inventory/items/{id}/nfc-scans            # Tap log, newest first (inventory.manage)
-GET    /api/v1/inventory/storage-areas/{id}/nfc-tags     # Tags on a storage area (inventory.manage)
-POST   /api/v1/inventory/storage-areas/{id}/nfc-tags     # Link a tag to a storage area (inventory.manage)
-POST   /api/v1/inventory/nfc/audits                      # Save a shelf audit: shelf + items tapped, <= 500 (inventory.manage)
-GET    /api/v1/inventory/nfc/audits                      # Audits, newest first; ?storage_area_id= (inventory.manage)
-GET    /api/v1/inventory/nfc/audits/{id}                 # One audit with its lines (inventory.manage)
-POST   /api/v1/inventory/nfc/audits/{id}/apply           # Move chosen unexpected items onto the shelf (inventory.manage)
-POST   /api/v1/inventory/nfc/resolve-member              # Tapped member ID card -> member; needs NFC ID Cards too (inventory.manage)
-GET    /api/v1/inventory/nfc/untagged                    # Active items with no working tag; ?search=&category_id= (inventory.manage)
-GET    /api/v1/inventory/nfc/audit-schedule              # Scheduled areas, overdue first; ?due_only= (inventory.manage)
-PUT    /api/v1/inventory/storage-areas/{id}/audit-schedule # {"audit_frequency": "weekly"|...|null} (inventory.manage)
-POST   /api/v1/inventory/nfc/put-away/replay         # Put-away taps made offline, applied in order; per-tap outcome (inventory.manage)
-POST   /api/v1/inventory/nfc/audits/replay           # Shelf audit finished offline; resend-safe by client_submission_id (inventory.manage)
-GET    /api/v1/inventory/check-compartments/{id}/nfc-tags # Tags on a checklist compartment (inventory.check_manage)
-POST   /api/v1/inventory/check-compartments/{id}/nfc-tags # Link a tag to a checklist compartment (inventory.check_manage)
-POST   /api/v1/inventory/nfc/resolve-check               # Tap during a check of template_id -> compartment or checklist rows (check_submit or check_manage)
-POST   /api/v1/inventory/kiosk/identify                  # Card -> member + open loans (inventory.kiosk)
-POST   /api/v1/inventory/kiosk/preview                   # Card + item -> checkout or return, or 409 why not (inventory.kiosk)
-POST   /api/v1/inventory/kiosk/checkout                  # Borrow (inventory.kiosk)
-POST   /api/v1/inventory/kiosk/return                    # Return; damaged + note marks the item damaged (inventory.kiosk)
-GET    /api/v1/inventory/not-seen                        # Items not seen in ?days= (default 180) (inventory.manage; not NFC-gated)
-GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up to 5,000 rows (inventory.manage; not NFC-gated)
-```
-
-- **Two ways to link a tag.** _Write a link_: the phone writes
-  `/inventory/tag/<code>` onto a blank tag, and any phone that taps it,
-  iPhones included, opens the item. _Read the serial_: for tags that cannot be
-  written; only the app on Android can use these. A USB reader or a typed
-  serial works from a desktop.
-- **Where a tap is used.** In the distribute and return scanner (**Tap NFC**,
-  next to the camera), and from a phone's home screen for written tags.
-- **Identifiers are stored hashed** (`inventory_nfc_tags.uid_hash`), using the
-  same peppered hash as member ID cards. The phone that links equipment tags
-  also reads ID cards, and a card tapped here by mistake must not leave its
-  serial on record.
-- **A lost tag resolves to nothing** until it is marked found, and a tag on a
-  retired item resolves to nothing.
-- **Browser support.** Web NFC exists only in Chrome on Android, over HTTPS. That
-  is the browser's limit, not the app's.
-- **Shelves carry tags too** (linked from the storage area editor), and so do
-  **equipment-check compartments** (linked from the checklist builder). A tag
-  names exactly one item, one storage area or one compartment; the database
-  enforces it (`ck_inventory_nfc_tags_one_target`). A compartment tag is read
-  only during a check of its own template (`/nfc/resolve-check`); the item and
-  put-away lookups refuse it. Deleting a compartment deletes its tags, and so
-  does replacing a template's contents from a vehicle preset, JSON or CSV
-  import, because that recreates every compartment.
-- **Offline taps** (put-away and shelf audits only). The phone keeps raw reads
-  in the generic offline queue (`genericOfflineQueue.ts`, purged at sign-out)
-  and never what a tag names; the `/replay` routes resolve them on arrival and
-  apply the online rules in order. A put-away session is one queue entry,
-  marked held while the screen adds to it and sent once it is released (or
-  after 30 minutes idle). An offline audit carries a `client_submission_id`,
-  unique per organization (`inventory_nfc_audits.client_submission_id`), so a
-  resend after a lost response returns the audit already saved.
-- **Put away** (`/inventory/put-away`). Tapping a shelf first _opens_ it: every
-  item tapped afterwards goes onto it. Tapping an item first holds it until a
-  shelf is tapped, moves it there, and leaves no shelf open. The move is the
-  barcode put-away's own (`InventoryService.put_away_items`), so both ways
-  follow one rule: the item takes the room of the nearest area that has one,
-  and an item that is assigned, checked out, lost, stolen or retired is
-  refused with the reason.
-- **The tap log** (`inventory_nfc_scans`) records taps by `inventory.manage`
-  holders only: lookups in the scanner or through a written tag, and every
-  put-away with where the item came from. A member opening a written tag from
-  their own phone is not recorded. The item page shows the most recent taps as
-  **Last Seen (NFC)**.
-- **Shelf audits** (`/inventory/shelf-audit`). The expected set is the active
-  items recorded on exactly that storage area (not its children) whose status
-  does not already place them elsewhere (assigned, checked out, lost, stolen,
-  retired). Saving an audit moves nothing. **Missing** items are only listed;
-  an audit never marks an item lost. **Unexpected** items move onto the shelf
-  only when ticked and confirmed (`/apply`), through `put_away_items`, so an
-  assigned item is skipped with the reason. Every tapped item is logged in the
-  tap log as `audit`, on the audited shelf.
-- **Audit schedules.** `storage_areas.audit_frequency` (weekly, monthly,
-  quarterly, yearly; null = not scheduled). The next audit is due one calendar
-  period (`relativedelta`) after the area's latest saved audit, or now if it
-  has none; this is computed on read, never stored. The
-  `inventory_audit_digest` scheduled task checks daily and emails
-  `inventory.manage` holders the overdue areas at most once a week per
-  department, measured from `inventory_nfc_audit_digests` because the
-  in-process scheduler forgets its run times on restart. It sends nothing
-  when nothing is overdue or NFC is off, and a failed send is retried the
-  next day.
-- **Self-service kiosk** (`/inventory/kiosk`, `inventory.kiosk`, seeded to
-  no position). Needs the NFC switch and the NFC ID Cards integration, checked
-  on every kiosk route. Every request carries the card read, and the server
-  re-reads it: the kiosk never sends a member id. Items qualify only when their
-  category has `allow_self_checkout` (default false); pool items, items not
-  `available`, and items failing the rank/position restriction
-  (`InventoryService.member_clears_restrictions`, the request catalog's rule)
-  are refused with a 409 and the reason. A checkout is
-  `InventoryService.checkout_item`, with the member as `user_id`, the kiosk
-  officer as `checked_out_by`, reason "Self-service kiosk", and
-  `expected_return_at` = now + the category's `self_checkout_loan_days` (none
-  when blank). A return is accepted only from the member the item is checked
-  out to. Damaged requires a note and sets the item's condition to `damaged`;
-  otherwise the condition is unchanged. Audit events:
-  `inventory_kiosk_checkout`, and `inventory_kiosk_return` (a warning when
-  damaged).
-- **Member ID card lookup.** With the NFC ID Cards integration connected, the
-  member scanner on the inventory screens (distribute, return, member lookup)
-  shows **Or tap their ID card**. The card resolves through the same hash and
-  rules as the check-in station: a lost card or an inactive member is refused
-  with the reason. Card taps are not written to the equipment tap log.
-- **Bulk enrollment** (`/inventory/admin/nfc/enroll`) lists active items with
-  no working tag (an item whose only tag is lost counts as untagged) and links
-  one after another, by written link or by serial.
-- **Not seen** (`/inventory/admin/not-seen`). An item's last-seen time is the
-  latest of a staff tap (any action), an assignment or its return, a checkout
-  or check-in, and a pool issuance or its return. Editing the item record does
-  not count. A barcode put-away does not count either: it is recorded only as
-  an audit-log event, with no per-item row to read. Retired items are left out;
-  lost and stolen items are listed, since not seeing them is the point.
-
-### Label Generation
-
-```
-GET    /api/v1/inventory/labels/formats                  # Available formats
-POST   /api/v1/inventory/labels/generate                 # Generate PDF labels
-POST   /api/v1/inventory/labels/mark-printed             # Record a confirmed print (inventory.manage; 1–500 ids) — 2026-09-23
-GET    /api/v1/inventory/items?label_printed=true|false  # Filter by label status (also on /items/export) — 2026-09-23
-GET    /api/v1/inventory/label-setups                    # Saved print setups, department-wide (inventory.manage) — 2026-09-24
-POST   /api/v1/inventory/label-setups                    # Save (same name, any case, replaces; max 20)
-DELETE /api/v1/inventory/label-setups/{id}               # Delete for everyone
-POST   /api/v1/labels/print  {module: "inventory", ...}  # Send to a registered network printer (shared endpoint)
-```
-
-`/inventory/labels/generate` takes `symbology` (`code128` default, or `qr`),
-`start_position` (1–30, Avery 5160 only, ignored on rolls) and `extra_lines`,
-whose keys add a line (`location`, `storage_area`, `category`, `size`,
-`condition`) or drop a default one (`no_name`, `no_asset_tag`,
-`no_serial_number`). Each confirmed print writes
-an `inventory_label_prints` row (migration `81537606ee07`) beside the latest-only
-`label_printed_at`. Details in
-[`docs/LABEL_PRINTING_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/LABEL_PRINTING_MODULE.md).
-
-### Maintenance
-
-```
-POST   /api/v1/inventory/maintenance                     # Create record
-PATCH  /api/v1/inventory/items/{id}/maintenance/{rid}    # Update record
-GET    /api/v1/inventory/items/{id}/maintenance           # Item history
-GET    /api/v1/inventory/maintenance/due                  # Items due
-```
-
-### Reporting & Analytics
-
-```
-GET    /api/v1/inventory/summary                         # Dashboard stats
-GET    /api/v1/inventory/low-stock                       # Low-stock alerts
-GET    /api/v1/inventory/members-summary                 # Per-member summary
-GET    /api/v1/inventory/users/{id}/inventory             # User's full inventory
-```
-
-### Departure Clearance
-
-```
-POST   /api/v1/inventory/clearances                      # Initiate clearance
-GET    /api/v1/inventory/clearances                      # List clearances
-GET    /api/v1/inventory/clearances/{id}                 # Get clearance details
-GET    /api/v1/inventory/users/{id}/clearance             # User's clearance
-POST   /api/v1/inventory/clearances/{id}/items/{iid}/resolve  # Resolve line item
-POST   /api/v1/inventory/clearances/{id}/complete         # Complete clearance
-```
-
-### Gear Requests
-
-```
-GET    /api/v1/inventory/requestable-catalog             # What a member may ask for (server-filtered for rank/position)
-POST   /api/v1/inventory/requests                        # Create request
-GET    /api/v1/inventory/requests                        # List requests
-PUT    /api/v1/inventory/requests/{id}/review             # Approve/deny; body may carry notify_member (default true)
-PUT    /api/v1/inventory/requests/{id}/fulfill            # Fulfil an approved request
-```
-
-_(2026-09-28)_ **The requester is told the outcome.** Review and fulfil queue a
-background notice (`app/services/equipment_request_notifications.py`): an in-app
-bell entry linking to `/inventory/my-equipment`, a web push where configured,
-and an email from the new editable `equipment_request_update` template, carrying
-the review note. **Never SMS** (pitfall 18). The whole notice sits behind the new
-`equipment_request_update` notification-rule trigger, enforced and on unless a
-department switches it off; the email is the optional `inventory_updates` kind
-in `app/services/email_policy.py` ("Equipment and inventory updates", default
-on). **Approve & fulfill now** sends `notify_member=false` on the approval so the
-member hears once, when the item is issued. Migration `fb7da5b05833` widens
-`email_templates.template_type`, `scheduled_emails.template_type` and
-`notification_rules.trigger` for the new value; no data changes, and the
-downgrade deletes rows of the new value before narrowing.
-
-Both sides now show one status vocabulary — `EQUIPMENT_REQUEST_STATUS_LABELS`:
-pending → **Awaiting review**, approved → **Approved**, denied → **Declined**,
-fulfilled → **Issued**. Filter values sent to the API are unchanged. The member's
-request list shows `review_notes` ("Quartermaster: …"), which the review dialog
-had always promised and nothing rendered.
-
-### Storage Areas
-
-```
-GET    /api/v1/inventory/storage-areas                   # List storage areas (tree or flat)
-POST   /api/v1/inventory/storage-areas                   # Create storage area
-PUT    /api/v1/inventory/storage-areas/{id}              # Update storage area
-DELETE /api/v1/inventory/storage-areas/{id}              # Delete (deactivate) storage area
-POST   /api/v1/inventory/storage-areas/{id}/put-away     # File 1–500 items onto the area (inventory.manage) — 2026-09-24
-```
-
-_(2026-09-24)_ **Put-away.** `InventoryService.put_away_items` is the single
-rule for shelving, shared by the barcode **Put away** panel and NFC put-away
-(audit event `inventory_items_put_away`, `method=nfc` on a tap). The area is
-resolved in the caller's org (404 otherwise); item ids from another org are
-counted, never touched. A moved item takes the area and the room of the nearest
-ancestor that has one. Items assigned, checked out, lost, stolen or retired are
-skipped with a reason; items already there are reported.
-
-_(2026-09-29)_ **Delete waits until the area is empty.** The Storage Areas page
-refuses **Delete** while the area holds items or has active nested areas —
-deleting only deactivates, which left items with a location reading "--" and
-orphaned the areas inside. Nested areas are counted from the list, since the
-target record never carried its children.
-
-_(2026-08-16)_ **Every storage area is assigned a barcode.** Creation assigns
-one automatically when the caller doesn't supply it — the next code in a per-org
-sequential series (default prefix `SA-`, counter in
-`organization.settings["storage_area_barcode"]`, manually-taken codes skipped) —
-so every area has a printable code rather than one only where somebody
-remembered the field. A blank barcode arriving from an older client cannot strip
-a code already printed on the shelf, areas created before this pick a code up on
-first edit, and migration `20260816_0002` backfilled the rest. The Storage Areas
-page also now shows **all areas by default** (the facility picker was fixed in
-the same pass).
-
-> **Partly superseded _(2026-09-24)_.** The Storage Areas page now resolves a
-> scanned `SA-…` code itself — **Scan shelf label** jumps to the area (and
-> writes `?area=<id>`), and **Put away** / **Check contents** start from one —
-> matching against the barcodes the page already loaded. Shelf labels print
-> through the `storage_areas` label module. What follows still holds for the
-> generic `/inventory/lookup`, which does not map an `SA-` code to an area.
->
-> **Assignment and display only — the scanner does not resolve these codes
-> yet.** `/inventory/lookup` (`InventoryService.search_by_code`) searches
-> `InventoryItem.barcode` / `serial_number` / `asset_tag` / `name` / `size` /
-> `color`; nothing maps a scanned `SA-…` code back to its storage area. The
-> Storage Areas form nevertheless tells the user the code is assigned "so it can
-> be scanned". Tracked as **INV-8** in
-> [KNOWN_LIMITATIONS](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md).
-
-### Vendors _(2026-08-16)_
-
-```
-GET    /api/v1/inventory/vendors                         # List vendors (search, active_only) — inventory.view
-GET    /api/v1/inventory/vendors/{id}                    # Vendor with contacts and purchasing totals
-POST   /api/v1/inventory/vendors                         # Create vendor (contacts optional, in one pass)
-PATCH  /api/v1/inventory/vendors/{id}                    # Update vendor
-DELETE /api/v1/inventory/vendors/{id}                    # Deactivate (items/reorders keep their link)
-
-POST   /api/v1/inventory/vendors/{id}/contacts               # Add a contact
-PATCH  /api/v1/inventory/vendors/{id}/contacts/{contact_id}  # Update a contact
-DELETE /api/v1/inventory/vendors/{id}/contacts/{contact_id}  # Remove a contact
-
-GET    /api/v1/inventory/vendors/unlinked-names          # Typed-in names with nothing behind them
-POST   /api/v1/inventory/vendors/{id}/attach-name        # Link every row carrying a typed-in name
-POST   /api/v1/inventory/vendors/{id}/merge              # Fold a duplicate in; it is then removed
-```
-
-`unlinked-names` is declared before `/vendors/{id}` on purpose — routes match in
-order, and the id route would otherwise reject "unlinked-names" as a malformed
-UUID.
-
-The two read endpoints take `inventory.view`; everything that writes takes `inventory.manage`. The screen itself sits behind `inventory.manage`, like every other page under `/inventory/admin` — the read permission on the API is there for surfaces that only need to name a vendor. `GET /api/v1/inventory/items?vendor_id=…` filters the catalog to one vendor — the link behind the item count on a vendor card.
-
-`inventory.view` gets the directory, not the commercial terms: `account_number`, `payment_terms` and `total_purchase_value` come back blank unless the caller also holds `inventory.manage` _(2026-08-16)_. Name, phone, email, fax, website, address, contacts and the item/reorder counts are unaffected — a member can see that the department buys from a vendor and how to reach them, but not what it pays. The screen is unaffected, being `inventory.manage`-gated already.
-
-### Write-Off Requests
-
-```
-POST   /api/v1/inventory/write-offs                      # Create write-off request
-GET    /api/v1/inventory/write-offs                      # List write-off requests
-PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
-```
-
-### Variant Groups & Gear Kits _(2026-03-07)_
-
-```
-GET    /api/v1/inventory/variant-groups                    # List variant groups
-POST   /api/v1/inventory/variant-groups                    # Create variant group
-GET    /api/v1/inventory/variant-groups/{id}               # Get variant group
-PATCH  /api/v1/inventory/variant-groups/{id}               # Update variant group
-
-GET    /api/v1/inventory/equipment-kits                    # List equipment kits
-POST   /api/v1/inventory/equipment-kits                    # Create equipment kit
-GET    /api/v1/inventory/equipment-kits/{id}               # Get equipment kit
-PATCH  /api/v1/inventory/equipment-kits/{id}               # Update equipment kit
-POST   /api/v1/inventory/equipment-kits/{id}/issue         # Issue kit to member
-
-GET    /api/v1/inventory/users/{id}/size-preferences       # Get member size preferences
-PUT    /api/v1/inventory/users/{id}/size-preferences       # Upsert member size preferences
-```
-
-### Reorder Requests _(2026-03-07)_
-
-```
-POST   /api/v1/inventory/reorder-requests                  # Create reorder request
-GET    /api/v1/inventory/reorder-requests                  # List reorder requests
-PATCH  /api/v1/inventory/reorder-requests/{id}             # Update request status
-GET    /api/v1/inventory/reorder-requests/{id}/history     # Request status history
-```
-
-### NFPA 1851/1852 Compliance
-
-```
-GET    /api/v1/inventory/items/{id}/nfpa-compliance      # Get NFPA compliance record
-POST   /api/v1/inventory/items/{id}/nfpa-compliance      # Create NFPA compliance record
-PATCH  /api/v1/inventory/items/{id}/nfpa-compliance      # Update NFPA compliance record
-DELETE /api/v1/inventory/items/{id}/nfpa-compliance      # Remove NFPA compliance record
-GET    /api/v1/inventory/items/{id}/exposures            # List exposure records
-POST   /api/v1/inventory/items/{id}/exposures            # Log exposure event
-GET    /api/v1/inventory/nfpa/summary                    # NFPA compliance dashboard
-GET    /api/v1/inventory/nfpa/retirement-due             # Items nearing 10-year retirement
-```
-
-### Impact Planner _(2026-06-23)_
-
-All endpoints require `inventory.manage`.
-
-```
-GET    /api/v1/inventory/impact-planner/options          # Filter options (ranks, stations, positions, statuses, membership types, categories, size fields)
-POST   /api/v1/inventory/impact-planner                  # Analyze impact for a filter set → matched members, per-size breakdown, counts
-POST   /api/v1/inventory/impact-planner/reorder          # Create one pending reorder request per size with a shortfall (pre-priced)
-POST   /api/v1/inventory/impact-planner/issue            # Bulk-issue matching on-hand pool stock to members who need it
-POST   /api/v1/inventory/impact-planner/request-sizes    # Notify (in-app) members who need the item but have no size on file
-POST   /api/v1/inventory/impact-planner/pdf              # Stream a print-ready PDF summary
-GET    /api/v1/inventory/impact-planner/plans            # List saved plans
-POST   /api/v1/inventory/impact-planner/plans            # Save a named plan (filter set)
-PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}  # Update a saved plan
-DELETE /api/v1/inventory/impact-planner/plans/{plan_id}  # Delete a saved plan
-```
-
-The analyze request is reused (and extended) by reorder/issue/pdf/plans. Optional layers — `stock_category_id` (+`size_field`) for on-hand netting and cost, `replacement_aware`, and `allowance_aware` — gate the extra computation so a basic query stays cheap. `analyze`/`pdf` include member contact details only per the org's `contact_info_visibility` settings; `reorder`/`issue` are audit-logged and `issue` publishes an `inventory_changed` WebSocket event.
-
----
-
-## Real-Time Updates (WebSocket)
-
-Inventory changes are broadcast in real time so that all connected users see updates without manual refresh.
-
-### Architecture
-
-```
-Browser  ←  WebSocket  ←  FastAPI endpoint  ←  Redis pub/sub  ←  API mutation endpoints
-```
-
-- **Backend**: `ConnectionManager` in `app/core/websocket_manager.py` manages per-org WebSocket connections and a Redis pub/sub listener
-- **Endpoint**: `WS /api/v1/inventory/ws` — authenticates via httpOnly `access_token` cookie (preferred for browsers) or `?token=<jwt>` query parameter (fallback for non-browser clients), subscribes to org-scoped events
-- **Publishing**: Each mutation endpoint (create, update, assign, checkout, batch, write-off review, etc.) publishes an event after the audit log entry
-- **Frontend**: `useInventoryWebSocket` hook auto-connects with exponential-backoff reconnect
-
-### Event Format
-
-```json
-{ "type": "inventory_changed", "action": "<action>", "data": { ... } }
-```
-
-Actions: `item_created`, `item_updated`, `item_assigned`, `item_unassigned`, `item_checked_out`, `item_checked_in`, `distribute_items`, `batch_return`, `pool_issued`, `pool_returned`, `item_retired`, `write_off_reviewed`
-
-### Graceful Degradation
-
-If Redis is unavailable, events are broadcast to local connections only (single-worker mode). The WebSocket connection retries with exponential backoff (1s → 30s cap).
-
----
-
-## Frontend Architecture
-
-### Shared Constants
-
-Condition options are centralized in `frontend/src/constants/enums.ts`:
-
-- `ITEM_CONDITION_OPTIONS` — All conditions including out_of_service (for admin forms)
-- `RETURN_CONDITION_OPTIONS` — Return-safe conditions (excludes out_of_service)
-
-### Key Components
-
-| Component               | Purpose                                                                                                                |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `InventoryPage`         | Main inventory management page with items/categories tabs                                                              |
-| `InventoryMembersTab`   | Per-member inventory view with sorting and expandable details                                                          |
-| `MemberIdScannerModal`  | Camera-based member ID scanning for quick member lookup                                                                |
-| `InventoryScanModal`    | Barcode/QR scanning + live search for item distribution and return (native BarcodeDetector with html5-qrcode fallback) |
-| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                                   |
-| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                               |
-
-### Test Coverage
-
-Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/enums.test.ts` cover:
-
-- Loading, empty, and error states
-- Sort by name, total items, overdue, and assigned
-- Search filtering with debounce
-- Condition constant consistency
-
----
-
-## Recent Changes (2026-06-23)
-
-### Inventory Impact Planner
-
-A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory.manage`) for scoping a prospective new issue end-to-end, plus the supporting endpoints and the `inventory_impact_plans` table (migration `20260622_0001`).
-
-- **Who is impacted** — filter the roster by status, membership type, rank, station, and corporate position; each matched member shows the size they need (from `member_size_preferences`), whether they already hold a comparable item (active assignment or pool issuance in a chosen category), and gated contact details
-- **Stock-aware shortfall** — with a stock category + size field, per-size demand is netted against available on-hand stock (pool `quantity − quantity_issued` and available individual units) to show the exact quantity to buy. Sizes are matched by a normalized key (drops boot-width/parenthetical notes; canonicalizes alpha-size aliases like `3XL`↔`XXXL`)
-- **Cost estimate** — per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback)
-- **Replacement-aware** — optionally treat members whose only held items are worn (poor/damaged/out-of-service) or past NFPA retirement as needing a replacement rather than excluding them
-- **Allowance-aware** — optionally flag members at/over their per-category `issuance_allowances` cap before a bulk issue would skip them (role-specific allowance beats org-wide)
-- **Act on the plan** — generate one pre-priced pending reorder request per shortfall size; bulk-issue matching on-hand pool stock via the existing `issue_from_pool` flow (skips reported with reasons; respects allowances; publishes a WebSocket event); request sizes from members with none on file via an in-app notification linking to self-service preferences
-- **Share & reuse** — print-ready PDF summary (reportlab) and client-side CSV export; save/load named plans (`inventory_impact_plans`)
-- **Privacy** — `analyze`/`pdf` resolve member contact visibility from the org's `contact_info_visibility` settings (enabled + per-field), matching the member list, rather than exposing it on permission alone
-
----
-
-## Recent Changes (2026-03-24)
-
-### Storage Areas, Barcode Backfill, Item Detail & WebSocket Fix
-
-- **Storage area items display**: Storage Areas page now shows actual inventory items assigned to each area with expandable inline panels. Items display name, serial number, status, and condition with direct links to item detail pages
-- **Storage area item link fix**: Item links from storage areas navigate to `/inventory/items/{id}` instead of incorrectly routing to dashboard
-- **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
-- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding fields entirely
-- **Barcode generation**: Barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`) assigned at item-creation time by `_next_sequential_barcode()` (shared by item creation, variant generation, and label backfill). The prefix/counter live in `organizations.settings["barcode"]`; migration `20260610_0001` reassigned existing items and seeded counters _(2026-06-10)_
-- **Admin items page improvements**: InventoryItemsPage readability and display bug fixes
-- **WebSocket double-accept fix**: Guard `client_state` check before `accept()` in `websocket_manager.py` to prevent `RuntimeError` when early auth accept causes second accept call
-- **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` hook (incompatible with BrowserRouter). `beforeunload` handler retained for browser close/refresh
-- **Camera error handling**: `InventoryScanModal` uses `getErrorMessage()` instead of generic string. Errors stay visible (no auto-dismiss)
-
-### Edge Cases (2026-03-24)
-
-| Scenario                                         | Behavior                                                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Item created before barcode auto-generation      | Backfilled with a sequential `INV-000001`-style barcode by migration `20260610_0001` |
-| Storage area with no items                       | Shows empty state message in expandable panel                                        |
-| Item with no barcode or asset tag                | Fields display `--` placeholder (always visible)                                     |
-| WebSocket connection already accepted            | Guard prevents second `accept()` call                                                |
-| Template builder navigation with unsaved changes | `beforeunload` fires on browser close; no in-app blocking (BrowserRouter limitation) |
-| Storage area item link clicked                   | Navigates to `/inventory/items/{id}` (fixed from dashboard)                          |
-| Camera permission denied on desktop              | Error message displayed; manual text entry available                                 |
-
----
-
-## Recent Changes (2026-03-22)
-
-### Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing
-
-- **Inventory admin hub redesign**: Dashboard redesigned with grouped card sections and prominent navigation cards replacing the flat list layout
-- **Gear Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles
-- **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
-- **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 — correct quiet zones, minimum bar widths, and aspect ratios
-- **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area when orientation doesn't match
-- **Test print capability**: Sample label generation for verifying printer alignment before full batch
-- **Unified label format catalog**: Frontend and backend share label format definitions to prevent size mismatches
-- **Batch label limit**: Maximum batch size enforced to prevent browser memory issues
-- **Inventory dashboard scoping**: Non-admin users see only their own assigned equipment
-- **Mobile FAB fix**: FAB changed from "Export CSV" to "Assign Items" for non-admin users
-- **Desktop camera scanning**: InventoryScanModal and MemberIdScannerModal now work on desktop via shared `useHtml5Scanner` hook with user-facing camera fallback
-- **Mobile responsiveness**: Card layouts, touch-friendly controls, and responsive admin hub across all inventory pages
-
-### Edge Cases (2026-03-22)
-
-| Scenario                             | Behavior                                                                                 |
-| ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced                                                       |
-| Thermal printer landscape label      | Auto-rotated to correct orientation                                                      |
-| Label batch > limit                  | Refused above 500 with the match count; narrow the filters _(500 cap stated 2026-09-23)_ |
-| Non-admin on inventory dashboard     | Sees only personally assigned equipment                                                  |
-| Desktop barcode scanning             | Falls back to user-facing camera if no environment camera                                |
-
----
-
-## Recent Changes (2026-03-07)
-
-- **Variant Groups** — Items can be grouped as variants of a base product (e.g., coat in sizes S/M/L/XL). Each variant has independent stock, serials, and assignments
-- **Gear Kits** — Named bundles for single-operation issuance with per-component tracking
-- **Member Size Preferences** — Record preferred garment sizes for auto-selection during kit issuance
-- **Reorder Requests** — Full lifecycle (pending → approved → ordered → received) with audit logging
-- **Item Reorder Points** — Per-pool-item threshold triggers low-stock dashboard alerts, email, and SMS notifications
-- **Low Stock SMS via Twilio** — SMS alerts for low-stock items when `TWILIO_ENABLED=True`
-- **Location Filter Dashboard** — Cascading Facility → Room → Storage Area filter on inventory views
-- **Item Detail Page** — `/inventory/items/:id` with two-column layout (barcode sidebar + tabbed content)
-- **Cost Data** — Purchase cost, replacement cost, and cost recovery in item views and dashboard
-- **Module Rewrite** — Individual focused pages replace monolithic admin hub: items, pool, categories, maintenance, members, charges, returns, requests, write-offs, reorder
-- **Barcode Race Condition Fix** — SVG barcodes fully rendered via `requestAnimationFrame` before print
-- **Storage Areas Room Filter** — Filters by `facility_room_id` to prevent station rooms leaking into pickers
-
-## Recent Changes (2026-03-04)
-
-- **WebSocket CSRF Fix** — The inventory WebSocket endpoint (`/api/v1/inventory/ws`) no longer fails with a 500 error. The global CSRF middleware now correctly handles WebSocket connections by using `HTTPConnection` instead of `Request` and returning early for WebSocket scope
-- **StorageArea Relationship Fix** — Self-referential `parent`/`children` relationship on `StorageArea` now has proper `back_populates`, eliminating SQLAlchemy warnings at startup
-
----
-
----
-
-## Storage Area Item Display & Barcode Improvements (2026-03-24)
-
-- **Storage area items display**: Storage areas page shows inventory items assigned to each area with expandable inline panels showing name, serial number, status, and condition
-- **Item links from storage areas**: Items in storage area panels link directly to `/inventory/items/{id}` (previously linked to dashboard)
-- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback instead of hiding empty fields
-- **Barcode backfill**: Items created before barcode auto-generation were given sequential `INV-000001`-style barcodes by migration `20260610_0001` (barcodes are assigned at creation time)
-- **Storage area name resolution**: Item detail page displays resolved storage area name instead of raw ID
-
-### Edge Cases
-
-| Scenario                             | Behavior                                           |
-| ------------------------------------ | -------------------------------------------------- |
-| Item created before barcode auto-gen | Barcode lazily generated on first detail page load |
-| Storage area with no items           | Shows empty state message                          |
-| Item without barcode or asset tag    | Fields display `--` placeholder                    |
-
----
-
-## Variant Capsules, Stock Matrix & Size/Color/Style Filters (2026-04-08)
-
-### Variant Capsules Component
-
-A new `VariantCapsules` component renders variant attributes as compact colored pill badges on inventory items:
-
-- **Blue capsule** — Size (e.g., "S", "M", "L", "XL")
-- **Purple capsule** — Color (e.g., "Navy", "White")
-- **Amber capsule** — Style (e.g., "Regular", "Long")
-
-Used across InventoryItemsPage, ItemDetailPage, MyEquipmentPage, PoolItemsPage, and VariantGroupsPage. The `getDisplayName()` helper strips variant suffixes (` — size [— color] [— style]`) for cleaner display in lists and cards. The component returns null for items without variant attributes (no empty badges rendered).
-
-### Stock Matrix on Variant Groups Page
-
-The VariantGroupsPage has been redesigned with a **stock matrix view** showing all size × color × style combinations for each variant group:
-
-- Per-variant quantity displayed in a grid layout
-- Total stock aggregated across all variants
-- Low-stock indicators on individual variants below threshold
-- Variants with zero stock are dimmed but remain visible so administrators can see which combinations need reordering
-
-### Size/Color/Style Filters
-
-`GET /api/v1/inventory/items` now accepts three new query parameters for variant-based filtering:
-
-| Parameter | Type   | Description                                     |
-| --------- | ------ | ----------------------------------------------- |
-| `size`    | string | Filter items by size variant (e.g., "L", "XL")  |
-| `color`   | string | Filter items by color variant (e.g., "Navy")    |
-| `style`   | string | Filter items by style variant (e.g., "Regular") |
-
-Filters are applied in the InventoryItemsPage as dropdown selectors alongside existing category, status, and location filters.
-
-### Barcode Label Improvements
-
-- **Layout bug fixes**: Fixed content overflowing on Dymo 30334 and Rollo 4×6 formats. Corrected quiet zone spacing on Code128 barcodes for ISO/IEC 15417 compliance
-- **Content customization**: New `BarcodeLabelOptions` schema allows choosing which fields appear on labels (name, serial, asset tag, barcode, category, location). Configured in the InventoryBarcodePrintPage before generating the PDF
-- **Print preview**: Live preview of label content displayed before generating the final PDF
-
-### Code Cleanup
-
-- Inventory service refactored: removed dead code, reduced duplication across `inventory_service.py`, `inventory_notification_service.py`, and `inventory.py` endpoints
-- `inventoryService.ts` form types extracted to shared `formTypes.ts`
-- `InventoryItem` TypeScript interface updated with `category_name` field to fix build error
-
-### Edge Cases (2026-04-08)
-
-| Scenario                                            | Behavior                                                   |
-| --------------------------------------------------- | ---------------------------------------------------------- |
-| Variant capsules on item with no variant attributes | Component returns null; no empty badges                    |
-| Stock matrix with zero stock across all variants    | Group shows "Out of Stock" banner; individual zeros dimmed |
-| Size/color/style filter with no matches             | Empty results; filter state preserved                      |
-| Label content with all optional fields unchecked    | Minimum: barcode image + item name always included         |
-| `category_name` null on older items                 | Falls back to empty string display                         |
-
----
-
-## Inventory Impact Planner (2026-06-22)
-
-The Impact Planner at `/inventory/admin/impact-planner` allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations from a single analysis.
-
-### Core Workflow
-
-1. **Filter the roster**: Select which members to analyze (by status, rank, station, membership type, position)
-2. **Choose the item category and size field**: e.g., "Job Shirts" + "Shirt Size"
-3. **Analyze**: The system determines who needs the item, broken down by size, with on-hand stock comparison
-4. **Act**: One-click reorder generation, bulk-issue from stock, or request sizes from members
-
-### Key Capabilities
-
-| Capability                      | Description                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Stock-aware shortfall**       | Compares member demand per size against on-hand pool stock to calculate purchase quantities |
-| **Cost estimation**             | Multiplies shortfall × unit cost per size for a total projected purchase cost               |
-| **One-click reorder**           | Generates `ReorderRequest` records (PENDING status) for each size with shortfall > 0        |
-| **Replacement-aware targeting** | Flags members whose existing items are worn/expired (not just missing)                      |
-| **Bulk-issue**                  | Issues on-hand stock to members who need it, matching by size preference                    |
-| **Saved plans**                 | Save filter sets with names for reuse (annual refresh, seasonal cycles)                     |
-| **Allowance-aware warnings**    | Flags members at or over their issuance allowance; bulk-issue skips them                    |
-| **Request sizes**               | Sends in-app notifications to members without sizes, directing them to add preferences      |
-| **PDF summary**                 | Branded printable PDF with size breakdown, filters, and optional contact columns            |
-
-### API Endpoints
-
-```
-GET    /api/v1/inventory/impact-planner/options              # Filter options
-POST   /api/v1/inventory/impact-planner                      # Analyze impact
-GET    /api/v1/inventory/impact-planner/plans                 # List saved plans
-POST   /api/v1/inventory/impact-planner/plans                 # Save new plan
-PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}       # Update plan
-DELETE /api/v1/inventory/impact-planner/plans/{plan_id}       # Delete plan
-POST   /api/v1/inventory/impact-planner/reorder               # Generate reorder requests
-POST   /api/v1/inventory/impact-planner/issue                 # Bulk-issue from stock
-POST   /api/v1/inventory/impact-planner/request-sizes         # Send size-request notifications
-POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF summary
-```
-
-### Data Model
-
-**Table: `inventory_impact_plans`** (migration `20260622_0001`)
+## Impact Planner
+
+`/inventory/admin/impact-planner` (`inventory.manage`) scopes a prospective
+new issue end to end and acts on the result. Saved plans live in
+`inventory_impact_plans`.
+
+### Core workflow
+
+1. **Filter the roster** — status, membership type, rank, station and
+   corporate position.
+2. **Choose the item category and size field** — e.g. "Job Shirts" +
+   "Shirt Size".
+3. **Analyze** — who needs the item, the size each needs (from
+   `member_size_preferences`), whether they already hold a comparable item
+   (an active assignment or pool issuance in the chosen category), and gated
+   contact details.
+4. **Act** — reorder, bulk-issue, request sizes, export, save.
+
+### Capabilities
+
+| Capability                      | Description                                                                                                                                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stock-aware shortfall**       | Per-size demand netted against available on-hand stock (pool `quantity − quantity_issued` and available individual units). Sizes match by a normalized key (drops boot-width/parenthetical notes; canonicalizes aliases like `3XL`↔`XXXL`) |
+| **Cost estimation**             | Per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback)                                                                         |
+| **One-click reorder**           | One pending, pre-priced `ReorderRequest` per size with a shortfall                                                                                                                                                   |
+| **Replacement-aware targeting** | Members whose only held items are worn (poor/damaged/out of service) or past NFPA retirement count as needing a replacement                                                                                          |
+| **Bulk-issue**                  | Issues matching on-hand pool stock through `issue_from_pool`; skips are reported with reasons; respects allowances; publishes a WebSocket event                                                                       |
+| **Allowance-aware warnings**    | Flags members at or over their per-category `issuance_allowances` cap (a role-specific allowance beats an org-wide one); bulk-issue skips them                                                                       |
+| **Request sizes**               | In-app notification to members with no size on file, linking to self-service preferences                                                                                                                            |
+| **PDF / CSV**                   | Print-ready PDF summary (ReportLab; organization name, filter parameters, member names and contact strings are XML-escaped) and client-side CSV export                                                               |
+| **Saved plans**                 | Named filter sets for reuse (annual refresh, seasonal cycles)                                                                                                                                                         |
+
+Member contact details follow the org's `contact_info_visibility` settings
+(enabled + per-field), matching the member list.
+
+### Saved plan columns
 
 | Column                     | Type                | Description                  |
 | -------------------------- | ------------------- | ---------------------------- |
@@ -1047,7 +560,7 @@ POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF sum
 | `created_by`               | UUID (FK, nullable) | Who created the plan         |
 | `created_at`, `updated_at` | DateTime(tz)        | Timestamps                   |
 
-### Edge Cases
+### Edge cases
 
 | Scenario                             | Behavior                                                       |
 | ------------------------------------ | -------------------------------------------------------------- |
@@ -1062,32 +575,30 @@ POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF sum
 
 ---
 
-**See also:** [Apparatus Module](Module-Apparatus) | [Training Module](Module-Training)
+## Network Label Printers
 
-## Network Label Printers _(2026-08-23 → 08-24)_
-
-Barcode labels print **straight to the printer**, with no browser print dialog
-to get wrong. A department registers each physical printer once — name,
-location, host, port, resolution, loaded label stock, darkness, and the command
-language it speaks — instead of typing the host at every print.
+Barcode labels print **straight to the printer**, with no browser print
+dialog. A department registers each physical printer once — name, location,
+host, port, resolution, loaded label stock, darkness, and the command language
+it speaks — instead of typing the host at every print.
 
 ### Two command languages
 
-| Language | Printers                                                                    | Note                                                                                                                                   |
-| -------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `zpl`    | Zebra, and the many printers with ZPL emulation                             | The default for rows that predate the column — a statement of fact, since it was the only language that existed when they were written |
-| `escpos` | Receipt-class thermal printers, several of which take linerless label media | —                                                                                                                                      |
+| Language | Printers                                                                    | Note                                     |
+| -------- | --------------------------------------------------------------------------- | ---------------------------------------- |
+| `zpl`    | Zebra, and the many printers with ZPL emulation                             | The default for the `language` column    |
+| `escpos` | Receipt-class thermal printers, several of which take linerless label media | —                                        |
 
 **The choice changes more than the bytes**: the renderer, the stock sizes
-offered, and the status query all branch on it. A ZPL-emulating printer should
-be registered as ZPL.
+offered, and the status query all branch on it. A ZPL-emulating printer
+should be registered as ZPL.
 
 ### The server opens the socket
 
 This is the single most useful thing to know when a print fails. The backend
 connects to the printer's host and port itself, so **reachability is the
-backend container's, not the operator's browser's**. A printer an operator can
-ping from their laptop may be unreachable from the server. Registration
+backend container's, not the operator's browser's**. A printer an operator
+can ping from their laptop may be unreachable from the server. Registration
 succeeds regardless — nothing validates the address at save time — and the
 failure surfaces at print or status time.
 
@@ -1097,382 +608,112 @@ failure surfaces at print or status time.
 report its current faults. **It is not tied to a print job and is not proof
 that anything printed** — on firmware that does not answer, all a successful
 send confirms is that the bytes were accepted. Treat a successful print as
-"sent", not as "printed", and check the tray.
-Status is **best-effort and per printer**: one printer failing to answer no
-longer suppresses the answers from the others. The status flag meanings were
-corrected against the published command tables in the same window.
+"sent", not as "printed", and check the tray. Status is **best-effort and per
+printer**: one printer failing to answer does not suppress the answers from
+the others.
+
+Other printer endpoints: `GET/POST /label-printers`,
+`PUT/DELETE /label-printers/{id}`, `POST /label-printers/{id}/test` and
+`POST /label-printers/probe`.
 
 ### What else prints
 
 Beyond inventory labels, `POST /station-documents/print` renders the **shift
-roster** and the **equipment check sheet** to the watch-desk printer. The check
-sheet is gated on the same permission as the check itself, and a pass-down
-stays with its own crew. A label can also carry a QR code.
+roster** and the **equipment check sheet** to the watch-desk printer. The
+check sheet is gated on the same permission as the check itself, and a
+pass-down stays with its own crew. A label can also carry a QR code.
 
 Reference:
 [`docs/LABEL_PRINTING_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/LABEL_PRINTING_MODULE.md).
 
-## Who Can See a Member's Assigned Gear _(2026-08-24)_
-
-**The Assigned Inventory table used to render on every member profile, for
-every viewer.** It was gated on "is the inventory module enabled" and nothing
-else, unlike the training, admin-hours, emergency-contact and ID-card sections
-beside it, which each gate on self-or-permission.
-
-A member profile is a directory card — the contact details a colleague is meant
-to look up. Which turnout coat, radio or SCBA mask somebody signed for, and
-what condition it is in, is quartermaster business.
-
-The section and its Quick Stats line now require **`inventory.manage`**, or
-that the profile is the viewer's own. The catalog-side reads were closed to the
-same disclosure in the same change.
-
-> **`inventory.view` could never have been the gate.** It is part of the
-> baseline Member position — every member holds it so they can browse the
-> catalog and their own kit — so a check for it says only "this person is a
-> member". The per-member endpoints checked exactly that, which is why the
-> server did not stop the page.
-
-The profile now **fetches nothing it may not show**: a viewer without the
-permission issues no request, rather than being turned away at the server, and
-items are cleared when navigating to a profile whose gear is not visible. A
-test asserts the baseline Member position holds `inventory.view` but not
-`inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
-
-**The same mistake was live on the dashboard.** `GET /dashboard/asset-widgets`
-gated its inventory section on `inventory.view`, handing every member
-department-wide item counts, low-stock lines and overdue-checkout totals. It
-now requires `inventory.manage` or `settings.manage`.
-
-## Inventory Administration _(2026-09-03)_
-
-The gear admin hub is now **Inventory Administration**. The area had four
-different names — "Gear & Uniforms Administration" on the hub, "Gear Admin" in
-the navigation, "Gear & Uniforms" in the module registry, "Inventory" in the
-command palette, and "Back to Logistics Admin" on the store's back-link.
-
-**Labels only. No route, permission key, module key or API value changed**, so
-no link, bookmark or integration breaks. Screens that really are about gear
-keep the quartermaster's vocabulary: My Issued Gear, Gear Requests, Gear Kits.
-
-The hub opens on the three supply lines a department staffs — PPE & Turnout
-Gear, Uniforms, and **EMS Supplies**, which the hub previously did not link to
-at all despite gear, uniforms and EMS stock sharing one catalog partitioned by
-`inventory_categories.item_type`. Below them the cards are grouped by what the
-officer is doing: Catalog, Issuance & Members, Requests & Approvals, Readiness
-& Compliance, Department Store, Setup & Tools.
-
-### The store console moved inside the hub
-
-| Was            | Is now                                       |
-| -------------- | -------------------------------------------- |
-| `/store/admin` | `/inventory/admin/store` (redirect in place) |
-
-It also stopped being the one administration page outside the shared frame — it
-now renders the same header, metrics row and attention queue as Members,
-Training, Events and Inventory. Its six tabs are selected by `?tab=`, so the
-hub can link at Catalog, Orders or Payments directly. No migration.
-
-### Cards no longer promise pages the viewer cannot open
-
-Every card carries the gate of the route it targets, and a section with no
-visible cards is not rendered. `checkPermission` is exact match plus module
-wildcard, so **`inventory.manage` implies neither `inventory.view_medical` nor
-`inventory.check_*`** — which is why the seeded Quartermaster was being shown
-Equipment Checklists and Check Reports and refused by both.
-
-The hub also admits checklist officers and store managers, whose consoles it
-links to; each card still resolves its own permission, so widening the door did
-not widen what is behind it. Previously the hub asked for ten sets of inventory
-figures on every visit regardless of who was looking, and for anyone without
-the inventory grant every one was refused — the page then listed all ten as
-unavailable, telling an officer the system was failing when it was working as
-configured.
-
-### API additions (all additive and defaulted)
-
-| Endpoint                         | Added                                | Note                                                                                                                                                               |
-| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /inventory/summary`         | `items_by_type`, `non_medical_items` | Counted as **rows**, deliberately unlike `total_items`, which sums quantities — so a supply-line card matches the list it opens                                    |
-| `GET /store/orders`              | `exclude_cancelled`                  | Narrower than `open_only`, which would also hide a fulfilled order still awaiting verification — money the department is still owed                                |
-| `GET /inventory/members-summary` | `userId`                             | Keeps a named member in the result whatever their status; a departure clearance is created _after_ the drop makes the member inactive, and the list is active-only |
-
-## Requesting gear no longer requires knowing the department's name for it _(2026-09-05)_
-
-The request form was a search box over an empty state. A member who did not
-know what the department calls a thing had nowhere to start.
-
-- **It browses.** The department's gear loads the moment the form opens, with
-  the real category names as filters. Search matches the category and
-  product-group names as well as the item's own, so typing "shirt" now finds a
-  garment the catalog files as "Long Sleeve".
-- **One row per product, not one per stocked size.** A shirt kept in seven
-  sizes and two colours was fourteen near-identical lines; it is one line now,
-  with sizes as their own step after the product is chosen. Serialized gear
-  collapses the same way — ten radios read as "Portable Radio — 7 on hand".
-- **The size step starts from the sizes you have on file**, matched through the
-  same alias table the impact planner uses, so "Large" on a member's record
-  selects the row the quartermaster stored as "L".
-- **You can ask for gear that is out of stock, or not carried at all.** The
-  form was pinned to items marked available, so the one need a quartermaster
-  has no other way to learn about could not be recorded. Out-of-stock sizes
-  stay selectable and are labelled as such, and a free-text line covers gear
-  that is not in the catalog. `equipment_requests.requested_size` carries the
-  size as its own field, so a request with no matching catalog row still tells
-  the quartermaster exactly what was wanted.
-
-**Rank- and position-restricted gear is filtered by the server**, not by the
-browser after the fact. The old form listed restricted items, disclosed their
-existence to everyone, and let the member submit a request the API then
-refused.
-
-Two fulfilment fixes went with it: _"Nothing on hand is size L"_ was suppressed
-by any item in the requested size, so a rack of size-L trousers silenced the
-notice on a request for a size-L shirt; and the fulfil picker judged
-availability from **the first 500 rows it had loaded**, so on a larger catalog
-"nothing on hand is that size" could mean "not on this page". Both are decided
-by the server now.
-
-## My Issued Gear is one list _(2026-09-05)_
-
-"Permanent Assignments" and "Issued Items" are now one **Issued to Me**
-section. The split was the stockroom's, not the member's: an assignment is one
-serialized unit out of `item_assignments`, an issuance is N units drawn from
-bulk stock in `item_issuances`, and a member holds both open-endedly with
-nothing to do differently about either.
-
-Both render in one list sorted by when the gear was received, with each row
-still showing what its record type actually carries — serial, asset tag and
-condition for an assignment; quantity and size for an issuance. The four
-quick-stat tiles collapse to three.
-
-**Active Temporary Loans stays its own section**, because a due date is the one
-distinction a member has to act on, and folding it in would have buried the
-overdue badge.
-
-**Nothing changed on the wire.** The two record types remain separate tables
-with separate return endpoints, and a row's "Notify quartermaster of return"
-still posts `return_type: assignment` or `issuance` against the right reference
-id. The quartermaster's member view and the dashboard gear widget are
-untouched — though the widget's **labels** now match the page ("Issued to me",
-"Temporary loans") and it now counts entries rather than units, which is what
-the page always did. The two used to disagree: 7 on the dashboard rail, 4 on
-the page, for one locker.
-
-## An item's size is edited through a labelled picker _(2026-09-06)_
-
-The Edit Item dialog's Size field was a free-text box over the legacy `size`
-column, which holds a code — so a quartermaster editing a variant-generated
-shirt read `l` where every other screen says `L`. It is now a picker over the
-whole standard-size vocabulary (garment, boot/glove and waist), with a Custom
-option for a boot width or a chest measurement.
-
-**Two columns hold a size** — the structured `standard_size` and the legacy
-free-text `size` — and the form wrote only the second, so the detail card, the
-variant capsules and the variant stock matrix kept reporting the pre-edit size.
-One control now writes both. The detail card and variant capsules also render
-`one_size` and `xxxl` as **One Size** and **3XL** rather than upper-casing the
-stored code.
-
-## The items page's location panel agrees with its list _(2026-09-06)_
-
-**Five of the items page's nine filters did nothing.** Location, size, colour,
-style and the vendor scope were absent from the reload effect's dependencies,
-so picking one changed the request the page _would_ send and never sent it. The
-list stayed as it was until an unrelated reload — a websocket event, a bulk
-status change — applied a filter nobody had touched since.
-
-That is the root of the reconciliation complaint: the location cards are links
-into a list that did not respond to them.
-
-Three counting mismatches were fixed with it:
-
-- **The cards counted medical stock the list excludes.**
-  `GET /inventory/summary/by-location` reported every domain while `GET /items`
-  carves EMS supplies out — they have their own page and their own permission.
-  A department running both saw a header of "82 items" and an "Unassigned" card
-  reading 52 units across 2 items, above a list of 6 items totalling 30. The
-  panel now takes the same carve-out the listing is fetched with, so **a
-  location holding only medical stock gets no card** rather than a card whose
-  rows the page cannot show.
-- **The "Unassigned" card could not filter to the items it counted.** It sent
-  the empty string, which is _All Locations_ — so clicking it cleared the filter
-  it appeared to apply, and its highlight was on whenever nothing was selected.
-  `GET /items` gains an optional **`unassigned_location`** flag for the "no
-  location at all" population; the card, a new dropdown option and a second
-  click to clear all use it.
-- **The header counted a different thing from the list under it.** It read
-  `total_items`, which sums quantities across every domain including medical,
-  over a list that counts rows and excludes it. It now reads
-  `non_medical_items` — which exists for exactly this, and which the inventory
-  hub already used.
-
-## A request is fulfilled from the variant it named, not one row of it _(2026-09-06)_
-
-Follow-up to the request-form rebuild above, and a direct consequence of it.
-
-The request catalog deliberately collapses rows that share a product and a
-size/colour/style into one line and **sums their availability** — that is what
-turns ten serialized radios into "Portable Radio — 7 available" instead of ten
-indistinguishable rows.
-
-The request then stored a single `item_id` out of that line, and fulfilment
-narrowed to exactly that row. **So a member could ask for ten against a line
-advertising ten, and leave the quartermaster looking at the one row holding
-one.**
-
-Fulfilment now resolves the request to the **variant** and offers its sibling
-rows, so the options match the availability the member was shown. Rows outside
-that variant — a different size, colour, style, product or organization — stay
-excluded, unchanged.
-
-The product and variant identity the catalog groups by is now one definition
-(`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
-grouping and the fulfilment narrowing rather than restated on each side — which
-is what let the two drift apart in the first place.
-
-## Retiring is the only way to deactivate an item _(2026-09-06)_
-
-**A generic item edit could deactivate equipment still checked out.**
-
-The dedicated retire action blocks deactivation while an item is assigned,
-checked out, or (for pooled stock) carries an unreturned issuance, and keeps the
-item's other fields consistent with being retired. **The general item-update
-path had none of that**, so a plain edit turning an item inactive — directly, or
-by setting its status and condition to retired without touching that flag —
-removed it from every active list and picker with no safeguards, and left it in
-a state where it could still be handed out again immediately.
-
-Editing an item **no longer accepts either route**. Retiring is the only way to
-deactivate one.
-
-The retire action itself now **re-checks the item's current holder immediately
-before deactivating**, closing a narrow window in which a member could be
-assigned the item in the instant before it was retired.
-
-### Three knock-ons
-
-- **Medical-supplies managers lost their retire path when the gap closed.** The
-  dedicated retire action existed only on the general inventory permission, so
-  a manager holding only the medical-supplies grant had no way to retire a
-  medical item once editing stopped accepting it. Medical supplies now has its
-  own retire action under the same permission every other action on that screen
-  uses.
-- **An item's detail page could show stale stock for lot-tracked consumables.**
-  The list view already computed on-hand stock from dated lots for any item
-  stocked that way; the single-item detail page — medical supplies and general
-  inventory alike — did not, and could show the older quantity figure.
-- **A large category list could lose categories from pickers.** Category pickers
-  (medical supplies, general inventory and CSV import) only ever fetch the
-  complete list, with no lower page to reach, so a low internal cap meant
-  anything past it was **silently absent** from every picker and filter.
-
-### Also
-
-Receiving an item's very first stock lot at the same moment as a quantity
-correction could record the wrong opening count — including losing it entirely
-if the item had nothing on hand yet.
-
-## September 24 – October 4, 2026
-
-The labels, storage-area and NFC work of 2026-09-24 is documented in its own
-sections above and in [Inventory NFC Tags](Inventory-NFC-Tags). The rest of the
-window was workflow reviews W38–W46 driven in a real browser, two
-plain-language copy passes, and a handful of standalone fixes.
-
-### Scheduled and background
-
-- **Property return reminders run daily** _(#2683)_. The 30/90-day reminders to
-  dropped members still holding property existed behind
-  `POST /users/property-return-reminders/process` and nothing called them.
-  `property_return_reminders` is now in the in-process scheduler (86400 s; cron
-  `45 7 * * *` for an external scheduler), run per organization through
-  `_for_each_org`. Each run sends a member at most one reminder — the latest
-  threshold passed, if not already sent — so the backlog present on upgrade
-  gets one 90-day email rather than a 30-day and a 90-day the same morning. No
-  schema change.
-- **Equipment-request outcomes notify the member** _(#2767)_ — see
-  [Gear Requests](#gear-requests).
-
-### Inventory Administration hub
-
-- **A malformed 200 no longer crashes the hub** _(#2867)_. Each of the ten
-  settled sources now carries the shape check its consumer depends on (a
-  captive portal's HTML on station Wi-Fi was the case); a bad body counts as a
-  failed source in the existing "some services did not respond" banner.
-- **Open return notices are counted** _(#2750)_ — the attention list asked for
-  `status=pending`, which `ReturnRequestStatus` does not have (`requested` is
-  right); the endpoint now types the filter as the enum, so an unknown status is
-  a 422 naming the valid values rather than a 500.
-- **New departure clearances are listed** _(#2765, W15)_. A clearance opens as
-  `initiated` and becomes `in_progress` only once something comes back; the hub
-  asked for `in_progress` alone. It now fetches all and keeps the two open
-  statuses, and names the member (`member_name`) instead of printing `user_id`.
-
-### Fixes from workflow reviews W38–W45 _(2026-09-29)_
-
-| Review | What changed                                                                                                                                                                                                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W38    | Setup wizard hides **Add room** without `locations.create` / `locations.manage` and says who can add one; the item form marks **Serial #** and **Inspection Interval (days)** required when the category requires them, as the server does                                |
-| W39    | Item **History** offered and fetched only with `inventory.manage` (the server's gate); a missing NFPA record reads as none started; return checkboxes are real named checkboxes; My Issued Gear's **Pending requests** counts open return notices                         |
-| W40    | Pool issue/return refuse a quantity above on hand / issued instead of silently lowering it; "no allowance" said in words, not `-1`; an extended loan is due at the end of the chosen day in the department's zone; issuing a kit asks first, naming the member            |
-| W41    | Fulfilling pool stock opens on issuance; a return notice's received count starts empty and must match what the member reported; reorder statuses readable; an unlinked reorder's **Receive stock** says it cannot be received here                                        |
-| W42    | Maintenance dates default to the department's today; a passed inspection's note no longer claims it keeps an in-service item out of service; **Apply Charge** needs an amount above $0; pool **Issue** waits for the allowance override                                   |
-| W43    | CSV import refuses a negative quantity or purchase price (they were stored, then 500'd every item list containing the row); storage-area **Delete** waits for an empty area; the import file input is keyboard-reachable                                                  |
-| W44    | **Tag Items in Bulk** with NFC off says an administrator can turn it on, as Put Away and Shelf Audit do                                                                                                                                                                   |
-| W45    | Kiosk: a refused item tap is retried as a member card (the next member no longer has to wait for **Done**); a suspended card is named as such; 409 refusals shown without the support code; the NFC-off notice no longer sends a kiosk officer to a page they cannot open |
-
-**Flagged, open in KNOWN_LIMITATIONS:** a room cannot be added by the seeded
-quartermaster (W38-1); a direct return leaves the member's return notice open
-(W39-5); a group made on Variant Groups can never be filled (W40-7); an
-in-app reorder can never be received (W41-5); a write-off for one returned pool
-unit retires the whole item (W41-6); rows already stored with negative values
-still break the item list (W43-1).
-
-### Equipment checklists _(W46, #2848, #2861, #2882)_
-
-- `inventory.check_manage` seeded on the Quartermaster (migration
-  `f73b449bdb8b`) — see [Permissions](#permissions).
-- `create_template` stored any apparatus id: a basic apparatus 500'd on the FK
-  and another organization's apparatus was stored and name-projected (W46-1).
-  The builder now offers only Apparatus-module units (W46-8); a basic-apparatus
-  department assigns by type (pinning one basic unit is open, W46-20).
-- A filed check no longer offers **Open checklist** (W46-2); a check that took an
-  item out of service counts as expected and completed (W46-3); the fleet board
-  no longer says "No check templates configured" for a rig a published checklist
-  covers (W46-4); the admin page carries the Fleet readiness and Check log links
-  its hub card promised (W46-5); a member's log links back to My checklists
-  (W46-6).
-- A Fail / Out of service the member chose requires a note before submit
-  (closes W46-13); Overall Notes is no longer pinned with Submit.
-- The builder's vehicle types follow the backend's `DefaultApparatusType` plus
-  custom types and saved values; it names which vehicles a checklist reaches and
-  warns when none; editing a live checklist (which unpublishes it) shows a
-  banner with **Publish now** and asks before leaving.
-- My Checklists and Fleet Readiness share one `isChecklistSubmitted` rule; the
-  duplicate "submitted" toast is gone.
-- `get_failure_log` counted `count(ShiftEquipmentCheckItem.id)` over the
-  filtered subquery, cross-joining every item row on the server, across
-  organizations — one failed flashlight read as "4 total failures". It counts
-  its own rows now.
-- Still open: missed checks counted before a checklist existed (W46-19); a check
-  on a basic apparatus stored with no apparatus (W46-11); a check filed ahead of
-  its shift invisible on the board (W46-12).
-
-### Copy
-
-The plain-language pass (#2781) renamed **Members Equipment** to **Member
-Equipment**, made reorder statuses readable, said a category's low-stock alert
-fires **at** its threshold (matching the backend's `<=`), and stopped the CSV
-upload box claiming drag-and-drop. The newcomer passes (#2837, #2850) gave My
-Issued Gear, the empty item list, the request form's empty catalog, the item
-form's **Tracking Type**, the hand-out dialog's duration choice and the Setup
-Guide's **Continue** (which now saves ticked categories) their explanations.
-
-### Phones, and the October 5 fixes
-
-- **Eight admin pages** (Vendors, Charges, Allowances, Gear Requests, Return Requests, Reorder Requests, Write-Offs, Impact Planner) padded their own container inside the app's padded page, losing 16px each side on a phone; the extra padding is gone and their maximum widths are kept.
-- **Items** on a phone: the nine filter dropdowns sit behind a **Filters** toggle that reports how many are active (below 640px; search stays visible; wider screens are unchanged), and the header counts line renders only when the counts are numbers.
-- **Hub metric tiles** (shared by every admin hub) wrap their label to two lines instead of truncating "To close out" and "Needs attention" at 320px.
-- **Maintenance cannot be completed as Retired** (condition after maintenance): retire the item with the retire action, which takes the lock, checks the blockers and writes the audit event. The form no longer offers it.
-- The scan-success flash no longer outlives an unmounted field (an intermittent test-suite failure; no user-visible change).
+---
+
+## Who Can See a Member's Gear
+
+A member profile is a directory card. Which turnout coat, radio or SCBA mask
+somebody signed for, and its condition, is quartermaster business.
+
+- The profile's **Assigned Inventory** section and its Quick Stats line
+  require **`inventory.manage`**, or that the profile is the viewer's own. A
+  viewer without the permission issues no request, and items are cleared when
+  navigating to a profile whose gear is not visible.
+- The per-member endpoints (`/users/{id}/assignments`, `/issuances`,
+  `/issuance-history`, `/inventory`, `/clearance`, and the allowance and
+  size-preference reads) answer for the caller's own record or for an
+  `inventory.manage` holder.
+- **`inventory.view` is not a gate for this.** It is part of the baseline
+  Member position — every member holds it so they can browse the request
+  catalog and their own kit. A test asserts the baseline Member position
+  holds `inventory.view` but not `inventory.manage`, so the fact the guard
+  rests on cannot drift unnoticed.
+- `GET /dashboard/asset-widgets` includes its inventory section (item counts,
+  low-stock lines, overdue-loan totals) only for `inventory.manage` holders.
+
+---
+
+## Scheduled Tasks
+
+| Task                         | Frequency                     | Does                                                                                                                                                         |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `inventory_low_stock_alerts` | daily                         | Emails low-stock and reorder-point alerts                                                                                                                    |
+| `inventory_overdue_alerts`   | daily                         | Reports overdue temporary loans                                                                                                                              |
+| `inventory_audit_digest`     | daily check, weekly send      | Emails overdue shelf audits (see [NFC Tags](Module-Inventory-Developer#nfc-tags))                                                                                                      |
+| `property_return_reminders`  | daily (cron `45 7 * * *`)     | Emails dropped members still holding property a 30-day and then a 90-day reminder, copying the notify roles; one reminder per member per run, the latest threshold passed |
+
+All four run in the in-process scheduler (86400 s) per organization through
+`_for_each_org`; the cron expressions serve an external scheduler. Property
+return reminders can also be run on demand with
+`POST /users/property-return-reminders/process`.
+
+---
+
+## Cross-Module Connections
+
+- **Scheduling** — shift check-in and the shift detail panel link to My
+  Checklists; shift templates name the checklists their shifts carry;
+  outstanding end-of-shift checks gate finalizing a shift.
+- **Apparatus** — checklists are pinned to Apparatus-module units or to an
+  apparatus type; see [Apparatus Module](Module-Apparatus).
+- **Medical Supplies** — EMS stock shares the catalog
+  (`item_type = medical`) but has its own screens, permission
+  (`inventory.view_medical` / `inventory.manage_medical`) and retire action;
+  the inventory list, location cards and header count exclude it.
+- **Department Store** — the store console lives at `/inventory/admin/store`
+  under its own module and gate.
+- **Member ID cards** — badge codes resolve through `/member-badges/resolve`;
+  NFC ID cards resolve through the NFC member lookup.
+- **Notifications** — email is the channel of record. Low-stock, reorder,
+  overdue and audit-digest notices are email-only; equipment-request outcomes
+  add a bell entry and web push; no inventory notice is sent by SMS.
+- **Dashboard** — the asset widgets read `GET /inventory/summary` and the
+  low-stock list for `inventory.manage` holders; the member gear widget
+  matches My Issued Gear.
+
+---
+
+## Known Limitations
+
+Open items, each tracked in
+[KNOWN_LIMITATIONS](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md):
+
+- The setup guide's first step adds rooms, which needs a locations grant the
+  seeded Quartermaster does not hold; the wizard hides **Add room** without
+  `locations.create` / `locations.manage` and says who can add one.
+- Receiving gear back directly does not close the member's open return
+  notice.
+- A variant group created on the Variant Groups page cannot be filled from
+  any screen.
+- A reorder request made in the app cannot be received until an inventory
+  item is linked to it.
+- A write-off raised for one returned unit of pool stock retires the whole
+  item.
+- The check log and fleet board count a checklist as missed on days before it
+  existed.
+- A department on basic apparatus cannot pin a checklist to one unit.
+- The generic scan lookup does not resolve storage-area `SA-` codes (INV-8).
+
+---
+
+**See also:** [Apparatus Module](Module-Apparatus) |
+[Training Module](Module-Training) |
+[Inventory NFC Tags](Inventory-NFC-Tags)
