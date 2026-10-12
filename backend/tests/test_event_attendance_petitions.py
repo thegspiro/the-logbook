@@ -205,6 +205,46 @@ class TestSubmit:
         # The organizer is the one prompted; managers are not also buried.
         assert not await _notices(db_session, dept["manager"], REVIEW_PROMPT_CATEGORY)
 
+    async def test_on_a_finalized_event_the_organizer_is_told_to_reopen(
+        self, db_session, dept, no_email
+    ):
+        event_id = await _event(
+            db_session, dept["org"], dept["organizer"], finalized=True
+        )
+        member = await _load(db_session, dept["member"])
+
+        await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+        (prompt,) = await _notices(
+            db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY
+        )
+        assert "finalized: reopen it on the event page before approving" in (
+            prompt.message
+        )
+        html_body, text_body = no_email.await_args.args[4:6]
+        assert "<strong>finalized</strong>" in html_body
+        assert "reopen attendance on the event page" in text_body
+
+    async def test_on_an_open_event_there_is_no_reopen_hint(
+        self, db_session, dept, no_email
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+
+        await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+        (prompt,) = await _notices(
+            db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY
+        )
+        assert "finalized" not in prompt.message
+        html_body, text_body = no_email.await_args.args[4:6]
+        assert "finalized" not in html_body
+        assert "finalized" not in text_body
+
     async def test_without_an_organizer_every_event_manager_hears(
         self, db_session, dept
     ):

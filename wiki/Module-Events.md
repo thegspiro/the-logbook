@@ -834,6 +834,10 @@ client API cache.
   `withdrawal_count`, and the event card and the Attendance Requests page show
   _"Withdrawn and sent again once / twice"_ on a resent request, so an
   organizer notified more than once can see why.
+- **Finalized-event hint** _(2026-10-12)_: when the event's attendance is
+  already finalized as the request arrives, the reviewers' in-app prompt and
+  email say approving needs attendance reopened first, and that declining
+  works either way, instead of the plain "Review the request" line.
 - **Across events** _(2026-10-09)_: `/events/attendance-requests` lists every
   pending request on events the viewer organizes or is alternate for, oldest
   first, with **Approve** / **Decline** in place (the same dialogs as the event

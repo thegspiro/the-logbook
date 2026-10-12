@@ -181,7 +181,10 @@ can switch between **My events** and **All events**.
 Nobody decides their own request. **Approving is refused while attendance is
 finalized** — the card says _"Attendance is finalized. Reopen attendance to
 approve a request; declining still works."_ — because approving would change
-what finalizing already credited.
+what finalizing already credited. A request that arrives after attendance was
+finalized says so in the notification itself — _"Attendance for this event is
+finalized: reopen it on the event page before approving. Declining works
+either way."_ — so you know before opening the event.
 
 **Who is told.** A new request goes to the event's organizer and alternate,
 in the app and by email (**Event officer duties** in the member email
