@@ -1479,6 +1479,33 @@ pending a decision:
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
 
+## Finance — Board Reports: What They Do Not Cover (2026-10-12)
+
+**Finance › Reports** (`/finance/reports`) is described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#board-reports-2026-10-12). Left out on
+purpose:
+
+- **Commitments on a past date.** Encumbrances are a running figure with no
+  history, so budget vs actual shows **Committed** only on a report through
+  today. Reconstructing them would mean recording each approval and payment as
+  a dated encumbrance movement, a schema change not made here.
+- **Spent is the dated payments, not the running total.** A line whose running
+  `amount_spent` was edited by hand, or that holds spending from before a
+  payment's date was recorded, reads differently on the report. Today's report
+  flags those lines (`runningSpentDiffers`) and shows both figures; the report
+  is not corrected to the running total, because then it would not reconcile
+  with the payments register.
+- **A voided check with no void date** counts as voided from the start on
+  budget vs actual, but its original row still appears on the register. The
+  2026-10-11 migration (`3f3bd6f3c7e4`) filled `voided_at` for every check
+  voided before then, so this arises only if a row is edited directly.
+- **No server-side PDF**, and no scheduled delivery. The browser's print, or
+  its _Save as PDF_, is the PDF.
+- **Not yet built from the original plan:** expense summary by member, dues
+  collection with delinquency, and purchase orders by vendor. Restricted funds
+  and functional expense classification (program / management / fundraising)
+  are separate work and appear on none of these reports.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import

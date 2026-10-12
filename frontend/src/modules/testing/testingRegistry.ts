@@ -1083,6 +1083,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'finance',
       },
       { path: '/finance/dues', label: 'Dues management', permission: 'finance.view', module: 'finance' },
+      { path: '/finance/reports', label: 'Finance reports', permission: 'finance.view', module: 'finance' },
       { path: '/finance/approvals', label: 'Approvals', permission: 'finance.approve', module: 'finance' },
       { path: '/finance/settings', label: 'Fiscal year settings', permission: 'finance.manage', module: 'finance' },
       {
