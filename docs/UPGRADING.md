@@ -1270,6 +1270,34 @@ Compliance Matrix and member status now **honour role-scoped requirements**
 where a requirement does not apply to a member, rather than grading them
 against it. Expect some percentages to move once.
 
+### Compliance settings start emailing members (2026-10-11)
+
+The two **Notifications** settings on the Compliance configuration screen —
+reminder days before a deadline (`notify_days_before_deadline`) and the
+non-compliance notice (`notify_non_compliant_members`) — were stored but never
+read. A new daily task, `compliance_member_notices`, now sends them. A
+department whose saved configuration already holds reminder days (the screen
+suggests 30, 14 and 7) or has the notice switched on will start emailing
+members on the first run after upgrade. A department with no compliance
+configuration sends nothing, as before.
+
+The emails are training-reminder mail, so a member who turned training
+reminders off is not sent them unless the department made that kind required.
+Each email is logged and not sent twice. To keep things quiet, clear the
+reminder days and switch the notice off before upgrading.
+
+### The seeded Quartermaster gains `locations.create` (2026-10-11)
+
+Migration `9e8b0b6f3fe8` **adds** `locations.create` to the stored seeded
+Quartermaster position, so a quartermaster can add the rooms and storage
+locations the inventory screens ask for. Only creating is granted — not
+editing or deleting locations. The grant is written only while the row still
+holds `inventory.manage` (so a Quartermaster your department re-purposed is
+left alone), and not where the row already covers it through
+`locations.manage`, `locations.*` or `*`. Remove it on the positions screen if
+your department keeps location setup with the facilities officer.
+Downgrading the revision revokes it from the same rows.
+
 ### Seeded positions gain checklist, NFC-tag and ID-card grants (2026-09-30, 2026-10-02)
 
 Two migrations **add** grants to the seeded positions already stored. Each is
