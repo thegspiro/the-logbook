@@ -670,6 +670,15 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Workflow Actions */}
         {canManage && (
           <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+            {/* Publishing needs approved minutes, so a published copy alongside
+                anything else means the minutes were reopened: Documents shows
+                that copy as being corrected until it is re-published. */}
+            {minutes.published_document_id && minutes.status !== 'approved' && (
+              <p className="alert-warning text-theme-text-primary mb-3 text-sm" role="status">
+                The copy published to Documents is marked as being corrected. Once these minutes are approved again,
+                re-publish them to replace it.
+              </p>
+            )}
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button

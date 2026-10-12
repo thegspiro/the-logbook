@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
 from app.core.utils import generate_uuid
+from app.models.document import Document
 from app.models.event import Event
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
@@ -631,6 +632,22 @@ class MinuteService:
         minutes.rejected_at = None
         minutes.rejected_by = None
         minutes.rejection_reason = None
+
+        # Owner decision (2026-10-12): a document already published from the
+        # approved version stays readable, flagged as being corrected, until
+        # the corrected minutes are republished over it (publish_minutes
+        # clears the flag). Resolved in-org: published_document_id is a plain
+        # column with no FK, so it is never trusted on its own.
+        if minutes.published_document_id:
+            doc_result = await self.db.execute(
+                select(Document).where(
+                    Document.id == minutes.published_document_id,
+                    Document.organization_id == str(organization_id),
+                )
+            )
+            published = doc_result.scalar_one_or_none()
+            if published is not None:
+                published.under_correction_since = datetime.now(timezone.utc)
 
         await self.db.commit()
         refreshed = await self.get_minutes(minutes_id, organization_id)

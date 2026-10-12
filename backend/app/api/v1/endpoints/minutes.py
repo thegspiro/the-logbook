@@ -797,6 +797,7 @@ async def publish_minutes(
         mime_type=doc.file_type,
         source_type=doc.source_type,
         source_id=doc.source_id,
+        under_correction_since=doc.under_correction_since,
         tags=tags_list,
         created_by=doc.uploaded_by,
         created_at=doc.created_at,

@@ -1256,9 +1256,19 @@ Correction**, and say what needs correcting (at least 10 characters). The
 minutes go back to **Draft**; make the correction, then **Submit for
 Approval** again, and another officer approves them as before. Until they are
 re-approved, members do not see them. The earlier approval and your reason are
-kept in the audit log. If the minutes had been published to Documents, the
-published copy stays there until you re-approve and **Re-publish to
-Documents**.
+kept in the audit log.
+
+**A published copy is marked while you correct it** _(2026-10-12)_. If the
+minutes had been published to Documents, that copy stays readable, but from the
+moment you reopen them it carries a **Being corrected** notice wherever it is
+listed in Documents: _"These minutes were reopened for correction on
+[date]. A corrected version will replace this document when it is approved."_
+The minutes page reminds you too: _"The copy published to Documents is marked
+as being corrected. Once these minutes are approved again, re-publish them to
+replace it."_ Re-approval alone does not lift the notice, because the copy in
+Documents still holds the old text. Once the corrected minutes are approved,
+click **Re-publish to Documents**: the corrected text replaces the same
+document — it is not added as a second copy — and the notice disappears.
 
 **The meeting record has a lighter approval** _(2026-10-11)_. A meeting (the
 card the minutes hang off, as opposed to the minutes themselves) carries its

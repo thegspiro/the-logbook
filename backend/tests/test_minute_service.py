@@ -108,6 +108,7 @@ def _make_minutes(**overrides) -> MagicMock:
         "rejected_at": None,
         "rejected_by": None,
         "rejection_reason": None,
+        "published_document_id": None,
         "created_by": str(uuid4()),
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),

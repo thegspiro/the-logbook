@@ -3919,9 +3919,24 @@ transition specifically.
 > approval and submission cleared, the prior approver and approval time go
 > into a `minutes_reopened` audit event, and the record is submitted and
 > approved again under the usual separation of duties. The minutes page offers
-> it as **Reopen for Correction** on approved minutes. A document already
-> published from the approved version is left in Documents until the minutes
-> are re-approved and re-published. The text below is the original finding.
+> it as **Reopen for Correction** on approved minutes. The text below is the
+> original finding.
+>
+> ✅ **Residual resolved (2026-10-12), as the owner chose: the published
+> document stays readable, marked "Being corrected", until the corrected
+> minutes are republished, which replaces it.** A reopen now stamps
+> `documents.under_correction_since` on the document named by the minutes'
+> `published_document_id` (resolved in-org; migration `4d8807bdd737`, a
+> guarded nullable column). `DocumentResponse` carries the field, and the
+> Documents screen shows a warning notice on that document in both grid and
+> list views — _"These minutes were reopened for correction on [date]. A
+> corrected version will replace this document when it is approved."_ The flag
+> is stored rather than derived from the minutes' status because it must
+> outlast the re-approval: approved-but-not-republished minutes still leave the
+> old text in Documents. Republishing already updated the same document row in
+> place (links stay valid, no second copy); it now also clears the flag. A
+> reopen that happened before this revision left no mark, so such a document
+> reads as current until it is republished.
 
 Every other mutating route against a `MeetingMinutes` record —
 `update_minutes`, `add_motion`/`update_motion`/`delete_motion`,

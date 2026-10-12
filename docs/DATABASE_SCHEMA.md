@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**304 tables · 5011 columns · 1011 foreign keys**
+**304 tables · 5012 columns · 1011 foreign keys**
 
 ---
 
@@ -149,7 +149,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`document_folders`](#document_folders) | `DocumentFolder` | 17 | Document Folder model |
-| [`documents`](#documents) | `Document` | 19 | Document model |
+| [`documents`](#documents) | `Document` | 20 | Document model |
 
 ### Elections
 
@@ -2139,6 +2139,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `content_html` | LONGTEXT | yes |  |  |  |
 | `source_type` | VARCHAR(50) | yes | IDX |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
+| `under_correction_since` | DATETIME | yes |  |  |  |
 | `version` | INTEGER | yes |  | `1` |  |
 | `tags` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |

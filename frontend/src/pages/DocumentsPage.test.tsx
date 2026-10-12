@@ -543,3 +543,44 @@ describe('DocumentsPage folder management (W53-4)', () => {
     expect(screen.queryByRole('button', { name: 'Manage folder' })).not.toBeInTheDocument();
   });
 });
+
+describe('DocumentsPage minutes being corrected (MM-17)', () => {
+  const corrected = makeDocument({
+    id: 'd-minutes',
+    name: 'October Business Meeting',
+    has_file: false,
+    file_name: '',
+    under_correction_since: '2026-10-12T15:00:00Z',
+  });
+  const current = makeDocument({ id: 'd-current', name: 'September Business Meeting', has_file: false });
+
+  beforeEach(() => {
+    mockGetDocuments.mockReset();
+    mockGetDocuments.mockResolvedValue({ documents: [corrected, current], total: 2, skip: 0, limit: 20 });
+  });
+
+  it('keeps the document listed but marks it as being corrected', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    const card = await screen.findByTestId('document-card-d-minutes');
+    const notice = within(card).getByRole('status');
+    expect(notice).toHaveTextContent('Being corrected.');
+    expect(notice).toHaveTextContent('These minutes were reopened for correction on Oct 12, 2026.');
+    expect(notice).toHaveTextContent('A corrected version will replace this document when it is approved.');
+    expect(within(card).getByText('October Business Meeting')).toBeInTheDocument();
+    expect(within(screen.getByTestId('document-card-d-current')).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('marks it in the list view too', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await screen.findByText('October Business Meeting');
+    await user.click(screen.getByRole('button', { name: 'List view' }));
+
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByText(/reopened for correction on Oct 12, 2026/)).toHaveLength(1);
+  });
+});

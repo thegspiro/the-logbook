@@ -137,4 +137,32 @@ describe('MinutesDetailPage reopen for correction (MM-17)', () => {
     expect(await screen.findByRole('button', { name: 'Reject Minutes' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reopen for Correction' })).not.toBeInTheDocument();
   });
+
+  it('tells the secretary a published copy is marked as being corrected until re-published', async () => {
+    const user = userEvent.setup();
+    mockGetMinutes.mockResolvedValue({ ...approved, published_document_id: 'doc-1' });
+    mockReopen.mockResolvedValue({
+      ...approved,
+      published_document_id: 'doc-1',
+      status: 'draft',
+      approved_by: null,
+      submitted_by: null,
+    });
+    renderWithRouter(<MinutesDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reopen for Correction' }));
+    expect(screen.queryByText(/marked as being corrected/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/What needs correcting/), 'Quorum threshold was entered wrong');
+    await user.click(screen.getByRole('button', { name: 'Reopen as draft' }));
+
+    expect(await screen.findByText(/The copy published to Documents is marked as being corrected/)).toBeInTheDocument();
+  });
+
+  it('says nothing about a published copy when none was published', async () => {
+    mockGetMinutes.mockResolvedValue({ ...submitted, status: 'draft' });
+    renderWithRouter(<MinutesDetailPage />);
+
+    expect(await screen.findByRole('button', { name: 'Submit for Approval' })).toBeInTheDocument();
+    expect(screen.queryByText(/marked as being corrected/)).not.toBeInTheDocument();
+  });
 });

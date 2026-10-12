@@ -233,7 +233,7 @@ When approved minutes are published:
 2. **Content escaping**: All user content is passed through `html.escape()` to prevent XSS
 3. **Document creation**: A new `Document` record is created in the "Meeting Minutes" system folder
 4. **Link back**: The minutes record stores the `published_document_id` for cross-reference
-5. **Re-publish**: If the document already exists, it is updated with new content
+5. **Re-publish**: If the document already exists, it is updated in place with new content (same document id, so links stay valid) and its `under_correction_since` flag, set when the minutes were reopened for correction, is cleared
 
 ### Published Document Structure
 
@@ -319,8 +319,11 @@ recalculating and overwriting them. A correction goes through
 return to draft with their approval and submission cleared, the prior approver
 and approval time are written to the `minutes_reopened` audit event, and the
 record must be submitted and approved again — by someone other than the new
-submitter. A document already published from the approved version stays in
-Documents until the minutes are re-approved and re-published.
+submitter. A document already published from the approved version stays
+readable in Documents, but the reopen stamps its `under_correction_since`
+(resolved in-org through `published_document_id`) and the Documents screen
+shows a "Being corrected" notice on it until the minutes are re-approved and
+re-published over it _(2026-10-12, owner decision)_.
 Meeting records themselves are a separate router at `/api/v1/meetings`.
 
 ### List Response Counts _(2026-08-17)_

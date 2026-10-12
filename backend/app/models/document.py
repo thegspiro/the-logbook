@@ -567,6 +567,15 @@ class Document(Base):
     )  # e.g. "meeting_minutes"
     source_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
+    # MM-17: set when the source record (published minutes) is reopened for
+    # correction, cleared when it is published again and this row's content is
+    # replaced. Stored, not derived from the minutes' status, because the
+    # notice must outlast the re-approval: approved-but-not-republished
+    # minutes still leave the superseded text here.
+    under_correction_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Versioning
     version: Mapped[Optional[int]] = mapped_column(Integer, default=1)
 
