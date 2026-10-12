@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #<pending>**: branch `claude/security-review-public-webhooks`, Feature
+03 (Public surface & webhooks), pass 8 (watchdog pickup). 1 fixed (a further
+narrowing of PUB-8 — the revoked- and expired-key 401 branches now write an
+access-log row, mirroring the already-fixed 429 branch), 0 new findings
+otherwise; the new MCP OAuth 2.1 authorization-server surface
+(`app/api/public/mcp_oauth.py`, new since pass 7) and four other small,
+already-landed fixes were read fresh against all seven checklist dimensions
+and found sound. See the Log entry below and
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 8** section
+for detail. Row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3097, Feature 02, Permissions & roles, pass 8, merged clean), preserved for history</summary>
+
 **PR [#3097](https://github.com/thegspiro/the-logbook/pull/3097)**: branch
 `claude/security-review-permissions-roles`, Feature 02 (Permissions &
 roles), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
@@ -23,7 +38,12 @@ PERM-5 re-verified fixed by other, non-security-review work that landed
 between pass 7 and this pass. See the Log entry below and
 `docs/security-review/PERM-02-permissions-roles.md`'s **Pass 8** section
 for detail. Row 02 → ✅ (pending this PR's merge); next is Feature 03
-(Public surface & webhooks).
+(Public surface & webhooks). Merged clean 2026-10-12 13:41:42 UTC (`git
+log`: fast-forward merge `d9a3357c`; 2 files changed — `PROGRESS.md` and
+`PERM-02-permissions-roles.md`). Docs-only, so nothing further to record
+beyond clearing this row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3096's merge, Feature 01, Auth & session lifecycle, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18611,6 +18631,82 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 03 (Public surface & webhooks, pass 8) — 1 fixed (PUB-8 narrowed further), 0 new findings; a new MCP OAuth 2.1 surface reviewed fresh (watchdog pickup)
+
+**Closure.** PR #3097 (Feature 02, Permissions & roles, pass 8) merged clean
+2026-10-12 13:41:42 UTC (`git log`: fast-forward merge `d9a3357c`; 2 files
+changed — `PROGRESS.md` and `PERM-02-permissions-roles.md`), docs-only, so
+nothing further to record beyond clearing the **Open PR** row above.
+Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR exists — roughly 65 minutes after that merge,
+with nothing started since. Proceeded to Feature 03.
+
+**Feature 03, pass 8.** Not a zero-delta pass: pass 7's closing merge
+(`4caded5d`, PR #2937) to current `HEAD` touches 6 of the (now) 14 files
+under `app/api/public/` plus `public_portal_security.py`. The headline
+change is a brand-new, 433-line unauthenticated surface,
+`app/api/public/mcp_oauth.py` — the MCP OAuth 2.1 authorization server
+(`/authorize`, `/token`, `/revoke`, RFC 8414/9728 metadata) that lets a
+member connect an MCP client (claude.ai, Claude Desktop, Claude Code) with
+their own account rather than a department-wide service key. Read in full
+against all seven checklist dimensions, together with its collaborators
+(`app/mcp/oauth.py`'s 1330-line state machine, the CSRF-protected consent
+screen, the admin client-registration endpoints, the model and its
+migration): redirect URIs are matched byte-for-byte and never used as an
+open redirector; PKCE (S256) is mandatory and verified against the stored
+challenge; a replayed code or refresh token revokes the grant it belongs to,
+committed despite the error response; a token is audience-bound to this
+server's own MCP endpoint and re-checked on every call, not only at
+issuance; what a token can do (scopes × the member's _current_ permissions
+× the department's switches) is re-derived every call, never cached; every
+secret/token comparison is `hmac.compare_digest`; every by-id/by-FK lookup
+is org-scoped, including under `require_permission`; registered/stored
+bounds (clients per org, redirect URIs per client, pending requests per
+client, live grants per member+client) prevent unauthenticated storage
+growth; the model's `SET NULL` columns are all nullable and the migration
+guards each `create_table` on the table's own existence. No findings.
+
+**One real fix, surfaced by re-reading `public_portal_security.py` fresh
+rather than trusting its own pass-7 write-up.** PUB-8 (this feature's one
+standing item) documented the 401-logging gap as uniformly blocked on a
+nullable-column migration — but two of its three 401 branches
+(`authenticate_api_key`'s "revoked" and "expired" checks) resolve the key
+before raising, exactly like the already-fixed 429 branch, so they needed
+nothing the 429 fix didn't already have and simply never got the same
+`_log_refusal` call. Fixed the same way: both branches now write an
+access-log row before raising. Before this, revoking a compromised key and
+watching it keep getting hammered left zero trace in
+`public_portal_access_log` — invisible to `detect_anomalies`'s per-IP 401
+counter and to the `status_4xx_24h`/`error_rate_percentage` dashboard tiles
+alike. Only the genuinely-unattributable "unknown key" 401 remains flagged.
+Guard tests added: `TestRevokedAndExpiredKeysAreRecordedToo` (4 tests) in
+`tests/test_public_portal_usage_stats.py`, mirroring
+`TestTheRefusalIsRecorded`'s own coverage of the 429 branch (each new branch
+writes its row; one confirms the row survives the rollback the raise
+causes). `docs/KNOWN_LIMITATIONS.md`'s PUB-8 row updated to match.
+
+Four other already-landed fixes in the diff (a public-portal rate limiter
+moved from per-process to a Redis-shared fixed window; a `last_used_at`
+datetime/string regression; an approval token reassignment check; a shared
+`paypal_auto_apply` helper) were re-verified fresh, not trusted from commit
+messages — all sound, no new findings. The other 8 of 14
+`app/api/public/*` files are byte-identical to pass 7's baseline
+(confirmed by `git diff` returning no hunks for each), so their findings
+stand unchanged and are not re-derived here.
+
+Gate: backend flake8(7.4.1)/black(26.5.1)/isort(9.0.1) clean,
+`validate_migrations.py --strict` (572 revisions, single head),
+`check_route_permissions.py --strict` (265 routes, 0 errors/warnings),
+`check_docs_links.py` (454 files, 0 broken links), scoped pytest 837 unit +
+211 integration passed (1 pre-existing skip), standing guard suites (153
+passed), full backend unit suite (14,243 passed, 1 skipped, 0 failed),
+frontend typecheck (0 errors) and lint (0 errors, 0 warnings) clean. Full
+write-up:
+[`PUB-03-public-surface-webhooks.md`](./PUB-03-public-surface-webhooks.md) →
+Pass 8. Rotation row 03 → ✅ (pending this PR's merge). Next: Feature 04
+(Storefront & payments).
 
 ### 2026-10-12 — Feature 02 (Permissions & roles, pass 8) — 0 fixed by this pass, 0 new findings; PERM-5 closed by other work (watchdog pickup)
 
