@@ -5,11 +5,13 @@ Handles fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, approval chains, and QuickBooks export.
 """
 
+import io
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -29,6 +31,7 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.schemas.finance import (
+    AmendmentLogReport,
     ApprovalActionRequest,
     ApprovalChainCreate,
     ApprovalChainResponse,
@@ -58,6 +61,7 @@ from app.schemas.finance import (
     BudgetSummaryResponse,
     BudgetTransactionPageResponse,
     BudgetUpdate,
+    BudgetVsActualReport,
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
@@ -96,6 +100,7 @@ from app.schemas.finance import (
     MyBudgetRequestLinesResponse,
     MyBudgetResponse,
     MyBudgetsSummaryResponse,
+    PaymentsRegisterReport,
     PendingApprovalResponse,
     PurchaseRequestCreate,
     PurchaseRequestResponse,
@@ -121,6 +126,10 @@ from app.services.finance_budget_request_service import (
     BudgetRequestForbiddenError,
     FinanceBudgetRequestService,
 )
+from app.services.finance_report_service import (
+    FinanceReportService,
+    ReportNotFoundError,
+)
 from app.services.finance_service import (
     AmendmentAlreadyReversedError,
     AmendmentDecidedError,
@@ -131,6 +140,7 @@ from app.services.finance_service import (
     ManualApprovalConflictError,
 )
 from app.utils import download_names
+from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import load_finance_settings
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -1853,6 +1863,259 @@ async def get_pending_approvals(
         str(current_user.organization_id),
         skip=pagination.skip,
         limit=pagination.limit,
+    )
+
+
+# ============================================
+# Board reports
+# ============================================
+
+_REPORT_FORMAT = Query("json", pattern="^(json|csv)$")
+
+
+def _csv_download(rows: list[list], filename: str) -> Response:
+    output = io.StringIO()
+    SafeCsvWriter(output).writerows(rows)
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _report_error(e: Exception) -> HTTPException:
+    if isinstance(e, ReportNotFoundError):
+        return HTTPException(status_code=404, detail=str(e))
+    if isinstance(e, ValueError):
+        return HTTPException(status_code=400, detail=safe_error_detail(e))
+    return HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+def _amount_cell(value) -> Decimal | str:
+    # A Decimal, not a formatted string: SafeCsvWriter escapes a string that
+    # starts with "-", which would turn a void or an overspent line into text a
+    # spreadsheet will not total. A number cannot carry a formula.
+    if value is None:
+        return ""
+    return Decimal(value).quantize(Decimal("0.01"))
+
+
+@router.get("/reports/budget-vs-actual", response_model=BudgetVsActualReport)
+async def budget_vs_actual_report(
+    fiscal_year_id: str = Query(...),
+    as_of: Optional[date] = Query(None),
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Every budget line in a fiscal year, through a date.
+
+    **Requires permission: finance.view**
+
+    ``as_of`` is a calendar date on the department's calendar, today when
+    omitted. The budget is the original plus the amendments confirmed by
+    then; spent is the payments dated through it. Open commitments, and each
+    line's running total, are reported only for today. ``format=csv``
+    downloads the same rows. Another department's fiscal year is 404.
+    """
+    service = FinanceReportService(db)
+    try:
+        report = await service.budget_vs_actual(
+            str(current_user.organization_id), fiscal_year_id, as_of
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    header = [
+        "Budget line",
+        "Station",
+        "Original budget",
+        "Amendments",
+        "Budget",
+        "Spent",
+        "Committed",
+        "Remaining",
+        "Percent used",
+    ]
+    rows = [header]
+    for row in report["rows"]:
+        rows.append(
+            [
+                row["category_name"],
+                row["station_name"] or "",
+                _amount_cell(row["original_budget"]),
+                _amount_cell(row["amendments"]),
+                _amount_cell(row["budget"]),
+                _amount_cell(row["spent"]),
+                _amount_cell(row["committed"]),
+                _amount_cell(row["remaining"]),
+                (
+                    ""
+                    if row["percent_used"] is None
+                    else Decimal(row["percent_used"]).quantize(Decimal("0.1"))
+                ),
+            ]
+        )
+    totals = report["totals"]
+    rows.append(
+        [
+            "Total",
+            "",
+            _amount_cell(totals["original_budget"]),
+            _amount_cell(totals["amendments"]),
+            _amount_cell(totals["budget"]),
+            _amount_cell(totals["spent"]),
+            _amount_cell(totals["committed"]),
+            _amount_cell(totals["remaining"]),
+            "",
+        ]
+    )
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "budget-vs-actual",
+            report["fiscal_year_name"],
+            report["as_of"],
+            extension=".csv",
+        ),
+    )
+
+
+@router.get("/reports/amendment-log", response_model=AmendmentLogReport)
+async def amendment_log_report(
+    fiscal_year_id: str = Query(...),
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Every amendment entered against a fiscal year's budget lines.
+
+    **Requires permission: finance.view**
+
+    Oldest first, with pending and rejected ones, who approved, entered and
+    decided each, and ``confirmedNet`` — what the confirmed ones moved the
+    year's budget by. ``format=csv`` downloads the same rows. Another
+    department's fiscal year is 404.
+    """
+    service = FinanceReportService(db)
+    try:
+        report = await service.amendment_log(
+            str(current_user.organization_id), fiscal_year_id
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    tz = await resolve_scheduling_timezone(db, str(current_user.organization_id))
+    rows = [
+        [
+            "Entered",
+            "Budget line",
+            "Station",
+            "Amount",
+            "Reversal",
+            "Reason",
+            "Approved by",
+            "Approved on",
+            "Entered by",
+            "Status",
+            "Decided by",
+            "Decided",
+            "Decision note",
+        ]
+    ]
+    for row in report["rows"]:
+        rows.append(
+            [
+                download_names.local_day(row["entered_at"], tz),
+                row["category_name"],
+                row["station_name"] or "",
+                _amount_cell(row["amount"]),
+                "yes" if row["is_reversal"] else "",
+                row["reason"],
+                row["approved_by"],
+                row["approved_on"],
+                row["entered_by_name"] or "",
+                row["status"],
+                row["decided_by_name"] or "",
+                download_names.local_day(row["decided_at"], tz) or "",
+                row["decision_note"] or "",
+            ]
+        )
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "amendment-log", report["fiscal_year_name"], extension=".csv"
+        ),
+    )
+
+
+_REGISTER_KINDS = {
+    "purchase_request": "Purchase request",
+    "check_request": "Check",
+    "check_void": "Check voided",
+    "expense_report": "Expense report",
+}
+
+
+@router.get("/reports/payments-register", response_model=PaymentsRegisterReport)
+async def payments_register_report(
+    start: date = Query(...),
+    end: date = Query(...),
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Every payment made between two dates, inclusive.
+
+    **Requires permission: finance.view**
+
+    Paid purchase requests, issued checks, paid expense reports, and a
+    negative row for each check voided in the period. Dates are on the
+    department's calendar; a period longer than 366 days is 400. ``format=csv``
+    downloads the same rows.
+    """
+    service = FinanceReportService(db)
+    try:
+        report = await service.payments_register(
+            str(current_user.organization_id), start, end
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    rows = [
+        [
+            "Date",
+            "Type",
+            "Number",
+            "Payee",
+            "Description",
+            "Budget line",
+            "Check number",
+            "Amount",
+        ]
+    ]
+    for row in report["rows"]:
+        rows.append(
+            [
+                row["paid_on"],
+                _REGISTER_KINDS.get(row["kind"], row["kind"]),
+                row["number"],
+                row["payee"],
+                row["description"],
+                row["budget_line"] or "",
+                row["check_number"] or "",
+                _amount_cell(row["amount"]),
+            ]
+        )
+    rows.append(["", "", "", "", "", "", "Total", _amount_cell(report["total"])])
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "payments-register", report["start"], report["end"], extension=".csv"
+        ),
     )
 
 

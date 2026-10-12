@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ClipboardCheck,
   FileSpreadsheet,
+  FileBarChart,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
@@ -318,6 +319,12 @@ const FinanceDashboardPage: React.FC = () => {
             icon={<CreditCard className="h-5 w-5" />}
             title="Check Requests"
             description="Request check payments"
+          />
+          <QuickLinkCard
+            to="/finance/reports"
+            icon={<FileBarChart className="h-5 w-5" />}
+            title="Reports"
+            description="Budget vs actual, amendments and payments for the board"
           />
           <QuickLinkCard
             to="/finance/dues"

@@ -1012,6 +1012,113 @@ class UnroutedApprovalResponse(UTCResponseBase):
     first_approved_by: Optional[str] = None
 
 
+# ============================================
+# Board Reports
+# ============================================
+
+
+class BudgetVsActualRow(BaseModel):
+    """One budget line, through the report's date."""
+
+    model_config = _RESPONSE_CONFIG
+
+    budget_id: str
+    category_name: str
+    station_name: Optional[str] = None
+    original_budget: Decimal
+    # Confirmed amendments that had taken effect by the report's date.
+    amendments: Decimal
+    budget: Decimal
+    # Payments dated through the report's date.
+    spent: Decimal
+    # Open commitments; reported only for a report run through today.
+    committed: Optional[Decimal] = None
+    remaining: Decimal
+    percent_used: Optional[float] = None
+    # Today's report only: the line's running total, and whether it disagrees
+    # with the payments summed for ``spent``.
+    running_spent: Optional[Decimal] = None
+    running_spent_differs: bool = False
+
+
+class BudgetVsActualTotals(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    original_budget: Decimal
+    amendments: Decimal
+    budget: Decimal
+    spent: Decimal
+    committed: Optional[Decimal] = None
+    remaining: Decimal
+
+
+class BudgetVsActualReport(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    fiscal_year_id: str
+    fiscal_year_name: str
+    as_of: date
+    includes_committed: bool
+    rows: list[BudgetVsActualRow]
+    totals: BudgetVsActualTotals
+
+
+class AmendmentLogRow(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    amendment_id: str
+    budget_id: str
+    category_name: str
+    station_name: Optional[str] = None
+    amount: Decimal
+    is_reversal: bool
+    reason: str
+    approved_by: str
+    approved_on: date
+    entered_by_name: Optional[str] = None
+    entered_at: datetime
+    status: str
+    decided_by_name: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    decision_note: Optional[str] = None
+
+
+class AmendmentLogReport(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    fiscal_year_id: str
+    fiscal_year_name: str
+    rows: list[AmendmentLogRow]
+    # Net of the confirmed rows: what the amendments moved the year's budget by.
+    confirmed_net: Decimal
+
+
+class PaymentsRegisterRow(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # The department's calendar day the money moved.
+    paid_on: date
+    # purchase_request, check_request, check_void or expense_report
+    kind: str
+    entity_id: str
+    number: str
+    payee: str
+    description: str
+    budget_line: Optional[str] = None
+    check_number: Optional[str] = None
+    # A void is negative: it puts back what the check took out.
+    amount: Decimal
+
+
+class PaymentsRegisterReport(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    rows: list[PaymentsRegisterRow]
+    total: Decimal
+
+
 class FinanceSettingsResponse(BaseModel):
     """The finance rules the server applies (app/utils/finance_settings.py)."""
 
