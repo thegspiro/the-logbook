@@ -58,6 +58,7 @@ def _to_response(
         reviewed_at=petition.reviewed_at,
         review_note=petition.review_note,
         created_at=petition.created_at,
+        withdrawal_count=petition.withdrawal_count or 0,
     )
 
 

@@ -695,10 +695,34 @@ class EventAttendancePetitionService:
             name = names.get(str(member.id), "A member")
             title = event.title or "an event"
             subject = f"Attendance request — {name}, {title}"
-            message = (
-                f'{name} asked to be marked present at "{title}". '
-                f"Review the request on the event page."
-            )
+            # Approving is refused while attendance is finalized, and a request
+            # may arrive after it was (they are accepted for 30 days). Saying
+            # so here spares the reviewer finding out from a refused approve.
+            if attendance_is_finalized(event):
+                next_step = (
+                    "Attendance for this event is finalized: reopen it on the "
+                    "event page before approving. Declining works either way."
+                )
+                next_step_text = (
+                    "Attendance for this event is finalized, so approving needs "
+                    "it reopened first: reopen attendance on the event page, "
+                    "then confirm the times and approve. Declining with a "
+                    "reason works either way."
+                )
+                next_step_html = (
+                    "<p>Attendance for this event is <strong>finalized</strong>, "
+                    "so approving needs it reopened first: reopen attendance on "
+                    "the event page, then confirm the times and approve. "
+                    "Declining with a reason works either way.</p>"
+                )
+            else:
+                next_step = "Review the request on the event page."
+                next_step_text = (
+                    "Confirm the times and approve the request, or reject it "
+                    "with a reason."
+                )
+                next_step_html = f"<p>{next_step_text}</p>"
+            message = f'{name} asked to be marked present at "{title}". {next_step}'
             action_url = f"/events/{event.id}"
             for recipient in recipients:
                 self.db.add(
@@ -742,13 +766,10 @@ class EventAttendancePetitionService:
                     f"<strong>{_html.escape(title)}</strong>, which they have "
                     f"no check-in for.</p>"
                     f'<p style="white-space:pre-line;"><strong>Their reason:'
-                    f"</strong> {reason_html}</p>"
-                    f"<p>Confirm the times and approve the request, or reject "
-                    f"it with a reason.</p>",
+                    f"</strong> {reason_html}</p>" + next_step_html,
                     f'{name} asked to be marked present at "{title}", which '
                     f"they have no check-in for.\n\nTheir reason: "
-                    f"{petition.reason}\n\nConfirm the times and approve the "
-                    f"request, or reject it with a reason.",
+                    f"{petition.reason}\n\n{next_step_text}",
                     event,
                     "Review Request",
                 )
