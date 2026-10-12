@@ -1272,4 +1272,4 @@ skip/advance guards around gated and final stages. Deleted interviewers remain
 available for historical display. Transfer/anonymization paths scrub applicant
 PII without crossing organization boundaries. Operators must review the
 reconciliation migration log around upgrade; see
-[the Alembic route](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+[the Alembic route](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-7).

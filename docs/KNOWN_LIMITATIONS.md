@@ -351,7 +351,7 @@ verified. What this leaves, accepted rather than fixed:
 ## Found by the September 24 – October 4 Documentation Pass (2026-10-04)
 
 Five items surfaced while bringing the guides up to date with the window's
-pull requests (`docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md`). None is new
+pull requests (`docs/CHANGE_AUDIT_2026-09.md`). None is new
 behaviour from that window except where noted; each is recorded here so the
 guides can point at one place and an owner can decide it.
 

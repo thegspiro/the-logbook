@@ -2,7 +2,7 @@
 
 ## Queued by the October 11 – 12 documentation pass
 
-Source: [CHANGE_AUDIT_2026-10-11_TO_10-12](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
 Nothing was captured; every row is open.
 
 | Guide / image | Disposition | Why |
@@ -65,7 +65,7 @@ placeholders, image file names and alt text are unchanged.
 ## Queued by the October 8 – 11 documentation pass, 2026-10-11
 
 Covers the merges from 2026-10-08 13:13 UTC to 2026-10-11. Audit:
-[CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+[CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-8--11-2026).
 **Nothing has been captured** (the capture stack does not run in this
 environment). Finance, attendance-request, encryption and receipt screens from
 this window were queued by their own commits; only items not already queued
@@ -138,7 +138,7 @@ Compliance box.
 ## Queued by the October 7 – 8 documentation pass, 2026-10-08
 
 Covers PRs #2981–#2996. Audit:
-[CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md). **Nothing
+[CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-7--8-2026). **Nothing
 has been captured** (the capture stack does not run in this environment). Run
 `status_report.py` after adding inline placeholders to refresh
 [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md).
@@ -185,7 +185,7 @@ capture a real key, secret or Transcript ID.
 
 Covers PR #2965 (owner-decision docket), #2967 (desktop density) and the review
 records through #2980. Audit:
-[CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md). **Nothing
+[CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-6--7-2026). **Nothing
 has been captured** (the capture stack does not run in this environment). Guides
 for these features were written by the feature PRs; the rows below are the screens
 that need a first capture or a replacement. Run `status_report.py` after adding
@@ -709,7 +709,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 
 ## Queued by the October 4 – 5 documentation pass, 2026-10-05
 
-Audit: [`CHANGE_AUDIT_2026-10-04_TO_10-05.md`](../CHANGE_AUDIT_2026-10-04_TO_10-05.md).
+Audit: [`CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-4--5-2026).
 **Nothing has been captured.** This list is the work order; the one new inline
 placeholder is `08-04b` in guide 08 (a `> **Screenshot needed:**` paragraph, so
 `status_report.py` counts it — regenerate `SCREENSHOT_STATUS.md` when you next
@@ -773,7 +773,7 @@ the source and **queued 122 captures. None has been taken yet.**
   reads 569 of 608 filled: these 38 plus the one carried phone shot
   (`07-19`).
 
-Audit: [`CHANGE_AUDIT_2026-09-24_TO_10-04.md`](../CHANGE_AUDIT_2026-09-24_TO_10-04.md#documentation-and-media-disposition).
+Audit: [`CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#documentation-and-media-disposition).
 
 **Read these before capturing.**
 
@@ -1394,7 +1394,7 @@ chart, testing runs, photo consent, waitlisted event and out-of-stock size.
 
 ## Disposition for September 15-23, 2026 - two new screens, and a new line on three old ones
 
-Audit: [`CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md).
+Audit: [`CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#change-audit-september-15--23-2026).
 
 **Two screens are new** — **Suggestions** (`/suggestions`) and **Suggestion
 Box Management** (`/communications/suggestion-boxes`) — and the inventory label
@@ -1538,7 +1538,7 @@ Do that on a throwaway item, not one another shot depends on.
 
 ## Disposition for September 12-15, 2026 - the screens stayed put, their contents did not
 
-Audit: [`CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md).
+Audit: [`CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#change-audit-september-12--15-2026).
 
 **No screen was added or retired this window**, so nothing here is a capture of
 somewhere new. Every item is the same address showing something different, which
@@ -1694,7 +1694,7 @@ where a capture run does not look.
 
 ## Disposition for September 6-12, 2026 - setup was rebuilt, and one shot broke silently
 
-Audit: [`CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md).
+Audit: [`CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#change-audit-september-6--12-2026).
 
 **Nine of these have now been shot** (2026-09-12), taking the library from
 518/560 to **527/569**. What remains queued is listed as such below. The
@@ -1946,7 +1946,7 @@ PNGs whose content did not change buries the six that did.
 
 ## Disposition for August 31 – September 6, 2026 — two modules changed address
 
-Audit: [`CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md).
+Audit: [`CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#change-audit-august-31--september-6-2026).
 Nothing below has been shot yet; this is the queue.
 
 **The manifest was repointed first, and it had to be.** Nineteen `route`
@@ -2142,7 +2142,7 @@ so a markdown-only sweep does not even find them to ask the question.
 ## Disposition for the 2026-08-24 → 08-31 window (recorded 2026-08-31)
 
 Reason and data-path context in
-[`../CHANGE_AUDIT_2026-08-24_TO_31.md`](../CHANGE_AUDIT_2026-08-24_TO_31.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-1).
 
 **This is a disposition, not a capture pass.** It records what the week's
 changes did to the existing library and what new markers were written into the
@@ -3321,7 +3321,7 @@ acting on; still not from here.
 ## Flagged by the 2026-08-23 → 08-24 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-23_TO_24.md`](../CHANGE_AUDIT_2026-08-23_TO_24.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-2).
 
 > **Also landed 2026-08-24, and it retracts a published claim:** the dark-mode
 > scrollbar gutter *could* be photographed after all, and the white strip in
@@ -4428,7 +4428,7 @@ by the above.
 ## Flagged by the 2026-08-19 → 08-23 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-3).
 
 **One change invalidates captures in bulk rather than individually.** The
 mobile bottom navigation used to paint over open dialogs; it now hides while
@@ -4539,7 +4539,7 @@ that is what a capture run has to set up and the marker cannot carry.
 ## Flagged by the 2026-08-17 → 08-19 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-4).
 
 Two things landed that invalidate existing captures rather than merely adding
 new ones: **shift close-out is a different screen** for departments recording a
@@ -4718,7 +4718,7 @@ seeded demo department, so they re-shoot rather than going stale.
 ## Flagged by the 2026-08-15 → 08-16 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-15_TO_16.md`](../CHANGE_AUDIT_2026-08-15_TO_16.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-6).
 These are **not verified captures**; each remains open until the image is
 opened and checked against its guide caption.
 
@@ -4836,7 +4836,7 @@ inside the content area — so these three need only re-capture, not re-caption.
     pair is the teaching point; either alone is not.
 
 The reason, data path, and edge cases for each are recorded in
-[`../CHANGE_AUDIT_2026-08-10_TO_16.md`](../CHANGE_AUDIT_2026-08-10_TO_16.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-8).
 
 ## Flagged by the 2026-08-12 → 08-14 changes
 
@@ -4874,7 +4874,7 @@ changed headers, dashboard cards, breadcrumbs, or actions at 375px; the 44px
 touch-target fixes can change spacing even when the words are unchanged.
 
 The reason, data path, and edge cases for each screen are recorded in
-[`../CHANGE_AUDIT_2026-08-12_TO_14.md`](../CHANGE_AUDIT_2026-08-12_TO_14.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-7).
 
 Which captured screenshots still match the application. Companion to
 [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md), which counts how many
