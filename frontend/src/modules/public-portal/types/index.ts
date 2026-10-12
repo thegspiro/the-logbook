@@ -19,9 +19,10 @@ export interface PublicPortalAPIKey {
   organization_id: string;
   key_prefix: string;
   name: string;
-  rate_limit: number | null; // Individual rate limit override
-  rate_limit_override: number | null; // Alias for compatibility
-  effective_rate_limit: number; // Actual rate limit being used
+  /** Per-key requests/hour, or `null` to run at the org's `default_rate_limit`. */
+  rate_limit_override: number | null;
+  /** The limit the key is enforced at: the override, else the org default. */
+  effective_rate_limit: number;
   expires_at: string | null;
   last_used_at: string | null;
   is_active: boolean;
@@ -100,8 +101,7 @@ export interface PublicPortalDataWhitelist {
 
 export interface CreateAPIKeyRequest {
   name: string;
-  rate_limit?: number | undefined; // Used in component
-  rate_limit_override?: number | undefined; // Alias for compatibility
+  rate_limit_override?: number | undefined;
   expires_at?: string | undefined;
 }
 
