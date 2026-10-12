@@ -69,6 +69,7 @@ from app.models.user import (
     UserStatus,
 )
 from app.services.membership_pipeline_service import prospect_document_path
+from app.utils.sql_results import rows_affected
 
 _DEPARTED_STATUSES = {
     UserStatus.DROPPED_VOLUNTARY,
@@ -159,11 +160,11 @@ class MemberAnonymizationService:
         result = await self.db.execute(
             delete(Session).where(Session.user_id == user.id)
         )
-        counts["sessions_deleted"] = result.rowcount or 0
+        counts["sessions_deleted"] = rows_affected(result) or 0
         result = await self.db.execute(
             delete(PasswordHistory).where(PasswordHistory.user_id == user.id)
         )
-        counts["password_history_deleted"] = result.rowcount or 0
+        counts["password_history_deleted"] = rows_affected(result) or 0
 
         # --- body measurements -----------------------------------------
         result = await self.db.execute(
@@ -171,7 +172,7 @@ class MemberAnonymizationService:
                 MemberSizePreferences.user_id == user.id
             )
         )
-        counts["size_preferences_deleted"] = result.rowcount or 0
+        counts["size_preferences_deleted"] = rows_affected(result) or 0
 
         # --- medical content (keep status/dates as compliance proof) ---
         result = await self.db.execute(
@@ -184,7 +185,7 @@ class MemberAnonymizationService:
                 provider_name=None,
             )
         )
-        counts["screening_records_scrubbed"] = result.rowcount or 0
+        counts["screening_records_scrubbed"] = rows_affected(result) or 0
 
         # --- free-text reasons (frequently medical/family detail) ------
         for label, model, values in (
@@ -199,14 +200,14 @@ class MemberAnonymizationService:
             result = await self.db.execute(
                 update(model).where(model.user_id == user.id).values(**values)
             )
-            counts[f"{label}_scrubbed"] = result.rowcount or 0
+            counts[f"{label}_scrubbed"] = rows_affected(result) or 0
 
         result = await self.db.execute(
             update(MeetingAttendee)
             .where(MeetingAttendee.user_id == user.id)
             .values(waiver_reason=None)
         )
-        counts["meeting_waiver_reasons_scrubbed"] = result.rowcount or 0
+        counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(
@@ -214,7 +215,7 @@ class MemberAnonymizationService:
             .where(EventRSVP.user_id == user.id)
             .values(dietary_restrictions=None, accessibility_needs=None, notes=None)
         )
-        counts["rsvps_scrubbed"] = result.rowcount or 0
+        counts["rsvps_scrubbed"] = rows_affected(result) or 0
 
         # --- duplicated identity copies --------------------------------
         result = await self.db.execute(
@@ -222,7 +223,7 @@ class MemberAnonymizationService:
             .where(ExternalUserMapping.internal_user_id == user.id)
             .values(external_username=None, external_email=None, external_name=None)
         )
-        counts["external_mappings_scrubbed"] = result.rowcount or 0
+        counts["external_mappings_scrubbed"] = rows_affected(result) or 0
 
         # Candidate photos duplicate the member photo; names on ballots are
         # official election records and are kept. Imported lazily — the
@@ -232,7 +233,7 @@ class MemberAnonymizationService:
         result = await self.db.execute(
             update(Candidate).where(Candidate.user_id == user.id).values(photo_url=None)
         )
-        counts["candidate_photos_scrubbed"] = result.rowcount or 0
+        counts["candidate_photos_scrubbed"] = rows_affected(result) or 0
 
         # --- original applicant record ---------------------------------
         prospect_counts = await self._scrub_prospect(user, token)
@@ -278,7 +279,7 @@ class MemberAnonymizationService:
                     provider_name=None,
                 )
             )
-            screenings_scrubbed += result.rowcount or 0
+            screenings_scrubbed += rows_affected(result) or 0
 
             # Form-driven pipeline steps copy the full mapped applicant data
             # (name, email, address, date of birth, ...) into
@@ -333,7 +334,7 @@ class MemberAnonymizationService:
                         integration_result=None,
                     )
                 )
-                form_submissions_scrubbed += result.rowcount or 0
+                form_submissions_scrubbed += rows_affected(result) or 0
 
             prospect.first_name = "Former"
             prospect.last_name = f"Member-{token[:8]}"

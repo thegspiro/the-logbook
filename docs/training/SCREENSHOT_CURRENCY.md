@@ -1,5 +1,26 @@
 # Screenshot currency
 
+## Queued by the October 11 – 12 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10-11_TO_10-12](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Nothing was captured; every row is open.
+
+| Guide / image | Disposition | Why |
+| ------------- | ----------- | --- |
+| 11 Finance, Dues page | **NEW + REPLACE** | Now has **New schedule**, **Generate dues**, **Record payment** for `finance.manage`; capture the page and the schedule dialog |
+| 11 Finance, QuickBooks | **NEW** | Export history list beside the mappings |
+| 12 Grants, library | **REPLACE** | **Add Opportunity** now opens a real form; capture the form (fixed vs rolling deadline) |
+| 12 Grants | **NEW** | Record Donation form, Pledges page with the Record Pledge dialog, Fundraising Events page |
+| 05 Inventory | **NEW** | Assign terms step (Permanent / Temporary + return date); Distribute Items with **Temporary assignment**; departure clearance record with the Resolve dialog |
+| 05 / 06 | **CHECK** | Equipment-check reports now include basic apparatus and an expected/missed count |
+| 13 Medical screening | **NEW** | **Show compliance for** panel for a member and a prospect; roster with **Not compliant (overdue)** |
+| 04 Events & Meetings | **NEW** | Minutes **Attendance** dashboard; event page **Guests (n)** card; action-item Assignee select |
+| 07 Documents & Forms | **NEW** | **Manage folder** dialog; "Publish this form?" warning dialog; builder one-submission control |
+| 14 Elections | **REPLACE** | Ballot screens without a default Abstain; results grouped per item; resend-ballots banner |
+| 15 Prospective members / 08 Admin | **NEW** | Drawer referral fields; **Department Email** section in Organization settings |
+| 03 Scheduling, `03-77-closeout-step3-confirm.png` | **REPLACE** | Shows **Give everyone all N calls**; capture with one member below the total |
+| 03 Scheduling settings | **CHECK** | Three settings now carry a "not in effect" notice |
+
 ## Moved out of 01-membership.md by the plain-language rewrite, 2026-10-11
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden

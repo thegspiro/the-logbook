@@ -133,6 +133,7 @@ from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import org_today, resolve_scheduling_timezone
 from app.utils.positions import position_label
+from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
@@ -6288,7 +6289,7 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
         .values(status=DuesStatus.OVERDUE)
     )
     await db.commit()
-    count = result.rowcount or 0
+    count = rows_affected(result) or 0
     if count:
         logger.info("Marked {} dues record(s) overdue", count)
     return {"task": "mark_overdue_dues", "marked_overdue": count}
@@ -6325,7 +6326,7 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
                 )
                 .values(is_overdue=True)
             )
-            total += result.rowcount or 0
+            total += rows_affected(result) or 0
     await db.commit()
     if total:
         logger.info("Marked {} maintenance record(s) overdue", total)

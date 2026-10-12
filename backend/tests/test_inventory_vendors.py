@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.api.v1.endpoints.inventory import _vendor_response
 from app.models.inventory import InventoryVendor, InventoryVendorContact
@@ -47,34 +48,34 @@ def org_id():
 
 def _first(value):
     """A result whose .scalars().first() yields `value`."""
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.scalars.return_value.first.return_value = value
     return result
 
 
 def _all(values):
     """A result whose .scalars().all() yields `values`."""
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.scalars.return_value.all.return_value = values
     return result
 
 
 def _rows(rows):
     """A result whose .all() yields raw tuples (grouped aggregate queries)."""
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.all.return_value = rows
     return result
 
 
 def _rowcount(n):
     """A result from an UPDATE, whose .rowcount reports the rows touched."""
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.rowcount = n
     return result
 
 
 def _scalar_one_or_none(value):
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.scalar_one_or_none.return_value = value
     return result
 

@@ -775,7 +775,7 @@ async def assert_attempts_remaining(
     db: AsyncSession,
     candidate_id: str,
     requirement_id: str | None,
-    organization_id: UUID,
+    organization_id: UUID | str,
 ) -> None:
     """Guard a requirement's ``max_attempts`` cap for skills tests.
 
@@ -887,8 +887,8 @@ async def apply_test_pass_to_pipeline(
     db: AsyncSession,
     candidate_id: str,
     requirement_id: str,
-    organization_id: UUID,
-    verified_by: UUID,
+    organization_id: UUID | str,
+    verified_by: UUID | str,
 ) -> None:
     """Mark a passed skills test's linked requirement complete on the
     candidate's active enrollment(s).
@@ -947,7 +947,7 @@ async def revert_test_pass_from_pipeline(
     db: AsyncSession,
     candidate_id: str,
     requirement_id: str,
-    organization_id: UUID,
+    organization_id: UUID | str,
 ) -> None:
     """Release the requirement a now-voided passing test had credited.
 

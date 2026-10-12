@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.notification import PushSubscription
 from app.models.user import User
+from app.utils.sql_results import rows_affected
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +235,8 @@ class PushService:
 
     async def subscribe(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         endpoint: str,
         p256dh: str,
         auth: str,
@@ -275,8 +276,8 @@ class PushService:
 
     async def _subscribe_once(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         endpoint: str,
         p256dh: str,
         auth: str,
@@ -404,7 +405,7 @@ class PushService:
         return sub
 
     async def unsubscribe(
-        self, organization_id: UUID, user_id: UUID, endpoint: str
+        self, organization_id: UUID | str, user_id: UUID | str, endpoint: str
     ) -> bool:
         """Remove a device endpoint.
 
@@ -426,7 +427,7 @@ class PushService:
             )
         )
         await self.db.commit()
-        return bool(result.rowcount)
+        return bool(rows_affected(result))
 
     async def _delete_by_hashes(self, hashes: List[str]) -> None:
         if not hashes:

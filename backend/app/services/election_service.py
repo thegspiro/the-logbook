@@ -87,6 +87,7 @@ from app.utils.org_timezone import (
     resolve_scheduling_timezone,
     to_local,
 )
+from app.utils.sql_results import rows_affected
 
 # What a member sees when they open the link a reminder replaced. Not
 # "expired": the election is still open and their newer email works.
@@ -626,7 +627,7 @@ class ElectionService:
     PAPER_ATTESTATIONS_DEFAULT = 2
     PAPER_ATTESTATIONS_MAX = 3
 
-    async def get_feature_flags(self, organization_id: UUID) -> Dict[str, bool]:
+    async def get_feature_flags(self, organization_id: UUID | str) -> Dict[str, bool]:
         """Resolve the org's election feature toggles (missing keys = ON)."""
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -644,7 +645,7 @@ class ElectionService:
             for key, default in self.FEATURE_DEFAULTS.items()
         }
 
-    async def get_required_attestations(self, organization_id: UUID) -> int:
+    async def get_required_attestations(self, organization_id: UUID | str) -> int:
         """How many officers must attest a paper-ballot batch (0 = off)."""
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -664,7 +665,7 @@ class ElectionService:
             required = self.PAPER_ATTESTATIONS_DEFAULT
         return max(0, min(required, self.PAPER_ATTESTATIONS_MAX))
 
-    async def _exclude_unattested(self, election_id: UUID, votes: List) -> List:
+    async def _exclude_unattested(self, election_id: UUID | str, votes: List) -> List:
         """Drop manual votes whose batch is still awaiting attestations.
 
         Pending batches are recorded and chained but unconfirmed claims —
@@ -689,7 +690,7 @@ class ElectionService:
         return [v for v in votes if getattr(v, "manual_batch_id", None) not in pending]
 
     @staticmethod
-    def _is_attested_vote(election_id: UUID):
+    def _is_attested_vote(election_id: UUID | str):
         """SQL predicate excluding votes that belong to a pending paper batch."""
         pending_batch = select(ManualBallotBatch.id).where(
             ManualBallotBatch.id == Vote.manual_batch_id,
@@ -736,7 +737,7 @@ class ElectionService:
         return None if election.anonymous_voting else ip_address
 
     @staticmethod
-    def _audit_voter(election: "Election", user_id: UUID) -> Optional[str]:
+    def _audit_voter(election: "Election", user_id: UUID | str) -> Optional[str]:
         """User to record on a voter-action audit event, or None.
 
         Same reasoning as ``_audit_ip``: an anonymous vote row stores only a
@@ -1170,9 +1171,9 @@ class ElectionService:
     async def check_in_attendee(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: UUID,
-        checked_in_by: UUID,
+        checked_in_by: UUID | str,
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """
         Check in a member as present at the meeting for this election.
@@ -1237,9 +1238,9 @@ class ElectionService:
     async def remove_attendee(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: UUID,
-        removed_by: UUID,
+        removed_by: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """
         Remove a member from the attendance list.
@@ -1280,7 +1281,7 @@ class ElectionService:
         return True, None
 
     async def get_attendees(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Optional[List[Dict]]:
         """Get the attendance list for an election."""
         result = await self.db.execute(
@@ -1410,9 +1411,9 @@ class ElectionService:
 
     async def check_voter_eligibility(
         self,
-        user_id: UUID,
+        user_id: UUID | str,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         position: Optional[str] = None,
     ) -> VoterEligibility:
         """
@@ -1758,11 +1759,11 @@ class ElectionService:
 
     async def cast_vote(
         self,
-        user_id: UUID,
+        user_id: UUID | str,
         election_id: UUID,
         candidate_id: UUID,
         position: Optional[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         vote_rank: Optional[int] = None,
@@ -1974,7 +1975,7 @@ class ElectionService:
     async def _validate_vote_limits(
         self,
         election: Election,
-        user_id: UUID,
+        user_id: UUID | str,
         candidate_id: UUID,
         position: Optional[str],
         vote_rank: Optional[int],
@@ -2046,8 +2047,8 @@ class ElectionService:
 
     async def _get_user_votes(
         self,
-        user_id: UUID,
-        election_id: UUID,
+        user_id: UUID | str,
+        election_id: UUID | str,
         election: Optional[Election] = None,
         for_update: bool = False,
     ) -> List[Vote]:
@@ -2077,7 +2078,7 @@ class ElectionService:
         items: List[Vote] = result.scalars().all()
         return items
 
-    def _voter_identity_filter(self, election: Election, user_id: UUID):
+    def _voter_identity_filter(self, election: Election, user_id: UUID | str):
         """The one definition of "rows this member cast in this election".
 
         Every vote row carries ``voter_hash`` — the in-app path, the proxy
@@ -2160,7 +2161,7 @@ class ElectionService:
 
     @staticmethod
     def _compute_vote_dedup_hash(
-        election_id: UUID,
+        election_id: UUID | str,
         voter_id_or_hash: str,
         position: Optional[str],
         discriminator: str = "",
@@ -2334,7 +2335,7 @@ class ElectionService:
     async def verify_vote_integrity(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         *,
         audit: bool = True,
     ) -> Dict:
@@ -2579,9 +2580,9 @@ class ElectionService:
     async def soft_delete_vote(
         self,
         vote_id: UUID,
-        deleted_by: UUID,
+        deleted_by: UUID | str,
         reason: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | str | None = None,
         election_id: Optional[UUID] = None,
     ) -> Optional[Vote]:
         """Soft-delete a vote with audit trail instead of hard-deleting.
@@ -2642,7 +2643,7 @@ class ElectionService:
         return vote
 
     async def get_election_forensics(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Optional[Dict]:
         """
         Aggregate all forensic data for an election into a single report.
@@ -3052,7 +3053,7 @@ class ElectionService:
         return {batch_id: count for batch_id, count in result.all()}
 
     async def _count_eligible_voters(
-        self, election: Election, organization_id: UUID
+        self, election: Election, organization_id: UUID | str
     ) -> int:
         """Count voters eligible for this election (turnout/quorum denominator).
 
@@ -3126,9 +3127,9 @@ class ElectionService:
 
     async def get_election_results(
         self,
-        election_id: UUID,
-        organization_id: UUID,
-        user_id: Optional[UUID] = None,
+        election_id: UUID | str,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
         _internal_bypass_visibility: bool = False,
     ) -> Optional[ElectionResults]:
         """
@@ -3733,7 +3734,7 @@ class ElectionService:
         return results
 
     async def get_election_stats(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Optional[ElectionStats]:
         """
         Get election statistics including ballot counts
@@ -3814,7 +3815,7 @@ class ElectionService:
         )
 
     async def get_non_voters(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> List[Dict]:
         """Return list of eligible voters who have not yet cast a vote.
 
@@ -3887,7 +3888,7 @@ class ElectionService:
     async def remind_non_voters(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: Optional[str] = None,
         subject: Optional[str] = None,
         message: Optional[str] = None,
@@ -4128,7 +4129,7 @@ class ElectionService:
         return f"{local:%Y-%m-%d %H:%M %Z}"
 
     async def _announce_nominations_open(
-        self, election, organization_id: UUID, acting_user_id: Optional[str]
+        self, election, organization_id: UUID | str, acting_user_id: Optional[str]
     ) -> None:
         """Email active members that the nomination phase is open.
 
@@ -4219,7 +4220,7 @@ class ElectionService:
             )
 
     async def _notify_proxy_delegator(
-        self, election, organization_id: UUID, delegating_user, proxy_user
+        self, election, organization_id: UUID | str, delegating_user, proxy_user
     ) -> None:
         """Tell the delegating member a proxy was authorized for them, and
         on an anonymous election that the proxy ballot is attributable.
@@ -4271,7 +4272,9 @@ class ElectionService:
                 f"Proxy delegator notice failed | election={election.id} error={e}"
             )
 
-    async def _notify_nominee(self, election, candidate, organization_id: UUID) -> None:
+    async def _notify_nominee(
+        self, election, candidate, organization_id: UUID | str
+    ) -> None:
         """Email a third-party nominee that they must accept or decline.
 
         Best-effort: a mail failure must never fail the nomination itself —
@@ -4342,7 +4345,7 @@ class ElectionService:
     async def open_nominations(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         acting_user_id: Optional[str] = None,
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Move a DRAFT election into the NOMINATIONS phase.
@@ -4402,7 +4405,7 @@ class ElectionService:
         return election, None
 
     async def close_nominations(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Close the nomination phase, returning the election to DRAFT.
 
@@ -4454,7 +4457,7 @@ class ElectionService:
     async def create_nomination(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         nominator_id: str,
         position: str,
         nominee_user_id: Optional[str] = None,
@@ -4706,7 +4709,7 @@ class ElectionService:
     async def respond_to_nomination(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         candidate_id: UUID,
         user_id: str,
         accept: bool,
@@ -4792,7 +4795,7 @@ class ElectionService:
     async def record_manual_ballots(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         recorded_by: str,
         entries: List[Dict],
         notes: Optional[str] = None,
@@ -5048,7 +5051,7 @@ class ElectionService:
     async def attest_manual_ballot_batch(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         batch_id: str,
         attested_by: str,
     ) -> Tuple[Optional[Dict], Optional[str]]:
@@ -5184,7 +5187,7 @@ class ElectionService:
         )
 
     async def list_manual_ballot_batches(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> List[Dict]:
         """All paper-tally batches for an election, newest first.
 
@@ -5281,7 +5284,7 @@ class ElectionService:
     async def void_manual_ballot_batch(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         batch_id: str,
         deleted_by: str,
         reason: str,
@@ -5391,7 +5394,7 @@ class ElectionService:
     async def clone_election(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         created_by: str,
         title: str,
         start_date: datetime,
@@ -5518,7 +5521,7 @@ class ElectionService:
     async def merge_write_in_candidates(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         source_candidate_ids: List[str],
         target_candidate_id: str,
         merged_by: str,
@@ -5589,7 +5592,7 @@ class ElectionService:
         return len(sources), None
 
     async def build_printable_ballot_pdf(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[BytesIO], Optional[str], str]:
         """Render the official blank paper ballot for in-room voting.
 
@@ -5699,7 +5702,7 @@ class ElectionService:
         return buf, None, f"ballot_{safe_title}.pdf"
 
     async def build_certified_results_pdf(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[BytesIO], Optional[str], str]:
         """Render the certified results package for a CLOSED election.
 
@@ -6097,7 +6100,7 @@ class ElectionService:
         return actions
 
     async def _check_and_create_runoff(
-        self, election: Election, organization_id: UUID
+        self, election: Election, organization_id: UUID | str
     ) -> Optional[Election]:
         """Check if a runoff is needed and create it if so"""
         # A rollback CLOSED->OPEN leaves ``runoff_round`` at 0 and the child
@@ -6392,8 +6395,8 @@ class ElectionService:
     async def close_election(
         self,
         election_id: UUID,
-        organization_id: UUID,
-        closed_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        closed_by: UUID | str | None = None,
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Close an election and finalize results, creating runoff if needed.
 
@@ -6578,7 +6581,7 @@ class ElectionService:
         return election, None
 
     async def _sync_package_statuses(
-        self, election: Election, organization_id: UUID
+        self, election: Election, organization_id: UUID | str
     ) -> None:
         """Update ProspectElectionPackage statuses based on vote outcomes.
 
@@ -6749,7 +6752,7 @@ class ElectionService:
         return dropped
 
     async def open_election(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Open an election for voting"""
         # SELECT ... FOR UPDATE prevents concurrent open calls from
@@ -6861,8 +6864,8 @@ class ElectionService:
     async def rollback_election(
         self,
         election_id: UUID,
-        organization_id: UUID,
-        performed_by: UUID,
+        organization_id: UUID | str,
+        performed_by: UUID | str,
         reason: str,
     ) -> Tuple[Optional[Election], int, Optional[str]]:
         """
@@ -6942,7 +6945,7 @@ class ElectionService:
                             superseded_at=now.replace(microsecond=0),
                         )
                     )
-                    tokens_invalidated = invalidate_result.rowcount or 0
+                    tokens_invalidated = rows_affected(invalidate_result) or 0
             to_status = "open"
             new_status = ElectionStatus.OPEN
             # The reopened election has not closed yet; the eventual re-close
@@ -7040,8 +7043,8 @@ class ElectionService:
     async def _notify_leadership(
         self,
         election: Election,
-        performed_by: UUID,
-        organization_id: UUID,
+        performed_by: UUID | str,
+        organization_id: UUID | str,
         reason: str,
         *,
         template_type: EmailTemplateType,
@@ -7177,8 +7180,8 @@ class ElectionService:
     async def _notify_leadership_of_rollback(
         self,
         election: Election,
-        performed_by: UUID,
-        organization_id: UUID,
+        performed_by: UUID | str,
+        organization_id: UUID | str,
         from_status: str,
         to_status: str,
         reason: str,
@@ -7231,8 +7234,8 @@ class ElectionService:
     async def _notify_leadership_of_deletion(
         self,
         election: Election,
-        performed_by: UUID,
-        organization_id: UUID,
+        performed_by: UUID | str,
+        organization_id: UUID | str,
         reason: str,
         vote_count: int = 0,
     ) -> int:
@@ -7262,9 +7265,9 @@ class ElectionService:
 
     async def _generate_voting_token(
         self,
-        user_id: UUID,
+        user_id: UUID | str,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         election_end_date: datetime,
         anonymity_salt: str = "",
         is_test: bool = False,
@@ -7353,7 +7356,7 @@ class ElectionService:
             .where(VotingToken.expires_at > now)
             .values(expires_at=now, superseded_at=now)
         )
-        return result.rowcount or 0
+        return rows_affected(result) or 0
 
     def _retired_by_reopen(self, election: Election, retired_at: Any) -> bool:
         """Whether links retired at ``retired_at`` were retired by a
@@ -7485,12 +7488,12 @@ class ElectionService:
     async def add_proxy_authorization(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         delegating_user_id: UUID,
         proxy_user_id: UUID,
         proxy_type: str,
         reason: str,
-        authorized_by: UUID,
+        authorized_by: UUID | str,
         anonymity_acknowledged: bool = False,
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """
@@ -7645,9 +7648,9 @@ class ElectionService:
     async def revoke_proxy_authorization(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         authorization_id: str,
-        revoked_by: UUID,
+        revoked_by: UUID | str,
     ) -> Tuple[bool, Optional[str]]:
         """Revoke a proxy authorization. Cannot revoke if the proxy vote has already been cast."""
         result = await self.db.execute(
@@ -7701,7 +7704,7 @@ class ElectionService:
         return True, None
 
     async def get_proxy_authorizations(
-        self, election_id: UUID, organization_id: UUID
+        self, election_id: UUID, organization_id: UUID | str
     ) -> Optional[Dict]:
         """Return all proxy authorizations for an election plus the org-level enabled flag."""
         result = await self.db.execute(
@@ -7729,12 +7732,12 @@ class ElectionService:
 
     async def cast_proxy_vote(
         self,
-        proxy_user_id: UUID,
+        proxy_user_id: UUID | str,
         election_id: UUID,
         candidate_id: UUID,
         proxy_authorization_id: str,
         position: Optional[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         vote_rank: Optional[int] = None,
@@ -7943,7 +7946,7 @@ class ElectionService:
     async def send_ballot_emails(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         recipient_user_ids: Optional[List[UUID]] = None,
         subject: Optional[str] = None,
         message: Optional[str] = None,
@@ -8529,7 +8532,7 @@ class ElectionService:
     async def generate_and_send_election_report(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         requested: bool = False,
     ) -> Tuple[bool, str]:
         """
@@ -8712,7 +8715,7 @@ class ElectionService:
     async def get_package_recipients(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         mode: str,
     ) -> Tuple[Optional[List[Dict]], Optional[str]]:
         """Resolve a prefill recipient list for the pre-meeting package modal.
@@ -8769,7 +8772,7 @@ class ElectionService:
     async def build_pre_meeting_package_pdf(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         include_ineligibility_detail: bool = False,
     ) -> Tuple[Optional[BytesIO], Optional[str], str]:
         """Assemble package data and render the PDF.
@@ -8942,8 +8945,8 @@ class ElectionService:
     async def generate_and_send_pre_meeting_package(
         self,
         election_id: UUID,
-        organization_id: UUID,
-        sent_by: UUID,
+        organization_id: UUID | str,
+        sent_by: UUID | str,
         recipient_emails: List[str],
         message: Optional[str] = None,
         include_full_roster: bool = False,
@@ -9107,7 +9110,7 @@ class ElectionService:
     async def send_eligibility_summary_email(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         sent_count: int,
         skipped_count: int,
         skipped_details: List[Dict],
@@ -10611,7 +10614,7 @@ class ElectionService:
         return auth, None
 
     async def get_my_proxy_authorizations(
-        self, election_id: UUID, organization_id: UUID, user_id: UUID
+        self, election_id: UUID, organization_id: UUID | str, user_id: UUID | str
     ) -> Optional[Dict]:
         """The live authorizations naming ``user_id`` as proxy holder, for
         the Cast Vote tab's "voting for" choice. None if no such election."""
@@ -10680,9 +10683,9 @@ class ElectionService:
 
     async def get_member_ballot(
         self,
-        user_id: UUID,
+        user_id: UUID | str,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         proxy_authorization_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """The ballot a signed-in member votes in the app: every contest
@@ -10763,9 +10766,9 @@ class ElectionService:
 
     async def submit_member_ballot(
         self,
-        user_id: UUID,
+        user_id: UUID | str,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         votes: List[Dict],
         proxy_authorization_id: Optional[str] = None,
         ip_address: Optional[str] = None,
@@ -10958,7 +10961,7 @@ class ElectionService:
     async def get_eligibility_roster(
         self,
         election_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Dict:
         """
         Build a full roster of all active members with per-ballot-item

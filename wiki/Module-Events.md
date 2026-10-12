@@ -70,7 +70,7 @@ requests, templates, analytics, and the public outreach request pipeline.
   attendance credit, and generating a **course cohort** creates one event per
   class of a multi-class course, each with its linked training session and the
   roster already RSVP'd — see
-  [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
+  [Module-Training](Module-Training#multi-class-courses--cohorts)
 - **Admin hours integration** — event types and custom categories can be mapped
   to admin hours categories so attendance credits administrative hours
 - **Custom event categories** — organization-specific categories with color
@@ -847,7 +847,7 @@ large messages.
 - **Training sessions** — a Training event can generate a linked training
   session (`TrainingSessionLinkageCard`); finalizing attendance writes the
   training records. Course cohorts generate events in the other direction —
-  see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05).
+  see [Module-Training](Module-Training#multi-class-courses--cohorts).
 - **Admin hours** — `event_hour_mappings` map an event type or custom category
   to an admin hours category with a percentage split (e.g. 70% Training, 30%
   Professional Development). Configured in **Event settings → Hour Tracking**.
