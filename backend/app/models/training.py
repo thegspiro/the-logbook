@@ -2865,6 +2865,15 @@ class TrainingSubmission(Base):
     """
 
     __tablename__ = "training_submissions"
+    # Lets the two display names below be declared as plain attributes rather
+    # than columns. Anything else on this class still needs Mapped[...].
+    __allow_unmapped__ = True
+
+    # Not stored. TrainingSubmissionService._attach_submitter_names resolves
+    # them for the review queue, which TrainingSubmissionResponse reads with
+    # from_attributes; the model has no relationship to User to read them from.
+    submitter_name: Optional[str] = None
+    recorder_name: Optional[str] = None
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
