@@ -2,32 +2,16 @@
 
 **[🏠 Home](Home)**
 
-**[Recent changes (Sep 24 – Oct 4, 2026)](Recent-Changes-2026-09-24-to-10-04)**
-[· Oct 11–12 detail](Recent-Changes-2026-10-11-to-10-12)
-[· Oct 8–11 detail](Recent-Changes-2026-10-08-to-10-11)
-[· Oct 7–8 detail](Recent-Changes-2026-10-07-to-10-08)
-[· Oct 6–7 detail](Recent-Changes-2026-10-06-to-10-07)
-[· Oct 5–6 detail](Recent-Changes-2026-10-05-to-10-06)
-[· Oct 4–5 detail](Recent-Changes-2026-10-04-to-10-05)
-[· Oct 3–4 detail](Recent-Changes-2026-10-03-to-10-04)
-[· Sep 15–23 detail](Recent-Changes-2026-09-15-to-09-23)
-[· Sep 12–15 detail](Recent-Changes-2026-09-12-to-09-15)
-[· Sep 6–12 detail](Recent-Changes-2026-09-06-to-09-12)
-[· Aug 31 – Sep 6 detail](Recent-Changes-2026-08-31-to-09-06)
-[· Aug 24–31 detail](Recent-Changes-2026-08-24-to-31)
-[· Aug 23–24 detail](Recent-Changes-2026-08-23-to-24)
-[· Aug 19–23 detail](Recent-Changes-2026-08-19-to-23)
-[· Aug 17–19 detail](Recent-Changes-2026-08-17-to-19)
-[· Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16)
-[· Aug 15–16 detail](Recent-Changes-2026-08-15-to-16)
-[· Aug 12–14 detail](Recent-Changes-2026-08-12-to-14)
+**Recent changes**
+[· October 2026](Recent-Changes-2026-10)
+[· September 2026](Recent-Changes-2026-09)
+[· August 2026](Recent-Changes-2026-08)
 
 ---
 
 ### 🎯 Getting Started
 
 - [Installation](Installation)
-- [Unraid Quick Start](Unraid-Quick-Start)
 - [Onboarding](Onboarding)
 - [Quick Reference](Quick-Reference)
 
@@ -109,6 +93,8 @@
 - [API Docs](API-Reference)
 - [Database Schema](Database-Schema)
 - [Training — Developer](Module-Training-Developer)
+- [Events — Developer](Module-Events-Developer)
+- [Elections — Developer](Module-Elections-Developer)
 - [Role System](Role-System)
 - [Tech Stack](Technology-Stack)
 

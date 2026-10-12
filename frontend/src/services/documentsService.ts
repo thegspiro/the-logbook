@@ -24,6 +24,9 @@ export const documentsService = {
     color?: string | undefined;
     icon?: string | undefined;
     parent_id?: string | undefined;
+    visibility?: 'organization' | 'leadership' | undefined;
+    allowed_roles?: string[] | null | undefined;
+    required_permissions?: string[] | null | undefined;
   }): Promise<DocumentFolder> {
     const response = await api.post<DocumentFolder>('/documents/folders', data);
     return response.data;
@@ -31,7 +34,8 @@ export const documentsService = {
 
   /**
    * Update payload: an omitted key is left alone, `null` clears it
-   * (`description`, `allowed_roles`, `parent_id` — null moves to the top level).
+   * (`description`, `allowed_roles`, `required_permissions`, `parent_id` —
+   * null moves to the top level).
    */
   async updateFolder(
     folderId: string,
@@ -42,6 +46,7 @@ export const documentsService = {
       parent_id: string | null;
       visibility: 'organization' | 'leadership';
       allowed_roles: string[] | null;
+      required_permissions: string[] | null;
     }>
   ): Promise<DocumentFolder> {
     const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);

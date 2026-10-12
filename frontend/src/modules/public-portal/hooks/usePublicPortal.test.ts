@@ -135,7 +135,6 @@ describe('usePublicPortal hooks', () => {
         organization_id: 'org-1',
         key_prefix: 'pk_live',
         name: 'reporting',
-        rate_limit: null,
         rate_limit_override: null,
         effective_rate_limit: 1000,
         expires_at: null,

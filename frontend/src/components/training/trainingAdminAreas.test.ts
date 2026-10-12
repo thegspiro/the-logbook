@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { AdminAttentionItem } from '../../types/adminHub';
-import { TRAINING_ADMIN_AREAS, attentionCountsByTab, resolveTrainingAdminLocation } from './trainingAdminAreas';
+import { PracticalSkillsMethod } from '../../constants/enums';
+import {
+  TRAINING_ADMIN_AREAS,
+  attentionCountsByTab,
+  isHiddenByPracticalSkills,
+  resolveTrainingAdminLocation,
+  trainingAdminAreasFor,
+} from './trainingAdminAreas';
 
 const attention = (href: string, count: number): AdminAttentionItem => ({
   key: href,
@@ -99,5 +106,50 @@ describe('attentionCountsByTab', () => {
         attention('/training/admin?page=records&tab=nope', 1),
       ])
     ).toEqual({});
+  });
+});
+
+describe('the practical-skills method', () => {
+  const evaluationIds = (method: PracticalSkillsMethod | null) =>
+    trainingAdminAreasFor(method)
+      .find((area) => area.id === 'evaluations')
+      ?.destinations.map((destination) => destination.id);
+
+  it('leaves out the sign-off catalog for a Skills Testing department', () => {
+    expect(evaluationIds(PracticalSkillsMethod.SKILLS_TESTING)).toEqual(['knowledge-tests', 'templates', 'tests']);
+  });
+
+  it('leaves out the skills-test screens for a shift sign-off department', () => {
+    expect(evaluationIds(PracticalSkillsMethod.SHIFT_SIGNOFFS)).toEqual(['skill-evaluations', 'knowledge-tests']);
+  });
+
+  // An unknown answer must not hide a system the department may be running.
+  it('hides nothing while the method is unknown', () => {
+    expect(evaluationIds(null)).toEqual(['skill-evaluations', 'knowledge-tests', 'templates', 'tests']);
+    expect(isHiddenByPracticalSkills('tests', null)).toBe(false);
+  });
+
+  it('touches no destination outside the two systems', () => {
+    const all = (areas: typeof TRAINING_ADMIN_AREAS) => areas.flatMap((area) => area.destinations).length;
+    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SKILLS_TESTING))).toBe(all(TRAINING_ADMIN_AREAS) - 1);
+    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS))).toBe(all(TRAINING_ADMIN_AREAS) - 2);
+  });
+
+  // A bookmark or attention link to a hidden destination must not open a
+  // screen the department switched off.
+  it('sends a link to a hidden destination to its area instead', () => {
+    const areas = trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS);
+    expect(resolveTrainingAdminLocation('evaluations', 'tests', areas)).toEqual({
+      area: 'evaluations',
+      tab: 'skill-evaluations',
+    });
+    expect(resolveTrainingAdminLocation(null, 'templates', areas)).toEqual({ area: 'dashboard', tab: 'overview' });
+  });
+
+  it('offers the setting itself under Settings & Data', () => {
+    expect(resolveTrainingAdminLocation('settings', 'practical-skills')).toEqual({
+      area: 'settings',
+      tab: 'practical-skills',
+    });
   });
 });

@@ -125,6 +125,7 @@ import {
 import {
   CHECK_TYPES,
   CHECK_TYPE_HELP,
+  CHECK_TYPE_SUMMARY,
   LEVEL_UNIT_PRESETS,
   POSITIONS,
   apparatusTypeLabel,
@@ -3261,313 +3262,280 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Item Row
   // ---------------------------------------------------------------------------
 
-  const renderItemEditorFields = (compIdx: number, itemIdx: number, item: ItemFormState, isHeader: boolean) => (
-    <div className="space-y-3">
-      <h3 className="text-theme-text-primary text-sm font-semibold sm:hidden">Essentials</h3>
-      {/* Name + Description */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
-            value={item.name}
-            onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
-          />
-        </div>
-        <div className="hidden sm:block">
-          <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
-            value={item.description}
-            onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
-          />
-        </div>
-      </div>
-
-      {!isHeader && (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Check Type */}
-            <div>
-              <label className={labelClass}>Check Type</label>
-              <select
-                className={selectClass}
-                value={item.checkType}
-                onChange={(e) =>
-                  updateItemFieldWithAutoSave(compIdx, itemIdx, {
-                    checkType: e.target.value as ItemFormState['checkType'],
-                  })
-                }
-              >
-                {CHECK_TYPES.map((ct) => (
-                  <option key={ct.value} value={ct.value}>
-                    {ct.label}
-                    {CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]
-                      ? ` — ${CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]}`
-                      : ''}
-                  </option>
-                ))}
-              </select>
-              {CHECK_TYPE_HELP[item.checkType] && (
-                <p className="text-theme-text-muted mt-1 text-[10px] leading-tight">
-                  {CHECK_TYPE_HELP[item.checkType]}
-                </p>
-              )}
-            </div>
-
-            {/* Required */}
-            <div className="flex items-end pb-2">
-              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className={checkboxClass}
-                  checked={item.isRequired}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })}
-                />
-                Required
-              </label>
-            </div>
-
-            {(item.checkType === 'count' || item.checkType === 'level' || item.checkType === 'expiry') && (
-              <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden">
-                Check settings
-              </h3>
-            )}
-
-            {/* Conditional: Quantity */}
-            {item.checkType === 'count' && (
-              <>
-                <div>
-                  <label className={labelClass}>Expected Qty</label>
-                  <p className="text-theme-text-secondary mb-1 text-xs">How many should be on the apparatus</p>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min="0"
-                    placeholder="0"
-                    value={item.expectedQuantity}
-                    onChange={(e) =>
-                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Min to Pass</label>
-                  <p className="text-theme-text-secondary mb-1 text-xs">Below this count = auto-fail</p>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min="0"
-                    placeholder="0"
-                    value={item.requiredQuantity}
-                    onChange={(e) =>
-                      updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>
-                    <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
-                    Critical Min
-                  </label>
-                  <p className="text-theme-text-secondary mb-1 text-xs">Below this = urgent alert to leadership</p>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min="0"
-                    placeholder="0"
-                    value={item.criticalMinimumQuantity}
-                    onChange={(e) =>
-                      updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
-                    }
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Conditional: Level */}
-            {item.checkType === 'level' && (
-              <>
-                <div>
-                  <label className={labelClass}>Min Level</label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min="0"
-                    step="0.1"
-                    placeholder="0"
-                    value={item.minLevel}
-                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Unit</label>
-                  <div className="flex gap-1.5">
-                    <select
-                      className={selectClass}
-                      value={
-                        LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number])
-                          ? item.levelUnit
-                          : '__custom__'
-                      }
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val !== '__custom__') {
-                          updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
-                        }
-                      }}
-                    >
-                      {LEVEL_UNIT_PRESETS.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                      <option value="__custom__">Custom...</option>
-                    </select>
-                    {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number]) && (
-                      <input
-                        type="text"
-                        className={inputClass}
-                        placeholder="Custom unit"
-                        value={item.levelUnit}
-                        onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
-                      />
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Conditional: Serial/Lot */}
-            {(item.checkType === 'expiry' || item.checkType === 'count') && (
-              <>
-                <div>
-                  <label className={labelClass}>Serial #</label>
-                  <input
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    type="text"
-                    className={inputClass}
-                    placeholder="Serial number"
-                    value={item.serialNumber}
-                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Lot #</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Lot number"
-                    value={item.lotNumber}
-                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Image URL */}
-            <div className="hidden sm:block">
-              <label className={labelClass}>
-                <Image className="mr-1 inline h-3.5 w-3.5" />
-                Image URL
-              </label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="https://..."
-                value={item.imageUrl}
-                onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden">
-            Inventory and expiration
-          </h3>
-
-          {/* Inventory link — connects to the catalog for ready-stock + swaps */}
+  /**
+   * `phone` is the full-screen editor below 640px. It pairs the short fields
+   * two to a row, uses one-line help, and turns Required into a switch row;
+   * the panel layout from 640px up is untouched. Field hints sit under the
+   * input there rather than above it, so a pair's two inputs line up even
+   * when one hint wraps and the other does not.
+   */
+  const renderItemEditorFields = (
+    compIdx: number,
+    itemIdx: number,
+    item: ItemFormState,
+    isHeader: boolean,
+    phone = false
+  ) => {
+    const fieldHint = (text: string) => (
+      <p
+        className={
+          phone ? 'text-theme-text-muted mt-1 text-[11px] leading-tight' : 'text-theme-text-secondary mb-1 text-xs'
+        }
+      >
+        {text}
+      </p>
+    );
+    const requiredLabelId = `item-required-${item.id ?? item.clientKey}`;
+    return (
+      <div className="space-y-3">
+        <h3 className="text-theme-text-primary text-sm font-semibold sm:hidden">Essentials</h3>
+        {/* Name + Description */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>
-              <Package className="mr-1 inline h-3.5 w-3.5" />
-              Linked Inventory Item
-            </label>
-            <InventoryItemPicker
-              value={item.inventoryItemId || undefined}
-              canCreateInventory={canManageInventory}
-              canCreateMedical={canManageMedical}
-              searchScope={catalogScope}
-              createTrackingType={trackingTypeForCheck(item.checkType)}
-              onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
+            <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
+              value={item.name}
+              onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
             />
-            <p className="text-theme-text-muted mt-1 text-[11px]">
-              Link to track replacement stock and enable lot swaps during checks. The count and minimum above stay on
-              this position — the same item can be stocked in other places, each counted on its own.
-            </p>
           </div>
-
-          {/* Expiration row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className={checkboxClass}
-                checked={item.hasExpiration}
-                onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })}
-              />
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Has Expiration
-            </label>
-            {item.hasExpiration && (
-              <>
-                <div>
-                  <label className={labelClass}>Expiration Date</label>
-                  <input
-                    type="date"
-                    className={inputClass}
-                    value={item.expirationDate}
-                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Warning Days</label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    min="0"
-                    placeholder="30"
-                    value={item.expirationWarningDays}
-                    onChange={(e) =>
-                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
-                    }
-                  />
-                </div>
-              </>
-            )}
+          <div className="hidden sm:block">
+            <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
+              value={item.description}
+              onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
+            />
           </div>
+        </div>
 
-          <details className="border-theme-surface-border border-t pt-1 sm:hidden">
-            <summary className="text-theme-text-primary flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold [&::-webkit-details-marker]:hidden">
-              Optional details
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </summary>
-            <div className="space-y-3 pb-2">
-              <div>
-                <label className={labelClass}>Description</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  placeholder="Optional description"
-                  value={item.description}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
-                />
+        {!isHeader && (
+          <>
+            <div
+              className={
+                phone ? 'grid grid-cols-2 gap-x-3 gap-y-4' : 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4'
+              }
+            >
+              {/* Check Type */}
+              <div className={phone ? 'col-span-2' : undefined}>
+                <label className={labelClass}>Check Type</label>
+                <select
+                  className={selectClass}
+                  value={item.checkType}
+                  onChange={(e) =>
+                    updateItemFieldWithAutoSave(compIdx, itemIdx, {
+                      checkType: e.target.value as ItemFormState['checkType'],
+                    })
+                  }
+                >
+                  {CHECK_TYPES.map((ct) => (
+                    <option key={ct.value} value={ct.value}>
+                      {ct.label}
+                      {CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]
+                        ? ` — ${CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]}`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+                {phone
+                  ? CHECK_TYPE_SUMMARY[item.checkType] && (
+                      <p className="text-theme-text-muted mt-1 text-xs">{CHECK_TYPE_SUMMARY[item.checkType]}</p>
+                    )
+                  : CHECK_TYPE_HELP[item.checkType] && (
+                      <p className="text-theme-text-muted mt-1 text-[10px] leading-tight">
+                        {CHECK_TYPE_HELP[item.checkType]}
+                      </p>
+                    )}
               </div>
-              <div>
+
+              {/* Required */}
+              {phone ? (
+                <div className="col-span-2 flex min-h-11 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p id={requiredLabelId} className="text-theme-text-primary text-sm font-medium">
+                      Required
+                    </p>
+                    <p className="text-theme-text-muted text-xs">The crew must answer it to submit</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={item.isRequired}
+                    aria-labelledby={requiredLabelId}
+                    onClick={() => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: !item.isRequired })}
+                    className="mobile-touch-target flex shrink-0 items-center justify-center"
+                  >
+                    <span className={`toggle-track-sm ${item.isRequired ? 'bg-blue-600' : 'bg-theme-surface-border'}`}>
+                      <span className={`toggle-knob-sm ${item.isRequired ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-end pb-2">
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={item.isRequired}
+                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })}
+                    />
+                    Required
+                  </label>
+                </div>
+              )}
+
+              {(item.checkType === 'count' || item.checkType === 'level' || item.checkType === 'expiry') && (
+                <h3
+                  className={`text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden ${phone ? 'col-span-2' : ''}`}
+                >
+                  Check settings
+                </h3>
+              )}
+
+              {/* Conditional: Quantity */}
+              {item.checkType === 'count' && (
+                <>
+                  <div>
+                    <label className={labelClass}>Expected Qty</label>
+                    {!phone && fieldHint('How many should be on the apparatus')}
+                    <input
+                      type="number"
+                      className={inputClass}
+                      min="0"
+                      placeholder="0"
+                      value={item.expectedQuantity}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
+                      }
+                    />
+                    {phone && fieldHint('Par on the apparatus')}
+                  </div>
+                  <div>
+                    <label className={labelClass}>Min to Pass</label>
+                    {!phone && fieldHint('Below this count = auto-fail')}
+                    <input
+                      type="number"
+                      className={inputClass}
+                      min="0"
+                      placeholder="0"
+                      value={item.requiredQuantity}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
+                      }
+                    />
+                    {phone && fieldHint('Below this fails')}
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
+                      Critical Min
+                    </label>
+                    {!phone && fieldHint('Below this = urgent alert to leadership')}
+                    <input
+                      type="number"
+                      className={inputClass}
+                      min="0"
+                      placeholder="0"
+                      value={item.criticalMinimumQuantity}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
+                      }
+                    />
+                    {phone && fieldHint('Below this alerts leadership')}
+                  </div>
+                </>
+              )}
+
+              {/* Conditional: Level */}
+              {item.checkType === 'level' && (
+                <>
+                  <div>
+                    <label className={labelClass}>Min Level</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      min="0"
+                      step="0.1"
+                      placeholder="0"
+                      value={item.minLevel}
+                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Unit</label>
+                    <div className={phone ? 'flex flex-col gap-1.5' : 'flex gap-1.5'}>
+                      <select
+                        className={selectClass}
+                        value={
+                          LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number])
+                            ? item.levelUnit
+                            : '__custom__'
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val !== '__custom__') {
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
+                          }
+                        }}
+                      >
+                        {LEVEL_UNIT_PRESETS.map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                        <option value="__custom__">Custom...</option>
+                      </select>
+                      {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number]) && (
+                        <input
+                          type="text"
+                          className={inputClass}
+                          placeholder="Custom unit"
+                          value={item.levelUnit}
+                          onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Conditional: Serial/Lot */}
+              {(item.checkType === 'expiry' || item.checkType === 'count') && (
+                <>
+                  {/* A new row on a phone, so Serial and Lot pair with each other
+                      rather than Serial filling the gap beside Critical Min. */}
+                  <div className={phone ? 'col-start-1' : undefined}>
+                    <label className={labelClass}>Serial #</label>
+                    <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      type="text"
+                      className={inputClass}
+                      placeholder="Serial number"
+                      value={item.serialNumber}
+                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Lot #</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="Lot number"
+                      value={item.lotNumber}
+                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Image URL */}
+              <div className="hidden sm:block">
                 <label className={labelClass}>
                   <Image className="mr-1 inline h-3.5 w-3.5" />
                   Image URL
@@ -3581,11 +3549,119 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 />
               </div>
             </div>
-          </details>
-        </>
-      )}
-    </div>
-  );
+
+            <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden">
+              Inventory and expiration
+            </h3>
+
+            {/* Inventory link — connects to the catalog for ready-stock + swaps */}
+            <div>
+              <label className={labelClass}>
+                <Package className="mr-1 inline h-3.5 w-3.5" />
+                Linked Inventory Item
+              </label>
+              <InventoryItemPicker
+                value={item.inventoryItemId || undefined}
+                canCreateInventory={canManageInventory}
+                canCreateMedical={canManageMedical}
+                searchScope={catalogScope}
+                createTrackingType={trackingTypeForCheck(item.checkType)}
+                onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
+              />
+              {phone ? (
+                <p className="text-theme-text-muted mt-1 text-xs">Tracks replacement stock and lot swaps.</p>
+              ) : (
+                <p className="text-theme-text-muted mt-1 text-[11px]">
+                  Link to track replacement stock and enable lot swaps during checks. The count and minimum above stay
+                  on this position — the same item can be stocked in other places, each counted on its own.
+                </p>
+              )}
+            </div>
+
+            {/* Expiration row */}
+            <div
+              className={
+                phone ? 'grid grid-cols-2 gap-x-3 gap-y-3' : 'flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end'
+              }
+            >
+              <label
+                className={`text-theme-text-secondary flex items-center gap-2 text-sm ${phone ? 'col-span-2 min-h-11' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={item.hasExpiration}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })}
+                />
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Has Expiration
+              </label>
+              {item.hasExpiration && (
+                <>
+                  <div>
+                    <label className={labelClass}>Expiration Date</label>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={item.expirationDate}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Warning Days</label>
+                    <input
+                      type="number"
+                      className={inputClass}
+                      min="0"
+                      placeholder="30"
+                      value={item.expirationWarningDays}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <details className="border-theme-surface-border border-t pt-1 sm:hidden">
+              <summary className="text-theme-text-primary flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                Optional details
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </summary>
+              <div className="space-y-3 pb-2">
+                <div>
+                  <label className={labelClass}>Description</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="Optional description"
+                    value={item.description}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    <Image className="mr-1 inline h-3.5 w-3.5" />
+                    Image URL
+                  </label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="https://..."
+                    value={item.imageUrl}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
+                  />
+                </div>
+              </div>
+            </details>
+          </>
+        )}
+      </div>
+    );
+  };
 
   /**
    * One item, edited in place.
@@ -6621,7 +6697,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </header>
                   <div className="modal-content px-4 py-5">
                     <section aria-label="Item editor fields">
-                      {renderItemEditorFields(compIdx, itemIdx, item, item.checkType === 'header')}
+                      {renderItemEditorFields(compIdx, itemIdx, item, item.checkType === 'header', true)}
                     </section>
                   </div>
                   <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4">

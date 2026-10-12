@@ -83,8 +83,9 @@ COPY main.py .
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
-# Operator commands the docs tell an installation to run with `docker exec`
-# (relocate_uploads.py, encrypt_uploads.py, rotate_encryption_key.py, ...).
+# Operator tools run with `docker exec ... python scripts/<name>.py`
+# (relocate_uploads.py, encrypt_uploads.py, rotate_encryption_key.py, ...);
+# docs/UPGRADING.md depends on them being present in the running image.
 # seed_test_users.py is removed: it creates accounts sharing one published
 # password and has no business on a production image.
 COPY scripts/ ./scripts/

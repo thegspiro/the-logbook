@@ -94,7 +94,14 @@ def _nfpa_next_due(mtype, last, last_date, records) -> Optional[date]:
         or unit not in ("days", "weeks", "months", "years")
     ):
         return None
-    due: date = last_date + relativedelta(**{unit: int(value)})
+    step = int(value)
+    interval = {
+        "days": relativedelta(days=step),
+        "weeks": relativedelta(weeks=step),
+        "months": relativedelta(months=step),
+        "years": relativedelta(years=step),
+    }[unit]
+    due: date = last_date + interval
     return due
 
 
@@ -1399,8 +1406,10 @@ class ApparatusService:
                 maintenance.completed_date = today
             maintenance.is_overdue = False
 
-        for field, value in update_data.items():
-            setattr(maintenance, field, value)
+        # `maintenance_type_id` and `is_completed` are Optional in the request
+        # schema but NOT NULL columns, so an explicit null has to be refused here
+        # as a 400; a bare setattr let it reach the commit as an IntegrityError.
+        apply_updates(maintenance, update_data)
 
         # Recheck overdue status
         if (

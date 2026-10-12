@@ -224,6 +224,37 @@ export interface CommunityEngagement {
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';
+
+export type PulseCardId =
+  | 'dues'
+  | 'cash_flow'
+  | 'budget_threshold'
+  | 'grant_deadlines'
+  | 'application_stages'
+  | 'campaign_progress'
+  | 'community_engagement'
+  | 'public_requests';
+
+export interface PulseCardPreference {
+  id: PulseCardId;
+  visible: boolean;
+  title: string | null;
+}
+
+/** A Department pulse layout, written and returned as a whole. */
+export interface DashboardPulseLayout {
+  period: WidgetPeriod | null;
+  cards: PulseCardPreference[];
+}
+
+export interface DashboardPulseResponse {
+  /** Always complete: every card appears exactly once. */
+  layout: DashboardPulseLayout;
+  personal: boolean;
+  organization_default: boolean;
+  /** The member's own stored choice, not completed with the other cards. */
+  personal_layout: DashboardPulseLayout | null;
+}
 export interface MainDashboardWidgets {
   period: WidgetPeriod;
   period_label: string;

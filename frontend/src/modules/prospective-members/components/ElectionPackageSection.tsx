@@ -2,7 +2,7 @@
  * Election Package Section
  *
  * Displays and manages the election package for an applicant
- * that is on the election vote stage. Extracted from ApplicantDetailDrawer.
+ * that is on the election vote stage. Extracted from ApplicantDetailDialog.
  */
 
 import React, { useState, useEffect } from 'react';

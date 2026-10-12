@@ -471,6 +471,16 @@ export const SubmissionStatus = {
 export type SubmissionStatus = (typeof SubmissionStatus)[keyof typeof SubmissionStatus];
 
 // ============================================
+// Training — Practical Skills Method
+// ============================================
+/** Which practical-skills system a department runs; the other is hidden. */
+export const PracticalSkillsMethod = {
+  SKILLS_TESTING: 'skills_testing',
+  SHIFT_SIGNOFFS: 'shift_signoffs',
+} as const;
+export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
+
+// ============================================
 // Scheduling — Assignment Status
 // ============================================
 export const AssignmentStatus = {

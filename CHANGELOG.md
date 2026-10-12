@@ -11660,14 +11660,14 @@ The entries below are dated by when the change actually merged.
 
 **Documentation**
 
-- Published [`docs/CHANGE_AUDIT_2026-08-10_TO_16.md`](docs/CHANGE_AUDIT_2026-08-10_TO_16.md),
+- Published [`docs/CHANGE_AUDIT_2026-08.md`](docs/CHANGE_AUDIT_2026-08.md#six-day-change-and-connection-audit--2026-08-10-through-2026-08-16),
   the six-day frame around the existing three-day audit. It adds what a
   three-day window could not show: the five routes added across the window with
   their real permission gates, the full 28-revision Alembic route from
   `20260809_0002` to the then-head `20260814_0004`, the supply-loop and
   restock data paths, a client-side storage map, and the 08-15 → 08-16 changes
   that had no coverage anywhere. The
-  [three-day audit](docs/CHANGE_AUDIT_2026-08-12_TO_14.md) remains authoritative
+  [three-day audit](docs/CHANGE_AUDIT_2026-08.md#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14) remains authoritative
   for 08-12 → 08-14.
 - **A YouTube script told installers to do the thing that now loses their
   work.** Script 02's Welcome Screen narration read _"the wizard auto-saves your
@@ -11864,7 +11864,7 @@ regression it guards.
   Alembic migration order, end-to-end data paths, organization/permission
   sharing boundaries, operational edge cases, screenshot replacements, and
   YouTube script updates. The narrative audit is
-  [`docs/CHANGE_AUDIT_2026-08-12_TO_14.md`](docs/CHANGE_AUDIT_2026-08-12_TO_14.md);
+  [`docs/CHANGE_AUDIT_2026-08.md`](docs/CHANGE_AUDIT_2026-08.md#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14);
   its generated 879-path net manifest is retained beside it for traceability.
 - Added the same handoff to the repository wiki index and added explicit
   **SCREENSHOT NEEDED** / **REPLACE** and pre-recording script queues so media

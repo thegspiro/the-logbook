@@ -237,10 +237,15 @@ export interface DocumentFolder {
   icon: string;
   parent_id?: string;
   document_count: number;
-  /** Who may open it: every member, leadership only, or its owner (+ leadership). */
+  /** Who may open it: every member, leadership only, or its owner (+ full administrators). */
   visibility?: 'organization' | 'leadership' | 'owner';
   /** Position slugs; when set on an organization folder, only those positions open it. */
   allowed_roles?: string[] | null;
+  /**
+   * Permission names, any one of which a member must also hold. On a built-in
+   * folder these are its module rights, which cannot be changed.
+   */
+  required_permissions?: string[] | null;
   /** Created by the application for a module; cannot be renamed, moved or deleted. */
   is_system?: boolean;
   created_at: string;

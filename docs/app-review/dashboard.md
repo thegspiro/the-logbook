@@ -180,7 +180,7 @@ only.
 The wiki also published `equipment_check.manage` for that section, which is a
 `LEGACY_PERMISSION_ALIASES` entry — it still resolves, but the real name has
 been `inventory.check_manage` since the module segment changed. Corrected.
-`docs/CHANGE_AUDIT_2026-08-19_TO_23.md` carries the same old name and was left
+`docs/CHANGE_AUDIT_2026-08.md` carries the same old name and was left
 alone: it is a dated record of what was true then.
 
 ## Pass 3 flagged

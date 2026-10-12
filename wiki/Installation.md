@@ -1,684 +1,196 @@
-# Installation Guide
+# Installation
 
-This guide covers all installation methods for The Logbook.
+The Logbook runs as a Docker Compose stack: a React frontend served by nginx, a
+FastAPI backend, MySQL 8.0, Redis 7, the ClamAV malware scanner and, in
+production, a nightly backup sidecar. This page helps you pick an install path;
+each platform's full procedure lives on its own page.
 
 ---
 
-## Quick Start (Universal Installer)
+## Choose a Method
 
-**Works on any platform!** The universal installer automatically detects your OS and hardware:
+| Platform                                | Install with                       | Full guide                                                              |
+| --------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+| Linux server, VM, macOS, Windows (WSL2) | `scripts/universal-install.sh`     | [Docker Deployment](Deployment-Docker#install-with-a-script)            |
+| Ubuntu / Debian server                  | `./install.sh --docker`            | [Docker Deployment](Deployment-Docker#install-with-a-script)            |
+| Any Docker host, by hand                | `docker compose`                   | [Docker Deployment](Deployment-Docker#install-manually)                 |
+| Unraid                                  | `unraid/unraid-setup.sh`           | [Unraid Deployment](Deployment-Unraid)                                  |
+| Raspberry Pi 4/5, other ARM64           | `docker compose` with ARM override | [Docker → ARM and Raspberry Pi](Deployment-Docker#arm-and-raspberry-pi) |
+| AWS, Azure, Google Cloud, DigitalOcean  | A VM running one of the above      | [Production → Cloud Platforms](Deployment-Production#cloud-platforms)   |
+| Synology NAS, Proxmox                   | Docker Compose                     | [Production → Cloud Platforms](Deployment-Production#cloud-platforms)   |
+| Local development                       | `npm run dev`                      | [Development Setup](#development-setup)                                 |
+
+Whatever the platform, a deployment that members will use also needs the steps
+in [Production Deployment](Deployment-Production): HTTPS in front of the app,
+backups copied off the host, and the encryption keys stored somewhere safe.
+
+### Requirements
+
+- **4 GB RAM** for a standard install; the malware scanner runs on every
+  install and sets the floor — see
+  [Docker → Memory Profiles](Deployment-Docker#memory-profiles).
+- **Docker Compose v2.24.4 or later** — see
+  [Docker → Requirements](Deployment-Docker#requirements).
+- **A public address** for `FRONTEND_URL`, which every emailed link is built
+  from; a production backend will not start with a `localhost` value.
+- **HTTPS** in front of the app, because production logins need it — see
+  [Production → Startup Security Gate](Deployment-Production#startup-security-gate).
+
+---
+
+## Universal Installer
+
+Detects the OS and CPU architecture, installs Docker if needed, generates
+secrets, writes `.env` and starts the production stack:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh \
+  | bash -s -- --public-url https://logbook.example.org --dir "$HOME/the-logbook"
 ```
 
-This automatically:
+Options, what the script does and does not configure, and the steps to finish
+afterwards: [Docker → Install with a Script](Deployment-Docker#install-with-a-script).
 
-- Detects your OS (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch, macOS)
-- Detects architecture (x86_64, ARM64, ARMv7)
-- Installs Docker if needed
-- Generates secure secrets
-- Configures optimal settings for your hardware
-- Starts all services
-
-**Access:** `http://localhost:3000`
-
----
-
-## Installation Profiles
-
-Choose a profile based on your hardware:
-
-| Profile    | RAM   | Best For                | Command             |
-| ---------- | ----- | ----------------------- | ------------------- |
-| `minimal`  | 1-2GB | Raspberry Pi, small VPS | `--profile minimal` |
-| `standard` | 4GB   | Most deployments        | (default)           |
-| `full`     | 8GB+  | Large organizations     | `--profile full`    |
-
-**Examples:**
+## Unraid
 
 ```bash
-# Raspberry Pi / Low memory (1-2GB)
-curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
-
-# Standard (default, 4GB RAM)
-curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org
-
-# Full with all features (8GB+ RAM)
-curl -sSL .../universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile full
+bash <(curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh)
 ```
 
-`--public-url` (or `LOGBOOK_PUBLIC_URL`) is required. It sets `FRONTEND_URL`,
-which every emailed link (password resets, ballots, reminders) is built from.
-Without it the installer exits before installing anything, unless an existing
-`.env` already has a public `FRONTEND_URL`; a `localhost` or `127.0.0.1` URL is
-refused. A production backend will not start with a loopback `FRONTEND_URL` — unless `ALLOWED_ORIGINS` names a public address, in which case the first such origin is used for links instead (logged at startup; 2026-09-25) —
-see [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
-
----
-
-## Supported Platforms
-
-| Platform                                                 | Architecture  | Profiles          | Status               |
-| -------------------------------------------------------- | ------------- | ----------------- | -------------------- |
-| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64        | All               | Full support         |
-| **macOS** (Intel & Apple Silicon)                        | x86_64, ARM64 | All               | Full support         |
-| **Windows** (WSL2)                                       | x86_64        | All               | Full support         |
-| **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | Full support         |
-| **Raspberry Pi 3**                                       | ARMv7         | minimal           | Limited (1GB RAM)    |
-| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | Full support         |
-| **Azure** (VMs, Container Instances)                     | x86_64        | All               | Full support         |
-| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | Full support         |
-| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | Full support         |
-| **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | Full support         |
-| **Unraid**                                               | x86_64        | standard          | Optimized            |
-| **Kubernetes**                                           | x86_64, ARM64 | standard, full    | Helm chart available |
-
----
-
-## Choose Your Installation Method
-
-| Method                                                      | Best For        | Difficulty |
-| ----------------------------------------------------------- | --------------- | ---------- |
-| **[Universal Installer](#quick-start-universal-installer)** | Any platform    | Easy       |
-| **[Unraid](#unraid-one-command)**                           | Unraid users    | Easy       |
-| **[Docker Compose](#docker-compose)**                       | Manual control  | Moderate   |
-| **[Raspberry Pi](#raspberry-pi)**                           | ARM devices     | Moderate   |
-| **[Cloud Deployment](#cloud-deployment)**                   | AWS, Azure, GCP | Moderate   |
-| **[Development](#development-setup)**                       | Contributors    | Advanced   |
-
----
-
-## Unraid (One Command!)
-
-**Recommended for Unraid users**
-
-```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
-```
-
-This automated script handles everything:
-
-- ✅ Container cleanup
-- ✅ Secure password generation
-- ✅ Directory creation with proper permissions
-- ✅ Build and deployment
-- ✅ Verification
-
-**Access:** `http://YOUR-UNRAID-IP:7880`
-
-**[→ Full Unraid Guide](Unraid-Quick-Start)**
-
----
+The script asks for the public HTTPS URL of your reverse proxy, so set that up
+first. Full procedure: [Unraid Deployment](Deployment-Unraid).
 
 ## Docker Compose
 
-**Recommended for most users**
-
-### Prerequisites
-
-- Docker 20.10+ and Docker Compose 2.0+
-- 2GB RAM minimum (4GB recommended)
-- 10GB disk space
-- Linux, macOS, or Windows with WSL2
-
-### Quick Install
-
 ```bash
-# Clone repository
 git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
-
-# Copy environment file
-cp .env.example .env
-
-# Generate secure keys
-openssl rand -hex 32  # Copy to SECRET_KEY
-openssl rand -hex 32  # Copy to ENCRYPTION_KEY
-openssl rand -hex 16  # Copy to ENCRYPTION_SALT
-openssl rand -base64 32  # Copy to DB_PASSWORD
-
-# Edit .env with your settings
-nano .env
-
-# Start services
+cp .env.example .env    # then edit it — see the full guide
 docker compose up -d
-
-# View logs
-docker compose logs -f
 ```
 
-> **Note:** The bare `docker compose up -d` above runs the **development**
-> configuration. For a production deployment, layer the production override
-> (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`) or
-> pin `COMPOSE_FILE` — see [Production Deployment](#production-deployment) below.
+As written this starts the **development** configuration, which is fine for a
+local trial. A production install layers `docker-compose.prod.yml`; see
+[Docker → Install Manually](Deployment-Docker#install-manually).
 
-### Access Application
+## Raspberry Pi and ARM
 
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:3001
-- **API Docs:** http://localhost:3001/docs _(development only — the production override disables API docs)_
+Raspberry Pi 4 or 5 with 4 GB or more and a 64-bit OS, using the minimal and
+ARM compose overrides: [Docker → ARM and Raspberry Pi](Deployment-Docker#arm-and-raspberry-pi).
 
-### Choosing Your Environment File
+## Cloud and Other Platforms
 
-Two templates are provided:
-
-- **`.env.example`** — Quick-start config (~30 variables). Covers security keys, database, Redis, CORS, ports, basic modules, and email. Sufficient for most deployments. Defaults to `production`.
-- **`.env.example.full`** — Complete reference (~100+ variables). Adds cloud storage (S3, Azure, GCS), OAuth/SSO (Azure AD, Google), SMS (Twilio), HIPAA fine-tuning, IP whitelisting, geofencing, feature flags, and development tools. Defaults to `development`.
-
-Start with `.env.example` unless you know you need advanced settings. You can add variables from `.env.example.full` at any time — they are fully compatible.
-
-### Required Environment Variables
-
-Edit `.env` file:
-
-```bash
-# REQUIRED: Generate these!
-SECRET_KEY=your_generated_secret_key_here
-ENCRYPTION_KEY=your_generated_encryption_key_here
-ENCRYPTION_SALT=your_generated_encryption_salt_here
-DB_PASSWORD=your_generated_db_password_here
-REDIS_PASSWORD=your_generated_redis_password_here
-
-# Database Configuration
-DB_HOST=db
-DB_PORT=3306
-DB_NAME=the_logbook
-DB_USER=logbook_user
-
-# CORS Configuration (update with your IP/domain)
-ALLOWED_ORIGINS=http://localhost:3000
-
-# Public site URL — every link in outgoing email is built from it.
-# With ENVIRONMENT=production a localhost value stops the backend from starting.
-FRONTEND_URL=https://logbook.yourdomain.com
-
-# Application Settings
-ENVIRONMENT=production
-DEBUG=false
-```
-
----
-
-## Raspberry Pi
-
-**For Raspberry Pi 3, 4, or 5**
-
-### Automatic Installation (Recommended)
-
-```bash
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org --profile minimal
-```
-
-### Manual Installation
-
-```bash
-# Clone repository
-git clone https://github.com/thegspiro/the-logbook.git
-cd the-logbook
-
-# Copy and configure environment
-cp .env.example .env
-nano .env  # Edit settings
-
-# Start with ARM + minimal profiles
-docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
-```
-
-### Raspberry Pi Memory Requirements
-
-| Model      | RAM   | Recommended Profile               |
-| ---------- | ----- | --------------------------------- |
-| Pi 3       | 1GB   | `minimal` (limited functionality) |
-| Pi 4 (2GB) | 2GB   | `minimal`                         |
-| Pi 4 (4GB) | 4GB   | `standard`                        |
-| Pi 4 (8GB) | 8GB   | `standard` or `full`              |
-| Pi 5       | 4-8GB | `standard`                        |
-
-### Performance Tips for Raspberry Pi
-
-1. **Use an SSD** - USB 3.0 SSD significantly improves performance over SD card
-2. **Increase swap** - Add 2GB swap for stability
-3. **Use minimal profile** - Reduces memory usage by ~60%
-4. **Disable unused services** - Comment out elasticsearch in compose file
-
----
-
-## Cloud Deployment
-
-### AWS (EC2)
-
-```bash
-# SSH to your EC2 instance, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
-
-# With managed RDS and ElastiCache: set DB_HOST, DB_PORT, REDIS_HOST,
-# REDIS_PORT and the TLS settings in .env (AWS Deployment Guide, Method 2),
-# then layer the external-services override so the bundled ones stay off
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  -f docker-compose.external-services.yml up -d
-```
-
-**Recommended EC2 instances:**
-
-| Instance  | vCPUs | RAM | Profile  |
-| --------- | ----- | --- | -------- |
-| t3.micro  | 2     | 1GB | minimal  |
-| t3.small  | 2     | 2GB | minimal  |
-| t3.medium | 2     | 4GB | standard |
-| t3.large  | 2     | 8GB | full     |
-
-### Azure (Virtual Machines)
-
-```bash
-# SSH to your Azure VM, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
-```
-
-### Google Cloud (Compute Engine)
-
-```bash
-# SSH to your GCE instance, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
-```
-
-### DigitalOcean (Droplets)
-
-```bash
-# SSH to your Droplet, then:
-curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --public-url https://logbook.example.org
-```
-
-**Recommended Droplet sizes:**
-
-| Size      | RAM | Profile  |
-| --------- | --- | -------- |
-| Basic $6  | 1GB | minimal  |
-| Basic $12 | 2GB | minimal  |
-| Basic $24 | 4GB | standard |
-| Basic $48 | 8GB | full     |
-
-### Kubernetes (Helm)
-
-```bash
-# Add Helm repository
-helm repo add the-logbook https://thegspiro.github.io/the-logbook/charts
-helm repo update
-
-# Install with default values
-helm install logbook the-logbook/the-logbook
-
-# Install with custom values
-helm install logbook the-logbook/the-logbook \
-  --set profile=standard \
-  --set ingress.enabled=true \
-  --set ingress.host=logbook.yourdomain.com
-```
-
-See [Deployment Guide](Deployment-Guide) for detailed cloud deployment instructions.
+Cloud VMs, Synology and Proxmox run the Docker Compose stack; managed MySQL and
+Redis are supported through an override. See
+[Production → Cloud Platforms](Deployment-Production#cloud-platforms).
 
 ---
 
 ## Development Setup
 
-**For contributors and developers**
-
-### Prerequisites
-
-- Python 3.13+
-- Node.js 22+
-- MySQL 8.0+ (or MariaDB 10.11+ for ARM/Raspberry Pi)
-- Redis 7+
-
-### Backend Setup
+For contributors, running the backend and frontend directly on the host.
+Prerequisites: Python 3.13+, Node.js 22+, MySQL 8.0 and Redis 7 reachable from
+the host.
 
 ```bash
-# Clone repository
 git clone https://github.com/thegspiro/the-logbook.git
-cd the-logbook/backend
+cd the-logbook
+npm run setup             # npm install + backend pip install + frontend npm install
 
-# Create virtual environment
-python3.13 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# The backend reads .env from its working directory (backend/)
+cp .env.example backend/.env
+# edit backend/.env: secrets, DB_HOST=localhost, REDIS_HOST=localhost
 
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Configure environment
-cp .env.example .env
-nano .env  # Edit with your settings
-
-# Run migrations
-alembic upgrade head
-
-# Start development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+npm run dev               # backend on :3001 (uvicorn --reload), frontend on :3000 (Vite)
 ```
 
-### Frontend Setup
+Open `http://localhost:3000`; Vite proxies `/api` to the backend
+(`VITE_BACKEND_URL`, default `http://localhost:3001`). API docs are at
+`http://localhost:3001/docs` while `ENABLE_DOCS=true`.
 
-```bash
-# In a new terminal
-cd the-logbook/frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-nano .env  # Update VITE_API_URL=http://localhost:3001
-
-# Start development server
-npm run dev
-```
-
-**Access:** http://localhost:5173
-
-**[→ Full Development Guide](Development-Backend)**
+Details: [Backend Development](Development-Backend) ·
+[Frontend Development](Development-Frontend).
 
 ---
 
-## Production Deployment
+## After Installing
 
-### Docker Compose Production
-
-For production you MUST layer the production override on top of the base file —
-the base `docker-compose.yml` alone is a **development** configuration (uvicorn
-`--reload`, source bind-mount, backend port published, API docs enabled, no
-HTTPS enforcement) and skips the startup security gate.
-
-```bash
-# Layer the production override (forces ENVIRONMENT=production, disables --reload
-# and API docs, enforces HTTPS, enables DB/Redis TLS, backend port not published)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
-bare `docker compose ...` command stays hardened; `install.sh` sets this
-automatically. HTTPS/TLS termination itself is handled by a reverse proxy — see
-[SSL/TLS Setup](#ssltls-setup) below. In production/staging the app **refuses to
-start** if required secrets are missing or weak, if `DEBUG` or API docs are
-enabled, or if HTTPS isn't enforced.
-
-### Environment Configuration
-
-Production `.env` checklist:
-
-- [ ] Generated strong `SECRET_KEY` (64+ characters)
-- [ ] Generated strong `ENCRYPTION_KEY` (64+ characters)
-- [ ] Set strong database passwords
-- [ ] Set `ENVIRONMENT=production`
-- [ ] Set `DEBUG=false`
-- [ ] Configured `ALLOWED_ORIGINS` with actual domain
-- [ ] Set `FRONTEND_URL` to the public site URL (otherwise emailed links point at localhost)
-- [ ] Configured SMTP for email (optional)
-- [ ] Set correct timezone in `TZ`
-- [ ] Configured backup schedule
-- [ ] Reviewed all security settings
-
-### SSL/TLS Setup
-
-#### Using Reverse Proxy (Recommended)
-
-```yaml
-# nginx reverse proxy example
-server {
-listen 443 ssl http2;
-server_name logbook.yourdomain.com;
-
-ssl_certificate /path/to/cert.pem;
-ssl_certificate_key /path/to/key.pem;
-
-location / {
-proxy_pass http://localhost:3000;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;
-}
-
-location /api {
-proxy_pass http://localhost:3001;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-}
-}
-```
-
-#### Using Let's Encrypt
-
-```bash
-# With Certbot
-certbot --nginx -d logbook.yourdomain.com
-
-# Auto-renewal
-certbot renew --dry-run
-```
-
----
-
-## Post-Installation
-
-### 1. Complete Onboarding
-
-Navigate to your frontend URL and complete the setup wizard:
-
-1. Create organization
-2. Set up first admin user
-3. Configure security settings
-4. Enable desired modules
-5. Set up integrations (optional)
-
-**[→ Onboarding Guide](Onboarding)**
-
-### 2. Configure Modules
-
-Enable/disable modules based on your needs. Module availability is controlled
-**per organization** inside the app — Organization/Admin Settings → Modules
-(also configurable during onboarding) — and stored in the organization's
-`enabled_modules` setting. There are no `MODULE_*_ENABLED` environment variables
-to set in `.env`.
-
-**[→ Module Configuration](Configuration-Modules)**
-
-### 3. Set Up Backups
-
-```bash
-# Backups run via the `backup` service in docker-compose.prod.yml
-# (or scripts/backup.sh from cron). There is no on/off env flag —
-# enable them by running the production compose profile.
-BACKUP_TIME=02:00            # Daily run time, UTC HH:MM
-BACKUP_RETENTION_DAYS=30     # Prune archives older than this
-VERIFY_EVERY_N_BACKUPS=7     # Automated restore-drill cadence; 0 disables
-```
-
-Every seventh backup, the sidecar loads the fresh dump into a throwaway schema
-and verifies the schema restored — a failed drill fails loudly every night
-until it is fixed. Sync the `backups` volume offsite, and store
-`ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately: a backup without its era's keys
-cannot decrypt encrypted fields. See [docs/BACKUP.md](../docs/BACKUP.md).
-_(2026-07-31)_
-
-Manual backup:
-
-```bash
-./scripts/backup.sh   # host-side script, run from the install directory
-```
-
-### 4. Security Hardening
-
-See **[Security Configuration](Configuration-Security)** for:
-
-- Rate limiting
-- Multi-factor authentication
-- Session security
-- Audit logging
-- HIPAA compliance
+1. **Run the onboarding wizard** at your site's URL: organization, first
+   administrator, security settings, modules. See [Onboarding](Onboarding).
+2. **Store the encryption keys.** Copy `ENCRYPTION_KEY` and `ENCRYPTION_SALT`
+   from `.env` to a password manager or sealed record kept away from the server
+   and its backups. Without them no backup can be decrypted. The app asks you
+   to confirm this during setup.
+3. **Enable modules** per organization in the app (Organization/Admin Settings
+   → Modules). There are no module switches in `.env`. See
+   [Module Configuration](Configuration-Modules).
+4. **Check backups** are running and copied off the host. See
+   [Production → Backup and Recovery](Deployment-Production#backup-and-recovery).
+5. **Review security settings:** [Security Configuration](Configuration-Security)
+   and [Security Overview](Security-Overview).
+6. **Create users and roles:** [Role System](Role-System).
 
 ---
 
 ## Verification
 
-### Health Checks
+Commands for the standard Docker Compose stack, run from the install directory.
+On Unraid use [Unraid → Verify](Deployment-Unraid#verify).
 
 ```bash
-# Backend health
-curl http://localhost:3001/health
-
-# Frontend accessibility
-curl -I http://localhost:3000
-
-# Database connection
-docker compose exec db mysql -u logbook_user -p -e "SELECT 1"
-
-# Redis connection
-docker compose exec redis redis-cli ping
-```
-
-### Container Status
-
-```bash
-# All containers should be "Up" and "healthy"
+# Every service Up; those with a healthcheck show (healthy)
 docker compose ps
 
-# Expected output:
-# logbook-frontend    Up (healthy)
-# logbook-backend     Up (healthy)
-# logbook-db          Up (healthy)
-# logbook-redis       Up (healthy)
+# Backend health, through the frontend's nginx (works in every configuration
+# that publishes the frontend port)
+curl -s http://localhost:3000/health
+# {"status":"healthy","ready":true}
+
+# Recent errors
+docker compose logs --tail=50 backend
 ```
 
-### Log Verification
+What the `/health` states mean:
+[Production → Monitoring](Deployment-Production#monitoring). ClamAV takes a few
+minutes to become healthy on first start.
+
+Direct checks of the data services (container environment supplies the
+credentials):
 
 ```bash
-# Check for errors
-docker compose logs --tail=50 backend
-docker compose logs --tail=50 frontend
-
-# Expected: No ERROR or CRITICAL messages
+docker compose exec mysql sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1"'
+docker compose exec redis sh -c 'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping'
 ```
 
 ---
 
 ## Troubleshooting
 
-If you encounter issues, see:
-
-- **[Troubleshooting Guide](Troubleshooting)** - Common problems
-- **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker problems
-- **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - UI problems
-- **[Backend Diagnostics](Troubleshooting#backend-service-diagnostics)** - API problems
-
-### Common Issues
-
-**Port already in use:**
-
-```bash
-# Change ports in .env
-FRONTEND_PORT=8080
-BACKEND_PORT=8081
-
-# Restart
-docker compose down
-docker compose up -d
-```
-
-**Permission denied:**
-
-```bash
-# Fix permissions
-sudo chown -R $USER:$USER .
-chmod -R 755 .
-```
-
-**Database connection failed:**
-
-```bash
-# Check database is running
-docker compose ps db
-
-# View database logs
-docker compose logs db
-
-# Verify credentials in .env match
-```
+- [Troubleshooting Guide](Troubleshooting)
+- [Container & Docker diagnostics](Troubleshooting#container--docker-diagnostics)
+- [Backend diagnostics](Troubleshooting#backend-service-diagnostics)
+- [Frontend diagnostics](Troubleshooting#frontend--browser-diagnostics)
+- Unraid-specific: [Unraid → Troubleshooting](Deployment-Unraid#troubleshooting)
 
 ---
 
-## Updating
+## Uninstall
 
-### Update to Latest Version
+Back up first if you might want the data
+([Production → Backup and Recovery](Deployment-Production#backup-and-recovery)).
 
 ```bash
 cd the-logbook
 
-# Stop services
-docker compose down
+docker compose down              # stop and remove containers, keep data
+docker compose down -v           # also delete every volume — ALL DATA
+docker compose down --rmi local  # also remove the images the stack built
 
-# Backup first!
-./scripts/backup.sh   # host-side script, run from the install directory
-
-# Pull latest code
-git pull
-
-# Rebuild containers
-docker compose build --no-cache
-
-# Start services
-docker compose up -d
-
-# Run migrations
-docker compose exec backend alembic upgrade head
+cd .. && rm -rf the-logbook      # remove the checkout and its .env
 ```
 
-### Unraid Updates
-
-```bash
-cd /mnt/user/appdata/the-logbook/unraid
-./unraid-setup.sh
-# Choose option 2 (Update)
-```
-
----
-
-## Uninstallation
-
-### Remove Containers
-
-```bash
-# Stop and remove containers
-docker compose down
-
-# Remove volumes (WARNING: deletes all data!)
-docker compose down -v
-
-# Remove images
-docker rmi the-logbook-frontend:local
-docker rmi the-logbook-backend:local
-```
-
-### Remove Files
-
-```bash
-# Development
-rm -rf the-logbook/
-
-# Unraid
-rm -rf /mnt/user/appdata/the-logbook/
-rm -rf /mnt/user/backups/the-logbook/
-```
-
----
-
-## Next Steps
-
-1. **[Complete Onboarding](Onboarding)**
-2. **[Configure Modules](Configuration-Modules)**
-3. **[Set Up Security](Security-Overview)**
-4. **[Create Users](Role-System)**
-5. **[Review Troubleshooting](Troubleshooting)**
+On Unraid, use the setup script's uninstall option:
+[Unraid → Uninstall](Deployment-Unraid#uninstall).
 
 ---
 

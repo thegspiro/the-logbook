@@ -79,6 +79,39 @@ RECOMMENDED ACTIONS:
 
 ---
 
+## Type Checking
+
+### `mypy_ratchet.py`
+
+Runs `python -m mypy app` and compares the error count with
+`backend/mypy-baseline.txt`. The **Backend Type Check** CI job runs it on every
+pull request.
+
+The backend still carries type errors from before mypy was enforced, so a
+zero-error gate cannot be switched on yet. The ratchet fails only when the count
+**rises**: nothing new gets in, and each fix lowers the bar for the next
+change. It compares a count, not the errors themselves, so fixing one error
+while adding another nets to zero and passes. Lowering the baseline whenever
+errors are fixed keeps that slack small.
+
+**Usage:**
+
+```bash
+cd backend
+python scripts/mypy_ratchet.py            # check against the baseline
+python scripts/mypy_ratchet.py --update   # after fixing errors: record the lower count
+```
+
+**Exit Codes:**
+
+- `0`: At or below the baseline (below also says to run `--update`)
+- `1`: Above the baseline; mypy's full output is printed
+- `2`: mypy did not finish a check (crash, bad config); its output is printed
+
+Never raise the baseline to get a change through. Fix the new errors instead.
+
+---
+
 ## Schema Documentation
 
 ### `generate_schema_docs.py`

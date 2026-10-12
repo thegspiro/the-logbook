@@ -216,208 +216,12 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
       isOpen={isOpen}
       onClose={onClose}
       title={isEdit ? 'Edit outside shift' : 'Log a shift with another department'}
-    >
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="space-y-4">
-          <p className="text-theme-text-secondary text-sm">
-            For time on another jurisdiction&apos;s apparatus that isn&apos;t on our schedule. It counts toward your
-            shift hours and shift requirements as soon as you save it. Your officers can see it and can remove it from
-            your totals if it shouldn&apos;t count.
-          </p>
-          {mode === 'times' ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="external-shift-start" className="form-label">
-                    Start
-                  </label>
-                  <DateTimeQuarterHour
-                    id="external-shift-start"
-                    value={start}
-                    onChange={handleStartChange}
-                    required
-                    className="form-input"
-                    timezone={tz}
-                    timeLabel="Start time"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="external-shift-end" className="form-label">
-                    End
-                  </label>
-                  <DateTimeQuarterHour
-                    id="external-shift-end"
-                    value={end}
-                    onChange={(value) => {
-                      setEnd(value);
-                      setEndPin(null);
-                    }}
-                    required
-                    className="form-input"
-                    timezone={tz}
-                    timeLabel="End time"
-                  />
-                </div>
-              </div>
-              <QuickDurationButtons
-                onSelect={handlePreset}
-                disabled={!start}
-                presets={EXTERNAL_SHIFT_PRESET_HOURS}
-                signed
-              />
-              {timesProblem ? (
-                <p className="text-sm text-red-700 dark:text-red-400" role="alert">
-                  {timesProblem}
-                </p>
-              ) : (
-                timesValid && (
-                  <p className="text-theme-text-secondary text-sm">
-                    Counts as{' '}
-                    <span className="text-theme-text-primary font-medium">{formatHours(spanMinutes / 60)} hours</span>
-                  </p>
-                )
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-theme-text-secondary text-sm">
-                This shift was logged as a date and hours, without its start and end times.
-              </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="external-shift-date" className="form-label">
-                    Date
-                  </label>
-                  <input
-                    id="external-shift-date"
-                    type="date"
-                    className="form-input"
-                    value={shiftDate}
-                    max={today}
-                    required
-                    onChange={(e) => setShiftDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="external-shift-hours" className="form-label">
-                    Hours
-                  </label>
-                  <input
-                    id="external-shift-hours"
-                    type="number"
-                    inputMode="decimal"
-                    className="form-input"
-                    value={hours}
-                    min={0.25}
-                    max={MAX_EXTERNAL_SHIFT_HOURS}
-                    step={0.25}
-                    required
-                    aria-describedby="external-shift-hours-hint"
-                    onChange={(e) => setHours(e.target.value)}
-                  />
-                  <p id="external-shift-hours-hint" className="text-theme-text-muted mt-1 text-xs">
-                    Up to {MAX_EXTERNAL_SHIFT_HOURS} hours per entry.
-                  </p>
-                </div>
-              </div>
-              <button type="button" className="text-sm font-medium underline" onClick={() => setMode('times')}>
-                Enter start and end times instead
-              </button>
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="external-shift-agency" className="form-label">
-                Department
-              </label>
-              <select
-                id="external-shift-agency"
-                className="form-input"
-                value={agencyId}
-                required
-                disabled={optionsLoading}
-                onChange={(e) => {
-                  setAgencyId(e.target.value);
-                  setApparatusId('');
-                }}
-              >
-                <option value="">{optionsLoading ? 'Loading…' : 'Choose a department'}</option>
-                {entry && agencyId === CURRENT && (
-                  <option value={CURRENT}>{entry.agency_name} (no longer listed)</option>
-                )}
-                {options.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="external-shift-apparatus" className="form-label">
-                Apparatus
-              </label>
-              <select
-                id="external-shift-apparatus"
-                className="form-input"
-                value={apparatusId}
-                required
-                disabled={optionsLoading || agencyId === ''}
-                onChange={(e) => setApparatusId(e.target.value)}
-              >
-                <option value="">Choose an apparatus</option>
-                {entry && agencyId === CURRENT && (
-                  <option value={CURRENT}>{entry.apparatus_name} (no longer listed)</option>
-                )}
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.apparatus_type ? `${u.name} (${u.apparatus_type})` : u.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {optionsError ? (
-            <p className="text-sm text-red-700 dark:text-red-400" role="alert">
-              {optionsError}
-            </p>
-          ) : (
-            !optionsLoading && (
-              <p className="text-theme-text-muted text-sm">
-                {hasAnyUnit ? '' : 'No outside apparatus has been set up yet. '}
-                {NOT_LISTED_HINT}
-              </p>
-            )
-          )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="external-shift-role" className="form-label">
-                Position <span className="text-theme-text-muted font-normal">(optional)</span>
-              </label>
-              <input
-                id="external-shift-role"
-                className="form-input"
-                value={role}
-                maxLength={100}
-                placeholder="e.g. Driver"
-                onChange={(e) => setRole(e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="external-shift-notes" className="form-label">
-              Notes <span className="text-theme-text-muted font-normal">(optional)</span>
-            </label>
-            <textarea
-              id="external-shift-notes"
-              className="form-input"
-              rows={3}
-              value={notes}
-              maxLength={2000}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" className="btn-primary" disabled={!canSave}>
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Log shift'}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -425,11 +229,206 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
           >
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={!canSave}>
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Log shift'}
-          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-theme-text-secondary text-sm">
+          For time on another jurisdiction&apos;s apparatus that isn&apos;t on our schedule. It counts toward your shift
+          hours and shift requirements as soon as you save it. Your officers can see it and can remove it from your
+          totals if it shouldn&apos;t count.
+        </p>
+        {mode === 'times' ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="external-shift-start" className="form-label">
+                  Start
+                </label>
+                <DateTimeQuarterHour
+                  id="external-shift-start"
+                  value={start}
+                  onChange={handleStartChange}
+                  required
+                  className="form-input"
+                  timezone={tz}
+                  timeLabel="Start time"
+                />
+              </div>
+              <div>
+                <label htmlFor="external-shift-end" className="form-label">
+                  End
+                </label>
+                <DateTimeQuarterHour
+                  id="external-shift-end"
+                  value={end}
+                  onChange={(value) => {
+                    setEnd(value);
+                    setEndPin(null);
+                  }}
+                  required
+                  className="form-input"
+                  timezone={tz}
+                  timeLabel="End time"
+                />
+              </div>
+            </div>
+            <QuickDurationButtons
+              onSelect={handlePreset}
+              disabled={!start}
+              presets={EXTERNAL_SHIFT_PRESET_HOURS}
+              signed
+            />
+            {timesProblem ? (
+              <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+                {timesProblem}
+              </p>
+            ) : (
+              timesValid && (
+                <p className="text-theme-text-secondary text-sm">
+                  Counts as{' '}
+                  <span className="text-theme-text-primary font-medium">{formatHours(spanMinutes / 60)} hours</span>
+                </p>
+              )
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-theme-text-secondary text-sm">
+              This shift was logged as a date and hours, without its start and end times.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="external-shift-date" className="form-label">
+                  Date
+                </label>
+                <input
+                  id="external-shift-date"
+                  type="date"
+                  className="form-input"
+                  value={shiftDate}
+                  max={today}
+                  required
+                  onChange={(e) => setShiftDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="external-shift-hours" className="form-label">
+                  Hours
+                </label>
+                <input
+                  id="external-shift-hours"
+                  type="number"
+                  inputMode="decimal"
+                  className="form-input"
+                  value={hours}
+                  min={0.25}
+                  max={MAX_EXTERNAL_SHIFT_HOURS}
+                  step={0.25}
+                  required
+                  aria-describedby="external-shift-hours-hint"
+                  onChange={(e) => setHours(e.target.value)}
+                />
+                <p id="external-shift-hours-hint" className="text-theme-text-muted mt-1 text-xs">
+                  Up to {MAX_EXTERNAL_SHIFT_HOURS} hours per entry.
+                </p>
+              </div>
+            </div>
+            <button type="button" className="text-sm font-medium underline" onClick={() => setMode('times')}>
+              Enter start and end times instead
+            </button>
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="external-shift-agency" className="form-label">
+              Department
+            </label>
+            <select
+              id="external-shift-agency"
+              className="form-input"
+              value={agencyId}
+              required
+              disabled={optionsLoading}
+              onChange={(e) => {
+                setAgencyId(e.target.value);
+                setApparatusId('');
+              }}
+            >
+              <option value="">{optionsLoading ? 'Loading…' : 'Choose a department'}</option>
+              {entry && agencyId === CURRENT && <option value={CURRENT}>{entry.agency_name} (no longer listed)</option>}
+              {options.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="external-shift-apparatus" className="form-label">
+              Apparatus
+            </label>
+            <select
+              id="external-shift-apparatus"
+              className="form-input"
+              value={apparatusId}
+              required
+              disabled={optionsLoading || agencyId === ''}
+              onChange={(e) => setApparatusId(e.target.value)}
+            >
+              <option value="">Choose an apparatus</option>
+              {entry && agencyId === CURRENT && (
+                <option value={CURRENT}>{entry.apparatus_name} (no longer listed)</option>
+              )}
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.apparatus_type ? `${u.name} (${u.apparatus_type})` : u.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </form>
+        {optionsError ? (
+          <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+            {optionsError}
+          </p>
+        ) : (
+          !optionsLoading && (
+            <p className="text-theme-text-muted text-sm">
+              {hasAnyUnit ? '' : 'No outside apparatus has been set up yet. '}
+              {NOT_LISTED_HINT}
+            </p>
+          )
+        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="external-shift-role" className="form-label">
+              Position <span className="text-theme-text-muted font-normal">(optional)</span>
+            </label>
+            <input
+              id="external-shift-role"
+              className="form-input"
+              value={role}
+              maxLength={100}
+              placeholder="e.g. Driver"
+              onChange={(e) => setRole(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="external-shift-notes" className="form-label">
+            Notes <span className="text-theme-text-muted font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="external-shift-notes"
+            className="form-input"
+            rows={3}
+            value={notes}
+            maxLength={2000}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+      </div>
     </Modal>
   );
 };

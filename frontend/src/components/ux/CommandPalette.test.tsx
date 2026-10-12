@@ -19,6 +19,11 @@ vi.mock('../../stores/authStore', () => ({
   useAuthStore: () => ({ checkPermission: (permission: string) => permissions.current.has(permission) }),
 }));
 
+const practicalSkillsMethod = { current: null as 'skills_testing' | 'shift_signoffs' | null };
+vi.mock('../../stores/practicalSkillsStore', () => ({
+  usePracticalSkillsMethod: () => practicalSkillsMethod.current,
+}));
+
 vi.mock('../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
     enabledModules: enabledModules.current,
@@ -141,6 +146,7 @@ describe('CommandPalette module gating', () => {
 
 describe('CommandPalette hub destinations', () => {
   beforeEach(() => {
+    practicalSkillsMethod.current = null;
     enabledModules.current = ALL;
     permissions.current = new Set(['training.manage', 'events.manage', 'members.manage', 'storefront.manage']);
     window.history.replaceState({}, '', '/');
@@ -231,5 +237,23 @@ describe('CommandPalette hub destinations', () => {
     permissions.current = new Set(['events.manage', 'members.manage', 'users.create']);
     await search('create event');
     expect(screen.getAllByRole('option', { name: /Create Event/ })).toHaveLength(1);
+  });
+
+  // The department runs one practical-skills system; the other's screens are
+  // hidden in the hub, so the palette must not offer a way round that.
+  it('leaves out the skills-test screens for a shift sign-off department', async () => {
+    practicalSkillsMethod.current = 'shift_signoffs';
+    await search('skills test');
+
+    expect(screen.queryByRole('option', { name: /Skills Test Records/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Skills Test Templates/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves out the sign-off catalog for a Skills Testing department', async () => {
+    practicalSkillsMethod.current = 'skills_testing';
+    await search('skill');
+
+    expect(screen.getByRole('option', { name: /Skills Test Records/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Skill Evaluations/ })).not.toBeInTheDocument();
   });
 });

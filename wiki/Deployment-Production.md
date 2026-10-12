@@ -1,298 +1,404 @@
 # Production Deployment
 
-Best practices for deploying The Logbook in a production environment.
-
-> **Production hardening — required.** The base `docker-compose.yml` is a
-> **development** configuration (uvicorn `--reload`, source bind-mount, backend
-> port published, API docs enabled, no HTTPS enforcement) and it skips the
-> startup security gate. For production, layer the production override on every
-> command:
-> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
-> The override forces `ENVIRONMENT=production`, disables `--reload`, disables API
-> docs (`ENABLE_DOCS=false`), enforces HTTPS (`SECURITY_ENFORCE_HTTPS=true`),
-> enables DB/Redis TLS, does not publish the backend port (it sits behind the
-> reverse proxy), and trusts the private Docker ranges via `TRUSTED_PROXY_IPS`.
-> So that every bare `docker compose ...` command below (start, logs, restart,
-> update) stays hardened, pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`
-> in `.env`. `install.sh` sets this automatically. The app **refuses to start**
-> in production/staging if required secrets are missing or weak, if `DEBUG` or
-> API docs are enabled, or if HTTPS isn't enforced.
->
-> **Docker Compose v2.24.4+ is required** _(2026-08-16)_: the production
-> override declares `volumes: !override` on the backend so the development
-> file's source bind mounts are **cleared**, not merged — Compose's default
-> merge would otherwise mount the live source tree into the production
-> container. Older Compose versions error on the `!override` tag; the fix is
-> to upgrade Compose, never to remove the tag.
+What a deployment needs before members use it: hardened configuration, HTTPS,
+off-host backups, monitoring and a safe update routine. Installing the stack is
+covered on [Docker Deployment](Deployment-Docker) and
+[Unraid Deployment](Deployment-Unraid).
 
 ---
 
 ## Pre-Production Checklist
 
-### Security
+### Configuration
 
-- [ ] Generate unique `SECRET_KEY` (not default): `openssl rand -hex 32`
-- [ ] Generate unique `ENCRYPTION_KEY`: `openssl rand -hex 32`
-- [ ] Generate unique `ENCRYPTION_SALT`: `openssl rand -hex 16`
-- [ ] Set strong `DB_PASSWORD` (16+ characters)
-- [ ] Set strong `REDIS_PASSWORD`
-- [ ] Set `ENVIRONMENT=production`
-- [ ] Set `DEBUG=false`
-- [ ] Configure `ALLOWED_ORIGINS` for your domain only
-- [ ] Set `FRONTEND_URL` to your public site URL — every emailed link is built from it, and a `localhost` value stops a production backend from starting
-- [ ] Enable HTTPS with valid SSL certificate
-- [ ] Review all `.env` settings
-- [ ] Ensure `.env` is in `.gitignore`
+- [ ] Production override in use: `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`
+      in `.env` ([Docker → Compose Files](Deployment-Docker#compose-files))
+- [ ] Unique `SECRET_KEY` (`openssl rand -hex 32`), `ENCRYPTION_KEY`
+      (`openssl rand -hex 32`) and `ENCRYPTION_SALT` (`openssl rand -hex 16`)
+- [ ] Strong `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` and `REDIS_PASSWORD`
+- [ ] `ENCRYPTION_KEY` and `ENCRYPTION_SALT` copied somewhere other than the
+      server and its backups
+- [ ] `ALLOWED_ORIGINS` and `FRONTEND_URL` set to the public `https://` origin
+- [ ] `SECURITY_REQUIRE_TLS` decided: TLS to the database and Redis, or an
+      explicit `false` for the bundled services
+- [ ] `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` set if the `with-s3` profile runs
+- [ ] SMTP configured if the department will use email
+      ([Environment Variables → Email](Configuration-Environment#email--smtp))
+- [ ] Preflight passes ([Updating in Production](#updating-in-production))
+- [ ] `.env` stays out of version control (the repository's `.gitignore`
+      already excludes it)
 
 ### Infrastructure
 
-- [ ] Minimum 4GB RAM, 2 CPU cores
-- [ ] SSD storage (recommended 50GB+)
-- [ ] Automated backups configured
-- [ ] Monitoring and alerting set up
-- [ ] Firewall rules configured (only expose ports 80/443)
+- [ ] Memory per [Docker → Memory Profiles](Deployment-Docker#memory-profiles),
+      2+ CPU cores, SSD storage
+- [ ] HTTPS reverse proxy with a valid certificate
+- [ ] Firewall open only for 22 (from admin addresses), 80 and 443; never
+      publish 3000, 3001, 3306 or 6379
+- [ ] Backups copied off the host, and a restore drill scheduled
+- [ ] Monitoring of `/health` and the backup sidecar's log
 
 ---
 
-## HTTPS Setup
+## Startup Security Gate
 
-### With Nginx Reverse Proxy (Recommended)
+With `ENVIRONMENT=production` (or `staging`) the backend checks its
+configuration at startup and **refuses to start** on any blocking item. `docker-compose.prod.yml` sets
+`ENVIRONMENT=production`, `DEBUG=false`, `ENABLE_DOCS=false` and
+`SECURITY_ENFORCE_HTTPS=true`, defaults `SECURITY_REQUIRE_TLS` to `true`,
+trusts the private Docker ranges in `TRUSTED_PROXY_IPS`, and stops publishing
+the backend port.
+
+Blocking items include:
+
+- a missing or placeholder (`CHANGE_ME`) `SECRET_KEY`, `ENCRYPTION_KEY` or
+  `DB_PASSWORD`, either key under 32 characters, or no `ENCRYPTION_SALT` or
+  `REDIS_PASSWORD`;
+- `DEBUG`, `DB_ECHO` or `ENABLE_DOCS` enabled;
+- `SECURITY_ENFORCE_HTTPS` not `true`. This is an attestation that TLS
+  terminates in front of the app; it does not redirect HTTP or send HSTS;
+- `DB_SSL` or `REDIS_SSL` off while `SECURITY_REQUIRE_TLS=true`, or either on
+  without its CA file (`DB_SSL_CA`, `REDIS_SSL_CA`);
+- a `FRONTEND_URL` that points at the local machine while `ALLOWED_ORIGINS`
+  has no public address to use instead (production only);
+- a wildcard in `ALLOWED_ORIGINS`.
+
+Auth cookies are always `Secure` in production unless `COOKIE_SECURE` says
+otherwise, so logins work only over HTTPS. Run the
+[preflight check](Configuration-Environment#check-the-configuration-before-you-restart-2026-08-18)
+to see the blocking and advisory items without restarting.
+
+---
+
+## HTTPS and Reverse Proxy
+
+With the production override the frontend container is the only published
+port (3000). Its nginx forwards `/api` (including WebSocket upgrades) and
+`/health` to the backend over the internal network, so a reverse proxy sends
+**everything** to port 3000 — there is no separate backend port to route.
+
+After the proxy works, set `FRONTEND_URL` and `ALLOWED_ORIGINS` to the
+`https://` origin and run `docker compose up -d`.
+
+### Nginx on the host
 
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;
-    return 301 https://$server_name$request_uri;
+    server_name logbook.example.org;
+    return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name your-domain.com;
+    server_name logbook.example.org;
 
-    ssl_certificate /etc/ssl/certs/your-cert.pem;
-    ssl_certificate_key /etc/ssl/private/your-key.pem;
-    ssl_protocols TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_certificate     /etc/letsencrypt/live/logbook.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/logbook.example.org/privkey.pem;
 
     # The backend's own ceiling (MAX_REQUEST_BODY_SIZE); nginx defaults to 1M
     client_max_body_size 60M;
 
-    # Frontend
     location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Backend API
-    location /api/ {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # WebSocket
-    location /ws/ {
-        proxy_pass http://localhost:3001;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-> **Size your own proxy's per-address limits for a department** _(2026-10-05)_. If you
-> add `limit_conn` or `limit_req` here, remember that a station's members usually
-> share one public address and that HTTP/2 counts every in-flight request: one
-> dashboard load is about 20 API calls. The bundled configs use `limit_conn 400`
-> and `limit_req zone=api_limit burst=600 delay=100` at 50 requests a second
-> (see `infrastructure/nginx/nginx.conf`); the old 10 concurrent / 10 a second
-> refused most of a page load with 503. Keep sign-in strict (5 a minute).
-
-### With Let's Encrypt (Free SSL)
+Issue the certificate with Certbot's nginx plugin:
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-# Auto-renewal is configured automatically
+sudo certbot --nginx -d logbook.example.org
+sudo certbot renew --dry-run
 ```
+
+The AWS guide's version of this config also keeps anonymous suggestion-box
+submissions out of the access log:
+[aws.md → Step 4](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#step-4-set-up-nginx-reverse-proxy).
+
+If you add `limit_conn` or `limit_req`, size them for a station whose members
+share one public address: one dashboard load is about 20 API calls, and HTTP/2
+counts every request in flight. The bundled configs use `limit_conn 400` and
+50 requests a second with `burst=600 delay=100` for the API, and keep sign-in
+at 5 a minute.
+
+### Caddy
+
+```
+logbook.example.org {
+    request_body {
+        max_size 60MB
+    }
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+Caddy obtains and renews the certificate itself.
+
+### Bundled nginx
+
+The stack can run its own nginx (`infrastructure/nginx/docker.conf`), which
+terminates TLS on 443, redirects 80 and applies the same rate limits. Add
+`docker-compose.proxy.yml` after the production override; it also stops
+publishing port 3000, so nginx is the only way in:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml
+```
+
+nginx will not start without `fullchain.pem` and `privkey.pem` in
+`infrastructure/nginx/ssl/`, and the installers stop before building if they
+are missing. The `production` profile (`--profile production`) also starts
+nginx but leaves port 3000 published as a plain-HTTP second entrance; use it
+only when something outside the stack must still reach port 3000.
+
+Bootstrap with a temporary self-signed certificate, then issue a Let's
+Encrypt certificate through the webroot nginx serves on port 80:
+
+```bash
+mkdir -p infrastructure/nginx/ssl infrastructure/nginx/certbot
+openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=localhost" \
+  -keyout infrastructure/nginx/ssl/privkey.pem \
+  -out infrastructure/nginx/ssl/fullchain.pem
+docker compose up -d
+
+DOMAIN=logbook.example.org
+sudo certbot certonly --webroot -w "$PWD/infrastructure/nginx/certbot" -d "$DOMAIN" \
+  --deploy-hook "cp -L /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem $PWD/infrastructure/nginx/ssl/ && docker exec intranet-nginx nginx -s reload"
+```
+
+Certbot reruns the deploy hook on every renewal. `cp -L` matters: the files
+under `live/` are symlinks the container cannot follow. Full details:
+[DEPLOYMENT.md → Docker Compose production profile](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#docker-compose-production-profile).
+
+`scripts/setup-ssl.sh <domain> <email>` configures an nginx installed on the
+host (`infrastructure/nginx/nginx.conf`). That config routes `/api/` to
+`127.0.0.1:3001`, which the production override does not publish, so it fits
+the traditional (non-Docker) install rather than the Compose stack.
 
 ---
 
 ## Environment Configuration
 
+A production `.env` built from `.env.example`, bundled database and Redis:
+
 ```bash
-# Production .env
 ENVIRONMENT=production
 DEBUG=false
-SECRET_KEY=<generated-64-char-hex>
-ENCRYPTION_KEY=<generated-64-char-hex>
-ENCRYPTION_SALT=<generated-32-char-hex>
+ENABLE_DOCS=false
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 
-# Database
-DB_HOST=mysql
-DB_PASSWORD=<strong-password>
-MYSQL_ROOT_PASSWORD=<strong-password>
+SECRET_KEY=<openssl rand -hex 32>
+ENCRYPTION_KEY=<openssl rand -hex 32>
+ENCRYPTION_SALT=<openssl rand -hex 16>
 
-# Redis
-REDIS_PASSWORD=<strong-password>
+MYSQL_ROOT_PASSWORD=<strong password>
+DB_PASSWORD=<strong password>
+REDIS_PASSWORD=<strong password>
 
-# CORS - your domain only
-ALLOWED_ORIGINS=["https://your-domain.com"]
+# Comma-separated; also the source of the Host-header allowlist
+ALLOWED_ORIGINS=https://logbook.example.org
+# Every link in outgoing email is built from it
+FRONTEND_URL=https://logbook.example.org
 
-# Public site URL - every link in outgoing email is built from it
-FRONTEND_URL=https://your-domain.com
+# Bundled MySQL/Redis speak plaintext on the internal network
+SECURITY_REQUIRE_TLS=false
 
-# Frontend build
-VITE_API_URL=/api/v1
+TZ=America/New_York   # container clock; the department's timezone is set in the app
 ```
+
+Recommended additions the backend warns about when missing:
+`VOTE_SIGNING_KEY` (elections) and `AUDIT_LOG_SIGNING_KEY`. All variables:
+[Environment Variables](Configuration-Environment).
 
 ---
 
-## Backup Strategy
+## Backup and Recovery
 
-### Backup Sidecar (Recommended) _(2026-07-31)_
+### Backup sidecar
 
-`docker-compose.prod.yml` includes a `backup` service that removes the need
-for host cron entirely. It runs nightly at `BACKUP_TIME` (default 02:00 UTC),
-writing the database, uploads, and audit archives to the `backups` volume as a
-checksummed archive, then pruning past `BACKUP_RETENTION_DAYS`.
+`docker-compose.prod.yml` runs a `backup` service
+(`scripts/backup-sidecar.sh`). Nightly at `BACKUP_TIME` it writes the database,
+uploads and audit archives to the `backups` volume as a checksummed
+`logbook_backup_YYYYmmdd_HHMMSS.tar.gz`, and prunes archives older than
+`BACKUP_RETENTION_DAYS`. Every `VERIFY_EVERY_N_BACKUPS` runs it restores the
+fresh dump into a throwaway schema and checks it; a failed drill keeps failing
+loudly every night until fixed.
 
-**It also drills itself.** Every `VERIFY_EVERY_N_BACKUPS` runs (default 7),
-`scripts/verify_backup.sh` loads the fresh dump into a throwaway schema,
-asserts the core tables and full schema came back, and drops it. A failed
-drill keeps failing loudly on every subsequent nightly run until someone fixes
-it — watch `docker compose logs backup`.
+| Variable                 | Default | Meaning                             |
+| ------------------------ | ------- | ----------------------------------- |
+| `BACKUP_TIME`            | `02:00` | Daily run time, UTC, `HH:MM`        |
+| `BACKUP_RETENTION_DAYS`  | `30`    | Prune archives older than this      |
+| `VERIFY_EVERY_N_BACKUPS` | `7`     | Restore-drill cadence; `0` disables |
+
+There is no on/off switch: backups run whenever the service runs.
+`BACKUP_ENABLED` and `BACKUP_SCHEDULE` in `.env.example` are not read by
+either backup script.
 
 ```bash
-# Run a drill by hand against any archive
+docker compose logs backup
+
+# Drill any archive by hand
 docker compose exec backup bash /scripts/verify_backup.sh \
   /backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
+
+# Where the volume lives on disk (project name = directory name by default)
+docker volume inspect the-logbook_backups -f '{{ .Mountpoint }}'
 ```
 
-> ⚠️ **The `backups` volume lives on the same host.** Sync it offsite (S3,
-> rsync target, NAS) — a backup that dies with the host is not a backup. Store
-> `ENCRYPTION_KEY` / `ENCRYPTION_SALT` offline as well: **a database backup
-> without its era's keys cannot decrypt sensitive fields.** Full guidance:
-> [docs/BACKUP.md](../docs/BACKUP.md).
+### Manual backup and restore
 
-### Automated Daily Backups
+`scripts/backup.sh` runs on the host from the install directory:
 
 ```bash
-# Add to crontab
-0 2 * * * docker exec logbook-db mysqldump -u logbook_user -p$DB_PASSWORD the_logbook | gzip > /backups/logbook-$(date +\%Y\%m\%d).sql.gz
-
-# Cleanup old backups (keep 30 days)
-0 3 * * * find /backups -name "logbook-*.sql.gz" -mtime +30 -delete
+./scripts/backup.sh                    # archive into ./backups (BACKUP_LOCATION overrides)
+./scripts/backup.sh --destination s3   # also upload: s3, azure or gcs
+./scripts/backup.sh --list
+./scripts/backup.sh --restore backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
 ```
 
-### Upload Volume Backup
+It reaches MySQL through the running database container. Restore into a
+running stack with the same `.env` secrets, then verify by logging in, opening
+an encrypted record and an uploaded file.
 
-```bash
-# Include uploads directory in backup
-0 2 * * * tar -czf /backups/uploads-$(date +\%Y\%m\%d).tar.gz /path/to/uploads/
-```
+### Off-host copies and keys
+
+- The `backups` volume is on the same host. Sync it elsewhere (S3, rsync
+  target, NAS) — a backup that dies with the host is not a backup.
+- The archive contains a values-stripped `.env` template, not your secrets.
+  Keep `ENCRYPTION_KEY`, `ENCRYPTION_SALT`, `SECRET_KEY` and the database
+  passwords offline in at least two places: a database backup is unreadable
+  without the keys in use when it was written.
+- With the external-services override the sidecar does not run; use the
+  provider's database backups and copy the `uploads` and `audit_archives`
+  volumes yourself.
+
+Restore drills, RTO/RPO targets and the total-loss runbook:
+[BACKUP.md](https://github.com/thegspiro/the-logbook/blob/main/docs/BACKUP.md).
 
 ---
 
 ## Monitoring
 
-### Health Checks
-
 ```bash
-# Backend health
-curl -s https://your-domain.com/api/v1/health | jq
-
-# Database health
-curl -s https://your-domain.com/api/v1/health/db | jq
-
-# Redis health
-curl -s https://your-domain.com/api/v1/health/redis | jq
-```
-
-### Container Monitoring
-
-```bash
-# Resource usage
+curl -s https://logbook.example.org/health   # {"status":"healthy","ready":true}
+docker compose ps
 docker stats
-
-# Container status
-docker-compose ps
+docker compose logs --tail=100 backend
+docker compose logs backup
 ```
 
-### Security Monitoring
+`/health` answers `healthy`, `degraded` (Redis unavailable, HTTP 200) or
+`unhealthy` (database or startup failure, HTTP 503); point an uptime monitor
+at it. While the backend is starting it also reports its startup phase and the
+database and Redis checks; once ready it reports nothing more, by design.
 
-```bash
-# Security status
-curl -s https://your-domain.com/api/v1/security/status | jq
+Security status and audit-log integrity are API endpoints that need a signed-in
+user with `audit.view`: `GET /api/v1/security/status` and
+`GET /api/v1/security/audit-log/integrity`. See
+[Security Audit Logging](Security-Audit-Logging).
 
-# Audit log integrity
-curl -s https://your-domain.com/api/v1/security/audit-log/integrity | jq
-```
+Error tracking: set `SENTRY_ENABLED=true` and `SENTRY_DSN`.
 
 ---
 
 ## Scaling
 
-### Multiple Backend Workers
-
-In `docker-compose.override.yml`:
+The production override runs the backend as one uvicorn worker. For more,
+add an override file and include it in `COMPOSE_FILE` — a pinned
+`COMPOSE_FILE` stops Compose from loading `docker-compose.override.yml`
+automatically:
 
 ```yaml
+# docker-compose.override.yml
 services:
   backend:
-    command: uvicorn main:app --host 0.0.0.0 --port 3001 --workers 4
+    command:
+      [
+        "uvicorn",
+        "main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "3001",
+        "--workers",
+        "4",
+      ]
 ```
 
-### Database Optimization
-
-```sql
--- Increase connection limits
-SET GLOBAL max_connections = 200;
-
--- Enable query cache
-SET GLOBAL query_cache_size = 67108864;  -- 64MB
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.override.yml
 ```
+
+Workers serialize startup migrations with a database lock and share rate-limit
+state through Redis. Raise the backend's 768 MB memory limit to match. MySQL's
+`max_connections` is 200 (`command:` in `docker-compose.yml`).
 
 ---
 
-## Cloud Deployment
+## Cloud Platforms
 
-For cloud-specific guides, see:
+Every cloud option runs the Docker Compose stack on a VM; there is no Helm
+chart or Kubernetes manifest. Size the VM at 4 GB RAM or more.
 
-- **[AWS Deployment](../docs/deployment/aws.md)** — ECS, EC2, RDS
-- **[Synology NAS](../docs/deployment/synology.md)**
-- **[Proxmox](../docs/deployment/proxmox.md)**
-- **[Unraid](Deployment-Unraid)**
+| Platform     | Typical VM                         | Guide                                                                                                                 |
+| ------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| AWS EC2      | `t3.medium` (4 GB), Ubuntu 22.04   | [aws.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md) — single VM, or RDS + ElastiCache |
+| Azure        | 4 GB VM, Ubuntu 22.04              | Universal installer on the VM                                                                                         |
+| Google Cloud | 4 GB Compute Engine VM             | Universal installer on the VM                                                                                         |
+| DigitalOcean | 4 GB Droplet                       | Universal installer on the Droplet                                                                                    |
+| Synology NAS | DSM 7.2+, Container Manager or SSH | [synology.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/synology.md)                         |
+| Proxmox      | LXC container with Docker          | [proxmox.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/proxmox.md)                           |
+| Unraid       | —                                  | [Unraid Deployment](Deployment-Unraid)                                                                                |
+
+On any VM: open only 22, 80 and 443 in the provider's firewall, install with
+the [universal installer](Deployment-Docker#universal-installer) or
+[manually](Deployment-Docker#install-manually), then add
+[HTTPS](#https-and-reverse-proxy).
+
+Managed MySQL and Redis (RDS and ElastiCache, Azure Database for MySQL and
+Azure Cache for Redis, and similar) go through
+[Docker → External Database and Redis](Deployment-Docker#external-database-and-redis).
+Use MySQL 8.0 with `utf8mb4` / `utf8mb4_unicode_ci`, Redis 7 with a password,
+and TLS to both.
 
 ---
 
 ## Updating in Production
 
 ```bash
-# 1. Backup first
-docker exec logbook-db mysqldump -u logbook_user -p the_logbook > pre-update-backup.sql
-
-# 2. Pull changes
 cd /path/to/the-logbook
+
+# 1. Back up (the sidecar's last archive may be up to a day old)
+./scripts/backup.sh
+
+# 2. Pull and repair build contexts
 git pull
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-# 3. Rebuild
-docker-compose build --no-cache
+# 3. Check the new version's configuration before restarting
+docker compose run --rm --build backend python -m app.preflight
 
-# 4. Restart with minimal downtime
-docker-compose up -d
+# 4. Rebuild and recreate; migrations run as the backend starts
+docker compose up -d --build
 
-# 5. Run migrations
-docker-compose exec backend alembic upgrade head
-
-# 6. Verify
-curl -s https://your-domain.com/api/v1/health
+# 5. Verify
+docker compose ps
+curl -s https://logbook.example.org/health
 ```
+
+Read [UPGRADING.md](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md)
+before pulling: it lists every change that can stop an existing deployment
+from starting. Never downgrade to repair a migration problem — several
+migrations do not reverse.
 
 ---
 

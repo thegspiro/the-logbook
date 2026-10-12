@@ -23,7 +23,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
   const tz = useTimezone();
   const [formData, setFormData] = useState<CreateAPIKeyRequest>({
     name: '',
-    rate_limit: undefined,
+    rate_limit_override: undefined,
     expires_at: undefined,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +37,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
         expires_at: formData.expires_at ? localToUTC(formData.expires_at, tz) : undefined,
       };
       await onCreate(submitData);
-      setFormData({ name: '', rate_limit: undefined, expires_at: undefined });
+      setFormData({ name: '', rate_limit_override: undefined, expires_at: undefined });
       onClose();
     } catch (_error) {
       // Error is handled by the hook
@@ -109,11 +109,11 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               type="number"
               min="1"
               max="100000"
-              value={formData.rate_limit || ''}
+              value={formData.rate_limit_override || ''}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  rate_limit: e.target.value ? parseInt(e.target.value) : undefined,
+                  rate_limit_override: e.target.value ? parseInt(e.target.value) : undefined,
                 })
               }
               placeholder="Leave blank to use the default"
@@ -383,7 +383,7 @@ export const APIKeysTab: React.FC = () => {
                   {key.key_prefix}...
                 </code>
                 <div className="text-theme-text-muted flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                  <span>{key.rate_limit || key.effective_rate_limit}/hour</span>
+                  <span>{key.rate_limit_override ?? key.effective_rate_limit}/hour</span>
                   <span>Created: {formatDateTime(key.created_at, tz)}</span>
                 </div>
                 {key.is_active && (
@@ -460,7 +460,7 @@ export const APIKeysTab: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(key)}</td>
                     <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
-                      {key.rate_limit || key.effective_rate_limit}/hour
+                      {key.rate_limit_override ?? key.effective_rate_limit}/hour
                     </td>
                     <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                       {formatDateTime(key.last_used_at, tz)}

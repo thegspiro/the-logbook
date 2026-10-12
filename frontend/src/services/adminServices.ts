@@ -11,6 +11,8 @@ import type {
   OperationsDashboard,
   ActionItemSummary,
   CommunityEngagement,
+  DashboardPulseLayout,
+  DashboardPulseResponse,
   MainDashboardWidgets,
   WidgetPeriod,
 } from './communicationsServices';
@@ -433,6 +435,26 @@ export const platformAnalyticsService = {
 export const dashboardService = {
   async getWidgets(period: WidgetPeriod): Promise<MainDashboardWidgets> {
     const response = await api.get<MainDashboardWidgets>('/dashboard/widgets', { params: { period } });
+    return response.data;
+  },
+  async getPulseLayout(): Promise<DashboardPulseResponse> {
+    const response = await api.get<DashboardPulseResponse>('/dashboard/pulse-layout');
+    return response.data;
+  },
+  async savePulseLayout(layout: DashboardPulseLayout): Promise<DashboardPulseResponse> {
+    const response = await api.put<DashboardPulseResponse>('/dashboard/pulse-layout', layout);
+    return response.data;
+  },
+  async resetPulseLayout(): Promise<DashboardPulseResponse> {
+    const response = await api.delete<DashboardPulseResponse>('/dashboard/pulse-layout');
+    return response.data;
+  },
+  async saveDepartmentPulseLayout(layout: DashboardPulseLayout): Promise<DashboardPulseResponse> {
+    const response = await api.put<DashboardPulseResponse>('/dashboard/pulse-layout/default', layout);
+    return response.data;
+  },
+  async resetDepartmentPulseLayout(): Promise<DashboardPulseResponse> {
+    const response = await api.delete<DashboardPulseResponse>('/dashboard/pulse-layout/default');
     return response.data;
   },
   async getAssetWidgets(): Promise<import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[]> {
@@ -1182,7 +1204,7 @@ export const shiftCompletionService = {
 
   async updateReport(
     reportId: string,
-    data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }
+    data: import('../types/training').ShiftCompletionReportUpdate
   ): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.put<import('../types/training').ShiftCompletionReport>(
       `/training/shift-reports/${reportId}`,
