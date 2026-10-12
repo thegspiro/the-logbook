@@ -3625,7 +3625,9 @@ include **Check Reports** or the fleet board, which stay with
   what is wrong before **Submit**: the note button reads **Note required**, the
   box asks "What's wrong with it? (required)", and submitting without it says
   "Add a note to each failed item saying what's wrong." and moves focus to the
-  note. (This closes W46-13.)
+  note. (This closes W46-13.) Since 2026-10-12 the server applies the same
+  rule, so a check sent by any other route — an older offline copy, a script —
+  is refused with the same items named rather than filed without a reason.
 - **Only Submit is pinned** at the bottom of the screen. **Overall Notes** was
   pinned with it and covered about a third of a phone screen for the whole check.
 - **Pass and Fail are grouped under the item's name** and announce which is

@@ -4924,9 +4924,13 @@ needs a decision rather than a patch:
   out of service takes the rig off the fleet board with no reason recorded.
   ✅ Resolved 2026-10-04 (#2882): the check form now requires a note on a Fail
   or Out of service the member chose (one a count, reading or expiry already
-  explains is exempt) before it submits. The requirement is enforced by the
-  form only; the server still accepts a failed item without a note from a
-  direct API call.
+  explains is exempt) before it submits. The server enforces the same rule
+  too (2026-10-12, owner decision): a shift, standalone or resumed-incomplete
+  check submission carrying such an item without a note — or with a
+  whitespace-only one — is refused with a 400 naming the item, before anything
+  is written. The exemptions match the form's `failureNeedsNote`, expiry read
+  from the soonest lot aboard as well as the item's own date
+  (`backend/tests/test_equipment_check_failure_notes.py`).
 - **W46-14 — The seeded Quartermaster holds no `inventory.check_*` grant.**
   ✅ Resolved: the owner granted `inventory.check_manage` (authoring only),
   seeded and backfilled by migration `f73b449bdb8b` — see "The seeded
