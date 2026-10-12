@@ -399,7 +399,7 @@ class AuditLogger:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        head = (await db.execute(stmt)).scalar_one_or_none()
+        head: AuditChainHead | None = (await db.execute(stmt)).scalar_one_or_none()
         if head is not None:
             return head
 
@@ -430,7 +430,8 @@ class AuditLogger:
             # Another sealer created it first. The locked read below waits
             # for that transaction to finish and then returns its row.
             pass
-        return (await db.execute(stmt)).scalar_one()
+        created: AuditChainHead = (await db.execute(stmt)).scalar_one()
+        return created
 
     async def _tail_hash(self, db: AsyncSession, head: AuditChainHead) -> str:
         """The hash the next sealed row links to.

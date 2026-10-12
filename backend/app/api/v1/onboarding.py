@@ -677,7 +677,8 @@ def _session_hard_expiry(session: OnboardingSessionModel) -> Optional[datetime]:
         return None
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
-    return created + timedelta(hours=SESSION_MAX_LIFETIME_HOURS)
+    expires_at: datetime = created + timedelta(hours=SESSION_MAX_LIFETIME_HOURS)
+    return expires_at
 
 
 def _slid_expiry(session: OnboardingSessionModel, now: datetime) -> datetime:

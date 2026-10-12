@@ -685,10 +685,10 @@ class EquipmentReadinessService:
         if end is not None:
             if end.tzinfo is None:
                 end = end.replace(tzinfo=timezone.utc)
-            return end > created
+            return bool(end > created)
         if tz is None:
-            return shift.shift_date >= created.astimezone(timezone.utc).date()
-        return shift.shift_date >= local_date(created, tz)
+            return bool(shift.shift_date >= created.astimezone(timezone.utc).date())
+        return bool(shift.shift_date >= local_date(created, tz))
 
     async def _resolve_occasions(
         self,

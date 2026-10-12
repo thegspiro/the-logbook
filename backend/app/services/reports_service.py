@@ -456,15 +456,15 @@ class ReportsService:
                 for member in population:
                     if not requirement_applies_to_user(req, member):
                         continue
-                    done = rid in completed_by_user.get(str(member.id), set())
+                    is_met = rid in completed_by_user.get(str(member.id), set())
                     if (
-                        not done
+                        not is_met
                         and today is not None
                         and catch_up_deadline(req, member_join_date(member), today)
                     ):
                         continue
                     graded += 1
-                    met += 1 if done else 0
+                    met += 1 if is_met else 0
                 requirement_breakdown.append(
                     {
                         "requirement_id": rid,

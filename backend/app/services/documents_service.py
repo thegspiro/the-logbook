@@ -2141,7 +2141,7 @@ class DocumentsService:
             for sub_def in FACILITY_SUB_FOLDERS:
                 self.db.add(
                     self._new_facility_sub_folder(
-                        organization_id, facility_folder, sub_def["slug"]
+                        organization_id, facility_folder, str(sub_def["slug"])
                     )
                 )
 

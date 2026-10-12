@@ -42,19 +42,21 @@ ANONYMOUS_LAST_NAME = "donor"
 
 
 def present_donation(donation: Any, can_see_identity: bool) -> DonationResponse:
-    response = DonationResponse.model_validate(donation)
+    response: DonationResponse = DonationResponse.model_validate(donation)
     if can_see_identity or not response.is_anonymous:
         return response
-    return response.model_copy(
+    masked: DonationResponse = response.model_copy(
         update={field: None for field in DONATION_IDENTITY_FIELDS}
     )
+    return masked
 
 
 def present_donor(donor: Any, can_see_identity: bool) -> DonorResponse:
-    response = DonorResponse.model_validate(donor)
+    response: DonorResponse = DonorResponse.model_validate(donor)
     if can_see_identity or not response.is_anonymous:
         return response
     update: dict[str, Any] = {field: None for field in DONOR_IDENTITY_FIELDS}
     update["first_name"] = ANONYMOUS_FIRST_NAME
     update["last_name"] = ANONYMOUS_LAST_NAME
-    return response.model_copy(update=update)
+    masked: DonorResponse = response.model_copy(update=update)
+    return masked
