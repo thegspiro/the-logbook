@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3095](https://github.com/thegspiro/the-logbook/pull/3095)**: branch
+`claude/security-review-cross-cutting-baseline`, Feature 00 (Cross-cutting
+baseline), pass 8 (watchdog pickup). 0 new application-security findings
+across all 13 established sweep classes; 1 fixed finding about this
+review's own tooling (SEC8-00-1, LOW — `json_column_ast_sweep.py` had gone
+silently blind after the codebase's `Column` → `mapped_column` migration).
+See the Log entry below and
+`docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 8**
+section for detail. Row 00 → ✅ (pending this PR's merge); next is Feature
+01 (Auth & session lifecycle).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3093's merge, Feature 34, Frontend shared, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
+
 **None.** PR #3093 (Feature 34, Frontend shared, pass 8) merged clean
 2026-10-12 02:45 UTC (confirmed via `pull_request_read`: `merged: true`,
 4 files changed — `PROGRESS.md`, `FE8-34-frontend-shared.md`,
@@ -23,8 +37,10 @@ feature. The rotation cannot outrun its own review queue.
 fixes landed with it), but it is already fully recorded in the Log entry
 below, so there is nothing further to add here. Rotation row 34 stays ✅.
 Row 34 was the last row (00–34) in the rotation table, so this (watchdog)
-iteration wraps back to Feature 00 (Cross-cutting baseline, pass 9) rather
+iteration wraps back to Feature 00 (Cross-cutting baseline, pass 8) rather
 than resetting the table to ⬜.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3093, Feature 34, Frontend shared, pass 8, before it merged), preserved for history</summary>
