@@ -94,7 +94,14 @@ def _nfpa_next_due(mtype, last, last_date, records) -> Optional[date]:
         or unit not in ("days", "weeks", "months", "years")
     ):
         return None
-    due: date = last_date + relativedelta(**{unit: int(value)})
+    step = int(value)
+    interval = {
+        "days": relativedelta(days=step),
+        "weeks": relativedelta(weeks=step),
+        "months": relativedelta(months=step),
+        "years": relativedelta(years=step),
+    }[unit]
+    due: date = last_date + interval
     return due
 
 
