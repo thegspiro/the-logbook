@@ -16,6 +16,10 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.endpoints.event_attendance_petitions import (
+    list_attendance_petitions,
+    list_pending_attendance_petitions,
+)
 from app.models.event import AttendancePetitionStatus, EventRSVP
 from app.models.notification import NotificationLog
 from app.models.user import User
@@ -200,6 +204,46 @@ class TestSubmit:
         assert prompts[0].notification_metadata["petition_id"] == petition.id
         # The organizer is the one prompted; managers are not also buried.
         assert not await _notices(db_session, dept["manager"], REVIEW_PROMPT_CATEGORY)
+
+    async def test_on_a_finalized_event_the_organizer_is_told_to_reopen(
+        self, db_session, dept, no_email
+    ):
+        event_id = await _event(
+            db_session, dept["org"], dept["organizer"], finalized=True
+        )
+        member = await _load(db_session, dept["member"])
+
+        await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+        (prompt,) = await _notices(
+            db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY
+        )
+        assert "finalized: reopen it on the event page before approving" in (
+            prompt.message
+        )
+        html_body, text_body = no_email.await_args.args[4:6]
+        assert "<strong>finalized</strong>" in html_body
+        assert "reopen attendance on the event page" in text_body
+
+    async def test_on_an_open_event_there_is_no_reopen_hint(
+        self, db_session, dept, no_email
+    ):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        member = await _load(db_session, dept["member"])
+
+        await EventAttendancePetitionService(db_session).submit(
+            event_id, member, _ask()
+        )
+
+        (prompt,) = await _notices(
+            db_session, dept["organizer"], REVIEW_PROMPT_CATEGORY
+        )
+        assert "finalized" not in prompt.message
+        html_body, text_body = no_email.await_args.args[4:6]
+        assert "finalized" not in html_body
+        assert "finalized" not in text_body
 
     async def test_without_an_organizer_every_event_manager_hears(
         self, db_session, dept
@@ -663,6 +707,35 @@ class TestWithdrawalLimit:
 
         assert petition.withdrawal_count == 1
         assert can_withdraw(petition) is True
+
+    async def test_reviewers_are_told_how_often_it_was_resent(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await self._cycle(service, db_session, dept, event_id, 2)
+
+        organizer = await _load(db_session, dept["organizer"])
+        on_event = await list_attendance_petitions(
+            event_id=uuid.UUID(event_id), db=db_session, current_user=organizer
+        )
+        organizer = await _load(db_session, dept["organizer"])
+        across_events = await list_pending_attendance_petitions(
+            scope="mine", db=db_session, current_user=organizer
+        )
+
+        assert [p.withdrawal_count for p in on_event] == [2]
+        assert [p.withdrawal_count for p in across_events] == [2]
+
+    async def test_a_first_request_reports_no_resends(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await self._cycle(service, db_session, dept, event_id, 0)
+
+        organizer = await _load(db_session, dept["organizer"])
+        on_event = await list_attendance_petitions(
+            event_id=uuid.UUID(event_id), db=db_session, current_user=organizer
+        )
+
+        assert [p.withdrawal_count for p in on_event] == [0]
 
     async def test_asking_again_reuses_the_request_and_prompts_the_organizer(
         self, db_session, dept
