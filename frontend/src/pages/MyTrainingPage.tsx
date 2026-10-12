@@ -39,6 +39,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
+import { offersSkillsTesting, usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { getProgressBarColor, getPercentageBarColor } from '../utils/trainingColors';
 
 // ==================== Helpers ====================
@@ -563,6 +564,7 @@ const MyTrainingPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const { user } = useAuthStore();
+  const practicalSkillsMethod = usePracticalSkillsMethod();
   const [data, setData] = useState<MyTrainingSummary | null>(null);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1015,10 +1017,11 @@ const MyTrainingPage: React.FC = () => {
           )}
 
           {/* Skills Tests — the member's own results, official and practice.
-              Always rendered (not behind a show_* visibility flag): these are
-              the member's own evaluations, and this page is the only place they
-              can see them at all. */}
-          {user?.id && (
+              Not behind a show_* visibility flag: these are the member's own
+              evaluations, and this page is the only place they can see them at
+              all. Left out only for a department that records skills on shift
+              reports instead; its past results are kept, not deleted. */}
+          {user?.id && offersSkillsTesting(practicalSkillsMethod) && (
             <Section title="Skills Tests" icon={ClipboardCheck} defaultOpen={false}>
               <MySkillTestsList userId={user.id} />
             </Section>
@@ -1308,10 +1311,12 @@ const MyTrainingPage: React.FC = () => {
                     class at another agency, an online course or a state certification only counts once you submit it
                     and a training officer approves it.
                   </li>
-                  <li>
-                    <span className="text-theme-text-primary font-medium">Take a skills test.</span> When an examiner
-                    tests you on a hands-on skill, the result appears under Skills Tests above.
-                  </li>
+                  {offersSkillsTesting(practicalSkillsMethod) && (
+                    <li>
+                      <span className="text-theme-text-primary font-medium">Take a skills test.</span> When an examiner
+                      tests you on a hands-on skill, the result appears under Skills Tests above.
+                    </li>
+                  )}
                 </ol>
                 <div className="mt-5 flex flex-wrap items-center gap-3">
                   <button onClick={() => void navigate('/training/submit')} className="btn-primary text-sm font-medium">

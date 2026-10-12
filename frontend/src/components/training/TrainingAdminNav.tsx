@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import type { TrainingAdminArea, TrainingAdminAreaId } from './trainingAdminAreas';
-import { TRAINING_ADMIN_AREAS, tabId, tabPanelId } from './trainingAdminAreas';
+import { tabId, tabPanelId } from './trainingAdminAreas';
 import AdminHubCardTabs from '../admin/AdminHubCardTabs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
 
@@ -21,6 +21,8 @@ import { ScrollCueRow } from '../ux/ScrollCueRow';
  */
 
 interface TrainingAdminNavProps {
+  /** The areas this department sees (`trainingAdminAreasFor`). */
+  areas: TrainingAdminArea[];
   activeArea: TrainingAdminArea;
   activeTab: string;
   onAreaChange: (area: TrainingAdminAreaId) => void;
@@ -70,6 +72,7 @@ function handleRovingKeyDown<T extends string>(
 }
 
 export const TrainingAdminNav: React.FC<TrainingAdminNavProps> = ({
+  areas,
   activeArea,
   activeTab,
   onAreaChange,
@@ -88,7 +91,7 @@ export const TrainingAdminNav: React.FC<TrainingAdminNavProps> = ({
   return (
     <div className="flex flex-col gap-4">
       <AdminHubCardTabs<TrainingAdminAreaId>
-        tabs={TRAINING_ADMIN_AREAS.map((area) => ({
+        tabs={areas.map((area) => ({
           id: area.id,
           label: area.label,
           description: area.description,

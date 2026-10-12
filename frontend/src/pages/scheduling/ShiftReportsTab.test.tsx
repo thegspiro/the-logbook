@@ -469,6 +469,72 @@ describe('ShiftReportsTab — calls are counted per member', () => {
   });
 });
 
+describe('ShiftReportsTab — skills observed on a trainee', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockBatchCreate.mockReset();
+    mockGetConfig.mockResolvedValue({ practical_skills_method: 'shift_signoffs' });
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 4,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Sam Ortiz',
+        has_active_enrollment: true,
+        enrollment_id: 'en-1',
+        program_name: 'Probationary Firefighter',
+        has_existing_report: false,
+        calls_responded: 4,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockBatchCreate.mockResolvedValue({ created: 1, skipped: 0, report_ids: ['r1'] });
+  });
+
+  // The chips wrap across the row, so a picked skill's score is set in the
+  // list under them; this pins that the pair still lands on the right skill.
+  it('scores a picked skill from the list under the chips and files it', async () => {
+    const user = userEvent.setup();
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Evaluate/ }));
+    await user.click(screen.getByRole('button', { name: 'Ladder operations' }));
+    expect(screen.getByRole('button', { name: '\u2713 Ladder operations' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: /Ladder operations: score 4/ }));
+    await user.click(screen.getByRole('button', { name: /Submit Report/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trainee_evaluations: [
+          expect.objectContaining({
+            user_id: 'u2',
+            skills_observed: [{ skill_name: 'Ladder operations', demonstrated: true, score: 4 }],
+          }),
+        ],
+      })
+    );
+  });
+
+  it('offers no score until a skill is picked', async () => {
+    const user = userEvent.setup();
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Evaluate/ }));
+
+    expect(screen.getByRole('button', { name: 'Ladder operations' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('Score:')).not.toBeInTheDocument();
+  });
+});
+
 describe('ShiftReportsTab — reports filed by the officer on the rig', () => {
   const shift = (id: string, officer: string) => ({
     id,

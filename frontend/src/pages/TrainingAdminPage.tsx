@@ -13,7 +13,7 @@
  * Requires: training.manage permission
  */
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
@@ -25,11 +25,13 @@ import {
   attentionCountsByTab,
   getTrainingAdminArea,
   resolveTrainingAdminLocation,
+  trainingAdminAreasFor,
   tabId,
   tabPanelId,
   type TrainingAdminAreaId,
 } from '../components/training/trainingAdminAreas';
 import type { AdminHubSummary } from '../types/adminHub';
+import { usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 // Lazy-loaded tab components
@@ -42,6 +44,7 @@ const ReviewSubmissionsPage = lazyWithRetry(() => import('./ReviewSubmissionsPag
 const CreateTrainingSessionPage = lazyWithRetry(() => import('./CreateTrainingSessionPage'));
 const ShiftReportPage = lazyWithRetry(() => import('./ShiftReportPage'));
 const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEntrySettingsPanel'));
+const PracticalSkillsSettingsPanel = lazyWithRetry(() => import('./training/PracticalSkillsSettingsPanel'));
 const SkillEvaluationsTab = lazyWithRetry(() => import('./training/SkillEvaluationsTab'));
 const KnowledgeTestsTab = lazyWithRetry(() => import('./training/KnowledgeTestsTab'));
 
@@ -115,6 +118,8 @@ const TabContent: React.FC<{ area: TrainingAdminAreaId; tab: string; onMetricsSa
       return <SkillsTestingTestRecordsTab />;
     case 'manual-entry':
       return <ManualEntrySettingsPanel />;
+    case 'practical-skills':
+      return <PracticalSkillsSettingsPanel />;
     case 'integrations':
       return <ExternalTrainingPage />;
     case 'import':
@@ -144,18 +149,24 @@ export const TrainingAdminPage: React.FC = () => {
   const [frameToken, setFrameToken] = useState(0);
   const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({});
 
+  // The practical-skills system the department does not run is left out, and
+  // a link to one of its destinations lands on the area's first page instead.
+  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const areas = useMemo(() => trainingAdminAreasFor(practicalSkillsMethod), [practicalSkillsMethod]);
+
   // Derived from the URL on every render rather than mirrored into state, so
   // browser back/forward and in-app links can never leave the two disagreeing.
   const { area: activeAreaId, tab: activeTab } = resolveTrainingAdminLocation(
     searchParams.get('page'),
-    searchParams.get('tab')
+    searchParams.get('tab'),
+    areas
   );
-  const activeArea = getTrainingAdminArea(activeAreaId);
+  const activeArea = getTrainingAdminArea(activeAreaId, areas);
 
   const navigateTo = (area: TrainingAdminAreaId, tab: string) => setSearchParams({ page: area, tab });
 
   const handleAreaChange = (areaId: TrainingAdminAreaId) => {
-    const area = getTrainingAdminArea(areaId);
+    const area = getTrainingAdminArea(areaId, areas);
     navigateTo(areaId, area.destinations[0]?.id ?? '');
   };
 
@@ -181,6 +192,7 @@ export const TrainingAdminPage: React.FC = () => {
       }
       nav={
         <TrainingAdminNav
+          areas={areas}
           activeArea={activeArea}
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
