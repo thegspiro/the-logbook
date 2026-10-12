@@ -86,6 +86,7 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.finance_settings import load_finance_settings
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
@@ -3169,6 +3170,25 @@ class FinanceService:
             )
         )
 
+    @staticmethod
+    def _has_pending_step_records(entity_type_value, entity_id_column):
+        """EXISTS an approval step still waiting on someone for this entity.
+
+        A request whose chain has run to the end but is still waiting for
+        approval is held for a second approver by the dual-approval threshold
+        (``_held_for_second_approver``); with nothing left in its chain, the
+        manual path is how that approver acts. One predicate shared by the
+        listing and the manual actions, for the reason ``_has_step_records``
+        gives.
+        """
+        return exists(
+            select(1).where(
+                ApprovalStepRecord.entity_type == entity_type_value,
+                ApprovalStepRecord.entity_id == entity_id_column,
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+            )
+        )
+
     async def _lock_unrouted_entity(
         self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ):
@@ -3196,10 +3216,10 @@ class FinanceService:
             raise ManualApprovalConflictError(
                 f"This {label.lower()} is not waiting for approval"
             )
-        has_steps = await self.db.execute(
-            select(self._has_step_records(entity_type, entity_id))
+        has_pending_steps = await self.db.execute(
+            select(self._has_pending_step_records(entity_type, entity_id))
         )
-        if has_steps.scalar():
+        if has_pending_steps.scalar():
             raise ManualApprovalConflictError(
                 "This request has approval steps; approve it through those steps"
             )
@@ -3229,11 +3249,26 @@ class FinanceService:
             action="approve",
             record=entity_type.value.replace("_", " "),
         )
+        # A request held for a second approver cannot be completed by someone
+        # who has already approved it, through its chain or here.
+        if str(approver_id) in await self._approvers_so_far(
+            entity_type, entity, org_id
+        ):
+            raise SeparationOfDutiesError(
+                "You have already approved this request. It needs a second "
+                "approval from someone else."
+            )
         # Shared with the chain path so status, approved_by/approved_at and
         # budget encumbrance are handled identically.
-        await self._finalize_approval(entity_type, entity_id, approver_id, org_id)
+        completed = await self._finalize_approval(
+            entity_type, entity_id, approver_id, org_id
+        )
         logger.info(
-            "{} {} manually approved by {}", entity_type.value, entity_id, approver_id
+            "{} {} manually {} by {}",
+            entity_type.value,
+            entity_id,
+            "approved" if completed else "given its first approval",
+            approver_id,
         )
         return entity
 
@@ -3266,7 +3301,11 @@ class FinanceService:
     async def get_unrouted_approvals(
         self, org_id: str, *, skip: int = 0, limit: int = 100
     ) -> list[dict]:
-        """Requests waiting for approval that have no approval steps.
+        """Requests waiting for a manual approval decision.
+
+        Those no approval chain applies to, and those held for a second
+        approver by the dual-approval threshold — a chain that has run to its
+        end, or a first manual approval (``awaiting_second_approval``).
 
         The same row shape as get_pending_approvals, minus the step fields.
         """
@@ -3278,10 +3317,14 @@ class FinanceService:
                 PurchaseRequest.estimated_amount.label("amount"),
                 PurchaseRequest.requested_by.label("requester_id"),
                 PurchaseRequest.created_at.label("submitted_at"),
+                PurchaseRequest.first_approved_by.label("first_approved_by"),
+                self._has_step_records(
+                    ApprovalEntityType.PURCHASE_REQUEST, PurchaseRequest.id
+                ).label("has_steps"),
             ).where(
                 PurchaseRequest.organization_id == org_id,
                 PurchaseRequest.status == PurchaseRequestStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.PURCHASE_REQUEST, PurchaseRequest.id
                 ),
             ),
@@ -3292,10 +3335,14 @@ class FinanceService:
                 ExpenseReport.total_amount,
                 ExpenseReport.submitted_by,
                 ExpenseReport.created_at,
+                ExpenseReport.first_approved_by,
+                self._has_step_records(
+                    ApprovalEntityType.EXPENSE_REPORT, ExpenseReport.id
+                ),
             ).where(
                 ExpenseReport.organization_id == org_id,
                 ExpenseReport.status == ExpenseReportStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.EXPENSE_REPORT, ExpenseReport.id
                 ),
             ),
@@ -3306,10 +3353,14 @@ class FinanceService:
                 CheckRequest.amount,
                 CheckRequest.requested_by,
                 CheckRequest.created_at,
+                CheckRequest.first_approved_by,
+                self._has_step_records(
+                    ApprovalEntityType.CHECK_REQUEST, CheckRequest.id
+                ),
             ).where(
                 CheckRequest.organization_id == org_id,
                 CheckRequest.status == CheckRequestStatus.PENDING_APPROVAL,
-                ~self._has_step_records(
+                ~self._has_pending_step_records(
                     ApprovalEntityType.CHECK_REQUEST, CheckRequest.id
                 ),
             ),
@@ -3322,6 +3373,8 @@ class FinanceService:
                 entities.c.title,
                 entities.c.amount,
                 entities.c.submitted_at,
+                entities.c.first_approved_by,
+                entities.c.has_steps,
                 User.first_name,
                 User.last_name,
                 User.preferred_name,
@@ -3358,6 +3411,11 @@ class FinanceService:
                     "entity_amount": row.amount,
                     "requester_name": requester_name,
                     "submitted_at": row.submitted_at,
+                    # Its chain has run, or one approval is already recorded:
+                    # what it waits for is a second, different approver.
+                    "awaiting_second_approval": bool(row.has_steps)
+                    or bool(row.first_approved_by),
+                    "first_approved_by": row.first_approved_by,
                 }
             )
         return rows
@@ -3510,60 +3568,131 @@ class FinanceService:
         email: Optional[str] = result.scalar_one_or_none()
         return email
 
+    @staticmethod
+    def _approval_amount(entity_type: ApprovalEntityType, entity) -> Decimal:
+        if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
+            return Decimal(entity.estimated_amount or 0)
+        if entity_type == ApprovalEntityType.EXPENSE_REPORT:
+            return Decimal(entity.total_amount or 0)
+        return Decimal(entity.amount or 0)
+
+    async def _approvers_so_far(
+        self, entity_type: ApprovalEntityType, entity, org_id: str
+    ) -> set[str]:
+        """Everyone who has approved the request, once each.
+
+        A chain step approved in the app counts as the member who approved it;
+        one approved from an emailed link (``acted_by`` is empty) as the
+        address the step names, a different person from any member. An
+        auto-approved step counts as nobody. A first approval given outside
+        the chain is on the request.
+        """
+        people: set[str] = set()
+        records = await self.get_approval_records(entity_type, entity.id, org_id)
+        for record in records:
+            if record.status != ApprovalStepStatus.APPROVED:
+                continue
+            if record.acted_by:
+                people.add(str(record.acted_by))
+            elif record.step is not None and record.step.approver_value:
+                people.add("email:" + record.step.approver_value.strip().lower())
+        if entity.first_approved_by:
+            people.add(str(entity.first_approved_by))
+        return people
+
+    async def _held_for_second_approver(
+        self,
+        entity_type: ApprovalEntityType,
+        entity,
+        approver_id: Optional[str],
+        org_id: str,
+    ) -> bool:
+        """Whether this approval leaves the request waiting for another person.
+
+        The department's dual-approval threshold: at or above it, a request is
+        approved only once two different people have approved it. This is the
+        one place both paths reach — the end of an approval chain and a manual
+        approval — so a single-step chain, or one person approving every step,
+        cannot complete a request above the threshold either. The first
+        approval given outside a chain is recorded on the request.
+        """
+        threshold = (
+            await load_finance_settings(self.db, org_id)
+        ).dual_approval_threshold
+        if threshold is None or self._approval_amount(entity_type, entity) < threshold:
+            return False
+        people = await self._approvers_so_far(entity_type, entity, org_id)
+        if approver_id:
+            people.add(str(approver_id))
+        if len(people) >= 2:
+            return False
+        if approver_id and not entity.first_approved_by:
+            entity.first_approved_by = approver_id
+            entity.first_approved_at = datetime.now(timezone.utc)
+            await self.db.flush()
+        logger.info("{} {} held for a second approver", entity_type.value, entity.id)
+        return True
+
+    def is_awaiting_second_approval(
+        self, entity_type: ApprovalEntityType, entity, records
+    ) -> bool:
+        """A request waiting for approval with nothing left in its chain.
+
+        Reported on the request so the screen offers the manual decision
+        rather than working out the hold itself (CLAUDE.md pitfall #29). It
+        follows the predicate the manual actions accept: no step still
+        pending, and either a chain that has run or a first approval recorded.
+        """
+        _model, pending_status, _label = self._unrouted_mapping(entity_type)
+        if entity.status != pending_status:
+            return False
+        if any(r.status == ApprovalStepStatus.PENDING for r in records):
+            return False
+        return bool(records) or bool(entity.first_approved_by)
+
     async def _finalize_approval(
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
         approver_id: Optional[str],
         org_id: str,
-    ) -> None:
-        """Set the entity status to APPROVED and update denormalized fields"""
+    ) -> bool:
+        """Set the entity status to APPROVED and update denormalized fields.
+
+        Returns False, changing only the first-approval record, when the
+        dual-approval threshold holds the request for a second approver.
+        """
+        model, _pending_status, _label = self._unrouted_mapping(entity_type)
+        result = await self.db.execute(
+            select(model).where(model.id == entity_id, model.organization_id == org_id)
+        )
+        entity = result.scalar_one_or_none()
+        if entity is None:
+            return False
+        if await self._held_for_second_approver(
+            entity_type, entity, approver_id, org_id
+        ):
+            return False
+
         now = datetime.now(timezone.utc)
+        entity.approved_by = approver_id
+        entity.approved_at = now
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
-            result = await self.db.execute(
-                select(PurchaseRequest).where(
-                    PurchaseRequest.id == entity_id,
-                    PurchaseRequest.organization_id == org_id,
+            entity.status = PurchaseRequestStatus.APPROVED
+            # Encumber budget
+            if entity.budget_id:
+                await self._encumber_budget(
+                    entity.budget_id,
+                    entity.estimated_amount,
+                    entity.organization_id,
                 )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = PurchaseRequestStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
-                # Encumber budget
-                if entity.budget_id:
-                    await self._encumber_budget(
-                        entity.budget_id,
-                        entity.estimated_amount,
-                        entity.organization_id,
-                    )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
-                select(ExpenseReport).where(
-                    ExpenseReport.id == entity_id,
-                    ExpenseReport.organization_id == org_id,
-                )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = ExpenseReportStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
-        elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
-                select(CheckRequest).where(
-                    CheckRequest.id == entity_id,
-                    CheckRequest.organization_id == org_id,
-                )
-            )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = CheckRequestStatus.APPROVED
-                entity.approved_by = approver_id
-                entity.approved_at = now
+            entity.status = ExpenseReportStatus.APPROVED
+        else:
+            entity.status = CheckRequestStatus.APPROVED
 
         await self.db.flush()
+        return True
 
     async def _finalize_denial(
         self,

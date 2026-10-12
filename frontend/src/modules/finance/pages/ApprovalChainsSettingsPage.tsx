@@ -31,6 +31,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { DualApprovalSettingsCard } from '../components/DualApprovalSettingsCard';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ApprovalEntityType, ApprovalStepType, ApproverCoverageProblem, ApproverType } from '../types';
 import type { ApprovalChain, ApprovalChainStep, ApprovalChainUpdatePayload, ApproverCoverageRow } from '../types';
@@ -615,6 +616,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           New Chain
         </button>
       </div>
+
+      <DualApprovalSettingsCard />
 
       {/* Error */}
       {error && (

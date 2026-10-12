@@ -909,9 +909,36 @@ chain applies to this request. Approve or deny it here."_
   deny it."_ and offers only **Deny**.
 
 Both decisions are written to the audit log
-(`finance.manual_approval_approved` / `finance.manual_approval_denied`). These
-requests do not appear on the Approvals screen, which lists step-based
-approvals only.
+(`finance.manual_approval_approved` / `finance.manual_approval_denied`). Since
+2026-10-11 the **Approvals** screen lists these requests below the steps
+waiting on you, under _Waiting for a decision on their own page_; open one to
+decide it.
+
+### Large Requests Need Two Approvers _(2026-10-11)_
+
+A department can require a **second approver** for large requests. At or above
+the amount it sets, a purchase request, check request or expense report is
+approved only once two different people have approved it.
+
+- **Turning it on.** Open **Finance > Settings > Approval Chains**. The card
+  _Second approver for large requests_ shows the rule. A member with
+  `settings.manage` enters a whole-dollar amount — many departments use
+  $1,000 — and clicks **Save**, or clicks **Turn off**. Finance officers can
+  read the rule but not change it, because it applies to them.
+- **What happens.** The first approval — a chain step, or **Approve** on a
+  request no chain applies to — does not complete the request. It stays
+  **Pending Approval**, and its page shows _"This request needs a second
+  approval from someone who has not approved it yet."_ Another `finance.approve`
+  holder opens it and clicks **Approve**; that completes it. A chain approved
+  by two different people completes as before.
+- **Who can give the second approval.** Anyone with `finance.approve` except
+  the person who submitted the request and anyone who has already approved it
+  — they see only **Deny**. Approving the same request twice is refused.
+- **Finding them.** Held requests are listed on the **Approvals** screen under
+  _Waiting for a decision on their own page_, marked _A second approver_.
+  Nobody is emailed when a request is waiting for its second approval.
+- The budget is committed (encumbered) once, when the request is fully
+  approved.
 
 <!-- Screenshot needed:
 _[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_

@@ -324,6 +324,8 @@ const CheckRequestDetailPage: React.FC = () => {
         entityId={cr.id}
         status={cr.status}
         approvalStepCount={cr.approvalSteps.length}
+        awaitingSecondApproval={cr.awaitingSecondApproval}
+        firstApprovedBy={cr.firstApprovedBy}
         requesterId={cr.requestedBy}
         onDecided={() => void fetchCheckRequest(cr.id)}
       />
