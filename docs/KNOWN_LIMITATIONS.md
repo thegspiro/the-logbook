@@ -5077,6 +5077,108 @@ assert_different_person(
 )
 ```
 
+## SF8-04-2 — A Storefront Order Status Update Can Settle A Payment From A Stale Read (2026-10-12)
+
+`StorefrontService.update_order_status` is a fifth path that can self-settle an
+order's payment (alongside `record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`): when the caller's target `status` is
+`PAID` and the order is not already paid/waived, it sets
+`order.amount_paid = _money(order.total)` from a plain, **unlocked**
+`get_order()` read.
+
+Security review (pass 8, 2026-10-12) fixed the identical shape in
+`refund_order` (SF8-04-1) once `record_payment`/`mark_order_paid` were found
+already fixed by other work (SF-9, 2026-10-05: both now take
+`get_order(..., for_update=True)` before any read-modify-write on
+`amount_paid`). `update_order_status`'s settlement branch is the one
+remaining unlocked writer of that column.
+
+**Why it is lower-severity today than SF-9 was:** this branch always writes
+the _full_ order total rather than an incremental delta, so the specific race
+this review could demonstrate (a webhook auto-apply landing mid-update) does
+not currently lose money — the stale write still lands on the correct total
+in that interleaving. The latent risk is structural: this is the busiest of
+the five settlement paths (the generic order-lifecycle status endpoint, used
+for routine transitions that never touch payment, not a specialized payment
+action), and a future change to its arithmetic — e.g. to record a partial
+settlement instead of always the full total — would silently reintroduce the
+SF-9 class of lost-update on the highest-traffic of the five call sites with
+no new review catching it, because the unlocked read is already there today.
+
+**Why not fixed directly.** Unlike `refund_order` (single-purpose,
+infrequent, locking it has no other effect), `update_order_status` handles
+every order-lifecycle transition, most of which never touch `amount_paid`.
+Taking an unconditional lock here serializes _every_ status change on _every_
+order behind a row lock, not just the ones that settle payment — a broader
+behavior/performance change than a drive-by fix should make. Two
+non-equivalent options for an owner to choose between:
+
+1. Re-read the order with `for_update=True` immediately before the
+   `settles_payment` branch's writes (cheap, reads the order twice on that
+   path only).
+2. Have the `settles_payment` branch delegate to the already-fixed
+   `record_payment(order_id, organization_id, None, ...)`, the way
+   `mark_order_paid` now does — but its post-settlement `status` transition
+   rule differs slightly from this method's own, so reconciling the two needs
+   care.
+
+Found in security-review SF-04 pass 8 (2026-10-12); see
+`docs/security-review/SF-04-storefront-payments.md` → SF8-04-2.
+
+## SF8-04-3 — Waiving A Storefront Order's Payment Does Not Check It Is Not Already Settled (2026-10-12)
+
+`StorefrontService.waive_order_payment` unconditionally sets
+`payment_status = WAIVED` after checking only that the order is not
+cancelled and that the actor is not the order's own member
+(`assert_different_person`). Unlike its sibling `mark_order_paid`, it has no
+`_is_settled(order)` early return.
+
+**No concurrency is required to hit this.** In plain sequential use: a
+payment is recorded on an order (`payment_status = PAID`,
+`amount_paid = 100`), and later a quartermaster calls "waive" on that same
+order — e.g. from a stale admin-hub tab that still showed it unpaid. The
+order ends up with `amount_paid = 100` **and** `payment_status = WAIVED`, an
+internally inconsistent row: the ledger shows money collected on an order
+flagged as comped, and the sales rollup (which keys off `payment_status`,
+per this method's own docstring — "the sales rollup still reports the
+order's value as uncollected") now **under-reports revenue that was, in
+fact, collected.** The same unlocked-read shape SF8-04-2/SF-9 describe makes
+this easier to hit by accident under concurrency too, but the inconsistency
+exists even with no race at all.
+
+**Impact:** a data-integrity/reporting defect, not a money-loss or
+access-control one — no funds move and no unauthorized party gains anything.
+
+**Why not fixed.** This is a business-rule gap, not a mechanical lost-update:
+adding a lock alone does not change the unconditional overwrite, since the
+method never branches on the order's settlement state. A correct fix needs a
+product decision on intended behavior — refuse with a `ValueError` (matching
+`mark_order_paid`'s guard), or silently no-op (matching that same guard's
+choice for its own, already-settled case) — before any code changes.
+
+Found in security-review SF-04 pass 8 (2026-10-12); see
+`docs/security-review/SF-04-storefront-payments.md` → SF8-04-3.
+
+## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12)
+
+`.github/workflows/ci.yml`'s Backend Lint job installs
+`flake8==7.3.0`/`isort==9.0.1` explicitly (its own comment at lines 110-121
+explains why: an earlier drift let "CI was green against a toolchain no
+developer actually ran"). `backend/requirements.txt` currently declares
+`flake8==7.4.1`/`isort==9.0.2` — a developer running `pip install -r
+requirements.txt` and then `flake8`/`isort` locally is not running what CI
+runs, which is exactly the failure mode the workflow's own comment warns
+against. `black==26.5.1` is in step with both.
+
+Found incidentally during security review SF-04 pass 8 (2026-10-12) while
+installing the completion gate's linters at CI's pinned versions — not a
+storefront-specific finding, and not fixed here (it is a repo-wide tooling
+question: bump the workflow's pin to match `requirements.txt`, or revert
+`requirements.txt` to match the workflow, is a one-line choice either way,
+but is outside this feature's scope and better made by whichever pass next
+touches `requirements.txt` or the workflow file — most likely Feature 00's
+cross-cutting sweep or Feature 33's core-infrastructure pass).
+
 ## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
 
 `/locations/:locationId/check-in` is where a room's NFC sticker lands a member's
