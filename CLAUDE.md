@@ -98,13 +98,22 @@ requests do not already record.
 So the narrative goes where it was already going, in files that are per-feature
 and therefore rarely land at the same offset:
 
-| What                                       | Where                                                                   |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| Why a change was made, what it fixed       | the pull request's Summary and Changes                                  |
-| A security-review finding and its fix      | `docs/security-review/<FEATURE>.md` and its `PROGRESS.md`               |
-| An app-review pass                         | `docs/app-review/PROGRESS.md`                                           |
-| Something the owner must decide, or accept | `docs/KNOWN_LIMITATIONS.md`                                             |
-| Anything that can stop an upgrade booting  | `docs/UPGRADING.md` — **still required**, and not covered by the freeze |
+| What                                       | Where                                                                      |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| Why a change was made, what it fixed       | the pull request's Summary and Changes                                     |
+| A security-review finding and its fix      | `docs/security-review/<FEATURE>.md` and its `PROGRESS.md`                  |
+| An app-review pass                         | `docs/app-review/PROGRESS.md`                                              |
+| A documentation pass's change audit        | top of `docs/CHANGE_AUDIT_YYYY-MM.md` and `wiki/Recent-Changes-YYYY-MM.md` |
+| Something the owner must decide, or accept | `docs/KNOWN_LIMITATIONS.md`                                                |
+| Anything that can stop an upgrade booting  | `docs/UPGRADING.md` — **still required**, and not covered by the freeze    |
+
+**Change audits are filed by month, one section per pass.** A documentation
+pass adds its section at the top of the current month's
+`docs/CHANGE_AUDIT_YYYY-MM.md` and `wiki/Recent-Changes-YYYY-MM.md` (creating
+both files when a month begins), never a new per-pass file: twenty per-pass
+files had piled up by 2026-10-12 and were merged into monthly ones. A pass is
+one writer a day, so a shared monthly file does not reintroduce the offset
+collisions described above.
 
 `docs/UPGRADING.md` is the one exemption and is deliberate: an operator
 upgrading an existing installation has nowhere else to read that a flag now
@@ -396,7 +405,9 @@ import { useMyStore } from "./myStore";
 
 // Access state via getState(), reset in beforeEach:
 beforeEach(() => {
-  useMyStore.setState({/* initial state */});
+  useMyStore.setState({
+    /* initial state */
+  });
   vi.clearAllMocks();
 });
 ```

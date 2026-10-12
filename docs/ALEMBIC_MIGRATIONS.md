@@ -145,7 +145,7 @@ does. It is not the source of truth for the current head.
 >
 > The full ordered route for the 2026-08-10 → 08-16 window, with what each
 > revision answers and the required preflight, is in the
-> [six-day change audit](./CHANGE_AUDIT_2026-08-10_TO_16.md#alembic-route-upgrade-data-path).
+> [six-day change audit](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-8).
 >
 > **Superseded (2026-08-12):** The head was **`20260812_0001`**
 > (`20260812_0001_add_saved_ballot_templates.py`).
@@ -420,7 +420,7 @@ are a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 ## August 12–14, 2026 upgrade set
 
 The revisions and their data/permission backfills for this window are listed in
-the [three-day change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+the [three-day change audit](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-7).
 Of particular importance, active-prospect email reconciliation lives in
 `20260814_0003`, not the already released uniqueness migration. Require one
 `alembic heads` result, back up first, run `alembic upgrade head`, and inspect

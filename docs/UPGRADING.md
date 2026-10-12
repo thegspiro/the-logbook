@@ -418,7 +418,7 @@ earliest `created_at` (then the lowest `id`), review the applications linked to
 the others, and set those others to `inactive`. Do not delete them. Re-run the
 query until it returns nothing, then upgrade, and read the migration log
 afterwards for anything the reconciliation merged. The full procedure is in the
-[August 12–14 change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+[August 12–14 change audit](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-7).
 
 ### `RATE_LIMIT_ENABLED` is enforced (2026-08-01)
 

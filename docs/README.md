@@ -12,7 +12,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔄 Recent-change handoff
 
-**[Change audit — 2026-09-24 through 2026-10-04](./CHANGE_AUDIT_2026-09-24_TO_10-04.md)**
+**[Change audit — 2026-09-24 through 2026-10-04](./CHANGE_AUDIT_2026-09.md#change-audit-september-24--october-4-2026)**
 is the current release handoff. 250 pull requests and 62 migrations (head
 `d058b5e7c1f4`), most of them fixes from the new browser-driven
 [workflow review](./workflow-review/README.md), plus a plain-language pass over
@@ -21,10 +21,10 @@ probationary members can sign in; inventory NFC tags, room door tags, outside
 shifts, "I was there" requests and a finance Approvals screen are new. It
 carries the Alembic route, the permission movements, and the screenshot
 (84 replace, 38 new) and YouTube disposition. A narrower
-[October 3 – 4 audit](./CHANGE_AUDIT_2026-10-03_TO_10-04.md), written in
+[October 3 – 4 audit](./CHANGE_AUDIT_2026-10.md#change-audit-october-3--4-2026), written in
 parallel, covers the window's last day in more detail.
 
-**[Change audit — 2026-09-15 through 2026-09-23](./CHANGE_AUDIT_2026-09-15_TO_09-23.md)**
+**[Change audit — 2026-09-15 through 2026-09-23](./CHANGE_AUDIT_2026-09.md#change-audit-september-15--23-2026)**
 was the previous handoff. 40 pull requests and four migrations (head
 `5a70c5dcd138`): **suggestion boxes** with structural anonymity, meeting stages
 that advance on **finalized** attendance and bind a coordinator's own Advance,
@@ -36,12 +36,12 @@ went is indexed in
 [`training/20-september-2026-release-changes.md`](./training/20-september-2026-release-changes.md).
 
 Earlier windows since the entry below:
-[September 12–15](./CHANGE_AUDIT_2026-09-12_TO_09-15.md),
-[September 6–12](./CHANGE_AUDIT_2026-09-06_TO_09-12.md),
-[August 31 – September 6](./CHANGE_AUDIT_2026-08-31_TO_09-06.md) and
-[August 24–31](./CHANGE_AUDIT_2026-08-24_TO_31.md).
+[September 12–15](./CHANGE_AUDIT_2026-09.md#change-audit-september-12--15-2026),
+[September 6–12](./CHANGE_AUDIT_2026-09.md#change-audit-september-6--12-2026),
+[August 31 – September 6](./CHANGE_AUDIT_2026-08.md#change-audit-august-31--september-6-2026) and
+[August 24–31](./CHANGE_AUDIT_2026-08.md#change-audit-august-2431-2026).
 
-**[Change audit — 2026-08-23 through 2026-08-24](./CHANGE_AUDIT_2026-08-23_TO_24.md)**
+**[Change audit — 2026-08-23 through 2026-08-24](./CHANGE_AUDIT_2026-08.md#change-audit-august-2324-2026)**
 was the release handoff for its window. 46 pull requests and twelve migrations in
 nineteen hours: a scheduling board that claims a seat in one tap plus standing
 (recurring) shifts, NFC ID cards and an unattended check-in station, network
@@ -54,22 +54,22 @@ of them reachable by an ordinary member**. It carries the Alembic route (head
 authorization analysis, the known limitations opened, and the screenshot /
 YouTube disposition.
 
-**[Change audit — 2026-08-19 through 2026-08-23](./CHANGE_AUDIT_2026-08-19_TO_23.md)**
+**[Change audit — 2026-08-19 through 2026-08-23](./CHANGE_AUDIT_2026-08.md#change-audit-august-1923-2026)**
 covers the window immediately before it: 147 pull requests, the Governance →
 Legal Documents module, the dashboard widget layer, the equipment-check rewrite
 that made shift submissions atomic and idempotent, a breaking pagination change
 on two scheduling endpoints, and the app-wide mobile overlay repair.
 
-**[Three-day change and connection audit — 2026-08-17 through 2026-08-19](./CHANGE_AUDIT_2026-08-17_TO_19.md)**
+**[Three-day change and connection audit — 2026-08-17 through 2026-08-19](./CHANGE_AUDIT_2026-08.md#change-audit-august-1719-2026)**
 was the release handoff before that. It covers PII-free call volume tracking and the
 resumable shift close-out wizard, the cross-module NFC tag surface, the
 configuration preflight tool, the rewritten privacy notice, and the red-team
 security batch.
 
-**[August 15–16 audit](./CHANGE_AUDIT_2026-08-15_TO_16.md)** covers the window
+**[August 15–16 audit](./CHANGE_AUDIT_2026-08.md#change-audit-august-1516-2026)** covers the window
 before that one.
 
-**[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08-10_TO_16.md)**
+**[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08.md#six-day-change-and-connection-audit--2026-08-10-through-2026-08-16)**
 was the previous release handoff. It carries what the three-day frame could not
 show: every route added across the window with its real permission gate, the
 full 28-revision Alembic route from `20260809_0002` to the then-head
@@ -77,7 +77,7 @@ full 28-revision Alembic route from `20260809_0002` to the then-head
 required preflight, the supply-loop and restock data paths, a client-side
 storage map, and the 2026-08-15 → 08-16 onboarding and canvas changes.
 
-**[Three-day change and connection audit — 2026-08-12 through 2026-08-14](./CHANGE_AUDIT_2026-08-12_TO_14.md)**
+**[Three-day change and connection audit — 2026-08-12 through 2026-08-14](./CHANGE_AUDIT_2026-08.md#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14)**
 remains authoritative for the middle of that window: the per-area inventory of
 changed pages, API connection points, models/data points, data-sharing
 boundaries, edge cases, training screenshot work, and YouTube script work. Its

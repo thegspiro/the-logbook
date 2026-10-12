@@ -579,5 +579,5 @@ controls navigation/banner presentation. Members may PATCH `/api/v1/store/orders
 on their own order; this records an external method and does not settle payment.
 Canonical product locks prevent option/variant spellings from creating distinct
 locks. Notification and test-send responses never include recipient addresses.
-See [the three-day audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#release-map) and the
+See [the three-day audit](./CHANGE_AUDIT_2026-08.md#release-map-7) and the
 [storefront training guide](./training/18-storefront.md#working-the-orders).

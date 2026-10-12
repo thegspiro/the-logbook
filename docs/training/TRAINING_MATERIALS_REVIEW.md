@@ -3,7 +3,7 @@
 ## 2026-08-14 three-day documentation gate
 
 Changes from 2026-08-12 through 2026-08-14 are catalogued in the
-[three-day change and connection audit](../CHANGE_AUDIT_2026-08-12_TO_14.md).
+[three-day change and connection audit](../CHANGE_AUDIT_2026-08.md#three-day-change-and-connection-audit--2026-08-12-through-2026-08-14).
 Authors adding the new workflows must place this marker at the exact teaching
 step until a verified image exists, with the description replaced:
 
