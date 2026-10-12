@@ -28,7 +28,7 @@ class AttendanceDashboardService:
 
     async def get_dashboard(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         period_months: int = 12,
         meeting_type: Optional[str] = None,
     ) -> Dict:

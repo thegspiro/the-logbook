@@ -26,6 +26,7 @@ from app.models.user import Organization, Position, User, user_positions
 from app.schemas.testing_checklist import TestingCheckUpsert
 from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_org_today
+from app.utils.sql_results import rows_affected
 
 # A run covers the pages the router declares — a few hundred. The cap is well
 # clear of that and exists so a scripted client cannot grow the table without
@@ -381,7 +382,7 @@ class TestingChecklistService:
             query = query.where(TestingChecklistEntry.user_id == user_id)
         result = await self.db.execute(query)
         await self.db.commit()
-        return int(result.rowcount or 0)
+        return int(rows_affected(result) or 0)
 
     async def _positions_of(self, user: User) -> list[str]:
         """The tester's seats, for the snapshot on the row.

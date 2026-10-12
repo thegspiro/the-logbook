@@ -27,6 +27,7 @@ from app.utils.org_timezone import (
     resolve_scheduling_timezone,
     today_in,
 )
+from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,10 @@ class NotificationsService:
     # ============================================
 
     async def create_rule(
-        self, organization_id: UUID, rule_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        rule_data: Dict[str, Any],
+        created_by: UUID | str,
     ) -> Tuple[Optional[NotificationRule], Optional[str]]:
         """Create a new notification rule"""
         try:
@@ -60,7 +64,7 @@ class NotificationsService:
 
     async def get_rules(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         category: Optional[str] = None,
         enabled: Optional[bool] = None,
         search: Optional[str] = None,
@@ -96,7 +100,7 @@ class NotificationsService:
         return list(result.scalars().all())
 
     async def get_rule_by_id(
-        self, rule_id: UUID, organization_id: UUID
+        self, rule_id: UUID, organization_id: UUID | str
     ) -> Optional[NotificationRule]:
         """Get a notification rule by ID"""
         result = await self.db.execute(
@@ -108,7 +112,7 @@ class NotificationsService:
         return notification_rule
 
     async def update_rule(
-        self, rule_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self, rule_id: UUID, organization_id: UUID | str, update_data: Dict[str, Any]
     ) -> Tuple[Optional[NotificationRule], Optional[str]]:
         """Update a notification rule"""
         try:
@@ -126,7 +130,7 @@ class NotificationsService:
             return None, safe_error_detail(e)
 
     async def delete_rule(
-        self, rule_id: UUID, organization_id: UUID
+        self, rule_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete a notification rule"""
         try:
@@ -142,7 +146,7 @@ class NotificationsService:
             return False, safe_error_detail(e)
 
     async def toggle_rule(
-        self, rule_id: UUID, organization_id: UUID, enabled: bool
+        self, rule_id: UUID, organization_id: UUID | str, enabled: bool
     ) -> Tuple[Optional[NotificationRule], Optional[str]]:
         """Toggle a notification rule on/off"""
         return await self.update_rule(rule_id, organization_id, {"enabled": enabled})
@@ -202,7 +206,7 @@ class NotificationsService:
 
     async def get_logs(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         channel: Optional[str] = None,
         recipient_id: Optional[UUID] = None,
         skip: int = 0,
@@ -269,8 +273,8 @@ class NotificationsService:
 
     async def get_user_notifications(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         include_expired: bool = False,
         include_read: bool = True,
         skip: int = 0,
@@ -333,8 +337,8 @@ class NotificationsService:
 
     async def get_user_unread_count(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
     ) -> int:
         """Get count of unread, non-expired in-app notifications for a user."""
         now = datetime.now(timezone.utc)
@@ -353,7 +357,9 @@ class NotificationsService:
         )
         return result.scalar() or 0
 
-    def _stackable_unread_filters(self, organization_id: UUID, user_id: UUID):
+    def _stackable_unread_filters(
+        self, organization_id: UUID | str, user_id: UUID | str
+    ):
         """Rows the inbox folds into a per-category stack.
 
         Pinned rows are excluded on purpose: a pin is the member asking for one
@@ -377,7 +383,7 @@ class NotificationsService:
         )
 
     async def get_user_unread_counts_by_category(
-        self, organization_id: UUID, user_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str
     ) -> Dict[str, int]:
         """Count a user's unread, unpinned, non-expired in-app rows per category.
 
@@ -393,7 +399,7 @@ class NotificationsService:
         return {category: count for category, count in result.all() if category}
 
     async def mark_user_category_read(
-        self, organization_id: UUID, user_id: UUID, category: str
+        self, organization_id: UUID | str, user_id: UUID | str, category: str
     ) -> int:
         """Mark a user's stackable unread rows in one category as read.
 
@@ -408,7 +414,7 @@ class NotificationsService:
             .execution_options(synchronize_session=False)
         )
         await self.db.commit()
-        return result.rowcount or 0
+        return rows_affected(result) or 0
 
     async def archive_related_notifications(
         self,
@@ -457,7 +463,7 @@ class NotificationsService:
                         read_at=func.coalesce(NotificationLog.read_at, now),
                     )
                 )
-                matched = result.rowcount or 0
+                matched = rows_affected(result) or 0
         except Exception:
             logger.exception(
                 "Failed to archive %s notification for %s=%s",
@@ -483,7 +489,7 @@ class NotificationsService:
         return matched
 
     async def mark_all_user_notifications_read(
-        self, organization_id: UUID, user_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str
     ) -> int:
         """Mark all unread in-app notifications as read for a user.
 
@@ -505,7 +511,7 @@ class NotificationsService:
         return len(logs)
 
     async def mark_all_logs_read(
-        self, organization_id: UUID, recipient_id: Optional[UUID] = None
+        self, organization_id: UUID | str, recipient_id: Optional[UUID] = None
     ) -> int:
         """Mark unread notification logs as read.
 
@@ -539,8 +545,8 @@ class NotificationsService:
     async def mark_as_read(
         self,
         log_id: UUID,
-        organization_id: UUID,
-        user_id: Optional[UUID] = None,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
         """Mark a notification as read.
 
@@ -576,8 +582,8 @@ class NotificationsService:
     async def toggle_pin(
         self,
         log_id: UUID,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         pinned: bool,
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
         """Pin or unpin a notification for the current user."""
@@ -605,7 +611,7 @@ class NotificationsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
+    async def get_summary(self, organization_id: UUID | str) -> Dict[str, Any]:
         """Get notifications summary statistics"""
         # Total rules
         total_result = await self.db.execute(

@@ -76,7 +76,7 @@ class MinuteService:
     # Action-item assignees (W52-6)
     # ============================================
 
-    async def list_assignable_members(self, organization_id: UUID) -> List[dict]:
+    async def list_assignable_members(self, organization_id: UUID | str) -> List[dict]:
         """Every active member of the department, as ``{id, name}``.
 
         Any active member may be assigned an action item — the owner's
@@ -119,7 +119,7 @@ class MinuteService:
     # ============================================
 
     async def create_minutes(
-        self, data: MinutesCreate, organization_id: UUID, created_by: UUID
+        self, data: MinutesCreate, organization_id: UUID | str, created_by: UUID | str
     ) -> MeetingMinutes:
         """Create new meeting minutes with optional motions and action items"""
         minutes_dict = data.model_dump(exclude={"motions", "action_items"})
@@ -273,7 +273,7 @@ class MinuteService:
         return reloaded
 
     async def _get_template(
-        self, template_id: str, organization_id: UUID
+        self, template_id: str, organization_id: UUID | str
     ) -> Optional[MinutesTemplate]:
         """Get a template by ID"""
         result = await self.db.execute(
@@ -287,7 +287,7 @@ class MinuteService:
     async def get_minutes(
         self,
         minutes_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         restricted: bool = False,
         load_children: bool = True,
     ) -> Optional[MeetingMinutes]:
@@ -326,7 +326,7 @@ class MinuteService:
 
     async def list_minutes(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         meeting_type: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
@@ -419,7 +419,7 @@ class MinuteService:
         return list(result.scalars().all())
 
     async def update_minutes(
-        self, minutes_id: str, organization_id: UUID, data: MinutesUpdate
+        self, minutes_id: str, organization_id: UUID | str, data: MinutesUpdate
     ) -> Optional[MeetingMinutes]:
         """Update meeting minutes (only if in draft or rejected status)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -498,7 +498,9 @@ class MinuteService:
         await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id)
 
-    async def delete_minutes(self, minutes_id: str, organization_id: UUID) -> bool:
+    async def delete_minutes(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> bool:
         """Delete meeting minutes (only if in draft status)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
@@ -516,7 +518,7 @@ class MinuteService:
     # ============================================
 
     async def submit_for_approval(
-        self, minutes_id: str, organization_id: UUID, submitted_by: UUID
+        self, minutes_id: str, organization_id: UUID | str, submitted_by: UUID | str
     ) -> Optional[MeetingMinutes]:
         """Submit draft minutes for approval"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -540,7 +542,7 @@ class MinuteService:
         return await self.get_minutes(minutes_id, organization_id)
 
     async def approve_minutes(
-        self, minutes_id: str, organization_id: UUID, approved_by: UUID
+        self, minutes_id: str, organization_id: UUID | str, approved_by: UUID | str
     ) -> Optional[MeetingMinutes]:
         """Approve submitted minutes"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -570,7 +572,11 @@ class MinuteService:
         return await self.get_minutes(minutes_id, organization_id)
 
     async def reject_minutes(
-        self, minutes_id: str, organization_id: UUID, rejected_by: UUID, reason: str
+        self,
+        minutes_id: str,
+        organization_id: UUID | str,
+        rejected_by: UUID | str,
+        reason: str,
     ) -> Optional[MeetingMinutes]:
         """Reject submitted minutes with a reason"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -593,7 +599,7 @@ class MinuteService:
     # ============================================
 
     async def add_motion(
-        self, minutes_id: str, organization_id: UUID, data: MotionCreate
+        self, minutes_id: str, organization_id: UUID | str, data: MotionCreate
     ) -> Optional[Motion]:
         """Add a motion to meeting minutes"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -624,7 +630,11 @@ class MinuteService:
         return motion
 
     async def update_motion(
-        self, motion_id: str, minutes_id: str, organization_id: UUID, data: MotionUpdate
+        self,
+        motion_id: str,
+        minutes_id: str,
+        organization_id: UUID | str,
+        data: MotionUpdate,
     ) -> Optional[Motion]:
         """Update a motion"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -657,7 +667,7 @@ class MinuteService:
         return motion
 
     async def delete_motion(
-        self, motion_id: str, minutes_id: str, organization_id: UUID
+        self, motion_id: str, minutes_id: str, organization_id: UUID | str
     ) -> bool:
         """Delete a motion"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -688,7 +698,7 @@ class MinuteService:
     # ============================================
 
     async def add_action_item(
-        self, minutes_id: str, organization_id: UUID, data: ActionItemCreate
+        self, minutes_id: str, organization_id: UUID | str, data: ActionItemCreate
     ) -> Optional[ActionItem]:
         """Add an action item to meeting minutes"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -719,7 +729,7 @@ class MinuteService:
         self,
         item_id: str,
         minutes_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: ActionItemUpdate,
         as_assignee: Optional[str] = None,
     ) -> Optional[ActionItem]:
@@ -799,7 +809,7 @@ class MinuteService:
         return item
 
     async def delete_action_item(
-        self, item_id: str, minutes_id: str, organization_id: UUID
+        self, item_id: str, minutes_id: str, organization_id: UUID | str
     ) -> bool:
         """Delete an action item (only on draft/rejected minutes)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
@@ -831,7 +841,9 @@ class MinuteService:
     # Stats & Search
     # ============================================
 
-    async def get_stats(self, organization_id: UUID, restricted: bool = False) -> dict:
+    async def get_stats(
+        self, organization_id: UUID | str, restricted: bool = False
+    ) -> dict:
         """Get aggregate stats for the minutes dashboard.
 
         ``restricted=True`` (a caller without ``minutes.manage``) counts only
@@ -896,7 +908,7 @@ class MinuteService:
 
     async def search_minutes(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         query: str,
         limit: int = 20,
         restricted: bool = False,
@@ -985,7 +997,7 @@ class MinuteService:
     # ============================================
 
     async def create_from_meeting(
-        self, meeting_id: UUID, organization_id: UUID, created_by: UUID
+        self, meeting_id: UUID, organization_id: UUID | str, created_by: UUID | str
     ) -> Optional[MeetingMinutes]:
         """
         Create meeting minutes pre-populated from a Meeting record.
