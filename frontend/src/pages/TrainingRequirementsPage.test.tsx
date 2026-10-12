@@ -245,7 +245,9 @@ describe('TrainingRequirementsPage', () => {
       expect(mockCreateRequirement).toHaveBeenCalledWith(expect.objectContaining({ frequency: 'one_time' }));
     });
     const payload = mockCreateRequirement.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(payload.year).toBeUndefined();
+    // An explicit null, not an omitted key: on create both store no year, but
+    // on an edit only null clears one the requirement already carried.
+    expect(payload.year).toBeNull();
     expect(payload.period_start_month).toBeUndefined();
     expect(payload.period_start_day).toBeUndefined();
     expect(payload.rolling_period_months).toBeUndefined();

@@ -75,6 +75,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
 
 // Repository convention: service dependencies above are mocked before this import.
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
+import { CHECK_TYPE_HELP, CHECK_TYPE_SUMMARY } from './equipmentCheckPresets';
 
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
@@ -313,6 +314,23 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
+  });
+
+  it('edits Required with a switch and keeps the help to one line in the phone editor', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+    const editor = screen.getByRole('dialog', { name: 'Radio' });
+
+    const required = within(editor).getByRole('switch', { name: 'Required' });
+    expect(required).toHaveAttribute('aria-checked', 'true');
+    expect(within(editor).queryByRole('checkbox', { name: 'Required' })).not.toBeInTheDocument();
+    await user.click(required);
+    expect(required).toHaveAttribute('aria-checked', 'false');
+
+    expect(within(editor).getByText(CHECK_TYPE_SUMMARY.function ?? '')).toBeVisible();
+    expect(within(editor).queryByText(CHECK_TYPE_HELP.function ?? '')).not.toBeInTheDocument();
   });
 
   it('opens a focused mobile add flow from the location header', async () => {
@@ -1735,6 +1753,18 @@ describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () =>
     getTemplate.mockResolvedValue(structuredClone(template));
     updateCheckItem.mockResolvedValue({});
     updateCompartment.mockResolvedValue({});
+  });
+
+  it('keeps the full help and the Required checkbox in the laptop item panel', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Show more settings for Radio' }));
+    expect(screen.getByText(CHECK_TYPE_HELP.function ?? '')).toBeInTheDocument();
+    expect(screen.queryByText(CHECK_TYPE_SUMMARY.function ?? '')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Required' })).toBeChecked();
+    expect(screen.queryByRole('switch', { name: 'Required' })).not.toBeInTheDocument();
   });
 
   it('names the toolbar controls where their labels are hidden', async () => {

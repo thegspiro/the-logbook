@@ -2400,8 +2400,7 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     // `div.modal-panel`, the panel itself. Two nearby selectors are wrong
-    // here and both were tried: `div.drawer-panel` belongs to
-    // ApplicantDetailDrawer in prospective-members and matches nothing on
+    // here and both were tried: `div.drawer-panel` matches nothing on
     // this page, and `div[role='dialog']` resolves to the full-viewport
     // backdrop (1425x1200) rather than the 896px panel inside it.
     selector: "div.modal-panel",
@@ -2585,8 +2584,7 @@ export const SHOTS = [
       await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
-    selector:
-      "div:has(> svg) >> text=/You're offline\\. Reports are saved/",
+    selector: "div:has(> svg) >> text=/You're offline\\. Reports are saved/",
   },
   {
     id: "02-90-crew-summary-table",

@@ -2978,3 +2978,28 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   clean · facilities frontend **124 passed** (18 files) · widened-type consumers
   26 passed · backend n/a (no Python changed). See facilities.md → Pass 5.
   Next: B5 elections.
+- **B4 follow-up: FAC2-6 closed, and a verification of mine corrected
+  (2026-10-12)** — the B4 entry above reports FAC2-6 (the apparatus maintenance
+  edit form losing cleared fields) as open and says it was re-verified as live on
+  2026-10-11. **That re-verification was wrong.** The frontend half had been
+  fixed on 2026-10-09 by a separate session (`f4e16fa0`, with tests across the
+  operator, equipment and maintenance modals). The check I relied on was a grep
+  for the conditional-spread idiom, which still matches in the modal's _create_
+  branch — where omitting a blank is correct — so it could not distinguish a
+  live bug from a fixed one, and it returned the same count either way. I then
+  carried the result into a merged PR and into the hand-off to the owner as a bug
+  to fix. What actually remained was the backend half:
+  `ApparatusService.update_maintenance_record` applied updates with a bare
+  `setattr` loop, so an explicit `null` for `is_completed` or
+  `maintenance_type_id` — both NOT NULL columns typed `Optional` in the request
+  schema — reached the commit and failed as `IntegrityError` (a 500) instead of a 400. Reproduced against real SQL before changing anything (2 of 4 new tests
+  failed on the unmodified service, with MySQL error 1048), then fixed with the
+  shared `apply_updates`. The reachable surface is narrow: the form always sends
+  a type and a boolean, so only a direct API client could trigger it. The same
+  doc also said a raw loop would set "an unknown field silently"; that is not
+  reachable, because every key the schema can emit is a real column, and the
+  claim is withdrawn in `facilities.md` and `apparatus.md`. Gate: backend
+  apparatus + structural suites **678 passed, 1 skipped** (an optional
+  dependency) · new file routes to the integration job only (0 under the unit
+  job's marker expression, 4 under `integration`) · flake8 / black clean on the
+  changed Python.

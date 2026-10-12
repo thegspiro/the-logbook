@@ -92,6 +92,22 @@ class TestGrading:
             _type(1, "years"), last, date(2025, 9, 1), [last]
         ) == date(2026, 9, 1)
 
+    @pytest.mark.parametrize(
+        ("value", "unit", "expected"),
+        [
+            (10, "days", date(2025, 9, 11)),
+            (2, "weeks", date(2025, 9, 15)),
+            (3, "months", date(2025, 12, 1)),
+            (2, "years", date(2027, 9, 1)),
+        ],
+    )
+    def test_every_calendar_unit_is_honoured(self, value, unit, expected):
+        last = _record()
+        assert (
+            _nfpa_next_due(_type(value, unit), last, date(2025, 9, 1), [last])
+            == expected
+        )
+
     def test_a_mileage_interval_gives_no_date(self):
         last = _record()
         assert (

@@ -1172,7 +1172,7 @@ A member with no check-in asks to be marked present at an event that is over,
 and the event's organizer, its alternate or an `events.manage` holder decides.
 All five routes require authentication only; who may review is checked per
 event in the handler, because an organizer need not hold `events.manage`. See
-[Module-Events](Module-Events#attendance-requests-i-was-there-2026-09-30).
+[Module-Events](Module-Events#attendance-requests-i-was-there).
 
 ```
 POST   /api/v1/events/{event_id}/attendance-petitions                         # Ask (201)

@@ -1,328 +1,427 @@
 # Docker Deployment
 
-Deploy The Logbook using Docker Compose on any Linux, macOS, or Windows system with Docker installed.
+Install and operate The Logbook with Docker Compose on Linux, macOS or Windows
+(WSL2). Unraid has its own compose file and scripts — see
+[Unraid Deployment](Deployment-Unraid). HTTPS, backups, monitoring and cloud
+hosting are on [Production Deployment](Deployment-Production).
 
 ---
 
-## Prerequisites
+## Requirements
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- 4GB+ RAM (2GB minimum with minimal profile)
-- 20GB+ storage
+- Docker Engine with the Compose plugin, **Compose v2.24.4 or later**
+  (`docker compose version`). The production override uses `!override` and
+  `!reset`, which older Compose rejects — upgrade Compose rather than editing
+  the tags out.
+- 4 GB RAM; the floor is set by ClamAV — see [Memory Profiles](#memory-profiles).
+- Git, and OpenSSL for generating secrets.
 
 ---
 
-## Quick Start
+## Compose Files
+
+The stack is assembled from a base file plus overrides. Always run `docker
+compose` from the repository root.
+
+| File                                   | Purpose                                                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`                   | Base. On its own it is a **development** configuration: `uvicorn --reload`, source bind mount, backend port published, API docs on |
+| `docker-compose.prod.yml`              | Production override: backend production image, no `--reload`, docs off, backend port unpublished, backup sidecar                   |
+| `docker-compose.proxy.yml`             | Bundled nginx as the only entrance; stops publishing the frontend port                                                             |
+| `docker-compose.external-services.yml` | Use a MySQL and Redis outside the stack                                                                                            |
+| `docker-compose.minimal.yml`           | Lower memory limits for small hosts                                                                                                |
+| `docker-compose.arm.yml`               | ARM64 platform; MariaDB 10.11 in place of MySQL                                                                                    |
+
+Pin the files a deployment uses in `.env` so every bare `docker compose ...`
+command applies them:
 
 ```bash
-# Clone the repository
-git clone https://github.com/thegspiro/the-logbook.git
-cd the-logbook
-
-# Copy and configure environment
-cp .env.example .env
-# Edit .env with your settings (see Configuration below)
-
-# Start all services
-docker compose up -d
-
-# Verify
-docker compose ps
-curl http://localhost:3001/health
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 ```
 
-Access the application at `http://localhost:3000`
+Both installers write this line. What the production override enforces at
+startup is described in
+[Production → Startup Security Gate](Deployment-Production#startup-security-gate).
 
-> **Development vs. production.** The base `docker-compose.yml` shown above is a
-> **development** configuration (uvicorn `--reload`, source bind-mount, backend
-> port published, API docs enabled, no HTTPS enforcement) and it skips the
-> startup security gate. It's fine for local evaluation. For a real deployment,
-> layer the production override on every command:
-> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
-> (forces `ENVIRONMENT=production`, disables `--reload` and API docs, enforces
-> HTTPS, enables DB/Redis TLS, and does not publish the backend port). Pin
-> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
-> bare `docker compose ...` command below stays hardened; `install.sh` sets this
-> automatically. In production/staging the app **refuses to start** if required
-> secrets are missing or weak, if `DEBUG` or API docs are enabled, or if HTTPS
-> isn't enforced.
+---
+
+## Install with a Script
+
+### Universal installer
+
+For Debian/Ubuntu/Raspberry Pi OS, Fedora/RHEL/Rocky/Alma/Amazon Linux, Alpine,
+Arch, macOS and WSL2, on x86_64, ARM64 or ARMv7. It has no interactive prompts,
+so it can be piped to `bash`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh \
+  | bash -s -- --public-url https://logbook.example.org --dir "$HOME/the-logbook"
+```
+
+| Option               | Effect                                                                                                                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--public-url <url>` | Required. Written to `FRONTEND_URL`. Also read from `LOGBOOK_PUBLIC_URL`. Must start with `http://` or `https://`; `localhost`/`127.*` is refused. May be omitted only when an existing `.env` already has a public `FRONTEND_URL` |
+| `--dir <path>`       | Install directory. Default: the current directory, which must be empty or an existing checkout                                                                                                                                     |
+| `--profile <name>`   | `minimal`, `standard` (default), `full` or `auto` — see below                                                                                                                                                                      |
+| `--arm`              | Force ARM handling (normally detected)                                                                                                                                                                                             |
+| `--no-docker`        | Do not install Docker                                                                                                                                                                                                              |
+| `--help`             | Show usage                                                                                                                                                                                                                         |
+
+What it does:
+
+1. Installs Docker and the Compose plugin if `docker compose` is missing
+   (Homebrew's Docker Desktop on macOS — start it, then re-run), and Git.
+2. Clones the repository into `--dir`, or pulls it if a checkout is there.
+3. Writes `.env` (mode `600`) with generated secrets, `ENVIRONMENT=production`,
+   the `COMPOSE_FILE` pin above, `SECURITY_REQUIRE_TLS=false` for the bundled
+   plaintext MySQL/Redis, `FRONTEND_URL` and `TZ` (your shell's, or `UTC`). An
+   existing `.env` is kept: the installer only appends a missing `COMPOSE_FILE`
+   and fills in a missing or `localhost` `FRONTEND_URL`.
+4. Builds and starts the base and production files (plus
+   `docker-compose.proxy.yml` when `.env` pins it — and stops first if the
+   certificate it needs is missing), then runs `alembic upgrade head`.
+
+Profiles:
+
+| Profile    | Effect                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------ |
+| `minimal`  | Writes smaller MySQL/Redis tuning values to `.env`                                                     |
+| `standard` | Default tuning values                                                                                  |
+| `full`     | Larger tuning values, and also starts the `with-search` (Elasticsearch) and `with-s3` (MinIO) profiles |
+| `auto`     | Picks by RAM: under 2 GB `minimal`, under 6 GB `standard`, otherwise `full`                            |
+
+The tuning values (`MYSQL_BUFFER_POOL_SIZE`, `MYSQL_MAX_CONNECTIONS`) are read
+only by `docker-compose.arm.yml`; the installer does not apply
+`docker-compose.minimal.yml` or `docker-compose.arm.yml`. To use them, pin them
+in `COMPOSE_FILE` after installing (see [Memory Profiles](#memory-profiles) and
+[ARM and Raspberry Pi](#arm-and-raspberry-pi)).
+
+**Finish the install:**
+
+1. Set `ALLOWED_ORIGINS` in `.env` to the same public origin as `FRONTEND_URL`.
+   The installer writes the `localhost` origins, and the backend derives both
+   its CORS list and its Host-header allowlist from this value, so requests
+   addressed to your public hostname are rejected until it is set.
+2. Put an HTTPS reverse proxy in front of port 3000 —
+   [Production → HTTPS and Reverse Proxy](Deployment-Production#https-and-reverse-proxy).
+3. Apply the change: `docker compose up -d`.
+4. Log out and back in if the installer added you to the `docker` group.
+
+If the installer ends with "Services may still be starting", check
+`curl -s http://localhost:3000/health` and `docker compose ps`; the first build
+and ClamAV's first signature download take several minutes.
+
+### install.sh (Ubuntu/Debian)
+
+Run from a clone, as a regular user with `sudo` (it refuses to run as root):
+
+```bash
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+./install.sh --docker --public-url https://logbook.example.org
+```
+
+It installs Docker, copies `.env.example` to `.env` with generated secrets,
+`ENVIRONMENT=production`, the `COMPOSE_FILE` pin and
+`SECURITY_REQUIRE_TLS=false`, then builds, starts and migrates the production
+stack. Without `--public-url` (or `LOGBOOK_PUBLIC_URL`) it asks when run from a
+terminal. Run with no arguments for an interactive menu. Finish with the same
+`ALLOWED_ORIGINS` and HTTPS steps as above.
+
+`./install.sh --traditional` installs MySQL, Redis, nginx and the backend
+directly on the host under systemd instead of Docker; see
+[DEPLOYMENT.md → Traditional Server Deployment](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#option-2-traditional-server-deployment).
+
+---
+
+## Install Manually
+
+```bash
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+cp .env.example .env
+```
+
+Replace every `CHANGE_ME` value in `.env`:
+
+```bash
+openssl rand -hex 32   # SECRET_KEY
+openssl rand -hex 32   # ENCRYPTION_KEY
+openssl rand -hex 16   # ENCRYPTION_SALT
+openssl rand -base64 24 | tr -d '=+/'   # MYSQL_ROOT_PASSWORD, DB_PASSWORD, REDIS_PASSWORD (one each)
+```
+
+**Local trial (development configuration):**
+
+```bash
+docker compose up -d
+```
+
+Frontend `http://localhost:3000`, backend `http://localhost:3001`, API docs
+`http://localhost:3001/docs`.
+
+**Production:** also set these in `.env`, then start:
+
+```bash
+ENVIRONMENT=production
+DEBUG=false
+ENABLE_DOCS=false
+ALLOWED_ORIGINS=https://logbook.example.org
+FRONTEND_URL=https://logbook.example.org
+# The bundled MySQL and Redis do not terminate TLS; the production override
+# requires TLS to both unless this records the decision
+SECURITY_REQUIRE_TLS=false
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+```
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl -s http://localhost:3000/health
+```
+
+The backend is not published in production; the frontend's nginx forwards
+`/api` and `/health` to it. Put HTTPS in front of port 3000 —
+[Production → HTTPS and Reverse Proxy](Deployment-Production#https-and-reverse-proxy).
+The backend applies database migrations itself when it starts.
 
 ---
 
 ## Configuration
 
-### Required .env Settings
+### Environment templates
 
-```bash
-# Generate secrets
-SECRET_KEY=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-ENCRYPTION_SALT=$(openssl rand -hex 16)
+| Template            | Contents                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `.env.example`      | About 40 variables: secrets, database, Redis, CORS, `FRONTEND_URL`, ports, timezone, email. Defaults to `ENVIRONMENT=development`    |
+| `.env.example.full` | About 180 variables: adds storage, SSO, SMS, HIPAA and security tuning, and development tools. Defaults to `ENVIRONMENT=development` |
 
-# Database
-DB_HOST=mysql
-DB_NAME=the_logbook
-DB_USER=logbook_user
-DB_PASSWORD=<strong-password>
-MYSQL_ROOT_PASSWORD=<strong-password>
-
-# Redis
-REDIS_PASSWORD=<strong-password>
-
-# CORS
-ALLOWED_ORIGINS=["http://localhost:3000"]
-
-# Public site URL — every link in outgoing email is built from it
-FRONTEND_URL=http://localhost:3000
-
-# Ports
-FRONTEND_PORT=3000
-BACKEND_PORT=3001
-```
+Start from `.env.example` and copy individual settings from
+`.env.example.full` as needed. Do not copy `.env.example.full` wholesale for
+the bundled stack: its `DB_HOST=localhost` is ignored there (see below), and
+would point the backend at its own container if you later add the
+external-services override. Every variable is described in
+[Environment Variables](Configuration-Environment); check a configuration
+before restarting with the
+[preflight command](Configuration-Environment#check-the-configuration-before-you-restart-2026-08-18).
 
 ### How `.env` reaches the backend
 
-`.env` is read by Docker Compose, not by the backend: it is not copied into
-the image. Compose hands the backend only the variables named in the backend
-service's `environment:` block. Since 2026-10-06 that block in each shipped
-compose file names every backend setting, defaulting each one to the
-application's own default, so any backend setting in `.env.example.full` can be
-set from `.env`. Before that, only about a fifth of them reached the backend
-and the rest were silently ignored — see `docs/UPGRADING.md` before upgrading
-an existing install.
+`.env` is read by Docker Compose, not copied into the image. Compose passes the
+backend the variables named in the backend service's `environment:` block,
+which lists every backend setting with the application's default, so any
+backend setting can be set from `.env`.
 
-The exceptions are pinned by the compose file: `DB_HOST`, `DB_PORT`,
-`REDIS_HOST` and `REDIS_PORT` point at the bundled `mysql` and `redis`
-services whatever `.env` says, and `VERSION` comes from the image. To use a
-database and Redis outside the stack instead, layer
-`docker-compose.external-services.yml` — see
-[External database and Redis](#external-database-and-redis) below.
-Variables that are not backend settings (`MYSQL_ROOT_PASSWORD`, `MINIO_*`,
-`ELASTIC_PASSWORD`) go only to their own services.
+Exceptions pinned by the compose file: `DB_HOST`, `DB_PORT`, `REDIS_HOST` and
+`REDIS_PORT` always point at the bundled `mysql` and `redis` services (use the
+[external-services override](#external-database-and-redis) to change them),
+and `docker-compose.prod.yml` fixes `ENVIRONMENT`, `DEBUG`, `ENABLE_DOCS` and
+`SECURITY_ENFORCE_HTTPS`. Variables that are not backend settings
+(`MYSQL_ROOT_PASSWORD`, `MINIO_*`, `ELASTIC_PASSWORD`) go only to their own
+services.
 
-Apply a change to `.env` with `docker compose up -d`, which recreates the
-containers whose configuration changed. `docker compose restart` keeps the
-old environment. To see what the backend will receive:
+Apply a change with `docker compose up -d`, which recreates the containers
+whose configuration changed. `docker compose restart` keeps the old
+environment. To see what a service will receive:
 
 ```bash
 docker compose config | grep SMTP_HOST
 ```
 
-### Frontend Environment
+### Frontend build settings
 
-Create `frontend/.env`:
-
-```bash
-VITE_API_URL=/api/v1
-```
-
-> **Important:** Vite bakes environment variables at build time. After changing these, rebuild the frontend.
+`VITE_API_URL` is passed as a build argument (`/api/v1`) in
+`docker-compose.yml`; Vite bakes it into the bundle, so a change needs
+`docker compose build frontend`. No `frontend/.env` is needed for Docker.
 
 ---
 
 ## Services
 
-| Service  | Container        | Port            | Description               |
-| -------- | ---------------- | --------------- | ------------------------- |
-| Frontend | logbook-frontend | 3000→80         | React app served by Nginx |
-| Backend  | logbook-backend  | 3001            | FastAPI application       |
-| MySQL    | logbook-db       | 3306 (internal) | Database                  |
-| Redis    | logbook-redis    | 6379 (internal) | Cache & sessions          |
-| ClamAV   | logbook-clamav   | 3310 (internal) | Malware scanning          |
+| Service    | Container           | Port                                    | Notes                                                |
+| ---------- | ------------------- | --------------------------------------- | ---------------------------------------------------- |
+| `frontend` | `intranet-frontend` | `FRONTEND_PORT` (3000) → 80             | nginx; serves the app, forwards `/api` and `/health` |
+| `backend`  | `intranet-backend`  | `BACKEND_PORT` (3001), development only | FastAPI; not published with the production override  |
+| `mysql`    | `intranet-mysql`    | internal                                | MySQL 8.0                                            |
+| `redis`    | `intranet-redis`    | internal                                | Redis 7, password required                           |
+| `clamav`   | `intranet-clamav`   | internal (3310)                         | Malware scanner, always started                      |
+| `backup`   | (Compose default)   | —                                       | Production override only; nightly backups            |
 
-### Optional Services (Profiles)
+Optional services, started by profile (`docker compose --profile <name> up -d`):
 
-| Service       | Profile       | Description            |
-| ------------- | ------------- | ---------------------- |
-| Nginx         | `production`  | Reverse proxy with SSL |
-| Elasticsearch | `with-search` | Advanced search        |
-| MinIO         | `with-s3`     | S3-compatible storage  |
-| Mailhog       | `development` | Email testing          |
+| Service         | Profile       | Notes                                                                                                                                           |
+| --------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nginx`         | `production`  | TLS on `NGINX_HTTP_PORT`/`NGINX_HTTPS_PORT` (80/443); prefer `docker-compose.proxy.yml` — see [Production](Deployment-Production#bundled-nginx) |
+| `elasticsearch` | `with-search` | No backend setting connects to it; needs `ELASTIC_PASSWORD`                                                                                     |
+| `minio`         | `with-s3`     | S3-compatible storage; set `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`                                                                          |
+| `mailhog`       | `development` | Mail catcher; UI on `127.0.0.1:8025`, SMTP on `127.0.0.1:1025`                                                                                  |
 
-Enable a profile: `docker compose --profile with-search up -d`
+**ClamAV** scans every upload before it is stored. It needs 1.5–3 GB of RAM,
+keeps signatures in the `clamav_data` volume and takes a few minutes to become
+healthy on first start; until then uploads get a retryable 503. Configuration
+and the consequences of `CLAMAV_ENABLED=false`:
+[Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
 
-> **ClamAV is not optional** _(2026-10-08)_. Every uploaded file is scanned
-> before it is stored, so the `clamav` service starts with the rest of the
-> stack and `CLAMAV_ENABLED` defaults to `true`. clamd keeps its signatures in
-> memory (budget 1.5–3 GB of RAM) in the `clamav_data` volume and takes a few
-> minutes to become healthy on first start; until then uploads get a retryable 503. Its port is not published. Setting `CLAMAV_ENABLED=false` accepts files
-> unscanned behind a standing administrator warning. Details:
-> [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
-
-> **The `production` profile's nginx** _(2026-09-30)_ reads
-> `infrastructure/nginx/docker.conf` and will not start without
-> `fullchain.pem` and `privkey.pem` in `infrastructure/nginx/ssl/`. On its own
-> the profile leaves the frontend's port 3000 published — a second, plain-HTTP
-> way in. To make nginx the only entrance, pin
-> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.proxy.yml`
-> in `.env`; `install.sh` and `universal-install.sh` respect that pin and stop
-> before building if the certificate is missing. Every proxy in the stack now
-> allows 60 MB uploads, matching the backend, and bounds each client address at
-> 400 concurrent requests and 50 API requests a second (burst 600, first 100
-> undelayed) — sized for a station's members sharing one address. Full steps, including Let's
-> Encrypt: [DEPLOYMENT.md](../docs/DEPLOYMENT.md#docker-compose-production-profile).
-
-> **Note:** Optional services use default values for credentials. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in `.env` if you enable the `with-s3` profile in production.
+Named volumes (prefixed with the Compose project name, by default the
+directory name, e.g. `the-logbook_uploads`): `mysql_data`, `redis_data`,
+`uploads`, `clamav_data`; with the production override also `backups` and
+`audit_archives`.
 
 ---
 
 ## Common Operations
 
-### Start / Stop / Restart
-
 ```bash
-docker compose up -d          # Start all
-docker compose down            # Stop all
-docker compose restart         # Restart all
-docker compose restart backend # Restart one service
+docker compose up -d                 # start, or apply .env changes
+docker compose down                  # stop and remove containers (volumes kept)
+docker compose restart backend       # restart one service
+docker compose ps                    # status
+
+docker compose logs -f               # follow all logs
+docker compose logs --tail=50 backend
+
+docker compose up -d --build         # rebuild images and recreate
+docker compose exec backend alembic upgrade head   # migrations by hand (normally run at startup)
 ```
 
-### Rebuild After Code Changes
-
-```bash
-docker compose build --no-cache
-docker compose up -d
-```
-
-### View Logs
-
-```bash
-docker compose logs -f              # All services
-docker compose logs -f backend      # Specific service
-docker compose logs --tail=50 backend # Last 50 lines
-```
-
-### Run Migrations
-
-```bash
-docker compose exec backend alembic upgrade head
-```
-
-### Database Backup
-
-```bash
-docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
-```
-
-For production, prefer the **backup sidecar** in `docker-compose.prod.yml` —
-nightly database + uploads + audit-archive snapshots with retention pruning and
-automated restore-verification drills. See
-[Production Deployment → Backup Strategy](Deployment-Production#backup-strategy)
-and [docs/BACKUP.md](../docs/BACKUP.md). _(2026-07-31)_
+Backups: [Production → Backup and Recovery](Deployment-Production#backup-and-recovery).
 
 ---
 
 ## Updating
 
+Back up first ([Production → Backup and Recovery](Deployment-Production#backup-and-recovery)),
+then from the install directory:
+
 ```bash
-cd /path/to/the-logbook
-docker compose down
 git pull
 
-# Reconcile the compose build contexts with the Dockerfiles just pulled.
-# `docker compose config` validates YAML and interpolation only — it never
-# opens the Dockerfile — so a context that no longer holds what the build
-# copies passes validation and then fails the build.
+# Repair compose build contexts if a pulled Dockerfile now copies files from
+# outside them. `docker compose config` never opens the Dockerfile, so a stale
+# context passes validation and fails the build. Needed mainly when you run
+# your own compose file; drop --fix to report without changing anything.
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-docker compose build --no-cache
-docker compose up -d
-docker compose exec backend alembic upgrade head
+docker compose up -d --build
+docker compose ps
 ```
 
-> Run the context check on every update if you maintain your own compose file:
-> a `git pull` updates the file in the repository, not the one your deployment
-> actually runs. Drop `--fix` to report drift without rewriting anything.
+The backend runs pending migrations when it starts. For a production
+deployment, also run the preflight check before the restart —
+[Production → Updating in Production](Deployment-Production#updating-in-production).
 
 ---
 
 ## Memory Profiles
 
-| RAM   | Profile  | Notes                        |
-| ----- | -------- | ---------------------------- |
-| 1-2GB | Minimal  | Single worker, reduced cache |
-| 4GB   | Standard | Default configuration        |
-| 8GB+  | Full     | Multiple workers, full cache |
+Memory limits set in the compose files (`deploy.resources.limits`):
 
-For low-memory systems:
+| Service    | Base                           | With `docker-compose.minimal.yml`       |
+| ---------- | ------------------------------ | --------------------------------------- |
+| `mysql`    | 1024 MB                        | 256 MB                                  |
+| `backend`  | 768 MB                         | 384 MB (single worker)                  |
+| `redis`    | 128 MB                         | 96 MB (64 MB maxmemory, no persistence) |
+| `frontend` | 128 MB                         | 128 MB                                  |
+| `clamav`   | no limit, 1.5–3 GB in practice | unchanged                               |
+
+The minimal override shrinks the application to about 1 GB, but ClamAV is
+unchanged, so plan for at least 3 GB in total. To use it in production:
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.minimal.yml
 ```
 
 ---
 
-## ARM / Raspberry Pi
+## ARM and Raspberry Pi
+
+`docker-compose.arm.yml` builds and runs every service for `linux/arm64` and
+replaces MySQL with MariaDB 10.11 (tuned by `MYSQL_BUFFER_POOL_SIZE`, default
+256M, and `MYSQL_MAX_CONNECTIONS`, default 100). It suits Raspberry Pi 4/5,
+Apple Silicon and AWS Graviton.
+
+Raspberry Pi: use a Pi 4 or 5 with 4 GB or more, a **64-bit** OS and, ideally,
+a USB 3 SSD instead of the SD card. The overrides target `linux/arm64`, and the
+ClamAV image is not published for 32-bit ARM.
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+cp .env.example .env    # complete it as in "Install Manually"
+
+# in .env:
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.minimal.yml:docker-compose.arm.yml
+
+docker compose up -d --build
 ```
 
-Uses MariaDB 10.11+ instead of MySQL 8.0 for ARM compatibility.
+Drop `docker-compose.minimal.yml` on an 8 GB board.
 
 ---
 
 ## External Database and Redis
 
-To run against MySQL and Redis that this stack does not start — Amazon RDS and
+To use a MySQL and Redis this stack does not start — Amazon RDS and
 ElastiCache, another managed service, or servers elsewhere on your network —
-layer `docker-compose.external-services.yml` last:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  -f docker-compose.external-services.yml up -d
-```
-
-or pin it, so every later command applies it too:
+layer `docker-compose.external-services.yml` last (after
+`docker-compose.proxy.yml` if you use it):
 
 ```bash
 COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
 ```
 
-Add `docker-compose.proxy.yml` before it if you use the bundled nginx. The
-override:
+The override:
 
-- passes `DB_HOST`, `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` from `.env` to the
-  backend. They have no default here: a missing one stops `docker compose` with
-  a message naming it. Set them to the real endpoints — `localhost` (the
-  `.env.example.full` value) or `mysql` / `redis` (the `.env.example` values)
-  name the backend's own container or services that no longer start;
+- passes `DB_HOST`, `DB_PORT`, `REDIS_HOST` and `REDIS_PORT` from `.env` to
+  the backend, with no defaults — a missing one stops `docker compose` with a
+  message naming it. Set the real endpoints: `localhost`, `mysql` or `redis`
+  would name the backend's own container or services that no longer start;
 - drops the backend's dependency on the bundled `mysql` and `redis`;
 - keeps `mysql`, `redis` and the production `backup` sidecar from starting.
-  Back the database up with the provider's own backups, and the `uploads` and
-  `audit_archives` volumes separately — see "Backups" in the
-  [AWS guide](../docs/deployment/aws.md#method-2-rds).
+  Never start them by name (`docker compose up -d mysql`). Back the database up
+  with the provider's backups, and the `uploads` and `audit_archives` volumes
+  separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds)).
 
-`MYSQL_ROOT_PASSWORD` must still have a value, because compose reads the
-unused `mysql` definition; it is used for nothing. `REDIS_PASSWORD` is sent to
-the external Redis, so the server must require a password (on ElastiCache, an
-AUTH token). Use TLS to both: `DB_SSL=true`, `REDIS_SSL=true` and their CA
-files (`DB_SSL_CA`, `REDIS_SSL_CA`) as container paths under
-`/etc/ssl/logbook`, which mounts `./infrastructure/certs` (or `SSL_CERTS_DIR`).
-The backend applies migrations to the external database on start, with the
-same TLS settings. Check what will start with
-`docker compose config --services` — `backend` and `frontend`, plus `nginx` or
-`clamav` if you enabled them.
+`MYSQL_ROOT_PASSWORD` still needs a value, because Compose reads the unused
+`mysql` definition. `REDIS_PASSWORD` is sent to the external Redis, so it must
+require one (an AUTH token on ElastiCache). Use TLS to both: `DB_SSL=true`,
+`REDIS_SSL=true`, `SECURITY_REQUIRE_TLS=true`, and CA files `DB_SSL_CA` /
+`REDIS_SSL_CA` given as container paths under `/etc/ssl/logbook`, which mounts
+`./infrastructure/certs` (or `SSL_CERTS_DIR`). The backend migrates the
+external database on start with the same TLS settings.
+
+Check what will start with `docker compose config --services`: `backend`,
+`frontend` and `clamav`, plus `nginx` if you use the proxy override.
 
 Full AWS walkthrough:
-[AWS Deployment Guide, Method 2](../docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
+[AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
 
 ---
 
 ## Docker Image Publishing
 
-To publish images to GitHub Container Registry:
+To build and push images to GitHub Container Registry, log in with a token
+that has `write:packages`, then use the script (optional tag argument, default
+`latest`):
 
 ```bash
-# Login
-echo $GITHUB_TOKEN | docker login ghcr.io -u thegspiro --password-stdin
-
-# Build and push
-docker build --target production -t ghcr.io/thegspiro/the-logbook-backend:latest ./backend
-docker push ghcr.io/thegspiro/the-logbook-backend:latest
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u thegspiro --password-stdin
+./scripts/build-and-push-images.sh [tag]
 ```
+
+or build each image by hand, from the repository root:
+
+```bash
+docker build --target production -t ghcr.io/thegspiro/the-logbook-backend:latest ./backend
+# The frontend's build context is the repository root (it needs the workspace lockfile)
+docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
+docker push ghcr.io/thegspiro/the-logbook-backend:latest
+docker push ghcr.io/thegspiro/the-logbook-frontend:latest
+```
+
+Full procedure, including making the packages public:
+[DOCKER-BUILD-PUBLISH.md](https://github.com/thegspiro/the-logbook/blob/main/docs/DOCKER-BUILD-PUBLISH.md).
 
 ---
 
-**See also:** [Installation Guide](Installation) | [Unraid Deployment](Deployment-Unraid) | [Production Deployment](Deployment-Production)
+**See also:** [Installation](Installation) | [Unraid Deployment](Deployment-Unraid) | [Production Deployment](Deployment-Production) | [Environment Variables](Configuration-Environment)
