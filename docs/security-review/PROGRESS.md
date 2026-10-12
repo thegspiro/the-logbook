@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pulls)**: branch
+**PR [#3097](https://github.com/thegspiro/the-logbook/pull/3097)**: branch
 `claude/security-review-permissions-roles`, Feature 02 (Permissions &
 roles), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
 PERM-5 re-verified fixed by other, non-security-review work that landed
