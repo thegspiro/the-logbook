@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #<pending>**: branch `claude/security-review-public-webhooks`, Feature
-03 (Public surface & webhooks), pass 8 (watchdog pickup). 1 fixed (a further
+**PR [#3105](https://github.com/thegspiro/the-logbook/pull/3105)**: branch
+`claude/security-review-public-webhooks`, Feature 03 (Public surface &
+webhooks), pass 8 (watchdog pickup). 1 fixed (a further
 narrowing of PUB-8 — the revoked- and expired-key 401 branches now write an
 access-log row, mirroring the already-fixed 429 branch), 0 new findings
 otherwise; the new MCP OAuth 2.1 authorization-server surface
