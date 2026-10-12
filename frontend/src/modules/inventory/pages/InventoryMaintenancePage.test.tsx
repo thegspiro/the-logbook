@@ -347,17 +347,20 @@ describe('InventoryMaintenancePage — opened for one named item', () => {
  * second, completed one and leaving the first open forever.
  */
 describe('InventoryMaintenancePage — completing open work', () => {
-  const openRepair = (overrides: Partial<MaintenanceRecord> = {}): MaintenanceRecord =>
-    makeRecord({
+  // An open record has no result and no completion date; with
+  // exactOptionalPropertyTypes those keys are removed, not set to undefined.
+  const openRepair = (overrides: Partial<MaintenanceRecord> = {}): MaintenanceRecord => {
+    const record = makeRecord({
       id: 'open-1',
       maintenance_type: 'repair',
       is_completed: false,
-      passed: undefined,
-      completed_date: undefined,
       scheduled_date: '2026-09-01',
       description: 'Replace strap',
-      ...overrides,
     });
+    delete record.passed;
+    delete record.completed_date;
+    return { ...record, ...overrides };
+  };
 
   beforeEach(() => {
     mockGetMaintenanceDueItems.mockReset();
