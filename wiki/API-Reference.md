@@ -1220,7 +1220,9 @@ after **two** withdrawals the pending request is final, `GET .../mine` reports
 declined request cannot be withdrawn (400), and with no request on file the
 answer is 404. The row lock
 it shares with approve and reject means a withdrawal and a decision arriving
-together resolve to one or the other.
+together resolve to one or the other. Every petition response carries
+`withdrawal_count` (0 for a request never withdrawn), so a reviewer notified
+more than once can see the request was resent.
 
 Approval writes the same RSVP override **Edit Times** writes
 (`override_check_in_at`, `override_check_out_at`, `override_duration_minutes`)

@@ -830,6 +830,10 @@ client API cache.
   request is kept with status `withdrawn` and a `withdrawal_count` (migration
   `a0b34c886658`), and asking again reuses that row. Reviewers never see
   withdrawn rows.
+- **Resend count for reviewers** _(2026-10-12)_: petition responses carry
+  `withdrawal_count`, and the event card and the Attendance Requests page show
+  _"Withdrawn and sent again once / twice"_ on a resent request, so an
+  organizer notified more than once can see why.
 - **Across events** _(2026-10-09)_: `/events/attendance-requests` lists every
   pending request on events the viewer organizes or is alternate for, oldest
   first, with **Approve** / **Decline** in place (the same dialogs as the event

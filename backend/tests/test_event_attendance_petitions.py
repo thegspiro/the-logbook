@@ -16,6 +16,10 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.endpoints.event_attendance_petitions import (
+    list_attendance_petitions,
+    list_pending_attendance_petitions,
+)
 from app.models.event import AttendancePetitionStatus, EventRSVP
 from app.models.notification import NotificationLog
 from app.models.user import User
@@ -663,6 +667,35 @@ class TestWithdrawalLimit:
 
         assert petition.withdrawal_count == 1
         assert can_withdraw(petition) is True
+
+    async def test_reviewers_are_told_how_often_it_was_resent(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await self._cycle(service, db_session, dept, event_id, 2)
+
+        organizer = await _load(db_session, dept["organizer"])
+        on_event = await list_attendance_petitions(
+            event_id=uuid.UUID(event_id), db=db_session, current_user=organizer
+        )
+        organizer = await _load(db_session, dept["organizer"])
+        across_events = await list_pending_attendance_petitions(
+            scope="mine", db=db_session, current_user=organizer
+        )
+
+        assert [p.withdrawal_count for p in on_event] == [2]
+        assert [p.withdrawal_count for p in across_events] == [2]
+
+    async def test_a_first_request_reports_no_resends(self, db_session, dept):
+        event_id = await _event(db_session, dept["org"], dept["organizer"])
+        service = EventAttendancePetitionService(db_session)
+        await self._cycle(service, db_session, dept, event_id, 0)
+
+        organizer = await _load(db_session, dept["organizer"])
+        on_event = await list_attendance_petitions(
+            event_id=uuid.UUID(event_id), db=db_session, current_user=organizer
+        )
+
+        assert [p.withdrawal_count for p in on_event] == [0]
 
     async def test_asking_again_reuses_the_request_and_prompts_the_organizer(
         self, db_session, dept

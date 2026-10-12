@@ -160,7 +160,9 @@ holding `events.manage` see an **Attendance Requests** card on the event page �
 _"Members with no check-in who say they were here. Approving records the times
 you confirm, credited when attendance is finalized."_ Each request shows the
 member, when they asked, their reason and the times they gave, with
-**Approve** and **Decline**:
+**Approve** and **Decline**. A request the member withdrew and sent again
+says so — _"Withdrawn and sent again once"_ (or _twice_) — which is why you
+may have been notified about it more than once:
 
 - **Approve** opens **Confirm attendance**: a **Check-in** and **Check-out**
   (both required — _"These times decide the hours credited"_) and an optional
