@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD](https://github.com/thegspiro/the-logbook/pulls)**: branch
+`claude/security-review-auth-session`, Feature 01 (Auth & session
+lifecycle), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
+all three standing items (AUTH-15, AUTH-17, AUTH-21) re-verified fixed by
+other, non-security-review work that landed between pass 7 and this pass.
+See the Log entry below and
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 8** section for
+detail. Row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3095's merge, Feature 00, Cross-cutting baseline, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR #3095 (Feature 00, Cross-cutting baseline, pass 8) merged
+clean 2026-10-12 11:45:54 UTC (confirmed via `git log`: fast-forward merge
+`347f49f0`; 5 files changed — `PROGRESS.md`,
+`SEC-00-cross-cutting-baseline.md`, `json_column_ast_sweep.py`,
+`scripts/README.md`, `test_json_column_ast_sweep.py`). Not docs-only (the
+tooling fix and its guard test landed with it), but it is already fully
+recorded in the Log entry below, so there is nothing further to add here.
+Rotation row 00 stays ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3095, Feature 00, Cross-cutting baseline, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3095](https://github.com/thegspiro/the-logbook/pull/3095)**: branch
 `claude/security-review-cross-cutting-baseline`, Feature 00 (Cross-cutting
 baseline), pass 8 (watchdog pickup). 0 new application-security findings
@@ -26,6 +53,8 @@ See the Log entry below and
 `docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 8**
 section for detail. Row 00 → ✅ (pending this PR's merge); next is Feature
 01 (Auth & session lifecycle).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3093's merge, Feature 34, Frontend shared, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18555,6 +18584,67 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 01 (Auth & session lifecycle, pass 8) — 0 fixed by this pass, 0 new findings; all three standing items closed by other work (watchdog pickup)
+
+Watchdog pickup: no `claude/security-review-*` PR or branch existed anywhere
+in the repo, and `main`'s last security-review merge (Feature 00, pass 8,
+PR #3095) had no follow-up iteration since. Rotation row 01 was the next
+`⬜`.
+
+**Not a zero-delta pass** — 634 commits since pass 7's actual baseline
+(`9aba1ea0`, PR #2924's merge; `git log` on this doc's own path turns up a
+different, unrelated commit due to this repo's known grafted/squashed-history
+problem, so the real baseline was found via `git log --all --grep="pass 7"`
+instead — recorded in the findings file so the next pass does not re-derive
+it). Eight of twelve scoped files carry real changes; two carry mypy-only
+type-annotation changes; one is byte-identical.
+
+**All three of this feature's standing items — the two this track had kept
+open (AUTH-15, AUTH-17) and one the app-review track owned (AUTH-21) — are
+now fixed, each verified directly in current code rather than trusted from
+another track's write-up:**
+
+- **AUTH-15 (HIPAA max password age, server-side)** — owner decision D8
+  (PR #2918). `dependencies.py`'s `get_current_user` now refuses an expired
+  password past a configurable grace period that starts on first notice,
+  so an installation turning this on does not lock out every overdue member
+  the day it deploys.
+- **AUTH-17 (session reaper)** — owner decision D4 (PR #2918). A daily
+  scheduled task batch-deletes session rows 30 days past their refresh
+  token's own expiry.
+- **AUTH-21 (double-fired refresh revoking every session)** — fixed
+  2026-10-05 with a conditional `UPDATE … WHERE refresh_token = :presented`;
+  the losing concurrent request gets a 409 (`LB-AUTH-012`) and nothing is
+  revoked, with the frontend's shared refresh treating that as success.
+
+No `KNOWN_LIMITATIONS.md` entry remains for any of the three. New code
+reviewed fresh and found clean: a from-scratch Authentik (OIDC) sign-in
+provider (same link-existing-only policy as Google/Microsoft, plus its own
+issuer/origin validation on the discovery document and asymmetric-only JWT
+algorithms), a new `_revoke_mcp_connections` call alongside session
+revocation on password change/reset (strictly self-scoped, not an IDOR
+path), a new public `collect_user_permissions` wrapper with exactly two
+external callers (both in the MCP OAuth subsystem, reviewed only as a new
+caller — full review is that feature's own), idempotency keys on the two
+MFA recovery-code endpoints (AUTH-7), and a `reset_encryption_ciphers()` fix
+that keeps the file-encryption key cache in step with a rotation. Route
+count 26 → 28 (the two new Authentik routes, both public by the same
+design as Google/Microsoft's, both in
+`test_endpoint_auth_coverage.py`'s `ALLOWLISTED_PUBLIC`).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (571
+revisions, single head, no migration this pass); `check_route_permissions.py
+--strict` passed (265 routes, 0 errors/0 warnings); scoped backend tests
+(`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or
+permission or authentik"`) 971 passed, 2 skipped (environment-only);
+standing guards run directly (10 files) 114 passed; frontend `npm run
+typecheck` 0 errors; `npm run lint` 0 errors/0 warnings.
+
+Findings doc: [`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md)'s
+**Pass 8** section. Rotation row 01 → ✅ (pending PR merge). Next: Feature
+02 (Permissions & roles).
 
 ### 2026-10-12 — Feature 00 (Cross-cutting baseline, pass 8) — 0 application-security findings; 1 security-tooling regression found and fixed (watchdog pickup)
 
