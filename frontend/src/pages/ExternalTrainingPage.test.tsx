@@ -6,6 +6,7 @@ import ExternalTrainingPage from './ExternalTrainingPage';
 
 const mockGetProviders = vi.fn();
 const mockGetImportBatches = vi.fn();
+const mockGetImportedRecords = vi.fn();
 const mockGetCategoryMappings = vi.fn();
 const mockGetUserMappings = vi.fn();
 const mockUpdateCategoryMapping = vi.fn();
@@ -33,6 +34,7 @@ vi.mock('../services/api', () => ({
   externalTrainingService: {
     getProviders: (...a: unknown[]) => mockGetProviders(...a) as unknown,
     getImportBatches: (...a: unknown[]) => mockGetImportBatches(...a) as unknown,
+    getImportedRecords: (...a: unknown[]) => mockGetImportedRecords(...a) as unknown,
     getCategoryMappings: (...a: unknown[]) => mockGetCategoryMappings(...a) as unknown,
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
@@ -81,6 +83,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetProviders.mockResolvedValue([provider]);
   mockGetImportBatches.mockResolvedValue([]);
+  mockGetImportedRecords.mockReset();
+  mockGetImportedRecords.mockResolvedValue([]);
   mockGetCategoryMappings.mockResolvedValue([unmapped]);
   mockGetUserMappings.mockResolvedValue([]);
   mockGetUsers.mockResolvedValue([]);
@@ -524,5 +528,164 @@ describe('ExternalTrainingPage — course mappings', () => {
     );
 
     expect(mockUpdateCourseMapping).toHaveBeenCalledWith('prov-1', 'cm-1', { internal_course_id: null });
+  });
+});
+
+describe('ExternalTrainingPage — All Mappings tab', () => {
+  const openAllMappings = async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /All Mappings/ }));
+  };
+
+  beforeEach(() => {
+    mockGetCategoryMappings.mockReset();
+    mockGetCategoryMappings.mockResolvedValue([unmapped]);
+    mockGetUserMappings.mockReset();
+    mockGetUserMappings.mockResolvedValue([
+      {
+        id: 'u-1',
+        provider_id: 'prov-1',
+        organization_id: 'org-1',
+        external_user_id: '6193',
+        external_email: 'jordan@example.org',
+        is_mapped: false,
+        auto_mapped: false,
+        created_at: '2026-08-01T00:00:00Z',
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+      {
+        id: 'u-2',
+        provider_id: 'prov-1',
+        organization_id: 'org-1',
+        external_user_id: '6342',
+        external_name: 'Gabriel Spiro',
+        is_mapped: true,
+        auto_mapped: true,
+        created_at: '2026-08-01T00:00:00Z',
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+    ]);
+    mockGetCourseMappings.mockReset();
+    mockGetCourseMappings.mockResolvedValue([]);
+  });
+
+  it('summarizes every provider’s mappings, naming what is unmapped', async () => {
+    await openAllMappings();
+
+    expect(await screen.findByRole('heading', { name: 'Vector Solutions' })).toBeInTheDocument();
+    expect(screen.getByText('0 of 1 mapped')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 mapped')).toBeInTheDocument();
+    expect(screen.getByText('Hazardous Materials Awareness')).toBeInTheDocument();
+    expect(screen.getByText('jordan@example.org')).toBeInTheDocument();
+    expect(mockGetCategoryMappings).toHaveBeenCalledWith('prov-1');
+    expect(mockGetUserMappings).toHaveBeenCalledWith('prov-1');
+    expect(mockGetCourseMappings).toHaveBeenCalledWith('prov-1');
+  });
+
+  it('opens the provider’s mappings modal from the tab', async () => {
+    await openAllMappings();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Open mappings for Vector Solutions/ }));
+
+    expect(await screen.findByLabelText('Internal category for Hazardous Materials Awareness')).toBeInTheDocument();
+  });
+
+  it('still shows the other mappings when one list fails to load', async () => {
+    mockGetCourseMappings.mockRejectedValue(new Error('boom'));
+    await openAllMappings();
+
+    expect(await screen.findByText('1 of 2 mapped')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Some mappings for this provider could not be loaded');
+  });
+
+  it('says so when there are no providers', async () => {
+    mockGetProviders.mockResolvedValue([]);
+    await openAllMappings();
+
+    expect(await screen.findByText('No Mappings Yet')).toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — Import Queue tab', () => {
+  const queued = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    provider_id: 'prov-1',
+    organization_id: 'org-1',
+    external_record_id: `ext-${id}`,
+    course_title: `Course ${id}`,
+    completion_date: '2026-09-15T12:00:00Z',
+    import_status: status,
+    created_at: '2026-09-16T00:00:00Z',
+    updated_at: '2026-09-16T00:00:00Z',
+    ...extra,
+  });
+
+  const openQueue = async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Import Queue/ }));
+  };
+
+  beforeEach(() => {
+    mockGetImportedRecords.mockReset();
+    mockGetImportedRecords.mockImplementation((_p: string, params: { status: string }) =>
+      Promise.resolve(
+        params.status === 'pending'
+          ? [queued('a', 'pending')]
+          : [queued('b', 'failed', { import_error: 'No matching member' })]
+      )
+    );
+  });
+
+  it('lists what is waiting and what failed for each provider', async () => {
+    await openQueue();
+
+    expect(await screen.findByRole('heading', { name: 'Vector Solutions' })).toBeInTheDocument();
+    expect(screen.getByText('Course a')).toBeInTheDocument();
+    expect(screen.getByText(/No matching member/)).toBeInTheDocument();
+    expect(mockGetImportedRecords).toHaveBeenCalledWith('prov-1', { status: 'pending', limit: 200 });
+    expect(mockGetImportedRecords).toHaveBeenCalledWith('prov-1', { status: 'failed', limit: 200 });
+  });
+
+  it('reports a count as a floor when the page limit is reached', async () => {
+    mockGetImportedRecords.mockImplementation((_p: string, params: { status: string }) =>
+      Promise.resolve(
+        params.status === 'pending' ? Array.from({ length: 200 }, (_, i) => queued(`p${i}`, 'pending')) : []
+      )
+    );
+    await openQueue();
+
+    expect(await screen.findByText('200+')).toBeInTheDocument();
+  });
+
+  it('opens the provider’s mappings modal', async () => {
+    await openQueue();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Open mappings for Vector Solutions/ }));
+
+    expect(await screen.findByLabelText('Internal category for Hazardous Materials Awareness')).toBeInTheDocument();
+  });
+
+  it('says so when nothing is waiting', async () => {
+    mockGetImportedRecords.mockResolvedValue([]);
+    await openQueue();
+
+    expect(await screen.findByText(/Nothing waiting/)).toBeInTheDocument();
+  });
+
+  it('still shows the failed list when the pending list cannot be loaded', async () => {
+    mockGetImportedRecords.mockImplementation((_p: string, params: { status: string }) =>
+      params.status === 'pending' ? Promise.reject(new Error('boom')) : Promise.resolve([queued('b', 'failed')])
+    );
+    await openQueue();
+
+    expect(await screen.findByText('Course b')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Some imports for this provider could not be loaded');
+  });
+
+  it('keeps the explanatory empty state when there are no providers', async () => {
+    mockGetProviders.mockResolvedValue([]);
+    await openQueue();
+
+    expect(await screen.findByText(/pending imports will appear here/)).toBeInTheDocument();
   });
 });

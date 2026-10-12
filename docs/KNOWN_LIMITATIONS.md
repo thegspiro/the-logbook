@@ -351,7 +351,7 @@ verified. What this leaves, accepted rather than fixed:
 ## Found by the September 24 – October 4 Documentation Pass (2026-10-04)
 
 Five items surfaced while bringing the guides up to date with the window's
-pull requests (`docs/CHANGE_AUDIT_2026-09-24_TO_10-04.md`). None is new
+pull requests (`docs/CHANGE_AUDIT_2026-09.md`). None is new
 behaviour from that window except where noted; each is recorded here so the
 guides can point at one place and an owner can decide it.
 
@@ -816,15 +816,17 @@ row above).
 
 ## File Storage — Folder Rights Phase 3 Left Open (2026-10-09)
 
-**Open, both deliberate.** Phase 3 of `docs/FILE_STORAGE_HARDENING.md` gated
-each module folder on that module's rights. Two things it did not do:
+**Open, deliberate.** Phase 3 of `docs/FILE_STORAGE_HARDENING.md` gated each
+module folder on that module's rights.
 
-- **No screen sets a custom folder's rights** (owner decision 22, later
-  change). `required_permissions` and `allowed_roles` are not in the folder
-  API's schemas at all, and the Documents page offers only name and
-  description when creating a folder. A department that wants a folder for,
-  say, the quartermaster alone cannot make one; it can mark a folder
-  leadership-only, which now means `documents.manage` holders.
+- **Resolved 2026-10-12: custom folder rights now have a screen.** The Create
+  Folder and Manage folder dialogs set positions and required permissions
+  (decision 27). Two narrower gaps remain:
+  - Positions are stored by slug. Renaming a position's slug, or deleting the
+    position, leaves the folder refusing its former holders until it is
+    edited. This fails closed.
+  - A folder restricted to a permission that nobody holds can still be made by
+    a full administrator. Only the editor's own access is checked.
 - **Facility files still need `documents.manage` to upload.** The facility
   Files section uploads through `POST /documents/upload` and then links the
   document, so a facilities manager holding `facilities.edit` but not
@@ -1476,6 +1478,33 @@ pending a decision:
 - **Purchase requests and check requests do not require one.** A purchase
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
+
+## Finance — Board Reports: What They Do Not Cover (2026-10-12)
+
+**Finance › Reports** (`/finance/reports`) is described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#board-reports-2026-10-12). Left out on
+purpose:
+
+- **Commitments on a past date.** Encumbrances are a running figure with no
+  history, so budget vs actual shows **Committed** only on a report through
+  today. Reconstructing them would mean recording each approval and payment as
+  a dated encumbrance movement, a schema change not made here.
+- **Spent is the dated payments, not the running total.** A line whose running
+  `amount_spent` was edited by hand, or that holds spending from before a
+  payment's date was recorded, reads differently on the report. Today's report
+  flags those lines (`runningSpentDiffers`) and shows both figures; the report
+  is not corrected to the running total, because then it would not reconcile
+  with the payments register.
+- **A voided check with no void date** counts as voided from the start on
+  budget vs actual, but its original row still appears on the register. The
+  2026-10-11 migration (`3f3bd6f3c7e4`) filled `voided_at` for every check
+  voided before then, so this arises only if a row is edited directly.
+- **No server-side PDF**, and no scheduled delivery. The browser's print, or
+  its _Save as PDF_, is the PDF.
+- **Not yet built from the original plan:** expense summary by member, dues
+  collection with delinquency, and purchase orders by vendor. Restricted funds
+  and functional expense classification (program / management / fundraising)
+  are separate work and appear on none of these reports.
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 

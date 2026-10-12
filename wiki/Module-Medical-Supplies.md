@@ -195,4 +195,4 @@ Two migrations, both in the 2026-08-16 chain:
 - [Inventory (gear)](Module-Inventory)
 - [Role System](Role-System)
 - [Apparatus](Module-Apparatus)
-- [Recent changes, Aug 16–17](Recent-Changes-2026-08-16-to-17)
+- [Recent changes, Aug 16–17](Recent-Changes-2026-08#recent-changes-august-1617-2026)
