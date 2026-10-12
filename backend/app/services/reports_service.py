@@ -142,7 +142,7 @@ class ReportsService:
 
     async def generate_report(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         report_type: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,

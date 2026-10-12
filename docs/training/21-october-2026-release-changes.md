@@ -104,3 +104,24 @@ Screenshots to create or replace are in
 | Receipts and apparatus files filed as documents                                                                                              | [07 — Documents & Forms](./07-documents-forms.md) (already updated)                    |
 | Admin-hours entries labelled **QR Scan**, **ID Card Station**, **Manual**, **Event Attendance**                                              | [01 — Membership](./01-membership.md) (already updated)                                |
 | Training requirements and programs reject another department's skills and roles                                                              | Behind the scenes; no workflow change                                                  |
+
+---
+
+# October 11–12, 2026 workflow updates
+
+Index for the fifth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10-11_TO_10-12.md`](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                       | Now in                                                         |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Dues administration, export history                                         | [11 — Finance](./11-finance.md)                                |
+| Add Opportunity, Record Donation, Pledges, Fundraising Events               | [12 — Grants & Fundraising](./12-grants-fundraising.md)        |
+| Permanent or temporary assignment; departure clearance; restock from checks | [05 — Inventory](./05-inventory.md)                            |
+| Member compliance view and overdue filter                                   | [13 — Medical Screening](./13-medical-screening.md)            |
+| Guests on the event page; attendance dashboard; action-item assignees       | [04 — Events & Meetings](./04-events-meetings.md)              |
+| Manage folder; publish warning; one submission per person                   | [07 — Documents & Forms](./07-documents-forms.md)              |
+| Election ballot and results changes                                         | [14 — Elections](./14-elections.md)                            |
+| Prospect referral fields, auto-purge warning, Department Email              | [15](./15-prospective-members.md), [08](./08-admin-reports.md) |
+| Give everyone all calls at close-out                                        | [03 — Scheduling](./03-scheduling.md)                          |

@@ -46,7 +46,10 @@ class MeetingsService:
     # ============================================
 
     async def create_meeting(
-        self, organization_id: UUID, meeting_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        meeting_data: Dict[str, Any],
+        created_by: UUID | str,
     ) -> Tuple[Optional[Meeting], Optional[str]]:
         """Create a new meeting with optional attendees and action items"""
         try:
@@ -118,7 +121,7 @@ class MeetingsService:
 
     async def get_meetings(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         meeting_type: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
@@ -175,7 +178,7 @@ class MeetingsService:
         return meetings, total
 
     async def attach_creator_names(
-        self, organization_id: UUID, meetings: List[Meeting]
+        self, organization_id: UUID | str, meetings: List[Meeting]
     ) -> None:
         """Populate MeetingResponse.creator_name, in place (BXC-2).
 
@@ -240,7 +243,7 @@ class MeetingsService:
             m.action_item_count = row.get("action_items", 0)
 
     async def get_meeting_by_id(
-        self, meeting_id: UUID, organization_id: UUID
+        self, meeting_id: UUID, organization_id: UUID | str
     ) -> Optional[Meeting]:
         """Get a meeting by ID with attendees and action items"""
         result = await self.db.execute(
@@ -256,7 +259,7 @@ class MeetingsService:
         return meeting
 
     async def update_meeting(
-        self, meeting_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self, meeting_id: UUID, organization_id: UUID | str, update_data: Dict[str, Any]
     ) -> Tuple[Optional[Meeting], Optional[str]]:
         """Update a meeting"""
         try:
@@ -289,7 +292,7 @@ class MeetingsService:
             return None, str(e)
 
     async def delete_meeting(
-        self, meeting_id: UUID, organization_id: UUID
+        self, meeting_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete a meeting and all its attendees/action items"""
         try:
@@ -305,7 +308,7 @@ class MeetingsService:
             return False, str(e)
 
     async def approve_meeting(
-        self, meeting_id: UUID, organization_id: UUID, approved_by: UUID
+        self, meeting_id: UUID, organization_id: UUID | str, approved_by: UUID | str
     ) -> Tuple[Optional[Meeting], Optional[str]]:
         """Approve meeting minutes"""
         try:
@@ -325,7 +328,7 @@ class MeetingsService:
                 )
 
             meeting.status = MeetingStatus.APPROVED
-            meeting.approved_by = approved_by
+            meeting.approved_by = str(approved_by)
             meeting.approved_at = datetime.now(timezone.utc)
 
             await self.db.commit()
@@ -340,7 +343,10 @@ class MeetingsService:
     # ============================================
 
     async def add_attendee(
-        self, meeting_id: UUID, organization_id: UUID, attendee_data: Dict[str, Any]
+        self,
+        meeting_id: UUID,
+        organization_id: UUID | str,
+        attendee_data: Dict[str, Any],
     ) -> Tuple[Optional[MeetingAttendee], Optional[str]]:
         """Add an attendee to a meeting"""
         try:
@@ -374,7 +380,7 @@ class MeetingsService:
             return None, str(e)
 
     async def remove_attendee(
-        self, meeting_id: UUID, attendee_id: UUID, organization_id: UUID
+        self, meeting_id: UUID, attendee_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Remove an attendee from a meeting"""
         try:
@@ -400,7 +406,7 @@ class MeetingsService:
     # ============================================
 
     async def create_action_item(
-        self, meeting_id: UUID, organization_id: UUID, item_data: Dict[str, Any]
+        self, meeting_id: UUID, organization_id: UUID | str, item_data: Dict[str, Any]
     ) -> Tuple[Optional[MeetingActionItem], Optional[str]]:
         """Create an action item for a meeting"""
         try:
@@ -430,7 +436,7 @@ class MeetingsService:
             return None, str(e)
 
     async def update_action_item(
-        self, item_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self, item_id: UUID, organization_id: UUID | str, update_data: Dict[str, Any]
     ) -> Tuple[Optional[MeetingActionItem], Optional[str]]:
         """Update an action item"""
         try:
@@ -476,7 +482,7 @@ class MeetingsService:
             return None, str(e)
 
     async def delete_action_item(
-        self, item_id: UUID, organization_id: UUID
+        self, item_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Delete an action item"""
         try:
@@ -497,7 +503,7 @@ class MeetingsService:
             return False, str(e)
 
     async def get_open_action_items(
-        self, organization_id: UUID, assigned_to: Optional[UUID] = None
+        self, organization_id: UUID | str, assigned_to: Optional[UUID] = None
     ) -> List[MeetingActionItem]:
         """Get all open action items for the organization"""
         query = (
@@ -521,7 +527,7 @@ class MeetingsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
+    async def get_summary(self, organization_id: UUID | str) -> Dict[str, Any]:
         """Get meetings summary statistics"""
         # Total meetings
         total_result = await self.db.execute(
@@ -574,7 +580,7 @@ class MeetingsService:
     # ============================================
 
     async def create_from_event(
-        self, event_id: UUID, organization_id: UUID, created_by: UUID
+        self, event_id: UUID, organization_id: UUID | str, created_by: UUID | str
     ) -> Tuple[Optional[Meeting], Optional[str]]:
         """
         Create a Meeting record from a completed Event (type: business_meeting).

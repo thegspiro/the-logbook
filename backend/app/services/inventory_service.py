@@ -110,6 +110,7 @@ from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone
+from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many of a low-stock category's items a report names.
@@ -879,7 +880,10 @@ class InventoryService:
     # ============================================
 
     async def create_category(
-        self, organization_id: UUID, category_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        category_data: Dict[str, Any],
+        created_by: UUID | str,
     ) -> Tuple[Optional[InventoryCategory], Optional[str]]:
         """Create a new inventory category"""
         try:
@@ -908,7 +912,7 @@ class InventoryService:
 
     async def get_categories(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         item_type: Optional[ItemType] = None,
         item_types: Optional[Iterable[ItemType]] = None,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
@@ -958,7 +962,7 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_category_by_id(
-        self, category_id: UUID, organization_id: UUID
+        self, category_id: UUID, organization_id: UUID | str
     ) -> Optional[InventoryCategory]:
         """Get category by ID"""
         result = await self.db.execute(
@@ -972,7 +976,7 @@ class InventoryService:
     async def update_category(
         self,
         category_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
     ) -> Tuple[Optional[InventoryCategory], Optional[str]]:
         """Update an inventory category"""
@@ -1006,7 +1010,7 @@ class InventoryService:
             return None, str(e)
 
     async def delete_category(
-        self, category_id: UUID, organization_id: UUID
+        self, category_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Soft-delete (deactivate) a category.
 
@@ -1045,7 +1049,7 @@ class InventoryService:
 
     async def _vendor_name_taken(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         name: str,
         exclude_vendor_id: Optional[UUID] = None,
     ) -> Optional[InventoryVendor]:
@@ -1066,7 +1070,7 @@ class InventoryService:
         return inventory_vendor
 
     async def get_vendor_stats(
-        self, organization_id: UUID, vendor_ids: List[str]
+        self, organization_id: UUID | str, vendor_ids: List[str]
     ) -> Dict[str, Dict[str, Any]]:
         """Per-vendor catalog and purchasing totals, keyed by vendor id.
 
@@ -1135,7 +1139,7 @@ class InventoryService:
 
     async def list_vendors(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         search: Optional[str] = None,
         active_only: bool = True,
     ) -> List[InventoryVendor]:
@@ -1162,7 +1166,7 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_vendor(
-        self, vendor_id: UUID, organization_id: UUID
+        self, vendor_id: UUID | str, organization_id: UUID | str
     ) -> Optional[InventoryVendor]:
         """Get one vendor with its contacts, scoped to the caller's org."""
         result = await self.db.execute(
@@ -1176,9 +1180,9 @@ class InventoryService:
 
     async def create_vendor(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
-        created_by: Optional[UUID] = None,
+        created_by: UUID | str | None = None,
     ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
         """Create a vendor, optionally with its contacts in the same call."""
         try:
@@ -1232,7 +1236,7 @@ class InventoryService:
     async def update_vendor(
         self,
         vendor_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
     ) -> Tuple[Optional[InventoryVendor], Optional[str]]:
         """Update a vendor. Explicit nulls clear the field (see CLAUDE.md #1)."""
@@ -1263,7 +1267,7 @@ class InventoryService:
             return None, str(e)
 
     async def deactivate_vendor(
-        self, vendor_id: UUID, organization_id: UUID
+        self, vendor_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Deactivate a vendor, keeping its purchase history intact.
 
@@ -1320,7 +1324,7 @@ class InventoryService:
     async def add_vendor_contact(
         self,
         vendor_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
     ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
         """Add a named contact to a vendor."""
@@ -1350,7 +1354,7 @@ class InventoryService:
             return None, str(e)
 
     async def get_vendor_contact(
-        self, contact_id: UUID, organization_id: UUID
+        self, contact_id: UUID, organization_id: UUID | str
     ) -> Optional[InventoryVendorContact]:
         """Get one vendor contact, scoped to the caller's org."""
         result = await self.db.execute(
@@ -1366,7 +1370,7 @@ class InventoryService:
     async def update_vendor_contact(
         self,
         contact_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
     ) -> Tuple[Optional[InventoryVendorContact], Optional[str]]:
         """Update a vendor contact."""
@@ -1394,7 +1398,7 @@ class InventoryService:
             return None, str(e)
 
     async def delete_vendor_contact(
-        self, contact_id: UUID, organization_id: UUID
+        self, contact_id: UUID, organization_id: UUID | str
     ) -> Optional[str]:
         """Delete a vendor contact, promoting another to primary if needed."""
         try:
@@ -1422,7 +1426,7 @@ class InventoryService:
         return (name or "").strip().lower()
 
     async def list_unlinked_vendor_names(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> List[Dict[str, Any]]:
         """Supplier names typed onto rows that were never attached to a vendor.
 
@@ -1482,7 +1486,7 @@ class InventoryService:
         )
 
     async def attach_vendor_name(
-        self, vendor_id: UUID, organization_id: UUID, name: str
+        self, vendor_id: UUID, organization_id: UUID | str, name: str
     ) -> Tuple[Optional[Dict[str, int]], Optional[str]]:
         """Point every row carrying this typed-in name at a real vendor.
 
@@ -1520,8 +1524,8 @@ class InventoryService:
             await self.db.commit()
             return (
                 {
-                    "items_linked": item_result.rowcount or 0,
-                    "reorders_linked": reorder_result.rowcount or 0,
+                    "items_linked": rows_affected(item_result) or 0,
+                    "reorders_linked": rows_affected(reorder_result) or 0,
                 },
                 None,
             )
@@ -1531,7 +1535,7 @@ class InventoryService:
             return None, str(e)
 
     async def merge_vendors(
-        self, target_id: UUID, source_id: UUID, organization_id: UUID
+        self, target_id: UUID, source_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Fold one vendor into another: same supplier, entered twice.
 
@@ -1591,8 +1595,8 @@ class InventoryService:
 
             return (
                 {
-                    "items_moved": item_result.rowcount or 0,
-                    "reorders_moved": reorder_result.rowcount or 0,
+                    "items_moved": rows_affected(item_result) or 0,
+                    "reorders_moved": rows_affected(reorder_result) or 0,
                     "contacts_moved": len(moved_contacts),
                     "merged_name": source_name,
                     "vendor_name": target.name,
@@ -1916,7 +1920,7 @@ class InventoryService:
 
     @classmethod
     def _outside_domains(
-        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+        cls, organization_id: UUID | str, exclude_item_types: Iterable[ItemType]
     ):
         """Filter keeping items not filed under any of ``exclude_item_types``.
 
@@ -1934,7 +1938,7 @@ class InventoryService:
 
     @classmethod
     def _item_ids_outside_domains(
-        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+        cls, organization_id: UUID | str, exclude_item_types: Iterable[ItemType]
     ) -> "Select":
         """Org-scoped select of item ids not filed under the excluded domains."""
         return select(InventoryItem.id).where(
@@ -1944,7 +1948,7 @@ class InventoryService:
 
     def _build_items_query(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         category_id: Optional[UUID] = None,
         status: Optional[ItemStatus] = None,
         condition: Optional[ItemCondition] = None,
@@ -2107,7 +2111,7 @@ class InventoryService:
 
     async def get_items(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         category_id: Optional[UUID] = None,
         status: Optional[ItemStatus] = None,
         condition: Optional[ItemCondition] = None,
@@ -2127,7 +2131,7 @@ class InventoryService:
         label_printed: Optional[bool] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
-        pinned_for_user_id: Optional[UUID] = None,
+        pinned_for_user_id: UUID | str | None = None,
         group_by: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
@@ -2203,7 +2207,7 @@ class InventoryService:
 
     async def get_items_page(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         *,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
@@ -2244,9 +2248,9 @@ class InventoryService:
 
     def _joined_items_query(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         group: Optional[Any],
-        pinned_for_user_id: Optional[UUID],
+        pinned_for_user_id: UUID | str | None,
         **filters: Any,
     ) -> "Select":
         """The filtered select plus the group and pin joins. No order, no page.
@@ -2282,9 +2286,9 @@ class InventoryService:
         self,
         query: "Select",
         *,
-        organization_id: UUID,
+        organization_id: UUID | str,
         group_by: Optional[str],
-        pinned_for_user_id: Optional[UUID],
+        pinned_for_user_id: UUID | str | None,
         sort_by: Optional[str],
         sort_order: Optional[str],
         skip: int,
@@ -2361,7 +2365,7 @@ class InventoryService:
 
     async def get_item_group_counts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         group_by: str,
         **filters: Any,
     ) -> List[Dict[str, Any]]:
@@ -2430,7 +2434,7 @@ class InventoryService:
     async def _attach_pin_positions(
         self,
         organization_id: str,
-        user_id: Optional[UUID],
+        user_id: UUID | str | None,
         items: List[InventoryItem],
     ) -> None:
         """Stamp each row with the caller's pin position, or None.
@@ -2506,7 +2510,7 @@ class InventoryService:
             item.group_key = keys.get(item.id)
 
     async def list_pins(
-        self, organization_id: UUID, user_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str
     ) -> List[InventoryItemPin]:
         """The member's pins, front of the list first."""
         result = await self.db.execute(
@@ -2520,7 +2524,7 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def pin_item(
-        self, organization_id: UUID, user_id: UUID, item_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str, item_id: UUID
     ) -> InventoryItemPin:
         """Add an item to the member's shortlist, at the end of it.
 
@@ -2594,7 +2598,7 @@ class InventoryService:
         return pin
 
     async def unpin_item(
-        self, organization_id: UUID, user_id: UUID, item_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str, item_id: UUID
     ) -> bool:
         """Drop an item from the shortlist and close the gap it leaves.
 
@@ -2631,7 +2635,10 @@ class InventoryService:
         return True
 
     async def reorder_pins(
-        self, organization_id: UUID, user_id: UUID, ordered_item_ids: List[str]
+        self,
+        organization_id: UUID | str,
+        user_id: UUID | str,
+        ordered_item_ids: List[str],
     ) -> List[InventoryItemPin]:
         """Rewrite the shortlist order from a full list of item ids.
 
@@ -2695,7 +2702,7 @@ class InventoryService:
         return item
 
     async def _get_item_locked(
-        self, item_id: UUID, organization_id: UUID | str
+        self, item_id: UUID | str, organization_id: UUID | str
     ) -> Optional[InventoryItem]:
         """Get item by ID with a row-level lock (SELECT FOR UPDATE).
 
@@ -2731,7 +2738,7 @@ class InventoryService:
     async def update_item(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
         required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -2950,7 +2957,7 @@ class InventoryService:
     async def retire_item(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         notes: Optional[str] = None,
         required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[bool, Optional[str]]:
@@ -3030,7 +3037,7 @@ class InventoryService:
         self,
         item_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         assigned_by: UUID | str,
         assignment_type: AssignmentType = AssignmentType.PERMANENT,
         reason: Optional[str] = None,
@@ -3173,8 +3180,8 @@ class InventoryService:
     async def unassign_item(
         self,
         item_id: UUID,
-        organization_id: UUID,
-        returned_by: UUID,
+        organization_id: UUID | str,
+        returned_by: UUID | str,
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         expected_user_id: Optional[UUID] = None,
@@ -3216,7 +3223,7 @@ class InventoryService:
             if assignment:
                 assignment.is_active = False
                 assignment.returned_date = datetime.now(timezone.utc)
-                assignment.returned_by = returned_by
+                assignment.returned_by = str(returned_by)
                 assignment.return_condition = return_condition
                 assignment.return_notes = return_notes
 
@@ -3275,7 +3282,7 @@ class InventoryService:
     async def get_user_assignments(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
@@ -3665,8 +3672,8 @@ class InventoryService:
     async def return_to_pool(
         self,
         issuance_id: UUID,
-        organization_id: UUID,
-        returned_by: UUID,
+        organization_id: UUID | str,
+        returned_by: UUID | str,
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         quantity_returned: Optional[int] = None,
@@ -3784,7 +3791,7 @@ class InventoryService:
                 # Full return
                 issuance.is_returned = True
                 issuance.returned_at = datetime.now(timezone.utc)
-                issuance.returned_by = returned_by
+                issuance.returned_by = str(returned_by)
                 issuance.return_condition = return_condition
                 issuance.return_notes = _append_note(
                     issuance.return_notes, return_notes
@@ -3822,7 +3829,7 @@ class InventoryService:
     async def get_item_issuances(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
@@ -3844,7 +3851,7 @@ class InventoryService:
     async def get_user_issuances(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 200,
@@ -3871,8 +3878,8 @@ class InventoryService:
 
     async def checkout_item(
         self,
-        item_id: UUID,
-        user_id: UUID,
+        item_id: UUID | str,
+        user_id: UUID | str,
         organization_id: UUID | str,
         checked_out_by: UUID | str,
         expected_return_at: Optional[datetime] = None,
@@ -3934,7 +3941,7 @@ class InventoryService:
 
     async def checkin_item(
         self,
-        checkout_id: UUID,
+        checkout_id: UUID | str,
         organization_id: UUID | str,
         checked_in_by: UUID | str,
         return_condition: ItemCondition,
@@ -4011,7 +4018,7 @@ class InventoryService:
 
             # Update checkout record
             checkout.checked_in_at = datetime.now(timezone.utc)
-            checkout.checked_in_by = checked_in_by
+            checkout.checked_in_by = str(checked_in_by)
             checkout.return_condition = return_condition
             checkout.damage_notes = damage_notes
             checkout.is_returned = True
@@ -4062,7 +4069,7 @@ class InventoryService:
 
     async def get_active_checkouts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user_id: Optional[UUID] = None,
         skip: int = 0,
         limit: int = 200,
@@ -4092,7 +4099,7 @@ class InventoryService:
 
     async def get_overdue_checkouts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         skip: int = 0,
         limit: int = 200,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
@@ -4151,7 +4158,7 @@ class InventoryService:
             due = due.replace(tzinfo=timezone.utc)
         return bool(due < datetime.now(timezone.utc))
 
-    async def mark_overdue_checkouts(self, organization_id: UUID) -> int:
+    async def mark_overdue_checkouts(self, organization_id: UUID | str) -> int:
         """Batch-mark overdue checkouts.  Call from a scheduled task, not from
         read endpoints, to avoid write-on-read overhead.
         """
@@ -4167,7 +4174,7 @@ class InventoryService:
             .values(is_overdue=True)
         )
         await self.db.commit()
-        return int(result.rowcount)
+        return int(rows_affected(result))
 
     # ============================================
     # Maintenance Management
@@ -4265,9 +4272,9 @@ class InventoryService:
     async def create_maintenance_record(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         maintenance_data: Dict[str, Any],
-        created_by: UUID,
+        created_by: UUID | str,
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Create a maintenance record"""
         try:
@@ -4356,7 +4363,7 @@ class InventoryService:
         self,
         record_id: UUID,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Update an existing maintenance record"""
@@ -4453,7 +4460,7 @@ class InventoryService:
             return None, str(e)
 
     async def get_maintenance_due(
-        self, organization_id: UUID, days_ahead: int = 30
+        self, organization_id: UUID | str, days_ahead: int = 30
     ) -> List[InventoryItem]:
         """Get items with maintenance due within specified days"""
         cutoff_date = await resolve_org_today(self.db, organization_id) + timedelta(
@@ -4473,7 +4480,7 @@ class InventoryService:
     async def get_item_maintenance_history(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         skip: int = 0,
         limit: int = 100,
         open_only: bool = False,
@@ -4508,7 +4515,7 @@ class InventoryService:
 
     async def get_low_stock_items(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
         skip: int = 0,
         limit: Optional[int] = None,
@@ -4645,7 +4652,7 @@ class InventoryService:
 
     async def get_inventory_summary(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Dict[str, Any]:
         """Get overall inventory summary statistics.
@@ -4820,7 +4827,7 @@ class InventoryService:
         }
 
     async def get_user_inventory_summary(
-        self, organization_id: UUID, user_id: str
+        self, organization_id: UUID | str, user_id: str
     ) -> Dict[str, Any]:
         """Get inventory summary scoped to a single user's checkouts and
         assignments."""
@@ -4943,7 +4950,7 @@ class InventoryService:
 
     async def get_summary_by_location(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Dict[str, Any]]:
         """Get inventory summary grouped by location.
@@ -5034,7 +5041,7 @@ class InventoryService:
         return locations
 
     async def get_user_inventory(
-        self, user_id: UUID, organization_id: UUID
+        self, user_id: UUID, organization_id: UUID | str
     ) -> Dict[str, Any]:
         """Get all inventory items for a specific user (for dashboard)"""
         # Permanent assignments
@@ -5097,7 +5104,7 @@ class InventoryService:
 
     async def get_members_inventory_summary(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         search: Optional[str] = None,
         include_user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
@@ -5236,7 +5243,7 @@ class InventoryService:
     # ============================================
 
     async def _lookup_by_item_id(
-        self, item_id: str, organization_id: UUID
+        self, item_id: str, organization_id: UUID | str
     ) -> Optional[Tuple[InventoryItem, str, str]]:
         """
         Look up an item directly by its ID.
@@ -5268,7 +5275,7 @@ class InventoryService:
         return item, "name", item.name
 
     async def lookup_by_code(
-        self, code: str, organization_id: UUID
+        self, code: str, organization_id: UUID | str
     ) -> Optional[Tuple[InventoryItem, str, str]]:
         """
         Look up an item by barcode, serial number, or asset tag.
@@ -5314,7 +5321,7 @@ class InventoryService:
     async def search_by_code(
         self,
         code: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         limit: int = 20,
     ) -> List[Tuple[InventoryItem, str, str]]:
         """
@@ -5416,8 +5423,8 @@ class InventoryService:
     async def distribute_items(
         self,
         user_id: UUID,
-        organization_id: UUID,
-        performed_by: UUID,
+        organization_id: UUID | str,
+        performed_by: UUID | str,
         items: List[Dict[str, Any]],
         reason: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -5590,7 +5597,7 @@ class InventoryService:
         }
 
     async def _active_holding_conflict(
-        self, item: InventoryItem, organization_id: UUID
+        self, item: InventoryItem, organization_id: UUID | str
     ) -> Optional[Dict[str, Any]]:
         """Return structured custody data for an active individual holding."""
         assignment_result = await self.db.execute(
@@ -5646,8 +5653,8 @@ class InventoryService:
         return_condition: ItemCondition,
         transfer_reason: str,
         immediate: bool,
-        organization_id: UUID,
-        performed_by: UUID,
+        organization_id: UUID | str,
+        performed_by: UUID | str,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Atomically close one custody record and open its successor."""
         try:
@@ -5763,8 +5770,8 @@ class InventoryService:
     async def batch_return(
         self,
         user_id: UUID,
-        organization_id: UUID,
-        performed_by: UUID,
+        organization_id: UUID | str,
+        performed_by: UUID | str,
         items: List[Dict[str, Any]],
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -6139,8 +6146,8 @@ class InventoryService:
     async def mark_labels_printed(
         self,
         item_ids: List[UUID],
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
     ) -> int:
         """Record that labels printed correctly for these items.
 
@@ -6193,7 +6200,7 @@ class InventoryService:
     async def generate_barcode_labels(
         self,
         item_ids: List[UUID],
-        organization_id: UUID,
+        organization_id: UUID | str,
         label_format: str = "letter",
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
@@ -6628,7 +6635,7 @@ class InventoryService:
     async def get_item_history(
         self,
         item_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[Dict[str, Any]]:
         """Get unified history/activity timeline for an item.
 
@@ -6865,7 +6872,7 @@ class InventoryService:
         self,
         user_id: UUID,
         category_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         role_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Check how many more units a member can receive for a category."""
@@ -7005,8 +7012,8 @@ class InventoryService:
         self,
         item_id: UUID,
         targets: List[Dict[str, Any]],
-        organization_id: UUID,
-        issued_by: UUID,
+        organization_id: UUID | str,
+        issued_by: UUID | str,
     ) -> List[Dict[str, Any]]:
         """Issue a pool item to multiple members at once."""
         results = []
@@ -7066,13 +7073,13 @@ class InventoryService:
                 seen.setdefault(settled.casefold(), settled)
         return sorted(seen.values(), key=str.casefold)
 
-    async def get_item_colors(self, organization_id: UUID) -> List[str]:
+    async def get_item_colors(self, organization_id: UUID | str) -> List[str]:
         """Public wrapper for the colour filter's option list."""
         return await self._known_colors(organization_id)
 
     async def _find_variant_group_for_reuse(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         base_name: str,
         category_id: Optional[str],
     ) -> Optional["ItemVariantGroup"]:
@@ -7114,7 +7121,7 @@ class InventoryService:
 
     async def _existing_variant_keys(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         variant_group_id: Optional[str],
         base_name: str,
         category_id: Optional[str],
@@ -7161,8 +7168,8 @@ class InventoryService:
 
     async def create_size_variants(
         self,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
         base_name: str,
         sizes: List[str],
         colors: Optional[List[str]] = None,
@@ -7391,7 +7398,7 @@ class InventoryService:
     async def update_issuance_charge(
         self,
         issuance_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         charge_status: str,
         charge_amount: Optional[Decimal] = None,
     ) -> Tuple[bool, Optional[str]]:
@@ -7419,7 +7426,7 @@ class InventoryService:
 
     async def get_charges(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         charge_status_filter: Optional[str] = None,
     ) -> Dict[str, Any]:
         """List issuances with charge-relevant info for admin charge management."""
@@ -7491,8 +7498,8 @@ class InventoryService:
 
     async def create_return_request(
         self,
-        organization_id: UUID,
-        requester_id: UUID,
+        organization_id: UUID | str,
+        requester_id: UUID | str,
         return_type: str,
         item_id: UUID,
         assignment_id: Optional[UUID] = None,
@@ -7608,9 +7615,9 @@ class InventoryService:
 
     async def get_return_requests(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         status_filter: Optional[str | ReturnRequestStatus] = None,
-        requester_id: Optional[UUID] = None,
+        requester_id: UUID | str | None = None,
     ) -> List[ReturnRequest]:
         """List return requests, optionally filtered by status or requester."""
         query = (
@@ -7635,8 +7642,8 @@ class InventoryService:
     async def review_return_request(
         self,
         request_id: UUID,
-        organization_id: UUID,
-        reviewer_id: UUID,
+        organization_id: UUID | str,
+        reviewer_id: UUID | str,
         status: str,
         review_notes: Optional[str] = None,
         observed_condition: Optional[str] = None,
@@ -8041,7 +8048,7 @@ class InventoryService:
     async def get_user_issuance_history(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[ItemIssuance]:
         """Get all issuance records (active + returned) for a user."""
         result = await self.db.execute(
@@ -8104,7 +8111,7 @@ class InventoryService:
 
     async def get_low_stock_items_for_alerts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryItem, int, bool]]:
         """Items at or below their reorder point, as (item, on_hand, from_lots).
@@ -8917,7 +8924,7 @@ class InventoryService:
 
     async def get_overdue_checkouts_for_alerts(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[CheckOutRecord]:
         """Get overdue checkouts for email alerts."""
         now = datetime.now(timezone.utc)
@@ -8941,7 +8948,7 @@ class InventoryService:
 
     async def get_nfpa_retirement_due_items(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         days_ahead: int = 180,
         today: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
@@ -8993,7 +9000,7 @@ class InventoryService:
 
     async def list_reorder_requests(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         status: Optional[str] = None,
         urgency: Optional[str] = None,
         search: Optional[str] = None,
@@ -9027,7 +9034,7 @@ class InventoryService:
     async def get_reorder_request(
         self,
         request_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         refresh_loaded: bool = False,
     ) -> Optional[ReorderRequest]:
         """Get a single reorder request.
@@ -9055,7 +9062,7 @@ class InventoryService:
         return reorder_request
 
     async def _assert_reorder_fks_in_org(
-        self, data: Dict[str, Any], organization_id: UUID
+        self, data: Dict[str, Any], organization_id: UUID | str
     ) -> None:
         # INV-4 (XC-1): a reorder can name a specific item and/or category; each
         # is optional and must belong to the caller's org. Only keys present are
@@ -9090,7 +9097,7 @@ class InventoryService:
 
     async def create_reorder_request(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
         requested_by: str,
     ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
@@ -9113,7 +9120,7 @@ class InventoryService:
     async def update_reorder_request(
         self,
         request_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: Dict[str, Any],
         current_user_id: str,
     ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
@@ -9352,7 +9359,7 @@ class InventoryService:
         return row, None
 
     async def delete_reorder_request(
-        self, request_id: UUID, organization_id: UUID
+        self, request_id: UUID, organization_id: UUID | str
     ) -> Optional[str]:
         """Delete a reorder request (only if pending)."""
         reorder = await self.get_reorder_request(request_id, organization_id)
@@ -9370,7 +9377,7 @@ class InventoryService:
 
     async def create_variant_group(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: dict,
         created_by: Optional[UUID] = None,
     ) -> Tuple[Optional[ItemVariantGroup], Optional[str]]:
@@ -9409,7 +9416,7 @@ class InventoryService:
             return None, str(e)
 
     async def get_variant_groups(
-        self, organization_id: UUID, active_only: bool = True
+        self, organization_id: UUID | str, active_only: bool = True
     ) -> List[ItemVariantGroup]:
         """List variant groups for an organization."""
         query = select(ItemVariantGroup).where(
@@ -9422,7 +9429,7 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_variant_group_by_id(
-        self, group_id: UUID, organization_id: UUID
+        self, group_id: UUID, organization_id: UUID | str
     ) -> Optional[ItemVariantGroup]:
         """Get a variant group with its member items."""
         query = (
@@ -9438,7 +9445,7 @@ class InventoryService:
         return item_variant_group
 
     async def update_variant_group(
-        self, group_id: UUID, organization_id: UUID, data: dict
+        self, group_id: UUID, organization_id: UUID | str, data: dict
     ) -> Tuple[Optional[ItemVariantGroup], Optional[str]]:
         """Update a variant group."""
         try:
@@ -9468,7 +9475,7 @@ class InventoryService:
             return None, str(e)
 
     async def delete_variant_group(
-        self, group_id: UUID, organization_id: UUID
+        self, group_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Soft-delete (deactivate) a variant group."""
         try:
@@ -9489,7 +9496,7 @@ class InventoryService:
 
     async def create_equipment_kit(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: dict,
         created_by: Optional[UUID] = None,
     ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
@@ -9553,7 +9560,7 @@ class InventoryService:
             return None, str(e)
 
     async def get_equipment_kits(
-        self, organization_id: UUID, active_only: bool = True
+        self, organization_id: UUID | str, active_only: bool = True
     ) -> List[EquipmentKit]:
         """List equipment kits for an organization.
 
@@ -9573,7 +9580,7 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_equipment_kit_by_id(
-        self, kit_id: UUID, organization_id: UUID
+        self, kit_id: UUID, organization_id: UUID | str
     ) -> Optional[EquipmentKit]:
         """Get a kit with its items."""
         query = (
@@ -9589,7 +9596,7 @@ class InventoryService:
         return equipment_kit
 
     async def update_equipment_kit(
-        self, kit_id: UUID, organization_id: UUID, data: dict
+        self, kit_id: UUID, organization_id: UUID | str, data: dict
     ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
         """Update a kit's metadata and, when supplied, replace its line items."""
         try:
@@ -9647,7 +9654,7 @@ class InventoryService:
             return None, str(e)
 
     async def delete_equipment_kit(
-        self, kit_id: UUID, organization_id: UUID
+        self, kit_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
         """Soft-delete (deactivate) an equipment kit template."""
         try:
@@ -9666,7 +9673,7 @@ class InventoryService:
         self,
         kit_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         issued_by: UUID,
     ) -> Tuple[Optional[List[ItemIssuance]], Optional[str]]:
         """Issue all items in a kit to a member."""
@@ -9834,7 +9841,7 @@ class InventoryService:
 
     async def get_requestable_catalog(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
         search: Optional[str] = None,
         category_id: Optional[UUID] = None,
@@ -9942,7 +9949,9 @@ class InventoryService:
             "identity_key": item.variant_group_id or f"item:{item.id}",
         }
 
-    def _fulfillment_base_query(self, organization_id: UUID, search: Optional[str]):
+    def _fulfillment_base_query(
+        self, organization_id: UUID | str, search: Optional[str]
+    ):
         """Rows a fulfilment may draw on, before the request narrows them."""
         query = (
             select(InventoryItem)
@@ -9987,7 +9996,7 @@ class InventoryService:
     async def get_fulfillment_options(
         self,
         request_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         search: Optional[str] = None,
         include_incompatible: bool = False,
         limit: int = 200,
@@ -10176,7 +10185,7 @@ class InventoryService:
         }
 
     async def get_requestable_categories(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> List[Dict[str, str]]:
         """Categories that actually hold requestable gear.
 
@@ -10581,8 +10590,8 @@ class InventoryService:
     async def fulfill_equipment_request(
         self,
         request_id: UUID,
-        organization_id: UUID,
-        fulfilled_by: UUID,
+        organization_id: UUID | str,
+        fulfilled_by: UUID | str,
         fulfillment_type: str,
         item_id: Optional[UUID] = None,
         quantity: Optional[int] = None,
@@ -10638,7 +10647,7 @@ class InventoryService:
                 )
             )
             await self.db.commit()
-            if claim.rowcount == 0:
+            if rows_affected(claim) == 0:
                 return None, "Only approved requests can be fulfilled"
 
             # From here the request is claimed (FULFILLED). Any validation or
@@ -10773,7 +10782,7 @@ class InventoryService:
             return None, str(e)
 
     async def _revert_fulfillment_claim(
-        self, request_id: UUID, organization_id: UUID
+        self, request_id: UUID, organization_id: UUID | str
     ) -> None:
         """Release a FULFILLED claim back to APPROVED.
 
@@ -10801,7 +10810,7 @@ class InventoryService:
     # ============================================
 
     async def get_member_size_preferences(
-        self, user_id: UUID, organization_id: UUID
+        self, user_id: UUID, organization_id: UUID | str
     ) -> Optional[MemberSizePreferences]:
         """Get a member's size preferences."""
         query = select(MemberSizePreferences).where(
@@ -10817,7 +10826,7 @@ class InventoryService:
     async def upsert_member_size_preferences(
         self,
         user_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         data: dict,
     ) -> Tuple[Optional[MemberSizePreferences], Optional[str]]:
         """Create or update a member's size preferences."""
@@ -12007,7 +12016,7 @@ class InventoryService:
     # Guided Setup
     # ============================================
 
-    async def get_setup_status(self, organization_id: UUID) -> Dict[str, Any]:
+    async def get_setup_status(self, organization_id: UUID | str) -> Dict[str, Any]:
         """Counts of the records the guided setup workflow walks through.
 
         Each count is what the corresponding step of the workflow produces, in
@@ -12059,7 +12068,7 @@ class InventoryService:
         }
         return {**counts, "is_complete": all(value > 0 for value in counts.values())}
 
-    async def _taken_category_names(self, organization_id: UUID) -> set[str]:
+    async def _taken_category_names(self, organization_id: UUID | str) -> set[str]:
         """Case-folded names of the org's *active* categories.
 
         Active only: `delete_category` deactivates rather than deleting, so
@@ -12075,7 +12084,9 @@ class InventoryService:
         )
         return {name.strip().lower() for name in existing.scalars().all() if name}
 
-    async def get_category_presets(self, organization_id: UUID) -> List[Dict[str, Any]]:
+    async def get_category_presets(
+        self, organization_id: UUID | str
+    ) -> List[Dict[str, Any]]:
         """Starter categories, each flagged with whether the org already has it.
 
         The flag is matched on case-insensitive name rather than on a stored
@@ -12095,7 +12106,7 @@ class InventoryService:
         ]
 
     async def apply_category_presets(
-        self, organization_id: UUID, keys: List[str], created_by: UUID
+        self, organization_id: UUID | str, keys: List[str], created_by: UUID | str
     ) -> Tuple[List[InventoryCategory], List[str], Optional[str]]:
         """Create the named starter categories, skipping ones already present.
 

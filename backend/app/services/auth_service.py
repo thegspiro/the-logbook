@@ -31,6 +31,7 @@ from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
 from app.utils.password_expiry import is_password_expired
+from app.utils.sql_results import rows_affected
 
 
 class RefreshTokenSuperseded(Exception):
@@ -529,7 +530,7 @@ class AuthService:
                 )
                 .execution_options(synchronize_session=False)
             )
-            if rotation.rowcount == 0:
+            if rows_affected(rotation) == 0:
                 logger.info(
                     f"Concurrent refresh for user {user_id}: the token was "
                     "rotated by a parallel request; no sessions revoked."
@@ -581,7 +582,7 @@ class AuthService:
         result = await self.db.execute(
             delete(UserSession).where(UserSession.user_id == str(user_id))
         )
-        count: int = result.rowcount
+        count: int = rows_affected(result)
         if count:
             await self.db.flush()
             logger.info(f"Revoked {count} session(s) for user {user_id}")
@@ -594,7 +595,7 @@ class AuthService:
         password: str,
         first_name: str,
         last_name: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         membership_number: Optional[str] = None,
         must_change_password: bool = True,
     ) -> Tuple[Optional[User], Optional[str]]:

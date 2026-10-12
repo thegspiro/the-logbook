@@ -358,8 +358,8 @@ class EventService:
         self,
         organizer_id: Optional[Any],
         alternate_id: Optional[Any],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Dict[str, Optional[str]]:
         """The organizer pair to store on a new event: the creator when none
         was chosen, and both checked to be active members of the org (XC-1)."""
@@ -379,7 +379,10 @@ class EventService:
         return {"organizer_id": organizer, "alternate_organizer_id": alternate}
 
     async def create_event(
-        self, event_data: EventCreate, organization_id: UUID, created_by: UUID
+        self,
+        event_data: EventCreate,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Event:
         """Create a new event"""
         # Validate dates
@@ -488,8 +491,8 @@ class EventService:
     async def get_event(
         self,
         event_id: UUID,
-        organization_id: UUID,
-        user_id: Optional[UUID] = None,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
         load_rsvps: bool = True,
     ) -> Tuple[Optional[Event], Optional[EventRSVP]]:
         """
@@ -527,8 +530,8 @@ class EventService:
 
     async def list_events(
         self,
-        organization_id: UUID,
-        user_id: Optional[UUID] = None,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
         event_type: Optional[str] = None,
         custom_category: Optional[str] = None,
         exclude_event_types: Optional[List[str]] = None,
@@ -727,8 +730,8 @@ class EventService:
 
     async def list_missed_mandatory_events(
         self,
-        organization_id: UUID,
-        user_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str,
         since: datetime,
         until: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
@@ -780,7 +783,7 @@ class EventService:
         ]
 
     async def _active_leave_periods(
-        self, organization_id: UUID, user_id: UUID
+        self, organization_id: UUID | str, user_id: UUID | str
     ) -> List[Tuple[date, Optional[date]]]:
         """Approved, still-active leave periods for one member.
 
@@ -840,7 +843,7 @@ class EventService:
         return True
 
     async def _annotate_list_items(
-        self, items: List[Dict[str, Any]], organization_id: UUID
+        self, items: List[Dict[str, Any]], organization_id: UUID | str
     ) -> None:
         """Attach the derived fields the member-facing list renders.
 
@@ -920,10 +923,10 @@ class EventService:
 
     async def update_event(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
         event_data: EventUpdate,
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | str | None = None,
         *,
         defer_commit: bool = False,
     ) -> Optional[Event]:
@@ -1052,7 +1055,7 @@ class EventService:
 
         return event
 
-    async def complete_deferred_writes(self, organization_id: UUID) -> None:
+    async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.
 
         The pipeline reversals read committed state, so they cannot run inside
@@ -1063,7 +1066,7 @@ class EventService:
         await self._reverse_pipeline_after_commit(pending, organization_id)
 
     async def publish_event(
-        self, event_id: UUID, organization_id: UUID
+        self, event_id: UUID, organization_id: UUID | str
     ) -> Optional[Event]:
         """Publish a draft event by setting is_draft to False"""
         result = await self.db.execute(
@@ -1089,9 +1092,9 @@ class EventService:
     async def update_future_events(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         event_data: EventUpdate,
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | str | None = None,
     ) -> int:
         """Update this event and all future events in the same recurring series.
 
@@ -1274,8 +1277,8 @@ class EventService:
 
     async def cancel_event(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
         reason: str,
         send_notifications: bool = False,
         *,
@@ -1353,7 +1356,7 @@ class EventService:
     async def cancel_series(
         self,
         parent_event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         reason: str,
         cancel_future_only: bool = False,
     ) -> int:
@@ -1418,7 +1421,7 @@ class EventService:
         return cancelled_count
 
     async def duplicate_event(
-        self, event_id: UUID, organization_id: UUID, created_by: UUID
+        self, event_id: UUID, organization_id: UUID | str, created_by: UUID | str
     ) -> Optional[Event]:
         """
         Duplicate an event, copying all configuration but not RSVPs or attendance data.
@@ -1498,7 +1501,7 @@ class EventService:
 
         return new_event
 
-    async def delete_event(self, event_id: UUID, organization_id: UUID) -> bool:
+    async def delete_event(self, event_id: UUID, organization_id: UUID | str) -> bool:
         """Delete an event"""
         result = await self.db.execute(
             select(Event)
@@ -1541,7 +1544,7 @@ class EventService:
     async def delete_event_series(
         self,
         parent_event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         delete_future_only: bool = False,
     ) -> int:
         """Delete all events in a recurring series.
@@ -1607,7 +1610,7 @@ class EventService:
     # RSVP Methods
 
     async def _evaluate_session_phase_warning(
-        self, event: Event, user_id: UUID
+        self, event: Event, user_id: UUID | str
     ) -> Optional[str]:
         """Soft training-pipeline gate: if this event is a program-linked
         training session belonging to a phase *ahead* of the member's current
@@ -1680,10 +1683,10 @@ class EventService:
 
     async def create_or_update_rsvp(
         self,
-        event_id: UUID,
-        user_id: UUID,
+        event_id: UUID | str,
+        user_id: UUID | str,
         rsvp_data: RSVPCreate,
-        organization_id: UUID,
+        organization_id: UUID | str,
         override: bool = False,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """Create or update an RSVP"""
@@ -2015,7 +2018,7 @@ class EventService:
     async def get_rsvp_history(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
         """Get RSVP change history for an event"""
@@ -2079,7 +2082,7 @@ class EventService:
         return items
 
     async def promote_from_waitlist(
-        self, event_id: UUID, organization_id: UUID
+        self, event_id: UUID | str, organization_id: UUID | str
     ) -> Optional[EventRSVP]:
         """
         Promote the earliest waitlisted RSVP for an event to 'going'.
@@ -2290,9 +2293,9 @@ class EventService:
 
     async def rsvp_to_series(
         self,
-        parent_event_id: UUID,
-        user_id: UUID,
-        organization_id: UUID,
+        parent_event_id: UUID | str,
+        user_id: UUID | str,
+        organization_id: UUID | str,
         rsvp_data: RSVPCreate,
         override: bool = False,
     ) -> int:
@@ -2405,7 +2408,7 @@ class EventService:
     async def list_event_rsvps(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         status_filter: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
@@ -2445,7 +2448,7 @@ class EventService:
     async def list_event_attendees_for_member(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[Optional[Event], List[EventRSVP]]:
@@ -2489,8 +2492,8 @@ class EventService:
         self,
         event_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
-        manager_id: UUID,
+        organization_id: UUID | str,
+        manager_id: UUID | str,
         status: str = "going",
         checked_in: bool = False,
         notes: Optional[str] = None,
@@ -2553,7 +2556,7 @@ class EventService:
             if checked_in and not existing_rsvp.checked_in:
                 existing_rsvp.checked_in = True
                 existing_rsvp.checked_in_at = now
-                existing_rsvp.overridden_by = manager_id
+                existing_rsvp.overridden_by = str(manager_id)
                 existing_rsvp.overridden_at = now
 
             rsvp = existing_rsvp
@@ -2587,8 +2590,8 @@ class EventService:
         self,
         event_id: UUID,
         user_id: UUID,
-        organization_id: UUID,
-        manager_id: UUID,
+        organization_id: UUID | str,
+        manager_id: UUID | str,
         override_data: RSVPOverride,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
@@ -2657,7 +2660,7 @@ class EventService:
             ).total_seconds() / 60
             rsvp.override_duration_minutes = int(duration)
 
-        rsvp.overridden_by = manager_id
+        rsvp.overridden_by = str(manager_id)
         rsvp.overridden_at = now
         rsvp.updated_at = now
 
@@ -2671,7 +2674,7 @@ class EventService:
         event: Event,
         was_training: bool,
         old_title: Optional[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Keep an event's training credit in step with an edit to the event.
 
@@ -2712,7 +2715,7 @@ class EventService:
         return None
 
     async def _void_training_credit_before_removal(
-        self, events: List[Event], organization_id: UUID
+        self, events: List[Event], organization_id: UUID | str
     ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Void the training credit of events about to be deleted or cancelled.
 
@@ -2739,13 +2742,14 @@ class EventService:
 
     @staticmethod
     async def _reverse_pipeline_after_commit(
-        pending: List[Tuple[Any, Tuple[str, Optional[str]]]], organization_id: UUID
+        pending: List[Tuple[Any, Tuple[str, Optional[str]]]],
+        organization_id: UUID | str,
     ) -> None:
         for training, session_ref in pending:
             await training.reverse_event_pipeline_credit(session_ref, organization_id)
 
     async def remove_attendee(
-        self, event_id: UUID, user_id: UUID, organization_id: UUID
+        self, event_id: UUID, user_id: UUID, organization_id: UUID | str
     ) -> Optional[str]:
         """
         Remove an attendee's RSVP from an event (manager action).
@@ -2817,7 +2821,7 @@ class EventService:
         return None
 
     async def check_in_attendee(
-        self, event_id: UUID, user_id: UUID, organization_id: UUID
+        self, event_id: UUID, user_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
         Check in an attendee (manager action)
@@ -2903,7 +2907,7 @@ class EventService:
         return rsvp, None
 
     async def get_event_stats(
-        self, event_id: UUID, organization_id: UUID
+        self, event_id: UUID, organization_id: UUID | str
     ) -> Optional[EventStats]:
         """Get statistics for an event"""
         event_result = await self.db.execute(
@@ -2971,10 +2975,10 @@ class EventService:
     async def record_actual_times(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         actual_start_time: Optional[datetime],
         actual_end_time: Optional[datetime],
-        finalized_by: Optional[UUID] = None,
+        finalized_by: UUID | str | None = None,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], Optional[str]]:
         """
@@ -3086,8 +3090,8 @@ class EventService:
     async def finalize_event_attendance(
         self,
         event_id: UUID,
-        organization_id: UUID,
-        finalized_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        finalized_by: UUID | str | None = None,
         can_manage_training: bool = False,
     ) -> Tuple[int, Optional[str]]:
         """Finalize attendance; see ``finalize_event_attendance_detailed``.
@@ -3105,9 +3109,9 @@ class EventService:
 
     async def finalize_event_attendance_detailed(
         self,
-        event_id: UUID,
-        organization_id: UUID,
-        finalized_by: Optional[UUID] = None,
+        event_id: UUID | str,
+        organization_id: UUID | str,
+        finalized_by: UUID | str | None = None,
         can_manage_training: bool = False,
         require_training: bool = False,
     ) -> "FinalizeOutcome":
@@ -3391,8 +3395,8 @@ class EventService:
 
     async def _revoke_event_attendance_credit(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
         event: Optional[Event] = None,
     ) -> List[Tuple[Any, Tuple[str, Optional[str]]]]:
         """Drop the admin-hours entries derived from this event's attendance.
@@ -3427,7 +3431,7 @@ class EventService:
     @staticmethod
     def _stamp_attendance_finalized(
         event: Event,
-        finalized_by: Optional[UUID] = None,
+        finalized_by: UUID | str | None = None,
     ) -> None:
         """Mark the event closed, in memory only.
 
@@ -3455,8 +3459,8 @@ class EventService:
     async def _record_attendance_finalized(
         self,
         event: Event,
-        organization_id: UUID,
-        finalized_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        finalized_by: UUID | str | None = None,
     ) -> None:
         """Durably record that attendance finalization ran for this event.
 
@@ -3482,8 +3486,8 @@ class EventService:
 
     async def reopen_event_attendance(
         self,
-        event_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        organization_id: UUID | str,
     ) -> Tuple[Optional[Event], Optional[str]]:
         """Reopen a finalized event so attendance can be corrected.
 
@@ -3623,8 +3627,8 @@ class EventService:
     async def end_event(
         self,
         event_id: UUID,
-        organization_id: UUID,
-        ended_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        ended_by: UUID | str | None = None,
         can_manage_training: bool = False,
     ) -> Tuple[Optional[Event], int, Optional[str]]:
         """
@@ -3707,7 +3711,7 @@ class EventService:
         return event, len(rsvps), None
 
     async def get_qr_check_in_data(
-        self, event_id: UUID, organization_id: UUID
+        self, event_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Get QR code check-in data for an event
@@ -4175,9 +4179,9 @@ class EventService:
 
     async def self_check_in(
         self,
-        event_id: UUID,
-        user_id: UUID,
-        organization_id: UUID,
+        event_id: UUID | str,
+        user_id: UUID | str,
+        organization_id: UUID | str,
         is_checkout: bool = False,
         override: bool = False,
     ) -> Tuple[Optional[EventRSVP], Optional[str], Optional[str]]:
@@ -4325,7 +4329,11 @@ class EventService:
         return rsvp, None, notice
 
     async def _auto_create_training_record(
-        self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
+        self,
+        event: Event,
+        rsvp: EventRSVP,
+        user_id: UUID | str,
+        organization_id: UUID | str,
     ) -> None:
         """
         Start an in-progress training record when a member checks in to a
@@ -4414,7 +4422,7 @@ class EventService:
             )
 
     async def get_check_in_monitoring_stats(
-        self, event_id: UUID, organization_id: UUID
+        self, event_id: UUID, organization_id: UUID | str
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Get real-time check-in monitoring statistics for an event.
@@ -4569,7 +4577,7 @@ class EventService:
     # ============================================================
 
     async def _assert_template_location_in_org(
-        self, location_id: Optional[str], organization_id: UUID
+        self, location_id: Optional[str], organization_id: UUID | str
     ) -> None:
         # EV2-2 (XC-1): a template's default_location_id is client-supplied and
         # stamped onto the template. Validate it is in the caller's org (mirrors
@@ -4582,7 +4590,10 @@ class EventService:
                 raise ValueError("Location not found")
 
     async def create_template(
-        self, template_data: Dict[str, Any], organization_id: UUID, created_by: UUID
+        self,
+        template_data: Dict[str, Any],
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> EventTemplate:
         """Create a new event template"""
         await self._assert_template_location_in_org(
@@ -4600,7 +4611,7 @@ class EventService:
 
     async def list_templates(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         include_inactive: bool = False,
         skip: int = 0,
         limit: int = 100,
@@ -4616,7 +4627,7 @@ class EventService:
         return list(result.scalars().all())
 
     async def get_template(
-        self, template_id: UUID, organization_id: UUID
+        self, template_id: UUID, organization_id: UUID | str
     ) -> Optional[EventTemplate]:
         """Get a specific event template"""
         result = await self.db.execute(
@@ -4630,9 +4641,9 @@ class EventService:
     async def update_template(
         self,
         template_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | str | None = None,
     ) -> Optional[EventTemplate]:
         """Update an event template"""
         template = await self.get_template(template_id, organization_id)
@@ -4654,7 +4665,9 @@ class EventService:
         await self.db.refresh(template)
         return template
 
-    async def delete_template(self, template_id: UUID, organization_id: UUID) -> bool:
+    async def delete_template(
+        self, template_id: UUID, organization_id: UUID | str
+    ) -> bool:
         """Soft-delete a template by deactivating it"""
         template = await self.get_template(template_id, organization_id)
         if not template:
@@ -4871,8 +4884,8 @@ class EventService:
     async def create_recurring_event(
         self,
         event_data: Dict[str, Any],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[List[Event], Optional[str]]:
         """
         Create a series of recurring events.
@@ -5053,8 +5066,8 @@ class EventService:
     async def import_events_from_csv(
         self,
         rows: List[Dict[str, str]],
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
         Import events from parsed CSV rows.
@@ -5218,7 +5231,7 @@ class EventService:
     async def send_event_reminders(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         reminder_type: str = "non_respondents",
     ) -> Tuple[List[str], Optional[str]]:
         """
@@ -5287,7 +5300,7 @@ class EventService:
 
     async def get_analytics_summary(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
@@ -5495,7 +5508,7 @@ class EventService:
     async def send_event_notification(
         self,
         event_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         notification_type: str,
         target: str = "all",
         message: Optional[str] = None,

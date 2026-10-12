@@ -1929,7 +1929,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
 
 
 async def _lock_test_for_transition(
-    db: AsyncSession, test_id: UUID, organization_id: UUID
+    db: AsyncSession, test_id: UUID, organization_id: UUID | str
 ) -> SkillTest | None:
     """Fetch a test with its row locked for the rest of the transaction.
 

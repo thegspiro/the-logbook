@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.utils import org_timezone
 from app.utils.org_timezone import local_day_start_utc, org_today, scheduling_timezone
@@ -917,8 +918,8 @@ class TestAdministration:
         db.execute = AsyncMock(
             side_effect=[
                 _scalars([_org()]),
-                MagicMock(rowcount=0),
-                MagicMock(rowcount=0),
+                MagicMock(spec=CursorResult, rowcount=0),
+                MagicMock(spec=CursorResult, rowcount=0),
             ]
         )
         db.commit = AsyncMock()

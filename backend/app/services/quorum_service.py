@@ -23,7 +23,7 @@ class QuorumService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_org_quorum_config(self, organization_id: UUID) -> Dict:
+    async def get_org_quorum_config(self, organization_id: UUID | str) -> Dict:
         """
         Get the organization's default quorum configuration.
 
@@ -44,7 +44,7 @@ class QuorumService:
         config: Dict = (org.settings or {}).get("quorum_config", {"enabled": False})
         return config
 
-    async def get_active_member_count(self, organization_id: UUID) -> int:
+    async def get_active_member_count(self, organization_id: UUID | str) -> int:
         """Count active members in the organization (denominator for percentage quorum)."""
         result = await self.db.execute(
             select(func.count(User.id))
@@ -57,7 +57,7 @@ class QuorumService:
     async def calculate_quorum(
         self,
         minutes_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Tuple[bool, int, int, Optional[str]]:
         """
         Calculate whether quorum is met for a meeting based on attendees.
@@ -154,7 +154,7 @@ class QuorumService:
     async def update_quorum_on_checkin(
         self,
         minutes_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Dict:
         """
         Recalculate quorum after an attendee check-in or removal.

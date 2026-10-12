@@ -2110,7 +2110,7 @@ class ApparatusService:
         return items
 
     async def get_nfpa_compliance(
-        self, compliance_id: str, organization_id: UUID
+        self, compliance_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusNFPACompliance]:
         """Get a specific NFPA compliance record"""
         result = await self.db.execute(
@@ -2124,8 +2124,8 @@ class ApparatusService:
     async def create_nfpa_compliance(
         self,
         compliance_data,
-        organization_id: UUID,
-        checked_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        checked_by: UUID | str | None = None,
     ) -> ApparatusNFPACompliance:
         """Create an NFPA compliance record"""
         # Verify apparatus exists and belongs to org
@@ -2150,8 +2150,8 @@ class ApparatusService:
         self,
         compliance_id: str,
         compliance_data,
-        organization_id: UUID,
-        checked_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        checked_by: UUID | str | None = None,
     ) -> Optional[ApparatusNFPACompliance]:
         """Update an NFPA compliance record"""
         record = await self.get_nfpa_compliance(compliance_id, organization_id)
@@ -2168,14 +2168,14 @@ class ApparatusService:
         )
 
         if checked_by:
-            record.last_checked_by = checked_by
+            record.last_checked_by = str(checked_by)
 
         await self.db.commit()
         await self.db.refresh(record)
         return record
 
     async def delete_nfpa_compliance(
-        self, compliance_id: str, organization_id: UUID
+        self, compliance_id: str, organization_id: UUID | str
     ) -> bool:
         """Delete an NFPA compliance record"""
         record = await self.get_nfpa_compliance(compliance_id, organization_id)
@@ -2298,7 +2298,7 @@ class ApparatusService:
 
     async def list_report_configs(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         is_active: Optional[bool] = None,
         report_type: Optional[str] = None,
     ) -> List[ApparatusReportConfig]:
@@ -2317,7 +2317,7 @@ class ApparatusService:
         return items
 
     async def get_report_config(
-        self, config_id: str, organization_id: UUID
+        self, config_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusReportConfig]:
         """Get a specific report config"""
         result = await self.db.execute(
@@ -2367,8 +2367,8 @@ class ApparatusService:
     async def create_report_config(
         self,
         config_data,
-        organization_id: UUID,
-        created_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        created_by: UUID | str | None = None,
     ) -> ApparatusReportConfig:
         """Create a report config"""
         await self._validate_report_config_fks(
@@ -2388,7 +2388,7 @@ class ApparatusService:
         self,
         config_id: str,
         config_data,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ApparatusReportConfig]:
         """Update a report config"""
         config = await self.get_report_config(config_id, organization_id)
@@ -2404,7 +2404,9 @@ class ApparatusService:
         await self.db.refresh(config)
         return config
 
-    async def delete_report_config(self, config_id: str, organization_id: UUID) -> bool:
+    async def delete_report_config(
+        self, config_id: str, organization_id: UUID | str
+    ) -> bool:
         """Delete a report config"""
         config = await self.get_report_config(config_id, organization_id)
         if not config:
@@ -2420,7 +2422,7 @@ class ApparatusService:
 
     async def list_service_providers(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         is_active: Optional[bool] = None,
         specialty: Optional[str] = None,
         is_preferred: Optional[bool] = None,
@@ -2449,7 +2451,7 @@ class ApparatusService:
         return items
 
     async def get_service_provider(
-        self, provider_id: str, organization_id: UUID
+        self, provider_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusServiceProvider]:
         """Get a specific service provider"""
         result = await self.db.execute(
@@ -2463,8 +2465,8 @@ class ApparatusService:
     async def create_service_provider(
         self,
         provider_data,
-        organization_id: UUID,
-        created_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        created_by: UUID | str | None = None,
     ) -> ApparatusServiceProvider:
         """Create a service provider"""
         provider = ApparatusServiceProvider(
@@ -2481,7 +2483,7 @@ class ApparatusService:
         self,
         provider_id: str,
         provider_data,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ApparatusServiceProvider]:
         """Update a service provider"""
         provider = await self.get_service_provider(provider_id, organization_id)
@@ -2497,7 +2499,7 @@ class ApparatusService:
         return provider
 
     async def archive_service_provider(
-        self, provider_id: str, organization_id: UUID, archived_by: str
+        self, provider_id: str, organization_id: UUID | str, archived_by: str
     ) -> Optional[ApparatusServiceProvider]:
         """Archive a service provider (soft-delete for compliance).
 
@@ -2516,7 +2518,7 @@ class ApparatusService:
         return provider
 
     async def restore_service_provider(
-        self, provider_id: str, organization_id: UUID
+        self, provider_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusServiceProvider]:
         """Restore an archived service provider back to active status."""
         provider = await self.get_service_provider(provider_id, organization_id)
@@ -2536,7 +2538,7 @@ class ApparatusService:
 
     async def list_components(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         apparatus_id: Optional[str] = None,
         component_type: Optional[str] = None,
         is_active: Optional[bool] = None,
@@ -2567,7 +2569,7 @@ class ApparatusService:
         return items
 
     async def get_component(
-        self, component_id: str, organization_id: UUID
+        self, component_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusComponent]:
         """Get a specific component"""
         result = await self.db.execute(
@@ -2581,8 +2583,8 @@ class ApparatusService:
     async def create_component(
         self,
         component_data,
-        organization_id: UUID,
-        created_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        created_by: UUID | str | None = None,
     ) -> ApparatusComponent:
         """Create a component"""
         apparatus = await self.get_apparatus(
@@ -2606,7 +2608,7 @@ class ApparatusService:
         self,
         component_id: str,
         component_data,
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> Optional[ApparatusComponent]:
         """Update a component"""
         component = await self.get_component(component_id, organization_id)
@@ -2624,8 +2626,8 @@ class ApparatusService:
     async def delete_component(
         self,
         component_id: str,
-        organization_id: UUID,
-        archived_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        archived_by: UUID | str | None = None,
     ) -> bool:
         """Soft-delete (archive) a component"""
         component = await self.get_component(component_id, organization_id)
@@ -2634,7 +2636,7 @@ class ApparatusService:
 
         component.is_active = False
         component.archived_at = datetime.now(tz=timezone.utc)
-        component.archived_by = archived_by
+        component.archived_by = str(archived_by) if archived_by is not None else None
         await self.db.commit()
         return True
 
@@ -2644,7 +2646,7 @@ class ApparatusService:
 
     async def list_component_notes(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         apparatus_id: Optional[str] = None,
         component_id: Optional[str] = None,
         note_status: Optional[str] = None,
@@ -2689,7 +2691,7 @@ class ApparatusService:
         return items
 
     async def get_component_note(
-        self, note_id: str, organization_id: UUID
+        self, note_id: str, organization_id: UUID | str
     ) -> Optional[ApparatusComponentNote]:
         """Get a specific component note"""
         result = await self.db.execute(
@@ -2703,9 +2705,9 @@ class ApparatusService:
     async def create_component_note(
         self,
         note_data,
-        organization_id: UUID,
-        created_by: Optional[UUID] = None,
-        reported_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        created_by: UUID | str | None = None,
+        reported_by: UUID | str | None = None,
     ) -> ApparatusComponentNote:
         """Create a component note"""
         component = await self.get_component(note_data.component_id, organization_id)
@@ -2742,8 +2744,8 @@ class ApparatusService:
         self,
         note_id: str,
         note_data,
-        organization_id: UUID,
-        resolved_by: Optional[UUID] = None,
+        organization_id: UUID | str,
+        resolved_by: UUID | str | None = None,
     ) -> Optional[ApparatusComponentNote]:
         """Update a component note"""
         note = await self.get_component_note(note_id, organization_id)
@@ -2766,7 +2768,7 @@ class ApparatusService:
 
         # Track resolution
         if update_data.get("status") == "resolved" and note.status != "resolved":
-            note.resolved_by = resolved_by
+            note.resolved_by = str(resolved_by) if resolved_by is not None else None
             note.resolved_at = datetime.now(timezone.utc)
 
         for field, value in update_data.items():
@@ -2776,7 +2778,9 @@ class ApparatusService:
         await self.db.refresh(note)
         return note
 
-    async def delete_component_note(self, note_id: str, organization_id: UUID) -> bool:
+    async def delete_component_note(
+        self, note_id: str, organization_id: UUID | str
+    ) -> bool:
         """Delete a component note"""
         note = await self.get_component_note(note_id, organization_id)
         if not note:
@@ -2793,7 +2797,7 @@ class ApparatusService:
     async def generate_service_report(
         self,
         apparatus_id: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         component_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
