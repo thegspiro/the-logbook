@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD](https://github.com/thegspiro/the-logbook/pulls)**: branch
+`claude/security-review-permissions-roles`, Feature 02 (Permissions &
+roles), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
+PERM-5 re-verified fixed by other, non-security-review work that landed
+between pass 7 and this pass. See the Log entry below and
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 8** section
+for detail. Row 02 → ✅ (pending this PR's merge); next is Feature 03
+(Public surface & webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3096's merge, Feature 01, Auth & session lifecycle, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
+
+**None.** PR #3096 (Feature 01, Auth & session lifecycle, pass 8) merged
+clean 2026-10-12 12:47:09 UTC (`git log`: fast-forward merge `89ea4d6a`;
+2 files changed — `AUTH-01-auth-session.md` and `PROGRESS.md`). Docs-only
+(0 fixed by that pass — every standing item was already fixed by other,
+non-security-review work and the pass only re-verified), so per the
+docs-only rule there is nothing further to record here. Rotation row 01
+stays ✅.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3096, Feature 01, Auth & session lifecycle, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3096](https://github.com/thegspiro/the-logbook/pull/3096)**: branch
 `claude/security-review-auth-session`, Feature 01 (Auth & session
 lifecycle), pass 8 (watchdog pickup). 0 fixed by this pass, 0 new findings;
@@ -25,6 +50,8 @@ See the Log entry below and
 `docs/security-review/AUTH-01-auth-session.md`'s **Pass 8** section for
 detail. Row 01 → ✅ (pending this PR's merge); next is Feature 02
 (Permissions & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3095's merge, Feature 00, Cross-cutting baseline, pass 8 — the state this pass's PR conflicted with), preserved for history</summary>
@@ -18584,6 +18611,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 02 (Permissions & roles, pass 8) — 0 fixed by this pass, 0 new findings; PERM-5 closed by other work (watchdog pickup)
+
+Watchdog pickup: no `claude/security-review-*` PR or branch existed
+anywhere in the repo, and `main`'s last security-review merge (Feature 01,
+pass 8, PR #3096) had no follow-up iteration since. Rotation row 02 was
+the next `⬜`.
+
+**Not a zero-delta pass** — 578 commits since pass 7's actual baseline
+(`e9e83612`, PR #2933's merge). Ten of twelve scoped files carry real
+changes.
+
+**PERM-5, this feature's one standing item, is now fixed** — the PR pass 7
+flagged as having the fix in flight (#2918) merged 2026-10-06.
+`admin_continuity_service.py`'s `assert_positions_retain_administrator` now
+refuses to strip `*` from the organization's only active holder of it,
+wired at both call sites plus the parallel role-level guard for a shared
+position's permission list. The W11-8 concurrency hardening (an
+organization-scoped lock plus a locking read on members+positions) is
+implemented alongside it. No `KNOWN_LIMITATIONS.md` entry remains.
+
+New code reviewed fresh and found clean: two new permissions
+(`finance.budget_review`, seeded to no position; `finance.request`, seeded
+on `member` with its own migration and verified-confined-to-own-records
+server-side scoping), a fix for a real gap not previously flagged
+(`resolve_rank_code` now honors built-in seed codes only for an
+organization with no rank rows at all, closing a path where a deleted
+seeded rank could still grant its static permissions — ONBOARD-3), a new
+narrower `GET /users/directory` roster (USR-8, field-by-field response
+construction, no over-serialization), a new `POST /users/{id}/unlock`
+(W02-4) correctly reusing the existing privilege-ceiling check, and a
+race-safe duplicate-position-name check (W05-5).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (571
+revisions, single head, no migration this pass); `check_route_permissions.py
+--strict` passed (265 routes, 0 errors/0 warnings); standing guard suite
+(12 files) 224 passed; scoped backend tests 1567 passed, 1 skipped
+(environment-only); frontend `npm run typecheck` 0 errors; `npm run lint`
+0 errors/0 warnings.
+
+Findings doc: [`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md)'s
+**Pass 8** section. Rotation row 02 → ✅ (pending PR merge). Next: Feature
+03 (Public surface & webhooks).
 
 ### 2026-10-12 — Feature 01 (Auth & session lifecycle, pass 8) — 0 fixed by this pass, 0 new findings; all three standing items closed by other work (watchdog pickup)
 
