@@ -347,6 +347,13 @@ member until you change it**:
 5. Share the URL or QR code. Responses sent through the public link show a
    **globe icon** in your submissions list.
 
+> **Publish warning _(2026-10-11)_.** If a public form files event requests but
+> the department has turned off **accept public requests** in Events settings,
+> publishing would file nothing. **Publish** now says so first, in a "Publish
+> this form?" dialog with **Publish anyway** and **Not yet**. A form with no
+> such problem publishes straight away. A forms manager sees the warning even
+> without Events settings access, because the server checks it.
+
 > **"No login required" was not true until 2026-09-29.** The Share dialog
 > promised it, but every form is created requiring a sign-in and no screen could
 > change that, so a signed-out visitor who filled in a public form was refused

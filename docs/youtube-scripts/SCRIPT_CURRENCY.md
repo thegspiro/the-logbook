@@ -1,5 +1,20 @@
 # Script currency
 
+## Flagged by the 2026-10-11 → 10-12 changes
+
+Source: [CHANGE_AUDIT_2026-10-11_TO_10-12](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                            | Beat                    | Was                                                                        | Now                                                                                                       |
+| --------------------------------- | ----------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **03 / 04** (leadership, finance) | Dues, grants (if shown) | Dues read-only; **Add Opportunity** bounced home; no pledge or event pages | Dues schedules and payments in-app; Add Opportunity, Record Donation, Pledges, Fundraising Events screens |
+| **03 / 07**                       | Documents               | Documents could be left unfiled                                            | Always in a folder (General Documents by default); **Manage folder** on each card                         |
+| **05 / 07**                       | Forms                   | Publish silently                                                           | Warning when a public form would file nothing; one submission per person control                          |
+| **12** (elections)                | Ballot and results      | Abstain pre-selected; pooled results                                       | No default Abstain; per-item results; proxy on anonymous elections; resend prompt                         |
+| **03**                            | Inventory (if shown)    | Assign was always permanent                                                | **Permanent / Temporary** with return date; departure clearance screen                                    |
+| **07 / 06**                       | Meetings                | Typed assignee name                                                        | Assignee picker; Attendance dashboard; executive meetings                                                 |
+| **06** (member guide)             | Shift close-out         | Retype each member's calls                                                 | **Give everyone all N calls**                                                                             |
+
 ## Flagged by the 2026-10-08 → 10-11 changes
 
 Source: [CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
