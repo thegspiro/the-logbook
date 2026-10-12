@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -640,7 +641,7 @@ class TestTheApi:
         dept = await _Dept(db_session).build(deadline_days=30)
         other = await _Dept(db_session).build(deadline_days=None)
 
-        with pytest.raises(Exception) as caught:
+        with pytest.raises(HTTPException) as caught:
             await program_endpoints.update_program_requirement(
                 program_id=uuid.UUID(dept.program.id),
                 program_requirement_id=uuid.UUID(dept.link.id),
@@ -648,7 +649,7 @@ class TestTheApi:
                 db=db_session,
                 current_user=other.officer,
             )
-        assert getattr(caught.value, "status_code", None) == 404
+        assert caught.value.status_code == 404
         link = await db_session.get(ProgramRequirement, dept.link.id)
         await db_session.refresh(link)
         assert link.custom_deadline_days == 30
