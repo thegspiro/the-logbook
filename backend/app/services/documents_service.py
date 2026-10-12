@@ -23,6 +23,7 @@ from sqlalchemy.orm import aliased, defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
+    get_all_permissions,
     get_rank_default_permissions,
     permission_matches_any,
     permission_matches_any_write,
@@ -36,7 +37,7 @@ from app.models.document import (
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
@@ -201,6 +202,31 @@ async def reachable_folder_ids(
     return {str(row) for row in result.scalars().all()}
 
 
+# The fields that decide who opens a folder. Changing any of them runs the
+# validation in _settle_access_fields and the shut-out check.
+_ACCESS_FIELDS = (
+    "visibility",
+    "allowed_roles",
+    "required_permissions",
+    "owner_user_id",
+)
+
+_SHUT_OUT_MESSAGE = (
+    "These settings would shut you out of this folder. Include a position or "
+    "permission you hold, or ask a full administrator to set them"
+)
+
+
+def _distinct(values: Optional[List[str]]) -> List[str]:
+    """Trimmed, non-empty, first occurrence kept."""
+    seen: List[str] = []
+    for value in values or []:
+        value = value.strip()
+        if value and value not in seen:
+            seen.append(value)
+    return seen
+
+
 class DocumentsService:
     """Service for document management used by the documents endpoint"""
 
@@ -212,9 +238,19 @@ class DocumentsService:
     # ============================================
 
     async def create_folder(
-        self, organization_id: UUID, folder_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID,
+        folder_data: Dict[str, Any],
+        created_by: UUID,
+        *,
+        acting_user: Optional[User] = None,
     ) -> DocumentFolder:
-        """Create a new document folder. Raises on failure."""
+        """Create a new document folder. Raises on failure.
+
+        ``acting_user``: when given, a folder whose access would not admit
+        that user (for writing) is refused rather than created, so nobody
+        makes a folder they cannot then manage (decision 27).
+        """
         # DOC-6 (XC-1): validate client-supplied FKs are in-org before storing.
         await assert_in_org(
             self.db,
@@ -232,9 +268,14 @@ class DocumentsService:
             allow_none=True,
             label="owner",
         )
+        await self._settle_access_fields(None, folder_data, organization_id)
         folder = DocumentFolder(
             organization_id=organization_id, created_by=created_by, **folder_data
         )
+        if acting_user is not None and not await self.can_access_folder(
+            folder, organization_id, acting_user, require_write=True
+        ):
+            raise ValueError(_SHUT_OUT_MESSAGE)
         self.db.add(folder)
         await self.db.commit()
         await self.db.refresh(folder)
@@ -586,9 +627,18 @@ class DocumentsService:
         return False
 
     async def update_folder(
-        self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        folder_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+        *,
+        acting_user: Optional[User] = None,
     ) -> Optional[DocumentFolder]:
-        """Update a folder. Returns None if not found."""
+        """Update a folder. Returns None if not found.
+
+        ``acting_user``: as for ``create_folder`` — an access change that
+        would shut that user out of the folder is refused.
+        """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
             return None
@@ -657,11 +707,123 @@ class DocumentsService:
             if _field in update_data and update_data[_field] is None:
                 raise ValueError(f"'{_field}' cannot be cleared; provide a value")
 
+        await self._settle_access_fields(folder, update_data, organization_id)
+        access_changed = any(field in update_data for field in _ACCESS_FIELDS)
+
         apply_updates(folder, update_data)
+
+        if (
+            access_changed
+            and acting_user is not None
+            and not await self.can_access_folder(
+                folder, organization_id, acting_user, require_write=True
+            )
+        ):
+            await self.db.rollback()
+            raise ValueError(_SHUT_OUT_MESSAGE)
 
         await self.db.commit()
         await self.db.refresh(folder)
         return folder
+
+    async def _settle_access_fields(
+        self,
+        folder: Optional[DocumentFolder],
+        data: Dict[str, Any],
+        organization_id: UUID,
+    ) -> None:
+        """Validate and normalize a create/update payload's access fields.
+
+        ``folder`` is the folder being updated, or None on create. Edits
+        ``data`` in place: lists are de-duplicated and an empty list is
+        stored as None, which is what "no restriction" means to
+        ``_folder_admits_user`` and ``restricted_folders_query``.
+        """
+        changing = [f for f in _ACCESS_FIELDS if f in data]
+        if not changing:
+            return
+
+        if folder is not None and folder.visibility == FolderVisibility.OWNER:
+            # Decision 20: a personal folder admits its member and full
+            # administrators only. Re-sending what is already stored is not
+            # a change, so a form that posts every field it owns still saves.
+            current = {
+                "visibility": folder.visibility.value,
+                "allowed_roles": folder.allowed_roles or None,
+                "required_permissions": folder.required_permissions or None,
+                "owner_user_id": folder.owner_user_id,
+            }
+            for field in changing:
+                value = data[field]
+                if field == "visibility" and value is not None:
+                    value = FolderVisibility(value).value
+                if field == "owner_user_id" and value is not None:
+                    value = str(value)
+                if field in ("allowed_roles", "required_permissions"):
+                    value = _distinct(value) or None
+                if value != current[field]:
+                    raise ValueError(
+                        "A member's personal folder opens to that member and "
+                        "full administrators only; its access cannot be changed"
+                    )
+
+        if "required_permissions" in data:
+            permissions = _distinct(data["required_permissions"])
+            if folder is not None and folder.is_system:
+                # Decision 27: a built-in folder's module rights (decision 19)
+                # are fixed. It can be narrowed with leadership-only or
+                # specific positions, which _folder_admits_user checks after
+                # these, never opened past them.
+                if set(permissions) != set(folder.required_permissions or []):
+                    raise ValueError(
+                        "A built-in folder's module rights cannot be changed. "
+                        "Restrict it further with leadership-only or specific "
+                        "positions instead"
+                    )
+                del data["required_permissions"]
+            else:
+                catalog = set(get_all_permissions())
+                unknown = [p for p in permissions if p not in catalog]
+                if unknown:
+                    raise ValueError(f"Unknown permission: {', '.join(unknown)}")
+                data["required_permissions"] = permissions or None
+
+        if "allowed_roles" in data:
+            slugs = _distinct(data["allowed_roles"])
+            if slugs:
+                known = set(
+                    (
+                        await self.db.execute(
+                            select(Position.slug).where(
+                                Position.organization_id == str(organization_id),
+                                Position.slug.in_(slugs),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                missing = [slug for slug in slugs if slug not in known]
+                if missing:
+                    raise ValueError(f"Unknown position: {', '.join(missing)}")
+            data["allowed_roles"] = slugs or None
+
+        visibility = data.get(
+            "visibility",
+            folder.visibility if folder is not None else FolderVisibility.ORGANIZATION,
+        )
+        roles = (
+            data["allowed_roles"]
+            if "allowed_roles" in data
+            else (folder.allowed_roles if folder is not None else None)
+        )
+        # _folder_admits_user returns on a leadership or personal folder before
+        # it reaches allowed_roles, so positions stored there would be shown
+        # as a restriction while doing nothing.
+        if roles and FolderVisibility(visibility) != FolderVisibility.ORGANIZATION:
+            raise ValueError(
+                "Specific positions apply only to a folder open to the " "organization"
+            )
 
     async def delete_folder(
         self,

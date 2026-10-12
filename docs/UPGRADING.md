@@ -482,6 +482,23 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### Folder access can be set by position and permission; some saves are refused (2026-10-12)
+
+Nothing here stops the stack from starting. The Documents folder dialogs, and
+`POST` / `PATCH /documents/folders`, now accept `required_permissions` on a
+custom folder. They refuse (400) a few saves that used to succeed silently:
+
+- a position that is not one of the department's;
+- positions together with leadership-only, or on a personal folder, where
+  they were stored but never applied;
+- a change to a built-in folder's module rights;
+- settings that would shut the person saving them out of the folder (a full
+  administrator is exempt).
+
+A folder already stored as leadership-only with positions keeps working as
+before. Its next access edit must clear the positions or choose
+Organization; the Manage folder dialog does that on its own.
+
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 
 Phase 4 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).

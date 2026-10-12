@@ -7,6 +7,7 @@ const mockUpdateFolder = vi.fn();
 const mockDeleteFolder = vi.fn();
 const mockGetFolders = vi.fn();
 const mockGetRoleOptions = vi.fn();
+const mockGetPermissions = vi.fn();
 
 vi.mock('../../services/api', () => ({
   documentsService: {
@@ -14,6 +15,9 @@ vi.mock('../../services/api', () => ({
     deleteFolder: (...a: unknown[]) => mockDeleteFolder(...a) as unknown,
     getFolders: (...a: unknown[]) => mockGetFolders(...a) as unknown,
     getFolderRoleOptions: (...a: unknown[]) => mockGetRoleOptions(...a) as unknown,
+  },
+  roleService: {
+    getPermissionsByCategory: (...a: unknown[]) => mockGetPermissions(...a) as unknown,
   },
 }));
 
@@ -53,7 +57,21 @@ describe('FolderManageDialog', () => {
     mockDeleteFolder.mockReset();
     mockGetFolders.mockReset();
     mockGetRoleOptions.mockReset();
+    mockGetPermissions.mockReset();
     onChanged.mockReset();
+    mockGetPermissions.mockResolvedValue([
+      {
+        category: 'inventory',
+        permissions: [
+          { name: 'inventory.view', description: 'View inventory', category: 'inventory' },
+          { name: 'inventory.manage', description: 'Manage inventory', category: 'inventory' },
+        ],
+      },
+      {
+        category: 'finance',
+        permissions: [{ name: 'finance.view', description: 'View finances', category: 'finance' }],
+      },
+    ]);
     mockUpdateFolder.mockResolvedValue({});
     mockDeleteFolder.mockResolvedValue(undefined);
     mockGetRoleOptions.mockResolvedValue([
@@ -77,7 +95,7 @@ describe('FolderManageDialog', () => {
     await user.clear(name);
     await user.type(name, 'Operating Procedures');
     await user.clear(screen.getByLabelText('Description'));
-    await user.click(screen.getByRole('radio', { name: 'Specific roles' }));
+    await user.click(screen.getByRole('radio', { name: 'Specific positions' }));
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.click(await screen.findByRole('checkbox', { name: 'Captain' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -88,6 +106,7 @@ describe('FolderManageDialog', () => {
         description: null,
         visibility: 'organization',
         allowed_roles: ['captain'],
+        required_permissions: null,
       })
     );
     expect(onChanged).toHaveBeenCalledWith('saved');
@@ -97,7 +116,7 @@ describe('FolderManageDialog', () => {
     const user = userEvent.setup();
     renderDialog(folder({ allowed_roles: ['captain'] }));
 
-    expect(screen.getByRole('radio', { name: 'Specific roles' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Specific positions' })).toBeChecked();
     await user.click(screen.getByRole('radio', { name: 'Leadership' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -166,5 +185,73 @@ describe('FolderManageDialog', () => {
     expect(payload).not.toHaveProperty('name');
     expect(payload).not.toHaveProperty('parent_id');
     expect(payload).toMatchObject({ visibility: 'leadership' });
+  });
+
+  it('requires a permission on a custom folder, and clears it again', async () => {
+    const user = userEvent.setup();
+    renderDialog(folder({ required_permissions: ['finance.view'] }));
+
+    await user.type(screen.getByRole('searchbox', { name: 'Filter permissions' }), 'inventory');
+    expect(screen.queryByRole('checkbox', { name: /View finances/ })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('checkbox', { name: /Manage inventory/ }));
+    await user.clear(screen.getByRole('searchbox', { name: 'Filter permissions' }));
+    await user.click(screen.getByRole('checkbox', { name: /View finances/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockUpdateFolder).toHaveBeenCalledWith(
+        'f-1',
+        expect.objectContaining({ required_permissions: ['inventory.manage'] })
+      )
+    );
+
+    mockUpdateFolder.mockClear();
+    await user.click(screen.getByRole('checkbox', { name: /Manage inventory/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockUpdateFolder).toHaveBeenCalledWith('f-1', expect.objectContaining({ required_permissions: null }))
+    );
+  });
+
+  it('shows a built-in folder its module rights and never sends them', async () => {
+    const user = userEvent.setup();
+    renderDialog(folder({ name: 'Finance', is_system: true, required_permissions: ['finance.view'] }));
+
+    expect(await screen.findByText('View finances')).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Filter permissions' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Specific positions' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Captain' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockUpdateFolder).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateFolder.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('required_permissions');
+    expect(payload).toMatchObject({ allowed_roles: ['captain'] });
+  });
+
+  it('describes a personal folder as fixed and sends no access fields', async () => {
+    const user = userEvent.setup();
+    renderDialog(folder({ name: 'Smith, John', visibility: 'owner' }));
+
+    expect(screen.getByText(/only its member and full administrators open it/)).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockUpdateFolder).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateFolder.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('visibility');
+    expect(payload).not.toHaveProperty('required_permissions');
+  });
+
+  it('shows the server’s reason when a save is refused', async () => {
+    const user = userEvent.setup();
+    mockUpdateFolder.mockRejectedValue(new Error('These settings would shut you out of this folder.'));
+    renderDialog(folder());
+
+    await user.click(screen.getByRole('radio', { name: 'Leadership' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('shut you out');
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });
