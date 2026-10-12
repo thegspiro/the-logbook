@@ -758,7 +758,11 @@ wait_for_services() {
     local attempt=0
 
     while [[ $attempt -lt $max_attempts ]]; do
-        if docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend curl -s http://localhost:3001/health > /dev/null 2>&1; then
+        # The same probe as the backend image's own HEALTHCHECK
+        # (backend/Dockerfile): the image has no curl, so a curl here failed
+        # on every attempt and every install waited out the full timeout.
+        # Requests is a backend dependency, and a non-200 answer is not ready.
+        if docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend python -c "import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code == 200 else 1)" > /dev/null 2>&1; then
             log_success "Backend is healthy"
             break
         fi
