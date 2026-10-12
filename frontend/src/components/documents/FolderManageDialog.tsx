@@ -2,8 +2,8 @@
  * Manage one document folder: rename it, choose who may open it, move it, or
  * delete it with everything inside.
  *
- * Owner decision (W53-4): access is Organization, Leadership, or Specific
- * roles (an organization folder with `allowed_roles`). A system folder — one
+ * Access is Organization, Leadership, or Specific positions, optionally with
+ * required permissions (decision 27; `FolderAccessFields`). A system folder — one
  * the application made for a module — keeps its name and place and cannot be
  * deleted; the server refuses all three, and this dialog does not offer them.
  * Delete cascades to every subfolder and document, so it goes through
@@ -17,20 +17,14 @@ import { useConfirm } from '../../contexts/ConfirmContext';
 import { documentsService, type DocumentFolder } from '../../services/api';
 import { blankToNull } from '../../utils/formValues';
 import { getErrorMessage } from '../../utils/errorHandling';
-
-type Access = 'organization' | 'leadership' | 'roles';
-
-const ACCESS_OPTIONS: ReadonlyArray<readonly [Access, string, string]> = [
-  ['organization', 'Organization', 'Every member who can open Documents.'],
-  ['leadership', 'Leadership', 'Officers who manage the department’s documents.'],
-  ['roles', 'Specific roles', 'Only members holding one of the positions you choose.'],
-];
-
-const accessOf = (folder: DocumentFolder): Access => {
-  if (folder.visibility === 'leadership') return 'leadership';
-  if (folder.allowed_roles && folder.allowed_roles.length > 0) return 'roles';
-  return 'organization';
-};
+import { FolderAccessFields } from './FolderAccessFields';
+import {
+  EMPTY_FOLDER_ACCESS,
+  folderAccessIncomplete,
+  folderAccessOf,
+  folderAccessPayload,
+  type FolderAccessValue,
+} from './folderAccess';
 
 interface FolderManageDialogProps {
   folder: DocumentFolder | null;
@@ -43,9 +37,7 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
   const { confirm } = useConfirm();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [access, setAccess] = useState<Access>('organization');
-  const [roles, setRoles] = useState<string[]>([]);
-  const [roleOptions, setRoleOptions] = useState<Array<{ slug: string; name: string }> | null>(null);
+  const [access, setAccess] = useState<FolderAccessValue>(EMPTY_FOLDER_ACCESS);
   // Move: `undefined` = stay put; `null` = top level; otherwise the folder.
   const [destination, setDestination] = useState<DocumentFolder | null | undefined>(undefined);
   const [browsePath, setBrowsePath] = useState<DocumentFolder[]>([]);
@@ -59,20 +51,11 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
     if (!folder) return;
     setName(folder.name);
     setDescription(folder.description ?? '');
-    setAccess(accessOf(folder));
-    setRoles(folder.allowed_roles ?? []);
+    setAccess(folderAccessOf(folder));
     setDestination(undefined);
     setBrowsePath([]);
     setError(null);
   }, [folder]);
-
-  useEffect(() => {
-    if (!folder || roleOptions) return;
-    documentsService
-      .getFolderRoleOptions()
-      .then(setRoleOptions)
-      .catch(() => setRoleOptions([]));
-  }, [folder, roleOptions]);
 
   const browseParent = browsePath[browsePath.length - 1];
   useEffect(() => {
@@ -108,7 +91,7 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
 
   if (!folder) return null;
 
-  const rolesMissing = access === 'roles' && roles.length === 0;
+  const rolesMissing = folderAccessIncomplete(access);
 
   const handleSave = async () => {
     if (!folder.is_system && !name.trim()) {
@@ -122,12 +105,7 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
         // Every field the dialog owns is sent, so clearing one persists.
         ...(folder.is_system ? {} : { name: name.trim() }),
         description: blankToNull(description),
-        ...(ownerFolder
-          ? {}
-          : {
-              visibility: access === 'leadership' ? 'leadership' : 'organization',
-              allowed_roles: access === 'roles' ? roles : null,
-            }),
+        ...(ownerFolder ? {} : folderAccessPayload(access, { isSystem: Boolean(folder.is_system) })),
         ...(destination !== undefined ? { parent_id: destination?.id ?? null } : {}),
       });
       onChanged('saved');
@@ -244,72 +222,15 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
 
         {ownerFolder ? (
           <p className="text-theme-text-secondary text-sm">
-            A personal folder: only its owner and document managers open it.
+            A personal folder: only its member and full administrators open it, and that can’t be changed.
           </p>
         ) : (
-          <fieldset className="space-y-2">
-            <legend className="text-theme-text-primary mb-1 text-sm font-medium">Who can open it</legend>
-            {ACCESS_OPTIONS.map(([value, label, hint]) => (
-              <label
-                key={value}
-                className="border-theme-surface-border flex cursor-pointer gap-2 rounded-md border p-3"
-              >
-                <input
-                  type="radio"
-                  name="folder-access"
-                  checked={access === value}
-                  onChange={() => setAccess(value)}
-                  aria-labelledby={`folder-access-${value}-label`}
-                  aria-describedby={`folder-access-${value}-hint`}
-                />
-                <span>
-                  <span
-                    id={`folder-access-${value}-label`}
-                    className="text-theme-text-primary block text-sm font-medium"
-                  >
-                    {label}
-                  </span>
-                  <span id={`folder-access-${value}-hint`} className="text-theme-text-muted block text-xs">
-                    {hint}
-                  </span>
-                </span>
-              </label>
-            ))}
-            {access === 'roles' && (
-              <div className="border-theme-surface-border rounded-md border p-3">
-                {roleOptions === null ? (
-                  <p className="text-theme-text-muted text-sm">Loading positions…</p>
-                ) : roleOptions.length === 0 ? (
-                  <p className="text-theme-text-muted text-sm">No positions could be loaded.</p>
-                ) : (
-                  <div className="grid gap-1 sm:grid-cols-2" role="group" aria-label="Positions">
-                    {roleOptions.map((role) => (
-                      <label key={role.slug} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox"
-                          checked={roles.includes(role.slug)}
-                          onChange={(event) =>
-                            setRoles((current) =>
-                              event.target.checked
-                                ? [...current, role.slug]
-                                : current.filter((slug) => slug !== role.slug)
-                            )
-                          }
-                        />
-                        <span className="text-theme-text-primary">{role.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {rolesMissing && (
-                  <p className="text-theme-text-muted mt-2 text-xs" role="status">
-                    Choose at least one position.
-                  </p>
-                )}
-              </div>
-            )}
-          </fieldset>
+          <FolderAccessFields
+            idPrefix="folder-manage"
+            value={access}
+            onChange={setAccess}
+            moduleRights={folder.is_system ? (folder.required_permissions ?? null) : undefined}
+          />
         )}
 
         {!folder.is_system && (

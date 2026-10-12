@@ -31,6 +31,13 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { asArray } from '../utils/asArray';
 import { FolderManageDialog } from '../components/documents/FolderManageDialog';
+import { FolderAccessFields } from '../components/documents/FolderAccessFields';
+import {
+  EMPTY_FOLDER_ACCESS,
+  folderAccessCreatePayload,
+  folderAccessIncomplete,
+} from '../components/documents/folderAccess';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type ViewMode = 'grid' | 'list';
 
@@ -96,6 +103,8 @@ const DocumentsPage: React.FC = () => {
 
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
+  const [folderAccess, setFolderAccess] = useState(EMPTY_FOLDER_ACCESS);
+  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
@@ -229,25 +238,29 @@ const DocumentsPage: React.FC = () => {
   // -------------------------------------------------------
 
   const handleCreateFolder = useCallback(async () => {
-    if (!folderForm.name.trim()) return;
+    if (!folderForm.name.trim() || folderAccessIncomplete(folderAccess)) return;
     setActionLoading(true);
-    setError(null);
+    setCreateFolderError(null);
     try {
       await documentsService.createFolder({
         name: folderForm.name.trim(),
         ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
         ...(currentFolder ? { parent_id: currentFolder.id } : {}),
+        ...folderAccessCreatePayload(folderAccess),
       });
       setShowCreateFolder(false);
       setFolderForm({ name: '', description: '' });
+      setFolderAccess(EMPTY_FOLDER_ACCESS);
       await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
       await fetchSummary();
-    } catch {
-      setError('Unable to create folder. Check your connection and try again.');
+    } catch (err: unknown) {
+      // Shown in the dialog, not behind it: the server's reason (an unknown
+      // position, settings that would shut you out) is what to fix.
+      setCreateFolderError(getErrorMessage(err, 'Unable to create folder. Check your connection and try again.'));
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, currentFolder, folderSkip, fetchFolders, fetchSummary]);
+  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) return;
@@ -442,7 +455,12 @@ const DocumentsPage: React.FC = () => {
           {canManage && (
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => setShowCreateFolder(true)}
+                onClick={() => {
+                  // Fresh access settings and no stale error each time it opens.
+                  setFolderAccess(EMPTY_FOLDER_ACCESS);
+                  setCreateFolderError(null);
+                  setShowCreateFolder(true);
+                }}
                 className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
               >
                 <Folder className="h-4 w-4" aria-hidden="true" />
@@ -1130,6 +1148,11 @@ const DocumentsPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
+                    {createFolderError && (
+                      <p className="alert-danger" role="alert">
+                        {createFolderError}
+                      </p>
+                    )}
                     <p className="text-theme-text-secondary text-sm">
                       Location:{' '}
                       <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
@@ -1164,6 +1187,7 @@ const DocumentsPage: React.FC = () => {
                         className="form-input focus:ring-amber-500"
                       />
                     </div>
+                    <FolderAccessFields idPrefix="create-folder" value={folderAccess} onChange={setFolderAccess} />
                   </div>
                 </div>
                 <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
@@ -1177,9 +1201,9 @@ const DocumentsPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateFolder();
                     }}
-                    disabled={!folderForm.name.trim() || actionLoading}
+                    disabled={!folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
-                      !folderForm.name.trim() || actionLoading
+                      !folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading
                         ? 'cursor-not-allowed bg-amber-700 opacity-50'
                         : 'bg-amber-700 hover:bg-amber-800'
                     }`}
