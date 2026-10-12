@@ -122,7 +122,7 @@ export const ChecklistsAdminPage: React.FC = () => {
           shows that it does, and the marker tells the mobile reflow pass the
           overflow is deliberate. */}
       <nav aria-label="Related checklist screens" className="mb-6">
-        <ScrollCueRow className="flex gap-2" data-mobile-scroll-region>
+        <ScrollCueRow className="flex gap-2" data-mobile-scroll-region aria-label="Related checklist screens">
           {related.map(({ label, description, path, icon: Icon }) => (
             <Link
               key={path}
