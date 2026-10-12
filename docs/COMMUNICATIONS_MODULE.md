@@ -259,6 +259,13 @@ section). The answers are stored on the submission as `intake_answers`,
 together with the question labels as they read at the time. Reviewers and the
 submitter both see them.
 
+**Two steps on the form** _(2026-10-12)_. A box with questions shows them first,
+on their own step, with a **Continue** button. Title, details and screenshots
+come on the second step, which has a **Back to the questions** button that keeps
+the answers. The answers decide where the submission goes and whether it can be
+anonymous, so the member sees that before writing anything. A box with no
+questions keeps its single page.
+
 | Answer type                   | Stored value                             | Can route | Rules a follow-up can use                       |
 | ----------------------------- | ---------------------------------------- | --------- | ----------------------------------------------- |
 | Dropdown, single choice       | option key                               | yes       | is / is not / includes / answered               |

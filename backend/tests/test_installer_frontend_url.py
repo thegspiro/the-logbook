@@ -149,9 +149,15 @@ class TestUnraidSetup:
                 "bash",
                 "-c",
                 _functions(
-                    UNRAID_SETUP, "frontend_url_is_loopback", "prompt_https_origin"
+                    UNRAID_SETUP,
+                    "frontend_url_is_loopback",
+                    "ask",
+                    "prompt_https_origin",
                 )
                 + '\nprint_error() { echo "ERROR:$1"; }\n'
+                # No terminal stands in here, so ask() reads these answers
+                # from stdin.
+                "PROMPT_TTY=/nonexistent/tty\n"
                 'prompt_https_origin; echo "GOT=$HTTPS_ORIGIN"',
             ],
             input=answers,

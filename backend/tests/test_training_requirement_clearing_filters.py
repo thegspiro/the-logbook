@@ -1,9 +1,10 @@
 """
-Clearing a training requirement's filters must persist.
+Clearing a training requirement's filters and dates must persist.
 
 RequirementModal.tsx used to omit ``training_type`` when the officer chose
-"Any Type", and omit ``category_ids`` / ``required_membership_types`` when
-the last one was deselected. An update omits a key to mean "leave it
+"Any Type", omit ``category_ids`` / ``required_membership_types`` when
+the last one was deselected, and omit ``year``, ``period_end_month`` /
+``period_end_day``, ``due_date`` and ``start_date`` when emptied. An update omits a key to mean "leave it
 alone", so each clear kept the old value behind a success toast. The form
 now sends ``null`` / ``[]``; these tests pin the backend half of that
 contract on both the "everyone" and the "new members only" save paths.
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.training import update_requirement
 from app.models.training import TrainingRequirement
 from app.schemas.training import TrainingRequirementUpdate
+from app.services.training_compliance import get_requirement_date_window
 
 pytestmark = [pytest.mark.integration]
 
@@ -259,3 +261,115 @@ class TestNewMembersSplitTreatsEmptyListsAsUnset:
         db_session.expire_all()
         assert not (await _load(db_session, new_id)).category_ids
         assert (await _load(db_session, req_id)).category_ids == ["cat-1"]
+
+
+class TestClearingCalendarFields:
+    async def _insert_pinned_annual_requirement(
+        self, db_session: AsyncSession, org_id: str
+    ) -> str:
+        """Annual, pinned to 2025 with a March-June window and both dates set."""
+        req_id = _uid()
+        now = datetime.now(timezone.utc)
+        await db_session.execute(
+            text(
+                "INSERT INTO training_requirements "
+                "(id, organization_id, name, requirement_type, source, "
+                "required_hours, frequency, year, due_date_type, "
+                "period_start_month, period_start_day, period_end_month, "
+                "period_end_day, start_date, due_date, applies_to_all, active, "
+                "created_at, updated_at) "
+                "VALUES (:id, :org, 'Annual Hours', 'hours', 'department', 72, "
+                "'annual', 2025, 'calendar_period', 3, 1, 6, 30, "
+                "'2025-01-01', '2025-12-31', 1, 1, :now, :now)"
+            ),
+            {"id": req_id, "org": org_id, "now": now},
+        )
+        await db_session.flush()
+        return req_id
+
+    async def test_nulls_clear_year_period_end_and_dates(
+        self, db_session: AsyncSession, current_user
+    ):
+        req_id = await self._insert_pinned_annual_requirement(
+            db_session, current_user.organization_id
+        )
+
+        await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(
+                apply_to="everyone",
+                year=None,
+                period_end_month=None,
+                period_end_day=None,
+                start_date=None,
+                due_date=None,
+            ),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        db_session.expire_all()
+        updated = await _load(db_session, req_id)
+        assert updated.year is None
+        assert updated.period_end_month is None
+        assert updated.period_end_day is None
+        assert updated.start_date is None
+        assert updated.due_date is None
+        # The point of the clear: grading falls back to the current calendar
+        # year instead of the old pinned March-June 2025 window.
+        assert get_requirement_date_window(updated, date(2026, 10, 12)) == (
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+        )
+
+    async def test_omitting_them_leaves_them_alone(
+        self, db_session: AsyncSession, current_user
+    ):
+        req_id = await self._insert_pinned_annual_requirement(
+            db_session, current_user.organization_id
+        )
+
+        await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(required_hours=80),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        db_session.expire_all()
+        updated = await _load(db_session, req_id)
+        assert updated.year == 2025
+        assert (updated.period_end_month, updated.period_end_day) == (6, 30)
+        assert updated.start_date == date(2025, 1, 1)
+
+    async def test_a_null_due_date_clears_a_fixed_date_requirement(
+        self, db_session: AsyncSession, current_user
+    ):
+        """Only a fixed-date requirement keeps its due date on save, so this is
+        the case where the explicit null is what does the clearing."""
+        req_id = _uid()
+        now = datetime.now(timezone.utc)
+        await db_session.execute(
+            text(
+                "INSERT INTO training_requirements "
+                "(id, organization_id, name, requirement_type, source, "
+                "required_hours, frequency, due_date_type, due_date, "
+                "applies_to_all, active, created_at, updated_at) "
+                "VALUES (:id, :org, 'Hazmat Refresher', 'hours', 'department', "
+                "8, 'annual', 'fixed_date', '2026-12-31', 1, 1, :now, :now)"
+            ),
+            {"id": req_id, "org": current_user.organization_id, "now": now},
+        )
+        await db_session.flush()
+
+        await update_requirement(
+            requirement_id=UUID(req_id),
+            requirement_update=TrainingRequirementUpdate(due_date=None),
+            db=db_session,
+            current_user=current_user,
+        )
+
+        db_session.expire_all()
+        updated = await _load(db_session, req_id)
+        assert updated.due_date_type == "fixed_date"
+        assert updated.due_date is None

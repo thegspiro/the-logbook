@@ -9,6 +9,17 @@ auto-apply landing while a treasurer records a payment on the same order.
 ``record_payment`` now reads the order with a lock, so the second payment
 waits and adds to the first.
 
+``refund_order`` is the same shape of read-modify-write on ``amount_paid``
+and, until this pass, locked nothing: a settlement committing between its
+read and its write was silently overwritten the instant refund's own blocked
+UPDATE finally landed, computed from a balance that predated the settlement.
+It now locks the order too, for the same reason and the same way. (See
+SF8-04-1 in the findings doc for why ``waive_order_payment`` is flagged, not
+fixed the same way: it does not do arithmetic on ``amount_paid`` at all, and
+its real gap — unconditionally overwriting ``payment_status`` even when the
+order was already settled by the time of read — is a business-rule question
+a lock does not answer.)
+
 The first writer here is raw SQL holding the row lock, so the test does not
 depend on the code under test to create the contention.
 
@@ -33,7 +44,9 @@ pytestmark = [pytest.mark.integration]
 _HOLD_SECONDS = 0.3
 
 
-async def _seed() -> tuple[str, str]:
+async def _seed(
+    amount_paid: str = "0", payment_status: str = "unpaid"
+) -> tuple[str, str]:
     org, window, order = (str(uuid.uuid4()) for _ in range(3))
     async with database_manager.engine.connect() as conn:
         async with conn.begin():
@@ -58,9 +71,15 @@ async def _seed() -> tuple[str, str]:
                     "order_number,customer_name,status,payment_status,subtotal,"
                     "tax_amount,shipping_amount,discount_amount,total,amount_paid,"
                     "fulfillment_method,submitted_at) VALUES (:i,:o,:w,'ORD-1','M',"
-                    "'submitted','unpaid',100,0,0,0,100,0,'pickup',NOW())"
+                    "'submitted',:ps,100,0,0,0,100,:ap,'pickup',NOW())"
                 ),
-                {"i": order, "o": org, "w": window},
+                {
+                    "i": order,
+                    "o": org,
+                    "w": window,
+                    "ps": payment_status,
+                    "ap": amount_paid,
+                },
             )
     return org, order
 
@@ -209,4 +228,61 @@ async def test_one_payment_event_is_applied_once():
     assert Decimal(paid) == Decimal("25"), (
         f"amount_paid is {paid} after one payment event of 25. 50 means the "
         "event was applied twice."
+    )
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_a_refund_racing_a_payment_does_not_lose_it():
+    """A refund computed from the balance before a concurrent payment landed
+    must not overwrite that payment when its own write finally lands."""
+    org, order = await _seed(amount_paid="50", payment_status="partial")
+    first_locked = asyncio.Event()
+
+    async def first():
+        # Stands in for a payment landing (e.g. the PayPal webhook) while the
+        # refund below is in flight.
+        async with database_manager.engine.connect() as conn:
+            async with conn.begin():
+                await conn.execute(
+                    text("SELECT amount_paid FROM store_orders WHERE id=:i FOR UPDATE"),
+                    {"i": order},
+                )
+                first_locked.set()
+                await asyncio.sleep(_HOLD_SECONDS)
+                await conn.execute(
+                    text(
+                        "UPDATE store_orders SET amount_paid = amount_paid + 30 "
+                        "WHERE id=:i"
+                    ),
+                    {"i": order},
+                )
+
+    async def second():
+        await first_locked.wait()
+        async with database_manager.engine.connect() as conn:
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            try:
+                await StorefrontService(session).refund_order(
+                    order, org, None, amount=Decimal("20"), notify_member=False
+                )
+            finally:
+                await session.close()
+
+    try:
+        await asyncio.gather(first(), second())
+        async with database_manager.engine.connect() as conn:
+            paid = (
+                await conn.execute(
+                    text("SELECT amount_paid FROM store_orders WHERE id=:i"),
+                    {"i": order},
+                )
+            ).scalar_one()
+    finally:
+        await _cleanup(org)
+
+    assert Decimal(paid) == Decimal("60"), (
+        f"amount_paid is {paid} after a payment of 30 landing on a balance of "
+        "50 (-> 80), refunded 20 (-> 60). Anything short of 60 means the "
+        "refund read the balance before the payment committed and wrote over "
+        "it."
     )
