@@ -1182,7 +1182,7 @@ export const shiftCompletionService = {
 
   async updateReport(
     reportId: string,
-    data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }
+    data: import('../types/training').ShiftCompletionReportUpdate
   ): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.put<import('../types/training').ShiftCompletionReport>(
       `/training/shift-reports/${reportId}`,
