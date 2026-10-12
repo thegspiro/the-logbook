@@ -327,7 +327,7 @@ const CatalogLinkReportPage: React.FC = () => {
       )}
 
       {report && report.groups.length > 0 && (
-        <div className="action-bar-safe surface-opaque border-theme-surface-border fixed inset-x-0 bottom-0 z-40 border-t px-4">
+        <div className="border-theme-surface-border surface-opaque action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <span className="text-theme-text-secondary text-sm">
               {chosenGroups.length} name{chosenGroups.length !== 1 ? 's' : ''} selected · {chosenPositions} position
