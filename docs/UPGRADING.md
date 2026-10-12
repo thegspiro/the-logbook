@@ -465,6 +465,25 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Public-portal access-log rows older than 90 days are deleted (2026-10-12)
+
+A new daily scheduled task, `prune_public_portal_access_log`, deletes rows in
+`public_portal_access_log` older than 90 days — successful requests and refused
+ones alike, including the rows that carry no organization. Nothing pruned the
+table before, so **the first run after the upgrade deletes every row older
+than 90 days at once**, in batches of 1,000 with a commit after each. If you
+need that history (for an investigation, or an export kept outside the
+application), copy it out before upgrading.
+
+What a department will notice: the public portal's **Access Logs** tab lists
+only the last 90 days, and the Usage Statistics screen's average response
+time, which averaged every row ever kept, now averages the last 90 days. The
+other all-time figures in the usage-statistics API response —
+`total_requests`, `unique_ips` and `flagged_requests`, which the screen does
+not display — cover the last 90 days too. The anomaly detector (the last few
+minutes) and the request-count tiles (at most 30 days) look back far less than
+90 days and are unchanged.
+
 ### A failed equipment-check item needs a note on the server too (2026-10-12)
 
 The server now refuses, with a 400, an equipment check that marks an item

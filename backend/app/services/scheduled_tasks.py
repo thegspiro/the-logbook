@@ -509,6 +509,12 @@ SCHEDULE = {
         "recommended_time": "00:45",
         "cron": "45 0 * * *",
     },
+    "prune_public_portal_access_log": {
+        "description": "Delete public-portal access-log rows older than 90 days, successful and refused alike (each holds a requester's IP address and browser)",
+        "frequency": "daily",
+        "recommended_time": "01:15",
+        "cron": "15 1 * * *",
+    },
     "notify_expired_passwords": {
         "description": "Tell members whose password has expired, once, by email and in-app; the API refuses it a grace period later",
         "frequency": "daily",
@@ -6876,6 +6882,64 @@ async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "reap_expired_sessions", "deleted": deleted}
 
 
+# Days a public-portal access-log row is kept, successful and refused alike
+# (owner decision PUB-8, 2026-10-12). The anomaly detector (one and five
+# minutes), the rate-limit backstop (the current hour) and the usage-statistics
+# windows (at most 30 days) all look back far less than this, so pruning never
+# changes what they report; only the unbounded Access Logs listing and the
+# all-time usage figures become "the last 90 days".
+PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS = 90
+_ACCESS_LOG_PRUNE_BATCH = 1000
+
+
+async def run_prune_public_portal_access_log(
+    db: AsyncSession, batch_size: Optional[int] = None
+) -> Dict[str, Any]:
+    """Delete public-portal access-log rows past the retention window.
+
+    Every request to the public API is logged, and since PUB-8 every refused
+    authentication is too, so without pruning the table grows with failed
+    traffic as well as real use and keeps each requester's IP address forever.
+    Platform-wide on purpose: rows with no organization (a key that matched
+    nothing) age out with the rest. Batched by primary key, because the first
+    run on an older installation can find years of rows on a table every
+    public request writes to.
+    """
+    from sqlalchemy import delete
+
+    from app.models.public_portal import PublicPortalAccessLog
+
+    size = batch_size or _ACCESS_LOG_PRUNE_BATCH
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS
+    )
+    deleted = 0
+    while True:
+        ids = (
+            (
+                await db.execute(
+                    select(PublicPortalAccessLog.id)
+                    .where(PublicPortalAccessLog.timestamp < cutoff)
+                    .limit(size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        await db.execute(
+            delete(PublicPortalAccessLog).where(PublicPortalAccessLog.id.in_(ids))
+        )
+        await db.commit()
+        deleted += len(ids)
+        if len(ids) < size:
+            break
+    if deleted:
+        logger.info("Pruned {} public-portal access-log row(s)", deleted)
+    return {"task": "prune_public_portal_access_log", "deleted": deleted}
+
+
 async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
     """Tell each member whose password has expired, once, and start their grace.
 
@@ -7129,6 +7193,7 @@ TASK_RUNNERS = {
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "reap_expired_sessions": run_reap_expired_sessions,
+    "prune_public_portal_access_log": run_prune_public_portal_access_log,
     "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "membership_auto_purge": run_membership_auto_purge,
@@ -7199,6 +7264,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
     "reap_expired_sessions": 86400,
+    "prune_public_portal_access_log": 86400,
     "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
     "membership_auto_purge": 86400,

@@ -246,6 +246,11 @@ task.
   — an infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+- **Public-portal access logs** (each request to the public API, including
+  refused authentications, with the requester's IP address) are kept **90
+  days**, a fixed platform-wide period, and deleted daily by the
+  `prune_public_portal_access_log` task _(2026-10-12)_. It is not configurable
+  per department.
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 
