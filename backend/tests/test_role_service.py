@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.core.permissions import permission_matches
 from app.services.role_service import RoleManagementService, slugify
@@ -298,7 +299,7 @@ class TestRoleMutationAuditing:
         db = _mutation_db()
         role_name = MagicMock()
         role_name.scalar.return_value = "Officer"
-        deleted = MagicMock()
+        deleted = MagicMock(spec=CursorResult)
         deleted.rowcount = 1
         db.execute.side_effect = [
             _in_org_result(),

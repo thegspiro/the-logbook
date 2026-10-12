@@ -65,7 +65,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
     const topicUrls: Record<string, string> = {
       dashboard: `${baseUrl}/Quick-Reference`,
       'organization-setup': `${baseUrl}/Onboarding`,
-      members: `${baseUrl}/Module-Training#membership`,
+      members: `${baseUrl}/Quick-Reference`,
       elections: `${baseUrl}/Module-Elections`,
       events: `${baseUrl}/Quick-Reference`,
       reports: `${baseUrl}/Module-Compliance`,

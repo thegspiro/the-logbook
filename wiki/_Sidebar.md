@@ -3,6 +3,7 @@
 **[🏠 Home](Home)**
 
 **[Recent changes (Sep 24 – Oct 4, 2026)](Recent-Changes-2026-09-24-to-10-04)**
+[· Oct 11–12 detail](Recent-Changes-2026-10-11-to-10-12)
 [· Oct 8–11 detail](Recent-Changes-2026-10-08-to-10-11)
 [· Oct 7–8 detail](Recent-Changes-2026-10-07-to-10-08)
 [· Oct 6–7 detail](Recent-Changes-2026-10-06-to-10-07)
@@ -60,6 +61,7 @@
 - [Communications](Module-Communications)
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
+- [Shift History Import — user guide](Scheduling-History-Import)
 - [Admin Hours](Module-Admin-Hours)
 - [Member ID Cards & Check-In Station](Member-ID-Cards)
 - [Member ID Card — troubleshooting](../docs/TROUBLESHOOTING.md#member-id-card-issues)
@@ -106,6 +108,7 @@
 
 - [API Docs](API-Reference)
 - [Database Schema](Database-Schema)
+- [Training — Developer](Module-Training-Developer)
 - [Role System](Role-System)
 - [Tech Stack](Technology-Stack)
 

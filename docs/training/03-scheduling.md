@@ -1442,6 +1442,13 @@ came on late or left early.
   the crew changed mid-shift. Otherwise, a member is credited too low or the
   total is too high.
 - A member's credit is never added into the department's total.
+- **Give everyone all _N_ calls** _(2026-10-11)_. When you reopen a finalized
+  shift and raise the call count, each member's credit still starts at the
+  figure saved at the first close-out. Instead of retyping every row, select
+  **Give everyone all _N_ calls** on this step. It appears whenever anyone is
+  below the total, and the hint above the list says when the numbers shown are
+  the saved credit rather than the apparatus's count. Lower individual rows
+  afterwards for anyone who came on late.
 - **A member credited with fewer calls than the apparatus ran gets a count,
   but not call types.** The Logbook does not know which calls they were on, so
   it does not guess. Guessing would wrongly count calls toward type-specific

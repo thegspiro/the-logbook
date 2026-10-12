@@ -239,9 +239,9 @@ class DocumentsService:
 
     async def create_folder(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         folder_data: Dict[str, Any],
-        created_by: UUID,
+        created_by: UUID | str,
         *,
         acting_user: Optional[User] = None,
     ) -> DocumentFolder:
@@ -283,7 +283,7 @@ class DocumentsService:
 
     async def get_folders(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         parent_id: Optional[UUID] = None,
         current_user: Optional[User] = None,
         skip: int = 0,
@@ -363,7 +363,7 @@ class DocumentsService:
         return folders, total
 
     async def get_folder_by_id(
-        self, folder_id: UUID, organization_id: UUID
+        self, folder_id: UUID | str, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Get a folder by ID"""
         result = await self.db.execute(
@@ -375,7 +375,7 @@ class DocumentsService:
         return document_folder
 
     async def general_folder(
-        self, organization_id: UUID, created_by: UUID
+        self, organization_id: UUID | str, created_by: UUID | str
     ) -> DocumentFolder:
         """The organization's General Documents root.
 
@@ -399,7 +399,9 @@ class DocumentsService:
             raise RuntimeError("General Documents folder could not be created")
         return folder
 
-    async def general_root(self, organization_id: UUID) -> Optional[DocumentFolder]:
+    async def general_root(
+        self, organization_id: UUID | str
+    ) -> Optional[DocumentFolder]:
         """The General Documents root if it exists; never creates it."""
         result = await self.db.execute(
             select(DocumentFolder)
@@ -477,7 +479,7 @@ class DocumentsService:
     async def can_access_folder(
         self,
         folder: DocumentFolder,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
         folders_by_id: Optional[Dict[str, DocumentFolder]] = None,
         *,
@@ -531,7 +533,7 @@ class DocumentsService:
     async def can_access_document(
         self,
         document: Document,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
         *,
         require_write: bool = False,
@@ -559,7 +561,7 @@ class DocumentsService:
         )
 
     async def accessible_folder_ids(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> Set[str]:
         """Return exactly the folder ids whose complete hierarchy is accessible.
 
@@ -592,7 +594,7 @@ class DocumentsService:
         )
 
     async def _creates_cycle(
-        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
+        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID | str
     ) -> bool:
         """True if *candidate_parent_id* is *folder_id* itself or one of its
         own descendants — i.e. re-parenting under it would make the folder its
@@ -629,7 +631,7 @@ class DocumentsService:
     async def update_folder(
         self,
         folder_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         update_data: Dict[str, Any],
         *,
         acting_user: Optional[User] = None,
@@ -730,7 +732,7 @@ class DocumentsService:
         self,
         folder: Optional[DocumentFolder],
         data: Dict[str, Any],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> None:
         """Validate and normalize a create/update payload's access fields.
 
@@ -828,7 +830,7 @@ class DocumentsService:
     async def delete_folder(
         self,
         folder_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> bool:
         """Delete a folder, its subtree, and all their documents.
@@ -1078,7 +1080,7 @@ class DocumentsService:
         )
 
     async def _lock_subtree_documents(
-        self, subtree_ids: Set[str], organization_id: UUID
+        self, subtree_ids: Set[str], organization_id: UUID | str
     ) -> List[Tuple[str, Optional[str]]]:
         """FAC-32: lock the subtree's ``Document`` rows, for_update, and
         return their ``(id, file_path)`` pairs.
@@ -1104,7 +1106,7 @@ class DocumentsService:
     async def _delete_facility_document_references(
         self,
         document_ids: Set[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> None:
         """Delete any facility_documents rows pointing at these documents.
@@ -1181,7 +1183,7 @@ class DocumentsService:
         self,
         model: type[FacilityDocument] | type[FacilityPhoto],
         target_document_ids: Set[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[str]:
         """Row ids of ``model`` (``FacilityDocument`` or ``FacilityPhoto``)
         that reference one of ``target_document_ids``.
@@ -1235,9 +1237,9 @@ class DocumentsService:
 
     async def create_document(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         doc_data: Dict[str, Any],
-        uploaded_by: UUID,
+        uploaded_by: UUID | str,
     ) -> Document:
         """Create a new document record. Raises on failure."""
         document = Document(
@@ -1250,7 +1252,7 @@ class DocumentsService:
 
     async def get_documents(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         folder_id: Optional[UUID] = None,
         search: Optional[str] = None,
         status: Optional[DocumentStatus] = None,
@@ -1322,8 +1324,8 @@ class DocumentsService:
 
     async def get_document_by_id(
         self,
-        document_id: UUID,
-        organization_id: UUID,
+        document_id: UUID | str,
+        organization_id: UUID | str,
         for_update: bool = False,
     ) -> Optional[Document]:
         """Get a document by ID.
@@ -1348,7 +1350,7 @@ class DocumentsService:
         return document
 
     async def attach_document_names(
-        self, organization_id: UUID, documents: List[Document]
+        self, organization_id: UUID | str, documents: List[Document]
     ) -> None:
         """Populate uploader_name / folder_name on document responses, in place.
 
@@ -1397,7 +1399,10 @@ class DocumentsService:
             d.folder_name = folder_names.get(d.folder_id) if d.folder_id else None
 
     async def update_document(
-        self, document_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        document_id: UUID,
+        organization_id: UUID | str,
+        update_data: Dict[str, Any],
     ) -> Optional[Document]:
         """Update a document. Returns None if not found."""
         document = await self.get_document_by_id(document_id, organization_id)
@@ -1456,8 +1461,8 @@ class DocumentsService:
 
     async def delete_document(
         self,
-        document_id: UUID,
-        organization_id: UUID,
+        document_id: UUID | str,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> bool:
         """Delete a document. Returns False if not found.
@@ -1517,7 +1522,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_members_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Member Files' system folder.
 
@@ -1541,7 +1546,7 @@ class DocumentsService:
         return document_folder
 
     async def _lock_members_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Member Files' system folder.
 
@@ -1615,7 +1620,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_member_folder(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> DocumentFolder:
         """
         Get or create a personal folder for a member under the
@@ -1720,7 +1725,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_apparatus_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Apparatus Files' system folder.
 
@@ -1740,7 +1745,7 @@ class DocumentsService:
         return document_folder
 
     async def _lock_apparatus_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Apparatus Files' system folder.
 
@@ -1802,7 +1807,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_apparatus_folder(
-        self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
+        self, organization_id: UUID | str, apparatus_id: str, apparatus_unit_number: str
     ) -> DocumentFolder:
         """
         Get or create a hierarchical folder structure for an apparatus
@@ -1922,7 +1927,7 @@ class DocumentsService:
         return vehicle_folder
 
     async def get_apparatus_sub_folders(
-        self, organization_id: UUID, apparatus_id: str, current_user: User
+        self, organization_id: UUID | str, apparatus_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific apparatus.
@@ -1978,7 +1983,7 @@ class DocumentsService:
     # ============================================
 
     async def _lock_facilities_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Facility Files' system folder.
 
@@ -2084,7 +2089,7 @@ class DocumentsService:
         return document_folder
 
     async def _peek_facilities_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Facility Files' system folder.
 
@@ -2121,7 +2126,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_facility_folder(
-        self, organization_id: UUID, facility_id: str, facility_display_name: str
+        self, organization_id: UUID | str, facility_id: str, facility_display_name: str
     ) -> DocumentFolder:
         """
         Get or create a hierarchical folder structure for a facility
@@ -2318,7 +2323,7 @@ class DocumentsService:
         return facility_folder
 
     async def get_facility_sub_folders(
-        self, organization_id: UUID, facility_id: str, current_user: User
+        self, organization_id: UUID | str, facility_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific facility.
@@ -2380,7 +2385,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_events_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Event Attachments' system folder.
 
@@ -2403,7 +2408,7 @@ class DocumentsService:
     FINANCE_RECEIPTS_SLUG = "finance-receipts"
 
     async def _finance_receipts_folder(
-        self, organization_id: UUID, *, lock: bool
+        self, organization_id: UUID | str, *, lock: bool
     ) -> Optional[DocumentFolder]:
         root = aliased(DocumentFolder)
         query = (
@@ -2421,7 +2426,7 @@ class DocumentsService:
         return (await self.db.execute(query)).scalar_one_or_none()
 
     async def ensure_finance_receipts_folder(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> DocumentFolder:
         """Get or create Finance > Receipts.
 
@@ -2483,7 +2488,7 @@ class DocumentsService:
         return folder
 
     async def _lock_events_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Event Attachments' system folder.
 
@@ -2545,7 +2550,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_event_folder(
-        self, organization_id: UUID, event_id: str, event_title: str
+        self, organization_id: UUID | str, event_id: str, event_title: str
     ) -> DocumentFolder:
         """
         Get or create a folder for an event under the 'Event Attachments'
@@ -2637,7 +2642,7 @@ class DocumentsService:
     # ============================================
 
     async def get_summary(
-        self, organization_id: UUID, current_user: User
+        self, organization_id: UUID | str, current_user: User
     ) -> Dict[str, Any]:
         """Get statistics for the folders and active documents a caller can browse."""
         accessible_ids = await self.accessible_folder_ids(organization_id, current_user)

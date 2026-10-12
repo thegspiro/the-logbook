@@ -42,7 +42,7 @@ class CourseSyllabusService:
         self.db = db
 
     async def _get_course(
-        self, course_id: UUID, organization_id: UUID
+        self, course_id: UUID, organization_id: UUID | str
     ) -> Optional[TrainingCourse]:
         """Fetch a course, always scoped to the caller's organization."""
         result = await self.db.execute(
@@ -55,7 +55,7 @@ class CourseSyllabusService:
         return training_course
 
     async def _get_class(
-        self, class_id: UUID, organization_id: UUID
+        self, class_id: UUID, organization_id: UUID | str
     ) -> Optional[CourseClass]:
         """Fetch a syllabus row, always scoped to the caller's organization."""
         result = await self.db.execute(
@@ -67,7 +67,9 @@ class CourseSyllabusService:
         course_class: Optional[CourseClass] = result.scalar_one_or_none()
         return course_class
 
-    async def _validate_references(self, data: object, organization_id: UUID) -> None:
+    async def _validate_references(
+        self, data: object, organization_id: UUID | str
+    ) -> None:
         """Reject any client-supplied foreign key that is not in the caller's org.
 
         Raises ValueError, which the endpoint layer turns into a 400 via
@@ -102,7 +104,7 @@ class CourseSyllabusService:
                 raise ValueError("Invalid program phase")
 
     async def list_classes(
-        self, course_id: UUID, organization_id: UUID
+        self, course_id: UUID, organization_id: UUID | str
     ) -> List[Tuple[CourseClass, Optional[TrainingCourse]]]:
         """Return the syllabus in order, each row paired with its catalog course."""
         course = await self._get_course(course_id, organization_id)
@@ -134,8 +136,8 @@ class CourseSyllabusService:
         self,
         course_id: UUID,
         data: CourseClassCreate,
-        organization_id: UUID,
-        created_by: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
     ) -> CourseClass:
         """Append (or insert) a class on the syllabus.
 
@@ -239,7 +241,7 @@ class CourseSyllabusService:
         await self.db.flush()
 
     async def update_class(
-        self, class_id: UUID, data: CourseClassUpdate, organization_id: UUID
+        self, class_id: UUID, data: CourseClassUpdate, organization_id: UUID | str
     ) -> CourseClass:
         """Patch a syllabus row."""
         course_class = await self._get_class(class_id, organization_id)
@@ -273,7 +275,7 @@ class CourseSyllabusService:
         await self.db.refresh(course_class)
         return course_class
 
-    async def delete_class(self, class_id: UUID, organization_id: UUID) -> None:
+    async def delete_class(self, class_id: UUID, organization_id: UUID | str) -> None:
         """Remove a syllabus row and close the gap in the ordering.
 
         Already-generated cohorts are unaffected: their ``course_class_id``
@@ -296,7 +298,7 @@ class CourseSyllabusService:
         await self.db.commit()
 
     async def reorder_classes(
-        self, course_id: UUID, class_ids: List[UUID], organization_id: UUID
+        self, course_id: UUID, class_ids: List[UUID], organization_id: UUID | str
     ) -> List[CourseClass]:
         """Reorder the syllabus to exactly the given sequence of class ids."""
         course = await self._get_course(course_id, organization_id)
@@ -326,7 +328,7 @@ class CourseSyllabusService:
         return list(refreshed.scalars().all())
 
     async def autofill_offsets(
-        self, course_id: UUID, data: CourseClassAutofill, organization_id: UUID
+        self, course_id: UUID, data: CourseClassAutofill, organization_id: UUID | str
     ) -> List[CourseClass]:
         """Recompute every class's ``day_offset`` from a weekly meeting pattern.
 

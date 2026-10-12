@@ -9,6 +9,8 @@ error. DB mocked; no MySQL.
 
 from unittest.mock import AsyncMock, MagicMock
 
+from sqlalchemy.engine import CursorResult
+
 from app.core.utils import _GENERIC_ERROR
 from app.models.notification import NotificationRule, NotificationTrigger
 from app.services.notifications_service import NotificationsService
@@ -132,7 +134,9 @@ def _db_with_savepoint(execute_result=None, execute_error=None):
 
 class TestRelatedActionArchiving:
     async def test_archives_only_notification_for_completed_resource(self):
-        db, nested = _db_with_savepoint(execute_result=MagicMock(rowcount=1))
+        db, nested = _db_with_savepoint(
+            execute_result=MagicMock(spec=CursorResult, rowcount=1)
+        )
 
         count = await NotificationsService(db).archive_related_notifications(
             "org-1", "event_validation", "event_id", "event-1"
@@ -154,7 +158,9 @@ class TestRelatedActionArchiving:
         # expiry written as 12:00:00.7 is stored as 12:00:01 and the prompt
         # reads as unexpired until then. MariaDB truncates, which is why only
         # the MySQL integration job saw archived prompts linger.
-        db, _ = _db_with_savepoint(execute_result=MagicMock(rowcount=1))
+        db, _ = _db_with_savepoint(
+            execute_result=MagicMock(spec=CursorResult, rowcount=1)
+        )
 
         await NotificationsService(db).archive_related_notifications(
             "org-1", "event_validation", "event_id", "event-1"
@@ -164,7 +170,9 @@ class TestRelatedActionArchiving:
         assert params["expires_at"].microsecond == 0
 
     async def test_no_match_is_idempotent_without_a_commit(self):
-        db, _ = _db_with_savepoint(execute_result=MagicMock(rowcount=0))
+        db, _ = _db_with_savepoint(
+            execute_result=MagicMock(spec=CursorResult, rowcount=0)
+        )
 
         count = await NotificationsService(db).archive_related_notifications(
             "org-1", "shift_validation", "shift_id", "shift-1"
@@ -193,7 +201,9 @@ class TestRelatedActionArchiving:
         assert nested.__aexit__.await_args.args[0] is Exception
 
     async def test_commit_failure_is_contained_and_resets_session(self):
-        db, _ = _db_with_savepoint(execute_result=MagicMock(rowcount=1))
+        db, _ = _db_with_savepoint(
+            execute_result=MagicMock(spec=CursorResult, rowcount=1)
+        )
         db.commit = AsyncMock(side_effect=Exception("deadlock"))
 
         count = await NotificationsService(db).archive_related_notifications(
