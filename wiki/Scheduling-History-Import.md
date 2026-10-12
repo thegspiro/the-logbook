@@ -136,6 +136,44 @@ were separate shifts, you can split them apart during review.
   different vehicles, which is correct when one is the county's and one is
   yours.
 
+### Sample file
+
+This short file shows most of what the import handles. Copy it into a text
+editor, save it as `sample.csv`, and upload it to see the review screens before
+you prepare your own:
+
+```csv
+member_name,membership_number,email,username,unit,agency,position,date,start_time,end_time,call_count,status
+"Smith, John",101,,,A106E,,Officer,2025-03-01,07:00,07:00,6,
+Maria Lopez,102,,,A106E,,Driver,2025-03-01,07:00,07:00,6,
+Dana Former,77,,,A106E,,,2025-03-01,07:30,07:00,5,
+Alice Ng,103,,,A106E,,EMT,2025-03-02,19:00,07:00,3,
+Bob Diaz,104,,,A106E,,EMT,2025-03-02,7:00 PM,7:00 AM,3,
+Alice Ng,103,,,A106E,,EMT,2025-10-09,06:00,06:00,8,
+Alice Ng,103,,,A106E,,EMT,2025-10-10,06:00,07:30,1,
+Bob Diaz,104,,,A106,County EMS,,03/05/2025,0800,2000,4,
+Maria Lopez,102,,,A106E,,Driver,2025-03-08,07:00,07:00,,Cancelled
+```
+
+The results below assume a department that:
+
+- owns unit **A106E**;
+- has **A106** listed as a County EMS unit;
+- has members numbered 101 to 104;
+- has nobody numbered 77.
+
+| Line | What it shows                                                                                  | What the import does                                                                                                                                                                                                                                        |
+| ---- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2–3  | Two members on a 24-hour shift. `"Smith, John"` is in quotes because the name contains a comma | One shift on A106E from 07:00 on March 1 to 07:00 on March 2, with John as officer and Maria as driver, each credited 24 hours and 6 calls                                                                                                                  |
+| 4    | A former member, arriving 30 minutes late, with no position                                    | **Dana Former** shows as _No match_ on **Members**. Once you choose _Create as an archived former member_, the row is an **85% match** for that shift and waits on **Shifts** for _Same shift_ or _Keep separate_. A blank position is the firefighter seat |
+| 5–6  | A night shift crossing midnight, written in two time formats                                   | One 12-hour shift, 19:00 on March 2 to 07:00 on March 3, with Alice and Bob in the EMT seat                                                                                                                                                                 |
+| 7–8  | One shift logged in two pieces                                                                 | Joined into **one 25.5-hour attendance** for Alice, with the call counts added together (9). **Split apart** on **Shifts** undoes it                                                                                                                        |
+| 9    | Time on another agency's unit, with a US-style date and 24-hour times without colons           | **12 outside-agency hours** for Bob on County EMS's A106, not a shift on your schedule                                                                                                                                                                      |
+| 10   | A cancelled shift                                                                              | Skipped, and listed under **Skipped** on **Rows**                                                                                                                                                                                                           |
+
+Line numbers count the header as line 1, matching the line numbers the review
+screens show.
+
 ---
 
 ## Upload
