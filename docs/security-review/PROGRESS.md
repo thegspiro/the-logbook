@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3128](https://github.com/thegspiro/the-logbook/pull/3128)**: branch `claude/security-review-storefront-payments`,
+Feature 04 (Storefront & payments), pass 8 (watchdog pickup). 2 fixed
+(SF8-04-1, a `refund_order` lost-update race of the same shape SF-9 was
+fixed for; one guard test added) — plus SF-9 and SF-11, both standing OPEN
+findings since pass 7, re-verified **already fixed by other,
+non-security-review work** that landed between passes (SF-9: `record_payment`
+et al. now lock the order row, 2026-10-05 owner decision; SF-11: an order's
+`items` array now carries `max_length=200`). 2 new findings flagged
+(SF8-04-2, `update_order_status`'s settlement branch has the same unlocked
+shape SF8-04-1 just fixed, needs an owner call on scope; SF8-04-3,
+`waive_order_payment` can downgrade an already-settled order's
+`payment_status`, a business-rule gap rather than a locking one), plus one
+repo-wide tooling note (CI-1: `requirements.txt`'s `flake8`/`isort` versions
+have drifted from the Backend Lint workflow's own pin again). See the Log
+entry below and
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 8** section for
+detail. Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3105's merge, Feature 03, Public surface & webhooks, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3105 (Feature 03, Public surface & webhooks, pass 8) merged
+clean 2026-10-12 16:15:06 UTC (`pull_request_read`: `merged: true`; 5 files
+changed — `PROGRESS.md`, `PUB-03-public-surface-webhooks.md`,
+`public_portal_security.py`, `test_public_portal_usage_stats.py`,
+`KNOWN_LIMITATIONS.md`). Not docs-only (the PUB-8 401-logging fix and its
+guard tests landed with it), but it is already fully recorded in the Log
+entry below, so there is nothing further to add here. Rotation row 03 stays
+✅. Confirmed via `search_pull_requests` (`is:open head:claude/security-review-`,
+0 results) that no `claude/security-review-*` PR is open. Proceeding to
+Feature 04 (Storefront & payments), pass 8.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3105, Feature 03, Public surface & webhooks, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3105](https://github.com/thegspiro/the-logbook/pull/3105)**: branch
 `claude/security-review-public-webhooks`, Feature 03 (Public surface &
 webhooks), pass 8 (watchdog pickup). 1 fixed (a further
@@ -28,6 +66,8 @@ and found sound. See the Log entry below and
 `docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 8** section
 for detail. Row 03 → ✅ (pending this PR's merge); next is Feature 04
 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3097, Feature 02, Permissions & roles, pass 8, merged clean), preserved for history</summary>
@@ -18632,6 +18672,85 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 04 (Storefront & payments, pass 8) — 2 fixed (1 new, SF8-04-1; plus SF-9/SF-11 re-verified fixed by other work), 2 new findings flagged (watchdog pickup)
+
+**Closure.** PR #3105 (Feature 03, Public surface & webhooks, pass 8) merged
+clean 2026-10-12 16:15:06 UTC (`pull_request_read`: `merged: true`; 5 files
+changed), not docs-only (the PUB-8 401-logging fix and its guard tests
+landed with it) but already fully recorded in its own Log entry below, so
+nothing further to record beyond clearing the **Open PR** row above.
+Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR exists. Proceeded to Feature 04.
+
+**Feature 04, pass 8.** Diffed pass 7's closing merge (`01b1bc26`, PR #2940)
+against current `HEAD`: 18 non-merge commits touched this domain, none
+zero-delta. The headline items: product image uploads now route through the
+app-wide scanned-upload service (reviewed as a collaborator, no new trust
+boundary); `models/storefront.py`'s 610-line diff is a mechanical
+`Column` → `Mapped`/`mapped_column` typing migration, verified semantically
+inert by counting `nullable=True`/`nullable=False` occurrences 1:1 before and
+after and re-confirming all 12 `ondelete="SET NULL"` FKs still pair with
+`nullable=True`; 22 frontend files are copy/contrast/layout polish, including
+the "remove nested modal-body scrollers" sweep landing on six storefront
+dialogs.
+
+**Both of pass 7's standing findings were found already fixed by other,
+non-security-review work** (app-review's own track, 2026-10-05, owner
+decision): **SF-9** (concurrent payment recording losing money off the
+ledger) — `get_order`/`get_payment_event` gained a `for_update` flag;
+`record_payment`, `mark_order_paid`, `apply_payment_event` all now lock
+before any read-modify-write on `amount_paid`, with lock order consistently
+event → order. **SF-11** (no cap on an order's line count) — `StoreOrderCreate.items`
+now carries `max_length=200`. Both re-verified directly, not trusted from
+the app-review doc's own claim: `test_storefront_payment_race.py`'s two
+pre-existing tests exercise SF-9's fix under real concurrent connections and
+both pass.
+
+**One new finding, found and fixed this pass: SF8-04-1 (MED).**
+`refund_order` had the exact same unlocked read-modify-write shape SF-9 was
+just fixed for in its siblings — a settlement (the PayPal webhook's
+auto-apply, now locked) landing between `refund_order`'s read and its write
+is silently overwritten once its own blocked `UPDATE` finally lands, computed
+from a balance that predates the settlement. Fixed the same way: its
+`get_order` call now passes `for_update=True`. New guard test
+`test_a_refund_racing_a_payment_does_not_lose_it` (fails against the
+pre-fix code, passes against the fix).
+
+**Two new findings flagged, not fixed — both need an owner call in a
+payments path rather than a guess:** **SF8-04-2** — `update_order_status`'s
+settlement branch is a fourth/fifth self-settlement path with the same
+unlocked shape, but is the generic, heavily-used order-lifecycle endpoint;
+locking it unconditionally would serialize every status change on every
+order, a broader behavior change than this pass's fix bar. **SF8-04-3** —
+`waive_order_payment` unconditionally overwrites `payment_status` even onto
+an already-settled order (no concurrency required to hit it), a business-rule
+gap (should it refuse, like `mark_order_paid` does?) that a lock alone does
+not answer. Both mirrored into `KNOWN_LIMITATIONS.md`
+(SF8-04-2, SF8-04-3).
+
+**One repo-wide tooling note, not a storefront finding:** installing the
+completion gate's linters at CI's exact pin surfaced that
+`backend/requirements.txt`'s `flake8==7.4.1`/`isort==9.0.2` have drifted from
+`.github/workflows/ci.yml`'s own explicit `flake8==7.3.0`/`isort==9.0.1`
+install — the same category of drift that workflow's own comment already
+documents happening once before. Mirrored into `KNOWN_LIMITATIONS.md` as
+CI-1 for whichever pass picks it up; this pass's own gate was run at CI's
+pinned versions, not `requirements.txt`'s.
+
+Gate: backend flake8(7.3.0, CI's pin)/black(26.5.1)/isort(9.0.1, CI's pin,
+installed over the sandbox's pre-existing 9.0.2) clean;
+`validate_migrations.py --strict` (572 revisions, single head);
+`check_route_permissions.py --strict` (265 routes, 0 errors/warnings);
+`check_docs_links.py` (456 files, 0 broken links); scoped pytest 796 unit +
+248 integration passed (1 pre-existing skip each); standing guard suites (87
+passed); full backend unit suite (14,246 passed, 1 skipped, 0 failed);
+frontend typecheck (0 errors) and lint (0 errors, 0 warnings) clean; scoped
+vitest (233 passed, 21 files). Full write-up:
+[`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 8.
+Rotation row 04 → ✅ (pending this PR's merge). Next: Feature 05 (Finance &
+approvals).
 
 ### 2026-10-12 — Feature 03 (Public surface & webhooks, pass 8) — 1 fixed (PUB-8 narrowed further), 0 new findings; a new MCP OAuth 2.1 surface reviewed fresh (watchdog pickup)
 
