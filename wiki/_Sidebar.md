@@ -108,6 +108,8 @@
 - [API Docs](API-Reference)
 - [Database Schema](Database-Schema)
 - [Training — Developer](Module-Training-Developer)
+- [Events — Developer](Module-Events-Developer)
+- [Elections — Developer](Module-Elections-Developer)
 - [Role System](Role-System)
 - [Tech Stack](Technology-Stack)
 
