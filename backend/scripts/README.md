@@ -79,6 +79,39 @@ RECOMMENDED ACTIONS:
 
 ---
 
+## Type Checking
+
+### `mypy_ratchet.py`
+
+Runs `python -m mypy app` and compares the error count with
+`backend/mypy-baseline.txt`. The **Backend Type Check** CI job runs it on every
+pull request.
+
+The backend still carries type errors from before mypy was enforced, so a
+zero-error gate cannot be switched on yet. The ratchet fails only when the count
+**rises**: nothing new gets in, and each fix lowers the bar for the next
+change. It compares a count, not the errors themselves, so fixing one error
+while adding another nets to zero and passes. Lowering the baseline whenever
+errors are fixed keeps that slack small.
+
+**Usage:**
+
+```bash
+cd backend
+python scripts/mypy_ratchet.py            # check against the baseline
+python scripts/mypy_ratchet.py --update   # after fixing errors: record the lower count
+```
+
+**Exit Codes:**
+
+- `0`: At or below the baseline (below also says to run `--update`)
+- `1`: Above the baseline; mypy's full output is printed
+- `2`: mypy did not finish a check (crash, bad config); its output is printed
+
+Never raise the baseline to get a change through. Fix the new errors instead.
+
+---
+
 ## Schema Documentation
 
 ### `generate_schema_docs.py`
@@ -381,25 +414,31 @@ keeps whatever mapped fields it copied at the time.
 
 ### `json_column_ast_sweep.py`
 
-Enumerates every model attribute declared as `Column(JSON, ...)`,
-`Column(MutableDict.as_mutable(JSON), ...)`, or `Column(EncryptedJSON, ...)`
-across `app/models/*.py`, by parsing each file with the `ast` module rather
-than scanning source lines. Matched type names live in the script's
-`JSON_LIKE_TYPE_NAMES` — `EncryptedJSON` (`app/core/encrypted_types.py`) is
-a `TypeDecorator` around `Text` that transparently encrypts a `json.dumps`'d
-value; it is not `MutableDict`-wrapped, so it carries the same
-shallow-copy-then-reassign risk (pitfall #12) as bare `Column(JSON)`.
+Enumerates every model attribute declared as `Column(JSON, ...)` /
+`mapped_column(JSON, ...)`, `Column(MutableDict.as_mutable(JSON), ...)` /
+`mapped_column(MutableDict.as_mutable(JSON), ...)`, or the `EncryptedJSON`
+equivalent of either, across `app/models/*.py`, by parsing each file with
+the `ast` module rather than scanning source lines. Matched call names live
+in `COLUMN_CALL_NAMES` (`Column`, `mapped_column`); matched type names live
+in `JSON_LIKE_TYPE_NAMES` — `EncryptedJSON` (`app/core/encrypted_types.py`)
+is a `TypeDecorator` around `Text` that transparently encrypts a
+`json.dumps`'d value; it is not `MutableDict`-wrapped, so it carries the
+same shallow-copy-then-reassign risk (pitfall #12) as bare `Column(JSON)`.
 
 **Purpose**: a line-anchored regex (`^\s*(\w+)\s*=\s*Column\(.*JSON`) cannot
 see a multiline declaration such as `report_email_recipients = Column(\n
 JSON, ...\n)` — the assignment target and the `JSON` reference land on
-different source lines. Four rounds of `docs/security-review/SEC-00-cross-
+different source lines. Five rounds of `docs/security-review/SEC-00-cross-
 cutting-baseline.md`'s sweep 9 were corrected because the JSON-column count
-behind it was produced by hand-derived, ad hoc methods, or — round 8 — because
-the script matched only the literal `JSON` identifier and missed a
+behind it was produced by hand-derived, ad hoc methods, or — round 8 —
+because the script matched only the literal `JSON` identifier and missed a
 custom-named type wrapping it (`EncryptedJSON`, on the medical-screening PHI
-column). This script is the authoritative, structural method, checked into
-the repo so it can be re-run rather than re-derived.
+column), or — security-review Feature 00, pass 8 — because the script
+matched only `Column(...)` calls after every model in the tree had already
+moved to SQLAlchemy 2.0's `mapped_column(...)` declarative style, which
+silently zeroed out the count (0 names, 0 declarations) rather than erroring.
+This script is the authoritative, structural method, checked into the repo
+so it can be re-run rather than re-derived.
 
 **Usage:**
 
@@ -413,8 +452,8 @@ python3 scripts/json_column_ast_sweep.py --by-file   # every declaration grouped
 **Expected Output:**
 
 ```
-180 distinct attribute names, 231 Column(...) declarations referencing JSON,
-across 43 files in .../backend/app/models.
+202 distinct attribute names, 256 Column(...)/mapped_column(...) declarations
+referencing JSON, across 50 files in .../backend/app/models.
 ```
 
 **Exit Codes:**

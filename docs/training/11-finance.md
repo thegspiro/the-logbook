@@ -16,9 +16,10 @@ The Finance module manages budgets, purchase requests, expense reports, check re
 8. [Expense Reports](#expense-reports)
 9. [Check Requests](#check-requests)
 10. [Dues & Assessments](#dues--assessments)
-11. [QuickBooks Export](#quickbooks-export)
-12. [Realistic Example: Annual Budget Cycle](#realistic-example-annual-budget-cycle)
-13. [Troubleshooting](#troubleshooting)
+11. [Board Reports](#board-reports)
+12. [QuickBooks Export](#quickbooks-export)
+13. [Realistic Example: Annual Budget Cycle](#realistic-example-annual-budget-cycle)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -92,6 +93,7 @@ does not want members raising requests removes `finance.request` from the
 | `/finance/check-requests/new`         | Create a check request             |
 | `/finance/check-requests/:id`         | Check request detail               |
 | `/finance/dues`                       | Dues management                    |
+| `/finance/reports`                    | Board reports (`finance.view`)     |
 
 ---
 
@@ -909,9 +911,36 @@ chain applies to this request. Approve or deny it here."_
   deny it."_ and offers only **Deny**.
 
 Both decisions are written to the audit log
-(`finance.manual_approval_approved` / `finance.manual_approval_denied`). These
-requests do not appear on the Approvals screen, which lists step-based
-approvals only.
+(`finance.manual_approval_approved` / `finance.manual_approval_denied`). Since
+2026-10-11 the **Approvals** screen lists these requests below the steps
+waiting on you, under _Waiting for a decision on their own page_; open one to
+decide it.
+
+### Large Requests Need Two Approvers _(2026-10-11)_
+
+A department can require a **second approver** for large requests. At or above
+the amount it sets, a purchase request, check request or expense report is
+approved only once two different people have approved it.
+
+- **Turning it on.** Open **Finance > Settings > Approval Chains**. The card
+  _Second approver for large requests_ shows the rule. A member with
+  `settings.manage` enters a whole-dollar amount — many departments use
+  $1,000 — and clicks **Save**, or clicks **Turn off**. Finance officers can
+  read the rule but not change it, because it applies to them.
+- **What happens.** The first approval — a chain step, or **Approve** on a
+  request no chain applies to — does not complete the request. It stays
+  **Pending Approval**, and its page shows _"This request needs a second
+  approval from someone who has not approved it yet."_ Another `finance.approve`
+  holder opens it and clicks **Approve**; that completes it. A chain approved
+  by two different people completes as before.
+- **Who can give the second approval.** Anyone with `finance.approve` except
+  the person who submitted the request and anyone who has already approved it
+  — they see only **Deny**. Approving the same request twice is refused.
+- **Finding them.** Held requests are listed on the **Approvals** screen under
+  _Waiting for a decision on their own page_, marked _A second approver_.
+  Nobody is emailed when a request is waiting for its second approval.
+- The budget is committed (encumbered) once, when the request is fully
+  approved.
 
 <!-- Screenshot needed:
 _[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
@@ -1459,6 +1488,68 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 | Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
 | Late fee application                                               | Not automated, and not settable from the Dues page. The `lateFeeApplied` field exists on the record but nothing writes it                                 |
 | Dues summary with no records                                       | Returns zeroes for all metrics and 0% collection rate                                                                                                     |
+
+---
+
+## Board Reports
+
+Navigate to **Finance > Reports** (or the **Reports** quick link on the
+dashboard). You need `finance.view`. Three reports sit on tabs across the top:
+
+- **Budget vs actual** -- every budget line for a fiscal year: its original
+  amount, confirmed amendments, the amended budget, what has been spent, what
+  remains and the percent used, with totals.
+- **Amendment log** -- every change to the adopted budget: when it was entered
+  and by whom, the line, the amount, the reason, the approval it cites, and
+  whether a second officer confirmed or rejected it.
+- **Payments register** -- every payment made in a period: date, type, request
+  number, payee, description, budget line and amount, with a total.
+
+Each report has **Download CSV**, which opens in Excel or Google Sheets with
+amounts as numbers, and **Print**, which prints just the report under a
+heading saying what it covers. To get a PDF, choose _Save as PDF_ in the print
+dialog.
+
+### Running budget vs actual for a meeting
+
+1. Pick the **Fiscal year** (the active year is chosen for you).
+2. Set **Through** to the date the report should stand at -- for a monthly
+   board meeting, usually the last day of the month. It starts on today.
+3. Print it, or download the CSV for the packet.
+
+**Spent** counts payments dated on or before that day, and a voided check
+stops counting from the day it was voided. **Amendments** count from the day
+they were confirmed. So a report through March 31, run in April, reads the
+same as one run on March 31 would have.
+
+**Committed** -- approved requests not yet paid -- appears only on a report
+through today. The system does not record what was committed on an earlier
+date, so a report for a past date leaves the column out rather than guess.
+
+> **Hint:** If a line shows _"The line's running total reads …"_ under its
+> name, the budget's spent total does not match the payments recorded against
+> it -- usually because it was adjusted by hand, or holds spending from before
+> payments were dated. The report uses the payments, so it agrees with the
+> payments register.
+
+### Reconciling the register with the bank
+
+Set **From** and **To** to the statement period (at most 366 days) and compare
+the register with the statement. A check voided in the period appears twice:
+once on the day it was written, and again as a negative amount on the day it
+was voided. The register's total for a period equals the change in **Spent**
+on budget vs actual over the same period, for payments charged to that year's
+budget lines.
+
+### Edge Cases
+
+| Situation                                         | Behavior                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Payment made late in the evening                  | Dated by your department's time zone, not the server's, so it lands on the day it was made |
+| Amendment still awaiting a second officer         | Listed on the amendment log as _Awaiting confirmation_; not counted on budget vs actual    |
+| Payment with no budget line                       | On the payments register, with no budget line shown; not on budget vs actual               |
+| An expense report charged to several budget lines | One register row for the whole report, naming every line it was charged to                 |
+| Register period longer than 366 days              | Refused with a message; run it in two parts                                                |
 
 ---
 

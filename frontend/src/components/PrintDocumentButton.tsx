@@ -158,7 +158,7 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
       </button>
 
       <Modal isOpen={isOpen} onClose={() => setOpen(false)} title="Print to receipt printer" size="lg">
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           {loading ? (
             <div className="flex items-center gap-2 py-6" role="status" aria-live="polite">
               <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />

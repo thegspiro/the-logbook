@@ -35,6 +35,19 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
+/**
+ * One-line versions of CHECK_TYPE_HELP for the phone item editor, where the
+ * full paragraph pushed every field below it off the first screen.
+ */
+export const CHECK_TYPE_SUMMARY: Record<string, string> = {
+  level: 'A reading; under the threshold fails and opens a swap.',
+  function: 'Switched on and watched; a fail takes a note and a photo.',
+  count: 'A par level to match; short of par becomes a restock line.',
+  expiry: 'A date on record, confirmed at a glance.',
+  text: 'A read-only statement; nothing to answer.',
+  header: 'A section divider; not a checkable item.',
+};
+
 export const LEVEL_UNIT_PRESETS = ['psi', '%', 'gallons', 'liters', 'inches', 'feet', 'bar', 'mmHg', 'quarts'] as const;
 
 // ============================================================================

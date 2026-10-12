@@ -5,17 +5,23 @@
  * only in this component's state — never localStorage: station computers are
  * shared, and a key left in one browser would hand the thread to whoever sits
  * down next.
+ *
+ * A box with intake questions asks them first, on a step of their own; the
+ * title, details and screenshots follow once they are answered. The answers
+ * decide where the submission goes and whether it can be anonymous, so the
+ * member sees that before writing anything. A box with no questions keeps the
+ * single page it always had.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ArrowRight, Copy, KeyRound, Loader2, Lightbulb } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, KeyRound, Loader2, Lightbulb } from 'lucide-react';
 import { EmptyState, FileDropzone } from '../../../components/ux';
-import { SuggestionAnonymityMode } from '../../../constants/enums';
+import { SuggestionAnonymityMode, SuggestionIntakeQuestionType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { suggestionsService } from '../services/suggestionsService';
 import type { SubmissionReceipt, SuggestionBoxPublic } from '../types/suggestions';
-import { answersToSend, resolveRoute } from '../utils/suggestionRouting';
+import { answersToSend, resolveRoute, savedQuestions, visibleQuestionIds } from '../utils/suggestionRouting';
 import IntakeQuestionsFields from './IntakeQuestionsFields';
 
 // Mirrors the backend's screenshot rules in suggestion_service.py
@@ -55,6 +61,9 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
   const [dropzoneKey, setDropzoneKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<SubmissionReceipt | null>(null);
+  const [step, setStep] = useState<'questions' | 'details'>('questions');
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const stepChanged = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,15 +106,58 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
     chosenBox?.anonymityMode === SuggestionAnonymityMode.ALLOWED &&
     routedTo?.anonymityMode === SuggestionAnonymityMode.DISABLED;
 
+  const questions = savedQuestions(chosenBox?.intakeQuestions);
+  const hasQuestions = questions.length > 0;
+  const onQuestionsStep = hasQuestions && step === 'questions';
+
+  // Move focus to the new step's heading so a screen reader announces it and
+  // keyboard focus is not left on a button that has just disappeared.
+  useEffect(() => {
+    if (!stepChanged.current) return;
+    stepChanged.current = false;
+    stepHeadingRef.current?.focus();
+  }, [step]);
+
+  const goToStep = (next: 'questions' | 'details') => {
+    stepChanged.current = true;
+    setStep(next);
+  };
+
   const handleBoxChange = (id: string) => {
     setBoxId(id);
     // Answers are keyed by another box's question ids; none carry over.
     setAnswers({});
+    setStep('questions');
+  };
+
+  /**
+   * The browser has already checked every rendered `required` control by the
+   * time the form submits; a member pick has no native control to require,
+   * so it is checked here. The server checks all of them again.
+   */
+  const unansweredPick = () => {
+    const visible = visibleQuestionIds(questions, answers);
+    return questions.find(
+      (q) =>
+        q.required &&
+        q.type === SuggestionIntakeQuestionType.MEMBER &&
+        visible.has(q.id) &&
+        !(answers[q.id] ?? '').trim()
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chosenBox || !box) return;
+    if (onQuestionsStep) {
+      const missing = unansweredPick();
+      if (missing) {
+        toast.error(`Please answer “${missing.label}”.`);
+        return;
+      }
+      goToStep('details');
+      return;
+    }
     if (screenshots.length > MAX_SCREENSHOTS) {
       toast.error(`Attach at most ${MAX_SCREENSHOTS} screenshots.`);
       return;
@@ -124,6 +176,7 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       setDetails('');
       setAnonymous(false);
       setAnswers({});
+      setStep('questions');
       setScreenshots([]);
       setDropzoneKey((k) => k + 1);
       if (!result.followUpKey) {
@@ -206,28 +259,46 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
       )}
 
       <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-4 sm:p-6">
-        <div>
-          <label htmlFor="suggestion-box" className="form-label">
-            Suggestion box
-          </label>
-          <select
-            id="suggestion-box"
-            className="form-input"
-            value={boxId}
-            onChange={(e) => handleBoxChange(e.target.value)}
-            required
+        {hasQuestions && (
+          <h2
+            ref={stepHeadingRef}
+            tabIndex={-1}
+            className="text-theme-text-primary text-base font-semibold focus:outline-none"
           >
-            <option value="">Choose a box…</option>
-            {boxes.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          {chosenBox?.description && <p className="text-theme-text-secondary mt-1 text-sm">{chosenBox.description}</p>}
-        </div>
+            {onQuestionsStep ? 'Step 1 of 2: A few questions' : 'Step 2 of 2: Your suggestion'}
+          </h2>
+        )}
 
-        {chosenBox && (
+        {!hasQuestions || onQuestionsStep ? (
+          <div>
+            <label htmlFor="suggestion-box" className="form-label">
+              Suggestion box
+            </label>
+            <select
+              id="suggestion-box"
+              className="form-input"
+              value={boxId}
+              onChange={(e) => handleBoxChange(e.target.value)}
+              required
+            >
+              <option value="">Choose a box…</option>
+              {boxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            {chosenBox?.description && (
+              <p className="text-theme-text-secondary mt-1 text-sm">{chosenBox.description}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-theme-text-secondary text-sm">
+            Suggestion box: <span className="text-theme-text-primary font-medium">{chosenBox?.name}</span>
+          </p>
+        )}
+
+        {chosenBox && onQuestionsStep && (
           <IntakeQuestionsFields
             questions={chosenBox.intakeQuestions}
             values={answers}
@@ -251,7 +322,14 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
           </p>
         )}
 
-        {box && (
+        {onQuestionsStep && (
+          <button type="submit" className="btn-primary inline-flex items-center gap-2 px-4 py-2">
+            Continue
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+
+        {box && !onQuestionsStep && (
           <>
             <div className="alert-info text-sm">
               <p className="text-theme-text-primary">
@@ -341,14 +419,27 @@ const SuggestionSubmitForm: React.FC<SuggestionSubmitFormProps> = ({ onSubmitted
               )}
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary inline-flex items-center gap-2 px-4 py-2 disabled:opacity-60"
-              disabled={isSubmitting || !title.trim() || !details.trim()}
-            >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {willBeAnonymous ? 'Submit anonymously' : 'Submit'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasQuestions && (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2 px-4 py-2"
+                  onClick={() => goToStep('questions')}
+                  disabled={isSubmitting}
+                >
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                  Back to the questions
+                </button>
+              )}
+              <button
+                type="submit"
+                className="btn-primary inline-flex items-center gap-2 px-4 py-2 disabled:opacity-60"
+                disabled={isSubmitting || !title.trim() || !details.trim()}
+              >
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {willBeAnonymous ? 'Submit anonymously' : 'Submit'}
+              </button>
+            </div>
           </>
         )}
       </form>

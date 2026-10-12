@@ -9,6 +9,7 @@ test_file_unfiled_documents_migration.py).
 """
 
 import io
+import os
 from uuid import uuid4
 
 import pytest
@@ -21,6 +22,7 @@ from app.api.v1.endpoints.facilities import _is_own_general_upload
 from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.documents import DocumentUpdate
+from app.services import file_storage_service
 from app.services.documents_service import DocumentsService
 
 pytestmark = pytest.mark.integration
@@ -93,6 +95,21 @@ class TestUploadWithNoFolder:
         document = await _upload(db_session, clerk)
 
         assert document.folder_id is not None
+
+
+class TestStoredUnderItsDocument:
+    async def test_a_library_upload_is_filed_in_its_own_directory(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        org = await _org(db_session)
+        clerk = await _user(db_session, org, "documents.view", "documents.manage")
+
+        document = await _upload(db_session, clerk)
+
+        assert os.path.dirname(document.file_path) == str(
+            tmp_path / org.id / "documents" / str(document.id)
+        )
 
 
 class TestMoveToNoFolder:

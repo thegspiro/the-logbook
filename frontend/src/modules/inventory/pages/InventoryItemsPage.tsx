@@ -114,6 +114,15 @@ const FILTER_DEBOUNCE_MS = 350;
  * a `location_id`.
  */
 const UNASSIGNED_LOCATION = 'unassigned';
+
+/**
+ * What the location panel and filter call items with no storage location.
+ *
+ * Not "Unassigned", which the summary endpoint names the bucket: on this page
+ * "assigned" means handed to a member, so a tile reading "Unassigned 2" above
+ * a radio badged ASSIGNED told a new quartermaster nobody held it.
+ */
+const NO_LOCATION_LABEL = 'No location';
 const SORT_COLS = [
   { key: 'name', label: 'Name' },
   { key: 'status', label: 'Status' },
@@ -811,6 +820,16 @@ const ItemTable: React.FC<ItemTableProps> = ({
                                 read as the same word repeated. */}
                             {clusterLeadId ? displaySize(item) || getDisplayName(item) : getDisplayName(item)}
                           </Link>
+                          {/* Desktop only: the stacked phone card already has
+                              its own Serial # and Asset Tag rows. Without it
+                              two radios both read "Portable Radio", and the
+                              only way to tell which one a member holds was to
+                              open each. */}
+                          {(item.serial_number || item.asset_tag) && (
+                            <span className="text-theme-text-muted hidden text-xs md:block">
+                              {item.serial_number ? `S/N ${item.serial_number}` : `Tag ${item.asset_tag}`}
+                            </span>
+                          )}
                         </td>
                         {/* Status: a desktop column only when showStatus, but always
                       surfaced on mobile (where items aren't column-grouped). */}
@@ -1808,7 +1827,9 @@ const InventoryItemsPage: React.FC = () => {
             >
               <div className="mb-1 flex items-center gap-1.5">
                 <MapPin className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                <span className="text-theme-text-primary truncate text-xs font-medium">{loc.location_name}</span>
+                <span className="text-theme-text-primary truncate text-xs font-medium">
+                  {loc.location_id ? loc.location_name : NO_LOCATION_LABEL}
+                </span>
               </div>
               <div className="text-theme-text-primary text-lg font-bold">{loc.total_quantity}</div>
               <div className="text-theme-text-muted text-xs">
@@ -1934,7 +1955,7 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFLoc(e.target.value)}
           >
             <option value="">All Locations</option>
-            <option value={UNASSIGNED_LOCATION}>Unassigned</option>
+            <option value={UNASSIGNED_LOCATION}>{NO_LOCATION_LABEL}</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}

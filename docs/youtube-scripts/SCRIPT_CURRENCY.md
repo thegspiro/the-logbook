@@ -1,8 +1,23 @@
 # Script currency
 
+## Flagged by the 2026-10-11 → 10-12 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                            | Beat                    | Was                                                                        | Now                                                                                                       |
+| --------------------------------- | ----------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **03 / 04** (leadership, finance) | Dues, grants (if shown) | Dues read-only; **Add Opportunity** bounced home; no pledge or event pages | Dues schedules and payments in-app; Add Opportunity, Record Donation, Pledges, Fundraising Events screens |
+| **03 / 07**                       | Documents               | Documents could be left unfiled                                            | Always in a folder (General Documents by default); **Manage folder** on each card                         |
+| **05 / 07**                       | Forms                   | Publish silently                                                           | Warning when a public form would file nothing; one submission per person control                          |
+| **12** (elections)                | Ballot and results      | Abstain pre-selected; pooled results                                       | No default Abstain; per-item results; proxy on anonymous elections; resend prompt                         |
+| **03**                            | Inventory (if shown)    | Assign was always permanent                                                | **Permanent / Temporary** with return date; departure clearance screen                                    |
+| **07 / 06**                       | Meetings                | Typed assignee name                                                        | Assignee picker; Attendance dashboard; executive meetings                                                 |
+| **06** (member guide)             | Shift close-out         | Retype each member's calls                                                 | **Give everyone all N calls**                                                                             |
+
 ## Flagged by the 2026-10-08 → 10-11 changes
 
-Source: [CHANGE_AUDIT_2026-10-08_TO_10-11](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-8--11-2026).
 Labels come from the merged commits and the frontend source; grep a label before
 it goes into a script. Rows are **Open**. Nothing was re-recorded.
 
@@ -23,7 +38,7 @@ it goes into a script. Rows are **Open**. Nothing was re-recorded.
 
 ## Flagged by the 2026-10-07 → 10-08 changes (PRs #2985–#2996)
 
-Source: [CHANGE_AUDIT_2026-10-07_TO_10-08](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-7--8-2026).
 Labels come from the merged PRs and the frontend source; grep a label before it
 goes into a script. Rows are **Open** (not yet rewritten in-script). Nothing was
 re-recorded.
@@ -46,7 +61,7 @@ they show the apparatus list.
 
 ## Flagged by the 2026-10-06 → 10-07 changes (PR #2965, #2967)
 
-Source: [CHANGE_AUDIT_2026-10-06_TO_10-07](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-6--7-2026).
 Every UI label below comes from the merged PR descriptions and the frontend routes;
 grep a label before it goes into a script. Rows are **Open** (not yet rewritten
 in-script) unless marked **Fixed**. Nothing was re-recorded.
@@ -344,7 +359,7 @@ Appended to [`08-quick-tips-and-shorts.md`](./08-quick-tips-and-shorts.md) after
 Nothing a script says became false except where marked **Stale**; the rest are
 **incomplete** or **additions**. No script was re-timed or rewritten — the rows
 say where each beat belongs. Detail:
-[`../CHANGE_AUDIT_2026-10-04_TO_10-05.md`](../CHANGE_AUDIT_2026-10-04_TO_10-05.md).
+[`../CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-4--5-2026).
 
 | Script         | Beat                                                              | Was                                                                                 | Now                                                                                                                                                                                                                                                                                                     | Class          |
 | -------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -365,7 +380,7 @@ a menu label or an install step, so scripts 01, 02, 10 – 15 are unaffected.
 ## Flagged by the 2026-10-04 currency pass (September 24 – October 4)
 
 Full context for every change below is in
-[`../CHANGE_AUDIT_2026-09-24_TO_10-04.md`](../CHANGE_AUDIT_2026-09-24_TO_10-04.md).
+[`../CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#change-audit-september-24--october-4-2026).
 Area reviewers flagged candidate discrepancies across scripts 01–16; **every
 row was checked against the current source before anything was written**, and
 the labels below are quoted from `frontend/src` as they stand on 2026-10-04.
@@ -676,7 +691,7 @@ beat at this one, so the two use the same labels.
 ## Flagged by the 2026-09-15 → 09-23 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-09-15_TO_09-23.md`](../CHANGE_AUDIT_2026-09-15_TO_09-23.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#documentation-and-media-disposition-1).
 
 This window produced **two Wrong** — one a beat that became false, one a screen
 direction that was never shootable — **three Incomplete**, and **three new
@@ -740,7 +755,7 @@ Applicants move when you close the event out.
 ## Flagged by the 2026-09-12 → 09-15 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-09-12_TO_09-15.md`](../CHANGE_AUDIT_2026-09-12_TO_09-15.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#documentation-and-media-disposition-2).
 
 This window produced **three Wrong**, one each in scripts 03, 04 and 06, and
 **all three are rewritten in-script**. Determinations were made by **reading the
@@ -796,7 +811,7 @@ by design.
 ## Flagged by the 2026-09-06 → 09-12 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-09-06_TO_09-12.md`](../CHANGE_AUDIT_2026-09-06_TO_09-12.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-09.md`](../CHANGE_AUDIT_2026-09.md#documentation-and-media-disposition-3).
 
 This window produced **five Wrong**, all five in script 02, and **all five are
 rewritten in-script**. As in every prior window, determinations were made by
@@ -892,7 +907,7 @@ Four, none of which requires a correction elsewhere:
 ## Flagged by the 2026-08-31 → 09-06 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition).
 
 This window produced **six Wrong** — all six rewritten in-script — plus three new
 chapters in script 03 and six new shorts. As in every prior window,
@@ -1024,7 +1039,7 @@ replaced; all fourteen chapters are present and the two smaller corrections
 ## Flagged by the 2026-08-24 → 08-31 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-24_TO_31.md`](../CHANGE_AUDIT_2026-08-24_TO_31.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-1).
 
 This window produced **five Wrong** — all five rewritten in-script — plus five
 new shorts, one new chapter in script 03, two new chapters (04 and 06), and a
@@ -1256,7 +1271,7 @@ go? · Build a check template in one list · Thread colour on a brass plate.
 ## Flagged by the 2026-08-23 → 08-24 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-23_TO_24.md`](../CHANGE_AUDIT_2026-08-23_TO_24.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-2).
 
 This window produced **four Wrong** — all four rewritten in-script — plus five
 new shorts, two new chapters in script 03, and a re-shoot list. Determinations
@@ -1497,7 +1512,7 @@ the product. Verify with `grep` before believing any claim that it shipped:
 ## Flagged by the 2026-08-19 → 08-23 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-3).
 
 This window produced **three Wrong** — all three now rewritten in-script — plus
 a substantial body of new material and a set of re-shoot notes.
@@ -1842,7 +1857,7 @@ range, not assumed.
 ## Flagged by the 2026-08-17 → 08-19 changes
 
 Full reason/data-path context in
-[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+[`../CHANGE_AUDIT_2026-08.md`](../CHANGE_AUDIT_2026-08.md#documentation-and-media-disposition-4).
 
 The window produced **one Wrong**, one **Dangerous-if-recorded** (a number a
 chief could put in a grant application), and a set of **additions** that are

@@ -895,6 +895,13 @@ class ProgramBuildRequirementInput(BaseModel):
     required_hours: Optional[float] = Field(None, ge=0)
     required_shifts: Optional[int] = Field(None, ge=0)
     required_calls: Optional[int] = Field(None, ge=0)
+    # Same type and (absent) validation as TrainingRequirementEnhancedBase, so a
+    # requirement built here reads exactly like one created from the edit modal.
+    # Omitted/None/[] all mean "every call counts".
+    required_call_types: Optional[List[str]] = Field(
+        None,
+        description="Call types that count toward a 'calls' requirement",
+    )
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     checklist_items: Optional[List[ChecklistItem]] = None

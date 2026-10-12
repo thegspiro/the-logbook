@@ -17,6 +17,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
@@ -85,6 +86,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const practicalSkillsMethod = usePracticalSkillsMethod();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
@@ -162,7 +164,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Submit Training', path: '/training/submit' },
               { label: 'Course Library', path: '/training/courses' },
               { label: 'Programs', path: '/training/programs' },
-              { label: 'Skills Testing', path: '/training/skills-testing' },
+              // Hidden for a department that records skills on shift reports.
+              ...(offersSkillsTesting(practicalSkillsMethod)
+                ? [{ label: 'Skills Testing', path: '/training/skills-testing' }]
+                : []),
               { label: 'Knowledge Tests', path: '/training/knowledge-tests' },
             ],
           } as NavItem,

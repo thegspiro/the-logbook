@@ -185,6 +185,23 @@ describe('InventoryItemsPage', () => {
     expect(screen.queryByText(/42 items/)).not.toBeInTheDocument();
   });
 
+  it('tells two items of the same name apart by serial number, else asset tag', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ id: 'r1', name: 'Portable Radio', serial_number: 'R-001' }),
+        makeItem({ id: 'r2', name: 'Portable Radio', asset_tag: 'AT-77' }),
+        makeItem({ id: 'r3', name: 'Portable Radio' }),
+      ],
+      total: 3,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByText('S/N R-001')).toBeInTheDocument();
+    expect(screen.getByText('Tag AT-77')).toBeInTheDocument();
+    // An item with neither gets no empty line.
+    expect(screen.getAllByText(/^(S\/N|Tag) /)).toHaveLength(2);
+  });
+
   it('shows lot stock as the quantity for a lot-stocked item', async () => {
     // quantity says 50, but lot bookkeeping never writes that column — the
     // in-date lots are the count that matters.
@@ -557,21 +574,21 @@ describe('InventoryItemsPage — the location panel', () => {
 
   it('starts with no location card selected', async () => {
     renderWithRouter(<InventoryItemsPage />);
-    const card = await screen.findByRole('button', { name: /Unassigned/ });
+    const card = await screen.findByRole('button', { name: /No location/ });
 
     // `location_id: null` used to collapse onto the "All Locations" empty
-    // string, so the Unassigned card read as selected on an unfiltered page.
+    // string, so the no-location card read as selected on an unfiltered page.
     expect(card).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('filters the list to items with no location when Unassigned is clicked', async () => {
+  it('filters the list to items with no location when No location is clicked', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    await user.click(await screen.findByRole('button', { name: /Unassigned/ }));
+    await user.click(await screen.findByRole('button', { name: /No location/ }));
 
     await waitFor(() => expect(lastItemsCall().unassigned_location).toBe(true));
     expect(lastItemsCall().location_id).toBeUndefined();
-    expect(screen.getByRole('button', { name: /Unassigned/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /No location/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('sends a location id, and no unassigned flag, for a real location', async () => {
@@ -586,17 +603,28 @@ describe('InventoryItemsPage — the location panel', () => {
   it('clears the filter when the selected card is clicked again', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
-    const card = await screen.findByRole('button', { name: /Unassigned/ });
+    const card = await screen.findByRole('button', { name: /No location/ });
     await user.click(card);
     await waitFor(() => expect(lastItemsCall().unassigned_location).toBe(true));
 
-    await user.click(screen.getByRole('button', { name: /Unassigned/ }));
+    await user.click(screen.getByRole('button', { name: /No location/ }));
 
     await waitFor(() => expect(lastItemsCall().unassigned_location).toBeUndefined());
     expect(lastItemsCall().location_id).toBeUndefined();
   });
 
-  it('offers Unassigned in the location dropdown too', async () => {
+  // The summary endpoint names the bucket "Unassigned", but on this page
+  // "assigned" means handed to a member, so the label is the page's own.
+  it('calls the bucket "No location", never "Unassigned"', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('button', { name: /No location/ });
+
+    expect(screen.queryByRole('button', { name: /Unassigned/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'No location' })).toHaveValue('unassigned');
+    expect(screen.queryByRole('option', { name: 'Unassigned' })).not.toBeInTheDocument();
+  });
+
+  it('offers No location in the location dropdown too', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
     await user.selectOptions(await screen.findByRole('combobox', { name: /filter by location/i }), 'unassigned');

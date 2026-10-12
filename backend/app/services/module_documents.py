@@ -22,6 +22,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import generate_uuid
 from app.models.document import Document, DocumentFolder
 from app.models.user import User
 from app.services import file_storage_service as file_storage
@@ -76,15 +77,20 @@ async def store_as_document(
     :func:`discard_file`.
     """
     organization_id = str(user.organization_id)
+    # Chosen before the write so the file is filed under its own document
+    # (<org>/documents/<document_id>/).
+    document_id = generate_uuid()
     stored = await FileStorageService(db).store_upload(
         upload,
         organization_id=organization_id,
         area=StorageArea.DOCUMENTS,
         rules=rules,
         user=user,
+        record_id=document_id,
         upload_kind=upload_kind,
     )
     document = Document(
+        id=document_id,
         organization_id=organization_id,
         folder_id=str(folder.id),
         name=name,

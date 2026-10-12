@@ -38,7 +38,7 @@
 # October 6–7, 2026 workflow updates
 
 Index for the second window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-06_TO_10-07.md`](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-6--7-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entry _Every backend setting in
 `.env` now reaches the container (2026-10-06)_: settings that were silently ignored
 start working, and a bad value can stop boot. Screenshots to create or replace are
@@ -62,7 +62,7 @@ in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the Octob
 # October 7–8, 2026 workflow updates
 
 Index for the third window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-07_TO_10-08.md`](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-7--8-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entries _Every member can raise
 their own finance requests (2026-10-07)_ and _Training provider imports credit
 members automatically (2026-10-08)_. Screenshots to create or replace are in
@@ -84,7 +84,7 @@ members automatically (2026-10-08)_. Screenshots to create or replace are in
 # October 8–11, 2026 workflow updates
 
 Index for the fourth window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-08_TO_10-11.md`](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-8--11-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entries for this window
 (encryption at rest and the key-custody notice; budget-amendment confirmation).
 Screenshots to create or replace are in
@@ -104,3 +104,24 @@ Screenshots to create or replace are in
 | Receipts and apparatus files filed as documents                                                                                              | [07 — Documents & Forms](./07-documents-forms.md) (already updated)                    |
 | Admin-hours entries labelled **QR Scan**, **ID Card Station**, **Manual**, **Event Attendance**                                              | [01 — Membership](./01-membership.md) (already updated)                                |
 | Training requirements and programs reject another department's skills and roles                                                              | Behind the scenes; no workflow change                                                  |
+
+---
+
+# October 11–12, 2026 workflow updates
+
+Index for the fifth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                       | Now in                                                         |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Dues administration, export history                                         | [11 — Finance](./11-finance.md)                                |
+| Add Opportunity, Record Donation, Pledges, Fundraising Events               | [12 — Grants & Fundraising](./12-grants-fundraising.md)        |
+| Permanent or temporary assignment; departure clearance; restock from checks | [05 — Inventory](./05-inventory.md)                            |
+| Member compliance view and overdue filter                                   | [13 — Medical Screening](./13-medical-screening.md)            |
+| Guests on the event page; attendance dashboard; action-item assignees       | [04 — Events & Meetings](./04-events-meetings.md)              |
+| Manage folder; publish warning; one submission per person                   | [07 — Documents & Forms](./07-documents-forms.md)              |
+| Election ballot and results changes                                         | [14 — Elections](./14-elections.md)                            |
+| Prospect referral fields, auto-purge warning, Department Email              | [15](./15-prospective-members.md), [08](./08-admin-reports.md) |
+| Give everyone all calls at close-out                                        | [03 — Scheduling](./03-scheduling.md)                          |

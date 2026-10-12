@@ -14,13 +14,14 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 ### Getting Started
 
 - **Installation.md** - Complete installation guide for all platforms
-- **Unraid-Quick-Start.md** - One-command Unraid installation
 - **Onboarding.md** - First-time setup wizard guide
 - **Quick-Reference.md** - Common commands and quick solutions
 
 ### Deployment & Configuration
 
-- **Deployment-Unraid.md** - Deploying and updating on Unraid
+- **Deployment-Unraid.md** - Installing, updating and troubleshooting on Unraid
+- **Deployment-Docker.md** - Docker Compose installation and operations
+- **Deployment-Production.md** - HTTPS, backups, monitoring and cloud platforms
 - **Configuration-Environment.md** - Environment variables reference
 - **Configuration-Modules.md** - Module configuration
 - **Configuration-Security.md** - Security settings
@@ -40,8 +41,10 @@ Per-module pages are listed in full in `_Sidebar.md`. Added most recently:
 
 ### Release handoffs
 
-One page per change window, newest first. The current one is
-**Recent-Changes-2026-09-24-to-10-04.md**; `_Sidebar.md` links the rest.
+One page per month (`Recent-Changes-YYYY-MM.md`), each holding one section per
+documentation pass, newest first. A pass adds its section at the top of the
+current month's page; a new month starts a new page. The current one is
+**Recent-Changes-2026-10.md**; `_Sidebar.md` links every month.
 
 ### Security
 
@@ -332,7 +335,6 @@ docker compose up -d
 Home.md (landing page)
 ├── Getting Started
 │   ├── Installation
-│   ├── Unraid-Quick-Start
 │   ├── Onboarding
 │   └── Quick-Reference
 ├── Deployment

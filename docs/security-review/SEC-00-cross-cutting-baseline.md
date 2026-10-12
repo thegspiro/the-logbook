@@ -1,12 +1,170 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`
 
 Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
 lap — the sweeps are cumulative and a reader needs the earlier method beside
 the later result to tell a re-verification from a first run. Newest pass first.
 
 ---
+
+## Pass 8 (2026-10-12, watchdog pickup) — delta re-sweep of all 13 established sweep classes against 646 commits, 0 security findings; 1 security-tooling regression found and fixed
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session had no
+open security-review PR or branch anywhere in the repo (`list_pull_requests`
+state=open and `search_pull_requests head:claude/security-review-` both
+returned nothing), and `main`'s last security-review merge (#3093, Feature
+34 pass 8) was from 2026-10-11 22:45 UTC with no follow-up iteration since.
+Row 34 was the rotation table's last row, so per its own preamble this
+iteration wraps back to Feature 00 rather than resetting the table.
+
+**Baseline:** `532340e3` (PR #2915's merge, pass 7). **Head:** `3f429ede`
+(PR #3093's merge). 646 commits between them. Routes checked against
+`APPLICATION_PAGES.md`: **265** (up from 244, 17 redirects skipped).
+Alembic revisions: **571** (up from 511), single head `e1a5bfe7a2ed`, no
+migration of this pass's own. Each guard-test-backed class ran directly;
+each grep/AST class ran against `HEAD` and against a `git archive` export
+of the baseline tree (never checked out over the working tree — the
+previous entry in this file describes two commands, `git checkout
+532340e3 -- .` immediately undone, that this pass used and does not repeat;
+`git archive <sha> | tar -x` into a scratch directory is the safe way to
+diff a sweep against an old tree without touching HEAD) for a count to
+diff against pass 7's.
+
+### Re-verified standing sweeps (all 13 classes from passes 1–7)
+
+| #   | Class swept                                           | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Formula injection in exports (Pitfall #15)            | **clean** — 0 `csv.writer`/`csv.DictWriter` sites outside `csv_export.py`; `tests/test_csv_writer_sweep.py` passes                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)         | **clean** — `test_set_null_fks_are_nullable` passes                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 3   | Proxy-IP attribution                                  | **clean** — same 3 hits as every prior pass, same shape (two documenting comments, one deliberate direct-IP fallback in `security_middleware.py:1250`)                                                                                                                                                                                                                                                                                                                                                                   |
+| 4   | Alembic chain integrity                               | **clean** — `validate_migrations.py --strict`: 571 revisions, single head `e1a5bfe7a2ed`, no duplicate ids                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 5   | LIKE-wildcard handling (Pitfall #25)                  | **clean** — `tests/test_like_escaping.py` passes                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)               | **clean** — 0 imports, 0 subclasses; every hit is a documenting comment in `security_middleware.py` / `app/mcp/transport.py`                                                                                                                                                                                                                                                                                                                                                                                             |
+| 7   | Unbounded in-memory trackers (Pitfall #9)             | **7 new candidates, all bounded or request-scoped** — see below                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)       | **clean** — 0 native calls (`window\.(confirm\|alert\|prompt)\(` greps to nothing); every `confirm(`/`alert(`/`prompt(` hit outside tests/e2e is the `useConfirm()` hook, `LabelScanConfirm.tsx`'s own component-local `confirm`, or the `BeforeInstallPromptEvent.prompt()` type                                                                                                                                                                                                                                        |
+| 9   | JSON shallow-copy-then-nested-mutate (Pitfall #12)    | **clean** — same 5 hits as pass 7, same files; `git diff 532340e3..HEAD` around each line is empty, so none of the 5 sites itself changed since it was last cleared                                                                                                                                                                                                                                                                                                                                                      |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)              | **clean** — `tests/test_org_scoping_ratchet.py` passes                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 11  | Capacity-check locking (Pitfall #27)                  | **clean** — `tests/test_capacity_locking.py` passes                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 12  | Route auth coverage                                   | **clean** — `tests/test_endpoint_auth_coverage.py` passes; `check_route_permissions.py --strict`: 265 routes, 0 errors, 0 warnings                                                                                                                                                                                                                                                                                                                                                                                       |
+| 13  | Raw exception text reaching the client (checklist §5) | **clean** — AST walk of every bound broad `except` handler (851, up from 615) found one `HTTPException(detail=...)` candidate (`salesforce_sync.py:117`) referencing the bound exception outside `safe_error_detail`; read directly: it is wrapped in `sanitize_integration_error()` (`integration_health.py:58`), a dedicated sanitizer that redacts URLs/emails/bearer tokens/key=value secrets and caps length — a different, purpose-built sanitizer for the integrations domain, not a leak. 0 real unwrapped sites |
+
+Also re-ran, as a spot-check rather than a numbered class: `tests/test_api_cache_pii_exclusions.py`,
+`tests/test_baseline_member_grants.py`, the frontend structural guards
+(`dialogScrollIntegrity`, `dialogDismissIntegrity`, `testingRegistry`,
+`primaryFillContrast`, `touchTargetIntegrity`, `hoverRevealIntegrity` —
+26/26 across 6 files, up from 25/25) and the standing outbound-transport
+checks: raw SQL by string interpolation (still the same 2 sites,
+`scheduling_service.py:302` and `enum_normalization.py:125`, same
+disposition) and outbound HTTP client construction (7 files construct a
+client directly, down from 8 at baseline — `audit_ship_service.py` no
+longer appears because it now routes through the same
+`create_integration_client()` shared, DNS-rebinding-safe factory
+`base.py` provides, read at `audit_ship_service.py:86-133`; it still calls
+`assert_outbound_url_safe` first, under `asyncio.to_thread`, exactly as
+before — a hardening, not a regression). `assert_outbound_url_safe(`
+callers: 9 files (7 `integration_services/*`, `ssrf_transport.py`,
+`url_validator.py`) — **outbound-URL DNS-rebinding TOCTOU
+(`KNOWN_LIMITATIONS.md`) re-confirmed open, unchanged.**
+
+### New candidates for class 7 (unbounded in-memory trackers), all verified bounded or request-scoped
+
+27 at baseline → 34 at head. The 7 new sites, each read directly:
+
+| Site                                                                                     | Disposition                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `upload_encryption.py:321` `_cache`                                                      | Bounded by construction — closed two-key space (`checked`, `remains`), overwritten in place, never grown per-request                                                                                                                                                |
+| `finance_approver_matching.py:141-142` `ApproverDirectory.self._positions`/`self._users` | Not a tracker — the class's own docstring: "cached **per request**... one instance serves a whole pending list or coverage report." Lifetime is bounded by the request, not the process, so size is bounded by that request's own chain, not by accumulated traffic |
+| `oauth_service.py:355` `_authentik_discovery`                                            | Bounded by construction, self-documented: "One entry: the configured issuer's discovery document... a new issuer replaces the old entry"                                                                                                                            |
+| `file_encryption.py:97` `_keks`                                                          | Keyed by `(ENCRYPTION_KEY, ENCRYPTION_SALT)` from deployment config plus a finite `ENCRYPTION_KEYS_LEGACY` list — a closed, operator-controlled key space, not request-derived                                                                                      |
+| `issued_secrets.py:56` `_local`                                                          | Explicitly bounded, self-documented: "Pitfall #9: the fallback map is capped and swept of expired entries," `_LOCAL_MAX_ENTRIES = 1000`, LRU eviction via `OrderedDict.popitem(last=False)`                                                                         |
+| `security_middleware.py:1300` `_ExceptionCache._entries`                                 | Explicitly bounded, self-documented: `MAX_ENTRIES = 10_000`, `TTL_SECONDS = 60.0`, LRU eviction                                                                                                                                                                     |
+
+No new finding from class 7.
+
+### Security-tooling finding, fixed: SEC8-00-1 (LOW, tooling correctness, not an application vulnerability)
+
+`backend/scripts/json_column_ast_sweep.py` — the structural sweep built in
+pass 3 to enumerate every JSON-shaped model column for pitfall #12 checks —
+matched only `Column(...)` calls. Every model in `app/models/*.py` has since
+moved to SQLAlchemy 2.0's `mapped_column(...)` declarative style (0 remaining
+`Column(JSON` sites; confirmed by direct grep), so a real run against the
+current tree printed **"0 distinct attribute names, 0 ... declarations"**
+instead of the documented ~180-and-growing baseline. The script's own exit
+code is always 0 ("a reporting tool, not a gate" — its own docstring), so
+this had no CI signal and could have stood for an arbitrary number of passes
+without anyone noticing, exactly the failure mode its own docstring warns
+reporting-only tools are exposed to.
+
+This is not an application-security finding — no column, no request path,
+no pitfall #12 site itself was found newly unsafe — but it is a finding
+about this review's own tooling: the instrument meant to make pitfall #12
+checkable mechanically had gone silently blind, which matters because a
+future pass could have trusted its "0" output as "nothing to check" rather
+than "the matcher can't see the current declaration style."
+
+**Fixed:** `_call_target_name(value) != "Column"` widened to a
+`COLUMN_CALL_NAMES = frozenset({"Column", "mapped_column"})` membership
+check; the rest of the AST walk (subtree search for `JSON_LIKE_TYPE_NAMES`,
+restriction to a class's direct body) is unchanged and needed no change —
+`mapped_column(...)`'s target-extraction path was already the same `Name`
+case `Column(...)` uses. Re-run against current `main`: **202 distinct
+attribute names, 256 declarations, across 50 files** (up from the
+documented 180/231/43 — consistent with four more months of feature
+growth, not a sign the fix over- or under-matches). `backend/scripts/README.md`'s
+worked example and `json_column_ast_sweep.py`'s own module docstring are
+updated to match. Guard test added
+(`tests/test_json_column_ast_sweep.py`): four synthetic-AST cases pin both
+call styles (bare `Column(JSON)`, `mapped_column(JSON)`,
+`mapped_column(MutableDict.as_mutable(JSON))`, `mapped_column(EncryptedJSON)`)
+plus a negative case (a non-JSON `mapped_column` must not match), and two
+real-tree assertions (`sweep()` against the actual `app/models/` returns
+more than 100 names/declarations, and finds the known `settings` /
+`result_data` columns by name) so a future declaration-style migration this
+matcher doesn't follow fails a test instead of silently printing a smaller
+number.
+
+## Findings
+
+**0 application-security findings this pass.** Every one of the 13 classes
+re-verified clean against head and diffed against the pass-7 baseline tree.
+The single open cross-cutting item (outbound-URL TOCTOU) is re-confirmed
+open with the same disposition. No `KNOWN_LIMITATIONS.md` change.
+
+**1 security-tooling finding, fixed:** SEC8-00-1 (`json_column_ast_sweep.py`
+silently matched 0 columns after the codebase's `Column` → `mapped_column`
+migration) — see above. Not mirrored into `KNOWN_LIMITATIONS.md`: it was
+fixed, not flagged, and it describes review tooling, not an application
+behavior an operator would need to know about.
+
+## Schema & migration notes
+
+No migration written this pass. Chain: 571 revisions, single head
+`e1a5bfe7a2ed`, no duplicate ids. `test_set_null_fks_are_nullable` and
+`test_migration_create_all_tables` both pass.
+
+## Guard tests added
+
+`backend/tests/test_json_column_ast_sweep.py` — pins both `Column(...)` and
+`mapped_column(...)` recognition (plus the `MutableDict`/`EncryptedJSON`
+wrapping of either) at the AST level, and asserts the real sweep against
+`app/models/` returns a plausible nonzero count, so a future declaration-
+style change that this matcher doesn't follow fails a test rather than
+silently printing a smaller number.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                                                                                     | Result                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                                                                                                                                                                                                                                                                           | ✅ 0 violations                           |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                      | ✅ clean                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                 | ✅ clean                                  |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                         | ✅ 571 revisions, single head             |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                                                     | ✅ 265 routes, 0 errors, 0 warnings       |
+| Backend `pytest tests/test_json_column_ast_sweep.py tests/test_like_escaping.py tests/test_org_scoping_ratchet.py tests/test_capacity_locking.py tests/test_endpoint_auth_coverage.py tests/test_csv_writer_sweep.py tests/test_database_schema.py tests/test_api_cache_pii_exclusions.py tests/test_baseline_member_grants.py tests/test_migration_create_all_tables.py` | ✅ 209 passed                             |
+| `npm run typecheck`                                                                                                                                                                                                                                                                                                                                                       | ✅ 0 errors                               |
+| `npm run lint`                                                                                                                                                                                                                                                                                                                                                            | ✅ 0 errors (exit 0, `--max-warnings 10`) |
+| Frontend structural guards (6 files)                                                                                                                                                                                                                                                                                                                                      | ✅ 26 passed                              |
 
 ## Pass 7 (2026-10-04) — delta re-sweep of all 13 established sweep classes against 1015 commits, 0 new findings
 

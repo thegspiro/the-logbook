@@ -2454,6 +2454,12 @@ class ShiftCompletionReport(Base):
 # ============================================
 
 
+#: The practical-skills systems a department can choose between, the first
+#: being what an unset choice reads as.
+PRACTICAL_SKILLS_METHODS: tuple[str, ...] = ("skills_testing", "shift_signoffs")
+DEFAULT_PRACTICAL_SKILLS_METHOD = PRACTICAL_SKILLS_METHODS[0]
+
+
 class TrainingModuleConfig(Base):
     """
     Training Module Configuration model
@@ -2531,6 +2537,16 @@ class TrainingModuleConfig(Base):
     )
     skills_result_release: Mapped[Optional[str]] = mapped_column(
         String(20), default="on_completion", server_default="on_completion"
+    )
+
+    # Which of the two practical-skills systems the department runs:
+    # "skills_testing" (station sheets, scored and validated) or
+    # "shift_signoffs" (skills ticked as demonstrated on a shift report, which
+    # raise competency). The other system's screens are hidden and it records
+    # nothing new; its existing data is kept. NULL is "never chosen" and reads
+    # as skills_testing — see PRACTICAL_SKILLS_METHODS.
+    practical_skills_method: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True
     )
 
     # Self-reported submissions

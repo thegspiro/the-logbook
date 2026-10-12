@@ -23,6 +23,7 @@ from sqlalchemy.orm import aliased, defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
+    get_all_permissions,
     get_rank_default_permissions,
     permission_matches_any,
     permission_matches_any_write,
@@ -36,7 +37,7 @@ from app.models.document import (
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
@@ -201,6 +202,31 @@ async def reachable_folder_ids(
     return {str(row) for row in result.scalars().all()}
 
 
+# The fields that decide who opens a folder. Changing any of them runs the
+# validation in _settle_access_fields and the shut-out check.
+_ACCESS_FIELDS = (
+    "visibility",
+    "allowed_roles",
+    "required_permissions",
+    "owner_user_id",
+)
+
+_SHUT_OUT_MESSAGE = (
+    "These settings would shut you out of this folder. Include a position or "
+    "permission you hold, or ask a full administrator to set them"
+)
+
+
+def _distinct(values: Optional[List[str]]) -> List[str]:
+    """Trimmed, non-empty, first occurrence kept."""
+    seen: List[str] = []
+    for value in values or []:
+        value = value.strip()
+        if value and value not in seen:
+            seen.append(value)
+    return seen
+
+
 class DocumentsService:
     """Service for document management used by the documents endpoint"""
 
@@ -212,9 +238,19 @@ class DocumentsService:
     # ============================================
 
     async def create_folder(
-        self, organization_id: UUID, folder_data: Dict[str, Any], created_by: UUID
+        self,
+        organization_id: UUID | str,
+        folder_data: Dict[str, Any],
+        created_by: UUID | str,
+        *,
+        acting_user: Optional[User] = None,
     ) -> DocumentFolder:
-        """Create a new document folder. Raises on failure."""
+        """Create a new document folder. Raises on failure.
+
+        ``acting_user``: when given, a folder whose access would not admit
+        that user (for writing) is refused rather than created, so nobody
+        makes a folder they cannot then manage (decision 27).
+        """
         # DOC-6 (XC-1): validate client-supplied FKs are in-org before storing.
         await assert_in_org(
             self.db,
@@ -232,9 +268,14 @@ class DocumentsService:
             allow_none=True,
             label="owner",
         )
+        await self._settle_access_fields(None, folder_data, organization_id)
         folder = DocumentFolder(
             organization_id=organization_id, created_by=created_by, **folder_data
         )
+        if acting_user is not None and not await self.can_access_folder(
+            folder, organization_id, acting_user, require_write=True
+        ):
+            raise ValueError(_SHUT_OUT_MESSAGE)
         self.db.add(folder)
         await self.db.commit()
         await self.db.refresh(folder)
@@ -242,7 +283,7 @@ class DocumentsService:
 
     async def get_folders(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         parent_id: Optional[UUID] = None,
         current_user: Optional[User] = None,
         skip: int = 0,
@@ -322,7 +363,7 @@ class DocumentsService:
         return folders, total
 
     async def get_folder_by_id(
-        self, folder_id: UUID, organization_id: UUID
+        self, folder_id: UUID | str, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Get a folder by ID"""
         result = await self.db.execute(
@@ -334,7 +375,7 @@ class DocumentsService:
         return document_folder
 
     async def general_folder(
-        self, organization_id: UUID, created_by: UUID
+        self, organization_id: UUID | str, created_by: UUID | str
     ) -> DocumentFolder:
         """The organization's General Documents root.
 
@@ -358,7 +399,9 @@ class DocumentsService:
             raise RuntimeError("General Documents folder could not be created")
         return folder
 
-    async def general_root(self, organization_id: UUID) -> Optional[DocumentFolder]:
+    async def general_root(
+        self, organization_id: UUID | str
+    ) -> Optional[DocumentFolder]:
         """The General Documents root if it exists; never creates it."""
         result = await self.db.execute(
             select(DocumentFolder)
@@ -436,7 +479,7 @@ class DocumentsService:
     async def can_access_folder(
         self,
         folder: DocumentFolder,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
         folders_by_id: Optional[Dict[str, DocumentFolder]] = None,
         *,
@@ -490,7 +533,7 @@ class DocumentsService:
     async def can_access_document(
         self,
         document: Document,
-        organization_id: UUID,
+        organization_id: UUID | str,
         user: User,
         *,
         require_write: bool = False,
@@ -518,7 +561,7 @@ class DocumentsService:
         )
 
     async def accessible_folder_ids(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> Set[str]:
         """Return exactly the folder ids whose complete hierarchy is accessible.
 
@@ -551,7 +594,7 @@ class DocumentsService:
         )
 
     async def _creates_cycle(
-        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
+        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID | str
     ) -> bool:
         """True if *candidate_parent_id* is *folder_id* itself or one of its
         own descendants — i.e. re-parenting under it would make the folder its
@@ -586,9 +629,18 @@ class DocumentsService:
         return False
 
     async def update_folder(
-        self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        folder_id: UUID,
+        organization_id: UUID | str,
+        update_data: Dict[str, Any],
+        *,
+        acting_user: Optional[User] = None,
     ) -> Optional[DocumentFolder]:
-        """Update a folder. Returns None if not found."""
+        """Update a folder. Returns None if not found.
+
+        ``acting_user``: as for ``create_folder`` — an access change that
+        would shut that user out of the folder is refused.
+        """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
             return None
@@ -657,16 +709,128 @@ class DocumentsService:
             if _field in update_data and update_data[_field] is None:
                 raise ValueError(f"'{_field}' cannot be cleared; provide a value")
 
+        await self._settle_access_fields(folder, update_data, organization_id)
+        access_changed = any(field in update_data for field in _ACCESS_FIELDS)
+
         apply_updates(folder, update_data)
+
+        if (
+            access_changed
+            and acting_user is not None
+            and not await self.can_access_folder(
+                folder, organization_id, acting_user, require_write=True
+            )
+        ):
+            await self.db.rollback()
+            raise ValueError(_SHUT_OUT_MESSAGE)
 
         await self.db.commit()
         await self.db.refresh(folder)
         return folder
 
+    async def _settle_access_fields(
+        self,
+        folder: Optional[DocumentFolder],
+        data: Dict[str, Any],
+        organization_id: UUID | str,
+    ) -> None:
+        """Validate and normalize a create/update payload's access fields.
+
+        ``folder`` is the folder being updated, or None on create. Edits
+        ``data`` in place: lists are de-duplicated and an empty list is
+        stored as None, which is what "no restriction" means to
+        ``_folder_admits_user`` and ``restricted_folders_query``.
+        """
+        changing = [f for f in _ACCESS_FIELDS if f in data]
+        if not changing:
+            return
+
+        if folder is not None and folder.visibility == FolderVisibility.OWNER:
+            # Decision 20: a personal folder admits its member and full
+            # administrators only. Re-sending what is already stored is not
+            # a change, so a form that posts every field it owns still saves.
+            current = {
+                "visibility": folder.visibility.value,
+                "allowed_roles": folder.allowed_roles or None,
+                "required_permissions": folder.required_permissions or None,
+                "owner_user_id": folder.owner_user_id,
+            }
+            for field in changing:
+                value = data[field]
+                if field == "visibility" and value is not None:
+                    value = FolderVisibility(value).value
+                if field == "owner_user_id" and value is not None:
+                    value = str(value)
+                if field in ("allowed_roles", "required_permissions"):
+                    value = _distinct(value) or None
+                if value != current[field]:
+                    raise ValueError(
+                        "A member's personal folder opens to that member and "
+                        "full administrators only; its access cannot be changed"
+                    )
+
+        if "required_permissions" in data:
+            permissions = _distinct(data["required_permissions"])
+            if folder is not None and folder.is_system:
+                # Decision 27: a built-in folder's module rights (decision 19)
+                # are fixed. It can be narrowed with leadership-only or
+                # specific positions, which _folder_admits_user checks after
+                # these, never opened past them.
+                if set(permissions) != set(folder.required_permissions or []):
+                    raise ValueError(
+                        "A built-in folder's module rights cannot be changed. "
+                        "Restrict it further with leadership-only or specific "
+                        "positions instead"
+                    )
+                del data["required_permissions"]
+            else:
+                catalog = set(get_all_permissions())
+                unknown = [p for p in permissions if p not in catalog]
+                if unknown:
+                    raise ValueError(f"Unknown permission: {', '.join(unknown)}")
+                data["required_permissions"] = permissions or None
+
+        if "allowed_roles" in data:
+            slugs = _distinct(data["allowed_roles"])
+            if slugs:
+                known = set(
+                    (
+                        await self.db.execute(
+                            select(Position.slug).where(
+                                Position.organization_id == str(organization_id),
+                                Position.slug.in_(slugs),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                missing = [slug for slug in slugs if slug not in known]
+                if missing:
+                    raise ValueError(f"Unknown position: {', '.join(missing)}")
+            data["allowed_roles"] = slugs or None
+
+        visibility = data.get(
+            "visibility",
+            folder.visibility if folder is not None else FolderVisibility.ORGANIZATION,
+        )
+        roles = (
+            data["allowed_roles"]
+            if "allowed_roles" in data
+            else (folder.allowed_roles if folder is not None else None)
+        )
+        # _folder_admits_user returns on a leadership or personal folder before
+        # it reaches allowed_roles, so positions stored there would be shown
+        # as a restriction while doing nothing.
+        if roles and FolderVisibility(visibility) != FolderVisibility.ORGANIZATION:
+            raise ValueError(
+                "Specific positions apply only to a folder open to the " "organization"
+            )
+
     async def delete_folder(
         self,
         folder_id: UUID,
-        organization_id: UUID,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> bool:
         """Delete a folder, its subtree, and all their documents.
@@ -916,7 +1080,7 @@ class DocumentsService:
         )
 
     async def _lock_subtree_documents(
-        self, subtree_ids: Set[str], organization_id: UUID
+        self, subtree_ids: Set[str], organization_id: UUID | str
     ) -> List[Tuple[str, Optional[str]]]:
         """FAC-32: lock the subtree's ``Document`` rows, for_update, and
         return their ``(id, file_path)`` pairs.
@@ -942,7 +1106,7 @@ class DocumentsService:
     async def _delete_facility_document_references(
         self,
         document_ids: Set[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> None:
         """Delete any facility_documents rows pointing at these documents.
@@ -1019,7 +1183,7 @@ class DocumentsService:
         self,
         model: type[FacilityDocument] | type[FacilityPhoto],
         target_document_ids: Set[str],
-        organization_id: UUID,
+        organization_id: UUID | str,
     ) -> List[str]:
         """Row ids of ``model`` (``FacilityDocument`` or ``FacilityPhoto``)
         that reference one of ``target_document_ids``.
@@ -1073,9 +1237,9 @@ class DocumentsService:
 
     async def create_document(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         doc_data: Dict[str, Any],
-        uploaded_by: UUID,
+        uploaded_by: UUID | str,
     ) -> Document:
         """Create a new document record. Raises on failure."""
         document = Document(
@@ -1088,7 +1252,7 @@ class DocumentsService:
 
     async def get_documents(
         self,
-        organization_id: UUID,
+        organization_id: UUID | str,
         folder_id: Optional[UUID] = None,
         search: Optional[str] = None,
         status: Optional[DocumentStatus] = None,
@@ -1160,8 +1324,8 @@ class DocumentsService:
 
     async def get_document_by_id(
         self,
-        document_id: UUID,
-        organization_id: UUID,
+        document_id: UUID | str,
+        organization_id: UUID | str,
         for_update: bool = False,
     ) -> Optional[Document]:
         """Get a document by ID.
@@ -1186,7 +1350,7 @@ class DocumentsService:
         return document
 
     async def attach_document_names(
-        self, organization_id: UUID, documents: List[Document]
+        self, organization_id: UUID | str, documents: List[Document]
     ) -> None:
         """Populate uploader_name / folder_name on document responses, in place.
 
@@ -1235,7 +1399,10 @@ class DocumentsService:
             d.folder_name = folder_names.get(d.folder_id) if d.folder_id else None
 
     async def update_document(
-        self, document_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        document_id: UUID,
+        organization_id: UUID | str,
+        update_data: Dict[str, Any],
     ) -> Optional[Document]:
         """Update a document. Returns None if not found."""
         document = await self.get_document_by_id(document_id, organization_id)
@@ -1294,8 +1461,8 @@ class DocumentsService:
 
     async def delete_document(
         self,
-        document_id: UUID,
-        organization_id: UUID,
+        document_id: UUID | str,
+        organization_id: UUID | str,
         current_user: Optional[User] = None,
     ) -> bool:
         """Delete a document. Returns False if not found.
@@ -1355,7 +1522,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_members_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Member Files' system folder.
 
@@ -1379,7 +1546,7 @@ class DocumentsService:
         return document_folder
 
     async def _lock_members_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Member Files' system folder.
 
@@ -1453,7 +1620,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_member_folder(
-        self, organization_id: UUID, user: User
+        self, organization_id: UUID | str, user: User
     ) -> DocumentFolder:
         """
         Get or create a personal folder for a member under the
@@ -1558,7 +1725,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_apparatus_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Apparatus Files' system folder.
 
@@ -1578,7 +1745,7 @@ class DocumentsService:
         return document_folder
 
     async def _lock_apparatus_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Apparatus Files' system folder.
 
@@ -1640,7 +1807,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_apparatus_folder(
-        self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
+        self, organization_id: UUID | str, apparatus_id: str, apparatus_unit_number: str
     ) -> DocumentFolder:
         """
         Get or create a hierarchical folder structure for an apparatus
@@ -1760,7 +1927,7 @@ class DocumentsService:
         return vehicle_folder
 
     async def get_apparatus_sub_folders(
-        self, organization_id: UUID, apparatus_id: str, current_user: User
+        self, organization_id: UUID | str, apparatus_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific apparatus.
@@ -1816,7 +1983,7 @@ class DocumentsService:
     # ============================================
 
     async def _lock_facilities_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Facility Files' system folder.
 
@@ -1922,7 +2089,7 @@ class DocumentsService:
         return document_folder
 
     async def _peek_facilities_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Facility Files' system folder.
 
@@ -1959,7 +2126,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_facility_folder(
-        self, organization_id: UUID, facility_id: str, facility_display_name: str
+        self, organization_id: UUID | str, facility_id: str, facility_display_name: str
     ) -> DocumentFolder:
         """
         Get or create a hierarchical folder structure for a facility
@@ -2156,7 +2323,7 @@ class DocumentsService:
         return facility_folder
 
     async def get_facility_sub_folders(
-        self, organization_id: UUID, facility_id: str, current_user: User
+        self, organization_id: UUID | str, facility_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific facility.
@@ -2218,7 +2385,7 @@ class DocumentsService:
     # ============================================
 
     async def _peek_events_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Non-locking read for the org's 'Event Attachments' system folder.
 
@@ -2241,7 +2408,7 @@ class DocumentsService:
     FINANCE_RECEIPTS_SLUG = "finance-receipts"
 
     async def _finance_receipts_folder(
-        self, organization_id: UUID, *, lock: bool
+        self, organization_id: UUID | str, *, lock: bool
     ) -> Optional[DocumentFolder]:
         root = aliased(DocumentFolder)
         query = (
@@ -2259,7 +2426,7 @@ class DocumentsService:
         return (await self.db.execute(query)).scalar_one_or_none()
 
     async def ensure_finance_receipts_folder(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> DocumentFolder:
         """Get or create Finance > Receipts.
 
@@ -2321,7 +2488,7 @@ class DocumentsService:
         return folder
 
     async def _lock_events_root(
-        self, organization_id: UUID
+        self, organization_id: UUID | str
     ) -> Optional[DocumentFolder]:
         """Locking read for the org's 'Event Attachments' system folder.
 
@@ -2383,7 +2550,7 @@ class DocumentsService:
         return document_folder
 
     async def ensure_event_folder(
-        self, organization_id: UUID, event_id: str, event_title: str
+        self, organization_id: UUID | str, event_id: str, event_title: str
     ) -> DocumentFolder:
         """
         Get or create a folder for an event under the 'Event Attachments'
@@ -2475,7 +2642,7 @@ class DocumentsService:
     # ============================================
 
     async def get_summary(
-        self, organization_id: UUID, current_user: User
+        self, organization_id: UUID | str, current_user: User
     ) -> Dict[str, Any]:
         """Get statistics for the folders and active documents a caller can browse."""
         accessible_ids = await self.accessible_folder_ids(organization_id, current_user)

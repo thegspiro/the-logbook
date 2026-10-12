@@ -16,12 +16,16 @@ NULL in all three, which is what a self-report means. ``training_submissions``
 and ``shifts`` are created by migrations, but each step still checks for the
 table and column so a re-run, or a database ``create_all`` built, is a no-op.
 
+This revision also joins the two heads ``bde76b481a16`` and ``a51a4e1d2443``,
+which were published with the same parent (``3c9c5025a380``) and left the
+chain with two heads.
+
 The downgrade drops the three columns. Crew submissions already filed stay in
 the queue as ordinary submissions under the member's name; only the record of
 who filed them, and their grouping, is lost.
 
 Revision ID: cc91959dbaff
-Revises: e1a5bfe7a2ed
+Revises: bde76b481a16, a51a4e1d2443
 Create Date: 2026-10-11 22:31:00.000000
 
 """
@@ -33,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "cc91959dbaff"
-down_revision: Union[str, None] = "e1a5bfe7a2ed"
+down_revision: Union[str, Sequence[str], None] = ("bde76b481a16", "a51a4e1d2443")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

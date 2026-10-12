@@ -385,7 +385,7 @@ const MyOrdersPage: React.FC = () => {
           </div>
         }
       >
-        <div className="modal-body space-y-4">
+        <div className="space-y-4">
           <p className="text-theme-text-secondary text-sm">
             The quartermaster checks your payment against the department account, then marks the order paid.
           </p>
@@ -444,7 +444,7 @@ const MyOrdersPage: React.FC = () => {
           </div>
         }
       >
-        <div className="modal-body">
+        <div>
           <label htmlFor="new-payment-method" className="form-label">
             Payment method
           </label>

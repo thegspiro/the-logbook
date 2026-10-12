@@ -18,7 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
+from app.core.utils import (
+    ensure_found,
+    generate_uuid,
+    handle_service_errors,
+    safe_error_detail,
+)
 from app.models.document import Document, DocumentStatus
 from app.models.user import Position, User
 from app.schemas.documents import (
@@ -174,7 +179,10 @@ async def create_folder(
             )
     async with handle_service_errors("Unable to create folder"):
         result = await service.create_folder(
-            current_user.organization_id, folder_data, current_user.id
+            current_user.organization_id,
+            folder_data,
+            current_user.id,
+            acting_user=current_user,
         )
     await log_audit_event(
         db=db,
@@ -186,6 +194,8 @@ async def create_folder(
             "name": result.name,
             "parent_id": str(result.parent_id) if result.parent_id else None,
             "visibility": result.visibility.value,
+            "allowed_roles": result.allowed_roles,
+            "required_permissions": result.required_permissions,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -270,7 +280,10 @@ async def update_folder(
     # create_folder.
     async with handle_service_errors("Unable to update folder"):
         updated = await service.update_folder(
-            folder_id, current_user.organization_id, update_data
+            folder_id,
+            current_user.organization_id,
+            update_data,
+            acting_user=current_user,
         )
     result = ensure_found(updated, "Folder")
     await log_audit_event(
@@ -278,7 +291,15 @@ async def update_folder(
         event_type="folder_updated",
         event_category="documents",
         severity="info",
-        event_data={"folder_id": str(folder_id), "fields": list(update_data.keys())},
+        event_data={
+            "folder_id": str(folder_id),
+            "fields": list(update_data.keys()),
+            # Who a folder opens to is the security-relevant part of an
+            # edit, so record the result, not only that it changed.
+            "visibility": result.visibility.value,
+            "allowed_roles": result.allowed_roles,
+            "required_permissions": result.required_permissions,
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
@@ -434,13 +455,17 @@ async def upload_document(
 
     # Size cap, content-type detection, malware scan and an org-scoped write,
     # in that order. The stored extension comes from the detected type, never
-    # the uploader's filename (no report.pdf.exe).
+    # the uploader's filename (no report.pdf.exe). The id is chosen here rather
+    # than by the column default so the file is filed under its own document
+    # (<org>/documents/<document_id>/), like every other area's records.
+    document_id = generate_uuid()
     stored = await FileStorageService(db).store_upload(
         file,
         organization_id=current_user.organization_id,
         area=StorageArea.DOCUMENTS,
         rules=DOCUMENT_FILE_RULES,
         user=current_user,
+        record_id=document_id,
         upload_kind="document",
     )
     file_path = stored.path
@@ -448,6 +473,7 @@ async def upload_document(
 
     # Create document record
     doc_data = {
+        "id": document_id,
         "name": name,
         "description": description,
         "folder_id": str(folder.id),

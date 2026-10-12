@@ -144,8 +144,10 @@ on the integration.
    `/api/`, and the MCP endpoint's `401` points clients there, so a proxy you
    manage yourself works without the extra rule.
 
-3. **Department** — Integrations → Claude (MCP) → settings → tick **Let
-   members connect with their own account**.
+3. **Department** — Integrations → Claude (MCP) → Connect, and tick **Let
+   members connect with their own account**. On an integration that is
+   already connected, use **Settings** on its card instead: it saves the
+   change in place and keeps the service key and member connections.
 
 4. **Register each client** — on the connected card, the **Member sign-in
    (OAuth)** panel (needs `integrations.mcp_keys`). Give it a name and its

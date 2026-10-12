@@ -68,6 +68,10 @@ import type {
   MonetaryAmount,
   StartFromLastYearResult,
   UnroutedApproval,
+  FinanceSettings,
+  AmendmentLogReport,
+  BudgetVsActualReport,
+  PaymentsRegisterReport,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -460,6 +464,58 @@ const stepDecisionBody = (notes?: string, overrideReason?: string) => ({
   notes: notes || undefined,
   ...(overrideReason ? { overrideReason } : {}),
 });
+
+export const financeSettingsService = {
+  /** The finance rules as the approval path reads them. */
+  async get(): Promise<FinanceSettings> {
+    const response = await api.get<FinanceSettings>('/finance/settings');
+    return response.data;
+  },
+};
+
+/**
+ * Board reports. Each is served as JSON for the screen and as CSV for the
+ * download, from the same query, so the file always matches what was shown.
+ */
+export const financeReportService = {
+  /** *asOf* omitted means today in the department's timezone. */
+  async budgetVsActual(fiscalYearId: string, asOf?: string): Promise<BudgetVsActualReport> {
+    const response = await api.get<BudgetVsActualReport>('/finance/reports/budget-vs-actual', {
+      params: { fiscal_year_id: fiscalYearId, as_of: asOf || undefined },
+    });
+    return response.data;
+  },
+
+  async budgetVsActualCsv(fiscalYearId: string, asOf?: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ fiscal_year_id: fiscalYearId, format: 'csv' });
+    if (asOf) query.set('as_of', asOf);
+    return fetchFile(api, `/finance/reports/budget-vs-actual?${query.toString()}`, 'budget-vs-actual.csv');
+  },
+
+  async amendmentLog(fiscalYearId: string): Promise<AmendmentLogReport> {
+    const response = await api.get<AmendmentLogReport>('/finance/reports/amendment-log', {
+      params: { fiscal_year_id: fiscalYearId },
+    });
+    return response.data;
+  },
+
+  async amendmentLogCsv(fiscalYearId: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ fiscal_year_id: fiscalYearId, format: 'csv' });
+    return fetchFile(api, `/finance/reports/amendment-log?${query.toString()}`, 'amendment-log.csv');
+  },
+
+  async paymentsRegister(start: string, end: string): Promise<PaymentsRegisterReport> {
+    const response = await api.get<PaymentsRegisterReport>('/finance/reports/payments-register', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async paymentsRegisterCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/payments-register?${query.toString()}`, 'payments-register.csv');
+  },
+};
 
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {

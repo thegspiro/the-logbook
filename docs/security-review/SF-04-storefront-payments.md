@@ -1,6 +1,298 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 8 (2026-10-12) — watchdog pickup: SF-9 and SF-11 closed by other work, one new lock gap fixed, two more flagged
+
+**Scope, same `git diff`-between-tree-states method passes 3–7 used.** Diffed
+pass 7's own closing merge (`01b1bc26`, PR #2940) against current `HEAD`
+across the same file set passes 3–7 established:
+`storefront.py`, `storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, the `frontend/src/modules/storefront/` tree, and
+every migration touching storefront/embroidery/personalization tables.
+
+**Not zero-delta — 18 non-merge commits touched this domain since pass 7,**
+read in full rather than diff-trusted:
+
+1. **`storefront.py` (+10, `upload_product_image`):** product images are now
+   scanned through the shared `reject_if_malicious` (part of the app-wide
+   "every upload scanned, org-first storage" feature, already reviewed as a
+   cross-cutting collaborator). Called after the existing magic-byte MIME
+   check and before re-encoding, with the already-detected MIME passed
+   through rather than re-sniffed — no new trust boundary, no change to this
+   route's permission gate (`storefront.manage`, unchanged).
+2. **`models/storefront.py` (610 lines, mechanical):** `Column(...)` →
+   `Mapped[...] = mapped_column(...)` (SQLAlchemy 2.0 typed-declarative
+   migration, part of the app-wide mypy cleanup). Checked this is genuinely
+   mechanical and not a semantic drift: every `nullable=True`/`nullable=False`
+   line count matches 1:1 before and after (78/78, 36/36), and all 12
+   `ondelete="SET NULL"` FKs are still paired with `nullable=True` on the same
+   or adjacent line (Pitfall #2) — `inventory_item_id`, `window_id`,
+   `user_id` (×5), `matched_order_id`, `resolved_by`, `product_id`,
+   `variant_id`. No column, type, default, or constraint changed.
+3. **`schemas/storefront.py` (+5): SF-11 fixed.** `StoreOrderCreate.items`
+   gained `max_length=STORE_ORDER_MAX_LINES` (200), closing the standing LOW
+   finding below — see its entry.
+4. **`storefront_service.py` (+87/-29): SF-9 fixed.** `get_order` and
+   `get_payment_event` gained a `for_update` flag
+   (`.with_for_update().execution_options(populate_existing=True)`);
+   `record_payment` now takes the lock before its read, accepts
+   `amount=None` to settle the remaining balance computed under that lock,
+   and `mark_order_paid`/`bulk_mark_paid` were updated to use it (the latter
+   now rolls back after a refused order so no lock carries into the next
+   iteration); `apply_payment_event` locks the payment event first, then
+   calls into the now-locked `record_payment` — lock order is consistently
+   event → order, never the reverse, so no new deadlock cycle is possible.
+   Closes the standing MED finding below — see its entry. The order-numbering
+   helper also switched from `_utcnow().year` to the department's own local
+   `resolve_org_today(...).year` (a date-boundary correctness fix, not a
+   security change: a US department's New Year's Eve had been dated by the
+   server's UTC clock).
+5. **`storefront_service.py`, `record_external_payment`: the "concurrent
+   duplicate webhook delivery degrades to a 500" item tracked in
+   `docs/app-review/storefront.md` is also fixed**, in the same change as
+   item 4 — a redelivered capture racing the backfill or a second webhook
+   attempt now catches the `IntegrityError` the unique `(org, provider,
+external_id)` constraint raises, rolls back, re-reads the row that won,
+   and returns it rather than raising. This is app-review's own tracked item,
+   not a security-review finding of this feature's prefix; noted here only
+   because it landed in the same commit as SF-9's fix and this pass verified
+   it directly (seeded two concurrent inserts against a real transaction;
+   the loser returns the winner's row rather than raising).
+6. **`paypal_webhook.py` (1 line):** `bool(config.get("auto_apply_payments",
+True))` → the already-reviewed `paypal_auto_apply(config)` helper
+   (pass 7 reviewed its introduction; this is the last remaining call site
+   switched over). No behavior change at this call site.
+7. **22 frontend files:** the "Remove nested modal-body scrollers inside the
+   shared `Modal`" sweep (six storefront dialogs lost a redundant
+   `modal-body` class now that `Modal` supplies its own scroll container —
+   Pitfall #21's concern, already centrally fixed, not re-litigated per
+   call site), an admin-hub card-tabs refactor (`storeAdminTabs.ts`, new —
+   cosmetic, same six tabs, same permission-gated page), the AAA→AA contrast
+   correction's storefront call sites (`text-blue-600` → `text-blue-800`
+   etc., consistent with CLAUDE.md's 2026-09-07 sweep), and a product-card
+   layout fix (price moved off the title row). None touch price,
+   permission, or org-scoping logic. `StoreAdminPage.test.tsx`,
+   `StoreProductCard.test.tsx`, `StorefrontPage.test.tsx`,
+   `storefrontStore.test.ts` gained type-only test updates from the app-wide
+   mypy/strict-typing passes, no behavior assertions changed.
+
+**One real gap found by this pass, not carried from pass 7: `refund_order`
+had the identical unlocked-read-modify-write shape SF-9 just fixed in its
+siblings, and `update_order_status`'s settlement branch still does. See
+SF8-04-1 (fixed) and SF8-04-2 (flagged) below.**
+
+**Re-verified unchanged:** the order-export unbounded-pagination item (still
+open, still grouped in `KNOWN_LIMITATIONS.md`); all 48 routes' permission
+gates (the only backend route-file change was the 10-line image-scan
+addition in item 1, confirmed by direct read of the diff); the five
+self-settlement separation-of-duties guards (`record_payment`,
+`mark_order_paid`, `waive_order_payment`, `refund_order`,
+`update_order_status`'s `settles_payment` branch — all still call
+`assert_different_person` before any mutation); PayPal webhook signature
+verification and replay guard (file touched only by item 6's one-line
+change).
+
+**One commit-message accuracy note, not a security finding:** the SF-9/SF-11
+fixes (item 3/4 above) landed inside a commit titled "fix(types): clear mypy
+errors in services m-z," whose message states "no behaviour change." That is
+inaccurate for this file — adding row locking and a `max_length` bound are
+both real behavior changes, independently reviewed here rather than trusted
+from the message, consistent with this review's standing practice of
+re-reading every diff rather than its commit log.
+
+### SF8-04-1 — MED — `refund_order` had the same unlocked read-modify-write SF-9 just fixed in its siblings — ✅ FIXED
+
+**What:** `refund_order` read the order with a plain `get_order()` (no
+`for_update`), then computed `paid - refunded` in Python and wrote it back.
+Exactly SF-9's shape: a `record_payment` commit (the webhook's auto-apply,
+now holding a row lock) landing between this read and this write is
+overwritten the instant this write's own blocked `UPDATE` finally lands,
+computed from a balance that predates the settlement that was just applied.
+
+**Where:** `backend/app/services/storefront_service.py:2294`
+(`refund_order`, pre-fix).
+
+**Failure scenario:** an order carries a $50 partial payment. A treasurer
+opens it to refund $20 at the same moment the PayPal webhook's auto-apply
+lands a further $30 payment. The webhook's `record_payment` locks the row,
+computes `50 + 30 = 80`, commits. The refund's earlier, unlocked read still
+holds `paid = 50`; its `UPDATE` blocks on the lock, then lands with
+`amount_paid = 50 - 20 = 30` — the $30 payment that committed in between is
+silently erased, with no error and no audit trail pointing at the loss.
+
+**Impact:** a real, successfully-processed member payment vanishes from the
+ledger whenever a refund and a settlement race, with no error surfaced to
+either party — a money-handling correctness defect, same class and severity
+as SF-9.
+
+**Fix:** `refund_order`'s `get_order` call now passes `for_update=True`
+(identical mechanism SF-9 already added and this pass already re-verified
+under real concurrent connections), so the refund's read waits for any
+in-flight settlement and sees the committed balance.
+`test_a_refund_racing_a_payment_does_not_lose_it` in
+`test_storefront_payment_race.py` reproduces the race with a raw-SQL first
+writer (fails against the pre-fix code: ends at 30 instead of 60) and passes
+against the fix.
+
+### SF8-04-2 — MED — `update_order_status`'s settlement branch still reads the order unlocked — OPEN (flagged)
+
+**What:** `update_order_status` is a fourth self-settlement path (alongside
+`record_payment`, `mark_order_paid`, `refund_order` — all now locked): when
+the caller's target `status` is `PAID` and the order is not already
+paid/waived, it sets `order.amount_paid = _money(order.total)` (the _full_
+total, not a delta) from a plain, unlocked `get_order()` read.
+
+**Where:** `backend/app/services/storefront_service.py:1867` (the read),
+`:1908`–`:1913` (the unlocked write of `amount_paid`/`payment_status`/
+`paid_at`).
+
+**Failure scenario:** a partially-paid order ($50 of $100) is advanced to
+`PAID` through the generic status endpoint
+(`POST /orders/{order_id}/status`) at the moment the PayPal webhook auto-applies
+the remaining $50. The webhook's `record_payment` (locked) commits
+`amount_paid = 100`, `payment_status = PAID`. The status update's earlier,
+unlocked read still holds `amount_paid = 50`; once its blocked `UPDATE`
+lands, it writes `amount_paid = 100` anyway (since it always writes the full
+total, not a delta) — in this particular interleaving the number happens to
+still be correct, but the `StoreOrderEvent` audit row it created
+("Payment of ... recorded" is not emitted by this path at all — only a
+`STATUS_CHANGED` event) does not reflect that a real, independently-arriving
+$50 payment is what actually settled the order, and the reverse interleaving
+(status update completes first, webhook's payment arrives after with its
+own, separately correct locked arithmetic) is unaffected only because the
+webhook path itself is now locked. The genuinely unsafe case is two
+_unlocked_ writers on this path alone — e.g. this status update racing
+`waive_order_payment` (SF8-04-3, also unlocked) — or a future caller that
+computes a _partial_ settlement through this branch rather than always the
+full total.
+
+**Impact:** lower immediate risk than SF8-04-1 since the specific race this
+pass could demonstrate does not currently lose money (the branch always
+writes the full total rather than an incremental amount), but the method
+shares the exact unguarded-read shape SF-9/SF8-04-1 were fixed for, is the
+most heavily used of the five settlement paths (the generic status-change
+route, not a specialized payment action), and a future change to this
+branch's arithmetic (e.g., to record a partial settlement) would silently
+reintroduce the SF-9 class of bug on the busiest of the five call sites.
+
+**Why flagged, not fixed:** unlike `refund_order` (a single-purpose,
+infrequent, money-only method where adding the lock has no other effect),
+`update_order_status` is the generic handler for every order-lifecycle
+transition — `SUBMITTED → PROCESSING`, `→ FULFILLED`, cancellation-adjacent
+transitions, etc. — most of which never touch `amount_paid`. Taking an
+unconditional `for_update` lock here would serialize _every_ status change
+on _every_ order through a row lock, not just the ones that settle payment;
+that is a broader behavior/performance change than this pass's "clearly
+correct, low-risk" bar for an unsupervised fix. Two non-equivalent options
+for an owner to choose between: (a) take the lock only on the
+`settles_payment` branch, by re-reading the order with `for_update=True`
+immediately before that branch's writes (cheap, but means the order is read
+twice on that path); (b) have `settles_payment` delegate to the already-fixed
+`record_payment(order_id, organization_id, None, ...)` the way
+`mark_order_paid` now does, reconciling the two methods' slightly different
+post-settlement `status`-transition rules. Mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+### SF8-04-3 — LOW — `waive_order_payment` overwrites `payment_status` unconditionally, even onto an order already settled — OPEN (flagged)
+
+**What:** unlike `mark_order_paid` (`_is_settled(order)` early-returns if the
+order is already paid or waived), `waive_order_payment` has no such check: it
+unconditionally sets `payment_status = WAIVED` and `paid_at = now()` after
+only checking the order is not `CANCELLED` and the separation-of-duties
+guard.
+
+**Where:** `backend/app/services/storefront_service.py:2102`–`:2112`.
+
+**Failure scenario:** no concurrency is even required — in plain sequential
+use, if a payment is recorded on an order (`payment_status = PAID`,
+`amount_paid = 100`) and a quartermaster later calls "waive" on that same
+order (e.g., from a stale admin-hub tab that still shows it as unpaid), the
+order ends up with `amount_paid = 100` **and** `payment_status = WAIVED` —
+an internally inconsistent row: the ledger shows money collected on an order
+flagged as comped, and the sales rollup (which keys off `payment_status`,
+per this method's own docstring: "the sales rollup still reports the order's
+value as uncollected") now undercounts revenue that was, in fact, collected.
+Concurrently, the same race SF8-04-1/SF-9 cover (an unlocked read racing a
+locked settlement) makes this easier to hit by accident rather than only by
+a stale tab, since this method's read is also unlocked — but the
+inconsistency exists even without any race at all.
+
+**Impact:** a data-integrity defect in the payment ledger (revenue
+under-reporting), not a money-loss or access-control defect — no funds move
+and no unauthorized party gains anything; it is a reporting/reconciliation
+correctness gap, hence LOW rather than MED.
+
+**Why flagged, not fixed:** this is a business-rule gap (should waiving an
+already-settled order be refused, the way `mark_order_paid` refuses to
+re-settle one?), not a mechanical lost-update race — adding `for_update`
+alone does not change the unconditional overwrite, since the method does not
+branch on the fresh read at all. A correct fix needs a product decision on
+the intended behavior (refuse with a `ValueError`, matching
+`mark_order_paid`'s `_is_settled` guard? or silently no-op, matching that
+same guard's choice for its own case? both differ from today's silent
+overwrite) before the code changes, which is exactly what this review's
+contract treats as out of scope for an unsupervised fix in a payments path.
+Mirrored into `KNOWN_LIMITATIONS.md`.
+
+### SF-9 — MED — Concurrent payment recording loses money off the ledger — ✅ FIXED (closed by other work, re-verified)
+
+Re-verified fixed by other, non-security-review work landing between pass 7
+and this pass (app-review's own track, `docs/app-review/storefront.md`'s
+SF-9, resolved 2026-10-05, owner decision option (a)). See item 4 of this
+pass's diff review above for the mechanism, and SF8-04-1 above for the one
+sibling method (`refund_order`) the same fix had not yet reached.
+
+### SF-11 — LOW — No upper bound on order line count — ✅ FIXED (closed by other work, re-verified)
+
+Re-verified fixed by other, non-security-review work landing between pass 7
+and this pass: `StoreOrderCreate.items` now carries
+`max_length=STORE_ORDER_MAX_LINES` (200). See item 3 of this pass's diff
+review above.
+
+## Guard tests added (pass 8)
+
+- `test_a_refund_racing_a_payment_does_not_lose_it` in
+  `backend/tests/test_storefront_payment_race.py` — a concurrent settlement
+  landing between `refund_order`'s read and write must not be overwritten
+  (SF8-04-1). Fails against the pre-fix code (asserts 60, pre-fix code
+  produces 30); passes against the fix. The two pre-existing tests in this
+  file (`record_payment`, `apply_payment_event`) continue to cover SF-9
+  directly.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                | Result                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin — see `.github/workflows/ci.yml`'s Backend Lint step, not `requirements.txt`'s 7.4.1) | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                        | ✅ clean (after formatting the new test file with `black`) |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin — installed over the sandbox's pre-installed 9.0.2 to match)              | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                    | ✅ 572 revisions, single head (`3c9c5025a380`)             |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                    | ✅ 265 routes, 0 errors, 0 warnings                        |
+| backend tests (scoped: `-k "storefront or payment"`, unit)                                                                           | ✅ 796 passed, 1 skipped (environment-only: `py_vapid`)    |
+| backend tests (scoped: `-k "storefront or payment"`, integration)                                                                    | ✅ 248 passed, 1 skipped                                   |
+| cross-cutting guard tests (deadlock, org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, endpoint-auth coverage)        | ✅ 87 passed                                               |
+| backend tests (full suite, `pytest tests/ -m "not integration and not slow and not docker"`)                                         | ✅ 14,246 passed, 1 skipped, 0 failed                      |
+| `npm run typecheck`                                                                                                                  | ✅ 0 errors                                                |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                          | ✅ 0 errors, 0 warnings                                    |
+| `vitest run src/modules/storefront/ src/components/admin/`                                                                           | ✅ 233 passed (21 files)                                   |
+
+A note on the flake8/isort version line above: CI's "Backend Lint" job
+installs `flake8==7.3.0`/`isort==9.0.1` explicitly, pinned apart from
+`requirements.txt`'s `black==26.5.1`/`flake8==7.4.1`/`isort==9.0.2` — the
+workflow file's own comment (`.github/workflows/ci.yml:110-121`) documents
+that this exact kind of drift ("CI was green against a toolchain no
+developer actually ran") has happened before and is why the install step is
+pinned explicitly rather than reading `requirements.txt`. `requirements.txt`
+has since moved to `7.4.1`/`9.0.2` without the workflow's pinned install
+step following — i.e., the drift the comment warns about has recurred.
+This is a repo-wide tooling-hygiene item, not specific to storefront, so it
+is not filed as an `SF`-prefixed finding; flagged here because this pass
+hit it directly, and mirrored into `KNOWN_LIMITATIONS.md` for whichever
+pass (or Feature 00's cross-cutting sweep) picks it up.
 
 ---
 
