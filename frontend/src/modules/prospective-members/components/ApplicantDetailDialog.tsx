@@ -1,9 +1,8 @@
 /**
- * Applicant Detail Drawer
+ * Applicant Detail Dialog
  *
  * Centred dialog showing full applicant details, stage history,
- * and stage-specific actions. It was a right-edge drawer; the name is kept
- * so its importers and tests are unchanged.
+ * and stage-specific actions.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -89,7 +88,7 @@ function formatFieldValue(value: unknown): string {
   return toDisplayString(value);
 }
 
-interface ApplicantDetailDrawerProps {
+interface ApplicantDetailDialogProps {
   applicant: Applicant | null;
   isOpen: boolean;
   onClose: () => void;
@@ -103,7 +102,7 @@ interface ApplicantDetailDrawerProps {
  *
  * `details` is unvalidated JSON written by whatever recorded the entry, so
  * every shape is possible and none is guaranteed — a bad value degrades to
- * "no detail to show" rather than taking the drawer down.
+ * "no detail to show" rather than taking the dialog down.
  */
 const detailText = (details: unknown, key: string): string | undefined => {
   if (!details || typeof details !== 'object') return undefined;
@@ -111,7 +110,7 @@ const detailText = (details: unknown, key: string): string | undefined => {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 };
 
-export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
+export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
   applicant,
   isOpen,
   onClose,
@@ -253,7 +252,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setShowActivityLog(false);
   }, [applicant?.id]);
 
-  // Refresh applicant data when the drawer becomes visible (catches
+  // Refresh applicant data when the dialog becomes visible (catches
   // pipeline changes made by other coordinators or from settings page).
   useEffect(() => {
     if (isOpen && applicant?.id) {
@@ -262,7 +261,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         void fetchApplicant(applicant.id);
       }
     }
-    // Only re-run when drawer visibility changes, not on every applicant update.
+    // Only re-run when dialog visibility changes, not on every applicant update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
@@ -497,7 +496,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           />
                         </div>
                         <TargetRolePicker
-                          id="drawer-target-role"
+                          id="dialog-target-role"
                           value={editFields.target_role_id}
                           onChange={(target_role_id) => setEditFields((f) => ({ ...f, target_role_id }))}
                           hint="Applied to the member record when this applicant is converted."
