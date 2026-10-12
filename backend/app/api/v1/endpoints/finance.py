@@ -8,7 +8,7 @@ check requests, dues, approval chains, and QuickBooks export.
 import io
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
@@ -1938,7 +1938,7 @@ async def budget_vs_actual_report(
         "Remaining",
         "Percent used",
     ]
-    rows = [header]
+    rows: list[list[Any]] = [header]
     for row in report["rows"]:
         rows.append(
             [
@@ -2008,7 +2008,7 @@ async def amendment_log_report(
     if format != "csv":
         return report
     tz = await resolve_scheduling_timezone(db, str(current_user.organization_id))
-    rows = [
+    rows: list[list[Any]] = [
         [
             "Entered",
             "Budget line",
@@ -2085,7 +2085,7 @@ async def payments_register_report(
         raise _report_error(e)
     if format != "csv":
         return report
-    rows = [
+    rows: list[list[Any]] = [
         [
             "Date",
             "Type",
