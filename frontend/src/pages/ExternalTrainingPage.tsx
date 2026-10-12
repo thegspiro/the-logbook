@@ -1382,6 +1382,164 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   );
 };
 
+interface ProviderMappingSummary {
+  providerId: string;
+  categories: ExternalCategoryMapping[];
+  users: ExternalUserMapping[];
+  courses: ExternalCourseMapping[];
+  failed: boolean;
+}
+
+const UNMAPPED_PREVIEW_LIMIT = 5;
+
+interface MappingCountProps {
+  label: string;
+  items: { is_mapped: boolean }[];
+  unmappedNames: string[];
+}
+
+const MappingCount: React.FC<MappingCountProps> = ({ label, items, unmappedNames }) => {
+  const unmapped = items.filter((item) => !item.is_mapped).length;
+  const shown = unmappedNames.slice(0, UNMAPPED_PREVIEW_LIMIT);
+  const hidden = unmappedNames.length - shown.length;
+
+  return (
+    <div>
+      <p className="text-theme-text-muted text-xs font-medium tracking-wide uppercase">{label}</p>
+      <p className="text-theme-text-primary text-sm">
+        {items.length - unmapped} of {items.length} mapped
+      </p>
+      {unmapped > 0 && (
+        <>
+          <p className="mt-1 text-xs font-medium text-yellow-700 dark:text-yellow-400">{unmapped} unmapped</p>
+          <ul className="text-theme-text-muted mt-1 space-y-0.5 text-xs">
+            {shown.map((name, index) => (
+              <li key={`${name}-${index}`} className="truncate">
+                {name}
+              </li>
+            ))}
+            {hidden > 0 && <li>and {hidden} more</li>}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+};
+
+interface AllMappingsPanelProps {
+  providers: ExternalTrainingProvider[];
+  // Bumped by the page when the mappings modal closes, so edits made there
+  // show up here without leaving the tab.
+  refreshKey: number;
+  onOpenMappings: (providerId: string) => void;
+}
+
+const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers, refreshKey, onOpenMappings }) => {
+  const [summaries, setSummaries] = useState<Record<string, ProviderMappingSummary>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const entries = await Promise.all(
+        providers.map(async (provider): Promise<ProviderMappingSummary> => {
+          const [categories, users, courses] = await Promise.allSettled([
+            externalTrainingService.getCategoryMappings(provider.id),
+            externalTrainingService.getUserMappings(provider.id),
+            externalTrainingService.getCourseMappings(provider.id),
+          ]);
+          return {
+            providerId: provider.id,
+            categories: categories.status === 'fulfilled' ? categories.value : [],
+            users: users.status === 'fulfilled' ? users.value : [],
+            courses: courses.status === 'fulfilled' ? courses.value : [],
+            failed: [categories, users, courses].some((r) => r.status === 'rejected'),
+          };
+        })
+      );
+      if (cancelled) return;
+      setSummaries(Object.fromEntries(entries.map((entry) => [entry.providerId, entry])));
+      setLoading(false);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [providers, refreshKey]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
+        <RefreshCw className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
+        <span className="sr-only">Loading mappings...</span>
+      </div>
+    );
+  }
+
+  if (providers.length === 0) {
+    return (
+      <div className="card p-8 text-center" role="tabpanel">
+        <FolderTree className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
+        <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">No Mappings Yet</h2>
+        <p className="text-theme-text-muted">
+          Add a provider and sync it; its categories, users and courses appear here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" role="tabpanel">
+      {providers.map((provider) => {
+        const summary = summaries[provider.id];
+        if (!summary) return null;
+        return (
+          <section key={provider.id} className="card p-6" aria-labelledby={`all-mappings-${provider.id}`}>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 id={`all-mappings-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
+                {provider.name}
+              </h2>
+              <button
+                onClick={() => onOpenMappings(provider.id)}
+                aria-label={`Open mappings for ${provider.name}`}
+                className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+              >
+                <FolderTree className="h-4 w-4" aria-hidden="true" />
+                Open mappings
+              </button>
+            </div>
+            {summary.failed && (
+              <p className="alert-warning mb-4 text-sm" role="alert">
+                Some mappings for this provider could not be loaded. Counts may be incomplete.
+              </p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <MappingCount
+                label="Categories"
+                items={summary.categories}
+                unmappedNames={summary.categories.filter((m) => !m.is_mapped).map((m) => m.external_category_name)}
+              />
+              <MappingCount
+                label="Users"
+                items={summary.users}
+                unmappedNames={summary.users
+                  .filter((m) => !m.is_mapped)
+                  .map((m) => m.external_name || m.external_email || m.external_user_id)}
+              />
+              <MappingCount
+                label="Courses"
+                items={summary.courses}
+                unmappedNames={summary.courses.filter((m) => !m.is_mapped).map((m) => m.external_course_name)}
+              />
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+};
+
 const ExternalTrainingPage: React.FC = () => {
   // Never window.confirm: a browser that suppresses it returns false, which is
   // indistinguishable from the officer pressing Cancel.
@@ -1402,6 +1560,8 @@ const ExternalTrainingPage: React.FC = () => {
     providerId: '',
     providerName: '',
   });
+
+  const [mappingsRefreshKey, setMappingsRefreshKey] = useState(0);
 
   useEffect(() => {
     void loadProviders();
@@ -1638,11 +1798,7 @@ const ExternalTrainingPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="card p-8 text-center" role="tabpanel">
-            <FolderTree className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-            <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">All Mappings</h2>
-            <p className="text-theme-text-muted">View and manage all category and user mappings across providers</p>
-          </div>
+          <AllMappingsPanel providers={providers} refreshKey={mappingsRefreshKey} onOpenMappings={handleViewMappings} />
         )}
       </div>
 
@@ -1664,7 +1820,10 @@ const ExternalTrainingPage: React.FC = () => {
       />
       <MappingsModal
         isOpen={mappingsModal.isOpen}
-        onClose={() => setMappingsModal((prev) => ({ ...prev, isOpen: false }))}
+        onClose={() => {
+          setMappingsModal((prev) => ({ ...prev, isOpen: false }));
+          setMappingsRefreshKey((key) => key + 1);
+        }}
         providerId={mappingsModal.providerId}
         providerName={mappingsModal.providerName}
       />
