@@ -2305,7 +2305,9 @@ ReturnRequestTypeLiteral = Literal["assignment", "issuance", "checkout"]
 ReturnRequestStatusLiteral = Literal[
     "requested", "received", "inspected", "denied", "completed"
 ]
-ReturnReviewStatusLiteral = Literal["received", "denied"]
+# "inspected" completes a notice a direct return already marked received
+# (W39-5); it records the inspection and moves no stock.
+ReturnReviewStatusLiteral = Literal["received", "denied", "inspected"]
 
 
 class ReturnRequestCreate(BaseModel):
@@ -2322,12 +2324,20 @@ class ReturnRequestCreate(BaseModel):
 
 
 class ReturnRequestReview(BaseModel):
-    """Quartermaster either denies the request or physically receives the item."""
+    """Quartermaster denies the request, physically receives the item, or
+    inspects gear that already came back through another return."""
 
-    status: ReturnReviewStatusLiteral = Field(..., description="received or denied")
+    status: ReturnReviewStatusLiteral = Field(
+        ...,
+        description=(
+            "received or denied for a requested notice; inspected for one a "
+            "direct return already marked received"
+        ),
+    )
     review_notes: Optional[FreeText] = None
     observed_condition: Optional[ReturnConditionLiteral] = Field(
-        None, description="Condition independently observed during physical receipt"
+        None,
+        description="Condition independently observed during receipt or inspection",
     )
     verified_identifier: Optional[str] = Field(None, max_length=255)
     received_quantity: Optional[int] = Field(None, ge=1)

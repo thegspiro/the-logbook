@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
-import { ArrowDownToLine, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle, ClipboardCheck, XCircle, Clock } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
 import { RequestStatus } from '../constants/enums';
@@ -20,6 +20,21 @@ const STATUS_BADGES: Record<string, string> = {
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service'] as const;
 const UNSAFE_CONDITIONS = ['poor', 'damaged', 'out_of_service'] as const;
 
+/** Receive or deny a requested notice; inspect one a direct return already received (W39-5). */
+type ReviewAction = 'received' | 'denied' | 'inspected';
+
+const REVIEW_TITLES: Record<ReviewAction, string> = {
+  received: 'Receive Item',
+  denied: 'Deny Request',
+  inspected: 'Inspect Returned Item',
+};
+
+const SUBMIT_LABELS: Record<ReviewAction, string> = {
+  received: 'Receive item',
+  denied: 'Deny',
+  inspected: 'Record inspection',
+};
+
 /** "out_of_service" → "Out of service". */
 const conditionLabel = (condition: string): string => {
   const words = condition.replace(/_/g, ' ');
@@ -35,7 +50,7 @@ const ReturnRequestsPanel: React.FC = () => {
     open: false,
     request: null,
   });
-  const [reviewAction, setReviewAction] = useState<'received' | 'denied'>('received');
+  const [reviewAction, setReviewAction] = useState<ReviewAction>('received');
   const [reviewNotes, setReviewNotes] = useState('');
   const [observedCondition, setObservedCondition] = useState('');
   const [verifiedIdentifier, setVerifiedIdentifier] = useState('');
@@ -65,21 +80,34 @@ const ReturnRequestsPanel: React.FC = () => {
   // Read here rather than in ReturnRequestsPage, which is a 47-line wrapper
   // holding none of the state — this panel owns the list and the modal, and
   // has no other consumer.
+  const openReview = useCallback((request: ReturnRequestItem, action: ReviewAction) => {
+    setReviewModal({ open: true, request });
+    setReviewAction(action);
+    setObservedCondition('');
+    setVerifiedIdentifier('');
+    setReviewNotes('');
+    setReceivedQuantity('');
+    setFollowUp('auto');
+  }, []);
+
   useDeepLinkedRecord(
     'request',
     requests,
     (request) => request.id,
-    (request) => setReviewModal({ open: true, request })
+    (request) => openReview(request, request.status === 'received' ? 'inspected' : 'received')
   );
 
   const handleReview = async () => {
     if (!reviewModal.request) return;
     setSubmitting(true);
     try {
+      // An inspection records what the officer sees on gear that already came
+      // back; it sends no identifier or count because it receives nothing.
+      const observes = reviewAction !== 'denied';
       await inventoryService.reviewReturnRequest(reviewModal.request.id, {
         status: reviewAction,
         review_notes: reviewNotes || undefined,
-        observed_condition: reviewAction === 'received' ? observedCondition : undefined,
+        observed_condition: observes ? observedCondition : undefined,
         verified_identifier:
           reviewAction === 'received' && reviewModal.request.return_type !== 'issuance'
             ? verifiedIdentifier.trim()
@@ -92,9 +120,7 @@ const ReturnRequestsPanel: React.FC = () => {
         // choice made on a previous, unsafe-condition review must not carry
         // over silently to a later review of a different, safe-condition item.
         follow_up:
-          reviewAction === 'received' && (UNSAFE_CONDITIONS as readonly string[]).includes(observedCondition)
-            ? followUp
-            : undefined,
+          observes && (UNSAFE_CONDITIONS as readonly string[]).includes(observedCondition) ? followUp : undefined,
       });
       toast.success(`Return request ${reviewAction}`);
       setReviewModal({ open: false, request: null });
@@ -192,15 +218,7 @@ const ReturnRequestsPanel: React.FC = () => {
                     <div className="flex gap-1">
                       <button
                         aria-label={`Receive ${req.item_name} from ${req.requester_name || 'unknown member'}`}
-                        onClick={() => {
-                          setReviewModal({ open: true, request: req });
-                          setReviewAction('received');
-                          setObservedCondition('');
-                          setVerifiedIdentifier('');
-                          setReviewNotes('');
-                          setReceivedQuantity('');
-                          setFollowUp('auto');
-                        }}
+                        onClick={() => openReview(req, 'received')}
                         className="rounded-lg bg-green-700 p-1.5 text-white transition-colors hover:bg-green-800"
                         title="Receive item"
                       >
@@ -208,21 +226,25 @@ const ReturnRequestsPanel: React.FC = () => {
                       </button>
                       <button
                         aria-label={`Deny return of ${req.item_name} from ${req.requester_name || 'unknown member'}`}
-                        onClick={() => {
-                          setReviewModal({ open: true, request: req });
-                          setReviewAction('denied');
-                          setObservedCondition('');
-                          setVerifiedIdentifier('');
-                          setReviewNotes('');
-                          setReceivedQuantity('');
-                          setFollowUp('auto');
-                        }}
+                        onClick={() => openReview(req, 'denied')}
                         className="rounded-lg bg-red-800 p-1.5 text-white transition-colors hover:bg-red-900"
                         title="Deny return"
                       >
                         <XCircle className="h-4 w-4" />
                       </button>
                     </div>
+                  )}
+                  {/* Received another way: the gear is back but nobody has
+                      inspected it through this notice yet (W39-5). */}
+                  {req.status === 'received' && (
+                    <button
+                      aria-label={`Inspect ${req.item_name} from ${req.requester_name || 'unknown member'}`}
+                      onClick={() => openReview(req, 'inspected')}
+                      className="rounded-lg bg-green-700 p-1.5 text-white transition-colors hover:bg-green-800"
+                      title="Inspect item"
+                    >
+                      <ClipboardCheck className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
               </div>
@@ -250,7 +272,7 @@ const ReturnRequestsPanel: React.FC = () => {
             >
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <h3 id="return-review-title" className="text-theme-text-primary mb-4 text-lg font-medium">
-                  {reviewAction === 'received' ? 'Receive Item' : 'Deny Request'}
+                  {REVIEW_TITLES[reviewAction]}
                 </h3>
                 <div className="space-y-4">
                   <div className="bg-theme-surface-secondary rounded-lg p-3">
@@ -268,7 +290,14 @@ const ReturnRequestsPanel: React.FC = () => {
                     )}
                   </div>
 
-                  {reviewAction === 'received' && (
+                  {reviewAction === 'inspected' && (
+                    <p className="text-theme-text-secondary text-sm">
+                      This gear already came back through a direct return, so nothing is returned to stock again. Record
+                      the condition you observe and any follow-up it needs.
+                    </p>
+                  )}
+
+                  {reviewAction !== 'denied' && (
                     <div>
                       <label
                         htmlFor="override-condition"
@@ -327,7 +356,7 @@ const ReturnRequestsPanel: React.FC = () => {
                       </p>
                     </div>
                   )}
-                  {reviewAction === 'received' &&
+                  {reviewAction !== 'denied' &&
                     (UNSAFE_CONDITIONS as readonly string[]).includes(observedCondition) && (
                       <div>
                         <label htmlFor="follow-up" className="form-label">
@@ -382,6 +411,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   }}
                   disabled={
                     submitting ||
+                    (reviewAction === 'inspected' && !observedCondition) ||
                     (reviewAction === 'received' &&
                       (!observedCondition ||
                         (reviewModal.request.return_type !== 'issuance'
@@ -389,10 +419,10 @@ const ReturnRequestsPanel: React.FC = () => {
                           : Number(receivedQuantity) !== reviewModal.request.quantity_returning)))
                   }
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
-                    reviewAction === 'received' ? 'bg-green-700 hover:bg-green-800' : 'bg-red-800 hover:bg-red-900'
+                    reviewAction === 'denied' ? 'bg-red-800 hover:bg-red-900' : 'bg-green-700 hover:bg-green-800'
                   }`}
                 >
-                  {submitting ? 'Processing...' : reviewAction === 'received' ? 'Receive item' : 'Deny'}
+                  {submitting ? 'Processing...' : SUBMIT_LABELS[reviewAction]}
                 </button>
               </div>
             </DialogPanel>

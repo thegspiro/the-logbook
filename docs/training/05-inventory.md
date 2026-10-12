@@ -3407,6 +3407,13 @@ Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
   units than the notice announced leaves the notice open. Receiving through the
   notice is still the better path when there is one, because it records the
   inspection and any safety follow-up against the member's report.
+  **Since 2026-10-12** a received notice can also be inspected afterwards:
+  press **Inspect** on its row, choose the **Observed condition**, a **Safety
+  follow-up** if the gear is poor, damaged or out of service, and any notes,
+  then **Record inspection**. The notice is completed with your inspection
+  added under the original "Received through …" note. Nothing is returned to
+  stock again — there is no barcode or count to enter — but a serialized item
+  you find unsafe while it is still on the shelf is moved to maintenance.
 - ~~**A write-off raised for one returned pool unit retires the whole item**
   (W41-6).~~ **Resolved 2026-10-11:** receiving a damaged pool return no
   longer offers **Write-off review** as a safety follow-up — only

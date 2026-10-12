@@ -163,6 +163,15 @@ _UNISSUABLE_CONDITIONS = {
     ItemCondition.RETIRED,
 }
 
+# Conditions observed on a returned item that require a follow-up (maintenance,
+# write-off or charge review). Shared by a return's receipt and by the
+# inspection of a notice received another way, so both grade a condition alike.
+_UNSAFE_RETURN_CONDITIONS = {
+    ItemCondition.POOR,
+    ItemCondition.DAMAGED,
+    ItemCondition.OUT_OF_SERVICE,
+}
+
 
 def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[str]:
     """Join a note onto whatever the row already carries.
@@ -7636,25 +7645,48 @@ class InventoryService:
         follow_up: str = "auto",
     ) -> Tuple[bool, Optional[str]]:
         """
-        Deny a request or receive the item in one atomic transaction.
+        Deny a request, receive the item, or inspect gear received another way.
 
         A receipt is only accepted with an independent condition observation and,
         for serialized gear, a matching barcode/asset/serial identifier.  The hold,
         inventory state, inspection result, and follow-up are committed together.
+
+        ``status="inspected"`` is the W39-5 follow-on: it completes a notice a
+        direct return already marked ``received``, recording only the
+        inspection (see ``_inspect_received_return``).
         """
         # Lock the request row itself: without this, a denial and a physical
         # receipt racing on the same REQUESTED request can both pass this
         # status check before either commits, so one review silently
-        # overwrites the other's outcome (Pitfall #27).
+        # overwrites the other's outcome (Pitfall #27). populate_existing so
+        # the status checked below is the locked row's, not a copy this
+        # session loaded before the lock.
         result = await self.db.execute(
             select(ReturnRequest)
             .where(ReturnRequest.id == str(request_id))
             .where(ReturnRequest.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         req = result.scalar_one_or_none()
         if not req:
             return False, "Return request not found"
+
+        if status == "inspected":
+            if req.status != ReturnRequestStatus.RECEIVED:
+                return (
+                    False,
+                    "Only a notice received through another return can be "
+                    f"inspected; this one is {req.status.value}",
+                )
+            return await self._inspect_received_return(
+                req,
+                organization_id,
+                reviewer_id,
+                review_notes,
+                observed_condition,
+                follow_up,
+            )
 
         if req.status != ReturnRequestStatus.REQUESTED:
             return False, f"Request is already {req.status.value}"
@@ -7786,11 +7818,7 @@ class InventoryService:
                     ).strip()
 
             req.status = ReturnRequestStatus.INSPECTED
-            unsafe = condition in {
-                ItemCondition.POOR,
-                ItemCondition.DAMAGED,
-                ItemCondition.OUT_OF_SERVICE,
-            }
+            unsafe = condition in _UNSAFE_RETURN_CONDITIONS
             # A pool row is a catalog entry for many physical units, not one of
             # them, so one member's damaged glove says nothing about the other
             # ninety-nine. Copying the observed condition onto the row used to
@@ -7805,66 +7833,200 @@ class InventoryService:
                     ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
                 )
 
-            # W41-6: a write-off request names the item, not the returned
-            # units, and approving it retires the item and releases every
-            # holder. For a pool issuance that is the whole shelf and every
-            # other member's issuance, so it is not offered there; "auto"
-            # falls back to the maintenance follow-up a damaged pool return
-            # already gets.
-            pool_issuance = req.return_type == ReturnRequestType.ISSUANCE
-            chosen = follow_up
-            if chosen == "write_off" and pool_issuance:
-                raise ValueError(
-                    "Write-off review is not available for pool issuances; "
-                    "choose maintenance or charge review"
-                )
-            if chosen == "auto":
-                chosen = (
-                    "write_off"
-                    if condition == ItemCondition.OUT_OF_SERVICE and not pool_issuance
-                    else ("maintenance" if unsafe else "none")
-                )
-            if unsafe and chosen == "none":
-                raise ValueError(
-                    "Damaged, poor, or out-of-service gear requires a follow-up"
-                )
-            follow = None
-            if chosen == "maintenance":
-                follow = MaintenanceRecord(
-                    organization_id=str(organization_id),
-                    item_id=str(item.id),
-                    maintenance_type=MaintenanceType.REPAIR,
-                    scheduled_date=now.date(),
-                    condition_before=condition,
-                    description=note,
-                    notes=f"Member reported {req.reported_condition.value}; quartermaster observed {condition.value}",
-                    is_completed=False,
-                    created_by=str(reviewer_id),
-                )
-            elif chosen == "write_off":
-                follow = WriteOffRequest(
-                    organization_id=str(organization_id),
-                    item_id=str(item.id),
-                    item_name=item.name,
-                    item_serial_number=item.serial_number,
-                    item_asset_tag=item.asset_tag,
-                    item_value=item.purchase_price,
-                    reason=WriteOffReason.DAMAGED_BEYOND_REPAIR,
-                    description=note,
-                    status=WriteOffStatus.PENDING,
-                    requested_by=str(reviewer_id),
-                )
-            elif chosen == "charge_review":
-                if req.return_type != ReturnRequestType.ISSUANCE:
-                    raise ValueError(
-                        "Charge review is only available for pool issuances"
+            await self._record_return_follow_up(
+                req,
+                item,
+                condition,
+                follow_up,
+                note,
+                organization_id,
+                reviewer_id,
+                issuance if req.return_type == ReturnRequestType.ISSUANCE else None,
+            )
+            req.status = ReturnRequestStatus.COMPLETED
+            await self.db.commit()
+            return True, None
+        except (ValueError, SQLAlchemyError) as exc:
+            await self.db.rollback()
+            return False, str(exc)
+
+    async def _record_return_follow_up(
+        self,
+        req: ReturnRequest,
+        item: InventoryItem,
+        condition: ItemCondition,
+        follow_up: str,
+        note: str,
+        organization_id: UUID | str,
+        reviewer_id: UUID | str,
+        issuance: Optional[ItemIssuance],
+    ) -> None:
+        """Open the follow-up an inspected return calls for, onto the notice.
+
+        Shared by the receipt and by the inspection of a notice received
+        another way, so the two cannot disagree about which condition needs
+        which follow-up. Raises ``ValueError`` for a choice the return cannot
+        take; the caller rolls back.
+        """
+        unsafe = condition in _UNSAFE_RETURN_CONDITIONS
+        # W41-6: a write-off request names the item, not the returned
+        # units, and approving it retires the item and releases every
+        # holder. For a pool issuance that is the whole shelf and every
+        # other member's issuance, so it is not offered there; "auto"
+        # falls back to the maintenance follow-up a damaged pool return
+        # already gets.
+        pool_issuance = req.return_type == ReturnRequestType.ISSUANCE
+        chosen = follow_up
+        if chosen == "write_off" and pool_issuance:
+            raise ValueError(
+                "Write-off review is not available for pool issuances; "
+                "choose maintenance or charge review"
+            )
+        if chosen == "auto":
+            chosen = (
+                "write_off"
+                if condition == ItemCondition.OUT_OF_SERVICE and not pool_issuance
+                else ("maintenance" if unsafe else "none")
+            )
+        if unsafe and chosen == "none":
+            raise ValueError(
+                "Damaged, poor, or out-of-service gear requires a follow-up"
+            )
+        now = datetime.now(timezone.utc)
+        follow: Optional[MaintenanceRecord | WriteOffRequest] = None
+        if chosen == "maintenance":
+            follow = MaintenanceRecord(
+                organization_id=str(organization_id),
+                item_id=str(item.id),
+                maintenance_type=MaintenanceType.REPAIR,
+                scheduled_date=now.date(),
+                condition_before=condition,
+                description=note,
+                notes=f"Member reported {req.reported_condition.value}; quartermaster observed {condition.value}",
+                is_completed=False,
+                created_by=str(reviewer_id),
+            )
+        elif chosen == "write_off":
+            follow = WriteOffRequest(
+                organization_id=str(organization_id),
+                item_id=str(item.id),
+                item_name=item.name,
+                item_serial_number=item.serial_number,
+                item_asset_tag=item.asset_tag,
+                item_value=item.purchase_price,
+                reason=WriteOffReason.DAMAGED_BEYOND_REPAIR,
+                description=note,
+                status=WriteOffStatus.PENDING,
+                requested_by=str(reviewer_id),
+            )
+        elif chosen == "charge_review":
+            if req.return_type != ReturnRequestType.ISSUANCE or issuance is None:
+                raise ValueError("Charge review is only available for pool issuances")
+            issuance.charge_status = "pending"
+        if follow:
+            self.db.add(follow)
+            await self.db.flush()
+            req.follow_up_id = follow.id
+        req.follow_up_type = None if chosen == "none" else chosen
+
+    async def _inspect_received_return(
+        self,
+        req: ReturnRequest,
+        organization_id: UUID | str,
+        inspector_id: UUID | str,
+        review_notes: Optional[str],
+        observed_condition: Optional[str],
+        follow_up: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Complete a notice a direct return marked ``received`` (W39-5).
+
+        The gear already came back through Return, a check-in or a pool
+        return, and that path closed the holding and moved the stock. This
+        records only the inspection the notice was waiting for -- the observed
+        condition, the officer's notes and the follow-up -- and never touches
+        the holding, ``quantity`` or ``quantity_issued`` again. The one item
+        change it makes is the safety one a receipt makes: a serialized item
+        found unsafe while it is still on the shelf is taken out of service,
+        so a damaged helmet cannot be issued on the strength of the counter's
+        earlier "good". Gear that has already gone out again is left to the
+        follow-up record rather than pulled out from under its new holder.
+
+        The notice has no inspector column, so ``reviewed_by``/``reviewed_at``
+        move to the inspector -- on a completed notice they name whoever
+        completed it, as they do after a receipt -- and the receipt's actor is
+        written into the preserved "Received through ..." note first.
+
+        Called with the notice already locked; the item is locked after it,
+        the order every return path in this file takes.
+        """
+        if not observed_condition:
+            return False, "Observed condition is required to inspect a return"
+        condition = ItemCondition(observed_condition)
+        try:
+            item = await self._get_item_locked(UUID(str(req.item_id)), organization_id)
+            if not item:
+                raise ValueError("Item not found")
+
+            issuance = None
+            if req.return_type == ReturnRequestType.ISSUANCE and req.issuance_id:
+                issuance = (
+                    await self.db.execute(
+                        select(ItemIssuance)
+                        .where(
+                            ItemIssuance.id == str(req.issuance_id),
+                            ItemIssuance.organization_id == str(organization_id),
+                            ItemIssuance.user_id == str(req.requester_id),
+                        )
+                        .with_for_update()
                     )
-                issuance.charge_status = "pending"
-            if follow:
-                self.db.add(follow)
-                await self.db.flush()
-                req.follow_up_id = follow.id
-            req.follow_up_type = None if chosen == "none" else chosen
+                ).scalar_one_or_none()
+
+            receipt_note = req.review_notes
+            if req.reviewed_by:
+                receiver = (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id == str(req.reviewed_by),
+                            User.organization_id == str(organization_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if receiver:
+                    receipt_note = _append_note(
+                        receipt_note, f"Received by {receiver.display_name}."
+                    )
+            notes = (review_notes or "").strip()
+            inspection_note = f"Inspected: {condition.value.replace('_', ' ')}" + (
+                f" -- {notes}" if notes else ""
+            )
+            follow_up_note = f"Return request #{req.id[:8]} inspection" + (
+                f" -- {notes}" if notes else ""
+            )
+
+            await self._record_return_follow_up(
+                req,
+                item,
+                condition,
+                follow_up,
+                follow_up_note,
+                organization_id,
+                inspector_id,
+                issuance,
+            )
+
+            if (
+                condition in _UNSAFE_RETURN_CONDITIONS
+                and item.tracking_type != TrackingType.POOL
+                and item.status == ItemStatus.AVAILABLE
+                and item.assigned_to_user_id is None
+            ):
+                item.condition = condition
+                item.status = ItemStatus.IN_MAINTENANCE
+
+            req.observed_condition = condition
+            req.review_notes = _append_note(receipt_note, inspection_note)
+            req.reviewed_by = str(inspector_id)
+            req.reviewed_at = datetime.now(timezone.utc)
             req.status = ReturnRequestStatus.COMPLETED
             await self.db.commit()
             return True, None

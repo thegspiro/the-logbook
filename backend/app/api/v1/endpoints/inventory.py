@@ -6422,6 +6422,8 @@ async def review_return_request(
 ):
     """
     Approve or deny a return request. On approval, the actual return is executed.
+    ``inspected`` completes a notice a direct return already marked received,
+    recording the inspection without moving stock again.
 
     **Authentication required**
     **Requires permission: inventory.manage**
@@ -6453,6 +6455,7 @@ async def review_return_request(
         event_data={
             "return_request_id": str(request_id),
             "decision": data.status,
+            "observed_condition": data.observed_condition,
         },
         user_id=str(current_user.id),
         username=current_user.username,

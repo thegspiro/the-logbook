@@ -1265,7 +1265,8 @@ export const inventoryService = {
   async reviewReturnRequest(
     requestId: string,
     data: {
-      status: 'received' | 'denied';
+      // 'inspected' completes a notice a direct return already received (W39-5).
+      status: 'received' | 'denied' | 'inspected';
       review_notes?: string | undefined;
       observed_condition?: string | undefined;
       verified_identifier?: string | undefined;

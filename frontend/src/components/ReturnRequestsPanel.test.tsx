@@ -127,6 +127,43 @@ describe('ReturnRequestsPanel', () => {
     expect(screen.queryByRole('button', { name: /Receive Nitrile Gloves/ })).not.toBeInTheDocument();
   });
 
+  // W39-5 follow-on: the received notice is inspected, not received again —
+  // no identifier or count, just what the officer observes.
+  it('inspects a notice received another way without asking for a count', async () => {
+    mockGetReturnRequests.mockResolvedValue([{ ...gloves, status: 'received' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<ReturnRequestsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Inspect Nitrile Gloves from Jordan Avery' }));
+    const dialog = screen.getByRole('dialog', { name: 'Inspect Returned Item' });
+    expect(within(dialog).queryByRole('spinbutton', { name: /Quantity physically received/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox', { name: /Scanned barcode/ })).not.toBeInTheDocument();
+
+    const submit = within(dialog).getByRole('button', { name: 'Record inspection' });
+    expect(submit).toBeDisabled();
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /Observed condition/ }), 'damaged');
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /Safety follow-up/ }), 'charge_review');
+    await user.type(within(dialog).getByRole('textbox', { name: /Notes/ }), 'Two torn');
+    await user.click(submit);
+
+    await waitFor(() => expect(mockReviewReturnRequest).toHaveBeenCalledTimes(1));
+    expect(mockReviewReturnRequest).toHaveBeenCalledWith('rr-1', {
+      status: 'inspected',
+      review_notes: 'Two torn',
+      observed_condition: 'damaged',
+      verified_identifier: undefined,
+      received_quantity: undefined,
+      follow_up: 'charge_review',
+    });
+  });
+
+  it('offers no Inspect action on a notice still awaiting receipt', async () => {
+    renderWithRouter(<ReturnRequestsPanel />);
+
+    expect(await screen.findByRole('button', { name: 'Receive Nitrile Gloves from Jordan Avery' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Inspect Nitrile Gloves/ })).not.toBeInTheDocument();
+  });
+
   it('names each row action after its item and member, and reads conditions as words', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ReturnRequestsPanel />);
