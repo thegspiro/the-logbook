@@ -572,6 +572,104 @@ class TrainingProgramService:
             return str(exc)
         return None
 
+    async def _validate_prerequisite_programs(
+        self,
+        prerequisite_ids: Optional[List[Any]],
+        organization_id: UUID | str,
+        program_id: UUID | str | None = None,
+    ) -> Tuple[List[str], Optional[str]]:
+        """Settle a program's ``prerequisite_program_ids`` before it is stored.
+
+        Returns the de-duplicated id list and an error message (or None). The
+        ids are client-supplied, so each must name a program in the caller's
+        org (XC-1). A program may not require itself, and — on an existing
+        program — may not require one that already requires it, directly or
+        through a chain: a cycle makes every program on it impossible to
+        enroll in, because nobody can complete the first one.
+        """
+        ids = normalize_id_list(prerequisite_ids)
+        if not ids:
+            return [], None
+        if program_id is not None and str(program_id) in ids:
+            return [], "A program cannot be its own prerequisite"
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingProgram,
+                ids,
+                organization_id,
+                label="prerequisite program",
+            )
+        except ValueError as exc:
+            return [], str(exc)
+        if program_id is None:
+            # A program not yet created cannot be anyone's prerequisite, so
+            # no cycle can pass through it.
+            return ids, None
+
+        # One query for the org's whole prerequisite graph; a department has
+        # tens of programs, not thousands.
+        rows = await self.db.execute(
+            select(
+                TrainingProgram.id,
+                TrainingProgram.name,
+                TrainingProgram.prerequisite_program_ids,
+            ).where(TrainingProgram.organization_id == str(organization_id))
+        )
+        graph: Dict[str, List[str]] = {}
+        names: Dict[str, str] = {}
+        for row_id, row_name, row_prereqs in rows.all():
+            graph[str(row_id)] = normalize_id_list(row_prereqs)
+            names[str(row_id)] = row_name
+        target = str(program_id)
+        graph[target] = ids
+
+        for start in ids:
+            seen: set = set()
+            stack = [start]
+            while stack:
+                current = stack.pop()
+                if current == target:
+                    return [], (
+                        f"{names.get(start, 'A selected program')} already "
+                        "requires this program, directly or through its own "
+                        "prerequisites, so it cannot also be a prerequisite of it"
+                    )
+                if current in seen:
+                    continue
+                seen.add(current)
+                stack.extend(graph.get(current, []))
+        return ids, None
+
+    async def attach_prerequisite_summaries(
+        self, programs: List[TrainingProgram], organization_id: UUID | str
+    ) -> None:
+        """Stamp ``prerequisite_programs`` (id + name) on each program.
+
+        One org-scoped query for the whole list rather than one per program.
+        An id whose program has since been deleted is left out.
+        """
+        wanted = {
+            str(pid)
+            for program in programs
+            for pid in (program.prerequisite_program_ids or [])
+        }
+        names: Dict[str, str] = {}
+        if wanted:
+            rows = await self.db.execute(
+                select(TrainingProgram.id, TrainingProgram.name).where(
+                    TrainingProgram.id.in_(wanted),
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            names = {str(row_id): row_name for row_id, row_name in rows.all()}
+        for program in programs:
+            program.prerequisite_programs = [
+                {"id": str(pid), "name": names[str(pid)]}
+                for pid in (program.prerequisite_program_ids or [])
+                if str(pid) in names
+            ]
+
     async def _validate_required_courses(
         self, course_ids: Optional[List[str]], organization_id: UUID | str
     ) -> Optional[str]:
@@ -861,6 +959,11 @@ class TrainingProgramService:
         )
         if roles_error:
             return None, roles_error
+        prerequisite_ids, prereq_error = await self._validate_prerequisite_programs(
+            program_data.prerequisite_program_ids, organization_id
+        )
+        if prereq_error:
+            return None, prereq_error
 
         # Create program
         program = TrainingProgram(
@@ -884,12 +987,15 @@ class TrainingProgramService:
             recert_interval_months=program_data.recert_interval_months,
             recert_anchor_month=program_data.recert_anchor_month,
             recert_anchor_day=program_data.recert_anchor_day,
+            prerequisite_program_ids=prerequisite_ids or None,
+            allows_concurrent_enrollment=program_data.allows_concurrent_enrollment,
             created_by=created_by,
         )
 
         self.db.add(program)
         await self.db.commit()
         await self.db.refresh(program)
+        await self.attach_prerequisite_summaries([program], organization_id)
 
         return program, None
 
@@ -945,6 +1051,11 @@ class TrainingProgramService:
         )
         if roles_error:
             return None, roles_error
+        prerequisite_ids, prereq_error = await self._validate_prerequisite_programs(
+            getattr(prog, "prerequisite_program_ids", None), organization_id
+        )
+        if prereq_error:
+            return None, prereq_error
 
         program = TrainingProgram(
             organization_id=organization_id,
@@ -961,6 +1072,10 @@ class TrainingProgramService:
             recert_interval_months=getattr(prog, "recert_interval_months", None),
             recert_anchor_month=getattr(prog, "recert_anchor_month", None),
             recert_anchor_day=getattr(prog, "recert_anchor_day", None),
+            prerequisite_program_ids=prerequisite_ids or None,
+            allows_concurrent_enrollment=getattr(
+                prog, "allows_concurrent_enrollment", True
+            ),
             created_by=created_by,
         )
         self.db.add(program)
@@ -1030,6 +1145,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(program)
+        await self.attach_prerequisite_summaries([program], organization_id)
 
         return program, None
 
@@ -1162,6 +1278,7 @@ class TrainingProgramService:
         result = await self.db.execute(query.order_by(TrainingProgram.name))
         programs = list(result.scalars().all())
         await self._attach_enrolled_counts(programs)
+        await self.attach_prerequisite_summaries(programs, organization_id)
         return programs
 
     async def _attach_enrolled_counts(self, programs: List[TrainingProgram]) -> None:
@@ -1232,12 +1349,30 @@ class TrainingProgramService:
                 for key, value in data["reminder_conditions"].items()
                 if value is not None
             }
+        # Present-but-empty (null or []) clears; a fresh list is assigned so
+        # the JSON column registers the change (pitfall #12).
+        if "prerequisite_program_ids" in data:
+            prerequisite_ids, prereq_error = await self._validate_prerequisite_programs(
+                data["prerequisite_program_ids"], organization_id, program.id
+            )
+            if prereq_error:
+                return None, prereq_error
+            data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        if (
+            "allows_concurrent_enrollment" in data
+            and data["allows_concurrent_enrollment"] is None
+        ):
+            return None, (
+                "Choose whether members may be enrolled in other programs at "
+                "the same time"
+            )
 
         for field, value in data.items():
             setattr(program, field, value)
 
         await self.db.commit()
         await self.db.refresh(program)
+        await self.attach_prerequisite_summaries([program], organization_id)
         return program, None
 
     async def delete_training_program(
@@ -1304,6 +1439,23 @@ class TrainingProgramService:
                 await self.db.execute(
                     delete(TrainingRequirement).where(TrainingRequirement.id == req_id)
                 )
+
+        # A program that listed this one as a prerequisite would otherwise
+        # keep a dangling id that no member can ever complete, blocking every
+        # future enrollment in it.
+        dependents = await self.db.execute(
+            select(TrainingProgram).where(
+                TrainingProgram.organization_id == str(organization_id),
+                TrainingProgram.id != pid,
+                json_array_contains(TrainingProgram.prerequisite_program_ids, pid),
+            )
+        )
+        for dependent in dependents.scalars().all():
+            dependent.prerequisite_program_ids = [
+                str(other)
+                for other in (dependent.prerequisite_program_ids or [])
+                if str(other) != pid
+            ] or None
 
         await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()

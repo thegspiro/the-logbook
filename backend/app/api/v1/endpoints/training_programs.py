@@ -718,6 +718,8 @@ async def get_training_program(
     )
     milestones = milestones_result.scalars().all()
 
+    await service.attach_prerequisite_summaries([program], current_user.organization_id)
+
     return ProgramWithPhasesAndRequirements(
         id=program.id,
         organization_id=program.organization_id,
@@ -730,6 +732,17 @@ async def get_training_program(
         structure_type=program.structure_type.value,
         time_limit_days=program.time_limit_days,
         warning_days_before=program.warning_days_before,
+        # The edit form is seeded from this response, so a field left out
+        # here comes back as its schema default and is saved over the real
+        # value the next time anyone edits the program.
+        reminder_conditions=program.reminder_conditions,
+        recert_enabled=program.recert_enabled,
+        recert_interval_months=program.recert_interval_months,
+        recert_anchor_month=program.recert_anchor_month,
+        recert_anchor_day=program.recert_anchor_day,
+        prerequisite_program_ids=program.prerequisite_program_ids,
+        allows_concurrent_enrollment=program.allows_concurrent_enrollment,
+        prerequisite_programs=program.prerequisite_programs,
         is_template=program.is_template,
         active=program.active,
         created_at=program.created_at,
