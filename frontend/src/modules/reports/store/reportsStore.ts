@@ -15,6 +15,7 @@ import type {
   SavedReportCreate,
   SavedReportUpdate,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toLocalDateString } from '../../../utils/dateFormatting';
 
@@ -153,7 +154,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ availableReportsLoading: true, error: null });
     try {
       const data = await reportsApiService.getAvailableReports();
-      set({ availableReports: data.available_reports, availableReportsLoading: false });
+      // A degraded view (the report picker and title lookup), so a malformed
+      // 200 renders as no reports rather than taking the page down.
+      set({ availableReports: asArray(data?.available_reports), availableReportsLoading: false });
     } catch (err: unknown) {
       set({
         availableReportsLoading: false,
