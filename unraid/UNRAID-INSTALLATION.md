@@ -820,6 +820,24 @@ AZURE_STORAGE_CONTAINER=logbook-backups
 
 ### Updating The Logbook
 
+**Installed with Docker Compose (`unraid-setup.sh`) — every install today.**
+No pre-built image is published yet, so an update pulls the latest code and
+rebuilds the images on your server. From the Unraid terminal:
+
+```bash
+cd /mnt/user/appdata/the-logbook && ./unraid/update.sh
+```
+
+It takes a verified database dump first, rebuilds, recreates the containers
+and waits for the backend to report healthy; on a failure it prints the exact
+rollback steps. See [QUICK-START.md](./QUICK-START.md#updating-the-logbook)
+for the manual equivalent.
+
+**Installed from the Community Applications template — once the listing is
+live.** The three methods below pull `ghcr.io/thegspiro/the-logbook`, which is
+not published yet (see the status note at the top of this guide); until it
+is, they fail with "manifest unknown" or "not found".
+
 **Method 1: Community Applications (Recommended)**
 
 1. Go to **Apps** tab
@@ -882,6 +900,11 @@ docker restart TheLogbook
 
 ### Rollback to Previous Version
 
+A Docker Compose install rolls back by restoring the dump `update.sh` took and
+checking out the previous commit; the script prints both commands when an
+update fails. The steps below are for the Community Applications image, once
+it is published.
+
 ```bash
 # Stop container
 docker stop TheLogbook
@@ -898,7 +921,8 @@ docker start TheLogbook
 The upgrade, key-rotation and file-encryption guides give commands like
 `docker exec -it intranet-backend python scripts/<name>.py`. `intranet-backend`
 is the container name in the standard Docker Compose files. In the Unraid
-compose stack the backend container is **`logbook-backend`**, so use:
+compose stack the backend container is **`logbook-backend`** (on a
+Community Applications install it will be `TheLogbook`), so use:
 
 ```bash
 docker exec -it logbook-backend python scripts/relocate_uploads.py
