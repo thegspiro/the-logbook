@@ -29,17 +29,19 @@ const ICON_FOR = (item: UpcomingItem): React.ElementType => {
 };
 
 const describe = (item: UpcomingItem): string => {
+  if (item.kind === 'shortfall') return `${String(Math.round((item.hoursShort ?? 0) * 10) / 10)} hrs to go`;
   const date = formatCalendarDate(item.date);
+  const days = item.days ?? 0;
   if (item.kind === 'window') {
-    return item.days <= 0 ? `Open since ${date}` : `Opens ${date} · ${item.days} ${item.days === 1 ? 'day' : 'days'}`;
+    return days <= 0 ? `Open since ${date}` : `Opens ${date} · ${days} ${days === 1 ? 'day' : 'days'}`;
   }
   const verb = item.kind === 'certification' ? 'Expires' : 'Due';
-  if (item.days < 0) {
-    const late = Math.abs(item.days);
+  if (days < 0) {
+    const late = Math.abs(days);
     return `${item.kind === 'certification' ? 'Expired' : 'Overdue'} ${late} ${late === 1 ? 'day' : 'days'} ago`;
   }
-  if (item.days === 0) return `${verb} today`;
-  return `${verb} ${date} · ${item.days} ${item.days === 1 ? 'day' : 'days'}`;
+  if (days === 0) return `${verb} today`;
+  return `${verb} ${date} · ${days} ${days === 1 ? 'day' : 'days'}`;
 };
 
 export const UpcomingDueList: React.FC<{ items: UpcomingItem[] }> = ({ items }) => {
