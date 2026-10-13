@@ -38,12 +38,13 @@ feature (4 new routes) reviewed fresh and found sound (org-scoped,
 write-gated, legacy typed-URL field rejects non-HTTP(S) schemes via
 `safe_external_url`). AP2-4 (app-review rotation's own standing flagged
 item on the EVOC gate's fail-open-on-unresolvable-apparatus behavior)
-re-confirmed unchanged, still awaiting an owner decision. `main` currently
-carries two Alembic heads (`cc91959dbaff`, `05ec84735fcf`); a different,
-already-open PR (#3176, a separate session) fixes it — not duplicated here,
-and this pass's own gate was run locally against that PR's merge revision
-(copied in, uncommitted) purely to get a single head to build a schema
-against. Route count: `apparatus.py` 94 (+4 from pass 14's 90 — the new
+re-confirmed unchanged, still awaiting an owner decision. `main` briefly
+carried two Alembic heads again (`cc91959dbaff`, `05ec84735fcf`), which
+turned this PR's first CI run red with "Multiple head revisions" — not this
+pass's own defect. A different session's PR (#3176) merged them while this
+PR was open; this branch merged `main` in once #3176 landed rather than wait
+on it, picking up its merge revision for real (no duplicate of this pass's
+own). Route count: `apparatus.py` 94 (+4 from pass 14's 90 — the new
 upload/download pair); `nfc_tags.py` unchanged at 5. See the Log entry below
 and `docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 15** section for
 detail. Row 13 stays ✅ (pending this PR's merge); next is Feature 14
@@ -19024,17 +19025,19 @@ Switched to `apply_updates(config, update_data)`. Guard tests:
 fail-open-on-unresolvable-apparatus behavior, owner decision pending) —
 re-confirmed unchanged this pass; still only logged, verdict untouched.
 
-**Cross-cutting migration-head conflict, not this feature's to fix.** `main`
-currently carries two Alembic heads again — `cc91959dbaff` (PR #3094,
-crew-recorded training) and `05ec84735fcf` (PR #3169/#3175, this rotation's
-own prior Facilities pass), each independently joining the same prior pair.
-A different, already-open PR (#3176, a separate session, not this rotation)
-adds the merge revision (`70070d86ff27`). Not duplicated here: this pass's
-own completion gate was run locally against that PR's merge-revision file
-(copied in from its branch, left uncommitted on this branch) purely so
-`alembic upgrade head` / `validate_migrations.py --strict` had a single head
-to build a schema against; it will resolve for real once #3176 merges and
-this branch's next rebase against `main` picks it up.
+**Cross-cutting migration-head conflict surfaced as this PR's first CI
+failure, and resolved by catching up, not by fixing it here.** `main` briefly
+carried two Alembic heads again — `cc91959dbaff` (PR #3094, crew-recorded
+training) and `05ec84735fcf` (PR #3169/#3175, this rotation's own prior
+Facilities pass), each independently joining the same prior pair — which
+failed this PR's integration-test job with "Multiple head revisions," not a
+defect in this pass's own diff. A different session's PR (#3176) merged the
+two with a no-op merge revision (`70070d86ff27`) while this PR was already
+open and its first CI run red; rather than wait on it, `main` was merged into
+this branch once #3176 landed, bringing that revision in for real (verified
+`alembic heads` → single head, `validate_migrations.py --strict` → 590
+revisions, single head, VALIDATION PASSED) — no duplicate merge revision of
+this pass's own.
 
 **Route inventory re-run from scratch:** `apparatus.py` 94 routes (up from
 pass 14's 90 — the new upload/download pair, `grep -c "^@router\."`, not the
@@ -19042,10 +19045,11 @@ commit message), all four new ones gated `apparatus.edit`/`apparatus.manage`
 (upload) or `apparatus.view`/`apparatus.manage` (download) and confirmed
 org-scoped. `nfc_tags.py` unchanged at 5.
 
-**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean over
+**Completion gate (re-run after merging `main`, per the note above):**
+`flake8`/`black --check`/`isort --check-only` clean over
 `app/ tests/ alembic/`; `validate_migrations.py --strict` passed (590
-revisions, single head, against the locally-copied-in #3176 merge revision
-per the note above); `check_route_permissions.py --strict` passed (269
+revisions, single head — `main`'s own #3176 merge revision, not a duplicate);
+`check_route_permissions.py --strict` passed (269
 routes, 0 errors/warnings, whole app); scoped backend tests (`-k "apparatus
 or nfc or evoc or driver_exception"`) 1118 passed, 1 skipped
 (environment-only — `pywebpush`); frontend `npm run typecheck` 0 errors,

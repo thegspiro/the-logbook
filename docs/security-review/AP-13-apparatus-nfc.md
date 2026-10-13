@@ -142,16 +142,15 @@ genuinely nullable field (e.g. `description`) still clears it.
 
 ## Schema & migration notes
 
-No schema change this pass. `main` currently carries two Alembic heads
-(`cc91959dbaff`, `05ec84735fcf` — PR #3094's crew-training migration and
-PR #3169/#3175's facilities migration each independently joined the same
-prior pair) — a different, already-open PR (#3176, a separate session) adds
-the merge revision (`70070d86ff27`). Not this feature's concern to fix and not
-duplicated here; this pass's own completion gate was run locally against that
-PR's merge revision (copied in, uncommitted, purely so `alembic upgrade head`
-/ `validate_migrations.py --strict` had a single head to build against) and
-will resolve for real once #3176 merges and this branch picks it up from
-`main`.
+No schema change of this feature's own this pass. `main` briefly carried two
+Alembic heads again (`cc91959dbaff`, `05ec84735fcf` — PR #3094's crew-training
+migration and PR #3169/#3175's facilities migration each independently
+joined the same prior pair), which turned CI red on this PR's first push with
+"Multiple head revisions" — not a defect in this pass's own diff. A different
+session's PR (#3176) merged the two with a no-op merge revision
+(`70070d86ff27`) while this PR was already open; rather than wait on it, this
+branch merged `main` in once it landed and picked that revision up for real
+(not duplicated — no merge revision of this pass's own).
 
 ## Guard tests added
 
