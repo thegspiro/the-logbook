@@ -69,6 +69,7 @@ export const CheckJumpSheet: React.FC<CheckJumpSheetProps> = ({
             </p>
           </div>
           <button
+            data-dialog-close
             type="button"
             onClick={onClose}
             aria-label="Close the jump sheet"
@@ -204,6 +205,7 @@ export const CheckFlatList: React.FC<{
             <p className="text-theme-text-muted text-[13px]">Tap any line to go to the stop it belongs to.</p>
           </div>
           <button
+            data-dialog-close
             type="button"
             onClick={onClose}
             aria-label="Close the item list"

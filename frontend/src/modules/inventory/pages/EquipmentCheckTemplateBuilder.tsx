@@ -269,6 +269,7 @@ const RowActionMenu: React.FC<{ label: string; title: string; children: React.Re
                   {title}
                 </h2>
                 <button
+                  data-dialog-close
                   type="button"
                   data-sheet-close
                   onClick={() => setSheetOpen(false)}
@@ -5130,6 +5131,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               Template details
             </h2>
             <button
+              data-dialog-close
               type="button"
               onClick={() => setDrawerOpen(false)}
               className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md sm:min-h-0 sm:min-w-0 sm:p-1.5"
@@ -6273,6 +6275,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Before publishing
                 </h2>
                 <button
+                  data-dialog-close
                   type="button"
                   onClick={() => setShowBlockerSheet(false)}
                   className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md"
@@ -6663,6 +6666,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 >
                   <header className="modal-header-sticky flex shrink-0 items-start gap-3 px-4 py-3">
                     <button
+                      data-dialog-close
                       type="button"
                       onClick={closeEditor}
                       className="text-theme-text-primary -ml-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md"

@@ -93,11 +93,13 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             Add Facility
           </h2>
           <button
+            type="button"
+            data-dialog-close
             onClick={onClose}
             className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Close dialog"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 

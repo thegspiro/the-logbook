@@ -83,6 +83,7 @@ const ModalShell: React.FC<{
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-lg font-bold">{title}</h2>
         <button
+          data-dialog-close
           type="button"
           onClick={onClose}
           aria-label="Close"
