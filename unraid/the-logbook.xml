@@ -1,4 +1,13 @@
 <?xml version="1.0"?>
+<!--
+  DRAFT - NOT INSTALLABLE YET. Nothing builds or publishes the image named in
+  <Repository>, and the project ships separate backend and frontend images
+  rather than the single combined container this template describes (one
+  container answering on 3000 and 3001). Do not submit it to Community
+  Applications until both are settled; see docs/KNOWN_LIMITATIONS.md,
+  "Unraid Community Apps Template - Not Installable Yet". Install on Unraid
+  with the Docker Compose path (unraid/QUICK-START.md).
+-->
 <Container version="2">
   <Name>TheLogbook</Name>
   <Repository>ghcr.io/thegspiro/the-logbook:latest</Repository>
@@ -9,8 +18,8 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/thegspiro/the-logbook/issues</Support>
   <Project>https://github.com/thegspiro/the-logbook</Project>
-  <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, built with HIPAA requirements in mind, and highly customizable.</Overview>
-  <Category>Productivity: Status:Stable</Category>
+  <Overview>DRAFT - NOT INSTALLABLE YET: the image is not published. Install with the Docker Compose path in unraid/QUICK-START.md. The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, built with HIPAA requirements in mind, and highly customizable.</Overview>
+  <Category>Productivity: Status:Beta</Category>
   <WebUI>http://[IP]:[PORT:7880]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png</Icon>
@@ -18,15 +27,12 @@
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
-  <DonateText>Support Development</DonateText>
-  <DonateLink>https://github.com/sponsors/your-org</DonateLink>
   <Requires>
     MySQL 8.0 database (can use existing Unraid MySQL instance)
     Redis (optional but recommended for caching)
   </Requires>
   <Config Name="WebUI Port" Target="3000" Default="7880" Mode="tcp" Description="Port for accessing The Logbook web interface" Type="Port" Display="always" Required="true" Mask="false">7880</Config>
   <Config Name="API Port" Target="3001" Default="7881" Mode="tcp" Description="Port for The Logbook backend API" Type="Port" Display="always" Required="true" Mask="false">7881</Config>
-  <Config Name="App Data" Target="/app/data" Default="/mnt/user/appdata/the-logbook" Mode="rw" Description="Application data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook</Config>
   <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/the-logbook/uploads" Mode="rw" Description="User uploaded files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook/uploads</Config>
   <Config Name="Backups" Target="/backups" Default="/mnt/user/backups/the-logbook" Mode="rw" Description="Backup files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/backups/the-logbook</Config>
   <Config Name="Logs" Target="/app/logs" Default="/mnt/user/appdata/the-logbook/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/the-logbook/logs</Config>
@@ -81,6 +87,4 @@
        settings → enabled_modules); there are no MODULE_*_ENABLED variables. -->
 
   <!-- User and Group IDs -->
-  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
-  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
 </Container>
