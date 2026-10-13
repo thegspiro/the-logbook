@@ -104,104 +104,17 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Receive delivery" size="xl">
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="space-y-3">
-          <>
-            <p className="text-theme-text-muted text-sm">
-              Add one line per item. Crews can swap stock recorded here onto a rig during an equipment check.
-            </p>
-
-            <div className="space-y-2">
-              {lines.map((line, index) => (
-                // Every line repeats the same four field names; the group is
-                // what tells a screen reader which line it is in.
-                <div
-                  key={line.key}
-                  role="group"
-                  aria-label={`Line ${index + 1}`}
-                  className="border-theme-surface-border grid gap-2 rounded-md border p-3 sm:grid-cols-12"
-                >
-                  <div className="sm:col-span-5">
-                    <label htmlFor={`${line.key}-item`} className="form-label">
-                      Item {index === 0 && <span aria-hidden="true">*</span>}
-                    </label>
-                    <MedicalSupplyItemPicker
-                      id={`${line.key}-item`}
-                      value={line.inventory_item_id}
-                      selectedName={line.inventory_item_name}
-                      onChange={(itemId, name) =>
-                        updateLine(line.key, { inventory_item_id: itemId, inventory_item_name: name })
-                      }
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label htmlFor={`${line.key}-qty`} className="form-label">
-                      Qty
-                    </label>
-                    <input
-                      id={`${line.key}-qty`}
-                      type="number"
-                      min="1"
-                      className="form-input w-full"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label htmlFor={`${line.key}-lot`} className="form-label">
-                      Lot #
-                    </label>
-                    <input
-                      id={`${line.key}-lot`}
-                      className="form-input w-full"
-                      value={line.lot_number}
-                      onChange={(e) => updateLine(line.key, { lot_number: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label htmlFor={`${line.key}-exp`} className="form-label">
-                      Expires
-                    </label>
-                    <input
-                      id={`${line.key}-exp`}
-                      type="date"
-                      className="form-input w-full"
-                      value={line.expiration_date}
-                      onChange={(e) => updateLine(line.key, { expiration_date: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="flex items-end sm:col-span-1">
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.key)}
-                      className="btn-icon"
-                      aria-label={`Remove line ${index + 1}`}
-                      disabled={lines.length === 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setLines((ls) => [...ls, newLine()])}
-              className="text-theme-text-primary hover:bg-theme-surface-secondary mobile-touch-target inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              Add line
-            </button>
-          </>
-        </div>
-
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Receive delivery"
+      size="xl"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
+            {isSaving ? 'Recording…' : 'Record delivery'}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -209,11 +122,103 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
           >
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={isSaving}>
-            {isSaving ? 'Recording…' : 'Record delivery'}
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <>
+          <p className="text-theme-text-muted text-sm">
+            Add one line per item. Crews can swap stock recorded here onto a rig during an equipment check.
+          </p>
+
+          <div className="space-y-2">
+            {lines.map((line, index) => (
+              // Every line repeats the same four field names; the group is
+              // what tells a screen reader which line it is in.
+              <div
+                key={line.key}
+                role="group"
+                aria-label={`Line ${index + 1}`}
+                className="border-theme-surface-border grid gap-2 rounded-md border p-3 sm:grid-cols-12"
+              >
+                <div className="sm:col-span-5">
+                  <label htmlFor={`${line.key}-item`} className="form-label">
+                    Item {index === 0 && <span aria-hidden="true">*</span>}
+                  </label>
+                  <MedicalSupplyItemPicker
+                    id={`${line.key}-item`}
+                    value={line.inventory_item_id}
+                    selectedName={line.inventory_item_name}
+                    onChange={(itemId, name) =>
+                      updateLine(line.key, { inventory_item_id: itemId, inventory_item_name: name })
+                    }
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor={`${line.key}-qty`} className="form-label">
+                    Qty
+                  </label>
+                  <input
+                    id={`${line.key}-qty`}
+                    type="number"
+                    min="1"
+                    className="form-input w-full"
+                    value={line.quantity}
+                    onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor={`${line.key}-lot`} className="form-label">
+                    Lot #
+                  </label>
+                  <input
+                    id={`${line.key}-lot`}
+                    className="form-input w-full"
+                    value={line.lot_number}
+                    onChange={(e) => updateLine(line.key, { lot_number: e.target.value })}
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor={`${line.key}-exp`} className="form-label">
+                    Expires
+                  </label>
+                  <input
+                    id={`${line.key}-exp`}
+                    type="date"
+                    className="form-input w-full"
+                    value={line.expiration_date}
+                    onChange={(e) => updateLine(line.key, { expiration_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex items-end sm:col-span-1">
+                  <button
+                    type="button"
+                    onClick={() => removeLine(line.key)}
+                    className="btn-icon"
+                    aria-label={`Remove line ${index + 1}`}
+                    disabled={lines.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setLines((ls) => [...ls, newLine()])}
+            className="text-theme-text-primary hover:bg-theme-surface-secondary mobile-touch-target inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
+          >
+            <Plus className="h-4 w-4" />
+            Add line
           </button>
-        </div>
-      </form>
+        </>
+      </div>
     </Modal>
   );
 };

@@ -2672,10 +2672,9 @@ export const SHOTS = [
       await roster.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(500);
     },
-    // `div.modal-panel`, the panel itself. Two nearby selectors are wrong
-    // here and both were tried: `div.drawer-panel` matches nothing on
-    // this page, and `div[role='dialog']` resolves to the full-viewport
-    // backdrop (1425x1200) rather than the 896px panel inside it.
+    // `div.modal-panel`, the panel itself. `div[role='dialog']` is wrong
+    // here: it resolves to the full-viewport backdrop (1425x1200) rather
+    // than the 896px panel inside it.
     selector: "div.modal-panel",
     allowEmptyState:
       '"No calls logged for this shift." belongs to the Calls panel below ' +
@@ -5352,11 +5351,12 @@ export const SHOTS = [
         .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
     },
-    // The drawer rather than the screen: it is taller than the viewport, and
-    // the subject runs from the stage panel down to the action row.
-    selector: "div.drawer-panel",
+    // The dialog's panel rather than the screen: the subject runs from the
+    // stage panel down to the action row. Scoped to the applicant dialog so
+    // no other `modal-panel` on the page can match.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // "No documents yet" -- Devon Marsh is seeded as a vote outcome and carries
-    // no uploads. The phrase sits below the drawer's own scroll, so it is in
+    // no uploads. The phrase sits below the dialog's own scroll, so it is in
     // the DOM the check reads and not in the frame; the subject, the package
     // status and the action row, is fully rendered.
     allowEmptyState: true,
@@ -5869,9 +5869,9 @@ export const SHOTS = [
         .first()
         .waitFor({ timeout: 20_000 });
     },
-    // The drawer itself, from its header down: taller than the viewport, so
-    // the element rather than the screen.
-    selector: "div.drawer-panel",
+    // The applicant dialog's panel, from its header down, rather than the
+    // screen. Scoped so no other `modal-panel` on the page can match.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // "No checklist data recorded yet" is the Checklist Progress section for
     // an applicant whose onboarding checklist has not been started. The shot
     // is about the final stage and its Convert action, both of which render.

@@ -410,6 +410,21 @@ def test_every_gate_names_a_real_module_setting():
     assert not unknown, f"gates reference non-existent module fields: {unknown}"
 
 
+def test_no_gate_label_carries_its_own_article():
+    """The refusal reads "The {label} module is not enabled", so a label that
+    already starts with "The" put "The The Department Store module" in front
+    of members. The frontend's ``moduleLabel`` is a whole phrase and keeps
+    its article; this label is a name and must not."""
+    import re
+    from pathlib import Path
+
+    api_py = Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "api.py"
+    labels = re.findall(r'module_gate\(\s*"\w+",\s*"([^"]+)"', api_py.read_text())
+    assert labels, "no module_gate labels found; the pattern no longer matches api.py"
+    doubled = sorted({label for label in labels if label.lower().startswith("the ")})
+    assert not doubled, f"labels that would read 'The The ...': {doubled}"
+
+
 # ── Cross-stack parity ──────────────────────────────────────────────────────
 
 

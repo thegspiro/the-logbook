@@ -65,56 +65,14 @@ const SuggestionForwardModal: React.FC<SuggestionForwardModalProps> = ({ detail,
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Forward for review" size="lg">
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="space-y-4">
-          <div className="alert-info text-sm">
-            <p className="text-theme-text-primary">
-              The people you choose can read <strong>this suggestion only</strong>, including its screenshots and
-              thread, set its disposition and reply. They are emailed a link, and cannot forward it further.
-              {detail.isAnonymous ? ' The submitter stays anonymous.' : ''}
-            </p>
-          </div>
-          {options === null ? (
-            <p className="text-theme-text-muted text-sm">Loading…</p>
-          ) : (
-            <>
-              <ReviewerChecklist
-                legend="Positions"
-                items={positions}
-                selected={positionIds}
-                onChange={setPositionIds}
-              />
-              <div>
-                <label htmlFor="forward-member-filter" className="form-label">
-                  Find members
-                </label>
-                <input
-                  id="forward-member-filter"
-                  className="form-input mb-2"
-                  value={memberFilter}
-                  onChange={(e) => setMemberFilter(e.target.value)}
-                  placeholder="Filter by name"
-                />
-                <ReviewerChecklist
-                  legend="Members"
-                  items={members}
-                  selected={memberIds}
-                  onChange={setMemberIds}
-                  filter={memberFilter}
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
-          >
-            Cancel
-          </button>
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Forward for review"
+      size="lg"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
           <button
             type="submit"
             className="btn-primary"
@@ -122,8 +80,51 @@ const SuggestionForwardModal: React.FC<SuggestionForwardModalProps> = ({ detail,
           >
             {isSaving ? 'Forwarding…' : 'Forward'}
           </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="alert-info text-sm">
+          <p className="text-theme-text-primary">
+            The people you choose can read <strong>this suggestion only</strong>, including its screenshots and thread,
+            set its disposition and reply. They are emailed a link, and cannot forward it further.
+            {detail.isAnonymous ? ' The submitter stays anonymous.' : ''}
+          </p>
         </div>
-      </form>
+        {options === null ? (
+          <p className="text-theme-text-muted text-sm">Loading…</p>
+        ) : (
+          <>
+            <ReviewerChecklist legend="Positions" items={positions} selected={positionIds} onChange={setPositionIds} />
+            <div>
+              <label htmlFor="forward-member-filter" className="form-label">
+                Find members
+              </label>
+              <input
+                id="forward-member-filter"
+                className="form-input mb-2"
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value)}
+                placeholder="Filter by name"
+              />
+              <ReviewerChecklist
+                legend="Members"
+                items={members}
+                selected={memberIds}
+                onChange={setMemberIds}
+                filter={memberFilter}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </Modal>
   );
 };

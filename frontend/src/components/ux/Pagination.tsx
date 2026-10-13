@@ -84,20 +84,28 @@ export const Pagination: React.FC<PaginationProps> = ({
           </div>
         )}
 
-        {/* Page buttons */}
+        {/* Page buttons. The edge buttons use aria-disabled, not disabled: a
+            disabled button drops focus to <body>, so pressing Next onto the
+            last page used to throw a keyboard user out of the list. */}
         <nav aria-label="Pagination" className="flex items-center gap-0.5">
           <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+            onClick={() => {
+              if (currentPage === 1) return;
+              onPageChange(1);
+            }}
+            aria-disabled={currentPage === 1}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="First page"
           >
             <ChevronsLeft className="h-4 w-4" />
           </button>
           <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+            onClick={() => {
+              if (currentPage === 1) return;
+              onPageChange(currentPage - 1);
+            }}
+            aria-disabled={currentPage === 1}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -125,17 +133,23 @@ export const Pagination: React.FC<PaginationProps> = ({
           )}
 
           <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+            onClick={() => {
+              if (currentPage === totalPages) return;
+              onPageChange(currentPage + 1);
+            }}
+            aria-disabled={currentPage === totalPages}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Next page"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
           <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+            onClick={() => {
+              if (currentPage === totalPages) return;
+              onPageChange(totalPages);
+            }}
+            aria-disabled={currentPage === totalPages}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Last page"
           >
             <ChevronsRight className="h-4 w-4" />

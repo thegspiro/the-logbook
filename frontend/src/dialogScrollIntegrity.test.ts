@@ -167,3 +167,58 @@ describe('shared Modal scrolls once', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * A form inside <Modal>'s children, with no footer, puts its actions in the scrolling content,
+ * so on a long form Save scrolls out of view with the fields. Pass the handler
+ * as Modal's `onSubmit` (the panel becomes the form) and the actions as
+ * `footer`, which stays pinned.
+ *
+ * A form that is a section of the dialog rather than the dialog's action set
+ * may stay, listed here with the reason.
+ */
+const FORM_IN_MODAL_ALLOWED: Record<string, string> = {
+  // The dialog is a contact list; the form is an "Add a contact" section under
+  // it, so its button is not the dialog's primary action.
+  'modules/inventory/pages/VendorsPage.tsx': 'contacts list with an inline add/edit section',
+  // The only form is the inline search/manual-entry bar; the dialog's actions
+  // depend on the scan step and live outside it.
+  'components/InventoryScanModal.tsx': 'inline search bar, step-dependent actions',
+};
+
+const findFormsInModals = (): string[] => {
+  const offenders: string[] = [];
+
+  for (const file of files) {
+    const relative = path.relative(SRC, file);
+    if (relative in FORM_IN_MODAL_ALLOWED) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    MODAL_ELEMENT.lastIndex = 0;
+    let open: RegExpExecArray | null;
+
+    while ((open = MODAL_ELEMENT.exec(source)) !== null) {
+      const close = source.indexOf('</Modal>', open.index);
+      if (close === -1) continue;
+      const children = source.slice(open.index, close);
+      const formAt = children.search(/<form\b/);
+      // A footer before the form means the actions are already pinned; they
+      // reach the form through the button's `form="<id>"` attribute.
+      if (formAt !== -1 && !children.slice(0, formAt).includes('footer=')) {
+        offenders.push(`${relative}:${source.slice(0, open.index + formAt).split('\n').length}`);
+      }
+      MODAL_ELEMENT.lastIndex = close;
+    }
+  }
+
+  return offenders;
+};
+
+describe('shared Modal pins its actions', () => {
+  it('has no <form> inside a <Modal>', () => {
+    expect(
+      findFormsInModals(),
+      "Pass the submit handler as Modal's `onSubmit` and the buttons as `footer`, so the actions stay " +
+        'pinned while the fields scroll. A form that is only a section of the dialog goes in FORM_IN_MODAL_ALLOWED.'
+    ).toEqual([]);
+  });
+});

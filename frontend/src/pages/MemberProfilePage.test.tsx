@@ -805,6 +805,18 @@ describe('MemberProfilePage edit and restricted-PII gates on a colleague', () =>
     }
   );
 
+  it('gives a users.edit holder no edit controls even on a full record', async () => {
+    // The profile and contact-info writes refuse users.edit without
+    // members.manage, so the page must not offer a form whose save would 403.
+    grantedPermissions = ['users.edit', 'users.view'];
+    getUserWithRoles.mockResolvedValue(fullColleague);
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Emergency Contacts' });
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
+  });
+
   it('gives a members-manager every edit control on the full record', async () => {
     grantedPermissions = ['members.manage'];
     getUserWithRoles.mockResolvedValue(fullColleague);

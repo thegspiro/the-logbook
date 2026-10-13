@@ -570,7 +570,7 @@ export const POSITION_LABELS: Record<string, string> = {
 // ============================================
 export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
   assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  confirmed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  confirmed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
@@ -582,7 +582,7 @@ export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
 
 export const REQUEST_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
@@ -590,7 +590,7 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
   draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  committed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  committed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
 };
 
 /**
@@ -599,7 +599,7 @@ export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
  * reviewer read amber or red.
  */
 export const HISTORY_IMPORT_RESOLUTION_COLORS: Record<string, string> = {
-  matched: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  matched: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   mapped: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   create: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   conflict: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
@@ -649,7 +649,7 @@ export type IPExceptionApprovalStatus = (typeof IPExceptionApprovalStatus)[keyof
 
 export const IP_EXCEPTION_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   rejected: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
   revoked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
@@ -726,7 +726,7 @@ export const COHORT_STATUS_LABELS: Record<string, string> = {
 export const COHORT_STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
   scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  in_progress: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  in_progress: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   completed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
   cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
@@ -741,7 +741,7 @@ export type CohortClassStatus = (typeof CohortClassStatus)[keyof typeof CohortCl
 
 export const COHORT_CLASS_STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  completed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  completed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
 
@@ -754,7 +754,7 @@ export const CohortMemberStatus = {
 export type CohortMemberStatus = (typeof CohortMemberStatus)[keyof typeof CohortMemberStatus];
 
 export const COHORT_MEMBER_STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  active: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
   completed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
 };
@@ -860,7 +860,7 @@ export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
 };
 
 export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
-  granted: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  granted: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
 };
