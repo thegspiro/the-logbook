@@ -73,8 +73,6 @@
   <Config Name="ClamAV Timeout" Target="CLAMAV_TIMEOUT_SECONDS" Default="30" Mode="" Description="Seconds allowed for one scan before the upload is refused" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
 
   <!-- Backup Configuration -->
-  <Config Name="Backup Enabled" Target="BACKUP_ENABLED" Default="true" Mode="" Description="Enable automated backups" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="Backup Schedule" Target="BACKUP_SCHEDULE" Default="0 2 * * *" Mode="" Description="Backup schedule (cron format - default: 2 AM daily)" Type="Variable" Display="advanced" Required="false" Mask="false">0 2 * * *</Config>
   <Config Name="Backup Retention Days" Target="BACKUP_RETENTION_DAYS" Default="30" Mode="" Description="Number of days to keep backups" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
 
   <!-- Modules are enabled per organization inside the app (organization
