@@ -1467,28 +1467,38 @@ async def get_unified_action_items(
         query2 = query2.where(assigned_to_caller)
 
     result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
-    for item in result2.scalars().all():
+    for minutes_item in result2.scalars().all():
         items.append(
             ActionItemSummary(
-                id=item.id,
+                id=minutes_item.id,
                 source="minutes",
-                source_id=item.minutes_id,
-                description=item.description,
-                assignee_id=item.assignee_id,
-                assignee_name=item.assignee_name,
-                due_date=item.due_date.isoformat() if item.due_date else None,
+                source_id=minutes_item.minutes_id,
+                description=minutes_item.description,
+                assignee_id=minutes_item.assignee_id,
+                assignee_name=minutes_item.assignee_name,
+                due_date=(
+                    minutes_item.due_date.isoformat() if minutes_item.due_date else None
+                ),
                 status=(
-                    item.status.value
-                    if hasattr(item.status, "value")
-                    else str(item.status)
+                    minutes_item.status.value
+                    if hasattr(minutes_item.status, "value")
+                    else str(minutes_item.status)
                 ),
                 priority=(
-                    item.priority.value
-                    if hasattr(item.priority, "value")
-                    else str(item.priority) if item.priority else None
+                    (
+                        minutes_item.priority.value
+                        if hasattr(minutes_item.priority, "value")
+                        else str(minutes_item.priority)
+                    )
+                    if minutes_item.priority
+                    else None
                 ),
-                completion_notes=item.completion_notes,
-                created_at=(item.created_at.isoformat() if item.created_at else ""),
+                completion_notes=minutes_item.completion_notes,
+                created_at=(
+                    minutes_item.created_at.isoformat()
+                    if minutes_item.created_at
+                    else ""
+                ),
             )
         )
 

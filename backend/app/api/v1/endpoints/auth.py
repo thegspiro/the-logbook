@@ -19,7 +19,7 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
@@ -98,7 +98,7 @@ router = APIRouter()
 
 
 def _set_auth_cookies(
-    response: JSONResponse,
+    response: Response,
     access_token: str,
     refresh_token: str,
 ) -> None:
@@ -1063,6 +1063,9 @@ async def _verify_and_consume_totp(db: AsyncSession, user: User, code: str) -> b
     )
     locked_user = locked.scalar_one_or_none()
     if locked_user is None:
+        return False
+
+    if not locked_user.mfa_secret:
         return False
 
     matched_timestep = mfa_service.verify_totp_get_timestep(

@@ -541,11 +541,11 @@ async def get_my_member_folder(
         .where(Document.folder_id == folder.id)
         .where(Document.status == DocumentStatus.ACTIVE)
     )
-    folder.document_count = count_result.scalar() or 0
+    document_count = count_result.scalar() or 0
 
     return {
         **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
-        "document_count": folder.document_count,
+        "document_count": document_count,
     }
 
 

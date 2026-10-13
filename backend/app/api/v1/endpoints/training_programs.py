@@ -7,6 +7,7 @@ Endpoints for managing training programs, enrollments, and member progress track
 import asyncio
 from datetime import date
 from pathlib import Path
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -72,6 +73,26 @@ from app.utils.org_timezone import (
 )
 
 router = APIRouter()
+
+
+def _is_behind_schedule(
+    *,
+    today: date,
+    cycle_start: date,
+    target_completion_date: date,
+    progress_percentage: Optional[float],
+) -> bool:
+    """Whether the share of the cycle gone exceeds progress by over 20 points.
+
+    A missing percentage reads as no progress. The column is nullable, and a
+    row that had never recorded one used to raise here and take the whole
+    progress view down with it.
+    """
+    total_time = (target_completion_date - cycle_start).days
+    if total_time <= 0:
+        return False
+    time_progress = ((today - cycle_start).days / total_time) * 100
+    return time_progress > (progress_percentage or 0) + 20
 
 
 def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
@@ -708,10 +729,11 @@ async def get_training_program(
         program_id, current_user.organization_id
     )
     requirements = [pr.requirement for pr in program_requirements]
-    if not can_view_officer_training_data(current_user):
-        requirements = [
-            _member_requirement(requirement) for requirement in requirements
-        ]
+    visible_requirements = (
+        requirements
+        if can_view_officer_training_data(current_user)
+        else [_member_requirement(requirement) for requirement in requirements]
+    )
 
     # Get milestones
     from sqlalchemy import select
@@ -754,7 +776,7 @@ async def get_training_program(
         updated_at=program.updated_at,
         created_by=program.created_by,
         phases=phases,
-        requirements=requirements,
+        requirements=visible_requirements,
         milestones=milestones,
         total_requirements=len(requirements),
         total_required=sum(1 for pr in program_requirements if pr.is_required),
@@ -1549,12 +1571,12 @@ async def get_enrollment_progress(
         cycle_start = local_date(
             enrollment.cycle_started_at or enrollment.enrolled_at, org_tz
         )
-        if enrollment.target_completion_date and time_remaining_days is not None:
-            time_elapsed = (today - cycle_start).days
-            total_time = (enrollment.target_completion_date - cycle_start).days
-            if total_time > 0:
-                time_progress = (time_elapsed / total_time) * 100
-                is_behind_schedule = time_progress > enrollment.progress_percentage + 20
+        is_behind_schedule = _is_behind_schedule(
+            today=today,
+            cycle_start=cycle_start,
+            target_completion_date=enrollment.target_completion_date,
+            progress_percentage=enrollment.progress_percentage,
+        )
 
     # Get next milestones
     from sqlalchemy import select
@@ -1593,17 +1615,19 @@ async def get_enrollment_progress(
     )
 
     can_view_officer_data = can_view_officer_training_data(current_user)
-    requirement_progress = enrollment.requirement_progress
-    if not can_view_officer_data:
-        requirement_progress = [
-            _member_progress(progress) for progress in requirement_progress
+    visible_progress = (
+        enrollment.requirement_progress
+        if can_view_officer_data
+        else [
+            _member_progress(progress) for progress in enrollment.requirement_progress
         ]
+    )
 
     return MemberProgramProgress(
         enrollment=enrollment,
         program=enrollment.program,
         current_phase=enrollment.current_phase,
-        requirement_progress=requirement_progress,
+        requirement_progress=visible_progress,
         completed_requirements=completed_requirements,
         total_requirements=len(tracked),
         next_milestones=next_milestones,

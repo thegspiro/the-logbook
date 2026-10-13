@@ -406,12 +406,12 @@ async def create_member(
     roles: list[Role] = []
     if user_data.role_ids:
         # Verify all role IDs exist and belong to the organization
-        result = await db.execute(
+        role_result = await db.execute(
             select(Role)
             .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
-        roles = result.scalars().all()
+        roles = list(role_result.scalars().all())
 
         if len(roles) != len(user_data.role_ids):
             raise HTTPException(
@@ -528,15 +528,16 @@ async def create_member(
     await db.commit()
 
     # Re-query with eager loading so Pydantic can serialize roles without lazy loading
-    result = await db.execute(
+    reload_result = await db.execute(
         select(User).where(User.id == new_user.id).options(selectinload(User.positions))
     )
-    new_user = result.scalar_one_or_none()
-    if not new_user:
+    reloaded_user = reload_result.scalar_one_or_none()
+    if not reloaded_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User disappeared after creation",
         )
+    new_user = reloaded_user
 
     await log_audit_event(
         db=db,
@@ -579,8 +580,8 @@ async def create_member(
         # request `db` or the detached `organization` ORM object.
         welcome_email = new_user.email
         # Greet the member by the name they go by.
-        welcome_first = new_user.preferred_name or new_user.first_name
-        welcome_last = new_user.last_name
+        welcome_first = new_user.preferred_name or new_user.first_name or ""
+        welcome_last = new_user.last_name or ""
         welcome_username = new_user.username
         welcome_org_id = str(current_user.organization_id)
 
@@ -1166,12 +1167,12 @@ async def assign_user_roles(
 
     # Verify all role IDs exist and belong to the same organization
     if role_assignment.role_ids:
-        result = await db.execute(
+        role_result = await db.execute(
             select(Role)
             .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
-        roles = result.scalars().all()
+        roles = role_result.scalars().all()
 
         if len(roles) != len(role_assignment.role_ids):
             raise HTTPException(
@@ -1309,12 +1310,12 @@ async def add_role_to_user(
         )
 
     # Get role
-    result = await db.execute(
+    role_result = await db.execute(
         select(Role)
         .where(Role.id == str(role_id))
         .where(Role.organization_id == str(current_user.organization_id))
     )
-    role = result.scalar_one_or_none()
+    role = role_result.scalar_one_or_none()
 
     if not role:
         raise HTTPException(
@@ -1849,9 +1850,9 @@ async def update_user_profile(
             .where(User.id == current_user.id)
             .options(selectinload(User.positions))
         )
-        perm_user = perm_result.scalar_one_or_none()
-        if not perm_user or not _has_permission(
-            "members.manage", _collect_user_permissions(perm_user)
+        acting_member = perm_result.scalar_one_or_none()
+        if not acting_member or not _has_permission(
+            "members.manage", _collect_user_permissions(acting_member)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1913,7 +1914,7 @@ async def update_user_profile(
             )
             if update_data["rank"] != user.rank:
                 await _enforce_rank_grant_ceiling(
-                    perm_user, update_data["rank"], db, None
+                    acting_member, update_data["rank"], db, None
                 )
 
         # An administrative member holds no operational rank. Judge against the
@@ -1983,8 +1984,7 @@ async def update_user_profile(
         ec_list = update_data.pop("emergency_contacts")
         if ec_list is not None:
             user.emergency_contacts = [
-                ec.model_dump() if hasattr(ec, "model_dump") else ec
-                for ec in profile_update.emergency_contacts
+                ec.model_dump() for ec in profile_update.emergency_contacts or []
             ]
 
     # Allowlist of safe fields to prevent mass-assignment of sensitive columns
@@ -2552,7 +2552,11 @@ async def get_deletion_impact(
         user_id=str(user_id),
         full_name=user.full_name,
         display_name=user.display_name,
-        status=user.status.value if hasattr(user.status, "value") else str(user.status),
+        status=(
+            user.status.value
+            if isinstance(user.status, UserStatus)
+            else str(user.status or "unknown")
+        ),
         training_records=training_count,
         inventory_items=inventory_count,
         documents=document_count,
@@ -2890,8 +2894,8 @@ async def get_member_audit_history(
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
-    logs = result.scalars().all()
+    logs_result = await db.execute(query)
+    logs = logs_result.scalars().all()
 
     # Convert to response format
     entries = []
