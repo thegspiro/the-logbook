@@ -21,6 +21,7 @@ import {
   AttendancePetitionApproveDialog,
   AttendancePetitionDeclineDialog,
 } from '../components/event-detail/AttendancePetitionDecisionDialogs';
+import { resendNote } from '../components/event-detail/attendancePetitionResends';
 import type { PendingAttendancePetition } from '../types/event';
 import { formatDate, formatDateTime } from '../utils/dateFormatting';
 import { getErrorDetail } from '../utils/errorHandling';
@@ -143,6 +144,7 @@ export const AttendanceRequestsPage: React.FC = () => {
                     <span className="text-theme-text-secondary font-normal">
                       {' '}
                       · asked {formatDateTime(request.created_at, tz)}
+                      {resendNote(request.withdrawal_count) && ` · ${resendNote(request.withdrawal_count)}`}
                     </span>
                   </p>
                   <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">

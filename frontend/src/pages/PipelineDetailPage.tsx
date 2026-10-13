@@ -37,6 +37,7 @@ import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
@@ -262,6 +263,14 @@ const RequirementList: React.FC<{
                 )}
                 {pr.program_specific_description && (
                   <p className="text-theme-text-secondary mt-1 text-xs italic">{pr.program_specific_description}</p>
+                )}
+                {(pr.custom_deadline_days != null || pr.notification_message) && (
+                  <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-x-3 text-xs">
+                    {pr.custom_deadline_days != null && (
+                      <span>Due {pr.custom_deadline_days} days after enrollment</span>
+                    )}
+                    {pr.notification_message && <span>Completion message set</span>}
+                  </div>
                 )}
                 <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                   {pr.requirement?.required_hours && <span>{pr.requirement.required_hours}h required</span>}
@@ -704,7 +713,7 @@ const RequirementProgressRow: React.FC<{
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center gap-2 text-xs">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <span className={statusMeta.className}>{statusMeta.label}</span>
           <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
           {target && (
@@ -712,6 +721,11 @@ const RequirementProgressRow: React.FC<{
               · target {target.value} {target.label}
             </span>
           )}
+          <RequirementDueDate
+            dueDate={record.due_date}
+            isOverdue={record.is_overdue}
+            done={isDone || record.status === 'waived'}
+          />
         </div>
       </div>
 

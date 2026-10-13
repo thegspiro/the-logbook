@@ -15,6 +15,7 @@ import { AttendancePetitionStatus } from '../../constants/enums';
 import type { AttendancePetition } from '../../types/event';
 import { formatDateTime } from '../../utils/dateFormatting';
 import { AttendancePetitionApproveDialog, AttendancePetitionDeclineDialog } from './AttendancePetitionDecisionDialogs';
+import { resendNote } from './attendancePetitionResends';
 
 interface EventAttendancePetitionsCardProps {
   eventId: string;
@@ -92,6 +93,7 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
                   <p className="text-theme-text-primary text-sm font-medium">{petition.user_name || 'A member'}</p>
                   <p className="text-theme-text-secondary text-xs">
                     Asked {formatDateTime(petition.created_at, timezone)}
+                    {resendNote(petition.withdrawal_count) && ` · ${resendNote(petition.withdrawal_count)}`}
                   </p>
                   <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">
                     {petition.reason}

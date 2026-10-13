@@ -60,6 +60,20 @@ describe('EventAttendancePetitionsCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('says when a member withdrew and resent the request', async () => {
+    mockList.mockResolvedValue([pending({ withdrawal_count: 2 })]);
+    render();
+
+    expect(await screen.findByText(/Withdrawn and sent again twice/)).toBeInTheDocument();
+  });
+
+  it('says nothing about resending a first request', async () => {
+    render();
+
+    expect(await screen.findByText('Phone died at the door')).toBeInTheDocument();
+    expect(screen.queryByText(/Withdrawn and sent again/)).not.toBeInTheDocument();
+  });
+
   it('approves with the event times when the member gave none', async () => {
     mockApprove.mockResolvedValue(pending({ status: 'approved', reviewed_by_name: 'Olive Member' }));
     const user = userEvent.setup();

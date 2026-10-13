@@ -513,6 +513,41 @@ two-year recert cycle do not want the same ramp. The weekly
 Set both on the pipeline's "Edit pipeline details" modal, under **Deadline
 reminders**.
 
+#### Per-Requirement Due Dates, Wording and Completion Messages
+
+Three settings belong to a requirement's place in one program rather than to
+the requirement itself. An officer sets them per requirement in the
+create-pipeline wizard and in the program's **Edit requirement** modal, under
+**In this program** — on a linked-in department requirement too, since they
+never change the department's copy.
+
+- **Due after enrollment (days)** (`custom_deadline_days`, 1–3650). The
+  requirement is due that many days after the member enrolled — the start of
+  their current cycle, so a recertification reset gives a fresh window. The
+  due date is **derived on every read** from the current setting, never stored
+  per member: changing it moves the date for everyone already enrolled. A
+  completed, verified or waived requirement is never due. The member's progress
+  page and the officer's progress modal show the date and, once it has passed,
+  **Overdue**; both are decided on the server against the department's
+  calendar.
+- **Reminders.** The daily `program_requirement_deadlines` sweep reminds the
+  member on the program's own **Deadline reminders** ramp (above) — each step
+  once, the closest step that has begun if a day was missed — and then sends
+  exactly **one** overdue notice. The requirement row records which due date
+  each notice was for, so moving the date starts the reminders again for the
+  new one. Email first (with the in-app bell entry), under the member's
+  **Training and certification reminders** email choice; never SMS. A member
+  with several requirements due hears about them in one email per run.
+- **Description members see** (`program_specific_description`). Shown on the
+  member's progress page in place of the requirement's own description.
+- **Message when completed** (`notification_message`). Emailed to the member
+  (and put in their bell) when they complete the requirement — once per
+  completion, not on every later edit; a reset followed by a fresh completion
+  sends it again. Members do not see it on the program before then.
+
+The create, build and update endpoints accept all three; on an update an
+omitted field is left alone and an explicit `null` clears it.
+
 > `milestone_threshold` appeared in an early sketch of `reminder_conditions` and
 > is **not** honored. `ProgramMilestone` rows already fire progress-based
 > notifications, and two mechanisms for one job is how the two drift apart. Old
@@ -1309,9 +1344,12 @@ const programRequirement = {
   is_required: true,
   is_prerequisite: false, // true = the rest of this phase stays locked until it's done
   sort_order: 1,
-  program_specific_description: "Complete within first 30 days",
+  // Shown to members in place of the requirement's own description.
+  program_specific_description: "Complete within your first 30 days",
+  // Due 30 days after each member enrolls (1–3650; omit for no due date).
   custom_deadline_days: 30,
-  notification_message: "Welcome! Please complete orientation materials.",
+  // Emailed to the member once, when they complete the requirement.
+  notification_message: "Orientation done — welcome aboard!",
 };
 ```
 
@@ -1524,6 +1562,9 @@ may read their own enrollment) and shows:
 
 A weekly sweep (`enrollment_deadline_warnings`) messages members at 30, 14 and 7
 days out.
+
+A requirement with its own due date (see "Per-Requirement Due Dates" above) is
+reminded separately, daily, by `program_requirement_deadlines`.
 
 ### Past the Deadline
 
@@ -1991,9 +2032,9 @@ regeneration possible.
 - id, program_id, phase_id, requirement_id
 - is_required, is_prerequisite
 - sort_order
-- program_specific_description
-- custom_deadline_days
-- notification_message
+- program_specific_description (shown to members instead of the requirement's)
+- custom_deadline_days (due N days after enrollment; derived, never stored per member)
+- notification_message (emailed once on completion)
 
 #### `program_milestones`
 

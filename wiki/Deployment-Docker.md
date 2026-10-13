@@ -74,9 +74,13 @@ What it does:
 2. Clones the repository into `--dir`, or pulls it if a checkout is there.
 3. Writes `.env` (mode `600`) with generated secrets, `ENVIRONMENT=production`,
    the `COMPOSE_FILE` pin above, `SECURITY_REQUIRE_TLS=false` for the bundled
-   plaintext MySQL/Redis, `FRONTEND_URL` and `TZ` (your shell's, or `UTC`). An
-   existing `.env` is kept: the installer only appends a missing `COMPOSE_FILE`
-   and fills in a missing or `localhost` `FRONTEND_URL`.
+   plaintext MySQL/Redis, `FRONTEND_URL`, `ALLOWED_ORIGINS` (the origin of
+   `--public-url`, e.g. `https://logbook.example.org`) and `TZ` (your shell's,
+   or `UTC`). An existing `.env` is kept: the installer only appends a missing
+   `COMPOSE_FILE`, fills in a missing or `localhost` `FRONTEND_URL`, and adds
+   the `FRONTEND_URL` origin to `ALLOWED_ORIGINS` when that list names only
+   `localhost` addresses. A list that already has a public address is left
+   alone.
 4. Builds and starts the base and production files (plus
    `docker-compose.proxy.yml` when `.env` pins it — and stops first if the
    certificate it needs is missing), then runs `alembic upgrade head`.
@@ -98,14 +102,14 @@ in `COMPOSE_FILE` after installing (see [Memory Profiles](#memory-profiles) and
 
 **Finish the install:**
 
-1. Set `ALLOWED_ORIGINS` in `.env` to the same public origin as `FRONTEND_URL`.
-   The installer writes the `localhost` origins, and the backend derives both
-   its CORS list and its Host-header allowlist from this value, so requests
-   addressed to your public hostname are rejected until it is set.
-2. Put an HTTPS reverse proxy in front of port 3000 —
+1. Put an HTTPS reverse proxy in front of port 3000 —
    [Production → HTTPS and Reverse Proxy](Deployment-Production#https-and-reverse-proxy).
-3. Apply the change: `docker compose up -d`.
-4. Log out and back in if the installer added you to the `docker` group.
+2. If members will reach the site at an address other than `--public-url`
+   (another hostname, or `https://` where you gave `http://`), set
+   `FRONTEND_URL` and `ALLOWED_ORIGINS` in `.env` to it and run
+   `docker compose up -d`. The backend only answers requests addressed to a
+   hostname in `ALLOWED_ORIGINS` (plus `localhost`).
+3. Log out and back in if the installer added you to the `docker` group.
 
 If the installer ends with "Services may still be starting", check
 `curl -s http://localhost:3000/health` and `docker compose ps`; the first build
@@ -125,8 +129,14 @@ It installs Docker, copies `.env.example` to `.env` with generated secrets,
 `ENVIRONMENT=production`, the `COMPOSE_FILE` pin and
 `SECURITY_REQUIRE_TLS=false`, then builds, starts and migrates the production
 stack. Without `--public-url` (or `LOGBOOK_PUBLIC_URL`) it asks when run from a
-terminal. Run with no arguments for an interactive menu. Finish with the same
-`ALLOWED_ORIGINS` and HTTPS steps as above.
+terminal. Run with no arguments for an interactive menu.
+
+Unlike the universal installer, `install.sh` leaves `ALLOWED_ORIGINS` at the
+`localhost` values from `.env.example`. Set it in `.env` to the same public
+origin as `FRONTEND_URL` and run `docker compose up -d`: the backend derives
+both its CORS list and its Host-header allowlist from this value, so requests
+addressed to your public hostname are rejected until it is set. Then add the
+HTTPS reverse proxy as above.
 
 `./install.sh --traditional` installs MySQL, Redis, nginx and the backend
 directly on the host under systemd instead of Docker; see

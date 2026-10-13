@@ -203,6 +203,88 @@ describe('CreatePipelinePage — a one-list program', () => {
   });
 });
 
+describe('CreatePipelinePage — a requirement’s settings in this program', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-3' });
+  });
+
+  it('sends the due-after days, member description and completion message with a linked requirement', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await goToRequirementsWithAPhase(user);
+    await user.click(await screen.findByRole('button', { name: /Link Existing/ }));
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.type(screen.getByLabelText(/Due after enrollment/), '30');
+    await user.type(screen.getByLabelText('Description members see'), '  Book the county class.  ');
+    await user.type(screen.getByLabelText('Message when completed'), 'Bring your card to Station 2.');
+
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    expect(screen.getByText('Due 30 days after enrollment')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    const payload = mockBuildProgram.mock.calls[0]?.[0] as {
+      phases: { requirements: Record<string, unknown>[] }[];
+    };
+    expect(payload.phases[0]?.requirements[0]).toStrictEqual({
+      requirement_id: 'req-cpr',
+      is_required: true,
+      sort_order: 0,
+      custom_deadline_days: 30,
+      program_specific_description: 'Book the county class.',
+      notification_message: 'Bring your card to Station 2.',
+    });
+  });
+
+  it('omits the settings an officer left blank on a new requirement', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await goToRequirementsWithAPhase(user);
+    await user.click(await screen.findByRole('button', { name: /New Requirement/ }));
+    await user.type(await screen.findByPlaceholderText(/Hose Operations Skills/), 'Ride-alongs');
+    await user.type(screen.getByLabelText('Required Hours'), '12');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    const payload = mockBuildProgram.mock.calls[0]?.[0] as {
+      phases: { requirements: Record<string, unknown>[] }[];
+    };
+    const sent = payload.phases[0]?.requirements[0] ?? {};
+    expect(sent.custom_deadline_days).toBeUndefined();
+    expect(sent.program_specific_description).toBeUndefined();
+    expect(sent.notification_message).toBeUndefined();
+  });
+
+  it('refuses a due-after value of zero before the server would', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await goToRequirementsWithAPhase(user);
+    await user.click(await screen.findByRole('button', { name: /Link Existing/ }));
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.type(screen.getByLabelText(/Due after enrollment/), '0');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('whole number from 1 to 3650'));
+    expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+});
+
 describe('CreatePipelinePage — enrollment rules', () => {
   const existing = [
     { id: 'prog-recruit', name: 'Recruit School', is_template: false },

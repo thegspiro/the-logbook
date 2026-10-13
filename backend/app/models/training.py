@@ -1788,17 +1788,19 @@ class ProgramRequirement(Base):
     )
 
     # Program-Specific Customization
-    program_specific_description: Mapped[Optional[str]] = mapped_column(
-        Text
-    )  # Override/supplement the requirement description
-    custom_deadline_days: Mapped[Optional[int]] = mapped_column(
-        Integer
-    )  # Override requirement's default time_limit_days
+    # Shown to the member on their progress page in place of the requirement's
+    # own (department-wide) description.
+    program_specific_description: Mapped[Optional[str]] = mapped_column(Text)
+    # The requirement is due this many days after the member's cycle began
+    # (their enrollment, or the latest reset). The due date is derived on
+    # every read from the current value, never stored per member, so an edit
+    # here moves every enrolled member's date at once — see
+    # app/services/program_requirement_deadlines.py.
+    custom_deadline_days: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Notification Message
-    notification_message: Mapped[Optional[str]] = mapped_column(
-        Text
-    )  # Custom message when assigned this requirement
+    # Emailed (and put in the bell) to the member when they complete this
+    # requirement — once per completion, not on every progress edit.
+    notification_message: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
@@ -2048,6 +2050,24 @@ class RequirementProgress(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     verification_notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Per-requirement deadline bookkeeping (ProgramRequirement.custom_deadline_days).
+    # Each marker names the due date a notice was sent for rather than
+    # recording that "a notice was sent": the due date is derived from the
+    # program's current setting, so when an officer changes it the markers
+    # stop matching and the reminders resume for the new date.
+    due_warning_sent_for: Mapped[Optional[date]] = mapped_column(Date)
+    # The days-before offset of that warning, so each step of the program's
+    # reminder ramp (30/14/7 …) goes out once and a missed day never replays
+    # the earlier, less urgent ones.
+    due_warning_days_before: Mapped[Optional[int]] = mapped_column(Integer)
+    overdue_notice_sent_for: Mapped[Optional[date]] = mapped_column(Date)
+    # Set when the requirement's completion message went out; cleared when the
+    # row leaves the completed state, so a re-completion after a reset is
+    # announced again but an edit to an already-complete row is not.
+    completion_notice_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(

@@ -777,6 +777,28 @@ Each program sets its **own** warning schedule in the pipeline editor:
 > 90-day warning got one at 30. If you set a schedule before 2026-08-09 and
 > thought it was not working, it was not.
 
+#### A due date per requirement _(2026-10-12)_
+
+When you add or edit a requirement in a pipeline — in the create wizard, or
+with **Edit requirement** on the program page — the **In this program** section
+holds three settings that apply only to this program:
+
+| Setting                         | Effect                                                                                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Due after enrollment (days)** | The requirement is due this many days after each member enrolls. Changing it moves the date for everyone already enrolled. Leave it blank for no due date. |
+| **Description members see**     | Shown to members on their progress page in place of the requirement's own description — the place to say how _this_ program wants it done.                 |
+| **Message when completed**      | Emailed to the member, once, when they complete the requirement. Members do not see it before then.                                                        |
+
+A member with a due date is reminded by email on the program's **Deadline
+reminders** schedule above, then told **once** if the date passes. The member's
+progress page and your **Manage progress** view show each requirement's due
+date, and **Overdue** once it has passed. A requirement that is completed,
+verified or waived is never overdue and gets no reminders.
+
+<!-- Screenshot needed:
+_[Program page → Edit requirement on a requirement in a phase: the modal scrolled to the **In this program** section with **Due after enrollment (days)** = 30, **Description members see** and **Message when completed** filled in. Demo data only.]_
+-->
+
 ### What Automatically Updates Progress
 
 Several actions credit pipeline progress without anyone editing the enrollment directly:
@@ -797,6 +819,8 @@ From **Training > My Training**, find your program under **Active Program Enroll
 - **Time remaining** in the program
 - Your **next milestones**
 - **Every requirement grouped by phase**, with each requirement's completion status
+- A requirement's **due date**, where your program sets one, and **Overdue** once it has passed
+- The program's own description of a requirement, where it has one
 
 ![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
