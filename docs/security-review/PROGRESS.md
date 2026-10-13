@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)**: branch `claude/security-review-documents-legal`, Feature 10
+(Documents & legal), pass 8 (watchdog pickup). 0 fixed, 0 new findings — DOC-8
+(MED, standing OPEN as of pass 7) re-verified **already fully fixed**, by two
+owner-direct commits that landed after pass 7 closed (`d7a7fadd`, 2026-10-11,
+paging; `46bc7ff7`, 2026-10-12, a per-member-per-type open-draft cap), neither
+reviewed by this rotation before now. Real delta since pass 7 was substantial,
+not zero — an owner-direct file-storage hardening project
+(`docs/FILE_STORAGE_HARDENING.md`, phases 1–5, 2026-10-08 → 2026-10-12) landed
+squarely in this feature's files: every document is now filed in a folder (no
+more org-wide "unfiled" documents), a folder-access editor lets a custom
+folder be restricted by position and/or permission, module folders (Training,
+Events, Apparatus, Member Separations, a new Finance root) opened to their own
+module's rights instead of document leadership, and every stored file is now
+malware-scanned and encrypted at rest. All of it read in full against current
+code (not sampled against the diff) and verified sound — no self-escalation
+path through the new access editor, no ancestor-bypass through nesting, no
+arbitrary-document read through the finance-receipt/apparatus-photo download
+paths, module-rights gating checked against the baseline permission set to
+confirm it narrows rather than widens exposure. 22 routes re-enumerated (up
+from 20 at pass 7, both additions verified sound). See the Log entry below and
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 8** section for
+detail. Row 10 stays ✅ (pending this PR's merge); next is Feature 11
+(Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 8, PR #3151, merged), preserved for history</summary>
+
 **PR [#3151](https://github.com/thegspiro/the-logbook/pull/3151)**: branch
 `claude/security-review-medical-screening`, Feature 09
 (Medical screening, PHI), pass 8 (watchdog pickup). 0 fixed, 1 new finding
@@ -29,6 +56,8 @@ sound; MS-14 re-confirmed unchanged. See the Log entry below and
 `docs/security-review/MS-09-medical-screening.md`'s **Pass 8** section for
 detail. Row 09 stays ✅ (pending this PR's merge); next is Feature 10
 (Documents & legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 9, PR #3149, before it merged), preserved for history</summary>
@@ -18828,6 +18857,99 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 10 (Documents & legal, pass 8) — 0 fixed, 0 new findings; one standing finding re-verified already fixed by owner-direct work (watchdog pickup)
+
+**Closure.** PR #3151 (Feature 09, Medical screening, pass 8) merged
+2026-10-13T09:12:47Z (`pull_request_read`: `merged: true`; local `HEAD` was
+stale at the previous feature's merge commit, so `git fetch` + `git checkout
+main` + fast-forward to `origin/main` was needed before starting) —
+docs-only (findings doc, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`; no application
+code), so per this file's own rule it is not an independently recordable
+event. Open PR row cleared and rotation row 09 stays ✅ with no log edit of
+its own. Independently re-confirmed before starting (`search_pull_requests`,
+`is:open head:claude/security-review-`, 0 results; `git branch -r`, 0 matches)
+that no security-review PR or branch was open — this iteration is itself a
+watchdog pickup, picking up Feature 10 (Documents & legal), the next `⬜` row
+per `PROGRESS.md`'s own Open-PR narrative pointer and per PR #3151's own body.
+
+**Prior art loaded first.** Read `docs/security-review/DOC-10-documents-legal.md`
+in full (all seven prior passes) before touching any code. As of pass 7
+(2026-10-06), the only standing item was DOC-8 (MED, `list_revisions`/
+`get_legal_documents` unbounded), left as an owner decision; DOC-9 and DOC-30
+had both been fixed by an external PR (#2954) just before pass 7 began, and
+re-traced independently that pass.
+
+**Real delta since pass 7 (`fe6876cd`, PR #2962's merge, 2026-10-06T02:35Z) was
+substantial — not a zero-delta pass, unlike passes 6 and 7.** An owner-direct
+file-storage hardening project (`docs/FILE_STORAGE_HARDENING.md`, phases 1–5,
+2026-10-08 → 2026-10-12, none of it from this rotation) landed in this
+feature's files: every document is now filed in a folder (closing the
+org-wide "unfiled document" gap), a folder-access editor (decision 27) lets a
+custom folder be restricted by position and/or permission with a shut-out
+guard, module folders (Training, Events, Apparatus, Member Separations, a new
+Finance root) opened to their own module's rights instead of blanket document
+leadership, and every stored file is now malware-scanned and encrypted at
+rest. Confirmed via direct content-diff against the pass-7 baseline for every
+declared file — `git log` on this range re-surfaced the same orphan/squash-merge
+artifact prior passes documented (a commit attributed to an unrelated
+feature's pass appeared in the path-filtered log for `api/public/legal.py`
+but changed zero lines of it on a direct `git diff`) — so content-diffing, not
+log output, is what this pass's delta claim rests on.
+
+Also found and verified, outside the hardening project: **DOC-8 was fully
+resolved** by two owner-direct commits after pass 7 closed — `d7a7fadd`
+(2026-10-11, pagination) and `46bc7ff7` (2026-10-12, a 10-open-drafts-per-member-
+per-type cap under a locked `users` row and a locking count, pitfall #27's
+both halves) — neither reviewed by the rotation before now. Re-verified
+directly against current code (not credited from the commit message or
+`KNOWN_LIMITATIONS.md`'s own already-correct "Resolved" note): a real SQL
+`LIMIT`/`OFFSET` query, a locking read ahead of the cap check, and the new
+`GET /legal-documents/{document_type}/revisions` route actually enforcing it.
+
+**22 routes re-enumerated via an AST walk** (up from 20 at pass 7): `GET
+/folders/role-options` (position slugs/names for the folder-access editor,
+`documents.manage`-gated, org-scoped, nothing sensitive) and `GET
+/{document_type}/revisions` (DOC-8's paging route). Every route still carries
+an explicit auth dependency; no OR-gate includes a baseline/rank-default
+permission.
+
+**No new findings.** Checked specifically for the three risks this iteration's
+own brief called out: (1) no self-escalation path through the new
+folder-access editor — `required_permissions` is validated against the real
+permission catalog, `allowed_roles` against the org's own `Position` rows, a
+personal folder's access is frozen, and every access-changing write re-checks
+the acting user would not be shut out before committing; (2) nesting a
+wide-open child folder under a restrictive parent (e.g. Member Separations)
+does not leak, because `can_access_folder`'s ancestry walk is an AND all the
+way to the root; (3) the two `folder_rights=False` finance-receipt download
+routes, and the two apparatus-photo download routes, all resolve their
+document id off an already org/record-scoped row (`pr.receipt_document_id`,
+`item.receipt_document_id`, `photo.document_id`) — never client-supplied —
+so the folder-ACL bypass those routes deliberately use cannot be reached for
+an arbitrary document. Module-rights gating was checked against
+`DEFAULT_POSITIONS["member"]`: `training.view`/`events.view` are baseline (no
+widening — those folders were already org-wide), `apparatus.*`/
+`finance.*`/`members.manage` are not (correctly narrower than before). The new
+shared storage/encryption infrastructure (`file_storage_service.py`,
+`file_encryption.py`) was read to the extent this feature's own invariants
+depend on it — path confinement correctly appends `os.sep` before the prefix
+check, so `/uploads/org-1` cannot match `/uploads/org-12` — but a full review
+of that cross-feature infrastructure belongs to Feature 00/33, not here.
+
+**Completion gate:** flake8/black/isort clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` clean (585 revisions, single head); scoped
+backend pytest (`-k "document or legal or station_document or
+facility_folder"`) 505 passed, 1 pre-existing skip (first run failed on a
+local DB one migration behind — `documents.under_correction_since` — fixed
+with `alembic upgrade head`, the same pre-existing-stale-DB shape pass 7 hit);
+full no-database backend unit suite 14,600 passed, 1 pre-existing skip, 0
+failed; `check_route_permissions.py --strict` clean (268 routes, 0
+errors/warnings); frontend `npm run typecheck` and `npm run lint` both clean;
+scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`,
+`legalDocumentsStore`, `FolderManageDialog`) 61 passed across 4 files. Full
+write-up: `docs/security-review/DOC-10-documents-legal.md` → **Pass 8**. Row
+10 stays ✅ (pending this PR's merge). Next: Feature 11 (Inventory).
 
 ### 2026-10-13 — Feature 09 (Medical screening, PHI, pass 8) — 0 fixed, 1 new finding flagged; a dating error in this feature's own findings doc found and corrected (watchdog pickup)
 
