@@ -692,6 +692,27 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### Folders name positions by id; deleting a position can be refused (2026-10-13)
+
+Nothing here stops the stack from starting. Migration `5b2e9c7d4a18` rewrites
+each document folder's position list from slugs to position ids. It does this
+within each folder's own department.
+
+- A slug that matches no position (one deleted earlier) is kept as it is. It
+  still opens the folder to nobody, as before. The Manage folder dialog removes
+  it, and says so, the next time the folder is opened.
+- `allowed_roles` in the `/documents/folders` API now carries position ids.
+  `GET /documents/folders/role-options` returns each position's `id` alongside
+  its slug and name. A script that wrote slugs there must send ids instead;
+  a slug is refused as an unknown position.
+- **Deleting a position is refused (400) while it is the only position that
+  opens a document folder.** The message names the folders. Change who can
+  open them, then delete the position. Otherwise, the deleted position is taken
+  out of every folder that lists it, and the folders are named in the audit
+  log.
+
+Rollback: `cd backend && alembic downgrade 4d8807bdd737` maps ids back to slugs.
+
 ### Folder access can be set by position and permission; some saves are refused (2026-10-12)
 
 Nothing here stops the stack from starting. The Documents folder dialogs, and

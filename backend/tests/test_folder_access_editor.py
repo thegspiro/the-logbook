@@ -19,13 +19,19 @@ from app.services.documents_service import DocumentsService
 pytestmark = pytest.mark.integration
 
 
-def _member(*permissions: str, slug: str = "custom"):
-    role = SimpleNamespace(permissions=list(permissions), slug=slug)
+# Folders name positions by id. Fixed here so the stand-in members below can
+# hold them; each test's rows are rolled back, so the ids never collide.
+QUARTERMASTER = str(uuid4())
+HISTORIAN = str(uuid4())
+
+
+def _member(*permissions: str, position: str = "custom"):
+    role = SimpleNamespace(permissions=list(permissions), slug=position, id=position)
     return SimpleNamespace(id=str(uuid4()), roles=[role], rank=None)
 
 
-LIBRARIAN = _member("documents.view", "documents.manage", slug="historian")
-ADMIN = _member("*", slug="chief")
+LIBRARIAN = _member("documents.view", "documents.manage", position=HISTORIAN)
+ADMIN = _member("*", position="chief")
 
 
 @pytest.fixture
@@ -36,9 +42,14 @@ async def org(db_session):
     db_session.add_all(
         [
             Position(
-                organization_id=org.id, name="Quartermaster", slug="quartermaster"
+                id=QUARTERMASTER,
+                organization_id=org.id,
+                name="Quartermaster",
+                slug="quartermaster",
             ),
-            Position(organization_id=org.id, name="Historian", slug="historian"),
+            Position(
+                id=HISTORIAN, organization_id=org.id, name="Historian", slug="historian"
+            ),
         ]
     )
     await db_session.flush()
@@ -89,10 +100,21 @@ class TestPermissionRestrictions:
 
 class TestPositionRestrictions:
     async def test_positions_must_be_this_departments(self, db_session, org):
-        with pytest.raises(ValueError, match="Unknown position: captain"):
+        other = Organization(name="Other FD", slug=f"fae-other-{uuid4().hex[:8]}")
+        db_session.add(other)
+        await db_session.flush()
+        theirs = Position(organization_id=other.id, name="Chief", slug="chief")
+        db_session.add(theirs)
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match=f"Unknown position: {theirs.id}"):
             await _create(
-                db_session, org, allowed_roles=["historian", "captain"], user=ADMIN
+                db_session, org, allowed_roles=[HISTORIAN, theirs.id], user=ADMIN
             )
+
+    async def test_a_slug_is_not_an_id(self, db_session, org):
+        with pytest.raises(ValueError, match="Unknown position: historian"):
+            await _create(db_session, org, allowed_roles=["historian"], user=ADMIN)
 
     async def test_positions_need_a_folder_open_to_the_organization(
         self, db_session, org
@@ -102,13 +124,13 @@ class TestPositionRestrictions:
                 db_session,
                 org,
                 visibility="leadership",
-                allowed_roles=["historian"],
+                allowed_roles=[HISTORIAN],
             )
 
     async def test_switching_to_leadership_with_positions_left_is_refused(
         self, db_session, org
     ):
-        folder = await _create(db_session, org, allowed_roles=["historian"])
+        folder = await _create(db_session, org, allowed_roles=[HISTORIAN])
         with pytest.raises(ValueError, match="open to the organization"):
             await _update(db_session, org, folder, visibility="leadership")
 
@@ -141,16 +163,16 @@ class TestBuiltInFolders:
     async def test_they_can_be_narrowed_to_positions(self, db_session, org):
         root = await self._root(db_session, org)
         updated = await _update(
-            db_session, org, root, user=ADMIN, allowed_roles=["quartermaster"]
+            db_session, org, root, user=ADMIN, allowed_roles=[QUARTERMASTER]
         )
 
-        treasurer = _member("finance.view", slug="treasurer")
-        quartermaster = _member("finance.view", slug="quartermaster")
+        treasurer = _member("finance.view", position="treasurer")
+        quartermaster = _member("finance.view", position=QUARTERMASTER)
         assert not DocumentsService._folder_admits_user(updated, treasurer)
         assert DocumentsService._folder_admits_user(updated, quartermaster)
         # The module gate still applies to anyone in the position.
         assert not DocumentsService._folder_admits_user(
-            updated, _member("documents.view", slug="quartermaster")
+            updated, _member("documents.view", position=QUARTERMASTER)
         )
 
 
@@ -191,12 +213,12 @@ class TestPersonalFolders:
 class TestNobodyShutsThemselvesOut:
     async def test_creating_a_folder_you_cannot_open_is_refused(self, db_session, org):
         with pytest.raises(ValueError, match="shut you out"):
-            await _create(db_session, org, allowed_roles=["quartermaster"])
+            await _create(db_session, org, allowed_roles=[QUARTERMASTER])
 
     async def test_saving_settings_you_fail_is_refused_and_nothing_changes(
         self, db_session, org
     ):
-        folder = await _create(db_session, org, allowed_roles=["historian"])
+        folder = await _create(db_session, org, allowed_roles=[HISTORIAN])
         folder_id = folder.id
 
         with pytest.raises(ValueError, match="shut you out"):
@@ -211,7 +233,7 @@ class TestNobodyShutsThemselvesOut:
             )
         ).scalar_one()
         assert stored.required_permissions is None
-        assert stored.allowed_roles == ["historian"]
+        assert stored.allowed_roles == [HISTORIAN]
 
     async def test_a_view_only_permission_does_not_count_for_managing(
         self, db_session, org
@@ -228,13 +250,13 @@ class TestNobodyShutsThemselvesOut:
 
     async def test_a_full_administrator_may(self, db_session, org):
         folder = await _create(
-            db_session, org, user=ADMIN, allowed_roles=["quartermaster"]
+            db_session, org, user=ADMIN, allowed_roles=[QUARTERMASTER]
         )
-        assert folder.allowed_roles == ["quartermaster"]
+        assert folder.allowed_roles == [QUARTERMASTER]
 
     async def test_a_rename_alone_is_not_an_access_change(self, db_session, org):
         folder = await _create(
-            db_session, org, user=ADMIN, allowed_roles=["quartermaster"]
+            db_session, org, user=ADMIN, allowed_roles=[QUARTERMASTER]
         )
         # The librarian cannot open it, but the shut-out check only runs on
         # an access change; reaching the folder at all is the endpoint's

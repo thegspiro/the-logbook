@@ -13,6 +13,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { documentsService, roleService } from '../../services/api';
+import type { FolderRoleOption } from '../../services/documentsService';
 import type { PermissionCategory } from '../../types/role';
 import { folderAccessIncomplete, type FolderAccess, type FolderAccessValue } from './folderAccess';
 
@@ -32,7 +33,8 @@ interface FolderAccessFieldsProps {
 }
 
 export const FolderAccessFields: React.FC<FolderAccessFieldsProps> = ({ value, onChange, moduleRights, idPrefix }) => {
-  const [roleOptions, setRoleOptions] = useState<Array<{ slug: string; name: string }> | null>(null);
+  const [roleOptions, setRoleOptions] = useState<FolderRoleOption[] | null>(null);
+  const [removedStale, setRemovedStale] = useState(0);
   const [categories, setCategories] = useState<PermissionCategory[] | null>(null);
   const [filter, setFilter] = useState('');
   const isSystem = moduleRights !== undefined;
@@ -59,6 +61,20 @@ export const FolderAccessFields: React.FC<FolderAccessFieldsProps> = ({ value, o
       cancelled = true;
     };
   }, []);
+
+  // A folder can still name a position that no longer exists: one deleted
+  // before folders stored ids, kept by migration 5b2e9c7d4a18 so the folder
+  // stayed closed. It matches nobody, and the server refuses it on save, so it
+  // is dropped here — visibly — once the department's positions are known.
+  // Never while they failed to load: an empty list would drop every entry.
+  useEffect(() => {
+    if (!roleOptions || roleOptions.length === 0) return;
+    const known = new Set(roleOptions.map((role) => role.id));
+    const kept = value.roles.filter((id) => known.has(id));
+    if (kept.length === value.roles.length) return;
+    setRemovedStale((count) => count + value.roles.length - kept.length);
+    onChange({ ...value, roles: kept });
+  }, [roleOptions, value, onChange]);
 
   const descriptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -124,19 +140,25 @@ export const FolderAccessFields: React.FC<FolderAccessFieldsProps> = ({ value, o
             ) : (
               <div className="grid gap-1 sm:grid-cols-2" role="group" aria-label="Positions">
                 {roleOptions.map((role) => (
-                  <label key={role.slug} className="flex items-center gap-2 text-sm">
+                  <label key={role.id} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       className="form-checkbox"
-                      checked={value.roles.includes(role.slug)}
+                      checked={value.roles.includes(role.id)}
                       onChange={(event) =>
-                        onChange({ ...value, roles: toggle(value.roles, role.slug, event.target.checked) })
+                        onChange({ ...value, roles: toggle(value.roles, role.id, event.target.checked) })
                       }
                     />
                     <span className="text-theme-text-primary">{role.name}</span>
                   </label>
                 ))}
               </div>
+            )}
+            {removedStale > 0 && (
+              <p className="text-theme-text-secondary mt-2 text-xs" role="status">
+                {removedStale === 1 ? 'A position' : `${removedStale} positions`} this folder listed no longer
+                {removedStale === 1 ? ' exists and was' : ' exist and were'} taken off. Saving keeps it that way.
+              </p>
             )}
             {rolesMissing && (
               <p className="text-theme-text-muted mt-2 text-xs" role="status">

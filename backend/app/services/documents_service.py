@@ -130,9 +130,9 @@ def _get_user_permissions(user: User) -> Set[str]:
     return perms
 
 
-def _get_user_role_slugs(user: User) -> Set[str]:
-    """Collect role slugs from a user's roles."""
-    return {role.slug for role in user.roles}
+def _get_user_position_ids(user: User) -> Set[str]:
+    """The ids of a user's positions, which a folder's allowed_roles holds."""
+    return {str(role.id) for role in user.roles}
 
 
 def _is_full_admin(user_permissions: Set[str]) -> bool:
@@ -206,6 +206,56 @@ async def reachable_folder_ids(
     tree = tree.union(children)
     result = await db.execute(select(tree.c.id))
     return {str(row) for row in result.scalars().all()}
+
+
+async def release_position_from_folders(
+    db: AsyncSession, organization_id: UUID | str, position_id: str
+) -> List[str]:
+    """Take a position about to be deleted out of every folder that names it.
+
+    Called by RoleService.delete_role, in its transaction. A folder open to the
+    organization whose *only* position is this one would otherwise be left
+    with nothing to admit anyone by; emptying the list would open it to the
+    whole department instead. So the deletion is refused while any such
+    folder exists, naming them, and an administrator decides their access
+    first. Returns the names of the folders the position was removed from.
+    """
+    position_id = str(position_id)
+    folders = (
+        (
+            await db.execute(
+                select(DocumentFolder).where(
+                    DocumentFolder.organization_id == str(organization_id),
+                    _json_has_value(DocumentFolder.allowed_roles),
+                )
+                # Locked so a concurrent folder edit cannot slip between this
+                # check and the delete.
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    naming = [f for f in folders if position_id in (f.allowed_roles or [])]
+    sole = sorted(
+        f.name
+        for f in naming
+        if f.allowed_roles == [position_id]
+        and (f.visibility or FolderVisibility.ORGANIZATION)
+        == FolderVisibility.ORGANIZATION
+    )
+    if sole:
+        raise ValueError(
+            "This is the only position that opens these document folders: "
+            f"{', '.join(sole)}. Change who can open them before deleting it"
+        )
+    for folder in naming:
+        # A new list rather than an in-place edit: a plain JSON column does
+        # not notice a mutated list (CLAUDE.md pitfall #12).
+        folder.allowed_roles = [
+            pid for pid in folder.allowed_roles or [] if pid != position_id
+        ] or None
+    return sorted(f.name for f in naming)
 
 
 # The fields that decide who opens a folder. Changing any of them runs the
@@ -303,7 +353,7 @@ class DocumentsService:
         - visibility='leadership'   → only the library managers (documents.manage)
         - visibility='owner'        → only the owner_user_id
         - a full administrator (*)  → every folder
-        - allowed_roles (if set)    → only users with a matching role slug
+        - allowed_roles (if set)    → only holders of one of those positions
         - required_permissions      → only users holding one of them
 
         A folder is admitted only if every folder on its path to the root
@@ -477,8 +527,7 @@ class DocumentsService:
             ) == str(user.id)
 
         if folder.allowed_roles:
-            user_roles = _get_user_role_slugs(user)
-            return bool(user_roles & set(folder.allowed_roles))
+            return bool(_get_user_position_ids(user) & set(folder.allowed_roles))
 
         return True
 
@@ -797,24 +846,24 @@ class DocumentsService:
                 data["required_permissions"] = permissions or None
 
         if "allowed_roles" in data:
-            slugs = _distinct(data["allowed_roles"])
-            if slugs:
+            position_ids = _distinct(data["allowed_roles"])
+            if position_ids:
                 known = set(
                     (
                         await self.db.execute(
-                            select(Position.slug).where(
+                            select(Position.id).where(
                                 Position.organization_id == str(organization_id),
-                                Position.slug.in_(slugs),
+                                Position.id.in_(position_ids),
                             )
                         )
                     )
                     .scalars()
                     .all()
                 )
-                missing = [slug for slug in slugs if slug not in known]
+                missing = [pid for pid in position_ids if pid not in known]
                 if missing:
                     raise ValueError(f"Unknown position: {', '.join(missing)}")
-            data["allowed_roles"] = slugs or None
+            data["allowed_roles"] = position_ids or None
 
         visibility = data.get(
             "visibility",
