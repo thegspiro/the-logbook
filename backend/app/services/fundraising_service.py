@@ -170,7 +170,11 @@ class FundraisingService:
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        search_anonymous: bool = True,
     ) -> List[Donor]:
+        """``search_anonymous=False`` keeps anonymous donors out of search
+        matches (GF-8): a caller who is shown such a donor without its name
+        must not be able to confirm the name by searching for it."""
         query = select(Donor).where(
             Donor.organization_id == organization_id,
             Donor.active.is_(True),
@@ -185,6 +189,8 @@ class FundraisingService:
                 | (Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
                 | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
+            if not search_anonymous:
+                query = query.where(Donor.is_anonymous.is_(False))
         # Tie-broken by id: identical name pairs are common (family
         # donations, common names) — see list_campaigns for why an unbroken
         # ORDER BY breaks pagination.

@@ -715,7 +715,13 @@ class RSVPHistory(Base):
     )
     changed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )  # Null means self-change
+    )  # Null means self-change, unless is_automatic
+    # Written by the system, not a person — an automatic waitlist promotion
+    # (W19-3). changed_by is null on these rows too, so readers must check this
+    # first or credit the member with a change they did not make.
+    is_automatic: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Relationships
     rsvp: Mapped["EventRSVP"] = relationship("EventRSVP", foreign_keys=[rsvp_id])

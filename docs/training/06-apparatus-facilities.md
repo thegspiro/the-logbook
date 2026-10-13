@@ -1106,6 +1106,41 @@ documents, capital project files and inspection paperwork**.
 > **[SCREENSHOT — REPLACE the facility detail Files tab capture.** The folder
 > structure is visible now, and the audience is different.**]**
 
+### Who can open which facility folder _(2026-10-11)_
+
+Until this change, every folder in a facility's file tree needed a sensitive
+facilities grant, so a secretary, quartermaster, safety officer or training
+officer — who hold plain `facilities.view` by design — saw **no folders at
+all**, not even Photos. The tree now has two tiers:
+
+| Folder                                                                 | Who can open it                                                       |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Facility Files**, each facility's folder                             | Anyone with any facilities access (`facilities.view` or more)         |
+| **Photos**, **Maintenance Records**, **Inspection Reports**            | Anyone with any facilities access                                     |
+| **Blueprints & Permits**, **Insurance & Leases**, **Capital Projects** | `facilities.view_sensitive`, `facilities.edit` or `facilities.manage` |
+| **Facility Documents** _(new)_                                         | `facilities.view_sensitive`, `facilities.edit` or `facilities.manage` |
+
+- **Floor plans stay restricted.** Blueprints & Permits is in the sensitive
+  tier on purpose.
+- **Adding, moving or deleting** in any of these folders still needs
+  `facilities.edit` or `facilities.manage`; read access is all that widened.
+- **Where an upload goes.** A photo attached on the facility's **Files** tab is
+  filed into **Photos**; a document attached there is filed into the new,
+  restricted **Facility Documents** folder. Nothing is filed loose in the
+  facility's own folder any more.
+- **What the upgrade moved.** Files that sat loose in a facility's folder or in
+  Facility Files itself were restricted only because those folders were, so
+  the upgrade moved them somewhere still restricted: a file a facility photo
+  points to went to that facility's **Photos**; everything else went to its
+  **Facility Documents**, or — for a file in Facility Files with no facility
+  to file it under — to a new **Restricted Facility Files** folder. A file the
+  Documents list points to that was sitting in Photos, Maintenance Records or
+  Inspection Reports was moved to **Facility Documents** too. A folder your
+  department made inside the tree keeps its restriction.
+- **Worth a look after upgrading:** anything else a sensitive-only person filed
+  directly into **Photos**, **Maintenance Records** or **Inspection Reports**
+  is now readable by every facilities role.
+
 ### Facilities is a leadership and facility-manager workspace now
 
 `facilities.view` has been **revoked from the regular member position, and then

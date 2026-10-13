@@ -461,6 +461,17 @@ class MinutesReject(BaseModel):
     )
 
 
+class MinutesReopen(BaseModel):
+    """Schema for reopening approved minutes for a correction (MM-17)"""
+
+    reason: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="What needs correcting; recorded in the audit trail",
+    )
+
+
 class MinutesSearchResult(UTCResponseBase):
     """Full-text search result"""
 

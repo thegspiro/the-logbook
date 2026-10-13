@@ -7,6 +7,7 @@ const mockCreateItem = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockCreateSizeVariants = vi.fn();
 const mockGetVendors = vi.fn();
+const mockGetVariantGroups = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -14,6 +15,7 @@ vi.mock('../../../services/api', () => ({
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
     createSizeVariants: (...a: unknown[]) => mockCreateSizeVariants(...a) as unknown,
     getVendors: (...a: unknown[]) => mockGetVendors(...a) as unknown,
+    getVariantGroups: (...a: unknown[]) => mockGetVariantGroups(...a) as unknown,
   },
 }));
 
@@ -104,6 +106,8 @@ describe('ItemFormModal', () => {
     mockUpdateItem.mockResolvedValue({});
     mockCreateSizeVariants.mockResolvedValue({ created_count: 1, items: [] });
     mockGetVendors.mockResolvedValue([]);
+    mockGetVariantGroups.mockReset();
+    mockGetVariantGroups.mockResolvedValue([]);
   });
 
   it('explains what each tracking type means, following the choice', async () => {
@@ -650,6 +654,106 @@ describe('ItemFormModal', () => {
     expect(payload.condition).not.toBeNull();
     expect(payload.quantity).not.toBeNull();
     expect(payload.tracking_type).not.toBeNull();
+  });
+
+  // MSUP-15: for a lot-stocked item `quantity` is a mirror no lot backs, so the
+  // form shows the lot total read-only and never writes the column.
+  describe('a lot-stocked pool item', () => {
+    const lotItem = () =>
+      makeItem({ name: 'Nitrile Gloves', tracking_type: 'pool', quantity: 3, is_lot_stocked: true, lot_stock: 40 });
+
+    it('shows the lot total instead of a Quantity input', () => {
+      render(<ItemFormModal {...baseProps} isOpen editItem={lotItem()} />);
+
+      expect(screen.queryByRole('spinbutton', { name: 'Quantity' })).not.toBeInTheDocument();
+      expect(screen.getByText(/40 from stock lots/)).toBeInTheDocument();
+    });
+
+    it('omits quantity from the update payload', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={lotItem()} />);
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      const payload = mockUpdateItem.mock.calls[0]?.[1] as Record<string, unknown>;
+      // undefined is dropped by JSON serialization, so the key never leaves the browser.
+      expect(payload.quantity).toBeUndefined();
+    });
+
+    it('still edits quantity for a pool item with no lots', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ tracking_type: 'pool', quantity: 3 })} />);
+
+      const qty = screen.getByRole('spinbutton', { name: 'Quantity' });
+      await user.clear(qty);
+      await user.type(qty, '7');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ quantity: 7 });
+    });
+  });
+
+  // W40-7: a group made on the Variant Groups page could never be filled,
+  // because no screen set variant_group_id.
+  describe('variant group picker', () => {
+    const group = (id: string, name: string, active = true) => ({
+      id,
+      organization_id: 'org-1',
+      name,
+      active,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+
+    beforeEach(() => {
+      mockGetVariantGroups.mockReset();
+      mockGetVariantGroups.mockResolvedValue([group('vg-1', 'Station T-Shirt'), group('vg-old', 'Old Polo', false)]);
+    });
+
+    it('puts a new item in the picked group', async () => {
+      const user = userEvent.setup();
+      mockCreateItem.mockResolvedValue({ id: 'new-1' });
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Station T-Shirt — L');
+      const picker = screen.getByRole('combobox', { name: 'Variant Group' });
+      await screen.findByRole('option', { name: 'Station T-Shirt' });
+      expect(within(picker).queryByRole('option', { name: /Old Polo/ })).not.toBeInTheDocument();
+      await user.selectOptions(picker, 'vg-1');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      expect(mockCreateItem.mock.calls[0]?.[0]).toMatchObject({ variant_group_id: 'vg-1' });
+      expect(mockGetVariantGroups).toHaveBeenCalledWith(false);
+    });
+
+    it('omits the group on create when none is picked', async () => {
+      const user = userEvent.setup();
+      mockCreateItem.mockResolvedValue({ id: 'new-1' });
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Loose item');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      expect((mockCreateItem.mock.calls[0]?.[0] as Record<string, unknown>).variant_group_id).toBeUndefined();
+    });
+
+    it('shows an inactive current group and sends an explicit null when the edit removes it', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ variant_group_id: 'vg-old' })} />);
+
+      const picker = screen.getByRole('combobox', { name: 'Variant Group' });
+      await screen.findByRole('option', { name: 'Old Polo (inactive)' });
+      expect(picker).toHaveValue('vg-old');
+      await user.selectOptions(picker, '');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ variant_group_id: null });
+    });
   });
 
   it('sends an explicit null when an edit unlinks the vendor', async () => {

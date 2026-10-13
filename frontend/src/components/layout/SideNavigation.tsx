@@ -126,6 +126,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const navListRef = useRef<HTMLElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+  // The collapse and expand toggles are different buttons, so pressing one
+  // unmounts it and focus fell to <body>. Hand focus to the one that replaces it.
+  const toggleFocusPending = useRef(false);
   const { canScrollUp, canScrollDown } = useScrollOverflow(navListRef);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const practicalSkillsMethod = usePracticalSkillsMethod();
@@ -787,9 +792,29 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     setExpandedMenus((prev) => (prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]));
   };
 
+  const setCollapsedFromToggle = (next: boolean) => {
+    toggleFocusPending.current = true;
+    setCollapsed(next);
+  };
+
+  useEffect(() => {
+    if (!toggleFocusPending.current) return;
+    toggleFocusPending.current = false;
+    (collapsed ? expandButtonRef : collapseButtonRef).current?.focus();
+  }, [collapsed]);
+
   const handleNavigation = (path: string, hasSubItems?: boolean, label?: string) => {
-    if (hasSubItems && !collapsed) {
-      if (label) toggleMenu(label);
+    if (hasSubItems) {
+      // A group's path is '#', so in the icon-only rail the old fallthrough to
+      // navigate() did nothing: no click, Enter or Space could reach anything
+      // under Training, Operations or the other groups. Opening the rail and
+      // the group together keeps them one press away.
+      if (collapsed) {
+        setCollapsed(false);
+        if (label) setExpandedMenus((prev) => (prev.includes(label) ? prev : [...prev, label]));
+      } else if (label) {
+        toggleMenu(label);
+      }
       return;
     }
     if (path !== '#') {
@@ -875,7 +900,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   </Link>
                 </div>
                 <button
-                  onClick={() => setCollapsed(false)}
+                  ref={expandButtonRef}
+                  type="button"
+                  aria-expanded={false}
+                  onClick={() => setCollapsedFromToggle(false)}
                   className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring mt-2 hidden w-full rounded-sm p-2 transition-colors focus:ring-2 focus:outline-hidden md:block"
                   aria-label="Expand navigation"
                 >
@@ -903,7 +931,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   </div>
                 </Link>
                 <button
-                  onClick={() => setCollapsed(true)}
+                  ref={collapseButtonRef}
+                  type="button"
+                  aria-expanded={true}
+                  onClick={() => setCollapsedFromToggle(true)}
                   className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring flex hidden min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-sm p-2 transition-colors focus:ring-2 focus:outline-hidden md:block"
                   aria-label="Collapse navigation"
                 >
@@ -990,7 +1021,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                           if (item.path !== '#') prefetchRoute(item.path);
                         }}
                         aria-current={parentActive && !hasSubItems ? 'page' : undefined}
-                        aria-expanded={hasSubItems ? isExpanded : undefined}
+                        aria-expanded={hasSubItems ? isExpanded && !collapsed : undefined}
                         aria-controls={hasSubItems ? submenuId(item.label) : undefined}
                         className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all duration-150 focus:ring-2 focus:outline-hidden ${
                           collapsed ? 'justify-center p-3' : 'px-4 py-3'

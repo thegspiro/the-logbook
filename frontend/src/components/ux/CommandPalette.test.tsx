@@ -72,7 +72,7 @@ describe('CommandPalette module gating', () => {
     renderWithRouter(<CommandPalette />);
     open();
 
-    await user.type(screen.getByRole('textbox', { name: 'Search commands' }), 'facilities');
+    await user.type(screen.getByRole('combobox', { name: 'Search commands' }), 'facilities');
     return user;
   };
 
@@ -156,7 +156,7 @@ describe('CommandPalette hub destinations', () => {
     const user = userEvent.setup();
     renderWithRouter(<CommandPalette />);
     open();
-    await user.type(screen.getByRole('textbox', { name: 'Search commands' }), text);
+    await user.type(screen.getByRole('combobox', { name: 'Search commands' }), text);
     return user;
   };
 

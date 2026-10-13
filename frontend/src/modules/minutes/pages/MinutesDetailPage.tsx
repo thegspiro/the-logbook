@@ -7,6 +7,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
+import { PromptDialog } from '../../../components/ux/PromptDialog';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -145,6 +146,8 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Approval
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
   const fetchMinutes = useCallback(async () => {
@@ -343,6 +346,21 @@ export const MinutesDetailPage: React.FC = () => {
       toast.success('Minutes rejected');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to reject minutes'));
+    }
+  };
+
+  const handleReopen = async (reason: string) => {
+    if (!minutesId) return;
+    try {
+      setReopening(true);
+      const updated = await minutesService.reopen(minutesId, reason);
+      setMinutes(updated);
+      setShowReopenDialog(false);
+      toast.success('Minutes reopened as a draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reopen minutes'));
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -652,6 +670,15 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Workflow Actions */}
         {canManage && (
           <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+            {/* Publishing needs approved minutes, so a published copy alongside
+                anything else means the minutes were reopened: Documents shows
+                that copy as being corrected until it is re-published. */}
+            {minutes.published_document_id && minutes.status !== 'approved' && (
+              <p className="alert-warning text-theme-text-primary mb-3 text-sm" role="status">
+                The copy published to Documents is marked as being corrected. Once these minutes are approved again,
+                re-publish them to replace it.
+              </p>
+            )}
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button
@@ -702,6 +729,14 @@ export const MinutesDetailPage: React.FC = () => {
                     : minutes.published_document_id
                       ? 'Re-publish to Documents'
                       : 'Publish to Documents'}
+                </button>
+              )}
+              {minutes.status === 'approved' && (
+                <button
+                  onClick={() => setShowReopenDialog(true)}
+                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border rounded-md border px-4 py-2"
+                >
+                  Reopen for Correction
                 </button>
               )}
               {minutes.published_document_id && (
@@ -1330,6 +1365,7 @@ export const MinutesDetailPage: React.FC = () => {
                   Link to Meeting Event
                 </h3>
                 <button
+                  data-dialog-close
                   onClick={() => setShowLinkEventModal(false)}
                   className="text-theme-text-muted hover:text-theme-text-secondary"
                   aria-label="Close dialog"
@@ -1377,6 +1413,22 @@ export const MinutesDetailPage: React.FC = () => {
             </DialogPanel>
           </div>
         )}
+
+        <PromptDialog
+          isOpen={showReopenDialog}
+          onClose={() => setShowReopenDialog(false)}
+          onSubmit={(reason) => void handleReopen(reason)}
+          title="Reopen approved minutes"
+          message="Approved minutes are locked. Reopening returns them to draft so they can be corrected; they must then be submitted and approved again, and members will not see them as approved until they are."
+          label="What needs correcting"
+          required
+          minLength={10}
+          multiline
+          hint="Saved in the audit log with the earlier approval."
+          confirmLabel="Reopen as draft"
+          confirmVariant="warning"
+          loading={reopening}
+        />
 
         {/* Reject Modal */}
         {showRejectModal && (

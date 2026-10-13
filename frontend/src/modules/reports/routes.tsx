@@ -10,6 +10,7 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const ReportsPage = lazyWithRetry(() => import('./pages/ReportsPage'));
+const SavedReportsPage = lazyWithRetry(() => import('./pages/SavedReportsPage'));
 
 export const getReportsRoutes = () => {
   return (
@@ -20,6 +21,16 @@ export const getReportsRoutes = () => {
           <ProtectedRoute requiredModule="reports" moduleLabel="Reports" requiredPermission="reports.view">
             <Suspense fallback={null}>
               <ReportsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/saved"
+        element={
+          <ProtectedRoute requiredModule="reports" moduleLabel="Reports" requiredPermission="reports.view">
+            <Suspense fallback={null}>
+              <SavedReportsPage />
             </Suspense>
           </ProtectedRoute>
         }

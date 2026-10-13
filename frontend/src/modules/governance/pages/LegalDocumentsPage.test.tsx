@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { renderWithRouter } from '../../../test/utils';
+import { createMockApiError, renderWithRouter } from '../../../test/utils';
 import type { LegalDocumentsOverview } from '../types/legal';
 
 const mockGetOverview = vi.fn();
@@ -11,6 +11,7 @@ const mockPublishRevision = vi.fn();
 const mockDeleteRevision = vi.fn();
 const mockRevertToDefault = vi.fn();
 const mockUpdateRevision = vi.fn();
+const mockListRevisions = vi.fn();
 
 vi.mock('../services/api', () => ({
   legalDocumentsService: {
@@ -20,7 +21,13 @@ vi.mock('../services/api', () => ({
     deleteRevision: (...args: unknown[]) => mockDeleteRevision(...args) as unknown,
     publishRevision: (...args: unknown[]) => mockPublishRevision(...args) as unknown,
     revertToDefault: (...args: unknown[]) => mockRevertToDefault(...args) as unknown,
+    listRevisions: (...args: unknown[]) => mockListRevisions(...args) as unknown,
   },
+}));
+
+const mockToastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: (...args: unknown[]) => mockToastError(...args) as unknown },
 }));
 
 vi.mock('../../../stores/authStore', () => ({
@@ -60,7 +67,9 @@ const overview = (partial: Partial<LegalDocumentsOverview> = {}): LegalDocuments
       publishedAt: null,
       publishedByName: null,
       drafts: [],
+      draftsTotal: 0,
       history: [],
+      historyTotal: 0,
     },
     {
       documentType: 'terms_of_service',
@@ -71,7 +80,9 @@ const overview = (partial: Partial<LegalDocumentsOverview> = {}): LegalDocuments
       publishedAt: null,
       publishedByName: null,
       drafts: [],
+      draftsTotal: 0,
       history: [],
+      historyTotal: 0,
     },
   ],
   ...partial,
@@ -80,8 +91,16 @@ const overview = (partial: Partial<LegalDocumentsOverview> = {}): LegalDocuments
 describe('LegalDocumentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useLegalDocumentsStore.setState({ overview: null, isLoading: false, isSaving: false, error: null });
+    useLegalDocumentsStore.setState({
+      overview: null,
+      isLoading: false,
+      isSaving: false,
+      loadingMore: null,
+      error: null,
+    });
+    mockGetOverview.mockReset();
     mockGetOverview.mockResolvedValue(overview());
+    mockListRevisions.mockReset();
   });
 
   it('shows which document members currently see', async () => {
@@ -155,13 +174,30 @@ describe('LegalDocumentsPage', () => {
     expect(mockPublishRevision).not.toHaveBeenCalled();
   });
 
+  it('tells the member why a proposal over the open-draft cap was refused', async () => {
+    const user = userEvent.setup();
+    const refusal = 'You already have 10 open proposals for the privacy policy. Publish or withdraw one first.';
+    mockCreateRevision.mockReset();
+    mockCreateRevision.mockRejectedValue(createMockApiError(refusal, 400));
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByRole('heading', { name: 'Legal Documents' });
+    await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
+
+    await user.type(await screen.findByLabelText(/What does this change/), 'Matches Article IV.');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    // The server's reason, not a generic "Could not save": the member has to
+    // learn that publishing or withdrawing one of their drafts unblocks them.
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(refusal));
+  });
+
   it('clears the effective date with an explicit null rather than omitting it', async () => {
     const user = userEvent.setup();
     mockUpdateRevision.mockResolvedValue(draft);
     mockGetOverview.mockResolvedValue(
       overview({
         documents: overview().documents.map((d) =>
-          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft] } : d
+          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 1 } : d
         ),
       })
     );
@@ -183,7 +219,7 @@ describe('LegalDocumentsPage', () => {
     mockGetOverview.mockResolvedValue(
       overview({
         documents: overview().documents.map((d) =>
-          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft] } : d
+          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 1 } : d
         ),
       })
     );
@@ -198,7 +234,7 @@ describe('LegalDocumentsPage', () => {
     mockGetOverview.mockResolvedValue(
       overview({
         documents: overview().documents.map((d) =>
-          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft] } : d
+          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 1 } : d
         ),
       })
     );
@@ -218,7 +254,7 @@ describe('LegalDocumentsPage', () => {
       overview({
         canPublish: false,
         documents: overview().documents.map((d) =>
-          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft] } : d
+          d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 1 } : d
         ),
       })
     );
@@ -248,5 +284,50 @@ describe('LegalDocumentsPage', () => {
     renderWithRouter(<LegalDocumentsPage />);
     expect(await screen.findByRole('button', { name: /Revert to the built-in text/ })).toBeInTheDocument();
     expect(screen.getByText(/Falls Church VFD publishes its own wording/)).toBeInTheDocument();
+  });
+  // DOC-8: the overview carries one page of each list and its total.
+  describe('loading more', () => {
+    const older = { ...draft, id: 'rev-2', createdByName: 'Sam Ortiz', changeNote: 'An older proposal.' };
+
+    beforeEach(() => {
+      mockGetOverview.mockResolvedValue(
+        overview({
+          documents: overview().documents.map((d) =>
+            d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 2 } : d
+          ),
+        })
+      );
+      mockListRevisions.mockResolvedValue({ items: [older], total: 2, offset: 1, limit: 10 });
+    });
+
+    it('counts every proposal and offers the rest', async () => {
+      renderWithRouter(<LegalDocumentsPage />);
+      expect(await screen.findByRole('heading', { name: 'Proposed revisions (2)' })).toBeInTheDocument();
+      expect(screen.getByText('Showing 1 of 2')).toBeInTheDocument();
+    });
+
+    it('appends the next page and then stops offering more', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<LegalDocumentsPage />);
+      await user.click(await screen.findByRole('button', { name: 'Load more proposals' }));
+
+      expect(mockListRevisions).toHaveBeenCalledWith('privacy_policy', 'drafts', 1);
+      expect(await screen.findByText('Sam Ortiz proposed this')).toBeInTheDocument();
+      expect(screen.getByText('Dana Reyes proposed this')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Load more proposals' })).not.toBeInTheDocument();
+    });
+
+    it('offers nothing more when the first page is everything', async () => {
+      mockGetOverview.mockResolvedValue(
+        overview({
+          documents: overview().documents.map((d) =>
+            d.documentType === 'privacy_policy' ? { ...d, drafts: [draft], draftsTotal: 1 } : d
+          ),
+        })
+      );
+      renderWithRouter(<LegalDocumentsPage />);
+      await screen.findByText('Dana Reyes proposed this');
+      expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument();
+    });
   });
 });

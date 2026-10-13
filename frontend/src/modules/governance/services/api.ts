@@ -11,6 +11,8 @@ import type {
   LegalDocumentsOverview,
   LegalRevision,
   LegalRevisionCreate,
+  LegalRevisionListKind,
+  LegalRevisionPage,
   LegalRevisionUpdate,
 } from '../types/legal';
 import type { OrgChart, OrgChartNodeCreate, OrgChartNodeMove, OrgChartNodeUpdate } from '../types/orgChart';
@@ -20,6 +22,18 @@ const api = createApiClient();
 export const legalDocumentsService = {
   async getOverview(): Promise<LegalDocumentsOverview> {
     const response = await api.get<LegalDocumentsOverview>('/legal-documents');
+    return response.data;
+  },
+
+  /** A further page of one document's drafts or history (the overview carries the first). */
+  async listRevisions(
+    documentType: LegalDocumentType,
+    kind: LegalRevisionListKind,
+    offset: number
+  ): Promise<LegalRevisionPage> {
+    const response = await api.get<LegalRevisionPage>(`/legal-documents/${documentType}/revisions`, {
+      params: { kind, offset },
+    });
     return response.data;
   },
 

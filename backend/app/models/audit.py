@@ -77,8 +77,23 @@ class AuditLog(Base):
     event_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     # Integrity Chain (Blockchain-inspired)
-    previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    current_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    #
+    # The caller's transaction inserts the row with all four chain columns
+    # NULL; AuditLogger.seal_pending fills them later in its own short
+    # transaction, serialized on audit_chain_head (SEC2-28-10). Assigning the
+    # chain position at insert time instead would mean reading the chain's
+    # tail inside every caller's transaction, which either forks the chain
+    # (non-locking read) or serializes every audited request behind one row
+    # lock (locking read).
+    #
+    # chain_seq is the row's position in the chain and is NOT id order: a
+    # transaction that inserts early and commits late is sealed after rows
+    # with higher ids. Anything that walks or slices the chain orders by
+    # chain_seq. Rows written before the sealer existed were backfilled with
+    # chain_seq = id, which was their chain order.
+    chain_seq: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    previous_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    current_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     # Hash algorithm version: NULL/1 = legacy unkeyed SHA-256, 2 = keyed
     # HMAC-SHA256, 3 = keyed + organization_id in the hash input. Stored
     # per-row so pre-upgrade entries still verify under their original
@@ -102,6 +117,7 @@ class AuditLog(Base):
         Index("idx_audit_user_id", "user_id"),
         Index("idx_audit_event_type", "event_type"),
         Index("idx_audit_current_hash", "current_hash"),
+        Index("uq_audit_chain_seq", "chain_seq", unique=True),
     )
 
     def __repr__(self):
@@ -170,10 +186,17 @@ class AuditShipState(Base):
     """
     High-water mark for off-host audit-log shipping.
 
-    A single row (id=1) tracking the last AuditLog.id successfully delivered
-    to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The
-    watermark only advances after the collector acknowledges a batch, so a
-    failed delivery is retried on the next scheduled run.
+    A single row (id=1) tracking the last chain position (AuditLog.chain_seq)
+    successfully delivered to the configured external collector
+    (AUDIT_SHIP_WEBHOOK_URL). The watermark only advances after the collector
+    acknowledges a batch, so a failed delivery is retried on the next
+    scheduled run.
+
+    The column is still called ``last_shipped_id`` because it held an
+    AuditLog.id until SEC2-28-10. It switched to chain_seq because only sealed
+    rows can be shipped and they are not sealed in id order, so an id
+    watermark would step over a row sealed late. Every row sealed before the
+    switch has chain_seq = id, so a stored watermark kept its meaning.
     """
 
     __tablename__ = "audit_ship_state"
@@ -197,3 +220,38 @@ class AuditShipState(Base):
 
     def __repr__(self):
         return f"<AuditShipState(last_shipped_id={self.last_shipped_id})>"
+
+
+class AuditChainHead(Base):
+    """
+    The sealed end of the audit hash chain: one row (id=1).
+
+    AuditLogger.seal_pending locks this row (SELECT ... FOR UPDATE) for the
+    length of one short sealing transaction, so two sealers serialize here and
+    can never both extend the chain from the same tail. It is the only lock
+    the chain takes, and no caller's transaction ever touches it.
+    """
+
+    __tablename__ = "audit_chain_head"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # chain_seq of the last sealed row, 0 before anything was sealed.
+    last_seq: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    # current_hash of that row. Kept here, not only on the row, because the
+    # retention job may purge every sealed row; the next row must still link
+    # to the purged tail, which the archive attestation vouches for.
+    last_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self):
+        return f"<AuditChainHead(last_seq={self.last_seq})>"

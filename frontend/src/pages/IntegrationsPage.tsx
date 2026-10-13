@@ -60,6 +60,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -356,6 +357,8 @@ const IntegrationsPage: React.FC = () => {
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   const [preview, setPreview] = useState<SalesforcePreviewResult | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [switchingSfAuth, setSwitchingSfAuth] = useState(false);
+  const { confirm } = useConfirm();
 
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -661,6 +664,20 @@ const IntegrationsPage: React.FC = () => {
     }
   };
 
+  // The Disconnect button is replaced by Connect, so focus fell to <body>.
+  // Focus moves once the replacement has rendered: a timer fired before the
+  // status update committed and found nothing to focus.
+  const [pendingConnectFocus, setPendingConnectFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingConnectFocus) return;
+    const connect = document.querySelector<HTMLButtonElement>(
+      `[data-integration-connect="${CSS.escape(pendingConnectFocus)}"]`
+    );
+    if (!connect) return;
+    connect.focus();
+    setPendingConnectFocus(null);
+  }, [pendingConnectFocus, integrations]);
+
   const handleDisconnect = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (mcpBusy && integration?.integration_type === 'claude-mcp') return;
@@ -671,10 +688,43 @@ const IntegrationsPage: React.FC = () => {
         prev.map((i) => (i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i))
       );
       toast.success(`${integration?.name ?? 'Integration'} ${activation ? 'deactivated' : 'disconnected'}`);
+      setPendingConnectFocus(integrationId);
     } catch (err: unknown) {
       toast.error(
         getErrorMessage(err, activation ? 'Failed to deactivate integration' : 'Failed to disconnect integration')
       );
+    }
+  };
+
+  // The backend treats an explicit "" refresh_token on a Salesforce update as
+  // "switch to the client-credentials flow" and discards the stored refresh
+  // and access tokens. The config form cannot send it — a blank field is
+  // omitted, which means "leave unchanged" for every secret on this page — so
+  // the switch is its own control and touches nothing else (INT-11).
+  const handleSwitchSalesforceToClientCredentials = async () => {
+    const salesforce = integrations.find(
+      (i) => i.integration_type === 'salesforce' && i.status === ConnectionStatus.CONNECTED
+    );
+    if (!salesforce) return;
+    const confirmed = await confirm({
+      title: 'Switch Salesforce to client credentials?',
+      message:
+        "Salesforce will stop signing in as the person who connected it. The saved refresh token is discarded and the next sync signs in with your Connected App's own client ID and secret, using Salesforce's client-credentials flow. That flow must be enabled on the Connected App, with a Run As user, or syncs will fail until it is.",
+      confirmLabel: 'Switch to client credentials',
+      cancelLabel: 'Keep the current connection',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+    setSwitchingSfAuth(true);
+    try {
+      await integrationsService.updateIntegration(salesforce.id, { refresh_token: '' });
+      setReadiness(null);
+      setPreview(null);
+      toast.success('Salesforce now uses client credentials');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not switch Salesforce to client credentials'));
+    } finally {
+      setSwitchingSfAuth(false);
     }
   };
 
@@ -1717,6 +1767,8 @@ const IntegrationsPage: React.FC = () => {
                   )}
                   {integration.status === 'available' && canManage && (
                     <button
+                      type="button"
+                      data-integration-connect={integration.id}
                       onClick={() => {
                         resetFormState(integration);
                         setShowConnectModal(integration.id);
@@ -2028,6 +2080,31 @@ const IntegrationsPage: React.FC = () => {
                   direction is &quot;Push&quot; or &quot;Bidirectional&quot;.
                 </p>
               </div>
+
+              {/* How Salesforce signs in */}
+              <div className="border-theme-surface-border mt-4 border-t pt-4">
+                <h4 className="text-theme-text-primary mb-1 text-sm font-medium">Sign-in method</h4>
+                <p className="text-theme-text-muted mb-3 text-xs">
+                  Connected with &quot;Connect with Salesforce&quot; or a pasted refresh token, the integration signs in
+                  as the person who connected it. Switch to client credentials to sign in as your Connected App instead,
+                  so syncing does not depend on one person&apos;s account.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleSwitchSalesforceToClientCredentials();
+                  }}
+                  disabled={switchingSfAuth}
+                  className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-50"
+                >
+                  {switchingSfAuth ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-3.5 w-3.5" />
+                  )}
+                  <span>Switch to Client Credentials</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -2078,6 +2155,7 @@ const IntegrationsPage: React.FC = () => {
                     }}
                     className="relative w-full max-w-lg"
                     role="dialog"
+                    aria-modal="true"
                     aria-labelledby="integration-connect-title"
                   >
                     <div className="px-6 pt-5 pb-4">
@@ -2091,6 +2169,7 @@ const IntegrationsPage: React.FC = () => {
                           </h3>
                         </div>
                         <button
+                          data-dialog-close
                           onClick={() => {
                             setShowConnectModal(null);
                             resetFormState();

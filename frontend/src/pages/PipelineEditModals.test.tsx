@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../test/utils';
+import { createMockApiError, renderWithRouter } from '../test/utils';
 
 const mockAddProgramRequirement = vi.fn();
 const mockCreateRequirementEnhanced = vi.fn();
@@ -19,6 +19,7 @@ const mockCreateProgramPhase = vi.fn();
 const mockUpdateProgramPhase = vi.fn();
 const mockUpdateProgram = vi.fn();
 const mockUpdateRequirementEnhanced = vi.fn();
+const mockGetPrograms = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -30,6 +31,7 @@ vi.mock('../services/api', () => ({
     updateProgramPhase: (...a: unknown[]) => mockUpdateProgramPhase(...a) as unknown,
     updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
     updateRequirementEnhanced: (...a: unknown[]) => mockUpdateRequirementEnhanced(...a) as unknown,
+    getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
   },
   trainingService: {
@@ -37,8 +39,9 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: { success: vi.fn(), error: (...a: unknown[]) => mockToastError(...a) as unknown },
 }));
 
 // Imported after the mocks so the modal picks them up.
@@ -406,6 +409,8 @@ describe('EditProgramModal — deadline reminders', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpdateProgram.mockResolvedValue(program);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
   });
 
   it('saves a custom reminder schedule and on-track cutoff', async () => {
@@ -455,5 +460,119 @@ describe('EditProgramModal — deadline reminders', () => {
         })
       );
     });
+  });
+});
+
+describe('EditProgramModal — enrollment rules', () => {
+  const others = [
+    { ...program },
+    { ...program, id: 'prog-hazmat', name: 'Hazmat Operations' },
+    { ...program, id: 'prog-driver', name: 'Driver Operator' },
+    { ...program, id: 'prog-template', name: 'Recruit Blueprint', is_template: true },
+  ];
+  const withPrerequisite = {
+    ...program,
+    allows_concurrent_enrollment: false,
+    prerequisite_program_ids: ['prog-hazmat', 'prog-archived'],
+    prerequisite_programs: [
+      { id: 'prog-hazmat', name: 'Hazmat Operations' },
+      { id: 'prog-archived', name: 'Old Academy' },
+    ],
+  };
+  const concurrencyLabel = 'Allow members to be enrolled in other programs at the same time';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue(others);
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+  });
+
+  it('offers the other programs, never the program itself or a template', async () => {
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(await screen.findByRole('checkbox', { name: 'Hazmat Operations' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Driver Operator' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Recruit School' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Recruit Blueprint' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: concurrencyLabel })).toBeChecked();
+  });
+
+  it('sends every field the form owns, including both rules', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={onSaved} />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Driver Operator' }));
+    await user.click(screen.getByRole('checkbox', { name: concurrencyLabel }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith('prog-1', {
+        name: 'Recruit School',
+        description: undefined,
+        code: undefined,
+        structure_type: 'phases',
+        target_position: undefined,
+        time_limit_days: undefined,
+        warning_days_before: 30,
+        reminder_conditions: { days_before_deadline: [], send_if_below_percentage: undefined },
+        is_template: false,
+        active: true,
+        recert_enabled: false,
+        recert_interval_months: undefined,
+        recert_anchor_month: undefined,
+        recert_anchor_day: undefined,
+        prerequisite_program_ids: ['prog-driver'],
+        allows_concurrent_enrollment: false,
+      });
+    });
+    // The parent re-fetches the program on onSaved.
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an existing prerequisite that is no longer offered visible and removable', async () => {
+    renderWithRouter(<EditProgramModal program={withPrerequisite} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(await screen.findByRole('checkbox', { name: 'Hazmat Operations' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Old Academy' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: concurrencyLabel })).not.toBeChecked();
+  });
+
+  it('clears the prerequisites with an empty list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={withPrerequisite} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Hazmat Operations' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Old Academy' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ prerequisite_program_ids: [], allows_concurrent_enrollment: false })
+      );
+    });
+  });
+
+  it('shows the server’s refusal and does not report success', async () => {
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockRejectedValue(
+      createMockApiError('Driver Operator already requires this program, directly or through its own prerequisites')
+    );
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={onSaved} />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Driver Operator' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Driver Operator already requires this program, directly or through its own prerequisites'
+      );
+    });
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

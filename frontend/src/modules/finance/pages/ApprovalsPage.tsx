@@ -30,6 +30,7 @@ import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import type { PendingApproval, UnroutedApproval } from '../types';
 import { ApprovalDecisionDialog } from '../components/ApprovalDecisionDialog';
+import { LateLinesBadge } from '../components/LateLinesBadge';
 import type { ApprovalDecision } from '../components/ApprovalDecisionDialog';
 import { APPROVAL_ENTITY_LABELS, approvalEntityPath } from '../components/approvalEntities';
 
@@ -142,7 +143,8 @@ const ManualDecisions: React.FC = () => {
           Waiting for a decision on their own page
         </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
-          No approval chain applies to these, or they need a second approver. Open one to approve or deny it.
+          No approval chain applies to these, they need a second approver, or an approver has to confirm late expenses.
+          Open one to approve or deny it.
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -179,6 +181,11 @@ const ManualDecisions: React.FC = () => {
                   >
                     {row.entityTitle}
                   </Link>
+                  {(row.lateLineCount ?? 0) > 0 && (
+                    <div className="mt-1">
+                      <LateLinesBadge count={row.lateLineCount} />
+                    </div>
+                  )}
                 </td>
                 <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                   {APPROVAL_ENTITY_LABELS[row.entityType]}
@@ -193,7 +200,11 @@ const ManualDecisions: React.FC = () => {
                   {formatCurrency(row.entityAmount)}
                 </td>
                 <td data-label="Needs" className="text-theme-text-primary px-4 py-3 text-sm">
-                  {row.awaitingSecondApproval ? 'A second approver' : 'An approver (no chain applies)'}
+                  {row.awaitingLateAcknowledgement
+                    ? 'An approver to confirm the late lines'
+                    : row.awaitingSecondApproval
+                      ? 'A second approver'
+                      : 'An approver (no chain applies)'}
                 </td>
                 <td data-label="Submitted" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                   {formatDate(row.submittedAt, tz)}
@@ -227,6 +238,7 @@ const ApprovalsPage: React.FC = () => {
       subject: `${row.entityTitle} (${APPROVAL_ENTITY_LABELS[row.entityType].toLowerCase()})`,
       stepName: row.stepName,
       override: !row.canAct && row.requiresOverride ? { assigneeLabel: row.assigneeLabel } : undefined,
+      lateLines: row.lateLineCount,
     });
 
   if (!loaded) {
@@ -303,6 +315,11 @@ const ApprovalsPage: React.FC = () => {
                       >
                         {row.entityTitle}
                       </Link>
+                      {(row.lateLineCount ?? 0) > 0 && (
+                        <div className="mt-1">
+                          <LateLinesBadge count={row.lateLineCount} />
+                        </div>
+                      )}
                     </td>
                     <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {APPROVAL_ENTITY_LABELS[row.entityType]}

@@ -1,5 +1,9 @@
 /**
- * Training Summary Report Renderer
+ * Training & Program Progress Summary Report Renderer (report id `training_summary`)
+ *
+ * The "Program Progress by Requirement" tab (RPT5-29-1) counts a requirement
+ * as met when a program enrollment marked it complete. It is labelled that
+ * way, not as compliance.
  */
 
 import React, { useState } from 'react';
@@ -44,11 +48,11 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
 
   const reqColumns = [
     { key: 'requirement_name', header: 'Requirement' },
-    { key: 'total_members', header: 'Total Members', align: 'right' as const },
-    { key: 'completed', header: 'Completed', align: 'right' as const },
+    { key: 'total_members', header: 'Members Graded', align: 'right' as const },
+    { key: 'completed', header: 'Met in Program', align: 'right' as const },
     {
       key: 'completion_pct',
-      header: 'Completion %',
+      header: 'Program Progress %',
       align: 'right' as const,
       render: (v: unknown) => (typeof v === 'number' ? `${v}%` : v != null ? toDisplayString(v) : '0%'),
     },
@@ -57,7 +61,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'members', label: 'By Member' },
     { id: 'courses', label: 'By Course' },
-    { id: 'requirements', label: 'By Requirement' },
+    { id: 'requirements', label: 'Program Progress by Requirement' },
   ];
 
   return (
@@ -100,11 +104,18 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
         />
       )}
       {tab === 'requirements' && (
-        <ReportTable
-          rows={(data.requirement_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
-          columns={reqColumns}
-          emptyMessage="No requirement data found."
-        />
+        <>
+          <p className="text-theme-text-secondary mb-3 text-sm">
+            Counts a requirement as met when a member&apos;s training-program enrollment marked it complete. Members a
+            requirement does not apply to, or who are still inside its catch-up period, are left out. For requirement
+            compliance, see the Training dashboard.
+          </p>
+          <ReportTable
+            rows={(data.requirement_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
+            columns={reqColumns}
+            emptyMessage="No requirement data found."
+          />
+        </>
       )}
     </div>
   );
@@ -117,7 +128,6 @@ export function getTrainingSummaryExportData(data: TrainingSummaryReport) {
     { key: 'total_courses', header: 'Total Courses' },
     { key: 'completed_courses', header: 'Completed' },
     { key: 'total_hours', header: 'Hours' },
-    { key: 'compliance_percentage', header: 'Compliance %' },
   ];
   return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

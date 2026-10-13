@@ -43,8 +43,23 @@ export interface LegalDocumentState {
   publishedEffectiveDate?: string | null;
   publishedAt?: string | null;
   publishedByName?: string | null;
+  /** The first page of proposals, newest first; `draftsTotal` counts them all. */
   drafts: LegalRevision[];
+  draftsTotal: number;
+  /** The first page of published and replaced versions; `historyTotal` counts them all. */
   history: LegalRevision[];
+  historyTotal: number;
+}
+
+/** Which of a document's two lists a further page is drawn from. */
+export type LegalRevisionListKind = 'drafts' | 'history';
+
+/** A further page of one list, from GET /legal-documents/{type}/revisions. */
+export interface LegalRevisionPage {
+  items: LegalRevision[];
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 export interface LegalDocumentsOverview {

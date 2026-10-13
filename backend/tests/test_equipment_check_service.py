@@ -1485,6 +1485,7 @@ class TestFailureAlertDetails:
                             "compartment_name": "Cab",
                             "check_type": "functional",
                             "status": "out_of_service",
+                            "notes": "Battery will not hold a charge",
                         },
                         {
                             "item_name": "O2 bottle",

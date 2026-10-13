@@ -61,6 +61,7 @@ import type {
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
+import { useTablist } from '../hooks/useTablist';
 
 // Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
 // without a timezone shift: build it at local midnight from its Y-M-D parts so
@@ -450,13 +451,16 @@ const EnrollModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="enroll-members-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
-          <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
+          <h2 id="enroll-members-title" className="text-theme-text-primary text-xl font-bold">
+            Enroll Members
+          </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
         </div>
         <form
@@ -1068,6 +1072,7 @@ const EnrollmentProgressModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="member-progress-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
@@ -1076,7 +1081,9 @@ const EnrollmentProgressModal: React.FC<{
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-theme-text-primary text-xl font-bold">Progress — {memberName}</h2>
+              <h2 id="member-progress-title" className="text-theme-text-primary text-xl font-bold">
+                Progress — {memberName}
+              </h2>
               {data && (
                 <p className="text-theme-text-muted mt-1 text-sm">
                   {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
@@ -1098,6 +1105,7 @@ const EnrollmentProgressModal: React.FC<{
               )}
             </div>
             <button
+              data-dialog-close
               type="button"
               onClick={onClose}
               aria-label="Close"
@@ -1261,6 +1269,7 @@ const EnrollmentProgressModal: React.FC<{
 // ==================== Main Page ====================
 
 const PipelineDetailPage: React.FC = () => {
+  const tablist = useTablist();
   const { programId } = useParams<{ programId: string }>();
   const navigate = useNavigate();
 
@@ -1609,6 +1618,24 @@ const PipelineDetailPage: React.FC = () => {
                   </span>
                 )}
               </div>
+              <dl className="text-theme-text-secondary mt-3 space-y-1 text-sm" aria-label="Enrollment rules">
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Prerequisite programs:</dt>
+                  <dd>
+                    {program.prerequisite_programs?.length
+                      ? program.prerequisite_programs.map((p) => p.name).join(', ')
+                      : 'None'}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Enrolled in other programs at the same time:</dt>
+                  <dd>
+                    {program.allows_concurrent_enrollment === false
+                      ? 'Not allowed — flagged when enrolling'
+                      : 'Allowed'}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
 
@@ -1701,7 +1728,7 @@ const PipelineDetailPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
+        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist" {...tablist}>
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             ...(canViewEnrollments ? [{ key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users }] : []),

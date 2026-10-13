@@ -143,6 +143,7 @@ class _FakeDB:
 def _make_log(log_id, event_data, version):
     return SimpleNamespace(
         id=log_id,
+        chain_seq=log_id,
         timestamp="2026-07-21T00:00:00.000000+00:00",
         timestamp_nanos=log_id,
         event_type="user_login",
@@ -236,8 +237,8 @@ async def test_rehash_noop_on_clean_keyed_chain(monkeypatch):
 
 
 class _VerifyDB:
-    """Returns the log rows on the first execute() and the checkpoint on the
-    second (matching verify_integrity's query order)."""
+    """Returns the log rows on the first execute() and a scalar result on
+    every later one (matching verify_integrity's query order)."""
 
     def __init__(self, logs, checkpoint):
         self._logs = logs
@@ -248,7 +249,11 @@ class _VerifyDB:
         self._calls += 1
         if self._calls == 1:
             return _FakeResult(self._logs)
-        return SimpleNamespace(scalar_one_or_none=lambda: self._checkpoint)
+        # The pending-seal count (scalar) and the checkpoint lookup
+        # (scalar_one_or_none); every fake row here is sealed.
+        return SimpleNamespace(
+            scalar=lambda: 0, scalar_one_or_none=lambda: self._checkpoint
+        )
 
 
 async def test_verify_detects_tail_truncation(monkeypatch):

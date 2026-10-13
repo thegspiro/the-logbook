@@ -79,6 +79,9 @@ async def _department(db_session):
         name="Engine Daily",
         check_timing="start_of_shift",
         is_active=True,
+        # Long before every shift below: a checklist is only owed from its
+        # creation (W46-19), and these tests are about what a shift owes.
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
     )
     db_session.add_all([engine, template])
     await db_session.flush()

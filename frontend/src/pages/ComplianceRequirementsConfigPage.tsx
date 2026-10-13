@@ -689,13 +689,12 @@ export default function ComplianceRequirementsConfigPage() {
           {/* Notification settings */}
           <div className="border-theme-surface-border border-t pt-4">
             <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Notifications</h3>
-            {/* Stored, not yet wired: no scheduled task or sender reads either
-                setting below (CLAUDE.md Pitfall #19 — see CMP2-1). Flagged
-                honestly here rather than implying an alert goes out, until a
-                reminder sender is built to consume them. */}
-            <p className="alert-warning mb-3 text-xs">
-              Not yet active: these settings are saved, but no reminder is sent yet. Members are not notified when they
-              become non-compliant.
+            {/* Read by the daily compliance_member_notices task (CMP2-1,
+                backend/app/services/compliance_member_notices.py). Each setting
+                stands on its own; both send email only. */}
+            <p className="text-theme-text-secondary mb-3 text-xs">
+              Sent by email once a day. Each member is judged the way the Training dashboard judges them. A member who
+              has turned off training reminders in their own email settings is not sent these.
             </p>
             <div className="space-y-3">
               <label className="mobile-touch-target flex items-center justify-start gap-2">
@@ -721,7 +720,8 @@ export default function ComplianceRequirementsConfigPage() {
                   placeholder="30, 14, 7"
                 />
                 <p className="text-theme-text-secondary mt-1 text-xs">
-                  Comma-separated list of days before a requirement deadline to send reminders
+                  Comma-separated list of days before a requirement deadline to email a member who has not yet met it.
+                  Leave empty to send no reminders.
                 </p>
               </div>
             </div>

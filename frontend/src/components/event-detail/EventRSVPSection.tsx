@@ -254,7 +254,14 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                   <div className="min-w-0 flex-1">
                     <p className="text-theme-text-primary text-sm">
                       <span className="font-medium">{userName}</span>
-                      {isInitial ? (
+                      {entry.is_automatic ? (
+                        <>
+                          {' '}
+                          was moved from <span className="font-medium">{rsvpStatusText(entry.old_status)}</span> to{' '}
+                          <span className="font-medium">{rsvpStatusText(entry.new_status)}</span>{' '}
+                          <span className="text-theme-text-muted">(automatically, when a spot opened up)</span>
+                        </>
+                      ) : isInitial ? (
                         <>
                           {' '}
                           RSVP&apos;d as <span className="font-medium">{rsvpStatusText(entry.new_status)}</span>

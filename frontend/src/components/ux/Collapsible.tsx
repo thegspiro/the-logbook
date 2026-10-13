@@ -52,8 +52,9 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   return (
     <div className={`border-theme-surface-border overflow-hidden rounded-lg border ${className}`}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition-colors ${headerClassName}`}
+        className={`focus-ring-inset text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition-colors ${headerClassName}`}
         id={triggerId}
         aria-expanded={isOpen}
         aria-controls={contentId}
@@ -68,12 +69,16 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
           are indistinguishable in a screen reader's landmark list — which is
           the list the role exists to put it in. Named from its own trigger, so
           a page with several collapsibles gives each the title already on
-          screen. */}
+          screen.
+          `inert` while closed: hidden only by a zero height, the content's
+          controls stayed in the tab order, so Tab from a closed header landed
+          on a button nobody could see. */}
       <div
         ref={contentRef}
         id={contentId}
         role="region"
         aria-labelledby={triggerId}
+        inert={!isOpen}
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
         className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >

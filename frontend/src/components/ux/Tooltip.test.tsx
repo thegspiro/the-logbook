@@ -58,4 +58,49 @@ describe('Tooltip', () => {
     });
     expect(screen.getByRole('tooltip')).toHaveTextContent('Info');
   });
+
+  it('describes the control itself, not a wrapper', () => {
+    render(
+      <Tooltip content="Expires in 30 days" delay={0}>
+        <button>Status</button>
+      </Tooltip>
+    );
+    const button = screen.getByRole('button', { name: 'Status' });
+    fireEvent.focus(button);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(button).toHaveAccessibleDescription('Expires in 30 days');
+  });
+
+  it('dismisses on Escape without moving focus or pointer', () => {
+    render(
+      <Tooltip content="Info" delay={0}>
+        <button>i</button>
+      </Tooltip>
+    );
+    fireEvent.focus(screen.getByText('i'));
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('stays open while the pointer moves onto it', () => {
+    render(
+      <Tooltip content="Info" delay={0}>
+        <button>i</button>
+      </Tooltip>
+    );
+    fireEvent.mouseOver(screen.getByText('i'));
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    const tooltip = screen.getByRole('tooltip');
+    fireEvent.mouseOut(screen.getByText('i'), { relatedTarget: tooltip });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+  });
 });

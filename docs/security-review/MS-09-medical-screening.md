@@ -1,6 +1,311 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, (this PR) (pass 7)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, (this PR) (pass 8)
+
+---
+
+## Pass 8 (2026-10-13)
+
+**Watchdog pickup.** PR #3149 (Feature 08, Membership pipeline, pass 9) had
+merged (`a7a7c47d`, the merge commit) with no `claude/security-review-*` PR
+or branch open anywhere (`search_pull_requests`, `is:open
+head:claude/security-review-`, 0 results; no stray remote branch). Row 09
+was the next feature per `PROGRESS.md`'s own Open-PR narrative pointer.
+
+### A dating/attribution error in this file, found before the review itself
+
+The **"Owner decisions"** section further down (between the Pass 7 and
+Pass 6 sections) read "(2026-10-05)" and stated its four fixes (MS-6, MS-12,
+MS-13, MS-7) were "implemented on the same branch" as pass 7, "one commit
+each." Both halves were wrong,
+confirmed against the actual history rather than taken on the file's word,
+because the date sits suspiciously _before_ the pass (2026-10-06) it claims
+to follow:
+
+- Pass 7's own PR (**#2957**, branch `claude/security-review-medical-screening`)
+  merged 2026-10-06T01:14:12Z with a 4-file, 419-line diff — its body
+  explicitly lists MS-6/MS-7/MS-12/MS-13 under "Re-verified open, unchanged
+  (no action this pass)". None of the four was touched on that branch.
+- The actual implementation is **PR #2965** ("Owner decisions, continued:
+  medical screening, portal, PayPal backfill, …"), opened directly by the
+  repository owner (not a security-review branch), which merged
+  2026-10-06T18:26:21Z — seventeen hours _after_ pass 7, not the day before
+  it. Its own description names all four fixes verbatim (the migration id,
+  the subject-picker endpoint, the audit event names, the `self_recorded`
+  column) and matches the current code exactly.
+- `git log`/`git blame` could not independently date this (this repo's
+  orphan/squash-merge history issue, documented since pass 1, applies here
+  too — the commit both landed in is a root commit with no parent), so the
+  correction rests on the GitHub PR records (`pull_request_read` on #2957
+  and #2965), not on git history.
+
+Corrected to **2026-10-06, PR #2965** below. This is a documentation
+accuracy fix only — re-verified in the review that follows that the actual
+code those four fixes describe is genuinely present and correct; nothing
+about the fixes themselves was in question, only when and where they
+landed.
+
+### Scope — real delta since pass 7's baseline (`0e848aff`, PR #2957's merge commit)
+
+`git log --oneline 0e848aff..HEAD -- <each of the 5 backend files + the
+frontend module>` (reliable here — `0e848aff` is a real ancestor of
+`HEAD`, unlike the older squash-merge heads prior passes had to work
+around). Nine commits, three of them substantive, grouped by the PR that
+actually carried them (found via `git rev-list --ancestry-path <sha>..HEAD
+--merges | tail -1`, since commit authorship here doesn't map 1:1 to the
+PR that merged it):
+
+| PR                                                                                                                                                             | Merged                | What it changed here                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#2965** (2026-10-06T18:26)                                                                                                                                   | directly by the owner | MS-6/7/12/13's four fixes (see correction above) — reviewed fresh this pass, below                                                                                          |
+| mechanical mypy-typing commits (`69d88b7f`, `c1b61de6`, `17e28941`, folded into later merges)                                                                  | 2026-10-09            | `Mapped`/`mapped_column` annotations on the model; a type-only pass, re-read in full, no behavior change                                                                    |
+| `25d4345f`                                                                                                                                                     | 2026-10-09            | touches `schemas/medical_screening.py` only for an unrelated import; no medical-screening behavior change                                                                   |
+| **#3086** "Docket builds: inventory, medical, forms, events, …" (2026-10-11T22:02)                                                                             | directly by the owner | `GET /medical-screening/compliance` (department roster, `?standing=` filter), `SubjectCompliancePanel`/`ComplianceRoster`/`SelfRecordedBadge` frontend, `_grade` extraction |
+| `61819263` "fix(medical,equipment-checks): settle the roster and report races; no compliant-by-default" (same-day Codex review fix, folded into #3086's merge) | 2026-10-11            | roster-filter race, subject-panel race, "no active requirement" no longer grading everyone compliant                                                                        |
+
+**None of this had been reviewed by the security-review rotation before
+now.** Pass 7 (2026-10-06, early) predates both #2965 and #3086; no Pass 8
+section existed until this one. #2965's own PR body and #3086's "Risk
+checks" section cover org-scoping/PHI-caching/config-switch basics
+reasonably, but neither is a seven-dimension pass, and PHI-adjacent surface
+getting its first dedicated security read five-plus days after merging is
+exactly the gap this rotation exists to close — recorded here, not as a
+finding against either PR (both are sound, below), but as the reason this
+pass has real work to do despite the rotation table already reading row 09
+✅ from a prior full cycle.
+
+### Route inventory — re-enumerated directly, 16 routes (+2 since pass 7)
+
+Walked `endpoints/medical_screening.py` top to bottom (598 lines, up from
+430 at pass 7):
+
+| Method | Path                        | Auth dependency                                  | Permission | New this pass  |
+| ------ | --------------------------- | ------------------------------------------------ | ---------- | -------------- |
+| GET    | `/requirements`             | `require_permission`                             | `.view`    |                |
+| GET    | `/requirements/{id}`        | `require_permission`                             | `.view`    |                |
+| POST   | `/requirements`             | `require_permission`                             | `.manage`  |                |
+| PUT    | `/requirements/{id}`        | `require_permission`                             | `.manage`  |                |
+| DELETE | `/requirements/{id}`        | `require_permission`                             | `.manage`  |                |
+| GET    | `/records`                  | `require_permission`                             | `.view`    |                |
+| GET    | `/subjects`                 | `require_permission`                             | `.manage`  | ✅ new (#2965) |
+| GET    | `/records/{id}`             | `require_permission`                             | `.view`    |                |
+| POST   | `/records`                  | `require_permission`                             | `.manage`  |                |
+| PUT    | `/records/{id}`             | `require_permission`                             | `.manage`  |                |
+| DELETE | `/records/{id}`             | `require_permission`                             | `.manage`  |                |
+| GET    | `/compliance` (roster)      | `require_permission`                             | `.view`    | ✅ new (#3086) |
+| GET    | `/compliance/me`            | `get_current_user` (self-scoped by construction) | n/a        |                |
+| GET    | `/compliance/{user_id}`     | `require_permission`                             | `.view`    |                |
+| GET    | `/compliance/prospect/{id}` | `require_permission`                             | `.view`    |                |
+| GET    | `/expiring`                 | `require_permission`                             | `.view`    |                |
+
+Every route carries an auth dependency; none is unintentionally public. No
+route removed or re-permissioned since pass 1.
+
+### New this pass, reviewed against all seven checklist dimensions
+
+**`GET /medical-screening/subjects` (#2965).** `.manage`-gated (appropriate:
+it backs the Add Record subject picker, a `.manage`-only action). Returns
+names and ids only (`ScreeningSubjects` — confirmed against
+`schemas/medical_screening.py:325-339`, no PHI field). Org-scoped on both
+queries (`services/medical_screening_service.py:308-351`, filters
+`organization_id` on both `User` and `ProspectiveMember`). Not audit-logged
+— correct, per the same reasoning as every other names-only read in this
+file (MS-11/MS-12's own distinction). No `.like()`; bounded by the roster
+and open-pipeline size, not paged — acceptable for a picker (an omitted
+entry is worse than a long list, and this mirrors `MemberPickerModal`'s own
+convention elsewhere in the app).
+
+**`POST /records`'s exactly-one-of-subject validator (#2965, MS-13's
+fix).** `ScreeningRecordCreate._exactly_one_subject`
+(`schemas/medical_screening.py:150-166`) rejects a payload naming neither or
+both of `user_id`/`prospect_id` — verified this is a real Pydantic
+`@model_validator(mode="after")`, not a docstring claim: traced it directly
+against the current file, confirmed `ScreeningRecordUpdate` deliberately
+carries neither field (so this is the only place either can be set, exactly
+as the docstring states), and confirmed the frontend's
+`ScreeningRecordForm.subjectPicker.test.tsx` exercises it end to end.
+
+**`screening_records.self_recorded` (#2965, MS-7's fix).** Column
+(`models/medical_screening.py:219-225`), `nullable=False` with
+`server_default="0"` — not a `SET NULL` FK, so Pitfall #2 doesn't apply, and
+a boolean default needs no nullability. Migration
+`9c1445489666_screening_record_self_recorded_flag.py` is table-existence-
+guarded (`screening_records` is `create_all`-only, confirmed via
+`_tables()`/`_columns()` helpers matching the Pitfall #26 shape exactly) and
+has a real `downgrade()`. Set on write: `create_record` marks it when the
+caller is the record's own subject (`_is_self`,
+`services/medical_screening_service.py:65-67,409`); `update_record`
+recomputes it only when the payload carries a `status`
+(`services/medical_screening_service.py:445-446`), matching the documented
+rule ("whoever submits the status owns it"). Surfaced consistently
+everywhere compliance is read: `ScreeningRecordResponse.self_recorded`,
+`ComplianceItem.self_recorded`, `ComplianceSummary.self_recorded_count`,
+`ExpiringScreening.self_recorded`, and the MCP tool's own projection
+(`mcp/tools/medical.py:77,87`) — checked each of the five independently
+rather than assuming the one I read first implies the rest.
+
+**`GET /medical-screening/compliance` — the department roster (#3086).**
+`.view`-gated — proportionate: the response (`ComplianceRoster` /
+`ComplianceRosterRow`) carries counts and a `standing` enum only, never a
+narrative field, same shape discipline as the other four `.view` routes
+MS-14 already found acceptable. Graded by `_grade()`
+(`services/medical_screening_service.py:70-146`), the same function
+`get_compliance_status` uses, so a roster row and the per-subject detail it
+opens cannot disagree — verified this directly rather than taking the
+docstring's word: `test_a_row_matches_the_per_subject_summary` in
+`backend/tests/test_medical_screening_compliance_roster.py` asserts the two
+paths produce identical counts for the same subject. Audited
+(`medical_screening.compliance_roster_viewed`) with the filter and the
+disclosed subject ids — consistent with every other PHI-adjacent read in
+this file. The "no active requirement grades nobody" fix (`61819263`) is in
+place and tested: `test_no_active_requirement_grades_nobody` confirms every
+row reads `not_applicable` and every total is zero rather than the old
+compliant-by-default bug.
+
+**Frontend (`ComplianceRoster.tsx`, `SubjectCompliancePanel.tsx`,
+`SelfRecordedBadge.tsx`, plus the `ComplianceDashboard.tsx`/
+`MedicalScreeningPage.tsx` wiring) — all read in full, not diffed.** Renders
+the server's `ComplianceSummary`/`ComplianceRoster` directly — no client-side
+grading (Pitfall #29 holds: a comment in `SubjectCompliancePanel.tsx` names
+the rule it is following and why). Both race-condition fixes from `61819263`
+are in place: `ComplianceRoster.tsx`'s `latestRequest` ref and the store's
+`latestComplianceRequest` counter + `clearCompliance()` retiring an
+in-flight read on panel close. No dialog in the new components (they are
+panels, not modals) so Pitfall #31 doesn't apply to them; the two existing
+form dialogs (`ScreeningRecordForm.tsx`, `ScreeningRequirementForm.tsx`)
+were re-checked and still carry no click handler on `modal-overlay`. Types
+(`types/index.ts`) match the backend's snake_case field-for-field — confirmed
+`schemas/medical_screening.py` still carries no `alias_generator=to_camel`
+(`grep` returned nothing), so snake_case is the correct convention here, not
+a mismatch. `UNCACHEABLE_PREFIXES` still covers both new routes via the
+existing `/medical-screening/` prefix entry — no new entry needed.
+
+**MCP tool (`mcp/tools/medical.py`) — re-read in full.** Unaffected by
+either PR's new fields beyond projecting `self_recorded`/
+`self_recorded_count` (booleans, not PHI) in `get_member_medical_compliance`.
+No new tool, no permission change. Explicit-projection discipline (MS-11)
+still holds for both tools.
+
+### New finding
+
+### MS-15 — LOW (scale, same class as MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) — the compliance roster loads every screening record in the organization, unbounded — 🚩 FLAGGED
+
+**What:** `MedicalScreeningService.get_compliance_roster`
+(`services/medical_screening_service.py:588`) calls
+`self.list_records(organization_id)` with no `user_id`, `prospect_id`,
+`status`, or date filter and no `skip`/`limit` — `list_records`'s own
+`limit=None` default then returns _every_ screening record ever created
+for the organization, loaded into Python to be grouped into `by_user`/
+`by_prospect` dicts for grading (lines 591-599).
+
+**Why this is real:** this runs on every `GET /medical-screening/compliance`
+request — i.e., every time an officer opens or re-filters the Compliance
+tab's roster (new in #3086, 2026-10-11) — not on an admin batch job. For a
+department that has used this module for years, the table accumulates one
+row per member per screening type per cycle indefinitely (no purge/archival
+path exists for a compliant, superseded record), so the load grows
+unboundedly with the organization's history even though only the single
+_latest_ record per subject/screening-type is ever used by `_grade()`.
+
+**Why this is the same class, not a new category:** this is exactly the
+"no SQL-level pagination on an org-wide table" pattern already tracked
+under FIN-9/ELEC-12/USR-5/MP-10/DOC-9/MS-6 — but it is a genuinely new call
+site: MS-6's own fix (owner decision, PR #2965) added `skip`/`limit` to the
+_public_ `GET /records` list; it did not and could not reach this _internal_
+call, which by design needs every subject's history to grade correctly (the
+same reason `get_compliance_status`'s single-subject call also passes
+`limit=None` — accepted there, since one person's history is small; `
+get_compliance_roster` is the same shape applied to the whole org at once).
+
+**Not fixed here:** narrowing the query (e.g., a SQL-level "latest record
+per subject per screening_type" using the same `exists()`/`aliased()`
+superseded-record pattern already written for the MCP tool's
+`list_expiring_screenings`, `mcp/tools/medical.py:131-167`) is a grading
+_implementation_ change on a PHI-adjacent, department-wide read — exactly
+the kind of change this feature's established discipline (MS-6, MS-9,
+MS-13) declines to make without a product decision, because a subtle
+off-by-one in the "latest" definition would silently change who reads
+compliant for the whole roster at once, not just one subject. It is also
+plausible the owner judges the real-world scale fine as-is: this is a
+volunteer fire department's own roster (the target deployment is tens to
+low hundreds of members per `ARCHITECTURE.md`), not an enterprise table,
+and `list_subjects`/`list_requirements` are bounded by the same roster size.
+
+**Disposition:** flagged for the application owner, same remedy shape as
+MS-6: either accept the cost at the department scale this app targets, or
+add the bounded SQL query described above. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+### Re-verified good ✅ (re-confirmed against current code)
+
+Everything pass 7 verified good, re-confirmed directly against the current
+(larger) files rather than carried forward: no baseline permission grant for
+either `medical_screening.view`/`.manage` (`app/core/permissions.py:270,275`
+are still the only references, confirmed against `DEFAULT_POSITIONS`/
+`OPERATIONAL_RANKS`/every seed migration); tenant isolation intact on every
+by-id query and all three client-supplied FKs on `create_record`
+(`assert_in_org`, `services/medical_screening_service.py:370-393`); PHI
+encryption at rest intact on all four columns
+(`provider_name`/`result_summary`/`result_data`/`notes`, confirmed
+`EncryptedText`/`EncryptedJSON` in `models/medical_screening.py:198-226`);
+`SET NULL` FKs (`requirement_id`, `reviewed_by`) both `nullable=True`;
+update schemas (`ScreeningRequirementUpdate`, `ScreeningRecordUpdate`) still
+omit every tenancy/subject FK field; no raw exception reaches the client
+(`except ValueError as exc: raise HTTPException(400, safe_error_detail(exc))`
+on both update paths and `create_record`); no CSV/spreadsheet export; no
+`.like()`/`.ilike()` anywhere in this feature's files (`grep` over all five
+backend files plus the frontend module, 0 matches); no unbounded in-memory
+cache/tracker; no JSON-column shallow-copy mutation risk (`applies_to_roles`
+is a plain assignment via `apply_updates`, not a nested mutate-and-reassign);
+audit logging present on all six writes, absent only on the names-only
+`/subjects` read and the caller's-own-counts `/compliance/me` (both by
+design, MS-12's own rationale); MCP tools' explicit-projection discipline
+intact; cache exclusion and the route/module gate both re-confirmed; both
+form dialogs still carry no click-outside-to-close handler (Pitfall #31).
+
+### Re-verified open, not re-flagged (unchanged from pass 7)
+
+- **MS-14 — LOW.** `medical_screening.view` still grants the full narrative
+  PHI on `GET /records`/`{id}` with no finer-grained read tier. Unchanged;
+  already in `KNOWN_LIMITATIONS.md`.
+- **MS-9's `grace_period_days`/`applies_to_roles`/`frequency_months`
+  remain unenforced** ("Not enforced yet" notices unchanged in substance).
+- **`get_compliance_status` still doesn't 404 an unknown subject**
+  (re-confirmed not an enumeration channel — identical response shape for a
+  nonexistent/out-of-org/zero-record subject).
+
+## Schema & migration notes
+
+One migration since pass 7: `9c1445489666` (self-recorded flag, part of the
+#2965 delta reviewed above) — table-existence-guarded, reversible,
+`validate_migrations.py --strict` clean (578 revisions, single head). No
+other model/schema change in scope this pass.
+
+## Guard tests added
+
+None new by this pass — the one new finding (MS-15) is flagged, not fixed,
+so there is no behavior change to pin; the #2965/#3086 fixes already carry
+their own guard tests (`test_medical_screening_record_subject.py`,
+`test_medical_screening_self_recorded.py`,
+`test_medical_screening_read_audit.py`,
+`test_medical_screening_list_pagination.py`,
+`test_medical_screening_compliance_roster.py`, plus the frontend
+`*.test.tsx` files named above), all re-run and passing below.
+
+## Completion gate
+
+| Check                                                                                         | Result                                                         |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                 | 0 violations                                                   |
+| `black --check app/ tests/ alembic/`                                                          | clean, 2209 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                                                     | clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                             | pass — 578 revisions, single head                              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                             | pass — 267 routes checked, 0 errors, 0 warnings                |
+| `pytest tests/ -q -k "medical or screening or phi"`                                           | **220 passed**, 1 skipped (pre-existing, `py_vapid`), 0 failed |
+| `pytest tests/ -m "not integration and not slow and not docker" -q` (full backend unit suite) | **14355 passed**, 1 skipped (pre-existing), 0 failed           |
+| `npm run typecheck`                                                                           | clean                                                          |
+| `npm run lint`                                                                                | clean (`eslint --max-warnings 10`, 0 warnings)                 |
+| `npx vitest run src/modules/medical-screening` (scoped frontend suite)                        | **50 passed** (8 files)                                        |
 
 ---
 
@@ -299,12 +604,23 @@ test's docstring with no assertion change.
 
 ---
 
-## Owner decisions (2026-10-05)
+## Owner decisions (2026-10-06, PR #2965)
+
+**Corrected by pass 8 (2026-10-13):** this section previously read "(2026-10-05)"
+and said the four fixes below were "implemented on the same branch" as pass 7
+— both wrong. Pass 7 is PR #2957 (merged 2026-10-06T01:14Z); its own diff
+touches only this findings doc, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`, and one
+test docstring, and its own PR body lists all four of these as "unchanged, no
+action this pass." The actual fixes landed in **PR #2965** ("Owner decisions,
+continued: medical screening, …"), opened directly by the repository owner on
+a separate, non-security-review branch, merged 2026-10-06T18:26Z — seventeen
+hours _after_ pass 7, not the day before it. See pass 8's own section above
+for how this was found and verified. The fixes themselves were re-verified
+intact against current code this pass and are accurately described below.
 
 Four findings this rotation had flagged for a product decision were decided by
-the owner and implemented on the same branch, one commit each. Earlier pass
-sections below are left as written; they record what was true when each pass
-ran.
+the owner and implemented on PR #2965, one commit each. Earlier pass sections
+below are left as written; they record what was true when each pass ran.
 
 ### MS-6 — ✅ FIXED — the requirement and record lists page in SQL
 

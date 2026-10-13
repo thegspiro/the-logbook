@@ -16,7 +16,12 @@ import inspect
 from types import SimpleNamespace
 
 from app.api.v1.endpoints.facilities import _SENSITIVE_READ_PERMISSIONS
-from app.models.document import SYSTEM_FOLDERS, FolderVisibility
+from app.models.document import (
+    FACILITY_ACCESS_PERMISSIONS,
+    FACILITY_SUB_FOLDERS,
+    SYSTEM_FOLDERS,
+    FolderVisibility,
+)
 from app.services.documents_service import (
     FACILITY_SENSITIVE_PERMISSIONS,
     DocumentsService,
@@ -144,25 +149,23 @@ class TestTheGateIsStampedOnTheFolderTreeItGuards:
     of the two paths would catch.
     """
 
-    @staticmethod
-    def _sub_folder_loop_body(func, marker: str) -> str:
-        """The text between `for sub_def in <MARKER>:` and the add() that ends
-        the loop body — i.e. the DocumentFolder construction itself, not the
-        log line after it that also names the constant."""
-        source = inspect.getsource(func)
-        after = source.split(f"for sub_def in {marker}:")[-1]
-        return after.split("self.db.add(sub_folder)")[0]
-
     async def test_facility_sub_folders_are_stamped(self):
-        body = self._sub_folder_loop_body(
-            DocumentsService.ensure_facility_folder, "FACILITY_SUB_FOLDERS"
-        )
-        assert "required_permissions" in body, (
-            "ensure_facility_folder creates its sub-folders without "
-            "required_permissions; migration a9c4e7b2f631 stamped the "
-            "equivalent existing rows, so new facilities would be readable by "
-            "anyone holding documents.view"
-        )
+        """Every sub-folder carries a tier; none is left to documents.view.
+
+        Built through the one constructor ensure_facility_folder and
+        ensure_facility_sub_folder both use (FAC-13), so checking its output
+        for every slug covers both creation paths.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        assert "self._new_facility_sub_folder(" in source
+        parent = SimpleNamespace(id="pf", slug="facility-abc")
+        for definition in FACILITY_SUB_FOLDERS:
+            folder = DocumentsService._new_facility_sub_folder(
+                "org-1", parent, definition["slug"]
+            )
+            assert folder.required_permissions, definition["slug"]
+            assert folder.slug == f"facility-abc-{definition['slug']}"
+            assert folder.parent_id == "pf"
 
     async def test_shared_system_folder_definitions_have_consistent_root_acls(self):
         definitions = {folder["slug"]: folder for folder in SYSTEM_FOLDERS}
@@ -174,8 +177,10 @@ class TestTheGateIsStampedOnTheFolderTreeItGuards:
             "apparatus.manage",
         ]
         assert definitions["facilities"]["visibility"] == FolderVisibility.ORGANIZATION
+        # The root admits any facilities access (FAC-13); the sensitive tier
+        # is on the sub-folders beneath it.
         assert set(definitions["facilities"]["required_permissions"]) == set(
-            FACILITY_SENSITIVE_PERMISSIONS
+            FACILITY_ACCESS_PERMISSIONS
         )
 
     async def test_apparatus_sub_folders_are_not_gated_on_facilities_grants(self):

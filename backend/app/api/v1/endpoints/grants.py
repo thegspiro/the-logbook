@@ -10,12 +10,16 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    require_permission,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
@@ -56,6 +60,11 @@ from app.schemas.grant import (
     PledgeCreate,
     PledgeResponse,
     PledgeUpdate,
+)
+from app.services.donor_privacy import (
+    MANAGE_PERMISSION,
+    present_donation,
+    present_donor,
 )
 from app.services.fundraising_service import FundraisingService
 from app.services.grant_service import GrantService
@@ -152,28 +161,57 @@ async def create_opportunity(
 
 @router.get("/applications", response_model=list[GrantApplicationListResponse])
 async def list_applications(
+    response: Response,
     status_filter: Optional[str] = Query(
         None, alias="status", description="Filter by application status"
     ),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
+    status_group: Optional[str] = Query(
+        None,
+        description=(
+            "Filter by a named set of statuses the dashboard counts: "
+            "active, pending or funded"
+        ),
+    ),
+    search: Optional[str] = Query(
+        None, max_length=200, description="Match program name or agency"
+    ),
+    sort: Optional[str] = Query(
+        None, description="Field to sort by (camelCase); newest first when omitted"
+    ),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
     """
-    List grant applications
+    List grant applications, a page at a time.
+
+    ``X-Total-Count`` carries the number of applications matching the filters,
+    so the applications page can page through all of them rather than
+    truncating at one fetch (GF-33).
 
     **Authentication required**
     **Requires permission: fundraising.view**
     """
     try:
         service = GrantService(db)
+        organization_id = str(current_user.organization_id)
+        filters: dict[str, Optional[str]] = {
+            "status": status_filter,
+            "status_group": status_group,
+            "priority": priority,
+            "assigned_to": str(assigned_to) if assigned_to else None,
+            "search": search,
+        }
+        total = await service.count_applications(organization_id, **filters)
+        response.headers["X-Total-Count"] = str(total)
         return await service.list_applications(
-            organization_id=str(current_user.organization_id),
-            status=status_filter,
-            priority=priority,
-            assigned_to=str(assigned_to) if assigned_to else None,
+            organization_id,
+            **filters,
+            sort=sort,
+            order=order,
             skip=pagination.skip,
             limit=pagination.limit,
         )
@@ -631,7 +669,16 @@ async def create_expenditure(
             data=exp_data,
             user_id=str(current_user.id),
         )
-        return expenditure
+        # GF-7: recorded either way; an overspend comes back as a warning.
+        warnings = await service.spending_warnings(
+            str(app_id),
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            budget_item_id=expenditure.budget_item_id,
+        )
+        return GrantExpenditureResponse.model_validate(expenditure).model_copy(
+            update={"warnings": warnings}
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -670,7 +717,16 @@ async def update_expenditure(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Expenditure not found",
             )
-        return expenditure
+        # GF-7: recorded either way; an overspend comes back as a warning.
+        warnings = await service.spending_warnings(
+            str(expenditure.application_id),
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            budget_item_id=expenditure.budget_item_id,
+        )
+        return GrantExpenditureResponse.model_validate(expenditure).model_copy(
+            update={"warnings": warnings}
+        )
     except HTTPException:
         raise
     except ValueError as e:
@@ -1182,13 +1238,18 @@ async def list_donors(
     """
     try:
         service = FundraisingService(db)
-        return await service.list_donors(
+        # GF-8: a view-only caller sees an anonymous donor without identity,
+        # and cannot find one by searching for the name it hides either.
+        can_see_identity = user_has_permission(current_user, MANAGE_PERMISSION)
+        donors = await service.list_donors(
             organization_id=str(current_user.organization_id),
             donor_type=donor_type,
             search=search,
             skip=pagination.skip,
             limit=pagination.limit,
+            search_anonymous=can_see_identity,
         )
+        return [present_donor(d, can_see_identity) for d in donors]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1261,7 +1322,9 @@ async def get_donor(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Donor not found",
             )
-        return donor
+        return present_donor(
+            donor, user_has_permission(current_user, MANAGE_PERMISSION)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1340,7 +1403,7 @@ async def list_donations(
     """
     try:
         service = FundraisingService(db)
-        return await service.list_donations(
+        donations = await service.list_donations(
             organization_id=str(current_user.organization_id),
             campaign_id=str(campaign_id) if campaign_id else None,
             donor_id=str(donor_id) if donor_id else None,
@@ -1349,6 +1412,9 @@ async def list_donations(
             skip=pagination.skip,
             limit=pagination.limit,
         )
+        # GF-8: an anonymous gift's donor is hidden from view-only callers.
+        can_see_identity = user_has_permission(current_user, MANAGE_PERMISSION)
+        return [present_donation(d, can_see_identity) for d in donations]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1717,7 +1783,13 @@ async def get_dashboard(
             pending_applications=grant_data.get("pending_applications", 0),
             active_grants=grant_data.get("active_grants", 0),
             upcoming_deadlines=grant_data.get("upcoming_deadlines", []),
-            recent_donations=fundraising_data.get("recent_donations", []),
+            # GF-8: an anonymous gift's donor is hidden from view-only callers.
+            recent_donations=[
+                present_donation(
+                    d, user_has_permission(current_user, MANAGE_PERMISSION)
+                )
+                for d in fundraising_data.get("recent_donations", [])
+            ],
             compliance_tasks_due=grant_data.get("compliance_tasks_due", []),
             total_grant_funding=grant_data.get("total_grant_funding", 0),
             total_donors=fundraising_data.get("total_donors", 0),

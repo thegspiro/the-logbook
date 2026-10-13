@@ -39,6 +39,7 @@ import ReviewPositions from './ReviewPositions';
 import ReviewRows from './ReviewRows';
 import ReviewShifts from './ReviewShifts';
 import ReviewUnits from './ReviewUnits';
+import { useTablist } from '../../../../hooks/useTablist';
 
 type TabId = 'issues' | 'columns' | 'members' | 'units' | 'positions' | 'shifts' | 'rows';
 
@@ -106,6 +107,7 @@ const IssuesPanel: React.FC<{ analysis: HistoryImportAnalysis; onGo: (tab: TabId
 };
 
 const ShiftHistoryImportReviewPage: React.FC = () => {
+  const tablist = useTablist();
   const { importId = '' } = useParams<{ importId: string }>();
   const navigate = useNavigate();
   const viewerZone = useTimezone();
@@ -330,7 +332,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
         )}
       </section>
 
-      <div className="tab-scroll" role="tablist" aria-label="Review sections">
+      <div className="tab-scroll" role="tablist" {...tablist} aria-label="Review sections">
         {tabs.map((t) => (
           <button
             key={t.id}

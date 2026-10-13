@@ -281,7 +281,7 @@ class TestAuditShippingUsesThePinnedFactory:
         monkeypatch.setattr(socket, "getaddrinfo", resolver)
 
         result = await audit_ship_module.ship_new_audit_logs(
-            self._fake_db([SimpleNamespace(id=1)])
+            self._fake_db([SimpleNamespace(id=1, chain_seq=1)])
         )
 
         assert result["error"] is None
@@ -308,7 +308,7 @@ class TestAuditShippingUsesThePinnedFactory:
         monkeypatch.setattr(socket, "getaddrinfo", resolver)
 
         result = await audit_ship_module.ship_new_audit_logs(
-            self._fake_db([SimpleNamespace(id=1)])
+            self._fake_db([SimpleNamespace(id=1, chain_seq=1)])
         )
 
         assert result["shipped_entries"] == 0

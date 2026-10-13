@@ -345,6 +345,13 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         },
         {"name": "event_url", "description": "Link to view the parent event"},
     ],
+    "event_waitlist_promotion": [
+        {"name": "recipient_name", "description": "Promoted member's display name"},
+        {"name": "event_title", "description": "Title of the event"},
+        {"name": "event_start", "description": "Event start date and time"},
+        {"name": "location_name", "description": "Event location name"},
+        {"name": "event_url", "description": "Link to view the event"},
+    ],
     "event_cancellation": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "event_title", "description": "Title of the cancelled event"},
@@ -891,6 +898,15 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "series_end_date": "September 15, 2026",
             "remaining_occurrences": "26",
             "event_url": "https://example.com/events/456",
+        }
+    ),
+    "event_waitlist_promotion": _sample(
+        {
+            "recipient_name": "John Doe",
+            "event_title": "Hose Advancement Drill",
+            "event_start": "March 15, 2026 at 07:00 PM",
+            "location_name": "Main Station \u2014 Training Bay",
+            "event_url": "https://example.com/events/123",
         }
     ),
     "event_cancellation": _sample(
@@ -1480,6 +1496,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "password_reset": {"first_name": "first"},
     "event_cancellation": {"recipient_name": "full"},
     "event_reminder": {"recipient_name": "full"},
+    "event_waitlist_promotion": {"recipient_name": "full"},
     "series_end_reminder": {"recipient_name": "full"},
     "ballot_notification": {"recipient_name": "legal_full"},
     "election_report": {"recipient_name": "legal_full"},
@@ -1541,6 +1558,7 @@ TEST_SAMPLE_DATES: Dict[
     },
     "series_end_reminder": {"series_end_date": (14, None, _strf(_DATE))},
     "event_cancellation": {"event_date": (3, None, _strf(_DATE))},
+    "event_waitlist_promotion": {"event_start": (2, time(19, 0), _strf(_DATE_TIME))},
     "training_approval": {
         "event_date": (-2, time(9, 0), _strf(_DATE_TIME)),
         "approval_deadline": (5, None, _strf(_DATE)),
@@ -2818,6 +2836,47 @@ DEFAULT_EVENT_CANCELLATION_SUBJECT = (
     "Event Cancelled: {{event_title}} — {{organization_name}}"
 )
 
+# Sent to a member promoted off an event's waitlist (W19-1). Email is the
+# channel of record (CLAUDE.md pitfall 18): the bell entry alone left a member
+# who reads only their inbox unaware they now hold a seat.
+DEFAULT_EVENT_WAITLIST_PROMOTION_HTML = build_shell(
+    "You're off the waitlist",
+    """        <p>Hello {{recipient_name}}, a spot opened up and you have been moved off the waitlist. You are now confirmed as going.</p>
+"""
+    + facts(
+        [
+            [fact("Event", "{{event_title}}")],
+            [fact("When", "{{event_start}}")],
+            [fact("Where", "{{location_name}}")],
+        ]
+    )
+    + """        <p>If you can no longer attend, change your RSVP so the seat goes to the next member in line.</p>
+"""
+    + action("{{event_url}}", "View Event"),
+    accent=ACCENT_BLUE,
+    chip="Confirmed",
+)
+
+DEFAULT_EVENT_WAITLIST_PROMOTION_TEXT = """You're Off the Waitlist
+
+Hello {{recipient_name}},
+
+A spot opened up and you have been moved off the waitlist. You are now
+confirmed as going.
+
+Event: {{event_title}}
+When: {{event_start}}
+Where: {{location_name}}
+
+If you can no longer attend, change your RSVP so the seat goes to the next
+member in line.
+
+View the event: {{event_url}}
+
+{{footer_text}}"""
+
+DEFAULT_EVENT_WAITLIST_PROMOTION_SUBJECT = "You're off the waitlist: {{event_title}}"
+
 # Default event reminder email
 DEFAULT_EVENT_REMINDER_HTML = build_shell(
     "{{event_title}}",
@@ -4035,6 +4094,18 @@ class EmailTemplateService:
             "description": (
                 "Sent to attendees as a reminder before an upcoming event. "
                 "Includes event details, time, and location."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EVENT_WAITLIST_PROMOTION,
+            "name": "Off the Waitlist",
+            "subject": DEFAULT_EVENT_WAITLIST_PROMOTION_SUBJECT,
+            "html": DEFAULT_EVENT_WAITLIST_PROMOTION_HTML,
+            "text": DEFAULT_EVENT_WAITLIST_PROMOTION_TEXT,
+            "description": (
+                "Sent to a member when a spot opens on an event they were "
+                "waitlisted for and they are moved to Going. Members can turn "
+                "it off under Off the waitlist."
             ),
         },
         {

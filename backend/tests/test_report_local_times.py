@@ -161,11 +161,19 @@ class TestAdminHoursExport:
             status=_Method.CLOCK,
             description="",
         )
-        rows = MagicMock()
-        rows.all.return_value = [(entry, "Admin", "Dana", "Reyes", None, None)]
+
+        class _Streamed:
+            async def partitions(self, size):
+                yield [(entry, "Admin", "Dana", "Reyes", None, None)]
+
         org = MagicMock()
         org.scalar_one_or_none.return_value = _org()
-        db = SimpleNamespace(execute=AsyncMock(side_effect=[rows, org]))
+        # The timezone is read first; the entries then stream through a
+        # server-side cursor (AH-16).
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=org),
+            stream=AsyncMock(return_value=_Streamed()),
+        )
 
         csv_text = await AdminHoursService(db).export_entries_csv("org-1")
 

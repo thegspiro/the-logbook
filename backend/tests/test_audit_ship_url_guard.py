@@ -132,7 +132,7 @@ class TestShipValidatesOncePerRunOffLoop:
         monkeypatch.setattr(audit_ship_module.asyncio, "to_thread", fake_to_thread)
 
         state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
-        rows = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        rows = [SimpleNamespace(id=1, chain_seq=1), SimpleNamespace(id=2, chain_seq=2)]
         db = _fake_db(state, [[rows[0]], [rows[1]], []])
         client, captured = _collector()
 
@@ -156,7 +156,7 @@ class TestShipValidatesOncePerRunOffLoop:
         monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", guard)
 
         state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
-        db = _fake_db(state, [[SimpleNamespace(id=1)], []])
+        db = _fake_db(state, [[SimpleNamespace(id=1, chain_seq=1)], []])
         client, captured = _collector()
 
         result = await ship_new_audit_logs(db, client=client)
@@ -172,7 +172,7 @@ class TestShipValidatesOncePerRunOffLoop:
         monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", guard)
 
         state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
-        db = _fake_db(state, [[SimpleNamespace(id=1)], []])
+        db = _fake_db(state, [[SimpleNamespace(id=1, chain_seq=1)], []])
         client, captured = _collector()
 
         result = await ship_new_audit_logs(db, client=client)
@@ -205,7 +205,7 @@ class TestAValueErrorInTheRunIsNotBlamedOnTheUrl:
         monkeypatch.setattr(audit_ship_module, "_get_audit_signing_key", _broken_key)
 
         state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
-        db = _fake_db(state, [[SimpleNamespace(id=1)]])
+        db = _fake_db(state, [[SimpleNamespace(id=1, chain_seq=1)]])
         client, captured = _collector()
 
         async with client:
@@ -228,7 +228,7 @@ class TestAValueErrorInTheRunIsNotBlamedOnTheUrl:
         monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", _reject)
 
         state = SimpleNamespace(last_shipped_id=0, last_shipped_at=None)
-        db = _fake_db(state, [[SimpleNamespace(id=1)]])
+        db = _fake_db(state, [[SimpleNamespace(id=1, chain_seq=1)]])
 
         results = await ship_new_audit_logs(db)
 

@@ -16,6 +16,8 @@ interface InlineEditProps {
   inputClassName?: string;
   type?: 'text' | 'number';
   renderDisplay?: (value: string) => React.ReactNode;
+  /** Accessible name for the edit field; defaults to the placeholder. */
+  label?: string;
 }
 
 export const InlineEdit: React.FC<InlineEditProps> = ({
@@ -26,16 +28,25 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
   inputClassName = '',
   type = 'text',
   renderDisplay,
+  label,
 }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const displayRef = useRef<HTMLButtonElement>(null);
+  // Set when the edit ends from the keyboard or the Save/Cancel buttons. The
+  // field is swapped for the display button, so without this focus fell to
+  // <body>; a blur, by contrast, means focus already went somewhere on purpose.
+  const restoreFocus = useRef(false);
 
   useEffect(() => {
     if (editing) {
       inputRef.current?.focus();
       inputRef.current?.select();
+    } else if (restoreFocus.current) {
+      restoreFocus.current = false;
+      displayRef.current?.focus();
     }
   }, [editing]);
 
@@ -66,8 +77,17 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') void handleSave();
-    if (e.key === 'Escape') handleCancel();
+    if (e.key === 'Enter') {
+      restoreFocus.current = true;
+      void handleSave();
+    }
+    if (e.key === 'Escape') {
+      // Escape ends the edit only; left to bubble, it also reached the
+      // document-level listener of any dialog around it and closed that too.
+      e.stopPropagation();
+      restoreFocus.current = true;
+      handleCancel();
+    }
   };
 
   if (editing) {
@@ -83,6 +103,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             void handleSave();
           }}
           disabled={saving}
+          aria-label={label ?? placeholder}
           className={`bg-theme-input-bg text-theme-text-primary rounded-sm border border-red-500 px-2 py-1 text-sm focus:outline-hidden ${inputClassName}`}
         />
         {saving ? (
@@ -92,6 +113,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
+                restoreFocus.current = true;
                 void handleSave();
               }}
               className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
@@ -101,7 +123,10 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             </button>
             <button
               onMouseDown={(e) => e.preventDefault()}
-              onClick={handleCancel}
+              onClick={() => {
+                restoreFocus.current = true;
+                handleCancel();
+              }}
               className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               aria-label="Cancel"
             >
@@ -115,6 +140,8 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
 
   return (
     <button
+      ref={displayRef}
+      type="button"
       onClick={() => setEditing(true)}
       className={`group hover:bg-theme-surface-hover -mx-1 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors ${className}`}
       title="Click to edit"
@@ -126,7 +153,10 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           {value || placeholder}
         </span>
       )}
-      <Pencil className="text-theme-text-muted h-3 w-3 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100" />
+      <Pencil
+        aria-hidden="true"
+        className="text-theme-text-muted h-3 w-3 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
+      />
     </button>
   );
 };

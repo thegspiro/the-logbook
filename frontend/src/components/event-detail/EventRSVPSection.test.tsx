@@ -14,6 +14,7 @@ const entry = (overrides: Partial<RSVPHistory>): RSVPHistory => ({
   new_status: 'going',
   changed_at: '2026-09-28T23:48:00Z',
   changed_by: null,
+  is_automatic: false,
   user_name: 'Jordan Avery',
   changer_name: null,
   ...overrides,
@@ -51,6 +52,29 @@ describe('EventRSVPSection RSVP activity', () => {
     expect(screen.getByText('Waitlisted')).toBeInTheDocument();
     expect(screen.queryByText('not_going')).not.toBeInTheDocument();
     expect(screen.queryByText('waitlisted')).not.toBeInTheDocument();
+  });
+
+  // W19-3: an automatic waitlist promotion is recorded, and marked as the
+  // system's doing rather than read as the member's own change.
+  it('shows an automatic waitlist promotion as automatic', async () => {
+    const user = userEvent.setup();
+    renderSection([entry({ old_status: 'waitlisted', new_status: 'going', is_automatic: true })]);
+
+    await user.click(screen.getByRole('button', { name: /RSVP Activity/ }));
+
+    expect(screen.getByText(/was moved from/)).toBeInTheDocument();
+    expect(screen.getByText('(automatically, when a spot opened up)')).toBeInTheDocument();
+    expect(screen.queryByText(/changed from/)).not.toBeInTheDocument();
+  });
+
+  it("shows a member's own change without the automatic note", async () => {
+    const user = userEvent.setup();
+    renderSection([entry({ old_status: 'going', new_status: 'not_going' })]);
+
+    await user.click(screen.getByRole('button', { name: /RSVP Activity/ }));
+
+    expect(screen.getByText(/changed from/)).toBeInTheDocument();
+    expect(screen.queryByText(/automatically/)).not.toBeInTheDocument();
   });
 
   it('shows an unrecognised stored value as it is rather than dropping it', async () => {

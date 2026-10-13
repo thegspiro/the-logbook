@@ -40,6 +40,7 @@ number when it was left implicit:
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -625,6 +626,10 @@ class EquipmentReadinessService:
         """
         by_apparatus, by_type, by_id = await self._load_templates(organization_id)
         links = await self._load_shift_template_links(organization_id)
+        # Only a shift with no recorded end needs the department's calendar to
+        # be bounded by a checklist's creation; resolved at most once, and only
+        # then.
+        tz: Optional[ZoneInfo] = None
 
         # Only dates that actually expected a check become columns — a shift on
         # a rig with no template configured is not a missed check.
@@ -644,8 +649,46 @@ class EquipmentReadinessService:
                 else self._templates_for(unit, by_apparatus, by_type)
             )
             for tmpl in templates:
-                expected.append((shift, tmpl))
+                if (
+                    tz is None
+                    and getattr(shift, "end_time", None) is None
+                    and getattr(tmpl, "created_at", None) is not None
+                ):
+                    tz = await resolve_scheduling_timezone(self.db, organization_id)
+                if self._checklist_existed_during(shift, tmpl, tz):
+                    expected.append((shift, tmpl))
         return expected
+
+    @staticmethod
+    def _checklist_existed_during(
+        shift: Shift, tmpl: EquipmentCheckTemplate, tz: Optional[ZoneInfo]
+    ) -> bool:
+        """Whether the checklist existed before this shift was over (W46-19).
+
+        A checklist is expected on a rig from its creation (owner decision
+        2026-10-05). A shift that had already ended when the checklist was
+        written could not have performed it, so counting it would put a miss
+        on the record minutes after the checklist was saved. A shift still
+        under way at creation does owe it — the crew can still do the check.
+
+        Without a recorded end, a shift owes it from the checklist's creation
+        day onward, read on the department's calendar: a checklist written at
+        9:54 PM must not reach the day before because that evening is already
+        tomorrow in UTC.
+        """
+        created = getattr(tmpl, "created_at", None)
+        if created is None:
+            return True
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        end = getattr(shift, "end_time", None)
+        if end is not None:
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=timezone.utc)
+            return bool(end > created)
+        if tz is None:
+            return bool(shift.shift_date >= created.astimezone(timezone.utc).date())
+        return bool(shift.shift_date >= local_date(created, tz))
 
     async def _resolve_occasions(
         self,

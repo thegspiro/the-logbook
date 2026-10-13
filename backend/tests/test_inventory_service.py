@@ -1508,6 +1508,8 @@ class TestCheckinItem:
         locked_result.scalar_one_or_none.return_value = checkout_record
         mock_db.execute = AsyncMock(side_effect=[peek_result, locked_result])
         service._get_item_locked = AsyncMock(return_value=_make_item())
+        # No open return notice on this item (W39-5's notice lock).
+        service._lock_open_return_notices = AsyncMock(return_value=[])
 
         success, err = await service.checkin_item(
             checkout_id=uuid4(),
@@ -1540,6 +1542,8 @@ class TestCheckinItem:
         co_result.scalar_one_or_none.return_value = checkout_record
 
         service._get_item_locked = AsyncMock(return_value=item)
+        # No open return notice on this item (W39-5's notice lock).
+        service._lock_open_return_notices = AsyncMock(return_value=[])
         mock_db.execute = AsyncMock(side_effect=[peek_result, co_result])
 
         with patch.object(

@@ -20,6 +20,7 @@ import SuggestionReviewPanel from '../components/SuggestionReviewPanel';
 import SuggestionSubmitForm from '../components/SuggestionSubmitForm';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewSummary, SuggestionBoxPublic } from '../types/suggestions';
+import { useTablist } from '../../../hooks/useTablist';
 
 type Tab = 'submit' | 'board' | 'mine' | 'key' | 'review';
 
@@ -39,6 +40,7 @@ const SHORT_TAB_LABELS: Partial<Record<Tab, string>> = {
 };
 
 const SuggestionsPage: React.FC = () => {
+  const tablist = useTablist();
   const [searchParams, setSearchParams] = useSearchParams();
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [summaryFailed, setSummaryFailed] = useState(false);
@@ -123,7 +125,7 @@ const SuggestionsPage: React.FC = () => {
         Suggestions
       </h1>
 
-      <div className="tab-scroll mb-4" role="tablist" aria-label="Suggestions">
+      <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Suggestions">
         {tabs.map((tab) => (
           <button
             key={tab}

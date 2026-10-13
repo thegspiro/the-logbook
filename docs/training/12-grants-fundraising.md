@@ -157,12 +157,38 @@ Applications progress through 10 stages:
 | **Reporting**       | Performance reports due                     | File required reports        |
 | **Closed**          | Grant period complete                       | Final closeout               |
 
+### Moving an Application Between Stages
+
+An application can only move to the stages that make sense next, and the
+**Application Status** list on the edit form offers only those (plus the stage
+it is in now):
+
+| From                                      | Can move to                                    |
+| ----------------------------------------- | ---------------------------------------------- |
+| Researching, Preparing or Internal Review | any of the other two, or Submitted             |
+| Submitted                                 | Under Review, Awarded or Denied                |
+| Under Review                              | Submitted (a resubmission), Awarded or Denied  |
+| Awarded                                   | Active, or Closed (an award declined/returned) |
+| Active                                    | Reporting or Closed                            |
+| Reporting                                 | Active or Closed                               |
+| Denied                                    | Researching (try again next cycle)             |
+| Closed                                    | Reporting (a report asked for after closeout)  |
+
+So a submitted application cannot slip back into drafting, and a closed grant
+cannot return to Researching. Any other move is refused with a message naming
+the stages that are allowed. A **new** application can be recorded at any stage
+— useful when entering a grant the department already has.
+
 ### Pipeline View vs Table View
 
 Applications can be viewed in two ways:
 
-- **Pipeline (Kanban)** — Visual columns with drag-and-drop between stages
-- **Table** — Sortable, filterable list with status badges
+- **Pipeline (Kanban)** — One column per stage. Each column's header shows how many applications are in that stage, and the column loads 25 cards at a time; **Show more** at the bottom loads the next batch. (Change a stage from the application's own page.)
+- **Table** — Sortable, filterable list with status badges, a page at a time. The pager under the table moves between pages and sets how many rows a page shows (25 by default); sorting by a column sorts every application, not only the page you are looking at.
+
+Nothing is left out of either view: every application matching the filters can be reached, however many the department has. (The page used to load the newest 1,000 and silently stop.)
+
+**Filtering.** Search matches the program name or the agency. The **Status** filter offers single statuses and three groups — **Active grants** (Active and Reporting), **Pending** (Researching through Under Review) and **Funded** (Awarded, Active, Reporting and Closed). The dashboard's **Active Grants**, **Pending Applications** and **Total Grant Funding** cards open the list on the matching group, so the list shows the same applications the card counted.
 
 ![Grant applications in pipeline view with a column per status](./images/12-05-applications-pipeline.png)
 
@@ -197,6 +223,18 @@ Navigate to the **Expenditures** tab to record spending against the budget:
 5. Save
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
+
+**Spending over the award or a budget line is recorded, with a warning.** An
+expenditure is never refused for being over — by the time it is entered the
+money has been spent, and refusing it would only make the books disagree with
+the bank. Instead:
+
+- after you record an expenditure that puts the grant over its **Amount
+  Awarded**, or its budget line over its budget, a warning appears saying by how
+  much;
+- the application page shows a standing warning while total spending is over
+  the amount awarded;
+- each overspend is written to the audit log.
 
 **[SCREENSHOT — CHECK `12-06-application-budget-tab.png`.** If the frame shows the add button, it now reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount**.**]**
 
@@ -352,11 +390,11 @@ Each donor profile shows:
 
 ### Edge Cases
 
-| Scenario                 | Behavior                                              |
-| ------------------------ | ----------------------------------------------------- |
-| Donor linked to a member | `user_id` field connects to the member profile        |
-| Anonymous donor          | `is_anonymous = true`; name not shown in public views |
-| Donor deactivated        | Soft-delete; historical records preserved             |
+| Scenario                 | Behavior                                                                                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Donor linked to a member | `user_id` field connects to the member profile                                                                                                                                                                           |
+| Anonymous donor          | `is_anonymous = true`; members with only `fundraising.view` see **Anonymous donor** with no contact details, and a search by the donor's name does not find the record. `fundraising.manage` holders see the full record |
+| Donor deactivated        | Soft-delete; historical records preserved                                                                                                                                                                                |
 
 ---
 
@@ -371,7 +409,7 @@ Each donor profile shows:
    - **Payment status** — defaults to Completed. Only a completed gift counts toward the campaign's raised total and the donor's giving history
    - **Campaign** — optional
    - **Donor** — choose from the donor directory, or leave it as "Not in the donor directory" and enter a name and email for a one-time gift
-   - **Anonymous** — keep the donor's name out of public views
+   - **Anonymous** — hide who gave from everyone who can only view fundraising (`fundraising.view`): the Donations list and the dashboard's recent donations show **Anonymous** and the API returns no donor name, email or link to the donor. Officers with `fundraising.manage` still see the donor, so receipts and thank-you letters can go out
    - **Dedication** — In honor of or In memory of, with the name
    - **Tax deductible** — on by default
    - **Notes**
@@ -400,12 +438,12 @@ Track whether receipts and thank-you letters have been sent:
 
 ### Edge Cases
 
-| Scenario                           | Behavior                                               |
-| ---------------------------------- | ------------------------------------------------------ |
-| Recurring donation                 | Records each occurrence separately; tracks frequency   |
-| Anonymous donation with dedication | Dedication shown; donor name hidden                    |
-| Donation to inactive campaign      | Allowed but logged; counted toward campaign total      |
-| Check donation                     | `check_number` is stored but API-only; put it in Notes |
+| Scenario                           | Behavior                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Recurring donation                 | Records each occurrence separately; tracks frequency                                                                                   |
+| Anonymous donation with dedication | Dedication shown; donor name, email and donor link hidden from `fundraising.view`-only members (amount, date and campaign still shown) |
+| Donation to inactive campaign      | Allowed but logged; counted toward campaign total                                                                                      |
+| Check donation                     | `check_number` is stored but API-only; put it in Notes                                                                                 |
 
 ---
 

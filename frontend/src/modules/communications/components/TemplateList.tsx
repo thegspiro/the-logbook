@@ -59,6 +59,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   password_reset: { icon: KeyRound, label: 'Password Reset', color: 'text-blue-500' },
   event_cancellation: { icon: CalendarX, label: 'Event Cancellation', color: 'text-red-500' },
   event_reminder: { icon: CalendarClock, label: 'Event Reminder', color: 'text-blue-700 dark:text-blue-400' },
+  event_waitlist_promotion: { icon: CalendarCheck, label: 'Off the Waitlist', color: 'text-green-600' },
   training_approval: { icon: GraduationCap, label: 'Training Approval', color: 'text-purple-500' },
   ballot_notification: { icon: Vote, label: 'Ballot Notification', color: 'text-indigo-500' },
   member_dropped: { icon: UserMinus, label: 'Member Dropped', color: 'text-red-600' },
@@ -139,6 +140,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
     types: [
       'event_reminder',
       'event_cancellation',
+      'event_waitlist_promotion',
       'event_request_status',
       'series_end_reminder',
       'post_event_validation',

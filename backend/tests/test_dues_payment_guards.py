@@ -419,3 +419,42 @@ class TestTotalsAreDerived:
         _apply_payment_totals(dues)
 
         assert dues.status == DuesStatus.PARTIAL
+
+
+class TestRecordingYourOwnDuesIsRefused:
+    """FIN-4 / OPS-8: settling dues is a money movement, so the recorder must
+    not be the member who owes them — the rule waive_dues already applies to
+    the same record. The owner chose this same-person guard over a separate
+    disbursement permission."""
+
+    async def test_a_manager_cannot_record_a_payment_on_their_own_dues(self):
+        dues = _dues()
+        service = _service_for(dues)
+
+        with pytest.raises(ValueError, match="cannot record a payment on your own"):
+            await service.record_dues_payment(
+                dues.id, ORG_ID, recorded_by=dues.user_id, amount_paid=100.0
+            )
+
+        # Refused before anything reached the ledger or the totals.
+        assert list(dues.payments) == []
+        assert dues.amount_paid == Decimal("0.00")
+        assert dues.status == DuesStatus.PENDING
+
+    async def test_a_different_recorder_is_allowed(self):
+        dues = _dues()
+        service = _service_for(dues)
+
+        await service.record_dues_payment(
+            dues.id, ORG_ID, recorded_by=str(uuid.uuid4()), amount_paid=100.0
+        )
+
+        assert dues.status == DuesStatus.PAID
+
+    async def test_an_unattributed_reconciliation_passes_through(self):
+        dues = _dues()
+        service = _service_for(dues)
+
+        await service.record_dues_payment(dues.id, ORG_ID, amount_paid=100.0)
+
+        assert dues.status == DuesStatus.PAID
