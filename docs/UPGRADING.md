@@ -444,8 +444,7 @@ classification set.
 
 Migration `afaca8c1f812` adds `submitted_at`, `late_acknowledged_by` and
 `late_acknowledged_at` to expense reports and `substantiated_late` to expense
-line items. Nothing is backfilled. It also joins the two migration heads
-`a51a4e1d2443` and `bde76b481a16`, so `alembic upgrade head` has one head again.
+line items. Nothing is backfilled.
 
 - **Nothing changes until you turn it on.** The new organization settings
   `finance.substantiation_mode` (`off` by default, `warn` or `block`) and
@@ -465,6 +464,27 @@ line items. Nothing is backfilled. It also joins the two migration heads
 - **Downgrading** drops the columns. Which lines were late, and who confirmed
   them, are lost; a report held for that confirmation stays waiting for
   approval, and the previous version lets any approver approve it.
+
+### Program requirements with a due-after-enrollment setting start sending reminders (2026-10-12)
+
+A program requirement's **due after enrollment (days)** setting was stored —
+by cloning a program or importing one — but nothing read it. It now does, for
+every enrollment already running: the requirement is due that many days after
+the member enrolled, members are emailed on the program's reminder schedule,
+and a member whose date has **already passed** is sent **one** overdue notice
+on the first daily `program_requirement_deadlines` run after the upgrade (not a
+replay of every earlier reminder). Programs whose requirements never had the
+setting see no change.
+
+The same applies to a requirement's completion message: it is emailed from now
+on when a member completes the requirement. Completions from before the upgrade
+are marked as already announced by the migration, so nobody receives a message
+for training they finished earlier.
+
+To see which requirements are affected before upgrading, check the
+`program_requirements` rows with `custom_deadline_days` or
+`notification_message` set; an officer can clear either on the program's
+**Edit requirement** modal.
 
 ### A department runs one practical-skills system (2026-10-12)
 
