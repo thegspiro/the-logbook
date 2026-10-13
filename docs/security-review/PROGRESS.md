@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3145](https://github.com/thegspiro/the-logbook/pull/3145)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 8 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged, current
+line numbers updated for file growth. New surface this pass (a narrower
+`GET /users/directory`, an account-unlock action, an undo-drop window,
+consolidated phone validation, upload malware scanning, a
+baseline-role-removal guard, and a repo-wide MCP permission gate affecting
+this feature's two MCP tool files) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 8** section
+for detail. Row 07 stays ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3142's merge, Feature 06, Elections & ballots, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3142 (Feature 06, Elections & ballots, pass 8) merged
+2026-10-13T01:40:06Z — 0 fixed, 0 new findings; log entry already recorded
+below and rotation row 06 stays ✅. This iteration (also a watchdog
+pickup — confirmed via `search_pull_requests`
+`is:open head:claude/security-review-`, 0 results, and no stray remote
+branch) picked up Feature 07 (Users & organizations), the state PR #3142
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 8, PR #3142, before it merged), preserved for history</summary>
+
 **PR [#3142](https://github.com/thegspiro/the-logbook/pull/3142)**: branch
 `claude/security-review-elections-ballots`, Feature 06 (Elections &
 ballots), pass 8 (watchdog pickup). 0 fixed, 0 new findings — one
@@ -30,6 +60,8 @@ for detail. Also carries the `main`-wide Alembic merge-heads revision so
 this PR's own gate isn't blocked by unrelated `main` breakage (identical
 content landing independently via #3139). Row 06 stays ✅ (pending this
 PR's merge); next is Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3137's merge, Feature 05, Finance & approvals, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18743,6 +18775,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 07 (Users & organizations, pass 8) — 0 fixed, 0 new findings; 3 standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged (watchdog pickup)
+
+**Watchdog pickup.** PR #3142 (Feature 06, Elections & ballots, pass 8)
+merged 2026-10-13T01:40:06Z and its own body named Feature 07 as next,
+matching this row's own `PROGRESS.md` note. Independently re-confirmed via
+`search_pull_requests` (`is:open head:claude/security-review-`, 0 results)
+and a remote-branch check (no `claude/security-review-*` ref) that no
+security-review PR was open before this iteration started. Docs-only — the
+merged PR touched only the Elections findings file and `PROGRESS.md`, so
+nothing further to record beyond clearing the **Open PR** row above.
+
+**Real delta since pass 7's closing merge (`cc55dff6`, PR #2952,
+2026-10-05): 629 commits in the window, 14 touching a declared file
+directly, 1,060 insertions / 320 deletions across all twelve of this
+feature's declared files** (the four endpoint files, their services, models
+and schemas, and its MCP surface). Read as a real delta rather than
+sampled — every hunk of every file's diff — not a zero-diff pass: a
+narrower `GET /users/directory` endpoint (USR-8's owner-chosen remedy from
+pass 7, now shipped and verified), a lockout-unlock admin action
+(`POST /users/{user_id}/unlock`), an "undo a mistaken drop" one-week window
+(`GET`/`POST /users/{user_id}/undo-drop`), phone-number validation
+consolidated onto one new-writes-only helper applied to both mutation
+paths, malware scanning added to the member-photo and organization-logo
+upload paths, a guard against stripping the baseline `member` position from
+an active account, and a near-total `Column(...)` → `Mapped[...]` mypy
+conversion across every model in `models/user.py`. Also read, though
+outside the four declared files because it is load-bearing for this
+feature's two MCP tool files or extends the `User` model: a cross-cutting
+change making `app/mcp/registry.py`'s per-tool `permissions` gate a
+required, no-default argument (closing a prior gap where an OAuth-connected
+member's own permissions were never checked against an MCP tool, only
+module enablement — this feature's five tools each now carry a
+`permissions=` tuple matching the equivalent REST endpoint's own gate), and
+the new member-badge-code feature (`member_badges.py`,
+`member_badge_service.py`) — org-scoped throughout, enumeration-safe,
+rate-limited, migration tolerant of a `create_all`-only install.
+
+All 77 routes across the four principal files enumerated mechanically (not
+sampled): every one carries a permission dependency or a bare
+`get_current_user` with self-or-admin gating in the handler body. Three
+standing findings re-confirmed unchanged, current line numbers updated for
+file growth: **USR-5** (unbounded lists, narrowed by the owner in pass 7),
+**USR-8** (full-roster `GET /users`, narrowed by the owner in pass 7 via
+the directory split verified this pass), **USR-10a**
+(`_tier_member_counts` not a locking read against
+`MembershipTierService.advance_all` — that service's only change this
+window is an unrelated mypy fix, so the disposition from pass 5 is
+unchanged). `docs/KNOWN_LIMITATIONS.md`'s three matching entries cite
+functions/files rather than line numbers, so no edit was needed there.
+**0 application-code defects found, 0 fixes needed.** Completion gate: all
+green — see `docs/security-review/USR-07-users-organizations.md`'s **Pass
+8** section for every check's result, including a full
+`pytest tests/ -m "not integration and not slow and not docker"` run
+(14,328 passed) given the cross-cutting MCP permission change in this
+window's diff.
 
 ### 2026-10-12 — Feature 06 (Elections & ballots, pass 8) — 0 fixed, 0 new findings; 1 standing item (ELEC-14) resolved by other work, 3 re-confirmed unchanged (watchdog pickup)
 
