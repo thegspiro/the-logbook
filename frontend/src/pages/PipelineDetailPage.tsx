@@ -450,13 +450,16 @@ const EnrollModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="enroll-members-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
-          <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
+          <h2 id="enroll-members-title" className="text-theme-text-primary text-xl font-bold">
+            Enroll Members
+          </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
         </div>
         <form
@@ -1068,6 +1071,7 @@ const EnrollmentProgressModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="member-progress-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
@@ -1076,7 +1080,9 @@ const EnrollmentProgressModal: React.FC<{
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-theme-text-primary text-xl font-bold">Progress — {memberName}</h2>
+              <h2 id="member-progress-title" className="text-theme-text-primary text-xl font-bold">
+                Progress — {memberName}
+              </h2>
               {data && (
                 <p className="text-theme-text-muted mt-1 text-sm">
                   {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
@@ -1098,6 +1104,7 @@ const EnrollmentProgressModal: React.FC<{
               )}
             </div>
             <button
+              data-dialog-close
               type="button"
               onClick={onClose}
               aria-label="Close"

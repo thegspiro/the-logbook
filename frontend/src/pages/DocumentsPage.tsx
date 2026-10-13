@@ -986,6 +986,7 @@ const DocumentsPage: React.FC = () => {
                       Upload Document
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowUploadModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
@@ -1140,6 +1141,7 @@ const DocumentsPage: React.FC = () => {
                       Create Folder
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowCreateFolder(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
