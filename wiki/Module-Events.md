@@ -755,6 +755,14 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
   `GET …/mine`; the API answers 400). A withdrawn request is kept with status
   `withdrawn` and a `withdrawal_count`, and asking again reuses that row.
   Reviewers never see withdrawn rows.
+- **Resend count for reviewers:** petition responses carry `withdrawal_count`,
+  and the event card and the Attendance Requests page show "Withdrawn and sent
+  again once / twice" on a resent request, so an organizer notified more than
+  once can see why.
+- **Finalized-event hint:** when the event's attendance is already finalized as
+  the request arrives, the reviewers' in-app prompt and email say approving
+  needs attendance reopened first, and that declining works either way, instead
+  of the plain "Review the request" line.
 - **Across events:** `/events/attendance-requests` lists every pending request
   on events the viewer organizes or is alternate for, oldest first, with
   **Approve** / **Decline** in place (the same dialogs as the event card,

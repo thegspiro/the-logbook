@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
 let storeState: Record<string, unknown> = {};
 vi.mock('../store/financeStore', () => ({
@@ -110,11 +111,13 @@ const renderCase = (c: PageCase, extra: Record<string, unknown> = {}) => {
     [c.fetchKey]: vi.fn(),
   };
   render(
-    <MemoryRouter initialEntries={[c.path.replace(':id', 'e-1')]}>
-      <Routes>
-        <Route path={c.path} element={<c.Page />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[c.path.replace(':id', 'e-1')]}>
+        <Routes>
+          <Route path={c.path} element={<c.Page />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 };
 

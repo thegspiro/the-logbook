@@ -1219,8 +1219,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {/* Confirmation overlay */}
         {showConfirm && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
-            <DialogPanel onClose={() => setShowConfirm(false)} className="mx-4 max-w-sm p-5">
-              <h4 className="text-theme-text-primary mb-2 font-medium">
+            <DialogPanel
+              onClose={() => setShowConfirm(false)}
+              className="mx-4 max-w-sm p-5"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="scan-confirm-title"
+            >
+              <h4 id="scan-confirm-title" className="text-theme-text-primary mb-2 font-medium">
                 Confirm {mode === 'distribute' ? 'Distribution' : 'Return'}
               </h4>
               <p className="text-theme-text-secondary mb-4 text-sm">
@@ -1266,8 +1272,16 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         )}
         {transferResult?.conflict && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/50">
-            <DialogPanel onClose={() => closeTransfer()} className="mx-4 max-w-md space-y-3 p-5">
-              <h4 className="text-theme-text-primary font-bold">Confirm custody transfer</h4>
+            <DialogPanel
+              onClose={() => closeTransfer()}
+              className="mx-4 max-w-md space-y-3 p-5"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="scan-transfer-title"
+            >
+              <h4 id="scan-transfer-title" className="text-theme-text-primary font-bold">
+                Confirm custody transfer
+              </h4>
               <label className="flex gap-2 text-sm">
                 <input
                   type="checkbox"

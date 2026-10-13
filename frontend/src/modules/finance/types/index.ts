@@ -282,6 +282,26 @@ export interface FiscalYearOpenItem {
   amount?: number | string | null;
 }
 
+/**
+ * What an expense was for, as IRS Form 990 Part IX reports it. Fundraising is
+ * the cost of raising money, not what the money raised buys.
+ */
+export const FunctionalClass = {
+  PROGRAM: 'program',
+  MANAGEMENT_GENERAL: 'management_general',
+  FUNDRAISING: 'fundraising',
+} as const;
+export type FunctionalClass = (typeof FunctionalClass)[keyof typeof FunctionalClass];
+
+export const isFunctionalClass = (value: string | null | undefined): value is FunctionalClass =>
+  (Object.values(FunctionalClass) as string[]).includes(value ?? '');
+
+export const FUNCTIONAL_CLASS_LABELS: Record<FunctionalClass, string> = {
+  [FunctionalClass.PROGRAM]: 'Program services',
+  [FunctionalClass.MANAGEMENT_GENERAL]: 'Management & general',
+  [FunctionalClass.FUNDRAISING]: 'Fundraising',
+};
+
 export interface BudgetCategory {
   id: string;
   organizationId: string;
@@ -294,6 +314,8 @@ export interface BudgetCategory {
   /** The position answerable for this category's lines; a line without its own owner inherits it. */
   ownerPositionId?: string | null;
   ownerPositionName?: string | null;
+  /** Default for payments against its lines; null inherits the parent category's. */
+  functionalClass?: FunctionalClass | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -478,6 +500,7 @@ export interface BudgetCategoryUpdatePayload {
   isActive?: boolean;
   qbAccountName?: string | null;
   ownerPositionId?: string | null;
+  functionalClass?: FunctionalClass | null;
 }
 
 /** `POST /finance/budgets`. Blank optional fields are omitted. */
@@ -785,6 +808,8 @@ export interface PendingApproval {
   canAct: boolean;
   /** The viewer is an approvals admin who is not the named approver, and must give an override reason to act. */
   requiresOverride: boolean;
+  /** Expense reports: lines submitted after the substantiation deadline; approving must acknowledge them. */
+  lateLineCount?: number;
 }
 
 /** Why nobody can act on an approval step, from the approver-coverage report. */
@@ -823,7 +848,18 @@ export interface UnroutedApproval {
   /** Held for a second, different approver by the dual-approval threshold. */
   awaitingSecondApproval?: boolean;
   firstApprovedBy?: string | null;
+  /** Expense reports: lines submitted after the substantiation deadline. */
+  lateLineCount?: number;
+  /** Held until an approver acknowledges the late lines. */
+  awaitingLateAcknowledgement?: boolean;
 }
+
+export const SubstantiationMode = {
+  OFF: 'off',
+  WARN: 'warn',
+  BLOCK: 'block',
+} as const;
+export type SubstantiationMode = (typeof SubstantiationMode)[keyof typeof SubstantiationMode];
 
 /** `GET /finance/settings`: the finance rules the server applies. */
 export interface FinanceSettings {
@@ -832,9 +868,13 @@ export interface FinanceSettings {
    * Changed through organization settings (`settings.manage`), not here.
    */
   dualApprovalThreshold: MonetaryAmount | null;
+  /** The accountable-plan deadline for expense reports. */
+  substantiationMode: SubstantiationMode;
+  /** Days allowed between incurring an expense and submitting it (1-60). */
+  substantiationDays: number;
 }
 
-export interface PurchaseRequest {
+export interface PurchaseRequest extends FunctionalClassFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -877,7 +917,7 @@ export interface PurchaseRequest {
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface ExpenseLineItem {
+export interface ExpenseLineItem extends FunctionalClassFields {
   id: string;
   expenseReportId: string;
   budgetId?: string;
@@ -889,6 +929,8 @@ export interface ExpenseLineItem {
   receiptDocumentId?: string | null;
   receiptFileUrl?: string | null;
   merchant?: string;
+  /** Submitted after the department's substantiation deadline; decided at submission. */
+  substantiatedLate?: boolean;
   createdAt: string;
 }
 
@@ -918,13 +960,22 @@ export interface ExpenseReport {
   /** When a complete QuickBooks export last carried this payment. */
   qbExportedAt?: string | null;
   notes?: string;
+  /** When the member submitted it; null before submission was recorded. */
+  submittedAt?: string | null;
+  /** Lines submitted after the department's substantiation deadline. */
+  lateLineCount?: number;
+  /** The first approver who confirmed reviewing the late lines (null for an emailed approval). */
+  lateAcknowledgedBy?: string | null;
+  lateAcknowledgedAt?: string | null;
+  /** Held until an approver acknowledges the late lines (detail responses only). */
+  awaitingLateAcknowledgement?: boolean;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface CheckRequest {
+export interface CheckRequest extends FunctionalClassFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -1245,5 +1296,57 @@ export interface PaymentsRegisterReport {
   start: string;
   end: string;
   rows: PaymentsRegisterRow[];
+  total: MonetaryAmount;
+}
+
+/** An expense line reimbursed outside the accountable plan (claimed after the deadline). */
+export interface LateSubstantiationRow {
+  /** `YYYY-MM-DD`, the department's calendar day the report was paid. */
+  paidOn: string;
+  reportId: string;
+  reportNumber: string;
+  memberName: string;
+  description: string;
+  budgetLine?: string | null;
+  /** `YYYY-MM-DD`. */
+  incurredOn: string;
+  /** `YYYY-MM-DD`; null for a report submitted before submission was recorded. */
+  submittedOn?: string | null;
+  daysToSubmit?: number | null;
+  amount: MonetaryAmount;
+  acknowledgedByName?: string | null;
+}
+
+export interface LateSubstantiationReport {
+  start: string;
+  end: string;
+  rows: LateSubstantiationRow[];
+  total: MonetaryAmount;
+}
+
+/** One payment's own class, and the one it takes once its category's applies (detail responses). */
+export interface FunctionalClassFields {
+  functionalClass?: FunctionalClass | null;
+  effectiveFunctionalClass?: FunctionalClass | null;
+}
+
+export interface FunctionalExpenseCategory {
+  /** Null: payments with no budget line. */
+  categoryId?: string | null;
+  categoryName?: string | null;
+  amount: MonetaryAmount;
+}
+
+export interface FunctionalExpenseClass {
+  /** Null is unclassified. */
+  functionalClass: FunctionalClass | null;
+  categories: FunctionalExpenseCategory[];
+  total: MonetaryAmount;
+}
+
+export interface FunctionalExpensesReport {
+  start: string;
+  end: string;
+  classes: FunctionalExpenseClass[];
   total: MonetaryAmount;
 }

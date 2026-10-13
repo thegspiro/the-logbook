@@ -88,8 +88,7 @@ import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPic
 import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
 import InventoryMatchModal from '@/modules/inventory/components/InventoryMatchModal';
 import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQuickAdd';
-import { useAuthStore } from '@/stores/authStore';
-import { useEnabledModules } from '@/hooks/useEnabledModules';
+import { useChecklistCatalogAccess } from '@/modules/inventory/hooks/useChecklistCatalogAccess';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
 import {
@@ -270,6 +269,7 @@ const RowActionMenu: React.FC<{ label: string; title: string; children: React.Re
                   {title}
                 </h2>
                 <button
+                  data-dialog-close
                   type="button"
                   data-sheet-close
                   onClick={() => setSheetOpen(false)}
@@ -584,22 +584,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Writing to the catalog is a separate grant from building checklists, so a
   // scheduling officer without it is offered linking but not creation —
   // showing the affordance anyway would just produce a 403 they cannot act on.
-  const checkPermission = useAuthStore((s) => s.checkPermission);
-  const canManageInventory = checkPermission('inventory.manage');
-  // Medical stock is served by its own module and its own grants, so an EMS
-  // supply officer holding only the medical pair can still find and create
-  // the supplies a rig's checklist counts. Each half of the catalog is
-  // searched only when the viewer can read it — the backend would 403 the
-  // other — and medical waits on the module answer so an organization that
-  // has Medical Supplies switched off is not sent a refused request per key.
-  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const medicalModuleOn = !modulesLoading && isModuleOn('medical_supplies');
-  const catalogScope = {
-    gear: checkPermission('inventory.view'),
-    medical: medicalModuleOn && (checkPermission('inventory.view_medical') || checkPermission('inventory.view')),
-  };
-  const canManageMedical =
-    medicalModuleOn && (checkPermission('inventory.manage_medical') || checkPermission('inventory.manage'));
+  // Who may search and create in the gear and medical halves of the catalog —
+  // shared with the department-wide link report.
+  const {
+    searchScope: catalogScope,
+    canCreateGear: canManageInventory,
+    canCreateMedical: canManageMedical,
+  } = useChecklistCatalogAccess();
   // Only a saved compartment can carry a tag, so a new template has nothing
   // to ask about until it is saved.
   const { enabled: nfcEnabled } = useInventoryNfcEnabled(isEditing);
@@ -5140,6 +5131,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               Template details
             </h2>
             <button
+              data-dialog-close
               type="button"
               onClick={() => setDrawerOpen(false)}
               className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md sm:min-h-0 sm:min-w-0 sm:p-1.5"
@@ -6283,6 +6275,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Before publishing
                 </h2>
                 <button
+                  data-dialog-close
                   type="button"
                   onClick={() => setShowBlockerSheet(false)}
                   className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md"
@@ -6673,6 +6666,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 >
                   <header className="modal-header-sticky flex shrink-0 items-start gap-3 px-4 py-3">
                     <button
+                      data-dialog-close
                       type="button"
                       onClick={closeEditor}
                       className="text-theme-text-primary -ml-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md"

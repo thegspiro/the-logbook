@@ -986,6 +986,11 @@ export interface ReminderConditions {
   send_if_below_percentage?: number | undefined;
 }
 
+export interface PrerequisiteProgramSummary {
+  id: string;
+  name: string;
+}
+
 // Training Program
 export interface TrainingProgram {
   id: string;
@@ -999,7 +1004,10 @@ export interface TrainingProgram {
   structure_type: ProgramStructureType;
   /** Members currently on this pipeline, withdrawn enrollments excluded. */
   enrolled_count: number;
+  /** Programs a member must have completed before enrolling in this one. */
   prerequisite_program_ids?: string[];
+  /** Names for the ids above; a since-deleted program is left out. */
+  prerequisite_programs?: PrerequisiteProgramSummary[];
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
   warning_days_before: number;
@@ -1069,9 +1077,12 @@ export interface ProgramRequirement {
   // created for this program: editing it changes the department's copy, and
   // unlinking leaves that copy in place.
   owns_requirement?: boolean;
-  program_specific_description?: string;
-  custom_deadline_days?: number;
-  notification_message?: string;
+  /** Shown to members in place of the requirement's own description. */
+  program_specific_description?: string | null;
+  /** Due this many days after a member enrolls; null for no due date. */
+  custom_deadline_days?: number | null;
+  /** Emailed to the member once, when they complete the requirement. */
+  notification_message?: string | null;
   created_at: string;
   requirement?: TrainingRequirementEnhanced;
 }
@@ -1090,9 +1101,9 @@ export interface ProgramRequirementCreate {
   // means true, which is what adding a requirement always did.
   apply_to_current_enrollments?: boolean;
   sort_order?: number;
-  program_specific_description?: string;
-  custom_deadline_days?: number;
-  notification_message?: string;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 export interface ProgramRequirementUpdate {
@@ -1100,6 +1111,10 @@ export interface ProgramRequirementUpdate {
   is_prerequisite?: boolean;
   sort_order?: number;
   phase_id?: string | null;
+  // Omitted leaves the stored value alone; null clears it.
+  program_specific_description?: string | null;
+  custom_deadline_days?: number | null;
+  notification_message?: string | null;
 }
 
 export interface TrainingProgramUpdate {
@@ -1117,6 +1132,9 @@ export interface TrainingProgramUpdate {
   recert_interval_months?: number | undefined;
   recert_anchor_month?: number | undefined;
   recert_anchor_day?: number | undefined;
+  /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
+  prerequisite_program_ids?: string[] | null | undefined;
+  allows_concurrent_enrollment?: boolean | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -1249,6 +1267,16 @@ export interface RequirementProgressRecord {
    * it). Sent by the enrollment progress read.
    */
   reads_compliance?: boolean;
+  /**
+   * The program's settings for this requirement, from the enrollment progress
+   * read. `due_date` is a calendar date ("YYYY-MM-DD") — the member's
+   * enrollment plus the program's due-after days, on the department's
+   * calendar — and `is_overdue` is the server's verdict against the
+   * department's today. Never re-derived here (CLAUDE.md pitfall #29).
+   */
+  program_specific_description?: string | null;
+  due_date?: string | null;
+  is_overdue?: boolean;
 }
 
 export interface RequirementProgressUpdate {
@@ -1381,6 +1409,9 @@ export interface ProgramBuildRequirementLink {
   requirement_id: string;
   is_required: boolean;
   sort_order: number;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 /** Defines a new program-specific requirement during program build. */
@@ -1402,6 +1433,9 @@ export interface ProgramBuildRequirementInput {
   allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 export interface ProgramBuildMilestoneInput {

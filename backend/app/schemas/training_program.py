@@ -218,6 +218,12 @@ class TrainingProgramBase(BaseModel):
 class TrainingProgramCreate(TrainingProgramBase):
     """Schema for creating a training program"""
 
+    # Programs a member must have completed before enrolling in this one.
+    # Validated in-org, acyclic and not self-referencing by the service.
+    prerequisite_program_ids: Optional[List[UUID]] = None
+    # Matches the column default and the JSON import's default.
+    allows_concurrent_enrollment: bool = True
+
 
 class TrainingProgramUpdate(BaseModel):
     """Schema for updating a training program"""
@@ -237,6 +243,18 @@ class TrainingProgramUpdate(BaseModel):
     recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
     recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
     recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
+    # Omitted leaves the prerequisites alone; null or [] clears them.
+    prerequisite_program_ids: Optional[List[UUID]] = None
+    # Omitted leaves the setting alone; null is rejected by the service, since
+    # the column has no "unset" meaning the enrollment checks could honour.
+    allows_concurrent_enrollment: Optional[bool] = None
+
+
+class PrerequisiteProgramSummary(BaseModel):
+    """A prerequisite program's id and name, for display."""
+
+    id: str
+    name: str
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
@@ -252,8 +270,28 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
     # How many members are on this pipeline. Computed for the list view — the
     # programme cards report it, and without it they rendered a hardcoded zero.
     enrolled_count: int = 0
+    prerequisite_program_ids: List[str] = []
+    allows_concurrent_enrollment: bool = True
+    # Names for the ids above, resolved in one query by the service. Ids whose
+    # program no longer exists are left out rather than shown blank.
+    prerequisite_programs: List[PrerequisiteProgramSummary] = []
 
     model_config = _response_config
+
+    @field_validator("prerequisite_program_ids", mode="before")
+    @classmethod
+    def _prerequisites_as_strings(cls, value: Any) -> Any:
+        if value is None:
+            return []
+        return [str(item) for item in value]
+
+    @field_validator("allows_concurrent_enrollment", mode="before")
+    @classmethod
+    def _concurrency_as_enforced(cls, value: Any) -> Any:
+        # The enrollment checks read a NULL column as "not allowed"
+        # (``if not program.allows_concurrent_enrollment``), so report it the
+        # way it is enforced rather than as the column default.
+        return bool(value)
 
 
 # Program Phase Schemas
@@ -300,6 +338,44 @@ class ProgramPhaseResponse(ProgramPhaseBase, UTCResponseBase):
 
 # Program Requirement Schemas
 
+# Upper bound for a requirement's due-after-enrollment window. Ten years, the
+# same ceiling the requirement's own ``recency_days`` uses.
+MAX_CUSTOM_DEADLINE_DAYS = 3650
+
+
+def _blank_text_to_none(value: Any) -> Any:
+    """Store a cleared text box as NULL, never as an empty string.
+
+    An empty description would replace the requirement's own on the member's
+    page with nothing, and an empty completion message would send a blank
+    email.
+    """
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+class ProgramRequirementCustomization(BaseModel):
+    """Per-program settings a create request may give a requirement link.
+
+    * ``program_specific_description`` replaces the requirement's own
+      description on the member's progress page.
+    * ``custom_deadline_days`` makes the requirement due that many days after
+      the member enrolled; the date is derived on read, never stored.
+    * ``notification_message`` is emailed to the member when they complete it.
+    """
+
+    program_specific_description: Optional[str] = None
+    custom_deadline_days: Optional[int] = Field(None, ge=1, le=MAX_CUSTOM_DEADLINE_DAYS)
+    notification_message: Optional[str] = None
+
+    @field_validator(
+        "program_specific_description", "notification_message", mode="before"
+    )
+    @classmethod
+    def _blank_is_none(cls, value: Any) -> Any:
+        return _blank_text_to_none(value)
+
 
 class ProgramRequirementBase(BaseModel):
     """Base program requirement schema"""
@@ -309,7 +385,7 @@ class ProgramRequirementBase(BaseModel):
     sort_order: int = Field(default=0, ge=0)
 
 
-class ProgramRequirementCreate(ProgramRequirementBase):
+class ProgramRequirementCreate(ProgramRequirementBase, ProgramRequirementCustomization):
     """Schema for creating a program requirement"""
 
     program_id: UUID
@@ -334,6 +410,10 @@ class ProgramRequirementUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
     # Move the requirement to a different phase (or None for program-level).
     phase_id: Optional[UUID] = None
+    # Omitted leaves the stored value alone; an explicit null clears it.
+    program_specific_description: Optional[str] = None
+    custom_deadline_days: Optional[int] = Field(None, ge=1, le=MAX_CUSTOM_DEADLINE_DAYS)
+    notification_message: Optional[str] = None
 
     @field_validator("is_required", "is_prerequisite", "sort_order")
     @classmethod
@@ -342,6 +422,13 @@ class ProgramRequirementUpdate(BaseModel):
         if value is None:
             raise ValueError("program requirement settings cannot be null")
         return value
+
+    @field_validator(
+        "program_specific_description", "notification_message", mode="before"
+    )
+    @classmethod
+    def _blank_is_none(cls, value: Any) -> Any:
+        return _blank_text_to_none(value)
 
 
 class PhaseReorderRequest(BaseModel):
@@ -366,6 +453,12 @@ class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
     # Surfaced so the editor can warn that edits to a linked-in department
     # requirement apply everywhere it is used, not just in this program.
     owns_requirement: bool = True
+    # Unconstrained on the way out: clone and import write these from JSON
+    # without the request bounds, and a response must not 500 over a stored
+    # value the readers already treat as "no deadline".
+    program_specific_description: Optional[str] = None
+    custom_deadline_days: Optional[int] = None
+    notification_message: Optional[str] = None
     # Nested so the UI can show the requirement's name/type without a second
     # lookup. The endpoints eager-load this relationship; from_attributes reads
     # only declared fields, so without it the name is silently dropped.
@@ -560,6 +653,15 @@ class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
     # compliance result, read live, not a tally officers adjust (W26-1). Set
     # by the enrollment progress read; False wherever it was not computed.
     reads_compliance: bool = False
+    # From the program's link to this requirement, set by the enrollment
+    # progress read (program_requirement_deadlines.annotate_progress_rows).
+    # The due date is the member's cycle start plus the link's
+    # custom_deadline_days on the department's calendar; overdue is decided
+    # against the department's today, so the page shows the server's verdict
+    # rather than the viewer's clock. None/False wherever it was not computed.
+    program_specific_description: Optional[str] = None
+    due_date: Optional[date] = None
+    is_overdue: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -918,6 +1020,10 @@ class ProgramBuildRequirementInput(BaseModel):
         ),
     )
     allows_external_credit: bool = False
+    # Per-program link settings; apply to a linked and a new requirement alike.
+    program_specific_description: Optional[str] = None
+    custom_deadline_days: Optional[int] = Field(None, ge=1, le=MAX_CUSTOM_DEADLINE_DAYS)
+    notification_message: Optional[str] = None
     is_required: bool = True
     # Every other path that creates a link — create, clone, import — carries the
     # prerequisite flag. Build did not, so a program assembled in one call came
@@ -931,6 +1037,13 @@ class ProgramBuildRequirementInput(BaseModel):
         # Accepts the legacy bare-string form as well as objects, so older
         # clients and the built-in sample templates keep working.
         return coerce_checklist_items(v)
+
+    @field_validator(
+        "program_specific_description", "notification_message", mode="before"
+    )
+    @classmethod
+    def _blank_is_none(cls, value: Any) -> Any:
+        return _blank_text_to_none(value)
 
     @model_validator(mode="after")
     def _link_or_define_not_both(self) -> "ProgramBuildRequirementInput":

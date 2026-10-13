@@ -59,6 +59,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
 )
+from app.services.program_requirement_deadlines import annotate_progress_rows
 from app.services.sample_program_templates import (
     SAMPLE_TEMPLATES,
     list_sample_template_summaries,
@@ -150,6 +151,10 @@ def _member_program_requirement(program_requirement) -> ProgramRequirementRespon
     response: ProgramRequirementResponse = ProgramRequirementResponse.model_validate(
         program_requirement
     )
+    # The completion message is the officer's word to a member who has just
+    # finished; it arrives by email then, not ahead of time on the member's
+    # own copy of the program.
+    response = response.model_copy(update={"notification_message": None})
     if response.requirement is None:
         return response
     member_view: ProgramRequirementResponse = response.model_copy(
@@ -718,6 +723,8 @@ async def get_training_program(
     )
     milestones = milestones_result.scalars().all()
 
+    await service.attach_prerequisite_summaries([program], current_user.organization_id)
+
     return ProgramWithPhasesAndRequirements(
         id=program.id,
         organization_id=program.organization_id,
@@ -730,6 +737,17 @@ async def get_training_program(
         structure_type=program.structure_type.value,
         time_limit_days=program.time_limit_days,
         warning_days_before=program.warning_days_before,
+        # The edit form is seeded from this response, so a field left out
+        # here comes back as its schema default and is saved over the real
+        # value the next time anyone edits the program.
+        reminder_conditions=program.reminder_conditions,
+        recert_enabled=program.recert_enabled,
+        recert_interval_months=program.recert_interval_months,
+        recert_anchor_month=program.recert_anchor_month,
+        recert_anchor_day=program.recert_anchor_day,
+        prerequisite_program_ids=program.prerequisite_program_ids,
+        allows_concurrent_enrollment=program.allows_concurrent_enrollment,
+        prerequisite_programs=program.prerequisite_programs,
         is_template=program.is_template,
         active=program.active,
         created_at=program.created_at,
@@ -1516,6 +1534,11 @@ async def get_enrollment_progress(
             enrollment = refreshed
     await service.mark_linked_rows(
         enrollment.program_id, list(enrollment.requirement_progress)
+    )
+    # Per-requirement due dates and the program's own description, decided on
+    # the department's calendar so the page never re-derives them.
+    await annotate_progress_rows(
+        db, enrollment, enrollment.requirement_progress, org_tz, today
     )
 
     # Calculate time remaining

@@ -37,6 +37,7 @@ import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
@@ -263,6 +264,14 @@ const RequirementList: React.FC<{
                 {pr.program_specific_description && (
                   <p className="text-theme-text-secondary mt-1 text-xs italic">{pr.program_specific_description}</p>
                 )}
+                {(pr.custom_deadline_days != null || pr.notification_message) && (
+                  <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-x-3 text-xs">
+                    {pr.custom_deadline_days != null && (
+                      <span>Due {pr.custom_deadline_days} days after enrollment</span>
+                    )}
+                    {pr.notification_message && <span>Completion message set</span>}
+                  </div>
+                )}
                 <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                   {pr.requirement?.required_hours && <span>{pr.requirement.required_hours}h required</span>}
                   {pr.requirement?.required_shifts && <span>{pr.requirement.required_shifts} shifts</span>}
@@ -441,13 +450,16 @@ const EnrollModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="enroll-members-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-lg flex-col">
         <div className="border-theme-surface-border border-b p-6">
-          <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
+          <h2 id="enroll-members-title" className="text-theme-text-primary text-xl font-bold">
+            Enroll Members
+          </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
         </div>
         <form
@@ -704,7 +716,7 @@ const RequirementProgressRow: React.FC<{
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center gap-2 text-xs">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <span className={statusMeta.className}>{statusMeta.label}</span>
           <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
           {target && (
@@ -712,6 +724,11 @@ const RequirementProgressRow: React.FC<{
               · target {target.value} {target.label}
             </span>
           )}
+          <RequirementDueDate
+            dueDate={record.due_date}
+            isOverdue={record.is_overdue}
+            done={isDone || record.status === 'waived'}
+          />
         </div>
       </div>
 
@@ -1054,6 +1071,7 @@ const EnrollmentProgressModal: React.FC<{
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="member-progress-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
@@ -1062,7 +1080,9 @@ const EnrollmentProgressModal: React.FC<{
         <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-theme-text-primary text-xl font-bold">Progress — {memberName}</h2>
+              <h2 id="member-progress-title" className="text-theme-text-primary text-xl font-bold">
+                Progress — {memberName}
+              </h2>
               {data && (
                 <p className="text-theme-text-muted mt-1 text-sm">
                   {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
@@ -1084,6 +1104,7 @@ const EnrollmentProgressModal: React.FC<{
               )}
             </div>
             <button
+              data-dialog-close
               type="button"
               onClick={onClose}
               aria-label="Close"
@@ -1595,6 +1616,24 @@ const PipelineDetailPage: React.FC = () => {
                   </span>
                 )}
               </div>
+              <dl className="text-theme-text-secondary mt-3 space-y-1 text-sm" aria-label="Enrollment rules">
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Prerequisite programs:</dt>
+                  <dd>
+                    {program.prerequisite_programs?.length
+                      ? program.prerequisite_programs.map((p) => p.name).join(', ')
+                      : 'None'}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Enrolled in other programs at the same time:</dt>
+                  <dd>
+                    {program.allows_concurrent_enrollment === false
+                      ? 'Not allowed — flagged when enrolling'
+                      : 'Allowed'}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
 

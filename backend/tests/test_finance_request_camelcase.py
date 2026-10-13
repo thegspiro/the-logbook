@@ -52,6 +52,7 @@ from app.schemas.finance import (
     FiscalYearLock,
     FiscalYearStageChange,
     FiscalYearUpdate,
+    FunctionalClassUpdate,
     ManualDenyRequest,
     MemberDuesPayment,
     MemberDuesUnwaive,
@@ -190,6 +191,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "is_active": False,
     },
     ApprovalActionRequest: {"notes": "Looks fine"},
+    FunctionalClassUpdate: {"functional_class": "fundraising"},
     ManualDenyRequest: {"reason": "No budget left this quarter"},
     PurchaseRequestCreate: {
         "fiscal_year_id": "fy-1",

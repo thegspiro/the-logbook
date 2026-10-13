@@ -20,6 +20,16 @@ of these defaults.
     one a department turns on, and an exception here would stop every approval
     over one mistyped setting (Pitfall #19, "read free-form JSON
     defensively").
+
+``substantiation_mode`` and ``substantiation_days``
+    The accountable-plan deadline for expense reports: a line submitted more
+    than ``substantiation_days`` after it was incurred is late. The mode is
+    ``off`` (nothing is checked; the default), ``warn`` (the report goes
+    through, and an approver must confirm reviewing the late lines before it
+    can be approved) or ``block`` (the report cannot be submitted). Days run
+    from 1 to 60, defaulting to 60: the IRS safe harbor for "a reasonable
+    time" is 60 days, so a department may be stricter but not looser. Anything
+    unreadable falls back to the default rather than raising.
 """
 
 from dataclasses import dataclass
@@ -33,6 +43,16 @@ from app.models.user import Organization
 
 FINANCE_SETTINGS_KEY = "finance"
 DUAL_APPROVAL_THRESHOLD_KEY = "dual_approval_threshold"
+SUBSTANTIATION_MODE_KEY = "substantiation_mode"
+SUBSTANTIATION_DAYS_KEY = "substantiation_days"
+
+SUBSTANTIATION_OFF = "off"
+SUBSTANTIATION_WARN = "warn"
+SUBSTANTIATION_BLOCK = "block"
+SUBSTANTIATION_MODES = (SUBSTANTIATION_OFF, SUBSTANTIATION_WARN, SUBSTANTIATION_BLOCK)
+# The IRS safe harbor for substantiating an expense "within a reasonable time"
+# under an accountable plan (Treas. Reg. 1.62-2(g)(2)).
+MAX_SUBSTANTIATION_DAYS = 60
 
 # The largest amount a request column holds (Numeric(12, 2)); a threshold above
 # it could never be reached.
@@ -42,6 +62,8 @@ MAX_DUAL_APPROVAL_THRESHOLD = 9_999_999_999
 @dataclass(frozen=True)
 class FinanceSettings:
     dual_approval_threshold: Optional[Decimal]
+    substantiation_mode: str = SUBSTANTIATION_OFF
+    substantiation_days: int = MAX_SUBSTANTIATION_DAYS
 
 
 def finance_settings_in(settings: Any) -> FinanceSettings:
@@ -59,7 +81,22 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
         and 0 < raw <= MAX_DUAL_APPROVAL_THRESHOLD
     ):
         threshold = Decimal(raw)
-    return FinanceSettings(dual_approval_threshold=threshold)
+
+    mode = section.get(SUBSTANTIATION_MODE_KEY)
+    if mode not in SUBSTANTIATION_MODES:
+        mode = SUBSTANTIATION_OFF
+    days = section.get(SUBSTANTIATION_DAYS_KEY)
+    if not (
+        isinstance(days, int)
+        and not isinstance(days, bool)
+        and 1 <= days <= MAX_SUBSTANTIATION_DAYS
+    ):
+        days = MAX_SUBSTANTIATION_DAYS
+    return FinanceSettings(
+        dual_approval_threshold=threshold,
+        substantiation_mode=mode,
+        substantiation_days=days,
+    )
 
 
 async def load_finance_settings(
