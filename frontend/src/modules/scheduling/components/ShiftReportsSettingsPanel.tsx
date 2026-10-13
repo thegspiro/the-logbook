@@ -371,6 +371,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     );
   }
 
+  // Under Skills Testing the skill lists in Feedback Defaults and Apparatus
+  // Skills feed a form section that is switched off. They stay editable, so a
+  // department that switches back keeps its lists, but they say so rather
+  // than looking like settings that take effect.
+  const skillsOff = trainingConfig ? !offersShiftSignoffs(trainingConfig.practical_skills_method ?? null) : false;
+
   const renderSection = () => {
     switch (activeSection) {
       case 'feature-toggles':
@@ -594,6 +600,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 </div>
 
                 {/* Skills */}
+                {skillsOff && <SkillsOffNotice />}
                 <TagListEditor
                   label="Observable Skills"
                   description="Skills officers can mark as demonstrated during the shift."
@@ -677,6 +684,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     These override the general defaults when a shift uses this apparatus type. Leave empty to use the
                     general defaults.
                   </p>
+                  {skillsOff && <SkillsOffNotice />}
 
                   <EditableTagList
                     items={appTypeSkills[selectedAppType] ?? []}
@@ -1142,6 +1150,21 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 };
 
 // ─── Tag List Editor ───────────────────────────────────────────────────────
+
+/** Says why a skill list is not in effect, and where that is decided. */
+const SkillsOffNotice: React.FC = () => (
+  <p className="alert-info text-theme-text-primary mb-3 p-3 text-xs" role="note">
+    Not in effect: the department records practical skills with Skills Testing, so the report form shows no skills list.
+    These skills are kept and apply again if the department switches to shift report sign-offs under{' '}
+    <Link
+      to="/training/admin?page=settings&tab=practical-skills"
+      className="font-medium text-violet-700 hover:underline dark:text-violet-300"
+    >
+      Training Administration → Settings &amp; Data → Practical Skills
+    </Link>
+    .
+  </p>
+);
 
 interface TagListEditorProps {
   label: string;
