@@ -43,7 +43,7 @@ from its open list.
 | B2  | apparatus                  | AP2    | ✅     |
 | B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ✅     |
-| B5  | elections                  | ELEC2  | ⬜     |
+| B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ⬜     |
 | B7  | equipment-check            | EC2    | ⬜     |
 | B8  | documents                  | DOC2   | ⬜     |
@@ -3003,3 +3003,61 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   dependency) · new file routes to the integration job only (0 under the unit
   job's marker expression, 4 under `integration`) · flake8 / black clean on the
   changed Python.
+- **B5 elections ✅ (pass 6)** — the largest module this rotation has been
+  pointed at, and the pass says up front how little of it it read: **69 routes,
+  an 11,208-line service, 2,040 lines of schemas and ~11,155 frontend lines across
+  96 files**, against the 46 routes and 4,616-line service that pass 5 saw. The
+  backend's security lens was not redone — the security rotation's eighth pass
+  on the same files ran the same day (PR #3142, real delta read, 0 fixed, 0
+  flagged) — so this pass took the lenses that found real defects on facilities:
+  every update path on both sides of the wire, the contract of the new in-app
+  ballot routes, the browser clock, dead code, and what nothing reads. Business
+  logic (tallying, runoffs, quorum, the hash chain) and the results, forensics
+  and manual-ballot screens were **not** reviewed, and a clean result here says
+  nothing about them. **ELEC2-7 (LOW, fixed):** an explicit `null` for a NOT
+  NULL column answered 500 on `PATCH` of an election or a candidate. Reproduced
+  field by field through the real handlers before changing anything: 14 election
+  fields died with `IntegrityError` at commit, `start_date` and `end_date`
+  died earlier with a `TypeError` from comparing a null date, and on
+  candidates `name` and `display_order` did the same — 18 distinct 500s, with
+  `quorum_type` and `accepted` already refused cleanly. Rated LOW because the UI
+  cannot send them: the frontend update types carry no `| null` on any NOT NULL
+  field, and every call site sends a real value behind an emptiness check, so only
+  a direct API client sees it. Fixed in the **schemas** rather than the handlers
+  — a `model_validator` on `ElectionUpdate` and `CandidateUpdate` answers 422
+  naming every offender before any handler logic runs — because converting the
+  `setattr` loops to `apply_updates` would not have covered the date fields,
+  which fail earlier in a comparison. `accepted` is deliberately left out of the
+  candidate set: its handler guard has its own message and an existing test.
+  The required sets are hand-kept, so the unit file derives the NOT NULL set
+  from the models and fails on drift, and the integration test's parametrization
+  is itself derived — a new NOT NULL column becomes a failing case the day it
+  lands. Positive halves (a null for a nullable column still clears) keep a
+  validator that refused everything from passing. Mutation-tested: disabling
+  each validator brings back exactly the failures reproduced at baseline.
+  **ELEC2-8 (LOW, flagged):** an AST scan of all 151 definitions in the service
+  found one with no production caller, `has_user_voted`; it is left alone
+  because its test is also one of the few exercising the anonymous-voting
+  identity filter end to end. **ELEC2-9 (LOW, flagged):** seven `default_*`
+  election settings are accepted, stored and returned by `PATCH`/`GET
+/elections/settings` and read by nothing — and the wiki says "there are no
+  organization-wide election defaults" — pitfall #19 in API-only form, an owner
+  decision with three options in `KNOWN_LIMITATIONS.md`. **Checked and clean,
+  with checks that could have failed the other way:** the `update_election`
+  allowlist matches the schema 30-for-30; the frontend's update payloads clear
+  correctly (the meeting-link edit sends explicit nulls with a comment saying
+  why); the four new ballot routes' response models match the frontend
+  interfaces field for field, nested models included, in snake_case as the
+  unaliased schemas require; the browser clock is used only for advisory
+  warnings and compares instants rather than wall-clock strings; the settings
+  save deep-copies before reassigning. **A slip of mine, caught:** my first
+  version of the dead-code scan matched on text and returned zero, because a
+  comment mentioning a method counted as a use; redoing it over real AST
+  references is what surfaced `has_user_voted`. A first election test run also
+  failed one storefront test — my `-k election` matched "s-**election**" — and
+  the failure was a real stale-schema `Unknown column 'users.dashboard_pulse'`,
+  so the schema was rebuilt and the run repeated rather than dismissed. Gate:
+  election-named backend tests **807 passed, 1 skipped** (an optional
+  dependency) · 22 integration + 7 unit new, failing first · flake8 0 · black
+  1,627 unchanged · isort clean · tsc 0 · eslint clean · docs links and prettier
+  checked before commit. See elections.md → Pass 6. Next: B6 meetings & minutes.
