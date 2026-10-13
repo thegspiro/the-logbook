@@ -577,12 +577,14 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             accessible name and its tooltip. */}
         <div className="flex items-center gap-2">
           <Tooltip content={getStatusLabel()}>
-            <span aria-label={getStatusLabel()} className="flex">
+            {/* Focusable so a keyboard user can open the tooltip too; role="img"
+                because an aria-label on a role-less span is not announced. */}
+            <span role="img" aria-label={getStatusLabel()} tabIndex={0} className="flex rounded">
               {getStatusIcon()}
             </span>
           </Tooltip>
           <span
-            className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}
+            className={`text-sm ${provider.active ? 'text-green-800 dark:text-green-400' : 'text-theme-text-muted'}`}
           >
             {provider.active ? 'Active' : 'Inactive'}
           </span>

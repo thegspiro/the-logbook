@@ -279,7 +279,7 @@ api_router.include_router(
     storefront.router,
     prefix="/store",
     tags=["storefront"],
-    dependencies=module_gate("storefront", "The Department Store"),
+    dependencies=module_gate("storefront", "Department Store"),
 )
 api_router.include_router(labels.router, tags=["labels"])
 api_router.include_router(
@@ -432,7 +432,7 @@ api_router.include_router(
     testing_checklist.router,
     prefix="/testing-checklist",
     tags=["testing-checklist"],
-    dependencies=module_gate("testing", "The Testing Checklist"),
+    dependencies=module_gate("testing", "Testing Checklist"),
 )
 api_router.include_router(
     integrations.router,

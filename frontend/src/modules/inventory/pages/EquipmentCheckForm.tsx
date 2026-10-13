@@ -372,6 +372,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   shiftContext,
   experience = 'accordion',
 }) => {
+  // The form replaces the page it was opened from, so nothing kept focus and a
+  // keyboard user was left at <body>. The heading takes it once, on first
+  // render, which also announces which check has started.
+  const headingFocused = useRef(false);
+  const focusHeadingOnce = useCallback((heading: HTMLHeadingElement | null) => {
+    if (!heading || headingFocused.current) return;
+    headingFocused.current = true;
+    heading.focus();
+  }, []);
   const { confirm } = useConfirm();
   const { checkPermission, user } = useAuthStore();
   // Mirrors the endpoint, which admits check submitters: replacing expired
@@ -2259,7 +2268,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <label htmlFor={`level-${item.id}`} className="text-theme-text-secondary text-xs whitespace-nowrap">
-                Reading:
+                Reading<span className="sr-only"> for {item.name}</span>:
               </label>
               <input
                 id={`level-${item.id}`}
@@ -3245,7 +3254,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
-            <h1 className="text-theme-text-primary min-w-0 truncate text-lg font-bold" title={template.name}>
+            <h1
+              ref={focusHeadingOnce}
+              tabIndex={-1}
+              className="text-theme-text-primary min-w-0 truncate text-lg font-bold focus:outline-hidden"
+              title={template.name}
+            >
               {template.name}
             </h1>
           </div>
