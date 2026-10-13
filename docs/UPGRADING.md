@@ -465,6 +465,22 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Editing a colleague's profile needs `members.manage` (2026-10-13)
+
+`PATCH /users/{id}/profile` and `PATCH /users/{id}/contact-info` now refuse
+(403) anyone editing a colleague who holds `users.edit` without
+`members.manage`. Members still edit their own records. Before this, a
+`users.edit` holder could make those writes through the API even though the
+profile page already showed them no edit forms.
+
+**No default position loses anything.** The five seeded positions that carry
+`users.edit` (Fire Chief, Deputy Chief, Assistant Chief, President, Membership
+Coordinator) all hold `members.manage` too. Only a **custom** position built
+with `users.edit` and without `members.manage` is affected; if someone in it
+must keep editing colleagues' profiles, grant that position `members.manage` in
+**Role Management** (`/settings/roles`). `users.edit` still opens everything
+else it did, such as a member's consent record.
+
 ### Public-portal access-log rows older than 90 days are deleted (2026-10-12)
 
 A new daily scheduled task, `prune_public_portal_access_log`, deletes rows in
