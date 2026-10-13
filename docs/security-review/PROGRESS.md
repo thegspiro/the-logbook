@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)**: branch `claude/security-review-medical-screening`, Feature 09
+(Medical screening, PHI), pass 8 (watchdog pickup). 0 fixed, 1 new finding
+flagged (MS-15, LOW/scale) — a dating/attribution error in this feature's
+own findings doc found and corrected (the "Owner decisions" section
+misdated an owner-direct PR, #2965, as part of pass 7's branch). Real delta
+since pass 7 reviewed: PR #2965's MS-6/7/12/13 fixes (never reviewed by the
+rotation before now — pass 7 predates them) and PR #3086's new department
+compliance roster + per-subject panel + self-recorded badge, both verified
+sound; MS-14 re-confirmed unchanged. See the Log entry below and
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 8** section for
+detail. Row 09 stays ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 9, PR #3149, before it merged), preserved for history</summary>
+
 **PR [#3149](https://github.com/thegspiro/the-logbook/pull/3149)**: branch
 `claude/security-review-membership-pipeline`, Feature 08 (Membership
 pipeline), pass 9 (watchdog pickup). 0 fixed, 0 new findings — three
@@ -29,6 +45,8 @@ Log entry below and
 `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 9** section
 for detail. Row 08 stays ✅ (pending this PR's merge); next is Feature 09
 (Medical screening).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3145's merge, Feature 07, Users & organizations, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18809,6 +18827,90 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 09 (Medical screening, PHI, pass 8) — 0 fixed, 1 new finding flagged; a dating error in this feature's own findings doc found and corrected (watchdog pickup)
+
+**Closure.** PR #3149 (Feature 08, Membership pipeline, pass 9) merged
+2026-10-13T06:47:15Z (the merge commit, `a7a7c47d`, is this session's
+checked-out `HEAD`, confirmed identical to `origin/main`) — 0 fixed, 0 new
+findings; log entry already recorded below and rotation row 08 stays ✅.
+Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) and a remote-branch
+check (`git branch -r`, 0 matches) that no security-review PR or branch
+was open before this iteration started — this iteration is itself a
+watchdog pickup. `PROGRESS.md`'s own Open-PR narrative pointer ("next is
+Feature 09") was already current, so no bookkeeping edit rode along
+uncommitted from Step 0 this time.
+
+**A dating/attribution error, found before the review itself.**
+`MS-09-medical-screening.md`'s "Owner decisions" section read "(2026-10-05)"
+and claimed its four fixes (MS-6, MS-7, MS-12, MS-13) were "implemented on
+the same branch" as pass 7 — a date that sits _before_ the pass (2026-10-06)
+it claims to follow, exactly the shape of inconsistency the membership-
+pipeline doc hit in an earlier cycle. Checked against the actual PR
+records rather than git history (unreliable here on purpose — the commit
+both land in is an orphan root with no parent): pass 7 is PR #2957, merged
+2026-10-06T01:14Z, whose own diff touches only docs and a test docstring
+and whose body lists all four as "unchanged, no action this pass." The
+real fix landed in PR #2965, opened directly by the repository owner on an
+unrelated branch, merged 2026-10-06T18:26Z — seventeen hours _after_ pass 7. Corrected in the findings doc; the fixes themselves were re-verified
+intact against current code and were never in question.
+
+**Scope confirmation.** Rotation table row 09 (`medical_screening.py`,
+`medical_screening_service.py`) plus this feature's established additional
+scope: `models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`, and `frontend/src/modules/medical-screening/`.
+
+**Real delta since pass 7's baseline (`0e848aff`, PR #2957's merge,
+2026-10-06T01:14Z), found via per-path `git log` (reliable here — `0e848aff`
+is a real, non-orphan ancestor of `HEAD`):** nine commits across three PRs.
+PR #2965 (owner-direct, 2026-10-06) is pass 7's own four standing findings
+(MS-6/7/12/13) actually being fixed — never reviewed by the rotation before
+now, since pass 7 predates it; re-reviewed fresh and found sound (the
+exactly-one-of-subject validator, the `self_recorded` column + guarded
+migration, the audited PHI reads, the SQL-level pagination). PR #3086
+(owner-direct, 2026-10-11, "Docket builds: inventory, medical, forms,
+…") added the department compliance roster (`GET
+/medical-screening/compliance`, `.view`-gated, counts only — proportionate,
+same shape MS-14 already accepted) and the per-subject panel, both graded
+by the one shared `_grade()` function so a roster row and the detail it
+opens cannot disagree (asserted directly by
+`test_a_row_matches_the_per_subject_summary`). A same-day Codex review fix
+folded into that PR's merge (`61819263`) settled two frontend races
+(roster-filter switch, subject-panel reopen) and a "no active requirement
+grades everyone compliant" bug — all three re-verified fixed and tested.
+The remaining commits are a mechanical SQLAlchemy `Mapped`/`mapped_column`
+typing pass, re-read in full, no behavior change.
+
+**16 routes re-enumerated directly** (up from 14 — `GET /subjects` and
+`GET /compliance` roster, both new since pass 7); every route still
+carries an auth dependency and a permission matching its data's
+sensitivity.
+
+**New finding: MS-15 (LOW, scale)** — `get_compliance_roster` loads every
+screening record the organization has ever created, unbounded, on every
+Compliance-tab load or filter change — the same "no SQL pagination on an
+org-wide table" class as FIN-9/ELEC-12/USR-5/MP-10/DOC-9/MS-6, but a call
+site MS-6's own fix (public-endpoint pagination) could not reach, because
+grading needs every subject's full history. Flagged rather than fixed: a
+bounded "latest per subject per screening-type" SQL query is a grading-
+logic change on a PHI-adjacent, org-wide read that risks silently
+misgrading the whole roster if the "latest" definition is subtly wrong —
+the owner's decision, not a same-day guess. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`. MS-14 (view/manage granularity) re-confirmed
+unchanged and still open.
+
+**Completion gate:** flake8/black/isort clean on `app/`, `tests/`,
+`alembic/`; `validate_migrations.py --strict` clean (578 revisions, single
+head); `check_route_permissions.py --strict` clean (267 routes, 0
+errors/warnings, run from the repo root); scoped backend pytest
+(`-k "medical or screening or phi"`) 220 passed, 1 pre-existing skip; full
+no-database backend unit suite 14,355 passed, 1 pre-existing skip, 0
+failed; frontend `npm run typecheck` and `npm run lint` both clean;
+scoped frontend suite (`src/modules/medical-screening`) 50 passed across 8
+files. Full write-up:
+`docs/security-review/MS-09-medical-screening.md` → **Pass 8**. Row 09
+stays ✅ (pending this PR's merge). Next: Feature 10 (Documents & legal).
 
 ### 2026-10-13 — Feature 08 (Membership pipeline, pass 9) — 0 fixed, 0 new findings; 1 standing item closed by other work, 3 re-confirmed unchanged (watchdog pickup)
 

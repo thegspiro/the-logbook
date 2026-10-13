@@ -4150,6 +4150,41 @@ fields, with plain `.view` continuing to cover the five derived-status
 routes. Found in `docs/security-review/MS-09-medical-screening.md` (feature
 09, pass 7, MS-14).
 
+## MS-15 — Compliance Roster Loads Every Screening Record in the Organization, Unbounded (2026-10-13)
+
+`GET /medical-screening/compliance` (the Compliance tab's department
+roster, added 2026-10-11) grades every screenable member and open prospect
+by calling `MedicalScreeningService.get_compliance_roster`, which loads
+_every_ screening record ever created for the organization — no date,
+status, or subject filter, and `list_records`'s own `limit=None` default —
+to group into per-subject lists for grading. This runs on every tab load or
+filter change, not an admin batch job, and only the single latest record
+per subject/screening-type is ever used, so the load grows with the
+organization's full history even though most of it is never read.
+
+Same class as FIN-9/ELEC-12/USR-5/MP-10/DOC-9/MS-6 (no SQL-level pagination
+on an org-wide table), but a genuinely new call site: MS-6's own fix (PR
+#2965) added `skip`/`limit` to the _public_ `GET /records` list; it could
+not reach this _internal_ roster call, which by design needs every
+subject's history to grade correctly — the same reason the single-subject
+`get_compliance_status` call also passes `limit=None`, accepted there
+because one person's history is small. `get_compliance_roster` is the same
+shape applied to the whole organization at once.
+
+Not fixed: narrowing the query to a SQL-level "latest record per subject per
+screening_type" (mirroring the `exists()`/`aliased()` superseded-record
+pattern already written for the MCP tool's `list_expiring_screenings`,
+`app/mcp/tools/medical.py:131-167`) is a grading-implementation change on a
+PHI-adjacent, department-wide read, where a subtle error in the "latest"
+definition would silently change who reads compliant for the whole roster
+at once — the kind of change this feature's established discipline (MS-6,
+MS-9, MS-13) declines to make without a product decision. It is also
+plausible the real-world scale is fine as-is: the target deployment is a
+volunteer fire department's own roster (tens to low hundreds of members),
+not an enterprise table. Found in
+`docs/security-review/MS-09-medical-screening.md` (feature 09, pass 8,
+MS-15).
+
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/
