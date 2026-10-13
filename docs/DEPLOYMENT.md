@@ -171,13 +171,15 @@ docker compose up -d
    sudo systemctl status redis
    ```
 
-3. **Configure Nginx**
+3. **Configure Nginx and HTTPS**
+
    ```bash
-   sudo cp infrastructure/nginx/nginx.conf /etc/nginx/sites-available/logbook
-   sudo ln -s /etc/nginx/sites-available/logbook /etc/nginx/sites-enabled/
-   sudo nginx -t
-   sudo systemctl reload nginx
+   sudo ./scripts/setup-ssl.sh yourdomain.com admin@yourdomain.com --traditional
    ```
+
+   This serves the built frontend from `frontend/dist` on `127.0.0.1:3000`,
+   sends `/api` to the backend on `127.0.0.1:3001`, and obtains a Let's Encrypt
+   certificate — see [Automatic SSL Setup](#automatic-ssl-setup-lets-encrypt).
 
 ---
 
@@ -259,14 +261,28 @@ after the production override; see Method 2 of the
 ### Automatic SSL Setup (Let's Encrypt)
 
 1. **Prerequisites**
-   - Domain name pointing to your server
+   - Domain name, and `www.` the same name, pointing to your server
    - Ports 80 and 443 open
+   - nginx installed on the host
 
 2. **Run SSL Setup Script**
 
    ```bash
    sudo ./scripts/setup-ssl.sh yourdomain.com admin@yourdomain.com
    ```
+
+   The script works out how The Logbook is installed and configures nginx to
+   match; pass `--docker` or `--traditional` if it cannot tell:
+
+   | Install                     | Detected by                             | nginx sends                                                                                                                    |
+   | --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+   | Docker Compose (`--docker`) | a running `intranet-frontend` container | everything to the frontend container on port 3000, which forwards `/api` itself (the production setup does not open port 3001) |
+   | `install.sh --traditional`  | the `logbook-backend` systemd service   | pages to a second nginx site serving `frontend/dist` on `127.0.0.1:3000`, and `/api` to the backend on `127.0.0.1:3001`        |
+
+   It obtains the certificate first, over plain HTTP, and only then installs
+   the HTTPS configuration, so it works on a server that has no certificate
+   yet. A traditional install's `frontend/dist` must be readable by nginx's
+   `www-data` user; the script checks this before changing anything.
 
 3. **Done!** Your site is now accessible at `https://yourdomain.com`
 

@@ -599,10 +599,9 @@ EOF
 
     print_success "Installation complete!"
     print_warning "\nNext steps:"
-    print_info "1. Configure Nginx (see docs/DEPLOYMENT.md)"
-    print_info "2. Set up SSL with: sudo certbot --nginx -d yourdomain.com"
-    print_info "3. Configure firewall"
-    print_info "4. Set up automated backups"
+    print_info "1. Configure Nginx and HTTPS: sudo ./scripts/setup-ssl.sh yourdomain.com you@example.org --traditional"
+    print_info "2. Configure firewall"
+    print_info "3. Set up automated backups"
 }
 
 show_help() {
