@@ -111,8 +111,28 @@ export const ArchiveApparatusModal: React.FC<ArchiveApparatusModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Archive ${unitNumber}`} size="md">
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Archive ${unitNumber}`}
+      size="md"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary text-sm disabled:opacity-60">
+            {saving ? 'Archiving…' : 'Archive apparatus'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg px-4 py-2 text-sm"
+          >
+            Keep in service
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           Archiving retires {unitNumber} from the fleet. Its maintenance, fuel and equipment history is kept — it stops
           appearing in rosters and assignments.
@@ -239,20 +259,7 @@ export const ArchiveApparatusModal: React.FC<ArchiveApparatusModalProps> = ({
             onChange={(e) => up('disposalNotes', e.target.value)}
           />
         </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg px-4 py-2 text-sm"
-          >
-            Keep in service
-          </button>
-          <button type="submit" disabled={saving} className="btn-primary text-sm disabled:opacity-60">
-            {saving ? 'Archiving…' : 'Archive apparatus'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

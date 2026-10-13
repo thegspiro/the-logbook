@@ -60,11 +60,35 @@ class TestUpdateProgramRequirement:
         db = RecordingSession([_one(None)])
         svc = TrainingProgramService(db)
         result, error = await svc.update_program_requirement(
-            uuid4(), uuid4(), ProgramRequirementUpdate(is_required=False)
+            uuid4(),
+            uuid4(),
+            ProgramRequirementUpdate(is_required=False),
+            program_id=uuid4(),
         )
         assert result is None
         assert error == "Program requirement not found"
         db.commit.assert_not_awaited()
+
+    async def test_lookup_is_scoped_to_the_program_in_the_path(self):
+        # A link from another program must not be loaded at all: the update
+        # commits before returning, so a later program check would be too late.
+        db = RecordingSession([_one(None)])
+        svc = TrainingProgramService(db)
+        program_id = uuid4()
+
+        result, error = await svc.update_program_requirement(
+            uuid4(),
+            uuid4(),
+            ProgramRequirementUpdate(is_required=False),
+            program_id=program_id,
+        )
+
+        assert result is None
+        assert error == "Program requirement not found"
+        db.commit.assert_not_awaited()
+        compiled = db.statements[0].compile()
+        assert "program_requirements.program_id = :program_id_1" in str(compiled)
+        assert compiled.params["program_id_1"] == str(program_id)
 
     async def test_toggling_required_recomputes_enrollments(self):
         pr = _program_requirement(is_required=True)
@@ -77,7 +101,10 @@ class TestUpdateProgramRequirement:
         svc._load_program_requirement = AsyncMock(return_value=pr)
 
         result, error = await svc.update_program_requirement(
-            uuid4(), uuid4(), ProgramRequirementUpdate(is_required=False)
+            uuid4(),
+            uuid4(),
+            ProgramRequirementUpdate(is_required=False),
+            program_id=uuid4(),
         )
 
         assert error is None
@@ -98,7 +125,7 @@ class TestUpdateProgramRequirement:
         svc._load_program_requirement = AsyncMock(return_value=pr)
 
         result, error = await svc.update_program_requirement(
-            uuid4(), uuid4(), ProgramRequirementUpdate(sort_order=5)
+            uuid4(), uuid4(), ProgramRequirementUpdate(sort_order=5), program_id=uuid4()
         )
 
         assert error is None
@@ -116,7 +143,10 @@ class TestUpdateProgramRequirement:
         svc._load_program_requirement = AsyncMock(return_value=pr)
 
         _, error = await svc.update_program_requirement(
-            uuid4(), uuid4(), ProgramRequirementUpdate(is_required=True)
+            uuid4(),
+            uuid4(),
+            ProgramRequirementUpdate(is_required=True),
+            program_id=uuid4(),
         )
 
         assert error is None

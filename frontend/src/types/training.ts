@@ -646,13 +646,13 @@ export interface TrainingRecordUpdate {
   hours_completed?: number;
   credit_hours?: number | null;
   certification_number?: string | null | undefined;
-  issuing_agency?: string | undefined;
+  issuing_agency?: string | null | undefined;
   status?: TrainingStatus;
   score?: number;
   passing_score?: number;
   passed?: boolean;
-  instructor?: string | undefined;
-  location?: string | undefined;
+  instructor?: string | null | undefined;
+  location?: string | null | undefined;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string | undefined;
@@ -1119,19 +1119,19 @@ export interface ProgramRequirementUpdate {
 
 export interface TrainingProgramUpdate {
   name?: string | undefined;
-  description?: string | undefined;
-  code?: string | undefined;
-  target_position?: string | undefined;
+  description?: string | null | undefined;
+  code?: string | null | undefined;
+  target_position?: string | null | undefined;
   structure_type?: ProgramStructureType | undefined;
-  time_limit_days?: number | undefined;
-  warning_days_before?: number | undefined;
+  time_limit_days?: number | null | undefined;
+  warning_days_before?: number | null | undefined;
   reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;
   recert_enabled?: boolean | undefined;
-  recert_interval_months?: number | undefined;
-  recert_anchor_month?: number | undefined;
-  recert_anchor_day?: number | undefined;
+  recert_interval_months?: number | null | undefined;
+  recert_anchor_month?: number | null | undefined;
+  recert_anchor_day?: number | null | undefined;
   /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
   prerequisite_program_ids?: string[] | null | undefined;
   allows_concurrent_enrollment?: boolean | undefined;
@@ -1139,8 +1139,8 @@ export interface TrainingProgramUpdate {
 
 export interface ProgramPhaseUpdate {
   name?: string | undefined;
-  description?: string | undefined;
-  time_limit_days?: number | undefined;
+  description?: string | null | undefined;
+  time_limit_days?: number | null | undefined;
   requires_manual_advancement?: boolean | undefined;
   /** Phases in the same program that must be finished before this one opens. */
   prerequisite_phase_ids?: string[] | undefined;
@@ -1148,9 +1148,9 @@ export interface ProgramPhaseUpdate {
 
 export interface ProgramMilestoneUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   completion_percentage_threshold?: number | undefined;
-  notification_message?: string | undefined;
+  notification_message?: string | null | undefined;
 }
 
 export type EligibilityStatus = 'eligible' | 'enrolled' | 'prerequisite' | 'concurrent';

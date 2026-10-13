@@ -140,6 +140,18 @@ def bootstrap(base_url: str, allow_remote: bool = False) -> None:
     )
     print(f"Administrator created: {DEMO_ADMIN_USERNAME}")
 
+    # Setup refuses to finish until the encryption key is confirmed as stored
+    # apart from the server. The confirmation names the key by its fingerprint,
+    # which the session endpoint reports, so a demo database records the key
+    # this backend is actually running with.
+    custody = client.request("GET", "/onboarding/session/key-custody")
+    client.request(
+        "POST",
+        "/onboarding/session/key-custody",
+        {"key_fingerprint": custody["key_fingerprint"]},
+    )
+    print("Encryption key safekeeping confirmed")
+
     client.request(
         "POST",
         "/onboarding/complete",

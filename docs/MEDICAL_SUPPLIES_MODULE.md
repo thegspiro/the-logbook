@@ -212,7 +212,10 @@ type cannot be used to hide them.
 Applying goes through `POST /equipment-checks/inventory-links`, all or nothing
 per request (2,000 positions), with a change-log entry on each affected
 template. A position somebody linked in the builder after the report loaded is
-left as they set it and counted as skipped.
+left as they set it, never overwritten. The response lists each one in
+`skippedPositions` — the line, its template and compartment, the item it is
+linked to now and the item the officer chose — and the page keeps that list on
+screen after it reloads, with a link into each template, until it is dismissed.
 
 ---
 

@@ -26,6 +26,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
 import type {
@@ -455,14 +456,17 @@ const EditRecordPanel: React.FC<{
         updates.credit_hours = fields.hours_completed;
       }
       if (fields.completion_date !== submission.completion_date) updates.completion_date = fields.completion_date;
+      // A changed field that is now blank goes out as null: an omitted key
+      // leaves the record's stored value alone, so emptying a certification
+      // number or expiry kept the old one behind a success toast.
       if (fields.certification_number !== (submission.certification_number || ''))
-        updates.certification_number = fields.certification_number || undefined;
+        updates.certification_number = blankToNull(fields.certification_number);
       if (fields.issuing_agency !== (submission.issuing_agency || ''))
-        updates.issuing_agency = fields.issuing_agency || undefined;
+        updates.issuing_agency = blankToNull(fields.issuing_agency);
       if (fields.expiration_date !== (submission.expiration_date || ''))
-        updates.expiration_date = fields.expiration_date || undefined;
-      if (fields.instructor !== (submission.instructor || '')) updates.instructor = fields.instructor || undefined;
-      if (fields.location !== (submission.location || '')) updates.location = fields.location || undefined;
+        updates.expiration_date = blankToNull(fields.expiration_date);
+      if (fields.instructor !== (submission.instructor || '')) updates.instructor = blankToNull(fields.instructor);
+      if (fields.location !== (submission.location || '')) updates.location = blankToNull(fields.location);
 
       if (Object.keys(updates).length === 0) {
         setEditing(false);

@@ -5366,6 +5366,47 @@ server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
 
+## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
+
+`PATCH /elections/settings` accepts `default_voting_method`,
+`default_victory_condition`, `default_victory_percentage`,
+`default_anonymous_voting`, `default_allow_write_ins`, `default_quorum_type` and
+`default_quorum_value`. The handler writes them into
+`org.settings["election_defaults"]` and `GET /elections/settings` returns them
+back — and that is the whole of their life. Nothing reads `election_defaults`
+anywhere else in the backend (the service, the create path and the schemas do
+not), no frontend code reads them (the only references are the type definition
+and one test fixture), and the settings screen renders no control for any of
+them.
+
+The wiki already says so: _"there are no organization-wide election defaults"_
+(`wiki/Module-Elections.md`, Election Settings). The API disagrees with it in
+the one place a person or an integrator would look. A client that PATCHes
+`default_voting_method: "ranked_choice"` gets a 200 and sees the value come back
+on the next GET, which reads as "this is now my department's default" — and the
+next election created still starts as simple majority. This is CLAUDE.md pitfall
+#19 (a setting with no reader) in its API-only form: no screen misleads anyone,
+which is why it is rated low, but the contract does.
+
+**Not changed in the review pass that found it**, because both fixes alter the
+public API or add a feature:
+
+1. **Remove them** — drop the seven fields from `ElectionSettingsUpdate`, from
+   `ElectionSettingsResponse`, from both handlers, and from the frontend
+   `ElectionSettings` type. Consistent with the wiki. Senders are not broken
+   (unknown keys on the request are ignored), but the GET response loses seven
+   keys, and any `election_defaults` already stored in an organization's
+   settings becomes dead data unless a migration clears it.
+2. **Wire a reader** — have the create-election form seed its starting values
+   from them, and add the missing controls to the settings screen. This is the
+   feature the endpoint appears to promise; it also needs a decision on whether a
+   stored default may override the form's own initial values for an officer who
+   never touched the setting.
+3. **Leave it and say so** — document the seven fields as reserved and unused in
+   the API reference. Cheapest, and it leaves the trap in place.
+
+Until one is chosen, the fields are harmless to set and useless.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
