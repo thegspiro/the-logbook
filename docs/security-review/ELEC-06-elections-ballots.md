@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), pass 7 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), pass 8 (this PR)
 
 ---
 
@@ -109,6 +109,148 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 8 (2026-10-12)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(open) and `search_pull_requests` (`is:open head:claude/security-review-`,
+0 results) confirmed no `claude/security-review-*` PR was in flight. PR
+#3137 (Feature 05, Finance & approvals, pass 8, watchdog pickup) had
+already merged (`pull_request_read`: `merged: true`,
+2026-10-12 23:00:53 UTC); `PROGRESS.md`'s Open PR row still named it, so it
+was cleared and Feature 06 marked 🔄 in the working tree per Step 0/1 —
+ridden into this PR's own commit rather than committed separately. This
+iteration was itself a watchdog pickup: the dedicated `/loop 30m
+/security-review` session had gone quiet after #3137 merged, with the
+tracker a step behind on GitHub's own state.
+
+**Baseline.** Diffed pass 7's closing merge (`3d4d6b14`, PR #2947) against
+current `HEAD` across the feature's full domain (`elections.py`,
+`election_service.py`, `models/election.py`, `schemas/election.py`, the
+elections frontend module, and every election-table migration): 71 files,
+9,852 insertions / 576 deletions — the diff touches the service file alone
+by +2,280 lines. Read as a real delta, not sampled: a fresh scripted diff
+of route decorators found **4 new routes** (69, up from 65 — `GET`/`POST
+/{election_id}/ballot`, `GET /{election_id}/ballot/proxies`, `POST
+/{election_id}/verify-receipt`); every new top-level service method the
+diff added was read in full (`get_member_ballot`, `submit_member_ballot`,
+`get_my_proxy_authorizations`, `_active_proxy_authorization`,
+`_sign_vote`/`_apply_vote_signature`/`_legacy_vote_signing_key`/
+`vote_signing_key_id`/`_vote_key_cutover`, `_declare_seat_winners`,
+`_token_voter_id`, `set_candidate_acceptance`/`respond_to_nomination`/
+`after_acceptance_on_behalf`), not merely diffed against their callers'
+comments.
+
+**New surface, verified sound:**
+
+- **In-app ballot self-service** (`GET`/`POST /{election_id}/ballot`,
+  `GET /{election_id}/ballot/proxies`) — the emailed ballot's submission
+  shape, now also reachable signed-in. `get_current_user`-gated only (no
+  `elections.*` permission, by design — it is the voter's own ballot), and
+  correctly self-scoped: `submit_member_ballot` row-locks the election
+  (`.with_for_update()`) before delegating each selection to the same
+  `cast_vote`/`cast_proxy_vote` path every other in-app vote uses
+  (`commit=False`, one refused selection rolls back the whole ballot — a
+  real `IntegrityError` path is also caught and rolled back, W50-6's dedup
+  race). The `proxy_authorization_id` a caller may pass is validated by
+  `_active_proxy_authorization` against `auth["proxy_user_id"] ==
+str(current_user.id)` before anything is read or written — closing the
+  obvious IDOR this parameter would otherwise open (a member voting a
+  ballot they hold no proxy for). `get_my_proxy_authorizations` mirrors
+  the same org/election scoping and additionally gates on the
+  organization's proxy-voting setting and the proxy's own anonymity
+  acknowledgment (`_proxy_anonymity_error`).
+- **`POST /{election_id}/verify-receipt`** carries the receipt hash in the
+  body instead of the query string, with the `GET` form kept (`deprecated:
+true`, a `Deprecation` header and a `Link` to the successor) for external
+  callers written against the documented GET. The frontend
+  (`electionService.ts:716-717`) already calls the POST form. **This
+  resolves ELEC-14** — see below.
+- **Vote-signing key rotation** (`VOTE_SIGNING_KEY` config,
+  `signing_key_id` column, migration `01f36743137a`) — votes sign with a
+  dedicated key (falling back to `SECRET_KEY` with a startup warning when
+  unset), and `verify_vote_integrity` accepts a vote signed with the prior
+  key only up to the first ballot signed with the new one
+  (`_vote_key_cutover`), so `SECRET_KEY` cannot become a silent permanent
+  second key. The key fingerprint recorded on each vote
+  (`vote_signing_key_id`) is itself an HMAC of a fixed label — it
+  identifies the key without revealing it. Signature comparison uses
+  `hmac.compare_digest` throughout (timing-safe), unchanged from prior
+  passes.
+- **Multi-seat tallying** (`seats_per_position`, migration `8c4f2a6e1d93`,
+  `_declare_seat_winners`) — this is the W50-11 fix (a "(2 seats)" race
+  previously declared one winner). Pure tally computation over an
+  already-fetched result set, no by-id or tenancy surface of its own; ties
+  on the last seat are flagged (`is_tied`) and resolved by the election's
+  existing `tie_policy`, the same mechanism a one-seat tie already used.
+  Not re-litigated as a §1-6 finding — it is correctness/tally logic the
+  2026-09-30 workflow review (W50-11) already owns, and nothing here
+  touches auth, tenancy, injection, exposure or abuse surface.
+- **Results-revision stamps** (`results_revisions` JSON column, migration
+  `5b1e7d3c9a42`, `_record_results_revision`) and **candidate
+  accepted-on-behalf labeling + nominations-closed slate freeze**
+  (migration `7adc810c57f9`, `set_candidate_acceptance`,
+  `after_acceptance_on_behalf`, `elections.nominations_closed_at`) are the
+  already-landed ELEC-45/W50-9 and ELEC-46/W50-38 fixes this file's Owner
+  Decisions already record resolved. Re-verified directly against the
+  current code rather than trusted from the prior write-up:
+  `update_candidate` (`elections.py:2431-2563`) now routes `accepted`
+  through `service.set_candidate_acceptance`, which refuses once
+  `nominations_closed_at` is set (slate frozen), and an on-behalf
+  acceptance (`previous["accepted"] is False and candidate.accepted and
+candidate.accepted_on_behalf_by is not None`) triggers
+  `after_acceptance_on_behalf` (audit event + notification) — matches the
+  resolution text exactly, both fixes hold.
+- **`voting_tokens.user_id`** (migration `edb445ae5806`, W50-3) — set only
+  via `record_user_id=not election.anonymous_voting` at the single call
+  site (`election_service.py:8335`); `_token_voter_id` additionally
+  hard-codes `if election.anonymous_voting: return None` before looking at
+  either the column or a hash-matched fallback, so an anonymous election's
+  link votes cannot become attributable through this column regardless of
+  what is stored on the token. No privacy regression of the ELEC-43 shape.
+- All five new election-table migrations are idempotent, guard the
+  `create_all`-only tables (`elections`, `candidates`, `voting_tokens` all
+  predate Alembic and are skipped when absent), and the two new FKs
+  (`voting_tokens.user_id`, `candidates.accepted_on_behalf_by`) are both
+  `ondelete="SET NULL"` with `nullable=True` (Pitfall #2). `/elections`
+  (no trailing slash) already covers every new sub-route in
+  `UNCACHEABLE_PREFIXES` (`frontend/src/utils/apiCache.ts:69`) — checked
+  directly, not assumed.
+
+**ELEC-14 — RESOLVED.** `verify_vote_receipt`'s credential moved off the
+query string onto a POST body (`VoteReceiptVerifyRequest.receipt`); the
+GET form survives only for undocumented external callers, marked
+deprecated with the headers above. Frontend already migrated
+(`electionService.ts`, `VerifyReceipt.tsx`). No `KNOWN_LIMITATIONS.md`
+entry existed for this one (it was FLAGGED, not an owner-decision item),
+so nothing to remove there.
+
+**Standing items re-verified, unchanged:**
+
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) —
+  `list_saved_ballot_templates` (`elections.py:488-498`) still has no
+  `.limit()`/pagination; practically bounded by the existing
+  `MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200` creation cap
+  (`elections.py:136,530`, unchanged, predates this window), which is
+  exactly why this stays LOW/MED rather than unbounded-growth HIGH.
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) —
+  `election_service.py:5189-5203` (shifted from pass 7's `4411-4440`)
+  still has no cap; accepted as-is per the Owner Decisions section above
+  (paper-tally sessions per election are naturally few).
+- **ELEC-28** (in-app ballot cannot render a ballot-item/multi-seat
+  contest) — grepped `ElectionBallot.tsx`'s `getPositions()`/
+  `getCandidatesForPosition()`: still iterates only `election.positions`.
+  Converges with W50-10/W50-11; W50-11's half (seat count) is now fixed in
+  the tally (see above), but the in-app tab's rendering gap itself is
+  unchanged and still awaits the owner's rewrite-or-hide decision.
+- **ELEC-40** (pre-ELEC-34 dedup collision-avoidance edge case) —
+  `_dedup_position_key`/`_dedup_scoped_item_aliases` (`election_service.py:286-375`,
+  shifted from pass 7's `146-240`) are unchanged by this window's diff;
+  confirmed none of the 2,280 changed lines falls inside either function.
+
+**0 new findings; 0 code fixed by this pass directly** — the one
+resolution (ELEC-14) was already landed on `main` by other work, re-found
+and recorded here rather than re-fixed.
 
 ## Pass 7 (2026-10-05)
 
@@ -533,6 +675,34 @@ pre-fix code before being counted (per that review's own write-up); adding
 a duplicate guard here would test the same invariant twice rather than
 close a new one. ELEC-43/44/45/46 are flagged, not fixed, so there is
 nothing yet to regression-guard.
+
+## Completion gate (pass 8)
+
+| Check                                                                                  | Result                                                                                   |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (backend)                                                | ✅ 0 violations                                                                          |
+| `black --check app/ tests/ alembic/`                                                   | ✅ 2197 files unchanged                                                                  |
+| `isort --check-only app/ tests/ alembic/`                                              | ✅ clean                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 575 revisions, single head `7a849409c1d0`                                             |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 266 routes, 0 errors, 0 warnings                                                      |
+| `python3 scripts/generate_schema_docs.py`                                              | ✅ regenerated (303 tables, 5006 columns — +1 column vs. committed; included in this PR) |
+| `python3 scripts/check_docs_links.py`                                                  | ✅ 425 files, 0 broken links                                                             |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or proxy"` (unit-only) | ✅ 565 passed, 1 skipped (pre-existing, `py_vapid`), 0 failed                            |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                                              |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                                  |
+| `npx vitest run` — elections-module + ballot/receipt frontend tests (33 files)         | ✅ 33/33 files, 172/172 tests passed                                                     |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                           | ✅ 12 passed                                                                             |
+| `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium`        | ✅ 1 passed                                                                              |
+
+No application code was changed this pass — every item above is either an
+independent re-verification of an already-landed fix or a standing
+FLAGGED/OPEN item re-confirmed unchanged, so this gate confirms the large
+W50-driven diff left the codebase clean, independently re-run rather than
+trusted from the commits' own write-ups. `generate_schema_docs.py`'s
+one-line diff (column count only) is carried in this PR per Pitfall #30c
+since it was stale on `main` before this pass touched it.
+
+---
 
 ## Completion gate (pass 7)
 
