@@ -2,7 +2,201 @@
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-08-21 (pass 5)
+2026-08-21 (pass 5), 2026-10-13 (pass 6)
+
+---
+
+## Pass 6 (2026-10-13) — the write paths, the new ballot contract, and what nothing reads: 1 fixed, 2 flagged
+
+### Scope, stated plainly
+
+Pass 5 saw a module of **46 routes and a 4,616-line service**. It is now **69
+routes, a 11,208-line service, 2,040 lines of schemas and ~11,155 frontend lines
+across 96 files** — most of that growth is surface no app-review pass has opened.
+This pass does not claim to have read it. It also did not redo the backend's
+security lens: `docs/security-review/ELEC-06-elections-ballots.md` ran its eighth
+pass on these files the same day (PR #3142: real delta read, 0 fixed, 0 flagged),
+and a second pass over the same ground would have spent the iteration
+re-reading cleared work.
+
+**Read, in the lenses that found real defects on facilities:**
+
+- every **update path**, backend and frontend — `update_election`,
+  `update_candidate`, the organization settings save, and all four frontend
+  `updateElection` call sites, `updateCandidate`, and the create form;
+- the **contract of the four new in-app ballot routes** against the frontend
+  types, field by field;
+- every use of the **browser clock** in the election screens (pitfall #29);
+- **dead code** across all 151 definitions in `election_service.py`;
+- the documented route counts and the one wiki claim the settings finding
+  turned on.
+
+**Not read, and so not reviewed here:** the service's business logic (tallying,
+runoffs, quorum, forensics, the hash chain) — security-review territory, and
+cleared by it today; the results, forensics and manual-ballot screens'
+rendering; `BallotBuilder`'s internals beyond its save call; accessibility and
+mobile layout of the 96 files. A clean result from this pass says nothing about
+those.
+
+### ELEC2-7 — LOW correctness — an explicit `null` for a NOT NULL column answers 500, not 4xx — ✅ FIXED
+
+`ElectionUpdate` and `CandidateUpdate` type every field `Optional` so a PATCH may
+omit it, and both handlers dump with `exclude_unset`, so a field that _was_ sent —
+a `null` included — reaches the write. For a nullable column that is a clear. For
+a NOT NULL column it can only be a mistake, and nothing refused it.
+
+Reproduced through the real handlers against the real schema before changing
+anything, one field at a time:
+
+| Handler            | Field(s)                                                                                                                                                                                                                                                                         | Outcome on the unmodified code                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `update_election`  | 14 fields: `title`, `election_type`, `anonymous_voting`, `allow_write_ins`, `max_votes_per_position`, `seats_per_position`, `voting_method`, `victory_condition`, `enable_runoffs`, `runoff_type`, `max_runoff_rounds`, `results_visible_immediately`, `auto_open`, `tie_policy` | `IntegrityError` (MySQL 1048) at commit — a 500                                                                |
+| `update_election`  | `start_date`, `end_date`                                                                                                                                                                                                                                                         | `TypeError` from `update_data["end_date"] <= update_data["start_date"]` — a 500, and raised _before_ the write |
+| `update_election`  | `quorum_type`                                                                                                                                                                                                                                                                    | already refused cleanly (the only one that was)                                                                |
+| `update_candidate` | `name`, `display_order`                                                                                                                                                                                                                                                          | `IntegrityError` — a 500                                                                                       |
+| `update_candidate` | `accepted`                                                                                                                                                                                                                                                                       | already refused: the handler's own explicit `400`                                                              |
+
+**Severity is LOW because the UI cannot send these.** The frontend
+`ElectionUpdate` and `CandidateUpdate` types carry no `| null` on any NOT NULL
+field, and every call site sends a real value behind an emptiness check
+(`handleExtendElection`, `handleEditDates`, `saveItems`, the candidate edit).
+Only a direct API client can trigger it, and what it gets is a 500 and a
+server-side stack trace in place of a message naming the field. Nothing is
+corrupted: the transaction fails and rolls back.
+
+**Fix — in the schemas, not the handlers.** A null is a _request_ error, and
+`ElectionUpdate`/`CandidateUpdate` already carry validators. A
+`model_validator(mode="after")` on each now refuses an explicit null for the
+listed fields with a 422 that names every offender (`end_date, title cannot be
+null; leave the field out to keep its current value`), before any handler logic
+runs. Converting the two `setattr` loops to `apply_updates` was the alternative,
+and was rejected: it would not have covered the date fields, which fail earlier
+in a comparison, and it would have meant wrapping `ValueError` in two long
+handlers.
+
+- `accepted` is deliberately **not** in `CANDIDATE_UPDATE_REQUIRED_FIELDS`: the
+  handler refuses it with its own message after routing acceptance through the
+  service, and an existing test depends on that. Listing it would make that guard
+  dead code.
+- The required sets are hand-kept, because the schema cannot see the column.
+  `test_election_update_required_fields.py` (database-free, `unit`) derives the
+  NOT NULL set from the models and fails if either set drifts, and the
+  integration test's parametrization is itself derived from the model — a new NOT
+  NULL column becomes a new failing case the day it is added.
+- **Positive halves**, so a validator that refused every null would not pass:
+  a null for a _nullable_ column (`description` on an election, `statement` on a
+  candidate) still clears it, through the real handlers.
+
+**Verification:** 22 integration tests + 7 unit tests, reproduced failing first
+(16 of 17 election fields and 2 of 3 candidate fields failed on the unmodified
+code). Mutation-tested: disabling the election validator brings back exactly the
+16 failures, disabling the candidate validator brings back exactly `name` and
+`display_order`. Marker routing checked by collection: 7 tests under the unit
+job's expression, 22 under `integration` (pitfall #30b).
+
+### ELEC2-8 — LOW — `ElectionService.has_user_voted` has no production caller — 🚩 FLAGGED
+
+An AST scan of every definition in `election_service.py` against every `Name`,
+`Attribute` and string-dispatch reference in `app/`, `scripts/` and `main.py`
+found **one** unreferenced definition out of 151: `has_user_voted`
+(`election_service.py`, ~line 9502). Its only mentions are a docstring that lists
+it among the readers of the shared voter-identity filter, and
+`test_election_voting_flow.py`. The scan was repeated with real code references
+only after a text-match version returned zero — a comment mentioning a name had
+been counting as a use.
+
+**Left in place deliberately.** It lives in the file that hash-chains votes, and
+its test is also one of the few that exercise the anonymous-voting identity
+filter end to end (`test_has_user_voted_before_and_after`). Deleting the method
+and its test removes that coverage for no functional gain; if it is removed, the
+identity-filter case needs a new home first. A maintainer's call.
+
+### ELEC2-9 — LOW — seven `default_*` election settings are accepted, stored and returned, and nothing reads them — 🚩 FLAGGED
+
+`PATCH /elections/settings` accepts `default_voting_method`,
+`default_victory_condition`, `default_victory_percentage`,
+`default_anonymous_voting`, `default_allow_write_ins`, `default_quorum_type` and
+`default_quorum_value`, stores them under `org.settings["election_defaults"]`, and
+`GET` returns them. Nothing else reads that key — not the service, not the create
+path, not any frontend code — and the settings screen renders no control for any
+of them. `wiki/Module-Elections.md` states the intended behaviour: _"there are no
+organization-wide election defaults."_
+
+The harm is to the contract, not a screen: a client that sets
+`default_voting_method` gets a 200 and sees the value echoed back, while the next
+election still starts as simple majority. CLAUDE.md pitfall #19, API-only form.
+Removing the fields, wiring a reader, or documenting them as reserved are all
+product or API decisions, so this is an owner decision recorded in
+`docs/KNOWN_LIMITATIONS.md` with the three options.
+
+### Verified good ✅
+
+Each of these was checked with something that could have failed the other way.
+
+- **The `update_election` allowlist matches the schema exactly** — 30 fields
+  each, nothing silently dropped, no dead entries. (`test_election_update_allowlist.py`
+  already locks this; re-derived here rather than inherited.)
+- **The frontend's update payloads clear correctly.** The meeting-link edit sends
+  explicit nulls for all three nullable columns, with a comment explaining why;
+  the candidate edit uses `blankToNull` for `position` and `statement`; the
+  create payloads use `|| undefined`; the create form's only blank optional
+  string, `description`, is trimmed to `undefined` at submit and everything else
+  starts with a real value. The `?? null` hits are all on API-returned values.
+- **The in-app ballot contract matches field for field.** The four new routes'
+  response models (`MemberBallotResponse`, `BallotSubmissionResponse`,
+  `MyProxyAuthorizationsResponse`, `VoteReceiptResponse`) and their nested models
+  have identical key sets to the frontend interfaces; the schemas carry no
+  `alias_generator`, so the wire is snake_case and the types are too (pitfall
+  #5). `BallotElection` is identical to `BallotElectionResponse`, and
+  `ElectionBallot.tsx` reads no candidate field the route omits.
+- **The browser clock is advisory, never authoritative** (pitfall #29). The
+  open-election confirmation and the extend-voting modal compare instants in
+  milliseconds rather than wall-clock strings, only gate a warning, and the
+  open handler reports the server's returned `start_date` as the real outcome.
+- **The settings save deep-copies before reassigning** (pitfall #12), and the
+  service's reader of `max_proxies_per_person` degrades a bad stored value to the
+  default instead of raising (pitfall #19) — so an explicit null stored by the
+  settings endpoint is harmless there.
+- **Route gating:** 69 routes in `elections.py`; not re-enumerated this pass,
+  because the same-day security review enumerated them.
+
+### Observation (not actioned)
+
+`MemberBallotResponse.candidates` is typed as the full `Candidate`, which
+declares `vote_count`, `nominated_by`, `user_id` and `accepted_on_behalf_*` —
+fields the ballot route deliberately never sends. No reader touches them today.
+A narrow `BallotCandidate` type, matching the backend's `BallotCandidateResponse`
+the way `BallotElection` already matches `BallotElectionResponse`, would let the
+compiler catch the first reader that does.
+
+### Documentation
+
+The route counts in `docs/module-audit/elections.md` and this file's Pass 1
+section are explicitly dated ("46 endpoints", "65 endpoints incl. …
+at iteration-5 audit time"), so they are historical rather than wrong. Current
+size: 69 routes, 4,618-line endpoint file, 11,208-line service.
+
+### Process note
+
+A first run of the election test suite failed one test, in
+`test_storefront_service.py`. My `-k election` expression had matched it because
+"s-**election**" contains "election". It was unrelated to this change — but the
+failure was a real `(1054, "Unknown column 'users.dashboard_pulse'")` from a
+local schema built before `main` gained that column, which is the stale-schema
+signature `CHECKLIST.md` describes. The schema was rebuilt
+(`alembic upgrade head` + `repair_schema.py`) and the full election run repeated
+rather than waving it off as unrelated.
+
+### Completion gate (pass 6)
+
+| Check                                | Result                                                          |
+| ------------------------------------ | --------------------------------------------------------------- |
+| election-named backend tests         | ✅ **807 passed**, 1 skipped (an unrelated optional dependency) |
+| new tests                            | ✅ 22 integration + 7 unit; failing first, mutation-tested      |
+| `flake8 app/ tests/`                 | ✅ 0 violations                                                 |
+| `black --check app/ tests/`          | ✅ 1,627 files unchanged                                        |
+| `isort --check-only` (changed files) | ✅ clean                                                        |
+| `npm run typecheck` / `npm run lint` | ✅ 0 errors / clean (no frontend file changed)                  |
 
 ---
 

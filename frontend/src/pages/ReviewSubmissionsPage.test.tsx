@@ -6,6 +6,7 @@ import { renderWithRouter } from '../test/utils';
 const getPendingSubmissions = vi.fn();
 const getConfig = vi.fn();
 const updateConfig = vi.fn();
+const updateRecord = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
@@ -15,7 +16,9 @@ vi.mock('../services/api', () => ({
     getPendingSubmissions: (...args: unknown[]) => getPendingSubmissions(...args) as unknown,
     getAttachmentDownloadUrl: () => '',
   },
-  trainingService: {},
+  trainingService: {
+    updateRecord: (...args: unknown[]) => updateRecord(...args) as unknown,
+  },
   trainingProgramService: {
     getUserEnrollments: () => Promise.resolve([]),
     getPrograms: () => Promise.resolve([]),
@@ -100,6 +103,53 @@ describe('ReviewSubmissionsPage', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent('at least 90 days');
       expect(screen.getByRole('button', { name: /Save Configuration/ })).toBeDisabled();
+    });
+  });
+
+  describe('editing the record of an approved submission', () => {
+    beforeEach(() => {
+      updateRecord.mockReset();
+      updateRecord.mockResolvedValue({});
+      getPendingSubmissions.mockReset();
+      getPendingSubmissions.mockResolvedValue([
+        {
+          id: 'sub-2',
+          organization_id: 'org-1',
+          submitted_by: 'user-1',
+          submitter_name: 'Jordan Avery',
+          course_name: 'EMT Recertification',
+          training_type: 'certification',
+          completion_date: '2026-09-27',
+          expiration_date: '2028-09-27',
+          certification_number: 'EMT-12345',
+          issuing_agency: 'NREMT',
+          instructor: 'Capt. Reyes',
+          hours_completed: 24,
+          status: 'approved',
+          training_record_id: 'rec-1',
+          submitted_at: '2026-09-29T03:50:00Z',
+          updated_at: '2026-09-29T03:50:00Z',
+        },
+      ]);
+    });
+
+    it('sends a cleared field as null so the old value is removed', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /EMT Recertification/ }));
+      await user.click(screen.getByRole('button', { name: 'Edit Training Record' }));
+      for (const value of ['EMT-12345', 'NREMT', '2028-09-27', 'Capt. Reyes']) {
+        await user.clear(screen.getByDisplayValue(value));
+      }
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      expect(updateRecord).toHaveBeenCalledWith('rec-1', {
+        certification_number: null,
+        issuing_agency: null,
+        expiration_date: null,
+        instructor: null,
+      });
     });
   });
 });

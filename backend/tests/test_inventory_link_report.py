@@ -206,7 +206,7 @@ class TestLinkAcrossTemplates:
             org.id, {a.id: cat.id, b.id: cat.id}, user_id=user_id, user_name="Pat"
         )
 
-        assert result == {"linked": 2, "skipped": 0}
+        assert result == {"linked": 2, "skipped": 0, "skipped_positions": []}
         assert a.inventory_item_id == cat.id
         assert b.inventory_item_id == cat.id
         logged = await db_session.execute(
@@ -233,8 +233,81 @@ class TestLinkAcrossTemplates:
             org.id, {item.id: offered.id}, user_id=user_id, user_name="Pat"
         )
 
-        assert result == {"linked": 0, "skipped": 1}
+        assert result["linked"] == 0
+        assert result["skipped"] == 1
         assert item.inventory_item_id == chosen.id
+
+    async def test_a_skipped_position_says_where_it_is_and_both_items(self, db_session):
+        org = await _org(db_session)
+        user_id = await _user(db_session, org.id)
+        current = await _catalog(db_session, org.id, "Gauze Pads 4x4 Sterile")
+        offered = await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        template, (taken, free) = await _template(
+            db_session,
+            org.id,
+            "Medic 1",
+            [("Gauze", "count", current.id), ("Gauze", "count", None)],
+        )
+
+        result = await EquipmentCheckService(
+            db_session
+        ).link_inventory_items_across_templates(
+            org.id,
+            {taken.id: offered.id, free.id: offered.id},
+            user_id=user_id,
+            user_name="Pat",
+        )
+
+        assert result["linked"] == 1
+        assert result["skipped_positions"] == [
+            {
+                "template_item_id": taken.id,
+                "item_name": "Gauze",
+                "template_id": template.id,
+                "template_name": "Medic 1",
+                "compartment_name": "Jump Bag",
+                "current_inventory_item_id": current.id,
+                "current_inventory_item_name": "Gauze Pads 4x4 Sterile",
+                "chosen_inventory_item_id": offered.id,
+                "chosen_inventory_item_name": "Gauze Pads 4x4",
+            }
+        ]
+
+    async def test_nothing_skipped_lists_nothing(self, db_session):
+        org = await _org(db_session)
+        user_id = await _user(db_session, org.id)
+        cat = await _catalog(db_session, org.id, "Gauze")
+        _, (item,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze", "count", None)]
+        )
+
+        result = await EquipmentCheckService(
+            db_session
+        ).link_inventory_items_across_templates(
+            org.id, {item.id: cat.id}, user_id=user_id, user_name="Pat"
+        )
+
+        assert result == {"linked": 1, "skipped": 0, "skipped_positions": []}
+
+    async def test_a_current_link_outside_the_org_is_not_named(self, db_session):
+        org = await _org(db_session, "Ours")
+        other = await _org(db_session, "Theirs")
+        user_id = await _user(db_session, org.id)
+        foreign = await _catalog(db_session, other.id, "Their Gauze")
+        ours = await _catalog(db_session, org.id, "Gauze")
+        _, (item,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze", "count", foreign.id)]
+        )
+
+        result = await EquipmentCheckService(
+            db_session
+        ).link_inventory_items_across_templates(
+            org.id, {item.id: ours.id}, user_id=user_id, user_name="Pat"
+        )
+
+        (entry,) = result["skipped_positions"]
+        assert entry["current_inventory_item_name"] is None
+        assert entry["chosen_inventory_item_name"] == "Gauze"
 
     async def test_another_departments_inventory_item_is_refused(self, db_session):
         org = await _org(db_session, "Ours")

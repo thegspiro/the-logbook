@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 
 const mockGetFailureLog = vi.fn();
@@ -59,5 +60,46 @@ describe('EquipmentCheckReportsPage deep links', () => {
     await waitFor(() => expect(mockGetCompliance).toHaveBeenCalled());
     expect(mockGetFailureLog).not.toHaveBeenCalled();
     expect(screen.queryByText(/yesterday/)).not.toBeInTheDocument();
+  });
+});
+
+const failure = (n: number) => ({
+  id: `f-${n}`,
+  checkedAt: '2026-10-01T12:00:00Z',
+  apparatusName: 'Engine 1',
+  compartmentName: 'Cab',
+  itemName: `Item ${n}`,
+  checkedByName: 'A. Member',
+  notes: null,
+});
+
+// A page change used to swap the table for a spinner, unmounting the
+// Pagination and dropping the pressed page button's focus to <body>.
+describe('EquipmentCheckReportsPage failure pagination', () => {
+  beforeEach(() => {
+    mockGetCompliance.mockReset();
+    mockGetCompliance.mockResolvedValue({ apparatus: [], members: [], summary: {} });
+    mockGetFailureLog.mockReset();
+    mockGetFailureLog.mockResolvedValue({ items: [failure(1)], total: 60 });
+  });
+
+  it('keeps the table and the pressed page button mounted while the next page loads', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/checklists/reports?tab=failures');
+    await screen.findByText('Item 1');
+
+    let resolveNext: (value: unknown) => void = () => undefined;
+    mockGetFailureLog.mockReturnValueOnce(new Promise((resolve) => (resolveNext = resolve)));
+
+    const next = screen.getByRole('button', { name: /next/i });
+    await user.click(next);
+
+    expect(next).toBeInTheDocument();
+    expect(next).toHaveFocus();
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+
+    resolveNext({ items: [failure(2)], total: 60 });
+    expect(await screen.findByText('Item 2')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'false');
   });
 });

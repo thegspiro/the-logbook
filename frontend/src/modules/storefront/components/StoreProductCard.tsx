@@ -239,7 +239,14 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
               >
                 <Minus className="h-4 w-4" />
               </button>
-              <span className="text-theme-text-primary w-8 text-center text-sm font-semibold">{quantity}</span>
+              <span
+                className="text-theme-text-primary w-8 text-center text-sm font-semibold"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <span className="sr-only">Quantity </span>
+                {quantity}
+              </span>
               <button
                 type="button"
                 aria-label={`Increase quantity of ${offer.name}`}

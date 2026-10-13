@@ -357,10 +357,25 @@ export interface LinkReportResult {
   groups: LinkReportGroup[];
 }
 
+/** A position somebody linked in the builder after the report loaded. */
+export interface SkippedLinkPosition {
+  templateItemId: string;
+  itemName: string;
+  templateId: string;
+  templateName: string;
+  compartmentName?: string | null;
+  currentInventoryItemId: string;
+  /** Null when the current link points outside the organization. */
+  currentInventoryItemName?: string | null;
+  chosenInventoryItemId: string;
+  chosenInventoryItemName?: string | null;
+}
+
 export interface CrossTemplateLinkResult {
   linked: number;
   /** Positions somebody linked in the builder after the report loaded. */
   skipped: number;
+  skippedPositions: SkippedLinkPosition[];
 }
 
 export interface CheckTemplateItemCreate {

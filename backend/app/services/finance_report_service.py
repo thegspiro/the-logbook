@@ -845,7 +845,7 @@ class FinanceReportService:
             for f in balances
         ]
         totals = {
-            key: sum((f[key] for f in funds), ZERO)
+            key: sum((getattr(f, key) for f in balances), ZERO)
             for key in (
                 "received",
                 "spent",

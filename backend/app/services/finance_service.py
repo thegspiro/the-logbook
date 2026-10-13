@@ -6034,7 +6034,8 @@ class FinanceService:
         )
         out: dict[str, Decimal] = {}
         for fund_id, amount in rows.all():
-            out[fund_id] = out.get(fund_id, Decimal("0")) + Decimal(str(amount))
+            if fund_id:  # excluded by the query; narrows the type
+                out[fund_id] = out.get(fund_id, Decimal("0")) + Decimal(str(amount))
         return out
 
     async def _enforce_fund_balance(

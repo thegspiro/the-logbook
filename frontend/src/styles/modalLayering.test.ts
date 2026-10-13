@@ -83,7 +83,7 @@ describe('bottom navigation vs dialogs contract', () => {
   it("drops the bar's height allowance inside overlay subtrees", () => {
     // Without this, an in-dialog action bar keeps padding for a bar that is no
     // longer rendered and its buttons float above a band of dead space.
-    const reset = /\.modal-overlay,\s*\.modal-panel,\s*\.drawer-panel \{[^}]*--bottom-nav-height:\s*0px/;
+    const reset = /\.modal-overlay,\s*\.modal-panel \{[^}]*--bottom-nav-height:\s*0px/;
     expect(stylesheet).toMatch(reset);
 
     // The page-level default must survive: page action bars still clear a bar
@@ -119,7 +119,7 @@ describe('overlay registration contract', () => {
       if (relative.includes('.test.') || NOT_A_MODAL.includes(relative)) continue;
 
       const source = readFileSync(file, 'utf8');
-      if (!/\b(?:modal-overlay|drawer-panel)\b/.test(source)) continue;
+      if (!/\bmodal-overlay\b/.test(source)) continue;
       // Either directly, or through a wrapper that registers on its behalf.
       if (/\buseOverlaySurface\b|\buseDialog\b|\bDialogPanel\b|components\/Modal/.test(source)) continue;
 

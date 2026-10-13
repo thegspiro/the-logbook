@@ -413,7 +413,8 @@ async def link_inventory_items_across_templates(
     """Apply links reviewed on the department-wide report, across templates.
 
     All or nothing. Positions linked by someone else since the report loaded
-    are left as they are and counted in ``skipped``.
+    are left as they are, counted in ``skipped`` and listed in
+    ``skippedPositions``.
 
     **Requires permission: inventory.check_manage**
     """

@@ -1106,18 +1106,13 @@ async def update_program_requirement(
         program_requirement_id=program_requirement_id,
         organization_id=current_user.organization_id,
         updates=updates,
+        program_id=program_id,
     )
 
     if error or program_requirement is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=error or "An unexpected error occurred",
-        )
-
-    if str(program_requirement.program_id) != str(program_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Requirement does not belong to this program",
         )
 
     await log_audit_event(

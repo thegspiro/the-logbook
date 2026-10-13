@@ -224,3 +224,64 @@ describe('ShiftReportsSettingsPanel — settings that are not in effect yet', ()
     ).toBeInTheDocument();
   });
 });
+
+describe('ShiftReportsSettingsPanel — skill lists under each practical-skills method', () => {
+  const configFor = (method: 'skills_testing' | 'shift_signoffs') => ({
+    shift_reports_enabled: true,
+    practical_skills_method: method,
+    form_show_skills_observed: true,
+    shift_review_default_skills: ['Alpha'],
+    shift_review_default_tasks: ['Task'],
+    apparatus_type_skills: {},
+    apparatus_type_tasks: {},
+    rating_scale_labels: {},
+  });
+
+  const openSection = async (user: ReturnType<typeof userEvent.setup>, name: RegExp) => {
+    const tabs = await screen.findAllByRole('button', { name });
+    await user.click(tabs[0] as HTMLElement);
+  };
+
+  // Under Skills Testing the form shows no skills list, so a list edited here
+  // changes nothing until the department switches back. It says so, and keeps
+  // the list rather than hiding it.
+  it('labels the default skills as not in effect under Skills Testing, and keeps them editable', async () => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue(configFor('skills_testing'));
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsSettingsPanel />);
+    await openSection(user, /Feedback Defaults/);
+
+    expect(await screen.findByRole('note')).toHaveTextContent(/Not in effect/);
+    expect(screen.getByRole('link', { name: /Practical Skills/ })).toHaveAttribute(
+      'href',
+      '/training/admin?page=settings&tab=practical-skills'
+    );
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+  });
+
+  it('labels the apparatus skills as not in effect under Skills Testing', async () => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue(configFor('skills_testing'));
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsSettingsPanel />);
+    await openSection(user, /Apparatus Skills/);
+
+    expect(await screen.findByRole('note')).toHaveTextContent(/Not in effect/);
+  });
+
+  it('shows no such label for a department on shift report sign-offs', async () => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue(configFor('shift_signoffs'));
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsSettingsPanel />);
+    await openSection(user, /Feedback Defaults/);
+
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+
+    await openSection(user, /Apparatus Skills/);
+    expect(await screen.findByText(/Skills for/)).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+});

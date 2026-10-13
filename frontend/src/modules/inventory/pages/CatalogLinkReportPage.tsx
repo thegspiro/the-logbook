@@ -13,14 +13,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Link2, Loader2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router';
+import { ChevronDown, ChevronRight, Link2, Loader2, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import InventoryItemPicker from '../components/InventoryItemPicker';
 import { useChecklistCatalogAccess } from '../hooks/useChecklistCatalogAccess';
 import { equipmentCheckService } from '../services/equipmentCheckApi';
-import type { LinkReportGroup, LinkReportResult } from '../types/equipmentCheck';
+import type { LinkReportGroup, LinkReportResult, SkippedLinkPosition } from '../types/equipmentCheck';
 
 /** Matches the backend's per-request cap on CrossTemplateLinkRequest. */
 const LINK_BATCH_SIZE = 2000;
@@ -54,6 +55,61 @@ interface GroupRowProps {
   onToggle: () => void;
   access: ReturnType<typeof useChecklistCatalogAccess>;
 }
+
+interface SkippedPanelProps {
+  positions: SkippedLinkPosition[];
+  onDismiss: () => void;
+}
+
+/**
+ * Positions left alone because somebody linked them in the builder after the
+ * report loaded. Their link stands — overwriting a colleague's newer choice is
+ * the thing this screen must not do — so each is listed with both items and a
+ * way into its template, where the officer can change it deliberately.
+ */
+const SkippedPanel: React.FC<SkippedPanelProps> = ({ positions, onDismiss }) => (
+  <section aria-labelledby="skipped-links" className="alert-warning space-y-2">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <h2 id="skipped-links" className="font-semibold">
+          {positions.length} position{positions.length !== 1 ? 's were' : ' was'} left as{' '}
+          {positions.length !== 1 ? 'they were' : 'it was'}
+        </h2>
+        <p className="text-sm">
+          Someone linked {positions.length !== 1 ? 'these' : 'this'} in the template builder after this page loaded, so
+          your choice was not applied. Open the template to change it.
+        </p>
+      </div>
+      <button type="button" onClick={onDismiss} className="btn-icon shrink-0" aria-label="Dismiss skipped positions">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+    <ul className="space-y-2 text-sm">
+      {positions.map((p) => (
+        <li key={p.templateItemId} className="border-t border-current/20 pt-2">
+          <p className="font-medium break-words">
+            {p.itemName}
+            <span className="font-normal">
+              {' '}
+              · {p.templateName}
+              {p.compartmentName ? ` · ${p.compartmentName}` : ''}
+            </span>
+          </p>
+          <p className="break-words">
+            Linked to {p.currentInventoryItemName ?? 'an item outside your inventory'}; you chose{' '}
+            {p.chosenInventoryItemName ?? 'an item no longer in your inventory'}.
+          </p>
+          <Link
+            to={`/inventory/admin/checklists/templates/${p.templateId}`}
+            className="touch:min-h-11 inline-flex items-center font-medium underline"
+          >
+            Open {p.templateName}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  </section>
+);
 
 const GroupRow: React.FC<GroupRowProps> = ({
   group,
@@ -148,6 +204,10 @@ const CatalogLinkReportPage: React.FC = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showUnmatched, setShowUnmatched] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Kept across the reload that follows a link pass: the reloaded report no
+  // longer lists these positions, since they are linked, so this is the only
+  // place they can still be seen.
+  const [skippedPositions, setSkippedPositions] = useState<SkippedLinkPosition[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,8 +247,9 @@ const CatalogLinkReportPage: React.FC = () => {
       g.positions.map((p): [string, string] => [p.templateItemId, choices[g.key] ?? ''])
     );
     setSaving(true);
+    setSkippedPositions([]);
     let linked = 0;
-    let skipped = 0;
+    const skipped: SkippedLinkPosition[] = [];
     try {
       // Each batch is all-or-nothing on the server; a department large enough
       // to need more than one is told how far it got if a later one fails.
@@ -196,17 +257,20 @@ const CatalogLinkReportPage: React.FC = () => {
         const batch = Object.fromEntries(entries.slice(i, i + LINK_BATCH_SIZE));
         const result = await equipmentCheckService.linkAcrossTemplates(batch);
         linked += result.linked;
-        skipped += result.skipped;
+        skipped.push(...result.skippedPositions);
       }
       toast.success(
-        skipped > 0
-          ? `Linked ${linked} position${linked !== 1 ? 's' : ''}; ${skipped} had been linked by someone else and were left as they were`
+        skipped.length > 0
+          ? `Linked ${linked} position${linked !== 1 ? 's' : ''}; ${skipped.length} had been linked by someone else — see the list above`
           : `Linked ${linked} position${linked !== 1 ? 's' : ''}`
       );
     } catch (err: unknown) {
       const prefix = linked > 0 ? `Linked ${linked} before stopping. ` : '';
       toast.error(prefix + getErrorMessage(err, 'Failed to link positions'));
     } finally {
+      // Set even after a failed batch: the earlier batches committed, and
+      // their skipped positions are as real as on a clean run.
+      setSkippedPositions(skipped);
       setSaving(false);
       await load();
     }
@@ -260,6 +324,10 @@ const CatalogLinkReportPage: React.FC = () => {
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
+
+      {skippedPositions.length > 0 && (
+        <SkippedPanel positions={skippedPositions} onDismiss={() => setSkippedPositions([])} />
+      )}
 
       {loading && !report && <SkeletonPage />}
 
