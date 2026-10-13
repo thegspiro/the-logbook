@@ -1278,6 +1278,11 @@ export const trainingSessionService = {
 // ============================================
 
 import type {
+  CrewBatchApproveResult,
+  CrewRecordingContext,
+  CrewShiftOption,
+  CrewTrainingCreate,
+  CrewTrainingResult,
   SelfReportConfig,
   SelfReportConfigUpdate,
   SubmissionAttachment,
@@ -1423,6 +1428,31 @@ export const trainingSubmissionService = {
 
   async reviewSubmission(submissionId: string, review: SubmissionReviewRequest): Promise<TrainingSubmission> {
     const response = await api.post<TrainingSubmission>(`/training/submissions/${submissionId}/review`, review);
+    return response.data;
+  },
+
+  // Crew-recorded training
+  async getCrewRecordingContext(): Promise<CrewRecordingContext> {
+    const response = await api.get<CrewRecordingContext>('/training/submissions/crew/context');
+    return response.data;
+  },
+
+  async getCrewShiftOptions(shiftDate: string): Promise<CrewShiftOption[]> {
+    const response = await api.get<CrewShiftOption[]>('/training/submissions/crew/shifts', {
+      params: { shift_date: shiftDate },
+    });
+    return asArray(response.data);
+  },
+
+  async recordCrewTraining(data: CrewTrainingCreate): Promise<CrewTrainingResult> {
+    const response = await api.post<CrewTrainingResult>('/training/submissions/crew', data);
+    return response.data;
+  },
+
+  async approveCrewBatch(batchId: string, reviewerNotes?: string): Promise<CrewBatchApproveResult> {
+    const response = await api.post<CrewBatchApproveResult>(`/training/submissions/crew/${batchId}/approve`, {
+      reviewer_notes: reviewerNotes,
+    });
     return response.data;
   },
 };

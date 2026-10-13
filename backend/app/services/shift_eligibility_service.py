@@ -26,6 +26,7 @@ from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
     Shift,
+    ShiftPosition,
     TrainingProgram,
 )
 from app.models.user import (
@@ -75,6 +76,16 @@ TRAINING_POSITION_MAP = {
 # per-shift reopening — is still the way in.
 DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE = 0
 DEFAULT_LATE_SIGNUP_GRACE_MINUTES = 60
+
+# The seats whose holder leads the crew. Matches the set
+# ``SchedulingService.create_assignment`` designates the shift officer from.
+OFFICER_SEATS = frozenset(
+    {
+        ShiftPosition.OFFICER.value,
+        ShiftPosition.CAPTAIN.value,
+        ShiftPosition.LIEUTENANT.value,
+    }
+)
 
 # Default membership types excluded from self-service shift signup.
 DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
@@ -438,6 +449,36 @@ class ShiftEligibilityService:
                 eligible = self._seats_granted(eligible, shift_positions)
 
         return sorted(eligible)
+
+    async def can_serve_as_shift_officer(
+        self, user: User, organization_id: str
+    ) -> bool:
+        """Whether the member could sit in a shift's officer seat.
+
+        Asked of the member, not of a shift: a driver whose rank or
+        qualifications also clear the officer seat counts, whether or not they
+        were in it today. Drawn from the same sources as
+        ``get_eligible_positions`` — rank, current qualifications, completed
+        training programs — but deliberately not from the department's
+        org-wide open positions, which make a seat signable by everyone and say
+        nothing about this member's capacity to lead it.
+        """
+        org = await self._get_org(organization_id)
+        if not org or not self._account_is_active(user):
+            return False
+
+        slug_map = await self._get_slug_eligibility_map(organization_id)
+        granted: Set[str] = self._positions_for_slugs([user.rank], slug_map)
+        granted.update(
+            await self._get_qualification_positions(
+                str(user.id), organization_id, org_today(org)
+            )
+        )
+        granted.update(
+            await self._get_training_positions(str(user.id), organization_id)
+        )
+        folded = {str(seat).casefold() for seat in granted}
+        return not folded.isdisjoint(OFFICER_SEATS)
 
     async def get_eligible_positions_bulk(
         self,
