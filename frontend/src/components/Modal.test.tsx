@@ -124,7 +124,19 @@ describe('Modal', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(dialog).toHaveAttribute('aria-labelledby', 'modal-title');
+    expect(dialog).toHaveAccessibleName(defaultProps.title);
+  });
+
+  it('gives each open dialog its own title id', () => {
+    render(
+      <>
+        <Modal {...defaultProps} title="Outer" />
+        <Modal {...defaultProps} title="Inner" />
+      </>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Outer' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Inner' })).toBeInTheDocument();
   });
 
   // ---- Close button ----

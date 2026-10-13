@@ -29,7 +29,8 @@ export { Avatar } from './Avatar';
 
 // Data & Interaction
 export { CommandPalette } from './CommandPalette';
-export { SortableHeader, sortItems } from './SortableHeader';
+export { SortableHeader } from './SortableHeader';
+export { sortItems } from '../../utils/sortItems';
 export type { SortDirection } from './SortableHeader';
 export { DateRangePicker } from './DateRangePicker';
 export { FileDropzone } from './FileDropzone';

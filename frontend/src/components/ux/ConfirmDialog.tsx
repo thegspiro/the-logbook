@@ -5,7 +5,7 @@
  * Supports customizable title, message, and button labels.
  */
 
-import React from 'react';
+import React, { useId } from 'react';
 import { AlertTriangle, Trash2, Loader2 } from 'lucide-react';
 import { Modal } from '../Modal';
 
@@ -59,21 +59,24 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     },
   };
 
+  const messageId = useId();
   const config = variantConfig[variant];
   const Icon = config.icon;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" aria-describedby="confirm-dialog-message">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" aria-describedby={messageId}>
       <div className="flex flex-col items-center">
         <div className={`h-12 w-12 rounded-full ${config.iconBg} mb-4 flex items-center justify-center`}>
-          <Icon className={`h-6 w-6 ${config.iconColor}`} />
+          <Icon className={`h-6 w-6 ${config.iconColor}`} aria-hidden="true" />
         </div>
-        <div id="confirm-dialog-message" className="text-theme-text-secondary w-full text-center text-sm">
+        <div id={messageId} className="text-theme-text-secondary w-full text-center text-sm">
           {message}
         </div>
       </div>
       <div className="mt-6 flex gap-3">
-        <button onClick={onClose} disabled={loading} className="btn-secondary flex-1">
+        {/* Focus starts on the answer that changes nothing, so an Enter
+            pressed before the question is read cannot carry out a deletion. */}
+        <button onClick={onClose} disabled={loading} className="btn-secondary flex-1" data-autofocus>
           {cancelLabel}
         </button>
         <button

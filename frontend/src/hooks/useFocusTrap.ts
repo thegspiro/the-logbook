@@ -1,8 +1,23 @@
 import { useEffect, useRef } from 'react';
 
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
 /**
  * Custom hook to trap focus within a container element
  * Useful for modals, mobile menus, and other overlay elements
+ *
+ * On activation focus moves to, in order: whatever inside the container already
+ * holds it (an `autoFocus` field), an element marked `data-autofocus`, the first
+ * focusable that is not marked `data-dialog-close`, and only then the close
+ * button. Landing on the header X put every form one Tab behind its first field
+ * and every confirmation on the one control that decides nothing.
  *
  * @param isActive - Whether the focus trap should be active
  * @returns ref - React ref to attach to the container element
@@ -10,36 +25,36 @@ import { useEffect, useRef } from 'react';
 export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
   const containerRef = useRef<T>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const wasActive = useRef(false);
+
+  // The opener is read during render, not in the effect: a child's `autoFocus`
+  // runs in the commit before this effect does, so by then document.activeElement
+  // is the dialog's own field and closing restored focus to an element that had
+  // just been unmounted, dropping a keyboard user back at <body>.
+  if (isActive && !wasActive.current && typeof document !== 'undefined') {
+    previousActiveElement.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  wasActive.current = isActive;
 
   useEffect(() => {
     if (!isActive) return;
 
-    // Store the previously focused element
-    previousActiveElement.current = document.activeElement as HTMLElement;
-
     const container = containerRef.current;
     if (!container) return;
 
-    // Get all focusable elements within the container
-    const getFocusableElements = (): HTMLElement[] => {
-      if (!container) return [];
+    const opener = previousActiveElement.current;
+    if (opener && container.contains(opener)) previousActiveElement.current = null;
 
-      const focusableSelectors = [
-        'a[href]',
-        'button:not([disabled])',
-        'input:not([disabled])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
-        '[tabindex]:not([tabindex="-1"])',
-      ].join(', ');
+    const getFocusableElements = (): HTMLElement[] =>
+      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
 
-      return Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors));
-    };
-
-    // Focus the first element
-    const focusableElements = getFocusableElements();
-    if (focusableElements.length > 0) {
-      focusableElements[0]?.focus();
+    if (!container.contains(document.activeElement)) {
+      const focusableElements = getFocusableElements();
+      const preferred =
+        container.querySelector<HTMLElement>('[data-autofocus]') ??
+        focusableElements.find((element) => !element.hasAttribute('data-dialog-close')) ??
+        focusableElements[0];
+      preferred?.focus();
     }
 
     // Handle tab key press
@@ -67,17 +82,17 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
       }
     };
 
-    // Add event listener
     document.addEventListener('keydown', handleKeyDown);
 
     // Cleanup: restore focus and remove listener
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
 
-      // Restore focus to the previously active element
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
-      }
+      // An opener that has since been removed from the page cannot take focus
+      // back; focusing it is a silent no-op that leaves focus on <body>.
+      const target = previousActiveElement.current;
+      if (target?.isConnected) target.focus();
+      previousActiveElement.current = null;
     };
   }, [isActive]);
 
