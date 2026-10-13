@@ -29,15 +29,17 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_optional_current_user
 from app.api.v1.email_test_helper import (
+    UNIFORM_SMTP_UNREACHABLE_MESSAGE,
     test_cloudflare_email,
     test_gmail_connection,
     test_microsoft_connection,
-    test_smtp_connection,
+    test_smtp_connection_uniform,
 )
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import (
+    DEFAULT_ROLES,
     module_checkbox_grants,
     module_checkbox_is_held,
     module_for_permission,
@@ -55,6 +57,7 @@ from app.services import key_custody_service
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
+    ONBOARDING_POSITION_EDITOR_MODULE_IDS,
     OnboardingService,
 )
 from app.services.upload_scanning import scan_and_validate_logo
@@ -573,14 +576,12 @@ class RoleSetupItem(BaseModel):
     priority: int = Field(default=50, ge=0, le=100)
     permissions: dict[str, RolePermission] = Field(
         default_factory=dict,
-        # The registry names 34 modules today; a client-supplied key is an
-        # arbitrary string (there is no allowlist — see ONB-7), so nothing
-        # else bounds how many `expand_module_checkboxes` turns into
-        # `{module}.view`/`{module}.manage`/`{module}.*` entries per role. The
-        # outer `RolesSetupRequest.roles`/`PositionsSetupRequest.positions`
-        # caps (ONB2-30-2) bound the number of roles in one request, not the
-        # size of any one role's own permission set — same rationale as
-        # `stations`/`apparatus`/`it_team`, headroom above the current count.
+        # Keys are checked against ONBOARDING_POSITION_EDITOR_MODULE_IDS by
+        # save_session_roles (ONB-7); this cap only bounds the request size
+        # before that check runs. The outer `RolesSetupRequest.roles` /
+        # `PositionsSetupRequest.positions` caps (ONB2-30-2) bound the number
+        # of roles in one request, not the size of any one role's own
+        # permission set — headroom above the registry's current count.
         max_length=50,
         description="Module permissions with view/manage flags",
     )
@@ -656,6 +657,35 @@ class SessionDataResponse(BaseModel):
 # ============================================
 
 SESSION_EXPIRY_HOURS = 0.5  # 30 minutes
+# Absolute lifetime from creation, however active the session is (owner
+# decision ONB2-30-8). Activity slides the 30-minute window, and three routes
+# slide it on the session id alone (no CSRF token), so without a ceiling a
+# holder of just the id could keep the pre-completion window open forever by
+# polling. 24 hours outlasts any real sitting of the wizard; a setup that
+# runs longer starts a fresh session and resumes its saved progress.
+SESSION_MAX_LIFETIME_HOURS = 24
+
+
+def _session_hard_expiry(session: OnboardingSessionModel) -> Optional[datetime]:
+    """When ``session`` dies regardless of activity, or None if unknown.
+
+    ``created_at`` is a server default and present on every stored row; it is
+    only absent on an object that was never flushed, which no caller holds.
+    """
+    created = session.created_at
+    if created is None:
+        return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    expires_at: datetime = created + timedelta(hours=SESSION_MAX_LIFETIME_HOURS)
+    return expires_at
+
+
+def _slid_expiry(session: OnboardingSessionModel, now: datetime) -> datetime:
+    """The sliding 30-minute expiry, never past the absolute ceiling."""
+    slid = now + timedelta(hours=SESSION_EXPIRY_HOURS)
+    hard = _session_hard_expiry(session)
+    return min(slid, hard) if hard is not None else slid
 
 
 async def _rehydrate_department_org_id(
@@ -778,11 +808,12 @@ async def get_or_create_session(
         )
         session: OnboardingSessionModel | None = result.scalar_one_or_none()
 
-        if session:
-            # Update expiration on activity
-            session.expires_at = datetime.now(timezone.utc) + timedelta(
-                hours=SESSION_EXPIRY_HOURS
-            )
+        hard = _session_hard_expiry(session) if session else None
+        if session and (hard is None or hard > datetime.now(timezone.utc)):
+            # Update expiration on activity, within the absolute ceiling. A
+            # session past its ceiling falls through to a fresh one, which
+            # rehydrates the saved progress below.
+            session.expires_at = _slid_expiry(session, datetime.now(timezone.utc))
             await db.commit()
             return session
 
@@ -854,7 +885,15 @@ async def validate_session(
         if session.expires_at.tzinfo is None
         else session.expires_at
     )
-    if session_exp < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    hard_expiry = _session_hard_expiry(session)
+    if hard_expiry is not None and hard_expiry <= now:
+        raise CodedHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your onboarding session reached its 24-hour limit. Please refresh the page to start a new session. Your previously saved progress will be retained.",
+            error_code=ErrorCode.ONBD_SESSION_INVALID,
+        )
+    if session_exp < now:
         raise CodedHTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained.",
@@ -877,10 +916,8 @@ async def validate_session(
                 error_code=ErrorCode.AUTH_CSRF_INVALID,
             )
 
-    # Update expiration on activity
-    session.expires_at = datetime.now(timezone.utc) + timedelta(
-        hours=SESSION_EXPIRY_HOURS
-    )
+    # Update expiration on activity, within the absolute ceiling
+    session.expires_at = _slid_expiry(session, now)
     await db.commit()
 
     return session
@@ -1724,8 +1761,10 @@ async def verify_email_configuration(
                     ),
                     details={"required": ["smtpPassword"]},
                 )
-            # Test self-hosted SMTP configuration
-            test_func = partial(test_smtp_connection, config)
+            # Self-hosted SMTP points at a host the caller chooses, before any
+            # account exists — connection-stage failures are made identical
+            # so the test cannot map the internal network (ONB-30-3).
+            test_func = partial(test_smtp_connection_uniform, config)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1738,6 +1777,18 @@ async def verify_email_configuration(
         return EmailTestResponse(success=success, message=message, details=details)
 
     except TimeoutError:
+        if platform in ("selfhosted", "other"):
+            # A hang (a slow DNS answer, a host that drops packets) is one more
+            # connection-stage outcome; give it the same answer as the rest.
+            logger.warning(
+                "Onboarding SMTP test exceeded {}s against a self-hosted server",
+                EMAIL_TEST_TIMEOUT,
+            )
+            return EmailTestResponse(
+                success=False,
+                message=UNIFORM_SMTP_UNREACHABLE_MESSAGE,
+                details={"error": "connection_failed"},
+            )
         return EmailTestResponse(
             success=False,
             message=f"Email connection test timed out after {EMAIL_TEST_TIMEOUT} seconds. The mail server may be unreachable or slow to respond.",
@@ -2086,8 +2137,12 @@ async def get_session_key_custody(request: Request, db: AsyncSession = Depends(g
     """
     The encryption key's fingerprint (an HMAC, never the key) and whether it
     has been confirmed as stored separately.
+
+    A read, so no CSRF token, like the other GETs here: the setup screen sends
+    one only with its writes. Requiring it refused this step's own first
+    request with a 403 and stopped every new installation's setup at it.
     """
-    await validate_session(request, db)
+    await validate_session(request, db, require_csrf=False)
     record = await key_custody_service.confirmation_for_current_key(db)
     return KeyCustodyStatus(
         key_fingerprint=key_custody_service.current_fingerprint(),
@@ -2520,6 +2575,78 @@ def _untouched_modules(
     }
 
 
+def _custom_priority_ceiling() -> int:
+    """The highest priority a position the client defines may claim.
+
+    One below the System Owner's own position, so nothing invented during
+    setup can rank above the account setting the installation up.
+    """
+    return int(DEFAULT_ROLES[ROLE_IT_MANAGER]["priority"]) - 1
+
+
+def _check_submitted_positions(
+    roles: list[RoleSetupItem], existing_system_slugs: set[str]
+) -> None:
+    """Refuse what the Positions editor cannot produce (owner decision ONB-7).
+
+    Two things, both checked before anything is written:
+
+    * a ``permissions`` key the editor never renders — the expansion would
+      otherwise turn it into a ``{key}.view`` / ``{key}.*`` grant, so a setup
+      session could mint ``users.*`` or ``audit.*``;
+    * a custom position reusing a built-in position's identifier. The update
+      branch keys on the slug, so this used to rewrite the built-in row with
+      the custom position's checkboxes and priority; and a custom ``member``
+      would take over the baseline every new account is given.
+    """
+    unknown = sorted(
+        {
+            module_id
+            for role in roles
+            for module_id in role.permissions
+            if module_id not in ONBOARDING_POSITION_EDITOR_MODULE_IDS
+        }
+    )
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown modules in position permissions: {', '.join(unknown)}",
+        )
+    reserved = sorted(
+        role.name
+        for role in roles
+        if role.is_custom
+        and (role.id in DEFAULT_ROLES or role.id in existing_system_slugs)
+    )
+    if reserved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "These custom positions use the name of a built-in position: "
+                f"{', '.join(reserved)}. Tick the built-in position instead, "
+                "or give the custom one a different name."
+            ),
+        )
+
+
+def _stored_priority(role_data: RoleSetupItem, existing: Optional[Any]) -> int:
+    """The priority to store; the client's figure is never trusted outright.
+
+    A built-in position keeps the registry's priority (or, for a seeded row
+    the registry no longer lists, the row's own) — the same rule
+    ``RoleService.update_role`` applies after setup, where a system position's
+    priority cannot be changed. Anything the client defines is clamped below
+    the System Owner's position.
+    """
+    if not role_data.is_custom:
+        registry = DEFAULT_ROLES.get(role_data.id)
+        if registry is not None:
+            return int(registry["priority"])
+        if existing is not None and existing.priority is not None:
+            return int(existing.priority)
+    return min(role_data.priority, _custom_priority_ceiling())
+
+
 @router.post("/session/roles", response_model=RolesSetupResponse)
 async def save_session_roles(
     request: Request, data: RolesSetupRequest, db: AsyncSession = Depends(get_db)
@@ -2584,8 +2711,18 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from sqlalchemy import delete
 
-    from app.core.permissions import DEFAULT_ROLES
     from app.models.user import Role, user_positions
+
+    # Get existing system roles. Read before the delete below (which only
+    # touches non-system rows) so the submission is checked before any write.
+    result = await db.execute(
+        select(Role).where(
+            Role.organization_id == organization_id,
+            Role.is_system.is_(True),
+        )
+    )
+    existing_system_roles = {role.slug: role for role in result.scalars().all()}
+    _check_submitted_positions(data.roles, set(existing_system_roles))
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -2594,15 +2731,6 @@ async def save_session_roles(
             Role.is_system.is_(False),
         )
     )
-
-    # Get existing system roles
-    result = await db.execute(
-        select(Role).where(
-            Role.organization_id == organization_id,
-            Role.is_system.is_(True),
-        )
-    )
-    existing_system_roles = {role.slug: role for role in result.scalars().all()}
 
     created_roles = []
     updated_roles = []
@@ -2632,7 +2760,7 @@ async def save_session_roles(
                 )
 
             existing_role.permissions = permission_list
-            existing_role.priority = role_data.priority
+            existing_role.priority = _stored_priority(role_data, existing_role)
             if role_data.description:
                 existing_role.description = role_data.description
             updated_roles.append(role_data.name)
@@ -2676,8 +2804,13 @@ async def save_session_roles(
                 slug=role_data.id,
                 description=role_data.description or f"Custom role: {role_data.name}",
                 permissions=permission_list,
-                is_system=not role_data.is_custom,  # System roles can't be deleted
-                priority=role_data.priority,
+                # System (undeletable) only for a position the registry defines.
+                # The client's is_custom flag alone used to decide this, so any
+                # invented slug could be minted as a system row (ONB-7); an
+                # unknown non-custom slug — a template a stale draft remembers —
+                # is stored as an ordinary position instead.
+                is_system=bool(registry_defaults),
+                priority=_stored_priority(role_data, None),
             )
             db.add(new_role)
             created_roles.append(role_data.name)

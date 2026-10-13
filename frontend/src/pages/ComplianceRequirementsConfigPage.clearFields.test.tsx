@@ -285,7 +285,7 @@ describe('ComplianceRequirementsConfigPage — reading a cleared field back afte
   });
 });
 
-describe('ComplianceRequirementsConfigPage — unwired notification settings (CMP2-1)', () => {
+describe('ComplianceRequirementsConfigPage — notification settings (CMP2-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetConfig.mockResolvedValue(baseConfig);
@@ -294,23 +294,14 @@ describe('ComplianceRequirementsConfigPage — unwired notification settings (CM
     mockListCategories.mockResolvedValue([]);
   });
 
-  it('tells the officer these settings do not send anything yet', async () => {
-    // `notify_non_compliant_members` / `notify_days_before_deadline` are
-    // stored by this page but read by no scheduled task or sender anywhere
-    // in the backend (verified: `grep -rn notify_days_before_deadline
-    // backend/app` outside schemas/models returns nothing). CLAUDE.md
-    // Pitfall #19: a config switch must have a reader before a UI, or the UI
-    // must say so. This asserts the honest label actually renders next to
-    // the settings it describes, rather than merely existing somewhere in
-    // the source. It does not (and cannot) verify a reader exists — that is
-    // CMP2-1's open half.
+  it('says how the reminders are sent, now that a task reads them', async () => {
+    // The daily compliance_member_notices task reads both settings (backend
+    // tests/test_compliance_member_notices.py), so the "Not yet active"
+    // warning the panel carried while nothing did is gone (Pitfall #19).
     await renderLoaded();
 
-    expect(
-      screen.getByText(
-        /Not yet active: these settings are saved, but no reminder is sent yet\. Members are not notified when they become non-compliant\./
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Sent by email once a day/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not yet active/)).not.toBeInTheDocument();
   });
 });
 

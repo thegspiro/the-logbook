@@ -860,6 +860,18 @@ for edits made from now on:
 > all future events** may have its later occurrences collapsed onto one date,
 > which cannot be recovered from the stored rows. Fix or recreate any that look
 > wrong — see `docs/UPGRADING.md` and `docs/KNOWN_LIMITATIONS.md`.
+>
+> **Finding them** _(2026-10-11)_. Nothing is repaired automatically — fixing
+> a series moves events members have RSVP'd to, so it is an officer's call.
+> Your administrator can list the series that look affected with
+> `scripts/report_recurring_series_drift.py` (add `--org "<department>"`). It
+> changes nothing. For each series it shows occurrences **1 hour off** or
+> **1 day off** the series' own pattern, with the stored and the expected
+> time, and series **COLLAPSED** onto one start, with the pattern dates no
+> occurrence holds any more — where the collapsed ones belong. Each line gives
+> the number of RSVPs, so you know whom to tell when you move it. Only
+> upcoming occurrences are listed unless `--include-past` is added; an
+> occurrence you moved by hand by some other amount is not listed.
 
 ### Recurring Event Edge Cases
 
@@ -900,13 +912,13 @@ Navigate to **Events > Analytics** to view department-wide event metrics:
 - **Top Events**: Table of highest-attendance events
 - **Date Range Filter**: Filter all analytics by custom date range
 
-> **Read the attendance rate with care.** It divides every check-in in the
-> period by every **Going** RSVP in the period, pooled across events, and it
-> includes events that have not happened yet — so the figure falls whenever
-> members RSVP to something upcoming, and an upcoming event shows in **Top
-> Events** at 0%. Despite its label it is a pooled ratio, not an average per
-> event. Which events it should cover is an open owner decision (found
-> 2026-09-29; `docs/KNOWN_LIMITATIONS.md`).
+> **What Avg Attendance Rate measures** _(2026-10-11)_. For each event in the
+> period that has **already ended** and had at least one member **Going**, it
+> takes checked-in ÷ Going, and the card shows the average of those per-event
+> rates. Upcoming and in-progress events are left out, so the figure no longer
+> falls when members RSVP to something ahead. Before this release it pooled
+> every check-in over every Going RSVP, upcoming events included. **Top
+> Events** still lists upcoming events, at 0% until they happen.
 
 ![Event analytics page with summary cards and attendance charts](./images/04-08-event-analytics.png)
 
@@ -921,7 +933,10 @@ Navigate to **Events > Templates** to manage reusable event configurations:
 1. Click **Create Template** to save a new template
 2. Fill in the template form with default event settings (title, type, location, time, description, reminders)
 3. Toggle templates **active/inactive** — inactive templates won't appear in the template picker
-4. Edit or delete existing templates
+4. Edit or deactivate existing templates. Templates are never deleted — events
+   created from one keep their link to it — so the archive icon reads
+   **Deactivate**, and a deactivated template can be switched back on at any
+   time _(2026-10-11)_.
 
 When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form. Its hint reads _"Pick a template to pre-fill common settings, or start blank."_
 
@@ -934,11 +949,12 @@ When creating a new event, the **Template Picker** lets you quick-select from ac
 - **A template's default start is the next hour on the department's clock**,
   not the browser's — in a browser set to a half-hour timezone it landed on the
   half hour.
-- **Delete does not delete.** The dialog reads _"Delete "…"? You can't undo
-  this."_ with **Delete Template**, but the template is kept and listed as
-  **Inactive**, exactly as **Deactivate** would leave it. Whether templates
-  should be removable is an open owner decision (`docs/KNOWN_LIMITATIONS.md`);
-  until then, treat Delete as Deactivate.
+- **Delete is now Deactivate** _(2026-10-11)_. The action used to read
+  **Delete Template** with _"You can't undo this."_, but the template was only
+  deactivated. It is now labelled for what it does: **Deactivate Template**,
+  _"It will no longer be offered when creating an event. Events already
+  created from it are not affected, and you can reactivate it at any time with
+  its switch."_ It is shown only on active templates.
 
 ![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)
 
@@ -999,18 +1015,33 @@ RSVP directly from the events list without opening the event detail page — cli
 
 For recurring events, you can RSVP to **all events in the series** at once instead of responding to each individually.
 
+**Sessions ahead of your training phase** _(2026-10-11)_. If you answer
+**Going** for a whole series and some of its sessions are training-program
+sessions in a phase ahead of yours, you now get the same warning a single RSVP
+gives — once, for the series. **Sessions ahead of your phase** lists every such
+session by name and date. **RSVP to series** answers Going for all of them;
+**Not now** writes nothing, so you can RSVP to the sessions you are ready for
+one at a time instead. Before this release a series RSVP skipped the warning
+entirely.
+
 ### Waitlist System
 
 When an event reaches its capacity limit:
 
 1. New RSVPs are automatically added to the **waitlist**
 2. If a spot opens (someone changes to "Not Going"), the first waitlisted person is promoted
-3. Waitlisted members are notified when promoted to "Going" — **in the app
-   only**. No email goes out, so a member who reads only their inbox does not
-   learn their seat is confirmed; tell them yourself if it matters (recorded as
-   an open item in `docs/KNOWN_LIMITATIONS.md`, 2026-09-28). An automatic
-   promotion also does not appear in **RSVP Activity**: the feed still shows the
-   member's "RSVP'd as Waitlisted" while the list above shows them Going
+3. Waitlisted members are notified when promoted to "Going" — in the app and,
+   since 2026-10-11, **by email** (_"You're off the waitlist: …"_, with the
+   event's time and place and a link to it). A member can turn that email off
+   under **Settings → Notifications → Off the waitlist**; the bell entry stays
+   either way, and a department can make the email required on the Member
+   Emails & Texts page. Its wording is the **Off the Waitlist** template under
+   Communications → Email Templates. Before that date the promotion was told
+   in the app only. Since
+   2026-10-11 an automatic promotion appears in **RSVP Activity** as "… was
+   moved from Waitlisted to Going (automatically, when a spot opened up)", so
+   it is not mistaken for the member's own change. Promotions made before that
+   date were not recorded and do not appear
 4. The waitlist position is visible on the event detail page
 
 > **Edge case:** Waitlisted attendees are promoted in the order they RSVP'd. If multiple spots open simultaneously, multiple waitlisted members are promoted in order.
@@ -1221,6 +1252,37 @@ read _"Waiting for another officer to approve. You submitted these minutes, so
 you cannot approve them."_ **Reject Minutes** stays available to them as a way
 to withdraw the submission. An action item's **Due** date now reads the
 calendar day it was set for — it showed a day early for a US department.
+
+**Correcting approved minutes** _(2026-10-11)_. Approved minutes are locked:
+their content, motions, action items and quorum settings can no longer be
+changed, so the record the department ratified — including whether quorum was
+met — stays as it was approved. To correct one, open it and click **Reopen for
+Correction**, and say what needs correcting (at least 10 characters). The
+minutes go back to **Draft**; make the correction, then **Submit for
+Approval** again, and another officer approves them as before. Until they are
+re-approved, members do not see them. The earlier approval and your reason are
+kept in the audit log.
+
+**A published copy is marked while you correct it** _(2026-10-12)_. If the
+minutes had been published to Documents, that copy stays readable, but from the
+moment you reopen them it carries a **Being corrected** notice wherever it is
+listed in Documents: _"These minutes were reopened for correction on
+[date]. A corrected version will replace this document when it is approved."_
+The minutes page reminds you too: _"The copy published to Documents is marked
+as being corrected. Once these minutes are approved again, re-publish them to
+replace it."_ Re-approval alone does not lift the notice, because the copy in
+Documents still holds the old text. Once the corrected minutes are approved,
+click **Re-publish to Documents**: the corrected text replaces the same
+document — it is not added as a second copy — and the notice disappears.
+
+**The meeting record has a lighter approval** _(2026-10-11)_. A meeting (the
+card the minutes hang off, as opposed to the minutes themselves) carries its
+own **Draft → Pending Approval → Approved** status. One officer may move it
+through all three, but only in that order: a meeting is approved only from
+**Pending Approval**, an approved meeting is not approved again, and editing a
+meeting cannot set it to **Approved** — the server answers _"A meeting cannot
+be marked approved by editing it; submit it for approval and use Approve
+instead"_, so every approved meeting records who approved it and when.
 
 ---
 
@@ -1821,7 +1883,7 @@ Events support three check-in window modes that control when QR and manual check
 | Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `\|\|` for all optional form fields, to coerce empty strings to `undefined`.                                                                                                                                                                                                                        |
 | Calendar view not showing events                           | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter.                                                                                                                                                                            |
 | Analytics page shows no data                               | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window.                                                                                                                                                             |
-| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden — and so are "deleted" ones, which are only deactivated. |
+| Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden; switch one back on from **Events > Templates**. |
 | Waitlist not promoting attendees                           | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set.                                                                                                                                                                                                               |
 | CSV import skipping rows                                   | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures.                                                                                                                                                                                                   |
 | Draft event visible to regular members                     | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts.                                                                                                                                                                                                                          |

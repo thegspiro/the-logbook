@@ -1,6 +1,222 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), (this PR) (pass 8)
+
+---
+
+## Pass 8 (2026-10-13)
+
+**Watchdog pickup.** PR #3151 (Feature 09, Medical screening, pass 8) merged
+2026-10-13T09:12:47Z, docs-only (findings doc + `PROGRESS.md` +
+`KNOWN_LIMITATIONS.md`, no application code) — per `PROGRESS.md`'s own rule
+that is not an independently recordable event, so nothing rode along
+uncommitted from Step 0. Independently re-confirmed before starting
+(`search_pull_requests`, `is:open head:claude/security-review-`, 0 results; no
+stray `claude/security-review-*` remote branch) that no security-review PR or
+branch was open. `PROGRESS.md`'s own Open-PR narrative pointer ("next is
+Feature 10") was already current and matched the rotation table's next `⬜`.
+
+**This was not a zero-delta pass.** Unlike passes 6/7, which found nothing in
+scope had changed, a large, owner-direct file-storage hardening project
+(`docs/FILE_STORAGE_HARDENING.md`, phases 1–5, 2026-10-08 → 2026-10-12, none of
+it from this rotation) landed squarely in this feature's files between pass 7's
+baseline and today. Baseline: `fe6876cd` (PR #2962's merge). Real delta,
+confirmed by diffing file content directly against that baseline rather than
+trusting `git log` — this repository's documented orphan/squash-merge artifact
+surfaced again here (`git log fe6876cd..origin/main -- backend/app/api/public/legal.py`
+listed a commit from an _unrelated_ feature's pass that turned out, on a direct
+`git diff`, to touch zero lines of that file; content-diffing every declared
+file against `fe6876cd` is what this pass relied on, not log output):
+
+| File                                          | Diff size     | What changed                                                                                                                                               |
+| --------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `documents.py`                                | 430 lines     | New `GET /folders/role-options`; every folder-upload/move path now files into General Documents instead of leaving a document unfiled                      |
+| `documents_service.py`                        | 1281 lines    | `_settle_access_fields` (the folder-access editor, decision 27), `general_folder`/`general_root`, module-rights gating, facility-tier lock-order additions |
+| `legal_documents.py`                          | 167 lines     | New `GET /{document_type}/revisions` (DOC-8 paging)                                                                                                        |
+| `legal_service.py`                            | 215 lines     | `list_revisions_page`, `_assert_under_draft_cap` (DOC-8 cap)                                                                                               |
+| `models/document.py`                          | 484 lines     | `system_folder_fields`, per-module `*_FOLDER_PERMISSIONS` lists, `FACILITY_SUB_FOLDERS` tiers                                                              |
+| `models/legal.py`                             | 87 lines      | mypy `Mapped`/`mapped_column` typing pass, no behavior change                                                                                              |
+| `schemas/documents.py` / `schemas/legal.py`   | 67 / 29 lines | `FolderRoleOption`, `under_correction_since`, paging schemas                                                                                               |
+| `mcp/tools/documents.py`                      | 51 lines      | `_open_folder_ids` now the SQL-CTE shape (already credited to PR #2954 in pass 7)                                                                          |
+| `station_documents.py`, `api/public/legal.py` | 0 lines       | byte-identical to pass 7's baseline                                                                                                                        |
+| `print_document_service.py`                   | 25 lines      | mypy-only helper extraction, no behavior change                                                                                                            |
+| `document_service.py`                         | 107 lines     | `system_folder_fields` reuse; `under_correction_since` cleared on republish                                                                                |
+
+All of it read in full against current code (not sampled against the diff),
+and all of it credited to the owner-direct hardening project rather than to
+this rotation, per the established precedent for cross-cutting work landing in
+this feature's files (pass 7's treatment of PR #2954; the FAC-22–45 work
+before it).
+
+### DOC-8 — now fully resolved (was: owner decision, pending, as of pass 7)
+
+Pass 7 (2026-10-06) left DOC-8 open, an owner decision. It was resolved in two
+owner-direct commits after that pass closed: `d7a7fadd` (2026-10-11, paging —
+`GET /legal-documents` now returns the first 10 drafts and first 10 history
+entries per document type plus totals; `GET /legal-documents/{document_type}/revisions`
+serves the rest) and `46bc7ff7` (2026-10-12, a per-member-per-type cap of 10
+open drafts on `create_draft`, under a locked `users` row and a locking count
+— pitfall #27's both halves). Independently re-verified this pass, not merely
+credited from the commit messages:
+
+- `LegalDocumentService.list_revisions_page` (`legal_service.py:119-160`) is a
+  real SQL `LIMIT`/`OFFSET` query, newest-first with `id` as a tie-breaker, not
+  a slice of an already-materialized list.
+- `_assert_under_draft_cap` (`legal_service.py:250-304`) locks the proposer's
+  own `users` row (org-scoped) before a locking `COUNT`, matching pitfall #27's
+  "the count itself must be a locking read" — a plain `SELECT` under
+  REPEATABLE READ would answer from a snapshot that predates the lock. Capped
+  at exactly `MAX_OPEN_DRAFTS_PER_MEMBER = 10`, counting only `status ==
+DRAFT`; publish/withdraw both free the slot.
+- `GET /legal-documents` (`legal_documents.py:70-148`) calls
+  `list_revisions_page` with `REVISION_PAGE_SIZE = 10` for both kinds, both
+  document types — eight bounded queries, never an unbounded `.all()`.
+- `docs/KNOWN_LIMITATIONS.md`'s "Documents — Legal Revision History Is
+  Unbounded" entry is already marked resolved for both halves (reading
+  2026-10-11, creation 2026-10-12) — no correction needed there.
+
+**Disposition: FIXED** (by owner-direct work, outside this rotation; verified
+sound here). No sibling of this class remains open in this feature.
+
+### Everything else re-verified good, including the new surface ✅
+
+- **Every document is now filed in a folder (Phase 5, 2026-10-11).**
+  `upload_document` (`documents.py:434-454`) and `update_document`'s
+  `folder_id: null` handling (`documents.py:680-684`) both resolve to
+  `general_folder()` instead of leaving (or moving to) `folder_id = NULL`,
+  closing the prior "unfiled documents are organization-wide, outside every
+  folder's rights" gap. `general_folder`/`general_root`
+  (`documents_service.py:383-421`) only ever resolve the existing General
+  Documents system root or create one from `system_folder_fields("general")`
+  — never a client-controllable shape. Migration `dcb8a46ac50c` backfills rows
+  already unfiled, table-existence-guarded, reversible, and the General root it
+  creates is recorded so a downgrade can remove it only if still empty — read
+  in full, matches `docs/rules/migrations.md`.
+- **The folder-access editor (decision 27) cannot be used to self-escalate.**
+  `_settle_access_fields` (`documents_service.py:737-834`): `required_permissions`
+  is validated against `get_all_permissions()`'s real catalog (unknown
+  permission → 400); `allowed_roles` is validated against the caller's own
+  organization's `Position.slug` rows (DOC-6-shaped FK check, not a bare
+  string); a personal (`OWNER`-visibility) folder's access fields are frozen
+  once created (re-sending the stored values is a no-op, anything else is a 400) — confirmed this holds on _create_ too (there is no path to create a new
+  `OWNER` folder for someone else and no acting-user shut-out check skip).
+  Every create/update that changes an access field re-checks
+  `can_access_folder(..., require_write=True)` against the acting user
+  afterward and rolls back with `_SHUT_OUT_MESSAGE` if it would lock them out —
+  verified this is not merely a message check but an actual `ValueError` raise
+  before `commit()` (`create_folder`/`update_folder`,
+  `documents_service.py:281-288`, `723-731`). A built-in (system) folder's own
+  module-rights list (`required_permissions`) cannot be changed at all, only
+  narrowed with `allowed_roles`/leadership visibility — `is_system` is not a
+  client-settable field on `DocumentFolderCreate`/`Update`
+  (`schemas/documents.py`), so a caller cannot fabricate a folder the editor
+  would treat as built-in.
+- **Nesting cannot bypass a restrictive ancestor.** Traced the scenario a
+  reviewer would reach for: a `documents.manage` + `members.manage` holder
+  creating a wide-open child folder inside the gated Member Separations root.
+  `can_access_folder`'s walk is an AND up the whole ancestry
+  (`documents_service.py:485-537`), so an open child still fails at its
+  restrictive parent for anyone who does not hold `members.manage` — the
+  child's own permissiveness never short-circuits the parent's gate. No
+  escalation path found.
+- **Module-rights gating (decision 19) matches the baseline permission set,
+  deliberately.** Checked every new `*_FOLDER_PERMISSIONS` list
+  (`models/document.py:63-96`) against `DEFAULT_POSITIONS["member"]`/
+  `_LINE_MEMBER_PERMISSIONS` in `core/permissions.py`: `training.view` and
+  `events.view` _are_ baseline (every member holds them), so Training
+  Materials and Event Attachments stay exactly as open as they were before
+  this project (`ORGANIZATION` visibility, open to every `documents.view`
+  holder, itself baseline) — not a widening. `apparatus.*`,
+  `finance.view`/`manage`/`approve` and `members.manage` are **not** baseline
+  (`finance.request`, which every member holds, is absent from the Finance
+  gate list) — so Apparatus Files, Finance, and Member Separations are
+  correctly narrower than the org-wide baseline, matching their sensitivity.
+- **Finance-receipt and apparatus-photo downloads cannot be used to read an
+  arbitrary document.** Both `folder_rights=False` call sites
+  (`finance.py:4061-4069`, `4162-4169`) pass `module_documents.serve_document`
+  a `document_id` read off an already org-and-record-scoped row
+  (`pr.receipt_document_id` / `item.receipt_document_id`, resolved only after
+  `get_purchase_request`/`_readable_expense_report` already authorized the
+  caller against that specific request or report) — never a client-supplied
+  id. The `folder_rights=False` bypass (deliberate: "a member opens the
+  receipt on their own request without holding the rights that open the
+  Finance folder") is therefore reachable only through a record the caller was
+  already independently authorized to read. The two `apparatus.py` call sites
+  use the default `folder_rights=True` (full folder ACL) and also resolve
+  `photo.document_id` off an org/apparatus-scoped row, never client input.
+- **DOC-4 is fixed** (`get_summary`, `documents_service.py:2697-2739`, applies
+  `_document_access_predicate`/`accessible_folder_ids` to both the document and
+  folder aggregates) — already credited as "intact" in pass 7's "Re-verified
+  good" list; re-confirmed directly by reading the method, not by trusting that
+  list.
+- **Route re-enumeration (AST walk, all 22 routes — up from 20 at pass 7, both
+  additions accounted for above: `GET /folders/role-options`,
+  `GET /{document_type}/revisions`).** Every route carries an explicit auth
+  dependency; no permission OR-gate includes a baseline/rank-default grant
+  (re-checked `documents.view`/`.manage`/`legal.propose`/`.publish`/
+  `settings.manage` against the baseline sets above — none present).
+  `GET /folders/role-options` (`documents.py:206-226`, `documents.manage`) is a
+  slug/name projection of the org's own `Position` rows, nothing sensitive, and
+  is itself org-scoped.
+- **Upload hardening, download path containment, encryption at rest, and
+  malware scanning** (the new `FileStorageService`/`file_encryption.py`
+  infrastructure the hardening project introduced) are shared cross-feature
+  infrastructure, read to the extent this feature's own invariants depend on
+  them: `area_directory`/`resolve` (`file_storage_service.py:142-192`) use
+  `_valid_segment` to reject any id containing `/`, `\`, NUL, `.` or `..`
+  before it ever becomes a path component, and `resolve`'s containment check
+  appends `os.sep` before the `startswith` comparison (so `/uploads/org-1`
+  cannot match a path under `/uploads/org-12`) — the exact prefix-confusion
+  shape this class of bug usually takes, already closed. `write_atomically`
+  encrypts before the write and uses a temp-name-then-`os.replace` so a reader
+  never observes a partial file. A full review of this shared infrastructure
+  (it also serves Events, Training, Applicants, Suggestions and Email
+  attachments) belongs to Feature 00/33, not this feature's scope; this pass
+  verified only that nothing it does regresses Documents & Legal's own
+  tenant-isolation and ACL invariants, and found nothing that does.
+- **Every SET NULL FK is nullable** (re-checked `models/document.py` and
+  `models/legal.py` in full, not sampled): `DocumentFolder.owner_user_id`,
+  `Document.folder_id`, `LegalDocumentRevision.created_by`/`published_by`.
+- **No `dangerouslySetInnerHTML`/`innerHTML`** anywhere in
+  `frontend/src/modules/governance/` or `frontend/src/components/documents/` —
+  a legal-document body (free text a `legal.propose` holder writes) is never
+  rendered as HTML to another admin or to the public page.
+- **Migrations added this window** (`b38df38d849b`, `dcb8a46ac50c`,
+  `65128d5ccd50`, `4d8807bdd737`, plus the apparatus/finance document-link
+  migrations) all guard on table existence before altering, are reversible
+  with real `downgrade()` work, and record what they changed in a dedicated
+  backfill table so the downgrade only ever touches rows this revision itself
+  moved — matches `docs/rules/migrations.md`.
+- **`under_correction_since` (MM-17 residual) is resolved in-org.**
+  `minute_service.py`'s reopen path (`minute_service.py:641-650`) re-selects
+  the document by `id` **and** `organization_id` before setting the flag, even
+  though `published_document_id` carries no FK — the same "resolve a
+  plain-column reference in-org before trusting it" pattern pitfall #14c calls
+  for.
+
+**0 new findings, 0 fixes needed** (DOC-8's fix was already complete before
+this pass began; credited above, not reopened). No standing OPEN finding
+remains for this feature.
+
+## Completion gate
+
+| Check                                                                                                      | Result                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                     | none — DOC-8 already fixed by owner-direct work (PRs outside this rotation) before this pass began; no new finding to fix                                                                                                              |
+| `flake8 app/ tests/ alembic/`                                                                              | clean                                                                                                                                                                                                                                  |
+| `black --check app/ tests/ alembic/`                                                                       | clean, 2257 files unchanged                                                                                                                                                                                                            |
+| `isort --check-only app/ tests/ alembic/`                                                                  | clean                                                                                                                                                                                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                          | 585 revisions, single head `4d8807bdd737`                                                                                                                                                                                              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                          | 268 routes, 0 errors, 0 warnings                                                                                                                                                                                                       |
+| `pytest tests/ -k "document or legal or station_document or facility_folder"`                              | 505 passed, 1 skipped (pre-existing, `pywebpush`), 0 failed (first run failed on a local DB one migration behind — `documents.under_correction_since` — fixed with `alembic upgrade head`, same pre-existing-stale-DB shape as pass 7) |
+| `pytest tests/ -m "not integration and not slow and not docker"` (full backend unit suite)                 | 14600 passed, 1 skipped (pre-existing), 0 failed                                                                                                                                                                                       |
+| `npm run typecheck` (frontend)                                                                             | clean                                                                                                                                                                                                                                  |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                             | clean, 0 warnings                                                                                                                                                                                                                      |
+| Scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`, `legalDocumentsStore`, `FolderManageDialog`) | 61 passed (4 files)                                                                                                                                                                                                                    |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
@@ -1653,7 +1869,20 @@ transient `LegalDocumentRevision`/`SimpleNamespace` user (no DB needed, since
 the guard reads only `created_by` and the caller's `positions`/`rank`):
 `tests/test_legal_documents.py::TestAssertMayModify`.
 
-### DOC-8 — MED — `LegalDocumentService.list_revisions` is unbounded — 🚩 flagged, not fixed
+### DOC-8 — MED — `LegalDocumentService.list_revisions` is unbounded — ✅ resolved (owner decisions 2026-10-11, 2026-10-12)
+
+**Status (2026-10-12):** both halves are closed by owner decision. Reading was
+paged on 2026-10-11 — the overview carries the first ten drafts and the first
+ten history entries plus their totals, and
+`GET /legal-documents/{document_type}/revisions` serves the rest
+(`tests/test_legal_documents_paging.py`). Creation was capped on 2026-10-12 —
+`LegalDocumentService.create_draft` refuses a member's eleventh open draft
+(status `draft`) per document type with a 400, under a lock on the proposer's
+org-scoped `users` row and a locking count (pitfall #27); publishing or
+withdrawing one frees the slot (`tests/test_legal_documents_draft_cap.py`,
+`tests/test_capacity_locking.py::TestLegalDraftCap`). See the
+`KNOWN_LIMITATIONS.md` entry "Documents — Legal Revision History Is Unbounded".
+The original finding follows unchanged.
 
 `list_revisions` (`legal_service.py:97-103`) runs `.all()` with no SQL
 `LIMIT`/`OFFSET`, and `GET /legal-documents` (`legal_documents.py:65-136`)

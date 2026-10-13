@@ -143,9 +143,9 @@ describe('VariantGroupsPage', () => {
     expect(await screen.findByText(/Stock Matrix/)).toBeInTheDocument();
   });
 
-  // It told the quartermaster to "assign them to this group", which no form
-  // in the app can do.
-  it('does not send an empty group to a step that does not exist', async () => {
+  // It once told the quartermaster to "assign them to this group" when no form
+  // could; the item form's Variant Group picker now does (W40-7).
+  it('points an empty group at the item form picker', async () => {
     mockGetVariantGroups.mockResolvedValue([makeGroup()]);
     mockGetVariantGroup.mockResolvedValue(makeGroup({ items: [] }));
     const user = userEvent.setup();
@@ -154,7 +154,7 @@ describe('VariantGroupsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'View Class A Uniform' }));
 
-    expect(await screen.findByText(/can't be added to an existing group from the app yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/choosing this group under Variant Group/)).toBeInTheDocument();
     expect(screen.queryByText(/assign them to this group/)).not.toBeInTheDocument();
   });
 

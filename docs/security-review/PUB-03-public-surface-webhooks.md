@@ -993,7 +993,7 @@ source by AST. A name that exists on only one of the three now fails a test
 rather than a public website. Reverting `PublicEvent` to its pre-fix
 declaration fails six of them. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
-#### PUB-8 — LOW — The public portal access log recorded successes only — ✅ FIXED (in part) / 🚩 FLAGGED (in part)
+#### PUB-8 — LOW — The public portal access log recorded successes only — ✅ FIXED (401 logging 2026-10-11, retention 2026-10-12)
 
 **What:** `log_access` ends at `db.flush()`, so the row's fate is the request
 transaction's — and `get_db` rolls that back on any raised exception. All six
@@ -1078,6 +1078,25 @@ key" 401 — where no key resolved at all — remains blocked on the
 `organization_id`/`config_id` nullable-column migration described above; it
 is the one case with nothing to attribute the row to. `docs/KNOWN_LIMITATIONS.md`'s
 PUB-8 row is updated to match.
+
+**Resolved 2026-10-11 — the unknown-key 401 is recorded too.** Migration
+`e6d21e605d99` made `organization_id`/`config_id` nullable, and
+`authenticate_api_key` now logs every refusal; a row for a key that matches
+nothing is platform-level (no organization). See the PUB-8 row in
+`docs/KNOWN_LIMITATIONS.md` and `tests/test_public_portal_failed_auth_logging.py`.
+
+**Retention resolved 2026-10-12 (owner decision).** Logging every 401 left
+the residual that nothing pruned `public_portal_access_log`, so the table grew
+with failed traffic and kept each requester's IP address indefinitely. The
+new daily scheduled task `prune_public_portal_access_log`
+(`run_prune_public_portal_access_log` in `app/services/scheduled_tasks.py`)
+deletes rows older than `PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS` (90),
+successful and refused alike and platform-wide (rows with no organization
+included — a retention job, not a tenant read), selecting ids in batches of
+1,000 and committing each delete. Every window the detector and usage
+statistics read is at most 30 days, well inside the retention. Covered by
+`tests/test_prune_public_portal_access_log.py` (old rows of every kind
+deleted, recent kept, more than one batch). **PUB-8 is now fully resolved.**
 
 #### PUB-9 — LOW — `response_model_exclude_unset` was missing, so the PUB-6 defaults round-tripped as explicit `null`s — ✅ FIXED
 

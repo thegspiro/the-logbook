@@ -325,6 +325,42 @@ docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.p
 docker exec -it intranet-backend python scripts/backfill_minutes_meeting_dates.py --apply
 ```
 
+### `report_recurring_series_drift.py`
+
+**Report only — writes nothing** (W18-3, the owner's decision: officers fix
+affected series by hand, because a repair moves events members RSVP'd to).
+Lists recurring series that the two pre-W18 defects may have left wrong:
+occurrences **1 hour off** (stepped in UTC across a daylight-saving change) or
+**1 day off** (a custom-weekday, Nth-weekday or skip-date pattern matched on
+the UTC day) the date the series' own stored pattern gives under the fixed
+generator, and series **collapsed** onto one start by "This and all future
+events", with the pattern dates no occurrence holds. Each occurrence shows its
+RSVP count. Upcoming occurrences only unless `--include-past`; moves no defect
+explains are left out unless `--all-differences`.
+
+```bash
+docker exec -it intranet-backend python scripts/report_recurring_series_drift.py
+docker exec -it intranet-backend python scripts/report_recurring_series_drift.py --org "Falls Church" --include-past
+```
+
+### `rotate_applicant_status_tokens.py`
+
+Revokes the applicant status tokens printed on applicant badges before W17-3
+(2026-09-28), for **one department, on request** — the owner's decision. Every
+applicant in the department who holds a token gets a fresh one, so **every
+status link already emailed to them stops working** too; nothing is re-sent.
+Dry run by default; `--apply` writes. `--org` is required and must match one
+organization by id or exact name. One `applicant_status_tokens_rotated` audit
+event records the count and applicant ids, never a token.
+
+```bash
+# Dry run — counts the applicants, writes nothing:
+docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.py --org "Falls Church Volunteer Fire Department"
+
+# Rotate:
+docker exec -it intranet-backend python scripts/rotate_applicant_status_tokens.py --org "Falls Church Volunteer Fire Department" --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.

@@ -9,7 +9,7 @@ report exports, and xAPI ingestion.
 import io
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,7 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
-from app.utils.csv_export import SafeCsvWriter
+from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import (
@@ -52,6 +52,7 @@ from app.utils.org_timezone import (
     resolve_scheduling_timezone,
     today_in,
 )
+from app.utils.streamed_query import iter_row_batches
 
 
 def _stringify_uuids(data: dict) -> dict:
@@ -1128,6 +1129,19 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> str:
+        """The same export as one string (see ``stream_compliance_csv``)."""
+        return await collect_csv(
+            await self.stream_compliance_csv(
+                organization_id, start_date=start_date, end_date=end_date
+            )
+        )
+
+    async def stream_compliance_csv(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> AsyncIterator[str]:
         """Generate a compliance report as CSV string"""
         if not end_date:
             end_date = await resolve_org_today(self.db, organization_id)
@@ -1154,54 +1168,56 @@ class ReportExportService:
         )
         requirements = req_result.scalars().all()
 
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-
-        # Header
-        header = ["Member Name", "Email", "Total Hours", "Completed Courses"]
-        for req in requirements:
-            header.append(f"{req.name} (Status)")
-        writer.writerow(header)
-
-        # Data rows
         # "Met" is judged as of the department's today, the same day the
         # compliance screens use; a caller's end_date only bounds the rows.
         today = await resolve_org_today(self.db, organization_id)
         shifts_by_user = await load_credited_shift_dates(
             self.db, organization_id, [u.id for u in users], requirements, today, True
         )
-        for user in users:
-            records_result = await self.db.execute(
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(user.id))
-                .where(TrainingRecord.organization_id == organization_id)
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                .where(TrainingRecord.completion_date >= start_date)
-                .where(TrainingRecord.completion_date <= end_date)
-            )
-            records = records_result.scalars().all()
 
-            total_hours = sum(r.hours_completed or 0 for r in records)
-            row = [
-                f"{user.first_name} {user.last_name}",
-                user.email,
-                f"{total_hours:.1f}",
-                str(len(records)),
-            ]
+        # Written and sent one member at a time (AH-16).
+        async def chunks() -> AsyncIterator[str]:
+            writer = SafeCsvChunks()
 
-            row.extend(
-                _requirement_cells(
-                    requirements,
-                    user,
-                    records,
-                    today,
-                    shifts_by_user.get(str(user.id), []),
+            header = ["Member Name", "Email", "Total Hours", "Completed Courses"]
+            for req in requirements:
+                header.append(f"{req.name} (Status)")
+            writer.writerow(header)
+            yield writer.drain()
+
+            for user in users:
+                records_result = await self.db.execute(
+                    select(TrainingRecord)
+                    .where(TrainingRecord.user_id == str(user.id))
+                    .where(TrainingRecord.organization_id == organization_id)
+                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                    .where(TrainingRecord.completion_date >= start_date)
+                    .where(TrainingRecord.completion_date <= end_date)
                 )
-            )
+                records = records_result.scalars().all()
 
-            writer.writerow(row)
+                total_hours = sum(r.hours_completed or 0 for r in records)
+                row = [
+                    f"{user.first_name} {user.last_name}",
+                    user.email,
+                    f"{total_hours:.1f}",
+                    str(len(records)),
+                ]
 
-        return output.getvalue()
+                row.extend(
+                    _requirement_cells(
+                        requirements,
+                        user,
+                        records,
+                        today,
+                        shifts_by_user.get(str(user.id), []),
+                    )
+                )
+
+                writer.writerow(row)
+                yield writer.drain()
+
+        return chunks()
 
     async def generate_individual_csv(
         self,
@@ -1211,6 +1227,25 @@ class ReportExportService:
         end_date: Optional[date] = None,
         include_certifications: bool = True,
     ) -> str:
+        """The same export as one string (see ``stream_individual_csv``)."""
+        return await collect_csv(
+            await self.stream_individual_csv(
+                user_id,
+                organization_id,
+                start_date=start_date,
+                end_date=end_date,
+                include_certifications=include_certifications,
+            )
+        )
+
+    async def stream_individual_csv(
+        self,
+        user_id: str,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        include_certifications: bool = True,
+    ) -> AsyncIterator[str]:
         """Generate an individual training history CSV.
 
         A missing ``start_date`` means no lower bound (lifetime export).
@@ -1238,50 +1273,53 @@ class ReportExportService:
         records = records_result.scalars().all()
 
         cert_headers = ["Certification #", "Issuing Agency", "Expiration Date"]
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            [
-                "Course Name",
-                "Course Code",
-                "Training Type",
-                "Completion Date",
-                "Hours",
-                "Credit Hours",
-                *(cert_headers if include_certifications else []),
-                "Score",
-                "Instructor",
-                "Location",
-            ]
-        )
 
-        for r in records:
-            training_type = (
-                r.training_type.value
-                if hasattr(r.training_type, "value")
-                else str(r.training_type)
-            )
-            cert_cells = [
-                r.certification_number or "",
-                r.issuing_agency or "",
-                str(r.expiration_date) if r.expiration_date else "",
-            ]
+        async def chunks() -> AsyncIterator[str]:
+            writer = SafeCsvChunks()
             writer.writerow(
                 [
-                    r.course_name,
-                    r.course_code or "",
-                    training_type,
-                    str(r.completion_date) if r.completion_date else "",
-                    f"{r.hours_completed:.1f}" if r.hours_completed else "0",
-                    f"{r.credit_hours:.1f}" if r.credit_hours else "",
-                    *(cert_cells if include_certifications else []),
-                    f"{r.score:.1f}" if r.score else "",
-                    r.instructor or "",
-                    r.location or "",
+                    "Course Name",
+                    "Course Code",
+                    "Training Type",
+                    "Completion Date",
+                    "Hours",
+                    "Credit Hours",
+                    *(cert_headers if include_certifications else []),
+                    "Score",
+                    "Instructor",
+                    "Location",
                 ]
             )
 
-        return output.getvalue()
+            for r in records:
+                training_type = (
+                    r.training_type.value
+                    if hasattr(r.training_type, "value")
+                    else str(r.training_type)
+                )
+                cert_cells = [
+                    r.certification_number or "",
+                    r.issuing_agency or "",
+                    str(r.expiration_date) if r.expiration_date else "",
+                ]
+                writer.writerow(
+                    [
+                        r.course_name,
+                        r.course_code or "",
+                        training_type,
+                        str(r.completion_date) if r.completion_date else "",
+                        f"{r.hours_completed:.1f}" if r.hours_completed else "0",
+                        f"{r.credit_hours:.1f}" if r.credit_hours else "",
+                        *(cert_cells if include_certifications else []),
+                        f"{r.score:.1f}" if r.score else "",
+                        r.instructor or "",
+                        r.location or "",
+                    ]
+                )
+
+            yield writer.drain()
+
+        return chunks()
 
     async def generate_compliance_forecast(
         self, organization_id: str
@@ -1666,6 +1704,19 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> str:
+        """The same export as one string (see ``stream_bulk_csv``)."""
+        return await collect_csv(
+            await self.stream_bulk_csv(
+                organization_id, start_date=start_date, end_date=end_date
+            )
+        )
+
+    async def stream_bulk_csv(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> AsyncIterator[str]:
         """Generate a combined CSV of every member's completed training records.
 
         One row per completed record, prefixed with the member's name and
@@ -1683,68 +1734,69 @@ class ReportExportService:
         )
         users = users_result.scalars().all()
 
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            [
-                "Member Name",
-                "Email",
-                "Course Name",
-                "Course Code",
-                "Training Type",
-                "Completion Date",
-                "Hours",
-                "Credit Hours",
-                "Certification #",
-                "Issuing Agency",
-                "Expiration Date",
-                "Score",
-                "Instructor",
-                "Location",
-            ]
-        )
-
-        for user in users:
-            query = (
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(user.id))
-                .where(TrainingRecord.organization_id == organization_id)
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                .where(TrainingRecord.completion_date <= end_date)
-                .order_by(TrainingRecord.completion_date.desc())
+        async def chunks() -> AsyncIterator[str]:
+            writer = SafeCsvChunks()
+            writer.writerow(
+                [
+                    "Member Name",
+                    "Email",
+                    "Course Name",
+                    "Course Code",
+                    "Training Type",
+                    "Completion Date",
+                    "Hours",
+                    "Credit Hours",
+                    "Certification #",
+                    "Issuing Agency",
+                    "Expiration Date",
+                    "Score",
+                    "Instructor",
+                    "Location",
+                ]
             )
-            if start_date:
-                query = query.where(TrainingRecord.completion_date >= start_date)
 
-            records = (await self.db.execute(query)).scalars().all()
-            member_name = f"{user.first_name} {user.last_name}"
-
-            for r in records:
-                training_type = (
-                    r.training_type.value
-                    if hasattr(r.training_type, "value")
-                    else str(r.training_type)
+            for user in users:
+                query = (
+                    select(TrainingRecord)
+                    .where(TrainingRecord.user_id == str(user.id))
+                    .where(TrainingRecord.organization_id == organization_id)
+                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                    .where(TrainingRecord.completion_date <= end_date)
+                    .order_by(TrainingRecord.completion_date.desc())
                 )
-                writer.writerow(
-                    [
-                        member_name,
-                        user.email,
-                        r.course_name,
-                        r.course_code or "",
-                        training_type,
-                        str(r.completion_date) if r.completion_date else "",
-                        f"{r.hours_completed:.1f}" if r.hours_completed else "0",
-                        f"{r.credit_hours:.1f}" if r.credit_hours else "",
-                        r.certification_number or "",
-                        r.issuing_agency or "",
-                        str(r.expiration_date) if r.expiration_date else "",
-                        f"{r.score:.1f}" if r.score else "",
-                        r.instructor or "",
-                        r.location or "",
-                    ]
-                )
+                if start_date:
+                    query = query.where(TrainingRecord.completion_date >= start_date)
 
-        return output.getvalue()
+                records = (await self.db.execute(query)).scalars().all()
+                member_name = f"{user.first_name} {user.last_name}"
+
+                for r in records:
+                    training_type = (
+                        r.training_type.value
+                        if hasattr(r.training_type, "value")
+                        else str(r.training_type)
+                    )
+                    writer.writerow(
+                        [
+                            member_name,
+                            user.email,
+                            r.course_name,
+                            r.course_code or "",
+                            training_type,
+                            str(r.completion_date) if r.completion_date else "",
+                            f"{r.hours_completed:.1f}" if r.hours_completed else "0",
+                            f"{r.credit_hours:.1f}" if r.credit_hours else "",
+                            r.certification_number or "",
+                            r.issuing_agency or "",
+                            str(r.expiration_date) if r.expiration_date else "",
+                            f"{r.score:.1f}" if r.score else "",
+                            r.instructor or "",
+                            r.location or "",
+                        ]
+                    )
+                yield writer.drain()
+
+        return chunks()
 
     async def generate_bulk_pdf(
         self,
@@ -1829,6 +1881,19 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> str:
+        """The same export as one string (see ``stream_hours_summary_csv``)."""
+        return await collect_csv(
+            await self.stream_hours_summary_csv(
+                organization_id, start_date=start_date, end_date=end_date
+            )
+        )
+
+    async def stream_hours_summary_csv(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> AsyncIterator[str]:
         """Generate a training-hours summary CSV broken down by member,
         category, and training type (for state/annual reporting).
 
@@ -1853,73 +1918,84 @@ class ReportExportService:
         )
         users = users_result.scalars().all()
 
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            [
-                "Member Name",
-                "Email",
-                "Category",
-                "Training Type",
-                "Total Hours",
-                "Credit Hours",
-                "Records",
-            ]
-        )
-
-        for user in users:
-            query = (
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(user.id))
-                .where(TrainingRecord.organization_id == organization_id)
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                .where(TrainingRecord.completion_date <= end_date)
+        async def chunks() -> AsyncIterator[str]:
+            writer = SafeCsvChunks()
+            writer.writerow(
+                [
+                    "Member Name",
+                    "Email",
+                    "Category",
+                    "Training Type",
+                    "Total Hours",
+                    "Credit Hours",
+                    "Records",
+                ]
             )
-            if start_date:
-                query = query.where(TrainingRecord.completion_date >= start_date)
-            records = (await self.db.execute(query)).scalars().all()
 
-            buckets: Dict[tuple, Dict[str, float]] = {}
-            for r in records:
-                training_type = (
-                    r.training_type.value
-                    if hasattr(r.training_type, "value")
-                    else str(r.training_type)
+            for user in users:
+                query = (
+                    select(TrainingRecord)
+                    .where(TrainingRecord.user_id == str(user.id))
+                    .where(TrainingRecord.organization_id == organization_id)
+                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                    .where(TrainingRecord.completion_date <= end_date)
                 )
-                category = (
-                    category_names.get(str(r.category_id), "Uncategorized")
-                    if r.category_id
-                    else "Uncategorized"
-                )
-                bucket = buckets.setdefault(
-                    (category, training_type),
-                    {"hours": 0.0, "credit": 0.0, "count": 0.0},
-                )
-                bucket["hours"] += float(r.hours_completed or 0)
-                bucket["credit"] += float(r.credit_hours or 0)
-                bucket["count"] += 1
+                if start_date:
+                    query = query.where(TrainingRecord.completion_date >= start_date)
+                records = (await self.db.execute(query)).scalars().all()
 
-            member_name = f"{user.first_name} {user.last_name}"
-            for (category, training_type), agg in sorted(buckets.items()):
-                writer.writerow(
-                    [
-                        member_name,
-                        user.email,
-                        category,
-                        training_type,
-                        f"{agg['hours']:.1f}",
-                        f"{agg['credit']:.1f}",
-                        str(int(agg["count"])),
-                    ]
-                )
+                buckets: Dict[tuple, Dict[str, float]] = {}
+                for r in records:
+                    training_type = (
+                        r.training_type.value
+                        if hasattr(r.training_type, "value")
+                        else str(r.training_type)
+                    )
+                    category = (
+                        category_names.get(str(r.category_id), "Uncategorized")
+                        if r.category_id
+                        else "Uncategorized"
+                    )
+                    bucket = buckets.setdefault(
+                        (category, training_type),
+                        {"hours": 0.0, "credit": 0.0, "count": 0.0},
+                    )
+                    bucket["hours"] += float(r.hours_completed or 0)
+                    bucket["credit"] += float(r.credit_hours or 0)
+                    bucket["count"] += 1
 
-        return output.getvalue()
+                member_name = f"{user.first_name} {user.last_name}"
+                for (category, training_type), agg in sorted(buckets.items()):
+                    writer.writerow(
+                        [
+                            member_name,
+                            user.email,
+                            category,
+                            training_type,
+                            f"{agg['hours']:.1f}",
+                            f"{agg['credit']:.1f}",
+                            str(int(agg["count"])),
+                        ]
+                    )
+                yield writer.drain()
+
+        return chunks()
 
     async def generate_certification_csv(
         self,
         organization_id: str,
         end_date: Optional[date] = None,
     ) -> str:
+        """The same export as one string (see ``stream_certification_csv``)."""
+        return await collect_csv(
+            await self.stream_certification_csv(organization_id, end_date=end_date)
+        )
+
+    async def stream_certification_csv(
+        self,
+        organization_id: str,
+        end_date: Optional[date] = None,
+    ) -> AsyncIterator[str]:
         """Generate a CSV of members' certifications with expiration status
         (valid / expiring soon / expired) for renewal tracking."""
         as_of = end_date or await resolve_org_today(self.db, organization_id)
@@ -1943,58 +2019,64 @@ class ReportExportService:
                     TrainingRecord.training_type == TrainingType.CERTIFICATION,
                 )
             )
-            .order_by(TrainingRecord.expiration_date)
-        )
-        records = (await self.db.execute(query)).scalars().all()
-
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            [
-                "Member Name",
-                "Email",
-                "Certification",
-                "Certification #",
-                "Issuing Agency",
-                "Completion Date",
-                "Expiration Date",
-                "Status",
-                "Days Until Expiry",
-            ]
+            .order_by(TrainingRecord.expiration_date, TrainingRecord.id)
         )
 
-        for r in records:
-            user = user_map.get(str(r.user_id))
-            if not user:
-                # Skip records for inactive/other members.
-                continue
-            member_name = f"{user.first_name} {user.last_name}"
-            if r.expiration_date:
-                days = (r.expiration_date - as_of).days
-                if days < 0:
-                    status = "Expired"
-                elif days <= 90:
-                    status = "Expiring Soon"
-                else:
-                    status = "Valid"
-                days_str = str(days)
-                exp_str = str(r.expiration_date)
-            else:
-                status = "No Expiration"
-                days_str = ""
-                exp_str = ""
+        # Records are read through a server-side cursor a batch at a time
+        # (AH-16); user_map is loaded above because the connection cannot run
+        # another query while the cursor is open.
+        async def chunks() -> AsyncIterator[str]:
+            writer = SafeCsvChunks()
             writer.writerow(
                 [
-                    member_name,
-                    user.email,
-                    r.course_name,
-                    r.certification_number or "",
-                    r.issuing_agency or "",
-                    str(r.completion_date) if r.completion_date else "",
-                    exp_str,
-                    status,
-                    days_str,
+                    "Member Name",
+                    "Email",
+                    "Certification",
+                    "Certification #",
+                    "Issuing Agency",
+                    "Completion Date",
+                    "Expiration Date",
+                    "Status",
+                    "Days Until Expiry",
                 ]
             )
 
-        return output.getvalue()
+            yield writer.drain()
+
+            async for batch in iter_row_batches(self.db, query, scalars=True):
+                for r in batch:
+                    user = user_map.get(str(r.user_id))
+                    if not user:
+                        # Skip records for inactive/other members.
+                        continue
+                    member_name = f"{user.first_name} {user.last_name}"
+                    if r.expiration_date:
+                        days = (r.expiration_date - as_of).days
+                        if days < 0:
+                            status = "Expired"
+                        elif days <= 90:
+                            status = "Expiring Soon"
+                        else:
+                            status = "Valid"
+                        days_str = str(days)
+                        exp_str = str(r.expiration_date)
+                    else:
+                        status = "No Expiration"
+                        days_str = ""
+                        exp_str = ""
+                    writer.writerow(
+                        [
+                            member_name,
+                            user.email,
+                            r.course_name,
+                            r.certification_number or "",
+                            r.issuing_agency or "",
+                            str(r.completion_date) if r.completion_date else "",
+                            exp_str,
+                            status,
+                            days_str,
+                        ]
+                    )
+                yield writer.drain()
+
+        return chunks()

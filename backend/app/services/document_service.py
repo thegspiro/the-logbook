@@ -207,8 +207,11 @@ class DocumentService:
                 minutes.published_document_id, organization_id
             )
             if existing:
+                # Republishing replaces the document in place, so links to it
+                # stay valid, and ends any correction notice a reopen set.
                 existing.content_html = html
                 existing.name = minutes.title
+                existing.under_correction_since = None
                 existing.updated_at = datetime.now(timezone.utc)
                 await self.db.commit()
                 await self.db.refresh(existing)

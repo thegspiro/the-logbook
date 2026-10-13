@@ -497,6 +497,9 @@ stays with `inventory.check_view`.
 - **`users.edit` without `members.manage` gets no edit forms on a redacted
   colleague profile**, and profile saves now return the same redacted record a
   read does (2026-09-30).
+- **Editing a colleague's profile or contact information needs
+  `members.manage`** (2026-10-13). `users.edit` alone no longer reaches those
+  writes through the API either; a member still edits their own record.
 - **Probationary accounts are active** (2026-10-03). `ACTIVE_ACCOUNT_STATUSES =
 (ACTIVE, PROBATIONARY)`: probationary and junior members can sign in, be
   scheduled and receive messages. Before this every probationary account was

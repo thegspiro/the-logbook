@@ -41,6 +41,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { EmptyState } from '../../components/ux/EmptyState';
 import SchedulingHeader from './SchedulingHeader';
 import DriverExceptionsPanel from './DriverExceptionsPanel';
+import { useTablist } from '../../hooks/useTablist';
 
 const POSITIONS = [
   'driver',
@@ -93,6 +94,7 @@ const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string
 };
 
 const PositionRosterPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [position, setPosition] = useState<string>('driver');
@@ -184,7 +186,7 @@ const PositionRosterPage: React.FC = () => {
         description="Who is cleared for each shift position, and why"
       />
 
-      <div className="tab-scroll mb-4" role="tablist" aria-label="Qualification views">
+      <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Qualification views">
         {TABS.map((tab) => (
           <button
             key={tab.id}

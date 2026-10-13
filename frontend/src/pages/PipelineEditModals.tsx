@@ -36,6 +36,7 @@ import type {
   ProgramStructureType,
   TrainingProgram,
 } from '../types/training';
+import { useTablist } from '../hooks/useTablist';
 
 // "Sequential" is deliberately absent: nothing in the system ever enforced an
 // order between requirements, so it behaved exactly like Flexible while telling
@@ -177,26 +178,33 @@ export const EditProgramModal: React.FC<{
     }
     setSubmitting(true);
     try {
+      // An emptied field goes out as null, not an omitted key: the update is
+      // partial, so an omitted key keeps the stored value. A stale target
+      // position kept unlocking shift seats, a stale time limit kept putting
+      // deadlines on new enrollments, and a stale recert anchor kept resetting
+      // progress on the old date.
       await trainingProgramService.updateProgram(program.id, {
         name: name.trim(),
-        description: description.trim() || undefined,
-        code: code.trim() || undefined,
+        description: blankToNull(description),
+        code: blankToNull(code),
         structure_type: structureType,
-        target_position: targetPosition.trim() || undefined,
-        time_limit_days: timeLimit ? Number(timeLimit) : undefined,
-        warning_days_before: warnDays ? Number(warnDays) : undefined,
+        target_position: blankToNull(targetPosition),
+        time_limit_days: timeLimit ? Number(timeLimit) : null,
+        warning_days_before: warnDays ? Number(warnDays) : null,
         reminder_conditions: {
           days_before_deadline: parsedWarnDays.map(Number),
-          // `|| undefined` not `??`: an emptied field must clear the setting,
-          // and '' is not null.
+          // Omitting this one does clear it: the backend replaces the whole
+          // reminder_conditions object rather than merging into it.
           send_if_below_percentage: remindBelow ? Number(remindBelow) : undefined,
         },
         is_template: isTemplate,
         active,
         recert_enabled: recertEnabled,
-        recert_interval_months: recertEnabled && recertInterval ? Number(recertInterval) : undefined,
-        recert_anchor_month: recertEnabled && recertAnchorMonth ? Number(recertAnchorMonth) : undefined,
-        recert_anchor_day: recertEnabled && recertAnchorDay ? Number(recertAnchorDay) : undefined,
+        // With recert off these stay untouched (recert_enabled gates every
+        // reader), so turning it back on restores the earlier schedule.
+        recert_interval_months: recertEnabled ? (recertInterval ? Number(recertInterval) : null) : undefined,
+        recert_anchor_month: recertEnabled ? (recertAnchorMonth ? Number(recertAnchorMonth) : null) : undefined,
+        recert_anchor_day: recertEnabled ? (recertAnchorDay ? Number(recertAnchorDay) : null) : undefined,
         // Always sent: an emptied list must reach the server as [] to clear.
         prerequisite_program_ids: prerequisiteIds,
         allows_concurrent_enrollment: allowsConcurrent,
@@ -464,10 +472,11 @@ export const PhaseFormModal: React.FC<{
     setSubmitting(true);
     try {
       if (phase) {
+        // null on a clear: an omitted key keeps the stored value.
         await trainingProgramService.updateProgramPhase(programId, phase.id, {
           name: name.trim(),
-          description: description.trim() || undefined,
-          time_limit_days: timeLimit ? Number(timeLimit) : undefined,
+          description: blankToNull(description),
+          time_limit_days: timeLimit ? Number(timeLimit) : null,
           requires_manual_advancement: manual,
           prerequisite_phase_ids: prerequisites,
         });
@@ -573,6 +582,7 @@ export const RequirementFormModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ programId, phaseId, link, sortOrder, linkedRequirementIds = [], onClose, onSaved }) => {
+  const tablist = useTablist();
   const req = link?.requirement;
   const [name, setName] = useState(req?.name ?? '');
   const [description, setDescription] = useState(req?.description ?? '');
@@ -729,7 +739,7 @@ export const RequirementFormModal: React.FC<{
       submitLabel={linkingExisting ? 'Link requirement' : 'Save'}
     >
       {!link && (
-        <div className="tab-scroll" role="tablist" aria-label="How to add the requirement">
+        <div className="tab-scroll" role="tablist" {...tablist} aria-label="How to add the requirement">
           {(
             [
               { value: 'existing', label: 'Use an existing requirement' },
@@ -1010,9 +1020,11 @@ export const MilestoneFormModal: React.FC<{
       if (milestone) {
         await trainingProgramService.updateMilestone(programId, milestone.id, {
           name: name.trim(),
-          description: description.trim() || undefined,
+          description: blankToNull(description),
           completion_percentage_threshold: pct,
-          notification_message: message.trim() || undefined,
+          // null on a clear, so members get the default message again rather
+          // than the old custom text an omitted key would keep.
+          notification_message: blankToNull(message),
         });
         toast.success('Milestone updated');
       } else {

@@ -183,7 +183,7 @@ async function onboard(page, admin) {
   // required step should fail the seed loudly, not be guessed through.
   const skip = /^(skip|i'll add these later)/i;
   const advance =
-    /^(continue|save & continue)|go to dashboard|complete setup|finish setup/i;
+    /^(continue|save & continue|confirm and continue)|go to dashboard|complete setup|finish setup/i;
   const labels = () =>
     page.$$eval("main button", (buttons) =>
       buttons.map((b) =>
@@ -253,6 +253,12 @@ async function onboard(page, admin) {
         .locator("main button", { hasText: /^top navigation/i })
         .first()
         .click();
+    }
+    // Confirm and Continue stays disabled until the administrator states the
+    // encryption key is stored apart from the server. A review database's key
+    // is throwaway, so the statement costs nothing here.
+    if (path === "/onboarding/encryption-key") {
+      await page.locator("main input[type=checkbox]").first().check();
     }
     // The modules step has a Skip on every module card; skipping one is a
     // choice about that module, not about the step. Modules are enabled over

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InventoryScanModal } from './InventoryScanModal';
 
@@ -374,5 +375,72 @@ describe('InventoryScanModal NFC tags', () => {
       <InventoryScanModal isOpen={false} onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Member One" />
     );
     expect(nfcScanner.stop).toHaveBeenCalled();
+  });
+});
+
+/**
+ * INV-8: storage areas are assigned SA-… barcodes "so they can be scanned",
+ * but the lookup searched items only and a shelf label read as "No item found".
+ */
+describe('InventoryScanModal scanning a shelf label', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNfcSettings.mockReset();
+    getNfcSettings.mockResolvedValue({ enabled: false });
+    lookupByCode.mockReset();
+    lookupByCode.mockResolvedValue({
+      total: 0,
+      results: [],
+      storage_areas: [{ id: 'sa-7', name: 'Glove shelf', barcode: 'SA-0007', storage_type: 'shelf' }],
+    });
+  });
+
+  it('names the storage area and links to it instead of adding an item', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <InventoryScanModal isOpen onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Jordan Avery" />
+      </MemoryRouter>
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /Item to add/ }), 'SA-0007');
+    await waitFor(() => expect(lookupByCode).toHaveBeenCalled());
+
+    expect(await screen.findByText(/is the label for the storage area/)).toBeInTheDocument();
+    expect(screen.getByText('Glove shelf')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open storage area' })).toHaveAttribute(
+      'href',
+      '/inventory/storage-areas?area=sa-7'
+    );
+    expect(screen.queryByRole('button', { name: /Review 1 Item/ })).not.toBeInTheDocument();
+  });
+
+  it('clears the notice once a code finds items again', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <InventoryScanModal isOpen onClose={vi.fn()} mode="distribute" userId="m-1" memberName="Jordan Avery" />
+      </MemoryRouter>
+    );
+    const box = screen.getByRole('textbox', { name: /Item to add/ });
+    await user.type(box, 'SA-0007');
+    expect(await screen.findByText(/is the label for the storage area/)).toBeInTheDocument();
+
+    lookupByCode.mockResolvedValue({
+      total: 1,
+      results: [
+        {
+          matched_field: 'name',
+          matched_value: 'Nitrile Gloves',
+          item: { id: 'gloves-1', name: 'Nitrile Gloves', status: 'available', tracking_type: 'pool' },
+        },
+      ],
+      storage_areas: [],
+    });
+    await user.clear(box);
+    await user.type(box, 'Nitrile');
+
+    expect(await screen.findByText('Nitrile Gloves')).toBeInTheDocument();
+    expect(screen.queryByText(/is the label for the storage area/)).not.toBeInTheDocument();
   });
 });

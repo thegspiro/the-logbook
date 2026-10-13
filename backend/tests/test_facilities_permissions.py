@@ -479,6 +479,7 @@ async def test_shared_file_reference_files_an_unfiled_document_into_the_facility
     document = SimpleNamespace(id=str(uuid4()), folder_id=None)
     facility = SimpleNamespace(id=facility_id, name="Station 1")
     folder = SimpleNamespace(id="folder-1")
+    sub_folder = SimpleNamespace(id="sub-folder-1")
     db = AsyncMock()
 
     with patch(
@@ -490,13 +491,18 @@ async def test_shared_file_reference_files_an_unfiled_document_into_the_facility
     ), patch(
         "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
         new=AsyncMock(return_value=folder),
-    ) as ensure:
+    ) as ensure, patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_sub_folder",
+        new=AsyncMock(return_value=sub_folder),
+    ) as ensure_sub:
         await _validate_shared_document_reference(
-            db, f"document:{document.id}", user, facility_id
+            db, f"document:{document.id}", user, facility_id, "documents"
         )
 
-    assert document.folder_id == "folder-1"
+    # Filed into the named sub-folder, never the facility's own folder (FAC-13).
+    assert document.folder_id == "sub-folder-1"
     assert str(ensure.await_args.args[1]) == facility_id
+    assert ensure_sub.await_args.args[1:] == (folder, "documents")
 
 
 @pytest.mark.asyncio
@@ -527,9 +533,12 @@ async def test_shared_file_reference_leaves_an_already_filed_document_alone():
     ), patch(
         "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
         new=AsyncMock(),
-    ) as ensure:
+    ) as ensure, patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_sub_folder",
+        new=AsyncMock(),
+    ):
         await _validate_shared_document_reference(
-            AsyncMock(), f"document:{document.id}", user, str(uuid4())
+            AsyncMock(), f"document:{document.id}", user, str(uuid4()), "photos"
         )
 
     assert document.folder_id == "somewhere-else"
@@ -548,12 +557,15 @@ async def test_shared_file_reference_rejects_cross_organization_document():
         "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
         new=AsyncMock(),
     ), patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_sub_folder",
+        new=AsyncMock(),
+    ), patch(
         "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
         new=AsyncMock(return_value=None),
     ) as lookup:
         with pytest.raises(HTTPException) as exc:
             await _validate_shared_document_reference(
-                AsyncMock(), f"document:{uuid4()}", user, str(uuid4())
+                AsyncMock(), f"document:{uuid4()}", user, str(uuid4()), "documents"
             )
     assert exc.value.status_code == 404
     assert str(lookup.await_args.args[1]) == user.organization_id

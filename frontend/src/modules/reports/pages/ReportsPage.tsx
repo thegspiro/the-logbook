@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { Link } from 'react-router';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import {
   FileText,
@@ -136,8 +137,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'training-summary',
-    title: 'Training Summary',
-    description: 'Training hours and completion rates by member, course, and requirement',
+    title: 'Training & Program Progress Summary',
+    description:
+      'Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance',
     icon: 'TrendingUp',
     category: 'training',
     available: true,
@@ -197,8 +199,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'compliance-status',
-    title: 'Compliance Status',
-    description: "Each member's compliance with training requirements, with overdue items and upcoming deadlines",
+    title: 'Program Requirement Progress',
+    description:
+      "Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance",
     icon: 'Shield',
     category: 'compliance',
     available: true,
@@ -271,6 +274,7 @@ export const ReportsPage: React.FC = () => {
     generatingReportType,
     activeReportData,
     activeReportType,
+    activeReportLabel,
     datePreset,
     startDate,
     endDate,
@@ -428,12 +432,20 @@ export const ReportsPage: React.FC = () => {
               <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Reports</h1>
               <p className="text-theme-text-secondary">Run department reports and export them to CSV or PDF</p>
             </div>
-            <HelpLink
-              topic="reports"
-              variant="icon"
-              tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
-              tooltipPosition="left"
-            />
+            <div className="flex items-center gap-2">
+              <Link
+                to="/reports/saved"
+                className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
+              >
+                Saved reports
+              </Link>
+              <HelpLink
+                topic="reports"
+                variant="icon"
+                tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
+                tooltipPosition="left"
+              />
+            </div>
           </div>
         </div>
 
@@ -554,14 +566,19 @@ export const ReportsPage: React.FC = () => {
                   )}
                 </div>
 
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">{report.title}</h3>
+                <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">{report.title}</h2>
                 <p className="text-theme-text-secondary mb-4 text-sm">{report.description}</p>
 
                 {report.available && (
+                  // aria-disabled rather than disabled: a disabled button drops
+                  // focus to <body>, so the results dialog would record <body>
+                  // as its opener and have nowhere to return focus on close.
                   <button
-                    disabled={isGenerating}
-                    className="btn-primary flex w-full items-center justify-center space-x-2 text-sm font-medium disabled:cursor-wait disabled:opacity-70"
+                    type="button"
+                    aria-disabled={isGenerating}
+                    className="btn-primary flex w-full items-center justify-center space-x-2 text-sm font-medium aria-disabled:cursor-wait aria-disabled:opacity-70"
                     onClick={() => {
+                      if (isGenerating) return;
                       void handleGenerateReport(report);
                     }}
                   >
@@ -587,7 +604,7 @@ export const ReportsPage: React.FC = () => {
         {filteredReports.length === 0 && (
           <div className="py-12 text-center">
             <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-            <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h3>
+            <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h2>
             <p className="text-theme-text-muted">Try selecting a different category</p>
           </div>
         )}
@@ -597,7 +614,7 @@ export const ReportsPage: React.FC = () => {
           <div className="flex items-start space-x-3">
             <AlertCircle className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">How Reports Work</h4>
+              <h2 className="text-theme-alert-info-title mb-1 text-sm font-medium">How Reports Work</h2>
               <p className="text-theme-alert-info-text text-sm">
                 Reports use live data. Reports marked Date Range cover the reporting period above. Export any report to
                 CSV or print it to PDF, and use Compare in an open report to see the previous period of the same length
@@ -630,13 +647,19 @@ export const ReportsPage: React.FC = () => {
                         })}
                       </div>
                       <div>
-                        <h3 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
+                        <h2 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
                           {activeCard.title}
-                        </h3>
-                        {activeCard.usesDateRange && startDate && endDate && (
-                          <p className="text-theme-text-muted mt-0.5 text-xs">
-                            {startDate} — {endDate}
-                          </p>
+                        </h2>
+                        {activeReportLabel ? (
+                          <p className="text-theme-text-muted mt-0.5 text-xs">Saved report: {activeReportLabel}</p>
+                        ) : (
+                          activeCard.usesDateRange &&
+                          startDate &&
+                          endDate && (
+                            <p className="text-theme-text-muted mt-0.5 text-xs">
+                              {startDate} — {endDate}
+                            </p>
+                          )
                         )}
                       </div>
                     </div>
@@ -678,10 +701,10 @@ export const ReportsPage: React.FC = () => {
                   {comparisonData && comparisonPeriod && (
                     <div className="border-theme-surface-border mt-6 border-t pt-6">
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                           <GitCompareArrows className="h-4 w-4" />
                           Previous Period: {comparisonPeriod.start} — {comparisonPeriod.end}
-                        </h4>
+                        </h3>
                         <button
                           type="button"
                           onClick={clearComparison}

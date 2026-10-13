@@ -1844,6 +1844,102 @@ class EquipmentCheckService:
                 f"{check_type} observation"
             )
 
+    @classmethod
+    def _failure_needs_note(
+        cls,
+        status: Optional[str],
+        quantity_found: Optional[int],
+        level_reading: Optional[float],
+        template_item: Optional[CheckTemplateItem],
+        submitted_expiration: Optional[date],
+        today: date,
+    ) -> bool:
+        """Whether this answer is a failure only a note can explain (W46-13).
+
+        Mirrors ``failureNeedsNote`` in the check form exactly, so a payload
+        the form would send is never refused here. A count or a reading carries
+        its own number, and an expired unit carries its date; what does not
+        explain itself is a crew member's own Fail or Out of service, which
+        without a note tells the officer only that something failed — or takes
+        the rig off the fleet board with no reason recorded.
+
+        Expiry is exempt if *either* date the system holds says expired: the
+        form reads the soonest lot aboard (``_soonest_expiration``), while the
+        force-fail in ``_compute_check_status`` reads the item's own column.
+        Taking either keeps the exemption at least as wide as the form's.
+        """
+        if status not in ("fail", "out_of_service"):
+            return False
+        if quantity_found is not None or level_reading is not None:
+            return False
+        if template_item is not None:
+            dates = [
+                cls._soonest_expiration(template_item),
+                cls._resolve_expiration({}, template_item),
+            ]
+        else:
+            dates = [submitted_expiration]
+        return not any(d is not None and d < today for d in dates)
+
+    @classmethod
+    def _require_failure_notes(
+        cls,
+        items_data: List[Dict[str, Any]],
+        template_items_map: Dict[str, CheckTemplateItem],
+        *,
+        today: date,
+        existing_map: Optional[Dict[str, ShiftEquipmentCheckItem]] = None,
+    ) -> None:
+        """Refuse a submission whose chosen failures carry no note.
+
+        Runs before anything is written. ``existing_map`` is the resumed
+        check's stored rows: ``complete_incomplete_check`` keeps a stored
+        value for any key the request omits, so the verdict has to be made on
+        the merged answer, not the request alone. A whitespace-only note is
+        no note — the form trims before it decides.
+        """
+        missing: List[str] = []
+        for item in items_data:
+            tmpl_id = str(item.get("template_item_id") or "")
+            existing = (existing_map or {}).get(tmpl_id)
+            status = item.get("status", "not_checked")
+            if existing is not None:
+                # Same merge complete_incomplete_check applies to the status.
+                if existing.status != "not_checked" and status == "not_checked":
+                    status = existing.status
+                notes = item["notes"] if "notes" in item else existing.notes
+                quantity = item.get("quantity_found", existing.quantity_found)
+                reading = item.get("level_reading", existing.level_reading)
+            else:
+                notes = item.get("notes")
+                quantity = item.get("quantity_found")
+                reading = item.get("level_reading")
+            if not cls._failure_needs_note(
+                status,
+                quantity,
+                reading,
+                template_items_map.get(tmpl_id),
+                item.get("expiration_date"),
+                today,
+            ):
+                continue
+            if notes and notes.strip():
+                continue
+            name = str(item.get("item_name") or "Unnamed item")
+            missing.append(name if len(name) <= 40 else name[:39] + "…")
+
+        if not missing:
+            return
+        # Bounded so the message stays under safe_error_detail's length cap,
+        # which would otherwise replace it with a generic error.
+        shown = ", ".join(missing[:3])
+        if len(missing) > 3:
+            shown += f" and {len(missing) - 3} more"
+        raise ValueError(
+            "Add a note saying what's wrong to each item marked Fail or "
+            f"Out of service: {shown}"
+        )
+
     @staticmethod
     def _snapshot_from_template(
         item: Dict[str, Any],
@@ -1989,6 +2085,7 @@ class EquipmentCheckService:
         else:
             # Shift checks without a template have no authoritative item set.
             template_items_map = {}
+        self._require_failure_notes(items_data, template_items_map, today=today)
 
         # Prevent duplicate submission for same shift+template
         if template_id:
@@ -2252,6 +2349,7 @@ class EquipmentCheckService:
         self._validate_and_snapshot_submission(
             items_data, template_items_map, require_all=False, today=today
         )
+        self._require_failure_notes(items_data, template_items_map, today=today)
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map, today=today
         )
@@ -2360,6 +2458,9 @@ class EquipmentCheckService:
         today = await resolve_org_today(self.db, organization_id)
         self._validate_and_snapshot_submission(
             items_data, template_items_map, today=today
+        )
+        self._require_failure_notes(
+            items_data, template_items_map, today=today, existing_map=existing_map
         )
 
         for item_data in items_data:
@@ -4568,7 +4669,7 @@ class EquipmentCheckService:
         *,
         user_id: str,
         user_name: str,
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Any]:
         """Apply a reviewed set of links that may span many templates.
 
         All or nothing, for the same reason as ``link_inventory_items``.
@@ -4577,16 +4678,24 @@ class EquipmentCheckService:
         officer reviewed was a snapshot; if somebody linked one of those
         positions in the builder since, their choice stands and the position
         comes back in ``skipped`` rather than being silently overwritten.
+        ``skipped_positions`` names each one, with what it is linked to now and
+        what the officer chose, so the screen can say where to look instead of
+        reporting a bare count.
         Unlinking is not offered here — this screen only ever showed unlinked
         positions, so there is nothing on it to undo.
         """
         if not links:
-            return {"linked": 0, "skipped": 0}
+            return {"linked": 0, "skipped": 0, "skipped_positions": []}
 
         # XC-1: every template item id is resolved through an org-scoped
         # template, never by id alone.
         result = await self.db.execute(
-            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            select(
+                CheckTemplateItem,
+                EquipmentCheckTemplate.id,
+                EquipmentCheckTemplate.name,
+                CheckTemplateCompartment.name,
+            )
             .join(
                 CheckTemplateCompartment,
                 CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
@@ -4601,7 +4710,10 @@ class EquipmentCheckService:
             )
             .with_for_update()
         )
-        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        found = {
+            item.id: (item, template_id, template_name, compartment_name)
+            for item, template_id, template_name, compartment_name in result.all()
+        }
         unknown = set(links) - set(found)
         if unknown:
             raise ValueError(
@@ -4624,11 +4736,21 @@ class EquipmentCheckService:
             )
 
         linked = 0
-        skipped = 0
+        skipped: List[Dict[str, Any]] = []
         for item_id, inventory_item_id in links.items():
-            item, template_id = found[item_id]
+            item, template_id, template_name, compartment_name = found[item_id]
             if item.inventory_item_id:
-                skipped += 1
+                skipped.append(
+                    {
+                        "template_item_id": item.id,
+                        "item_name": item.name,
+                        "template_id": template_id,
+                        "template_name": template_name,
+                        "compartment_name": compartment_name,
+                        "current_inventory_item_id": str(item.inventory_item_id),
+                        "chosen_inventory_item_id": str(inventory_item_id),
+                    }
+                )
                 continue
             item.inventory_item_id = str(inventory_item_id)
             await self.log_template_change(
@@ -4647,8 +4769,33 @@ class EquipmentCheckService:
             )
             linked += 1
 
+        # Names for both sides of each conflict, org-scoped like every other
+        # read here: a stored link is not proof the item is in this org.
+        if skipped:
+            ids = {s["current_inventory_item_id"] for s in skipped} | {
+                s["chosen_inventory_item_id"] for s in skipped
+            }
+            named = await self.db.execute(
+                select(InventoryItem.id, InventoryItem.name).where(
+                    InventoryItem.id.in_(ids),
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+            names = {str(row_id): name for row_id, name in named.all()}
+            for entry in skipped:
+                entry["current_inventory_item_name"] = names.get(
+                    entry["current_inventory_item_id"]
+                )
+                entry["chosen_inventory_item_name"] = names.get(
+                    entry["chosen_inventory_item_id"]
+                )
+
         await self.db.commit()
-        return {"linked": linked, "skipped": skipped}
+        return {
+            "linked": linked,
+            "skipped": len(skipped),
+            "skipped_positions": skipped,
+        }
 
     # ------------------------------------------------------------------
     # Private Helpers

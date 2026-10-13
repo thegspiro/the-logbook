@@ -1,7 +1,7 @@
 /**
  * Event Templates Page
  *
- * Lists all event templates with create, edit, delete, and toggle active actions.
+ * Lists all event templates with create, edit, deactivate, and toggle active actions.
  * Accessible to users with events.manage permission.
  */
 
@@ -9,7 +9,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { FileText, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowLeft, Clock } from 'lucide-react';
+import { FileText, Plus, Pencil, Archive, ToggleLeft, ToggleRight, ArrowLeft, Clock } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
@@ -26,7 +26,9 @@ export const EventTemplatesPage: React.FC = () => {
   const [editingTemplate, setEditingTemplate] = useState<EventTemplate | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Delete confirmation state
+  // Deactivate confirmation state. The backend's DELETE soft-deletes (it sets
+  // is_active=False so events created from the template keep their reference),
+  // so the action is labelled as what it does (W21-5).
   const [deleteTarget, setDeleteTarget] = useState<EventTemplate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -100,11 +102,11 @@ export const EventTemplatesPage: React.FC = () => {
     setIsDeleting(true);
     try {
       await eventService.deleteTemplate(deleteTarget.id);
-      toast.success('Template deleted');
+      toast.success('Template deactivated');
       setDeleteTarget(null);
       void fetchTemplates();
     } catch {
-      toast.error('Failed to delete template');
+      toast.error('Failed to deactivate template');
     } finally {
       setIsDeleting(false);
     }
@@ -270,14 +272,16 @@ export const EventTemplatesPage: React.FC = () => {
                     >
                       <Pencil className="h-5 w-5" />
                     </button>
-                    <button
-                      onClick={() => setDeleteTarget(template)}
-                      className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-red-600 dark:hover:text-red-400"
-                      title="Delete template"
-                      aria-label={`Delete ${template.name}`}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
+                    {template.is_active && (
+                      <button
+                        onClick={() => setDeleteTarget(template)}
+                        className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
+                        title="Deactivate template…"
+                        aria-label={`Deactivate ${template.name}…`}
+                      >
+                        <Archive className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -314,13 +318,14 @@ export const EventTemplatesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirmation */}
+      {/* Deactivate Confirmation */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        title="Delete Template"
-        message={`Delete "${deleteTarget?.name ?? ''}"? You can't undo this.`}
-        confirmLabel="Delete Template"
-        variant="danger"
+        title="Deactivate Template"
+        message={`Deactivate "${deleteTarget?.name ?? ''}"? It will no longer be offered when creating an event. Events already created from it are not affected, and you can reactivate it at any time with its switch.`}
+        confirmLabel="Deactivate"
+        cancelLabel="Keep it active"
+        variant="warning"
         loading={isDeleting}
         onConfirm={() => {
           void handleDeleteConfirm();

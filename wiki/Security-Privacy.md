@@ -246,6 +246,11 @@ task.
   — an infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
+- **Public-portal access logs** (each request to the public API, including
+  refused authentications, with the requester's IP address) are kept **90
+  days**, a fixed platform-wide period, and deleted daily by the
+  `prune_public_portal_access_log` task _(2026-10-12)_. It is not configurable
+  per department.
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 
@@ -346,6 +351,12 @@ screen and an update sends blanks as `null`, so a save would have erased every
 field the editor was never shown. Which viewer got the full record is read from
 the payload (the server keeps `profile_visibility` only for those it does not
 redact), not re-derived from local permissions.
+
+**Editing a colleague's profile needs `members.manage`** _(2026-10-13)_. Hiding
+the forms left the two write routes open to a `users.edit` holder calling the
+API directly. `PATCH /users/{id}/profile` and `/contact-info` now accept only
+the member themselves and `members.manage` holders, so the write responses
+need no redaction of their own.
 
 **A colleague's ID card is not directory information** _(2026-09-30)_. The ID
 Card page assembled a scannable badge — QR code and barcode — for any member

@@ -65,6 +65,17 @@ describe('TemplateList', () => {
     expect(screen.getByText('Elections & Voting')).toBeInTheDocument();
   });
 
+  // W19-1: the waitlist-promotion email is an event notice, not "Other".
+  it('files the off-the-waitlist email under Events & Scheduling', () => {
+    const templates = [makeTemplate({ id: '1', name: 'Off the Waitlist', template_type: 'event_waitlist_promotion' })];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText('Events & Scheduling')).toBeInTheDocument();
+    expect(screen.queryByText('Other')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Off the Waitlist/ })).toHaveAttribute('title', 'Off the Waitlist');
+  });
+
   it('files an unrecognised template type under Other', () => {
     const templates = [makeTemplate({ id: '1', name: 'Ad-hoc Notice', template_type: 'custom' })];
 

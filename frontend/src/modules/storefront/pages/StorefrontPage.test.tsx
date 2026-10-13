@@ -88,10 +88,13 @@ const renderPage = () =>
     </MemoryRouter>
   );
 
+const realLoadStorefront = useStorefrontStore.getState().loadStorefront;
+
 describe('StorefrontPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useStorefrontStore.setState({
+      loadStorefront: realLoadStorefront,
       storefront: null,
       cart: [],
       myOrders: [],
@@ -215,5 +218,28 @@ describe('StorefrontPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(await screen.findByRole('heading', { name: 'Job Shirt' })).toBeInTheDocument();
+  });
+
+  // The store's isLoading starts false, so the first render — before the load
+  // has begun — used to say "The store is closed" for an open store, and the
+  // route announcer read that heading out. The load here never flips
+  // isLoading, which is exactly the gap that first render fell into.
+  it('does not call the store closed before its first load has answered', async () => {
+    let finishLoad: () => void = () => undefined;
+    useStorefrontStore.setState({
+      loadStorefront: () =>
+        new Promise<void>((resolve) => {
+          finishLoad = () => {
+            useStorefrontStore.setState({ storefront: storefront({ isEnabled: false }) });
+            resolve();
+          };
+        }),
+    });
+    renderPage();
+
+    expect(screen.queryByText('The store is closed')).not.toBeInTheDocument();
+
+    finishLoad();
+    expect(await screen.findByText('The store is closed')).toBeInTheDocument();
   });
 });

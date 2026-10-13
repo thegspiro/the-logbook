@@ -41,7 +41,12 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
-from app.models.audit import AuditLog, AuditLogCheckpoint, SeverityLevel
+from app.models.audit import (
+    AuditChainHead,
+    AuditLog,
+    AuditLogCheckpoint,
+    SeverityLevel,
+)
 from app.models.call_tracking import CallSource, OrgCall, OrgCallResponse
 from app.models.compliance_config import (
     ComplianceConfig,
@@ -446,6 +451,7 @@ __all__ = [
     "MemberServicePeriod",
     "LeaveType",
     # Audit models
+    "AuditChainHead",
     "AuditLog",
     "AuditLogCheckpoint",
     "SeverityLevel",

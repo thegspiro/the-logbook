@@ -38,6 +38,7 @@ import PhoneDaySheet from './PhoneDaySheet';
 import PhoneMonth from './PhoneMonth';
 import StandingShiftModal from './StandingShiftModal';
 import { STATUS_STYLES, legendFor } from './statusStyles';
+import { useTablist } from '../../../hooks/useTablist';
 
 /**
  * How often a visible board re-reads its range.
@@ -96,6 +97,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   refreshKey = 0,
   onViewShift,
 }) => {
+  const tablist = useTablist();
   const signupWindow = useSignupWindow();
   const { user } = useAuthStore();
   const timezone = useTimezone();
@@ -506,7 +508,12 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           {/* Kept as a tablist rather than a pressed-button group: the two
               ranges are alternative views of the same panel, and this is the
               accessible name the page has always exposed. */}
-          <div className="segmented-group hidden rounded-full sm:flex" role="tablist" aria-label="Calendar view mode">
+          <div
+            className="segmented-group hidden rounded-full sm:flex"
+            role="tablist"
+            {...tablist}
+            aria-label="Calendar view mode"
+          >
             {(['month', 'week'] as BoardView[]).map((option) => (
               <button
                 key={option}

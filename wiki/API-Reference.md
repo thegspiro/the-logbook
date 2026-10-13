@@ -293,7 +293,8 @@ Governance record for the wording served on the public `/privacy` and
 `/terms` pages. **Proposing and publishing are separate grants.**
 
 ```
-GET    /api/v1/legal-documents                                # Current + revisions
+GET    /api/v1/legal-documents                                # Current + first page of drafts/history
+GET    /api/v1/legal-documents/{document_type}/revisions      # ?kind=drafts|history&offset=&limit= (Load more)
 POST   /api/v1/legal-documents/revisions                      # Draft a revision
 PUT    /api/v1/legal-documents/revisions/{id}                 # Edit a draft
 DELETE /api/v1/legal-documents/revisions/{id}                 # Discard a draft
@@ -1591,6 +1592,7 @@ alternatives for local rules.
 
 ```
 GET    /api/v1/legal-documents                              # legal.propose | legal.publish | settings.manage
+GET    /api/v1/legal-documents/{document_type}/revisions    # legal.propose | legal.publish | settings.manage
 POST   /api/v1/legal-documents/revisions                    # legal.propose | legal.publish | settings.manage
 PUT    /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage
 DELETE /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage

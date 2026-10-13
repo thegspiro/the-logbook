@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5018 columns · 1012 foreign keys**
+**304 tables · 5026 columns · 1012 foreign keys**
 
 ---
 
@@ -110,8 +110,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`audit_chain_head`](#audit_chain_head) | `AuditChainHead` | 5 | The sealed end of the audit hash chain: one row (id=1). |
 | [`audit_log_checkpoints`](#audit_log_checkpoints) | `AuditLogCheckpoint` | 13 | Periodic integrity checkpoints for audit logs |
-| [`audit_logs`](#audit_logs) | `AuditLog` | 19 | Tamper-proof audit log entries |
+| [`audit_logs`](#audit_logs) | `AuditLog` | 20 | Tamper-proof audit log entries |
 | [`audit_ship_state`](#audit_ship_state) | `AuditShipState` | 5 | High-water mark for off-host audit-log shipping. |
 
 ### Call_Tracking
@@ -148,7 +149,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`document_folders`](#document_folders) | `DocumentFolder` | 17 | Document Folder model |
-| [`documents`](#documents) | `Document` | 19 | Document model |
+| [`documents`](#documents) | `Document` | 20 | Document model |
 
 ### Elections
 
@@ -205,7 +206,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 55 | Event model for managing department events |
-| [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
+| [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
 
@@ -1827,6 +1828,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Audit & Compliance Logging
 
+### `audit_chain_head`
+
+**AuditChainHead** · `app/models/audit.py`
+
+> The sealed end of the audit hash chain: one row (id=1). AuditLogger.seal_pending locks this row (SELECT ... FOR UPDATE) for the length of one short sealing transaction, so two sealers serialize here and can never both extend the chain from the same tail. It is the only lock the chain takes, and no caller's transaction ever touches it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | INTEGER | no | PK |  |  |
+| `last_seq` | BIGINT | no |  | `0` |  |
+| `last_hash` | VARCHAR(64) | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
 ### `audit_log_checkpoints`
 
 **AuditLogCheckpoint** · `app/models/audit.py`
@@ -1875,8 +1890,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_agent` | TEXT | yes |  |  |  |
 | `geo_location` | JSON | yes |  |  |  |
 | `event_data` | JSON | no |  |  |  |
-| `previous_hash` | VARCHAR(64) | no |  |  |  |
-| `current_hash` | VARCHAR(64) | no | IDX |  |  |
+| `chain_seq` | BIGINT | yes | UQ-IDX |  |  |
+| `previous_hash` | VARCHAR(64) | yes |  |  |  |
+| `current_hash` | VARCHAR(64) | yes | IDX |  |  |
 | `hash_version` | INTEGER | yes |  |  |  |
 | `signing_key_id` | VARCHAR(16) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -1889,12 +1905,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_audit_user_id` (`user_id`)
 - `ix_audit_logs_event_category` (`event_category`)
 - `ix_audit_logs_organization_id` (`organization_id`)
+- UNIQUE `uq_audit_chain_seq` (`chain_seq`)
 
 ### `audit_ship_state`
 
 **AuditShipState** · `app/models/audit.py`
 
-> High-water mark for off-host audit-log shipping. A single row (id=1) tracking the last AuditLog.id successfully delivered to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The watermark only advances after the collector acknowledges a batch, so a failed delivery is retried on the next scheduled run.
+> High-water mark for off-host audit-log shipping. A single row (id=1) tracking the last chain position (AuditLog.chain_seq) successfully delivered to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The watermark only advances after the collector acknowledges a batch, so a failed delivery is retried on the next scheduled run. The column is still called ``last_shipped_id`` because it held an AuditLog.id until SEC2-28-10. It switched to chain_seq because only sealed rows can be shipped and they are not sealed in id order, so an id watermark would step over a row sealed late. Every row sealed before the switch has chain_seq = id, so a stored watermark kept its meaning.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -2122,6 +2139,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `content_html` | LONGTEXT | yes |  |  |  |
 | `source_type` | VARCHAR(50) | yes | IDX |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
+| `under_correction_since` | DATETIME | yes |  |  |  |
 | `version` | INTEGER | yes |  | `1` |  |
 | `tags` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2463,7 +2481,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2525,7 +2543,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `custom`) | no |  |  |  |
 | `to_emails` | JSON | no |  |  |  |
 | `cc_emails` | JSON | yes |  |  |  |
 | `bcc_emails` | JSON | yes |  |  |  |
@@ -2902,6 +2920,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `new_status` | VARCHAR(20) | no |  |  |  |
 | `changed_at` | DATETIME | no | IDX | `now()` |  |
 | `changed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `is_automatic` | BOOL | no |  | `0` |  |
 
 **Indexes**
 
@@ -7165,7 +7184,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **OnboardingSessionModel** · `app/models/onboarding.py`
 
-> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward.
+> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward, but never past SESSION_MAX_LIFETIME_HOURS (24h) after ``created_at``.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -7341,8 +7360,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `config_id` | VARCHAR(36) | no | FK |  | → `public_portal_config.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | yes | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `config_id` | VARCHAR(36) | yes | FK |  | → `public_portal_config.id` ON DELETE CASCADE |
 | `api_key_id` | VARCHAR(36) | yes | FK, IDX |  | → `public_portal_api_keys.id` ON DELETE SET NULL |
 | `ip_address` | VARCHAR(45) | no | IDX |  |  |
 | `endpoint` | VARCHAR(255) | no | IDX |  |  |
@@ -11131,7 +11150,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `property_return_reminders` | `organization_id` | CASCADE | no |
 | `prospective_members` | `organization_id` | CASCADE | no |
 | `prospects` | `organization_id` | CASCADE | no |
-| `public_portal_access_log` | `organization_id` | CASCADE | no |
+| `public_portal_access_log` | `organization_id` | CASCADE | yes |
 | `public_portal_api_keys` | `organization_id` | CASCADE | no |
 | `public_portal_config` | `organization_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
@@ -11703,7 +11722,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `public_portal_access_log` | `config_id` | CASCADE | no |
+| `public_portal_access_log` | `config_id` | CASCADE | yes |
 | `public_portal_api_keys` | `config_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `config_id` | CASCADE | no |
 
@@ -12187,6 +12206,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 |---|---|
 | `approval_chain_steps` | `approval_chains`, `email_templates` |
 | `approval_step_records` | `approval_chain_steps`, `approval_chains`, `users` |
+| `audit_chain_head` | — _(root table)_ |
 | `audit_log_checkpoints` | — _(root table)_ |
 | `audit_ship_state` | — _(root table)_ |
 | `blocked_access_attempts` | `users` |

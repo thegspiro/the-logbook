@@ -76,14 +76,10 @@ class SavedReport(Base):
     report_type: Mapped[str] = mapped_column(String(50), nullable=False)
     filters: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=dict)
 
-    # Scheduling. NOTE (2026-08-27): stored and API-writable, but nothing
-    # reads it — no TASK_RUNNERS entry (scheduled_tasks.py) or other job
-    # advances next_run_date or sends email_recipients. A caller can set
-    # is_scheduled=True and see it listed as scheduled with no report ever
-    # generated (CLAUDE.md Pitfall #19 shape). SavedReportResponse.enforced
-    # reports this so the UI can label it instead of badging it Active; a
-    # scheduler is needed before this can report True. See
-    # docs/KNOWN_LIMITATIONS.md.
+    # Scheduling. Read by the saved_report_delivery scheduled task
+    # (app/services/saved_report_schedule.py, RPT2-29-2), which sends on
+    # next_run_date (the department's calendar date) and advances it; the save
+    # endpoints validate a schedule with the same module.
     is_scheduled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     schedule_frequency: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True

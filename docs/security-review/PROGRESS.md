@@ -16,6 +16,87 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3160](https://github.com/thegspiro/the-logbook/pull/3160)**: branch
+`claude/security-review-documents-legal`, Feature 10
+(Documents & legal), pass 8 (watchdog pickup). 0 fixed, 0 new findings — DOC-8
+(MED, standing OPEN as of pass 7) re-verified **already fully fixed**, by two
+owner-direct commits that landed after pass 7 closed (`d7a7fadd`, 2026-10-11,
+paging; `46bc7ff7`, 2026-10-12, a per-member-per-type open-draft cap), neither
+reviewed by this rotation before now. Real delta since pass 7 was substantial,
+not zero — an owner-direct file-storage hardening project
+(`docs/FILE_STORAGE_HARDENING.md`, phases 1–5, 2026-10-08 → 2026-10-12) landed
+squarely in this feature's files: every document is now filed in a folder (no
+more org-wide "unfiled" documents), a folder-access editor lets a custom
+folder be restricted by position and/or permission, module folders (Training,
+Events, Apparatus, Member Separations, a new Finance root) opened to their own
+module's rights instead of document leadership, and every stored file is now
+malware-scanned and encrypted at rest. All of it read in full against current
+code (not sampled against the diff) and verified sound — no self-escalation
+path through the new access editor, no ancestor-bypass through nesting, no
+arbitrary-document read through the finance-receipt/apparatus-photo download
+paths, module-rights gating checked against the baseline permission set to
+confirm it narrows rather than widens exposure. 22 routes re-enumerated (up
+from 20 at pass 7, both additions verified sound). See the Log entry below and
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 8** section for
+detail. Row 10 stays ✅ (pending this PR's merge); next is Feature 11
+(Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 8, PR #3151, merged), preserved for history</summary>
+
+**PR [#3151](https://github.com/thegspiro/the-logbook/pull/3151)**: branch
+`claude/security-review-medical-screening`, Feature 09
+(Medical screening, PHI), pass 8 (watchdog pickup). 0 fixed, 1 new finding
+flagged (MS-15, LOW/scale) — a dating/attribution error in this feature's
+own findings doc found and corrected (the "Owner decisions" section
+misdated an owner-direct PR, #2965, as part of pass 7's branch). Real delta
+since pass 7 reviewed: PR #2965's MS-6/7/12/13 fixes (never reviewed by the
+rotation before now — pass 7 predates them) and PR #3086's new department
+compliance roster + per-subject panel + self-recorded badge, both verified
+sound; MS-14 re-confirmed unchanged. See the Log entry below and
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 8** section for
+detail. Row 09 stays ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 9, PR #3149, before it merged), preserved for history</summary>
+
+**PR [#3149](https://github.com/thegspiro/the-logbook/pull/3149)**: branch
+`claude/security-review-membership-pipeline`, Feature 08 (Membership
+pipeline), pass 9 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (MP-10, MP-22, MP-26) re-confirmed unchanged, and one
+(MP-19) closed by other work (owner decision, 2026-10-11). New surface
+this pass (a widget-summary scaling fix, W23-1 stranded-applicant
+placement, referral fields with an XC-1 guard, an auto-purge warning
+email, the file-storage hardening fully wired for prospect documents, and
+a `create_election_package` 500 fix) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 9** section
+for detail. Row 08 stays ✅ (pending this PR's merge); next is Feature 09
+(Medical screening).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3145's merge, Feature 07, Users & organizations, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3145 (Feature 07, Users & organizations,
+pass 8) merged 2026-10-13T03:24:09Z — 0 fixed, 0 new findings; log entry
+already recorded below and rotation row 07 stays ✅. This iteration
+(a watchdog pickup — confirmed via `gh api
+repos/thegspiro/the-logbook/pulls?state=open`, the REST endpoint rather
+than GraphQL `search_pull_requests`, which this environment blocks for
+Code sessions; 0 `claude/security-review-*` branches among the open PRs
+returned) picks up Feature 08 (Membership pipeline), the state PR #3145
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 8, PR #3145, before it merged), preserved for history</summary>
+
 **PR [#3145](https://github.com/thegspiro/the-logbook/pull/3145)**: branch
 `claude/security-review-users-organizations`, Feature 07 (Users &
 organizations), pass 8 (watchdog pickup). 0 fixed, 0 new findings — three
@@ -29,6 +110,8 @@ Log entry below and
 `docs/security-review/USR-07-users-organizations.md`'s **Pass 8** section
 for detail. Row 07 stays ✅ (pending this PR's merge); next is Feature 08
 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3142's merge, Feature 06, Elections & ballots, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18776,6 +18859,252 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
+### 2026-10-13 — Feature 10 (Documents & legal, pass 8) — 0 fixed, 0 new findings; one standing finding re-verified already fixed by owner-direct work (watchdog pickup)
+
+**Closure.** PR #3151 (Feature 09, Medical screening, pass 8) merged
+2026-10-13T09:12:47Z (`pull_request_read`: `merged: true`; local `HEAD` was
+stale at the previous feature's merge commit, so `git fetch` + `git checkout
+main` + fast-forward to `origin/main` was needed before starting) —
+docs-only (findings doc, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`; no application
+code), so per this file's own rule it is not an independently recordable
+event. Open PR row cleared and rotation row 09 stays ✅ with no log edit of
+its own. Independently re-confirmed before starting (`search_pull_requests`,
+`is:open head:claude/security-review-`, 0 results; `git branch -r`, 0 matches)
+that no security-review PR or branch was open — this iteration is itself a
+watchdog pickup, picking up Feature 10 (Documents & legal), the next `⬜` row
+per `PROGRESS.md`'s own Open-PR narrative pointer and per PR #3151's own body.
+
+**Prior art loaded first.** Read `docs/security-review/DOC-10-documents-legal.md`
+in full (all seven prior passes) before touching any code. As of pass 7
+(2026-10-06), the only standing item was DOC-8 (MED, `list_revisions`/
+`get_legal_documents` unbounded), left as an owner decision; DOC-9 and DOC-30
+had both been fixed by an external PR (#2954) just before pass 7 began, and
+re-traced independently that pass.
+
+**Real delta since pass 7 (`fe6876cd`, PR #2962's merge, 2026-10-06T02:35Z) was
+substantial — not a zero-delta pass, unlike passes 6 and 7.** An owner-direct
+file-storage hardening project (`docs/FILE_STORAGE_HARDENING.md`, phases 1–5,
+2026-10-08 → 2026-10-12, none of it from this rotation) landed in this
+feature's files: every document is now filed in a folder (closing the
+org-wide "unfiled document" gap), a folder-access editor (decision 27) lets a
+custom folder be restricted by position and/or permission with a shut-out
+guard, module folders (Training, Events, Apparatus, Member Separations, a new
+Finance root) opened to their own module's rights instead of blanket document
+leadership, and every stored file is now malware-scanned and encrypted at
+rest. Confirmed via direct content-diff against the pass-7 baseline for every
+declared file — `git log` on this range re-surfaced the same orphan/squash-merge
+artifact prior passes documented (a commit attributed to an unrelated
+feature's pass appeared in the path-filtered log for `api/public/legal.py`
+but changed zero lines of it on a direct `git diff`) — so content-diffing, not
+log output, is what this pass's delta claim rests on.
+
+Also found and verified, outside the hardening project: **DOC-8 was fully
+resolved** by two owner-direct commits after pass 7 closed — `d7a7fadd`
+(2026-10-11, pagination) and `46bc7ff7` (2026-10-12, a 10-open-drafts-per-member-
+per-type cap under a locked `users` row and a locking count, pitfall #27's
+both halves) — neither reviewed by the rotation before now. Re-verified
+directly against current code (not credited from the commit message or
+`KNOWN_LIMITATIONS.md`'s own already-correct "Resolved" note): a real SQL
+`LIMIT`/`OFFSET` query, a locking read ahead of the cap check, and the new
+`GET /legal-documents/{document_type}/revisions` route actually enforcing it.
+
+**22 routes re-enumerated via an AST walk** (up from 20 at pass 7): `GET
+/folders/role-options` (position slugs/names for the folder-access editor,
+`documents.manage`-gated, org-scoped, nothing sensitive) and `GET
+/{document_type}/revisions` (DOC-8's paging route). Every route still carries
+an explicit auth dependency; no OR-gate includes a baseline/rank-default
+permission.
+
+**No new findings.** Checked specifically for the three risks this iteration's
+own brief called out: (1) no self-escalation path through the new
+folder-access editor — `required_permissions` is validated against the real
+permission catalog, `allowed_roles` against the org's own `Position` rows, a
+personal folder's access is frozen, and every access-changing write re-checks
+the acting user would not be shut out before committing; (2) nesting a
+wide-open child folder under a restrictive parent (e.g. Member Separations)
+does not leak, because `can_access_folder`'s ancestry walk is an AND all the
+way to the root; (3) the two `folder_rights=False` finance-receipt download
+routes, and the two apparatus-photo download routes, all resolve their
+document id off an already org/record-scoped row (`pr.receipt_document_id`,
+`item.receipt_document_id`, `photo.document_id`) — never client-supplied —
+so the folder-ACL bypass those routes deliberately use cannot be reached for
+an arbitrary document. Module-rights gating was checked against
+`DEFAULT_POSITIONS["member"]`: `training.view`/`events.view` are baseline (no
+widening — those folders were already org-wide), `apparatus.*`/
+`finance.*`/`members.manage` are not (correctly narrower than before). The new
+shared storage/encryption infrastructure (`file_storage_service.py`,
+`file_encryption.py`) was read to the extent this feature's own invariants
+depend on it — path confinement correctly appends `os.sep` before the prefix
+check, so `/uploads/org-1` cannot match `/uploads/org-12` — but a full review
+of that cross-feature infrastructure belongs to Feature 00/33, not here.
+
+**Completion gate:** flake8/black/isort clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` clean (585 revisions, single head); scoped
+backend pytest (`-k "document or legal or station_document or
+facility_folder"`) 505 passed, 1 pre-existing skip (first run failed on a
+local DB one migration behind — `documents.under_correction_since` — fixed
+with `alembic upgrade head`, the same pre-existing-stale-DB shape pass 7 hit);
+full no-database backend unit suite 14,600 passed, 1 pre-existing skip, 0
+failed; `check_route_permissions.py --strict` clean (268 routes, 0
+errors/warnings); frontend `npm run typecheck` and `npm run lint` both clean;
+scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`,
+`legalDocumentsStore`, `FolderManageDialog`) 61 passed across 4 files. Full
+write-up: `docs/security-review/DOC-10-documents-legal.md` → **Pass 8**. Row
+10 stays ✅ (pending this PR's merge). Next: Feature 11 (Inventory).
+
+### 2026-10-13 — Feature 09 (Medical screening, PHI, pass 8) — 0 fixed, 1 new finding flagged; a dating error in this feature's own findings doc found and corrected (watchdog pickup)
+
+**Closure.** PR #3149 (Feature 08, Membership pipeline, pass 9) merged
+2026-10-13T06:47:15Z (the merge commit, `a7a7c47d`, is this session's
+checked-out `HEAD`, confirmed identical to `origin/main`) — 0 fixed, 0 new
+findings; log entry already recorded below and rotation row 08 stays ✅.
+Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) and a remote-branch
+check (`git branch -r`, 0 matches) that no security-review PR or branch
+was open before this iteration started — this iteration is itself a
+watchdog pickup. `PROGRESS.md`'s own Open-PR narrative pointer ("next is
+Feature 09") was already current, so no bookkeeping edit rode along
+uncommitted from Step 0 this time.
+
+**A dating/attribution error, found before the review itself.**
+`MS-09-medical-screening.md`'s "Owner decisions" section read "(2026-10-05)"
+and claimed its four fixes (MS-6, MS-7, MS-12, MS-13) were "implemented on
+the same branch" as pass 7 — a date that sits _before_ the pass (2026-10-06)
+it claims to follow, exactly the shape of inconsistency the membership-
+pipeline doc hit in an earlier cycle. Checked against the actual PR
+records rather than git history (unreliable here on purpose — the commit
+both land in is an orphan root with no parent): pass 7 is PR #2957, merged
+2026-10-06T01:14Z, whose own diff touches only docs and a test docstring
+and whose body lists all four as "unchanged, no action this pass." The
+real fix landed in PR #2965, opened directly by the repository owner on an
+unrelated branch, merged 2026-10-06T18:26Z — seventeen hours _after_ pass 7. Corrected in the findings doc; the fixes themselves were re-verified
+intact against current code and were never in question.
+
+**Scope confirmation.** Rotation table row 09 (`medical_screening.py`,
+`medical_screening_service.py`) plus this feature's established additional
+scope: `models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`, and `frontend/src/modules/medical-screening/`.
+
+**Real delta since pass 7's baseline (`0e848aff`, PR #2957's merge,
+2026-10-06T01:14Z), found via per-path `git log` (reliable here — `0e848aff`
+is a real, non-orphan ancestor of `HEAD`):** nine commits across three PRs.
+PR #2965 (owner-direct, 2026-10-06) is pass 7's own four standing findings
+(MS-6/7/12/13) actually being fixed — never reviewed by the rotation before
+now, since pass 7 predates it; re-reviewed fresh and found sound (the
+exactly-one-of-subject validator, the `self_recorded` column + guarded
+migration, the audited PHI reads, the SQL-level pagination). PR #3086
+(owner-direct, 2026-10-11, "Docket builds: inventory, medical, forms,
+…") added the department compliance roster (`GET
+/medical-screening/compliance`, `.view`-gated, counts only — proportionate,
+same shape MS-14 already accepted) and the per-subject panel, both graded
+by the one shared `_grade()` function so a roster row and the detail it
+opens cannot disagree (asserted directly by
+`test_a_row_matches_the_per_subject_summary`). A same-day Codex review fix
+folded into that PR's merge (`61819263`) settled two frontend races
+(roster-filter switch, subject-panel reopen) and a "no active requirement
+grades everyone compliant" bug — all three re-verified fixed and tested.
+The remaining commits are a mechanical SQLAlchemy `Mapped`/`mapped_column`
+typing pass, re-read in full, no behavior change.
+
+**16 routes re-enumerated directly** (up from 14 — `GET /subjects` and
+`GET /compliance` roster, both new since pass 7); every route still
+carries an auth dependency and a permission matching its data's
+sensitivity.
+
+**New finding: MS-15 (LOW, scale)** — `get_compliance_roster` loads every
+screening record the organization has ever created, unbounded, on every
+Compliance-tab load or filter change — the same "no SQL pagination on an
+org-wide table" class as FIN-9/ELEC-12/USR-5/MP-10/DOC-9/MS-6, but a call
+site MS-6's own fix (public-endpoint pagination) could not reach, because
+grading needs every subject's full history. Flagged rather than fixed: a
+bounded "latest per subject per screening-type" SQL query is a grading-
+logic change on a PHI-adjacent, org-wide read that risks silently
+misgrading the whole roster if the "latest" definition is subtly wrong —
+the owner's decision, not a same-day guess. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`. MS-14 (view/manage granularity) re-confirmed
+unchanged and still open.
+
+**Completion gate:** flake8/black/isort clean on `app/`, `tests/`,
+`alembic/`; `validate_migrations.py --strict` clean (578 revisions, single
+head); `check_route_permissions.py --strict` clean (267 routes, 0
+errors/warnings, run from the repo root); scoped backend pytest
+(`-k "medical or screening or phi"`) 220 passed, 1 pre-existing skip; full
+no-database backend unit suite 14,355 passed, 1 pre-existing skip, 0
+failed; frontend `npm run typecheck` and `npm run lint` both clean;
+scoped frontend suite (`src/modules/medical-screening`) 50 passed across 8
+files. Full write-up:
+`docs/security-review/MS-09-medical-screening.md` → **Pass 8**. Row 09
+stays ✅ (pending this PR's merge). Next: Feature 10 (Documents & legal).
+
+### 2026-10-13 — Feature 08 (Membership pipeline, pass 9) — 0 fixed, 0 new findings; 1 standing item closed by other work, 3 re-confirmed unchanged (watchdog pickup)
+
+**Closure.** PR #3145 (Feature 07, Users & organizations, pass 8) merged
+2026-10-13T03:24:09Z (`pulls/3145`: `merged: true`) — 0 fixed, 0 new
+findings; log entry already recorded above and rotation row 07 stays ✅.
+Independently re-confirmed via `gh api
+repos/thegspiro/the-logbook/pulls?state=open` (0 `claude/security-review-*`
+branches among the open PRs returned; GraphQL `search_pull_requests` is
+blocked for Code sessions in this environment, so the REST listing is the
+check) that no security-review PR was open before this iteration started
+— this iteration is itself a watchdog pickup, the dedicated `/loop 30m
+/security-review` session having gone quiet after #3145 merged. Row 08 was
+the next feature in rotation order.
+
+**Scope confirmation.** Rotation table row 08
+(`membership_pipeline.py`, `membership_pipeline_service.py`) plus this
+feature's established additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`, and `frontend/src/modules/prospective-members/`.
+
+**Real delta since pass 8's closing merge (`0b12efb5`, PR #2955,
+2026-10-06): 961 insertions / 325 deletions** across the four backend
+scope files (the largest single piece, `models/membership_pipeline.py`'s
++464, is a pure SQLAlchemy-2.0 `Mapped[...]` typing refactor — verified
+every `ondelete="SET NULL"` column still carries `nullable=True`), landed
+in 15 commits (two merges) touching: a `pipeline_widget_summary` scaling
+fix (`GROUP BY`/`CASE` counting, capped `details`), the W23-1
+stranded-applicant placement fix + backfill migration, referral-source
+fields in the drawer (with an explicit in-org-only `referred_by_name`
+guard — XC-1), a new auto-purge warning email
+(`warn_upcoming_auto_purges`), the repo-wide file-storage hardening
+(malware scanning, org confinement, AES-256-GCM encryption at rest) now
+fully wired through for prospect documents, and a `create_election_package`
+500 fix. All read in full and re-derived against current code — route
+enumeration (53 routes, auth dependency and permission string checked on
+every one), tenant isolation on every new/changed by-id or aggregate query,
+and the multi-approval self-approval/forged-role path re-traced end to end
+(`block_self_prospect_access` is router-wide for any `{prospect_id}` route;
+`complete_step` discards the client-claimed approval role and re-derives it
+from the signer's own positions). See
+[`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)'s
+**Pass 9** section for the full write-up.
+
+**One standing item closed by other work:** MP-19 (the `/widget-summary`
+half — the `/pipelines` sibling was already fixed in pass 3) is now fully
+✅ resolved — an owner decision landed 2026-10-11 that replaced the full
+`ProspectiveMember` row scan with SQL aggregation and capped the details
+list. Three re-confirmed unchanged: MP-10 (unbounded election-package
+list, no per-prospect creation cap), MP-22 (a document delete / the pass-8
+purge rewrite can lose a file on disk if the commit fails after a
+successful `os.remove` — owner-accepted tradeoff), MP-26 (multiple
+`election_vote` stages with no single "current stage" — the helper was
+refactored for reuse this window but its behavior and callers are
+unchanged). No new findings.
+
+**Gate:** backend `flake8`/`black --check`/`isort --check-only` clean (CI's
+pinned `flake8==7.3.0`/`black==26.5.1`/`isort==9.0.1`, installed into a
+fresh Python 3.13 virtualenv rather than the sandbox's unrelated system
+Python); `validate_migrations.py --strict` (578 revisions, single head
+`390fa30d0200`); `check_route_permissions.py --strict` (267 routes, 0
+errors/warnings); cross-cutting guard tests (212 passed); scoped pytest
+(1638 passed, 0 failed); full backend unit suite (14355 passed, 0 failed);
+frontend `typecheck` (0 errors), `lint` (0 errors/warnings), scoped
+`npx vitest run src/modules/prospective-members` (285 passed, 34 files).
+
+Findings doc: [`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)
+→ **Pass 9**. Rotation row 08 stays ✅ (pending this PR's merge). Next:
+Feature 09 (Medical screening).
+
 ### 2026-10-13 — Feature 07 (Users & organizations, pass 8) — 0 fixed, 0 new findings; 3 standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged (watchdog pickup)
 
 **Watchdog pickup.** PR #3142 (Feature 06, Elections & ballots, pass 8)
@@ -30390,3 +30719,19 @@ Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
 **Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — the one new
 finding was fixed, not flagged. Rotation row 18 → ✅ (pending PR merge).
 Next: Feature 19 (Skills testing).
+
+### 2026-10-12 — Feature 28 (Security, audit & IP): SEC2-28-10 resolved by owner decision
+
+**SEC2-28-10 (HIGH) — fixed.** Owner decision: "keep rows in the caller's
+transaction and seal the chain in a separate step". `create_log_entry` now
+inserts the audit row unsealed in the caller's transaction and never reads
+the chain; `AuditLogger.seal_pending`, in its own short transaction, locks the
+single `audit_chain_head` row `FOR UPDATE` and assigns chain position and
+hashes, so concurrent sealers serialize and the chain cannot fork. It runs
+after every commit carrying audit rows, at startup, and as the
+`audit_chain_seal` scheduled task (every minute). Verification, rehash,
+shipping (SEC2-28-9) and retention follow `chain_seq`; unsealed rows are
+reported as `pending_seal`, not tampering. Migration `bcd688674099`. Guard
+tests: `backend/tests/test_audit_chain_sealing.py`. Details:
+[`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md) →
+SEC2-28-10; the `KNOWN_LIMITATIONS.md` row is marked resolved.

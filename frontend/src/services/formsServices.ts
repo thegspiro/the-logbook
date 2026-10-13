@@ -271,6 +271,8 @@ export interface DocumentRecord {
   uploaded_by?: string;
   uploader_name?: string;
   folder_name?: string;
+  /** Set while the minutes this was published from are reopened for correction (MM-17). */
+  under_correction_since?: string | null;
 }
 
 export interface DocumentsSummary {

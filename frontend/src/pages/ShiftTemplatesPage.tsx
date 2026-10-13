@@ -41,14 +41,18 @@ import {
   PATTERN_TYPES,
   getPositionOptions,
 } from '../modules/scheduling/components/shiftTemplateTypes';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'templates' | 'patterns';
 
 export const ShiftTemplatesPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
+  const { confirm } = useConfirm();
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
 
@@ -118,6 +122,18 @@ export const ShiftTemplatesPage: React.FC = () => {
   };
 
   const handleDeleteTemplate = async (id: string) => {
+    const template = templates.find((t) => t.id === id);
+    // One Enter on a focused Delete removed the record with no way back;
+    // Apparatus and Locations already ask first.
+    if (
+      !(await confirm({
+        title: 'Delete template',
+        message: `Delete "${template?.name ?? 'this template'}"? Shifts already created from it are kept. This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     setDeletingTemplateId(id);
     try {
       await schedulingService.deleteTemplate(id);
@@ -145,6 +161,16 @@ export const ShiftTemplatesPage: React.FC = () => {
   };
 
   const handleDeletePattern = async (id: string) => {
+    const pattern = patterns.find((p) => p.id === id);
+    if (
+      !(await confirm({
+        title: 'Delete pattern',
+        message: `Delete "${pattern?.name ?? 'this pattern'}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     setDeletingPatternId(id);
     try {
       await schedulingService.deletePattern(id);
@@ -213,10 +239,12 @@ export const ShiftTemplatesPage: React.FC = () => {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
+          {/* h2: this page renders only inside Shift Planning, whose header
+              is the page's h1; a second h1 split the page in two. */}
+          <h2 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
             <LayoutTemplate className="h-7 w-7 shrink-0" aria-hidden="true" />
             Shift Templates & Patterns
-          </h1>
+          </h2>
           <p className="text-theme-text-muted mt-1">Manage reusable shift configurations and scheduling patterns</p>
         </div>
         <button
@@ -229,7 +257,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="tab-scroll mb-6" role="tablist" aria-label="Templates and patterns">
+      <div className="tab-scroll mb-6" role="tablist" {...tablist} aria-label="Templates and patterns">
         <button
           onClick={() => setActiveTab('templates')}
           role="tab"
@@ -343,7 +371,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                               <span
                                 className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
                                   cat.value === 'specialty'
-                                    ? 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
+                                    ? 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
                                     : 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
                                 }`}
                               >
@@ -355,7 +383,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                           return null;
                         })()}
                         {template.is_default && (
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             <CheckCircle className="mr-1 h-3 w-3" aria-hidden="true" />
                             Default
                           </span>
@@ -544,7 +572,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                       <span
                         className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
                           pattern.is_active
-                            ? 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400'
+                            ? 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                             : 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                         }`}
                       >

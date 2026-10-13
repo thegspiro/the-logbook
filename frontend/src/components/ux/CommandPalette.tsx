@@ -489,6 +489,9 @@ export const CommandPalette: React.FC = () => {
               placeholder="Search pages, actions..."
               className="text-theme-text-primary placeholder-theme-text-muted flex-1 bg-transparent py-3.5 text-sm focus:outline-hidden"
               aria-label="Search commands"
+              role="combobox"
+              aria-expanded={filteredCommands.length > 0}
+              aria-autocomplete="list"
               aria-activedescendant={
                 filteredCommands[selectedIndex] ? `cmd-${filteredCommands[selectedIndex].id}` : undefined
               }

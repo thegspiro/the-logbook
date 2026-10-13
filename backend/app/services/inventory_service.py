@@ -35,6 +35,7 @@ from app.core.audit import log_audit_event
 from app.models.inventory import (
     MEDICAL_ITEM_TYPES,
     AssignmentType,
+    ChargeStatus,
     CheckOutRecord,
     DepartureClearance,
     EquipmentKit,
@@ -162,6 +163,15 @@ _UNISSUABLE_CONDITIONS = {
     ItemCondition.DAMAGED,
     ItemCondition.OUT_OF_SERVICE,
     ItemCondition.RETIRED,
+}
+
+# Conditions observed on a returned item that require a follow-up (maintenance,
+# write-off or charge review). Shared by a return's receipt and by the
+# inspection of a notice received another way, so both grade a condition alike.
+_UNSAFE_RETURN_CONDITIONS = {
+    ItemCondition.POOR,
+    ItemCondition.DAMAGED,
+    ItemCondition.OUT_OF_SERVICE,
 }
 
 
@@ -3095,6 +3105,79 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    async def _lock_open_return_notices(
+        self, organization_id: UUID | str, item_id: UUID | str
+    ) -> List[ReturnRequest]:
+        """Lock the item's open ("requested") return notices, before the item.
+
+        W39-5: gear that comes back through a direct return must take the
+        member's open notice off the queue. ``review_return_request`` locks the
+        notice and then the item, so the direct paths take them in the same
+        order — locking the notice after the item would let a direct return
+        and a review of the same notice deadlock each other.
+        """
+        result = await self.db.execute(
+            select(ReturnRequest)
+            .where(
+                ReturnRequest.organization_id == str(organization_id),
+                ReturnRequest.item_id == str(item_id),
+                ReturnRequest.status == ReturnRequestStatus.REQUESTED,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    def _mark_return_notices_received(
+        notices: List[ReturnRequest],
+        *,
+        requester_id: str,
+        return_type: ReturnRequestType,
+        holding_id: Optional[str],
+        quantity: int,
+        holding_closed: bool,
+        received_by: UUID | str,
+        via: str,
+    ) -> None:
+        """Mark the member's open notice for this holding received.
+
+        Owner decision on W39-5: "received for inspection", not completed. The
+        direct return recorded its own condition on the holding; the notice
+        records only that the gear came back, by which path, and how many —
+        ``observed_condition`` stays empty because nobody inspected it through
+        the notice. A partial pool return that brings back fewer units than the
+        notice announced leaves the notice open.
+        """
+        holding_column = {
+            ReturnRequestType.ASSIGNMENT: "assignment_id",
+            ReturnRequestType.CHECKOUT: "checkout_id",
+            ReturnRequestType.ISSUANCE: "issuance_id",
+        }[return_type]
+        now = datetime.now(timezone.utc)
+        for notice in notices:
+            if notice.status != ReturnRequestStatus.REQUESTED:
+                continue
+            if str(notice.requester_id) != str(requester_id):
+                continue
+            noted_type = getattr(notice.return_type, "value", notice.return_type)
+            if noted_type != return_type.value:
+                continue
+            noted_holding = getattr(notice, holding_column)
+            if noted_holding and holding_id and str(noted_holding) != str(holding_id):
+                continue
+            announced = notice.quantity_returning or 1
+            if not holding_closed and quantity < announced:
+                continue
+            notice.status = ReturnRequestStatus.RECEIVED
+            notice.reviewed_by = str(received_by)
+            notice.reviewed_at = now
+            notice.received_quantity = min(quantity, announced)
+            notice.review_notes = (
+                f"Received through {via}, not through this notice; "
+                "not inspected here."
+            )
+
     async def unassign_item(
         self,
         item_id: UUID,
@@ -3111,6 +3194,7 @@ class InventoryService:
         in batch operations.
         """
         try:
+            notices = await self._lock_open_return_notices(organization_id, item_id)
             # Lock the item row to prevent concurrent assign/unassign races
             item = await self._get_item_locked(item_id, organization_id)
             if not item:
@@ -3143,6 +3227,17 @@ class InventoryService:
                 assignment.returned_by = str(returned_by)
                 assignment.return_condition = return_condition
                 assignment.return_notes = return_notes
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=previous_user_id,
+                return_type=ReturnRequestType.ASSIGNMENT,
+                holding_id=str(assignment.id) if assignment else None,
+                quantity=1,
+                holding_closed=True,
+                received_by=returned_by,
+                via="a direct return",
+            )
 
             # Update item
             item.assigned_to_user_id = None
@@ -3604,6 +3699,10 @@ class InventoryService:
             if not peek_item_id:
                 return False, "Issuance record not found"
 
+            notices = await self._lock_open_return_notices(
+                organization_id, peek_item_id
+            )
+
             # Lock the item row before modifying pool counts to prevent
             # concurrent returns from losing updates via read-modify-write
             item = await self._get_item_locked(
@@ -3665,6 +3764,17 @@ class InventoryService:
             )
             # Down either way: the member is not holding them any more.
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=issuance_user_id,
+                return_type=ReturnRequestType.ISSUANCE,
+                holding_id=str(issuance.id),
+                quantity=qty,
+                holding_closed=qty >= issuance.quantity_issued,
+                received_by=returned_by,
+                via="a direct pool return",
+            )
 
             # Handle partial return: reduce issuance quantity_issued and leave open
             if qty < issuance.quantity_issued:
@@ -3859,6 +3969,10 @@ class InventoryService:
             if not peek_item_id:
                 return False, "Checkout record not found"
 
+            notices = await self._lock_open_return_notices(
+                organization_id, peek_item_id
+            )
+
             # Lock the item row before mutating status/condition to prevent
             # concurrent checkout/checkin from creating inconsistent state
             item = await self._get_item_locked(UUID(str(peek_item_id)), organization_id)
@@ -3910,6 +4024,17 @@ class InventoryService:
             checkout.damage_notes = damage_notes
             checkout.is_returned = True
             checkout.is_overdue = False
+
+            self._mark_return_notices_received(
+                notices,
+                requester_id=checkout_user_id,
+                return_type=ReturnRequestType.CHECKOUT,
+                holding_id=str(checkout.id),
+                quantity=1,
+                holding_closed=True,
+                received_by=checked_in_by,
+                via="a check-in",
+            )
 
             item.condition = return_condition
 
@@ -4095,6 +4220,56 @@ class InventoryService:
             else False
         )
 
+    @classmethod
+    def _apply_completion_to_item(
+        cls,
+        item: InventoryItem,
+        *,
+        maintenance_type: Any,
+        completed: Any,
+        next_due_date: Any,
+        passed: Optional[bool],
+        condition_after: Any,
+    ) -> None:
+        """Apply a completed maintenance record's effects to its item.
+
+        The one definition both ways of completing a record go through:
+        creating it already completed, and completing a scheduled one by
+        PATCH. They drifted twice -- #2479 gated the inspection clock on the
+        create path only, and the PATCH path never quarantined an item whose
+        inspection failed -- and INV-17 made the PATCH path the ordinary route
+        for both Complete work and Record inspection.
+        """
+        if condition_after:
+            item.condition = condition_after
+        # Only an INSPECTION may move the inspection clock. This ran for any
+        # completed record, so a repair or a cleaning rewrote
+        # last_inspection_date and pushed next_inspection_due out by a whole
+        # interval -- a coat repaired in August had its annual NFPA 1851
+        # inspection silently rescheduled from April, and the department read
+        # as compliant four months longer than it was.
+        if completed and is_inspection_type(maintenance_type):
+            item.last_inspection_date = completed
+            if item.inspection_interval_days:
+                if isinstance(completed, str):
+                    completed = date.fromisoformat(completed)
+                item.next_inspection_due = completed + timedelta(
+                    days=item.inspection_interval_days
+                )
+            elif next_due_date:
+                item.next_inspection_due = next_due_date
+
+        # Completion never silently returns equipment to service. A failed
+        # inspection must remain unavailable; successful work has a separate,
+        # deliberate "Return to service" action.
+        if passed is False:
+            item.status = ItemStatus.IN_MAINTENANCE
+            item.condition = ItemCondition.OUT_OF_SERVICE
+        # `passed` is absent on a plain repair log, so the branch above does
+        # not fire and an unsafe condition_after would otherwise be written
+        # against an AVAILABLE item.
+        cls._enforce_state_invariant(item)
+
     async def create_maintenance_record(
         self,
         item_id: UUID,
@@ -4165,42 +4340,14 @@ class InventoryService:
             if maintenance_data.get("is_completed"):
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
-                    if maintenance_data.get("condition_after"):
-                        item.condition = maintenance_data["condition_after"]
-                    completed = maintenance_data.get("completed_date")
-                    # Only an INSPECTION may move the inspection clock. This
-                    # ran for any completed record, so a repair or a cleaning
-                    # rewrote last_inspection_date and pushed
-                    # next_inspection_due out by a whole interval -- a coat
-                    # repaired in August had its annual NFPA 1851 inspection
-                    # silently rescheduled from April, and the department read
-                    # as compliant four months longer than it was. Nothing
-                    # raised, nothing logged: the only sign was two dates on
-                    # the item page disagreeing.
-                    if completed and is_inspection_type(
-                        maintenance_data.get("maintenance_type")
-                    ):
-                        item.last_inspection_date = completed
-                        # Auto-calculate next_inspection_due from interval
-                        if item.inspection_interval_days:
-                            if isinstance(completed, str):
-                                completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(
-                                days=item.inspection_interval_days
-                            )
-                        elif maintenance_data.get("next_due_date"):
-                            item.next_inspection_due = maintenance_data["next_due_date"]
-
-                    # Completion never silently returns equipment to service. A
-                    # failed inspection must remain unavailable; successful work
-                    # has a separate, deliberate "Return to service" action.
-                    if maintenance_data.get("passed") is False:
-                        item.status = ItemStatus.IN_MAINTENANCE
-                        item.condition = ItemCondition.OUT_OF_SERVICE
-                    # `passed` is absent on a plain repair log, so the branch
-                    # above does not fire and an unsafe condition_after would
-                    # otherwise be written against an AVAILABLE item.
-                    self._enforce_state_invariant(item)
+                    self._apply_completion_to_item(
+                        item,
+                        maintenance_type=maintenance_data.get("maintenance_type"),
+                        completed=maintenance_data.get("completed_date"),
+                        next_due_date=maintenance_data.get("next_due_date"),
+                        passed=maintenance_data.get("passed"),
+                        condition_after=maintenance_data.get("condition_after"),
+                    )
             elif maintenance_data.get("maintenance_type") == "repair":
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
@@ -4222,11 +4369,18 @@ class InventoryService:
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Update an existing maintenance record"""
         try:
+            # INV-17: "Complete work" now closes an open record through this
+            # path instead of creating a new one, so two officers can complete
+            # the same record at once. The lock makes ``was_completed_before``
+            # below the committed value, so the item's condition and dates are
+            # updated by exactly one of them.
             result = await self.db.execute(
                 select(MaintenanceRecord)
                 .where(MaintenanceRecord.id == str(record_id))
                 .where(MaintenanceRecord.item_id == str(item_id))
                 .where(MaintenanceRecord.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             record = result.scalar_one_or_none()
 
@@ -4255,41 +4409,49 @@ class InventoryService:
                     label="performed_by",
                 )
 
+            completing = (
+                bool(safe_data.get("is_completed")) and not was_completed_before
+            )
+            if completing:
+                # INV-17: "Record inspection" now closes a scheduled inspection
+                # through this path, so it must refuse what the create
+                # validator refuses -- an inspection completed with no result
+                # or no date would close the record without moving the
+                # inspection clock or quarantining a failed item. Judged on the
+                # values the record will hold once the update applies.
+                final_type = safe_data.get("maintenance_type", record.maintenance_type)
+                final_passed = (
+                    safe_data["passed"] if "passed" in safe_data else record.passed
+                )
+                if is_inspection_type(final_type):
+                    if final_passed is None:
+                        return None, "A pass/fail result is required for inspections"
+                    if not (safe_data.get("completed_date") or record.completed_date):
+                        return None, "Completion date is required for completed work"
+
             for key, value in safe_data.items():
                 setattr(record, key, value)
 
-            # If is_completed just changed to True, update item inspection dates.
-            # Lock the item row to prevent concurrent updates from racing.
-            if safe_data.get("is_completed") and not was_completed_before:
+            # If is_completed just changed to True, update the item exactly as
+            # creating an already-completed record does. Lock the item row to
+            # prevent concurrent updates from racing.
+            if completing:
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
-                    if safe_data.get("condition_after"):
-                        item.condition = safe_data["condition_after"]
-                    completed = safe_data.get("completed_date") or record.completed_date
-                    # Only an INSPECTION may move the inspection clock -- the
-                    # same rule the create path applies, which #2479 fixed there
-                    # and only there. This is the likelier route to it: a
-                    # quartermaster schedules a repair and marks it complete
-                    # later, which is a PATCH, so the coat's annual NFPA 1851
-                    # deadline still slid a year on the commonest flow.
-                    #
-                    # `record`, not `safe_data`: the type is read AFTER the
-                    # update is applied, so a call that completes a record and
-                    # corrects its type in one go is judged on what it ends up
-                    # being, not on what it was.
-                    if completed and is_inspection_type(record.maintenance_type):
-                        item.last_inspection_date = completed
-                        if item.inspection_interval_days:
-                            if isinstance(completed, str):
-                                completed = date.fromisoformat(completed)
-                            item.next_inspection_due = completed + timedelta(
-                                days=item.inspection_interval_days
-                            )
-                        elif safe_data.get("next_due_date") or record.next_due_date:
-                            item.next_inspection_due = (
-                                safe_data.get("next_due_date") or record.next_due_date
-                            )
-                    self._enforce_state_invariant(item)
+                    # `record`, not `safe_data`: the type and result are read
+                    # AFTER the update is applied, so a call that completes a
+                    # record and corrects its type in one go is judged on what
+                    # it ends up being, not on what it was.
+                    self._apply_completion_to_item(
+                        item,
+                        maintenance_type=record.maintenance_type,
+                        completed=safe_data.get("completed_date")
+                        or record.completed_date,
+                        next_due_date=safe_data.get("next_due_date")
+                        or record.next_due_date,
+                        passed=record.passed,
+                        condition_after=safe_data.get("condition_after"),
+                    )
 
             await self.db.commit()
             await self.db.refresh(record)
@@ -4322,17 +4484,30 @@ class InventoryService:
         organization_id: UUID | str,
         skip: int = 0,
         limit: int = 100,
+        open_only: bool = False,
     ) -> List[MaintenanceRecord]:
-        """Get maintenance history for an item with pagination"""
-        result = await self.db.execute(
+        """Get maintenance history for an item with pagination.
+
+        ``open_only`` returns just the records not yet completed, oldest first,
+        for the "Complete work" picker (INV-17). The default ordering sorts by
+        ``completed_date`` descending, which puts every open record (NULL date)
+        last under MySQL — past the page limit on an item with a long history.
+        """
+        query = (
             select(MaintenanceRecord)
             .where(MaintenanceRecord.item_id == str(item_id))
             .where(MaintenanceRecord.organization_id == str(organization_id))
             .options(selectinload(MaintenanceRecord.technician))
-            .order_by(MaintenanceRecord.completed_date.desc())
-            .offset(skip)
-            .limit(limit)
         )
+        if open_only:
+            query = query.where(MaintenanceRecord.is_completed.is_(False)).order_by(
+                MaintenanceRecord.scheduled_date.is_(None),
+                MaintenanceRecord.scheduled_date.asc(),
+                MaintenanceRecord.created_at.asc(),
+            )
+        else:
+            query = query.order_by(MaintenanceRecord.completed_date.desc())
+        result = await self.db.execute(query.offset(skip).limit(limit))
         return list(result.scalars().all())
 
     # ============================================
@@ -4433,6 +4608,7 @@ class InventoryService:
             ranked = (
                 select(
                     InventoryItem.category_id,
+                    InventoryItem.id,
                     InventoryItem.name,
                     on_hand.label("quantity"),
                     rank,
@@ -4447,13 +4623,20 @@ class InventoryService:
                 .subquery()
             )
             items_result = await self.db.execute(
-                select(ranked.c.category_id, ranked.c.name, ranked.c.quantity)
+                select(
+                    ranked.c.category_id,
+                    ranked.c.id,
+                    ranked.c.name,
+                    ranked.c.quantity,
+                )
                 .where(ranked.c.rank <= LOW_STOCK_ITEMS_PER_CATEGORY)
                 .order_by(ranked.c.category_id, ranked.c.rank)
             )
             for row in items_result.all():
+                # The id lets a reorder raised from this alert link the item,
+                # which receiving it requires (W41-5).
                 item_details.setdefault(row.category_id, []).append(
-                    {"name": row.name, "quantity": int(row.quantity)}
+                    {"id": row.id, "name": row.name, "quantity": int(row.quantity)}
                 )
 
         return [
@@ -5209,6 +5392,30 @@ class InventoryService:
         results.sort(key=lambda r: priority.get(r[1], 99))
 
         return results[:limit]
+
+    async def find_storage_areas_by_code(
+        self, code: str, organization_id: UUID | str
+    ) -> List[StorageArea]:
+        """Active storage areas whose label barcode is exactly ``code`` (INV-8).
+
+        Exact, case-insensitive match rather than the substring search items
+        get: a shelf label is scanned whole, and a partial match would put
+        every ``SA-…`` shelf into the results of an unrelated item scan.
+        """
+        code = code.strip()
+        if not code:
+            return []
+        result = await self.db.execute(
+            select(StorageArea)
+            .where(
+                StorageArea.organization_id == str(organization_id),
+                StorageArea.is_active.is_(True),
+                func.upper(StorageArea.barcode) == code.upper(),
+            )
+            .order_by(StorageArea.name)
+            .limit(5)
+        )
+        return list(result.scalars().all())
 
     # ============================================
     # Item distribution (scan-to-assign or loan)
@@ -7206,7 +7413,7 @@ class InventoryService:
         if not issuance:
             return False, "Issuance record not found"
 
-        issuance.charge_status = charge_status
+        issuance.charge_status = ChargeStatus(charge_status)
         if charge_amount is not None:
             issuance.charge_amount = charge_amount
         elif charge_status == "charged" and issuance.unit_cost_at_issuance:
@@ -7446,25 +7653,48 @@ class InventoryService:
         follow_up: str = "auto",
     ) -> Tuple[bool, Optional[str]]:
         """
-        Deny a request or receive the item in one atomic transaction.
+        Deny a request, receive the item, or inspect gear received another way.
 
         A receipt is only accepted with an independent condition observation and,
         for serialized gear, a matching barcode/asset/serial identifier.  The hold,
         inventory state, inspection result, and follow-up are committed together.
+
+        ``status="inspected"`` is the W39-5 follow-on: it completes a notice a
+        direct return already marked ``received``, recording only the
+        inspection (see ``_inspect_received_return``).
         """
         # Lock the request row itself: without this, a denial and a physical
         # receipt racing on the same REQUESTED request can both pass this
         # status check before either commits, so one review silently
-        # overwrites the other's outcome (Pitfall #27).
+        # overwrites the other's outcome (Pitfall #27). populate_existing so
+        # the status checked below is the locked row's, not a copy this
+        # session loaded before the lock.
         result = await self.db.execute(
             select(ReturnRequest)
             .where(ReturnRequest.id == str(request_id))
             .where(ReturnRequest.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         req = result.scalar_one_or_none()
         if not req:
             return False, "Return request not found"
+
+        if status == "inspected":
+            if req.status != ReturnRequestStatus.RECEIVED:
+                return (
+                    False,
+                    "Only a notice received through another return can be "
+                    f"inspected; this one is {req.status.value}",
+                )
+            return await self._inspect_received_return(
+                req,
+                organization_id,
+                reviewer_id,
+                review_notes,
+                observed_condition,
+                follow_up,
+            )
 
         if req.status != ReturnRequestStatus.REQUESTED:
             return False, f"Request is already {req.status.value}"
@@ -7596,11 +7826,7 @@ class InventoryService:
                     ).strip()
 
             req.status = ReturnRequestStatus.INSPECTED
-            unsafe = condition in {
-                ItemCondition.POOR,
-                ItemCondition.DAMAGED,
-                ItemCondition.OUT_OF_SERVICE,
-            }
+            unsafe = condition in _UNSAFE_RETURN_CONDITIONS
             # A pool row is a catalog entry for many physical units, not one of
             # them, so one member's damaged glove says nothing about the other
             # ninety-nine. Copying the observed condition onto the row used to
@@ -7615,54 +7841,200 @@ class InventoryService:
                     ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
                 )
 
-            chosen = follow_up
-            if chosen == "auto":
-                chosen = (
-                    "write_off"
-                    if condition == ItemCondition.OUT_OF_SERVICE
-                    else ("maintenance" if unsafe else "none")
-                )
-            if unsafe and chosen == "none":
-                raise ValueError(
-                    "Damaged, poor, or out-of-service gear requires a follow-up"
-                )
-            follow = None
-            if chosen == "maintenance":
-                follow = MaintenanceRecord(
-                    organization_id=str(organization_id),
-                    item_id=str(item.id),
-                    maintenance_type=MaintenanceType.REPAIR,
-                    scheduled_date=now.date(),
-                    condition_before=condition,
-                    description=note,
-                    notes=f"Member reported {req.reported_condition.value}; quartermaster observed {condition.value}",
-                    is_completed=False,
-                    created_by=str(reviewer_id),
-                )
-            elif chosen == "write_off":
-                follow = WriteOffRequest(
-                    organization_id=str(organization_id),
-                    item_id=str(item.id),
-                    item_name=item.name,
-                    item_serial_number=item.serial_number,
-                    item_asset_tag=item.asset_tag,
-                    item_value=item.purchase_price,
-                    reason=WriteOffReason.DAMAGED_BEYOND_REPAIR,
-                    description=note,
-                    status=WriteOffStatus.PENDING,
-                    requested_by=str(reviewer_id),
-                )
-            elif chosen == "charge_review":
-                if req.return_type != ReturnRequestType.ISSUANCE:
-                    raise ValueError(
-                        "Charge review is only available for pool issuances"
+            await self._record_return_follow_up(
+                req,
+                item,
+                condition,
+                follow_up,
+                note,
+                organization_id,
+                reviewer_id,
+                issuance if req.return_type == ReturnRequestType.ISSUANCE else None,
+            )
+            req.status = ReturnRequestStatus.COMPLETED
+            await self.db.commit()
+            return True, None
+        except (ValueError, SQLAlchemyError) as exc:
+            await self.db.rollback()
+            return False, str(exc)
+
+    async def _record_return_follow_up(
+        self,
+        req: ReturnRequest,
+        item: InventoryItem,
+        condition: ItemCondition,
+        follow_up: str,
+        note: str,
+        organization_id: UUID | str,
+        reviewer_id: UUID | str,
+        issuance: Optional[ItemIssuance],
+    ) -> None:
+        """Open the follow-up an inspected return calls for, onto the notice.
+
+        Shared by the receipt and by the inspection of a notice received
+        another way, so the two cannot disagree about which condition needs
+        which follow-up. Raises ``ValueError`` for a choice the return cannot
+        take; the caller rolls back.
+        """
+        unsafe = condition in _UNSAFE_RETURN_CONDITIONS
+        # W41-6: a write-off request names the item, not the returned
+        # units, and approving it retires the item and releases every
+        # holder. For a pool issuance that is the whole shelf and every
+        # other member's issuance, so it is not offered there; "auto"
+        # falls back to the maintenance follow-up a damaged pool return
+        # already gets.
+        pool_issuance = req.return_type == ReturnRequestType.ISSUANCE
+        chosen = follow_up
+        if chosen == "write_off" and pool_issuance:
+            raise ValueError(
+                "Write-off review is not available for pool issuances; "
+                "choose maintenance or charge review"
+            )
+        if chosen == "auto":
+            chosen = (
+                "write_off"
+                if condition == ItemCondition.OUT_OF_SERVICE and not pool_issuance
+                else ("maintenance" if unsafe else "none")
+            )
+        if unsafe and chosen == "none":
+            raise ValueError(
+                "Damaged, poor, or out-of-service gear requires a follow-up"
+            )
+        now = datetime.now(timezone.utc)
+        follow: Optional[MaintenanceRecord | WriteOffRequest] = None
+        if chosen == "maintenance":
+            follow = MaintenanceRecord(
+                organization_id=str(organization_id),
+                item_id=str(item.id),
+                maintenance_type=MaintenanceType.REPAIR,
+                scheduled_date=now.date(),
+                condition_before=condition,
+                description=note,
+                notes=f"Member reported {req.reported_condition.value}; quartermaster observed {condition.value}",
+                is_completed=False,
+                created_by=str(reviewer_id),
+            )
+        elif chosen == "write_off":
+            follow = WriteOffRequest(
+                organization_id=str(organization_id),
+                item_id=str(item.id),
+                item_name=item.name,
+                item_serial_number=item.serial_number,
+                item_asset_tag=item.asset_tag,
+                item_value=item.purchase_price,
+                reason=WriteOffReason.DAMAGED_BEYOND_REPAIR,
+                description=note,
+                status=WriteOffStatus.PENDING,
+                requested_by=str(reviewer_id),
+            )
+        elif chosen == "charge_review":
+            if req.return_type != ReturnRequestType.ISSUANCE or issuance is None:
+                raise ValueError("Charge review is only available for pool issuances")
+            issuance.charge_status = ChargeStatus.PENDING
+        if follow:
+            self.db.add(follow)
+            await self.db.flush()
+            req.follow_up_id = follow.id
+        req.follow_up_type = None if chosen == "none" else chosen
+
+    async def _inspect_received_return(
+        self,
+        req: ReturnRequest,
+        organization_id: UUID | str,
+        inspector_id: UUID | str,
+        review_notes: Optional[str],
+        observed_condition: Optional[str],
+        follow_up: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Complete a notice a direct return marked ``received`` (W39-5).
+
+        The gear already came back through Return, a check-in or a pool
+        return, and that path closed the holding and moved the stock. This
+        records only the inspection the notice was waiting for -- the observed
+        condition, the officer's notes and the follow-up -- and never touches
+        the holding, ``quantity`` or ``quantity_issued`` again. The one item
+        change it makes is the safety one a receipt makes: a serialized item
+        found unsafe while it is still on the shelf is taken out of service,
+        so a damaged helmet cannot be issued on the strength of the counter's
+        earlier "good". Gear that has already gone out again is left to the
+        follow-up record rather than pulled out from under its new holder.
+
+        The notice has no inspector column, so ``reviewed_by``/``reviewed_at``
+        move to the inspector -- on a completed notice they name whoever
+        completed it, as they do after a receipt -- and the receipt's actor is
+        written into the preserved "Received through ..." note first.
+
+        Called with the notice already locked; the item is locked after it,
+        the order every return path in this file takes.
+        """
+        if not observed_condition:
+            return False, "Observed condition is required to inspect a return"
+        condition = ItemCondition(observed_condition)
+        try:
+            item = await self._get_item_locked(UUID(str(req.item_id)), organization_id)
+            if not item:
+                raise ValueError("Item not found")
+
+            issuance = None
+            if req.return_type == ReturnRequestType.ISSUANCE and req.issuance_id:
+                issuance = (
+                    await self.db.execute(
+                        select(ItemIssuance)
+                        .where(
+                            ItemIssuance.id == str(req.issuance_id),
+                            ItemIssuance.organization_id == str(organization_id),
+                            ItemIssuance.user_id == str(req.requester_id),
+                        )
+                        .with_for_update()
                     )
-                issuance.charge_status = "pending"
-            if follow:
-                self.db.add(follow)
-                await self.db.flush()
-                req.follow_up_id = follow.id
-            req.follow_up_type = None if chosen == "none" else chosen
+                ).scalar_one_or_none()
+
+            receipt_note = req.review_notes
+            if req.reviewed_by:
+                receiver = (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id == str(req.reviewed_by),
+                            User.organization_id == str(organization_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if receiver:
+                    receipt_note = _append_note(
+                        receipt_note, f"Received by {receiver.display_name}."
+                    )
+            notes = (review_notes or "").strip()
+            inspection_note = f"Inspected: {condition.value.replace('_', ' ')}" + (
+                f" -- {notes}" if notes else ""
+            )
+            follow_up_note = f"Return request #{req.id[:8]} inspection" + (
+                f" -- {notes}" if notes else ""
+            )
+
+            await self._record_return_follow_up(
+                req,
+                item,
+                condition,
+                follow_up,
+                follow_up_note,
+                organization_id,
+                inspector_id,
+                issuance,
+            )
+
+            if (
+                condition in _UNSAFE_RETURN_CONDITIONS
+                and item.tracking_type != TrackingType.POOL
+                and item.status == ItemStatus.AVAILABLE
+                and item.assigned_to_user_id is None
+            ):
+                item.condition = condition
+                item.status = ItemStatus.IN_MAINTENANCE
+
+            req.observed_condition = condition
+            req.review_notes = _append_note(receipt_note, inspection_note)
+            req.reviewed_by = str(inspector_id)
+            req.reviewed_at = datetime.now(timezone.utc)
             req.status = ReturnRequestStatus.COMPLETED
             await self.db.commit()
             return True, None
@@ -8753,14 +9125,50 @@ class InventoryService:
         data: Dict[str, Any],
         current_user_id: str,
     ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
-        """Update a reorder request and handle status transitions."""
+        """Update a reorder request's editable details under a row lock."""
         try:
-            reorder = await self.get_reorder_request(request_id, organization_id)
+            # INV-16: lock the row so this edit serializes against a concurrent
+            # receipt or transition, and read it with populate_existing so the
+            # quantity_received compared below is the committed value, not one
+            # the identity map held from before the lock was taken.
+            reorder = await self.db.scalar(
+                select(ReorderRequest)
+                .where(
+                    ReorderRequest.id == str(request_id),
+                    ReorderRequest.organization_id == str(organization_id),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             if not reorder:
                 return None, "Reorder request not found"
 
             if "quantity_received" in data:
                 return None, "Received quantity changes require the receiving workflow"
+
+            # W41-5: the item link may be set or corrected until stock arrives
+            # against it; after that, moving it would leave the received units
+            # posted to one item and the order naming another.
+            if (
+                "item_id" in data
+                and (reorder.quantity_received or 0) > 0
+                and str(data.get("item_id") or "") != str(reorder.item_id or "")
+            ):
+                return None, (
+                    "The linked item cannot change once stock has been received "
+                    "against it"
+                )
+
+            # receive_reorder's outstanding check assumes requested >= received;
+            # an edit lowering the order below what has already arrived would
+            # leave a negative outstanding quantity.
+            new_requested = data.get("quantity_requested")
+            received = reorder.quantity_received or 0
+            if new_requested is not None and new_requested < received:
+                return None, (
+                    f"Quantity requested cannot be lower than the {received} "
+                    "already received"
+                )
 
             await self._assert_reorder_fks_in_org(data, organization_id)
 

@@ -378,6 +378,47 @@ describe('IntegrationsPage', () => {
       expect(await screen.findByText(/Member sync preview \(3 members\)/i)).toBeInTheDocument();
       expect(screen.getByText('matched existing')).toBeInTheDocument();
     });
+
+    // INT-11: the backend switches to client credentials on an explicit ""
+    // refresh token; a blank form field is omitted and so could never send it.
+    describe('Switch to Client Credentials', () => {
+      beforeEach(() => {
+        mockUpdateIntegration.mockReset();
+        mockUpdateIntegration.mockResolvedValue(salesforceConnected);
+        mockGetIntegrations.mockReset();
+        mockGetIntegrations.mockResolvedValue([salesforceConnected]);
+      });
+
+      it('sends only an explicit empty refresh token once confirmed', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Salesforce');
+        await user.click(screen.getByText('Sync'));
+        await user.click(screen.getByRole('button', { name: 'Switch to Client Credentials' }));
+
+        expect(await screen.findByText('Switch Salesforce to client credentials?')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Switch to client credentials' }));
+
+        await waitFor(() => {
+          expect(mockUpdateIntegration).toHaveBeenCalledWith('sf-1', { refresh_token: '' });
+        });
+        expect(mockUpdateIntegration).toHaveBeenCalledTimes(1);
+      });
+
+      it('changes nothing when the officer keeps the current connection', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Salesforce');
+        await user.click(screen.getByText('Sync'));
+        await user.click(screen.getByRole('button', { name: 'Switch to Client Credentials' }));
+        await user.click(await screen.findByRole('button', { name: 'Keep the current connection' }));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Switch Salesforce to client credentials?')).not.toBeInTheDocument();
+        });
+        expect(mockUpdateIntegration).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('Documenso and Cal.com', () => {

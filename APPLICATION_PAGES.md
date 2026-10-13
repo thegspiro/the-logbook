@@ -1046,12 +1046,13 @@ Checklists** admin. Exact matches are pre-selected; the bottom bar links every
 position under each chosen name in one step. Names with no plausible catalog
 match are collapsed at the end.
 
-| Control            | Options                                                       |
-| ------------------ | ------------------------------------------------------------- |
-| Per-name selector  | Don't link · each suggested catalog item · Search the catalog |
-| "_n_ positions"    | Expands to the templates and compartments carrying the name   |
-| No catalog match   | Expands the names nothing in the catalog resembles            |
-| Link _n_ positions | Applies every chosen name; reloads the report afterwards      |
+| Control            | Options                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| Per-name selector  | Don't link · each suggested catalog item · Search the catalog                                             |
+| "_n_ positions"    | Expands to the templates and compartments carrying the name                                               |
+| No catalog match   | Expands the names nothing in the catalog resembles                                                        |
+| Link _n_ positions | Applies every chosen name; reloads the report afterwards                                                  |
+| Left as they were  | Lines linked in the builder meanwhile, with both items and a link to each template; stays until dismissed |
 
 #### Apparatus Inventory (`/inventory/checklists/apparatus-inventory`) _(added 2026-08-10)_
 
@@ -1193,9 +1194,10 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL        | Page    | Permission     |
-| ---------- | ------- | -------------- |
-| `/reports` | Reports | `reports.view` |
+| URL              | Page          | Permission     |
+| ---------------- | ------------- | -------------- |
+| `/reports`       | Reports       | `reports.view` |
+| `/reports/saved` | Saved Reports | `reports.view` |
 
 ---
 

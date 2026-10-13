@@ -43,6 +43,7 @@ import type {
   TrainingCourse,
 } from '../types/training';
 import type { User } from '../types/user';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'providers' | 'imports' | 'mappings';
 
@@ -576,12 +577,14 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             accessible name and its tooltip. */}
         <div className="flex items-center gap-2">
           <Tooltip content={getStatusLabel()}>
-            <span aria-label={getStatusLabel()} className="flex">
+            {/* Focusable so a keyboard user can open the tooltip too; role="img"
+                because an aria-label on a role-less span is not announced. */}
+            <span role="img" aria-label={getStatusLabel()} tabIndex={0} className="flex rounded">
               {getStatusIcon()}
             </span>
           </Tooltip>
           <span
-            className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}
+            className={`text-sm ${provider.active ? 'text-green-800 dark:text-green-400' : 'text-theme-text-muted'}`}
           >
             {provider.active ? 'Active' : 'Inactive'}
           </span>
@@ -973,6 +976,7 @@ interface MappingsModalProps {
 }
 
 const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, providerId, providerName }) => {
+  const tablist = useTablist();
   const dialogRef3 = useDialog<HTMLDivElement>({ isOpen, onClose });
 
   const [activeTab, setActiveTab] = useState<'categories' | 'users' | 'courses'>('categories');
@@ -1116,7 +1120,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </p>
         </div>
 
-        <div className="tab-scroll" role="tablist" aria-label="Mapping types">
+        <div className="tab-scroll" role="tablist" {...tablist} aria-label="Mapping types">
           <button
             onClick={() => setActiveTab('categories')}
             role="tab"
@@ -1693,6 +1697,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
 };
 
 const ExternalTrainingPage: React.FC = () => {
+  const tablist = useTablist();
   // Never window.confirm: a browser that suppresses it returns false, which is
   // indistinguishable from the officer pressing Cancel.
   const { confirm } = useConfirm();
@@ -1849,7 +1854,13 @@ const ExternalTrainingPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="tab-scroll mb-6" role="tablist" aria-label="External training views" data-mobile-scroll-region>
+        <div
+          className="tab-scroll mb-6"
+          role="tablist"
+          {...tablist}
+          aria-label="External training views"
+          data-mobile-scroll-region
+        >
           <button
             onClick={() => setActiveTab('providers')}
             role="tab"

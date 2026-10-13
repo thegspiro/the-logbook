@@ -1649,9 +1649,21 @@ async def lifespan(app: FastAPI):
                 logger.info(
                     f"Starting background audit log verification (worker PID {_worker_pid})..."
                 )
-                from app.core.audit import audit_logger, verify_audit_log_integrity
+                from app.core.audit import (
+                    audit_logger,
+                    seal_audit_chain,
+                    verify_audit_log_integrity,
+                )
                 from app.core.database import async_session_factory
 
+                # Rows committed before the last shutdown may never have been
+                # sealed; seal them so this check covers them. A failure here
+                # must not cost the integrity check, which still runs over
+                # whatever is sealed.
+                try:
+                    await seal_audit_chain()
+                except Exception as e:
+                    logger.warning(f"Could not seal pending audit rows: {e}")
                 async with async_session_factory() as db:
                     integrity_result = await verify_audit_log_integrity(db)
                     if integrity_result["verified"]:

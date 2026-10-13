@@ -47,6 +47,29 @@ def _validate_choice(
     return value
 
 
+def _refuse_cleared(model: BaseModel, required: AbstractSet[str]) -> None:
+    """Reject an explicit ``null`` for a field whose column is NOT NULL.
+
+    The update schemas type every field ``Optional`` so a PATCH may omit it, and
+    the handlers dump with ``exclude_unset``, so a field that *was* sent -- null
+    included -- reaches the write. For a nullable column a null means "clear
+    this"; for a NOT NULL one it can only mean a mistake, and left to the
+    database it surfaces as an ``IntegrityError`` (or a ``TypeError`` from
+    comparing a null date) and a 500. Refusing it here answers 422 before any
+    handler logic runs.
+    """
+    cleared = sorted(
+        name
+        for name in model.model_fields_set & required
+        if getattr(model, name) is None
+    )
+    if cleared:
+        raise ValueError(
+            f"{', '.join(cleared)} cannot be null; "
+            "leave the field out to keep its current value"
+        )
+
+
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     """Treat a naive datetime as UTC (the project-wide wire convention).
 
@@ -519,6 +542,33 @@ class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
 
 
+# Every ElectionUpdate field whose `elections` column is NOT NULL. Kept beside
+# the schema because the schema cannot see the column; `test_election_update_null_
+# columns_integration.py` derives the set from the model and fails if the two
+# drift, so a new NOT NULL column cannot be added without being listed here.
+ELECTION_UPDATE_REQUIRED_FIELDS = frozenset(
+    {
+        "title",
+        "election_type",
+        "start_date",
+        "end_date",
+        "anonymous_voting",
+        "allow_write_ins",
+        "max_votes_per_position",
+        "seats_per_position",
+        "results_visible_immediately",
+        "voting_method",
+        "victory_condition",
+        "enable_runoffs",
+        "runoff_type",
+        "max_runoff_rounds",
+        "quorum_type",
+        "auto_open",
+        "tie_policy",
+    }
+)
+
+
 class ElectionUpdate(BaseModel):
     """Schema for updating an election
 
@@ -616,6 +666,11 @@ class ElectionUpdate(BaseModel):
         cls, values: Optional[List[BallotItemInput]]
     ) -> Optional[List[BallotItemInput]]:
         return _validate_ballot_item_identities(values)
+
+    @model_validator(mode="after")
+    def refuse_cleared_required_fields(self) -> "ElectionUpdate":
+        _refuse_cleared(self, ELECTION_UPDATE_REQUIRED_FIELDS)
+        return self
 
 
 class ResultsRevision(BaseModel):
@@ -789,6 +844,11 @@ class CandidateCreate(CandidateBase):
     is_write_in: bool = Field(default=False)
 
 
+# `accepted` is NOT NULL too but is refused in `update_candidate` itself, which
+# answers 400 with its own message after routing acceptance through the service.
+CANDIDATE_UPDATE_REQUIRED_FIELDS = frozenset({"name", "display_order"})
+
+
 class CandidateUpdate(BaseModel):
     """Schema for updating a candidate"""
 
@@ -798,6 +858,11 @@ class CandidateUpdate(BaseModel):
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
     display_order: Optional[int] = None
+
+    @model_validator(mode="after")
+    def refuse_cleared_required_fields(self) -> "CandidateUpdate":
+        _refuse_cleared(self, CANDIDATE_UPDATE_REQUIRED_FIELDS)
+        return self
 
 
 class NominationCreate(BaseModel):

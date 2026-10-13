@@ -201,7 +201,10 @@ class TestApproveMeeting:
 
     async def test_sets_approval_fields(self):
         m = SimpleNamespace(
-            id="m1", status=MeetingStatus.DRAFT, approved_by=None, approved_at=None
+            id="m1",
+            status=MeetingStatus.PENDING_APPROVAL,
+            approved_by=None,
+            approved_at=None,
         )
         db = _db([_one(m)])
         meeting, err = await MeetingsService(db).approve_meeting("m1", "org-1", "admin")
@@ -209,6 +212,36 @@ class TestApproveMeeting:
         assert m.status == MeetingStatus.APPROVED
         assert m.approved_by == "admin"
         assert m.approved_at is not None
+
+    async def test_draft_cannot_be_approved(self):
+        """MM-9: a draft must be submitted (PENDING_APPROVAL) first."""
+        m = SimpleNamespace(
+            id="m1", status=MeetingStatus.DRAFT, approved_by=None, approved_at=None
+        )
+        db = _db([_one(m)])
+        meeting, err = await MeetingsService(db).approve_meeting("m1", "org-1", "admin")
+        assert meeting is None
+        assert "pending approval" in err.lower()
+        assert m.status == MeetingStatus.DRAFT
+        assert m.approved_by is None
+        db.commit.assert_not_awaited()
+
+    async def test_approved_meeting_is_not_restamped(self):
+        stamped = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        m = SimpleNamespace(
+            id="m1",
+            status=MeetingStatus.APPROVED,
+            approved_by="first",
+            approved_at=stamped,
+        )
+        db = _db([_one(m)])
+        meeting, err = await MeetingsService(db).approve_meeting(
+            "m1", "org-1", "second"
+        )
+        assert meeting is None
+        assert "already approved" in err.lower()
+        assert m.approved_by == "first"
+        assert m.approved_at == stamped
 
 
 class TestUpdateMeeting:
@@ -235,6 +268,56 @@ class TestUpdateMeeting:
         )
         assert result is None
         assert "cannot be cleared" in err.lower()
+
+    async def test_patch_cannot_move_a_meeting_into_approved(self):
+        """MM-9: status=approved via PATCH would record an approval with no
+        approver or timestamp; only approve_meeting may make it."""
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1",
+            organization_id="org-1",
+            title="T",
+            status=MeetingStatus.PENDING_APPROVAL,
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"status": "approved", "notes": "x"}
+        )
+        assert result is None
+        assert "approve" in err.lower()
+        assert meeting.status == MeetingStatus.PENDING_APPROVAL
+        assert meeting.notes is None
+        db.commit.assert_not_awaited()
+
+    async def test_patch_can_submit_for_approval(self):
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1", organization_id="org-1", title="T", status=MeetingStatus.DRAFT
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"status": "pending_approval"}
+        )
+        assert err is None
+        assert result.status == "pending_approval"
+
+    async def test_patch_resending_approved_on_approved_meeting_is_allowed(self):
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1", organization_id="org-1", title="T", status=MeetingStatus.APPROVED
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"status": "approved", "location": "Hall"}
+        )
+        assert err is None
+        assert result.location == "Hall"
 
     async def test_clears_a_nullable_field(self):
         from app.models.meeting import Meeting

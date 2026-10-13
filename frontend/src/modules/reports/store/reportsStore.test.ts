@@ -112,6 +112,17 @@ describe('useReportsStore', () => {
       expect(useReportsStore.getState().availableReportsLoading).toBe(false);
     });
 
+    // A captive portal answers 200 with a body that is not the contract; the
+    // Saved Reports screen maps this list, so it must stay an array.
+    it('keeps an empty list when the response is not the expected shape', async () => {
+      mockGetAvailableReports.mockResolvedValue({});
+
+      await useReportsStore.getState().fetchAvailableReports();
+
+      expect(useReportsStore.getState().availableReports).toEqual([]);
+      expect(useReportsStore.getState().availableReportsLoading).toBe(false);
+    });
+
     it('sets error on failure', async () => {
       mockGetAvailableReports.mockRejectedValue(new Error('Network error'));
 

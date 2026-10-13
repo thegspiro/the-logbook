@@ -7,7 +7,7 @@ Request and response schemas for report generation endpoints.
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 # ============================================
 # Report Request Schemas
@@ -65,7 +65,9 @@ class SavedReportCreate(BaseModel):
         None, max_length=20
     )  # daily, weekly, monthly, quarterly
     schedule_day: Optional[int] = None
-    email_recipients: Optional[List[str]] = None
+    # Addresses only; whether each may receive the report is the PII gate's
+    # decision at save and at send (app/services/saved_report_schedule.py).
+    email_recipients: Optional[List[EmailStr]] = None
 
 
 class SavedReportUpdate(BaseModel):
@@ -77,7 +79,7 @@ class SavedReportUpdate(BaseModel):
     is_scheduled: Optional[bool] = None
     schedule_frequency: Optional[str] = Field(None, max_length=20)
     schedule_day: Optional[int] = None
-    email_recipients: Optional[List[str]] = None
+    email_recipients: Optional[List[EmailStr]] = None
 
 
 class SavedReportResponse(BaseModel):
@@ -94,9 +96,9 @@ class SavedReportResponse(BaseModel):
     email_recipients: Optional[List[str]] = None
     last_run_at: Optional[str] = None
     next_run_at: Optional[str] = None
-    # No scheduler reads is_scheduled/schedule_frequency/next_run_date yet —
-    # always False until one exists (see app/models/analytics.py). Lets the
-    # UI label a saved report as "not yet automated" instead of "Active".
+    # True when the schedule is live: the saved_report_delivery task reads
+    # is_scheduled/schedule_frequency/next_run_date (RPT2-29-2). Kept so a
+    # client written against the earlier always-False field still reads it.
     enforced: bool = False
     created_by: str
     created_at: str

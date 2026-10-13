@@ -266,6 +266,48 @@ export function getPhaseGateWarning(error: unknown): string | null {
   return null;
 }
 
+/** One series session ahead of the member's training phase (EV-23). */
+export interface PhaseGateOccurrence {
+  event_id: string;
+  title: string;
+  /** UTC ISO-8601; format it in the department's timezone. */
+  start_datetime: string | null;
+  message: string;
+}
+
+/**
+ * Detect the series form of the phase gate: `POST /events/{id}/rsvp-series`
+ * answers 409 `phase_gate` with an `occurrences` list naming every session
+ * ahead of the member's phase. Returns null for anything else, including the
+ * single-event form (which has no list).
+ */
+export function getSeriesPhaseGateWarning(
+  error: unknown
+): { message: string; occurrences: PhaseGateOccurrence[] } | null {
+  const response = (
+    error as {
+      response?: {
+        status?: number;
+        data?: { detail?: { warning_type?: string; message?: string; occurrences?: unknown } };
+      };
+    }
+  )?.response;
+  const body = response?.data?.detail;
+  if (
+    response?.status !== 409 ||
+    !body ||
+    typeof body !== 'object' ||
+    body.warning_type !== 'phase_gate' ||
+    !Array.isArray(body.occurrences)
+  ) {
+    return null;
+  }
+  return {
+    message: body.message ?? 'Some sessions in this series are ahead of your current phase.',
+    occurrences: body.occurrences as PhaseGateOccurrence[],
+  };
+}
+
 /**
  * Type-safe error handler for async operations
  *

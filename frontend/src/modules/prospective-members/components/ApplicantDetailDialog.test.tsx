@@ -427,7 +427,6 @@ describe('ApplicantDetailDialog dialog shell', () => {
     const dialog = screen.getByRole('dialog', { name: 'Applicant details' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveClass('items-center', 'justify-center');
-    expect(dialog).not.toHaveClass('drawer-panel');
   });
 
   it('closes on Escape and on the close button', async () => {
