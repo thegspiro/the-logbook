@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)**: branch `claude/security-review-inventory`, Feature 11
+**PR [#3166](https://github.com/thegspiro/the-logbook/pull/3166)**: branch
+`claude/security-review-inventory`, Feature 11
 (Inventory), pass 8 (watchdog pickup). 0 code fixes needed, 0 new security
 findings — INV-8, INV-9, INV-16 and INV-17 (pass 7's full list of standing
 open/flagged items) all re-verified **already fixed**, by five owner-direct
