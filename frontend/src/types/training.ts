@@ -1798,8 +1798,58 @@ export interface TrainingSubmission {
   reviewed_at?: string;
   reviewer_notes?: string;
   training_record_id?: string;
+  /** Set only on an entry a shift officer recorded for the crew. */
+  recorded_by?: string | null;
+  recorder_name?: string | null;
+  crew_batch_id?: string | null;
+  shift_id?: string | null;
   submitted_at: string;
   updated_at: string;
+}
+
+/** A drill a shift officer records for every member present. */
+export interface CrewTrainingCreate {
+  course_name: string;
+  training_type: TrainingType;
+  description?: string | undefined;
+  completion_date: string;
+  /** "HH:MM" */
+  start_time?: string | undefined;
+  hours_completed: number;
+  instructor?: string | undefined;
+  location?: string | undefined;
+  category_id?: string | undefined;
+  shift_id?: string | undefined;
+  member_ids: string[];
+}
+
+export interface CrewTrainingResult {
+  crew_batch_id: string;
+  submissions: TrainingSubmission[];
+}
+
+export interface CrewMemberOption {
+  id: string;
+  name: string;
+}
+
+export interface CrewRecordingContext {
+  can_record: boolean;
+  members: CrewMemberOption[];
+}
+
+export interface CrewShiftOption {
+  id: string;
+  start_time: string;
+  end_time?: string | null;
+  platoon?: string | null;
+  shift_officer_name?: string | null;
+  member_ids: string[];
+}
+
+export interface CrewBatchApproveResult {
+  approved: number;
+  skipped: { submission_id: string; member_name?: string | null; reason: string }[];
 }
 
 export interface TrainingSubmissionCreate {
@@ -2141,6 +2191,43 @@ export interface RequirementDetail {
    * the met/total summary until it passes.
    */
   catch_up_deadline?: string | null;
+  /**
+   * For a requirement whose completion window crosses the year (November to
+   * January): the date the next window opens. Until then a class taken in the
+   * last window still counts, so the requirement reads as met.
+   */
+  next_window_opens?: string | null;
+}
+
+/** One training record on the History tab, from `/my-training/records`. */
+export interface MyTrainingHistoryRecord {
+  id: string;
+  course_name: string;
+  course_code?: string | null;
+  training_type: string;
+  status: string;
+  completion_date: string | null;
+  expiration_date: string | null;
+  /** Absent when the department hides training hours from members. */
+  hours_completed?: number;
+  instructor?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+}
+
+export interface MyTrainingHistoryYear {
+  /** Four digits, or `undated` for records still awaiting approval. */
+  year: string;
+  records: number;
+  hours?: number;
+}
+
+export interface MyTrainingHistoryPage {
+  items: MyTrainingHistoryRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  years: MyTrainingHistoryYear[];
 }
 
 export interface MyTrainingSummary {
@@ -2173,6 +2260,12 @@ export interface MyTrainingSummary {
      */
     hours_this_month?: number;
     completed_courses: number;
+    /** Calendar year to date, in the department's timezone. */
+    year_to_date_courses?: number;
+    /** Withheld alongside `total_hours`. */
+    year_to_date_hours?: number;
+    /** The calendar year the `year_to_date_*` figures cover. */
+    year?: number;
   };
   requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };
   certifications?: Array<{

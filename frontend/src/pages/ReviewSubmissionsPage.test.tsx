@@ -6,6 +6,7 @@ import { renderWithRouter } from '../test/utils';
 const getPendingSubmissions = vi.fn();
 const getConfig = vi.fn();
 const updateConfig = vi.fn();
+const approveCrewBatch = vi.fn();
 const updateRecord = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -15,6 +16,7 @@ vi.mock('../services/api', () => ({
     getPendingCount: () => Promise.resolve({ pending_count: 1 }),
     getPendingSubmissions: (...args: unknown[]) => getPendingSubmissions(...args) as unknown,
     getAttachmentDownloadUrl: () => '',
+    approveCrewBatch: (...args: unknown[]) => approveCrewBatch(...args) as unknown,
   },
   trainingService: {
     updateRecord: (...args: unknown[]) => updateRecord(...args) as unknown,
@@ -69,6 +71,55 @@ describe('ReviewSubmissionsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Request Revision' }));
     expect(screen.getByRole('textbox', { name: 'Reason for the member (required)' })).toBeInTheDocument();
+  });
+
+  describe('crew-recorded training', () => {
+    const crewEntry = (id: string, name: string) => ({
+      id,
+      organization_id: 'org-1',
+      submitted_by: `user-${id}`,
+      submitter_name: name,
+      recorded_by: 'officer-1',
+      recorder_name: 'Lee Crew',
+      crew_batch_id: 'batch-1',
+      course_name: 'Hose Advancement Drill',
+      training_type: 'skills_practice',
+      completion_date: '2026-10-11',
+      hours_completed: 0.75,
+      status: 'pending_review',
+      submitted_at: '2026-10-11T18:00:00Z',
+      updated_at: '2026-10-11T18:00:00Z',
+    });
+
+    beforeEach(() => {
+      getPendingSubmissions.mockReset();
+      getPendingSubmissions.mockResolvedValue([crewEntry('a', 'Ana Crew'), crewEntry('b', 'Ben Crew')]);
+      approveCrewBatch.mockReset();
+      approveCrewBatch.mockResolvedValue({ approved: 2, skipped: [] });
+    });
+
+    it('groups the crew under one heading and approves it in one action', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      const group = await screen.findByRole('region', { name: 'Crew training: Hose Advancement Drill' });
+      expect(group).toHaveTextContent('Recorded by Lee Crew');
+      expect(group).toHaveTextContent('2 members');
+
+      await user.click(screen.getByRole('button', { name: 'Approve all 2' }));
+      expect(approveCrewBatch).toHaveBeenCalledWith('batch-1');
+    });
+
+    it('lets the reviewer open one member, but not send it back to them', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Ana Crew/ }));
+
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request Revision' })).not.toBeInTheDocument();
+    });
   });
 
   describe('certificate file retention', () => {

@@ -21,6 +21,7 @@ from app.core.utils import generate_uuid
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.training import (
     SelfReportConfig,
+    Shift,
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
@@ -54,6 +55,21 @@ MEMBER_NOTICE_DECISIONS = (
     "revision_requested",
     "approval_reversed",
 )
+
+
+def assert_member_may_change(submission: TrainingSubmission) -> None:
+    """Refuse a member's edit, delete or attachment change to a crew entry.
+
+    A crew entry is the recording officer's statement of who was present and
+    for how long. Letting the member credited by it change the hours would put
+    words in the officer's mouth that the reviewer would read as theirs. The
+    training officer adjusts it on approval instead.
+    """
+    if submission.crew_batch_id:
+        raise PermissionError(
+            "This training was recorded by your officer. Ask the training "
+            "officer to correct it."
+        )
 
 
 class TrainingSubmissionService:
@@ -422,6 +438,7 @@ class TrainingSubmissionService:
         attribute the response schema declares, resolved in one query.
         """
         user_ids = {str(s.submitted_by) for s in submissions if s.submitted_by}
+        user_ids |= {str(s.recorded_by) for s in submissions if s.recorded_by}
         if not user_ids:
             return
         result = await self.db.execute(
@@ -435,6 +452,11 @@ class TrainingSubmissionService:
         }
         for submission in submissions:
             submission.submitter_name = names.get(str(submission.submitted_by))
+            submission.recorder_name = (
+                names.get(str(submission.recorded_by))
+                if submission.recorded_by
+                else None
+            )
 
     async def update_submission(
         self,
@@ -450,6 +472,8 @@ class TrainingSubmissionService:
 
         if submission.submitted_by != user_id:
             raise PermissionError("You can only edit your own submissions")
+
+        assert_member_may_change(submission)
 
         if submission.status not in (
             SubmissionStatus.DRAFT,
@@ -502,6 +526,8 @@ class TrainingSubmissionService:
         if submission.submitted_by != user_id:
             raise PermissionError("You can only delete your own submissions")
 
+        assert_member_may_change(submission)
+
         if submission.status not in (
             SubmissionStatus.DRAFT,
             SubmissionStatus.PENDING_REVIEW,
@@ -516,6 +542,235 @@ class TrainingSubmissionService:
         await self._archive_review_prompts(organization_id, submission_id)
         await self._archive_member_notices(organization_id, submission_id)
         return True
+
+    # ==================== Crew-Recorded Training ====================
+
+    async def create_crew_submissions(
+        self,
+        organization_id: str,
+        recorded_by: str,
+        member_ids: List[str],
+        course_name: str,
+        training_type: str,
+        completion_date: date,
+        hours_completed: float,
+        shift_id: Optional[str] = None,
+        **kwargs,
+    ) -> Tuple[str, List[TrainingSubmission]]:
+        """File one pending submission per member present at a drill.
+
+        Every entry waits for the training officer regardless of the
+        department's auto-approve settings: the people credited did not report
+        it themselves, so nobody has yet confirmed it but the officer who
+        recorded it. No evidence attachment is required — the recording
+        officer's attestation is the evidence, and the reviewer sees who gave
+        it.
+
+        Caller authorization (the recorder can serve as a shift officer) is
+        the endpoint's job; this enforces everything about the data.
+        """
+        config = await self.get_config(organization_id)
+        self._assert_within_department_limits(config, training_type, hours_completed)
+
+        await assert_in_org(
+            self.db,
+            TrainingCategory,
+            kwargs.get("category_id"),
+            organization_id,
+            allow_none=True,
+            label="training category",
+        )
+        await assert_in_org(
+            self.db,
+            Shift,
+            shift_id,
+            organization_id,
+            allow_none=True,
+            label="shift",
+        )
+
+        wanted = list(dict.fromkeys(str(m) for m in member_ids))
+        if not wanted:
+            raise ValueError("Select at least one member who was present")
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id.in_(wanted),
+                User.organization_id == organization_id,
+                User.is_active,
+            )
+        )
+        found = {str(uid) for (uid,) in result.all()}
+        missing = [m for m in wanted if m not in found]
+        if missing:
+            raise ValueError(
+                f"{len(missing)} selected member(s) are not active members of "
+                "this department"
+            )
+
+        batch_id = generate_uuid()
+        fields = {k: v for k, v in kwargs.items() if v is not None}
+        submissions = []
+        for member_id in wanted:
+            submission = TrainingSubmission(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                submitted_by=member_id,
+                recorded_by=recorded_by,
+                crew_batch_id=batch_id,
+                shift_id=shift_id,
+                course_name=course_name,
+                training_type=training_type,
+                completion_date=completion_date,
+                hours_completed=hours_completed,
+                status=SubmissionStatus.PENDING_REVIEW,
+                **fields,
+            )
+            self.db.add(submission)
+            submissions.append(submission)
+
+        await self.db.commit()
+        for submission in submissions:
+            await self.db.refresh(submission)
+        await self._attach_submitter_names(submissions)
+
+        logger.info(
+            f"Crew training recorded: {course_name} by {recorded_by} for "
+            f"{len(submissions)} member(s) (batch={batch_id})"
+        )
+        await self._notify_crew_reviewers(
+            organization_id=organization_id,
+            batch_id=batch_id,
+            recorded_by=recorded_by,
+            summary=self._describe(submissions[0]),
+            count=len(submissions),
+        )
+        return batch_id, submissions
+
+    async def get_crew_batch(
+        self, batch_id: str, organization_id: str
+    ) -> List[TrainingSubmission]:
+        """Every submission filed in one crew recording, in this org."""
+        result = await self.db.execute(
+            select(TrainingSubmission)
+            .where(
+                TrainingSubmission.crew_batch_id == batch_id,
+                TrainingSubmission.organization_id == organization_id,
+            )
+            .order_by(TrainingSubmission.submitted_at)
+        )
+        submissions = list(result.scalars().all())
+        await self._attach_submitter_names(submissions)
+        return submissions
+
+    async def approve_crew_batch(
+        self,
+        batch_id: str,
+        reviewer_id: str,
+        organization_id: str,
+        reviewer_notes: Optional[str] = None,
+    ) -> Tuple[List[TrainingSubmission], List[dict]]:
+        """Approve every pending entry in a crew recording, as recorded.
+
+        An entry the reviewer adjusted or decided individually is already out
+        of the pending state and is left as it is. The reviewer's own entry,
+        when they were in the crew, is skipped rather than failing the batch:
+        separation of duties means another officer approves that one.
+        """
+        batch = await self.get_crew_batch(batch_id, organization_id)
+        if not batch:
+            raise ValueError("Crew training entry not found")
+
+        recorded_by = next((s.recorded_by for s in batch if s.recorded_by), None)
+        assert_different_person(
+            reviewer_id,
+            recorded_by,
+            action="approve",
+            record="crew training you recorded",
+        )
+
+        approved: List[TrainingSubmission] = []
+        skipped: List[dict] = []
+        pending = [s for s in batch if s.status == SubmissionStatus.PENDING_REVIEW]
+        if not pending:
+            raise ValueError("Nothing in this crew entry is awaiting approval")
+        for submission in pending:
+            name = getattr(submission, "submitter_name", None)
+            if str(submission.submitted_by) == str(reviewer_id):
+                skipped.append(
+                    {
+                        "submission_id": submission.id,
+                        "member_name": name,
+                        "reason": "Your own entry needs another officer's approval",
+                    }
+                )
+                continue
+            reviewed = await self.review_submission(
+                submission_id=str(submission.id),
+                reviewer_id=reviewer_id,
+                organization_id=organization_id,
+                action="approve",
+                reviewer_notes=reviewer_notes,
+            )
+            approved.append(reviewed)
+        return approved, skipped
+
+    async def _archive_crew_prompt_if_settled(
+        self, organization_id: str, batch_id: str
+    ) -> None:
+        """Clear the crew prompt once nothing in the batch awaits review."""
+        remaining = (
+            await self.db.execute(
+                select(sa_func.count(TrainingSubmission.id)).where(
+                    TrainingSubmission.crew_batch_id == batch_id,
+                    TrainingSubmission.organization_id == organization_id,
+                    TrainingSubmission.status == SubmissionStatus.PENDING_REVIEW,
+                )
+            )
+        ).scalar_one()
+        if not remaining:
+            await NotificationsService(self.db).archive_related_notifications(
+                organization_id, REVIEW_PROMPT_CATEGORY, "crew_batch_id", batch_id
+            )
+
+    async def _notify_crew_reviewers(
+        self,
+        *,
+        organization_id: str,
+        batch_id: str,
+        recorded_by: str,
+        summary: str,
+        count: int,
+    ) -> None:
+        """One prompt per training officer for the whole crew, not one each."""
+
+        async def build() -> List[NotificationLog]:
+            officers = [
+                officer
+                for officer in await self._training_officers(organization_id)
+                if str(officer.id) != str(recorded_by)
+            ]
+            if not officers:
+                return []
+            name = await self._display_name(recorded_by, organization_id, "An officer")
+            people = "1 member" if count == 1 else f"{count} members"
+            return [
+                NotificationLog(
+                    organization_id=organization_id,
+                    recipient_id=str(officer.id),
+                    channel=NotificationChannel.IN_APP,
+                    category=REVIEW_PROMPT_CATEGORY,
+                    subject=f"Crew training awaiting approval — {name}",
+                    message=f"{name} recorded {summary} for {people}.",
+                    action_url=REVIEW_QUEUE_URL,
+                    notification_metadata={
+                        "crew_batch_id": batch_id,
+                        "recorded_by": str(recorded_by),
+                    },
+                )
+                for officer in officers
+            ]
+
+        await self._deliver_in_app(build, f"review of crew batch {batch_id}")
 
     # ==================== Review / Approval ====================
 
@@ -553,6 +808,23 @@ class TrainingSubmissionService:
                 submission.submitted_by,
                 action="approve",
                 record="training submission",
+            )
+            # The officer who vouched for a crew entry is the other half of
+            # the same control: their word is what the review checks.
+            assert_different_person(
+                reviewer_id,
+                submission.recorded_by,
+                action="approve",
+                record="crew training entry you recorded",
+            )
+
+        if action == "revision_requested" and submission.crew_batch_id:
+            # The member cannot edit an entry their officer filed (see
+            # assert_member_may_change), so sending it back to them would
+            # strand it. The reviewer corrects it on approval or rejects it.
+            raise ValueError(
+                "A crew-recorded entry cannot be sent back to the member. "
+                "Adjust it when approving, or reject it."
             )
 
         # What the member sent, so an approval that changes it can say how.
@@ -619,6 +891,10 @@ class TrainingSubmissionService:
         # should still be prompted for it — including a revision request,
         # which waits on the member rather than on an officer.
         await self._archive_review_prompts(organization_id, submission_id)
+        if submission.crew_batch_id:
+            await self._archive_crew_prompt_if_settled(
+                organization_id, str(submission.crew_batch_id)
+            )
 
         if action == "approve":
             changes = self._changed_values(

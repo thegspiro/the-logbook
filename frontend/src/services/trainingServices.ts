@@ -1278,6 +1278,11 @@ export const trainingSessionService = {
 // ============================================
 
 import type {
+  CrewBatchApproveResult,
+  CrewRecordingContext,
+  CrewShiftOption,
+  CrewTrainingCreate,
+  CrewTrainingResult,
   SelfReportConfig,
   SelfReportConfigUpdate,
   SubmissionAttachment,
@@ -1425,6 +1430,31 @@ export const trainingSubmissionService = {
     const response = await api.post<TrainingSubmission>(`/training/submissions/${submissionId}/review`, review);
     return response.data;
   },
+
+  // Crew-recorded training
+  async getCrewRecordingContext(): Promise<CrewRecordingContext> {
+    const response = await api.get<CrewRecordingContext>('/training/submissions/crew/context');
+    return response.data;
+  },
+
+  async getCrewShiftOptions(shiftDate: string): Promise<CrewShiftOption[]> {
+    const response = await api.get<CrewShiftOption[]>('/training/submissions/crew/shifts', {
+      params: { shift_date: shiftDate },
+    });
+    return asArray(response.data);
+  },
+
+  async recordCrewTraining(data: CrewTrainingCreate): Promise<CrewTrainingResult> {
+    const response = await api.post<CrewTrainingResult>('/training/submissions/crew', data);
+    return response.data;
+  },
+
+  async approveCrewBatch(batchId: string, reviewerNotes?: string): Promise<CrewBatchApproveResult> {
+    const response = await api.post<CrewBatchApproveResult>(`/training/submissions/crew/${batchId}/approve`, {
+      reviewer_notes: reviewerNotes,
+    });
+    return response.data;
+  },
 };
 
 // ============================================
@@ -1455,6 +1485,24 @@ export const trainingModuleConfigService = {
   async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
     const response = await api.get<import('../types/training').MyTrainingSummary>(
       '/training/module-config/my-training'
+    );
+    return response.data;
+  },
+
+  async getMyTrainingRecords(
+    params: { year?: string; search?: string; trainingType?: string; page?: number; pageSize?: number } = {}
+  ): Promise<import('../types/training').MyTrainingHistoryPage> {
+    const response = await api.get<import('../types/training').MyTrainingHistoryPage>(
+      '/training/module-config/my-training/records',
+      {
+        params: {
+          year: params.year || undefined,
+          search: params.search || undefined,
+          training_type: params.trainingType || undefined,
+          page: params.page ?? 1,
+          page_size: params.pageSize ?? 25,
+        },
+      }
     );
     return response.data;
   },

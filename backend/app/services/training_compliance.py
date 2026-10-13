@@ -84,6 +84,32 @@ def _get_custom_annual_window(req, today: date):
         return date(yr, start_month, start_day), date(yr, end_month, end_day)
 
 
+def next_window_opens(req, today: date) -> Optional[date]:
+    """When the next completion window of a year-crossing requirement opens.
+
+    A requirement configured November to January keeps last winter's window
+    open through the following October (see ``_get_custom_annual_window``), so
+    a member who took it early reads as complete for the whole year. This is
+    the date the *next* window starts, which is when they can take it again
+    for the coming year. ``None`` for every requirement without such a window,
+    and while a window is already open.
+    """
+    if not getattr(req, "period_end_month", None):
+        return None
+    start_month = getattr(req, "period_start_month", None) or 1
+    if start_month <= req.period_end_month:
+        return None
+    start_day = getattr(req, "period_start_day", None) or 1
+    end_day = (
+        getattr(req, "period_end_day", None)
+        or calendar.monthrange(today.year, req.period_end_month)[1]
+    )
+    if today <= date(today.year, req.period_end_month, end_day):
+        return None
+    opens = date(today.year, start_month, start_day)
+    return opens if today < opens else None
+
+
 def biannual_window(req, today: date) -> tuple[date, date]:
     """The window a BIANNUAL ("Every 2 Years") requirement is graded over.
 

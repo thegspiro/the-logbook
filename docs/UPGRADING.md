@@ -465,6 +465,19 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### The maintenance commands now run in production images (2026-10-12)
+
+Commands this guide and `docs/KEY_ROTATION.md` tell you to run —
+`relocate_uploads.py`, `encrypt_uploads.py`, `rotate_encryption_key.py` and the
+rest of `backend/scripts/` — answered `can't open file '/app/scripts/...'` on
+every production install: the production image never contained `scripts/`.
+It does from this release; rebuild to pick it up. `seed_test_users.py` is
+deliberately left out of production images.
+
+The container name in these commands is the standard compose file's
+`intranet-backend`. **On Unraid it is `logbook-backend`**
+(`unraid/UNRAID-INSTALLATION.md`, "Running maintenance commands").
+
 ### Editing a colleague's profile needs `members.manage` (2026-10-13)
 
 `PATCH /users/{id}/profile` and `PATCH /users/{id}/contact-info` now refuse

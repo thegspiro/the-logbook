@@ -239,6 +239,13 @@ class TrainingSubmissionResponse(UTCResponseBase):
     reviewer_notes: Optional[str]
     training_record_id: Optional[UUID]
 
+    # Set only on a crew-recorded entry: the officer who filed it on the
+    # member's behalf, the batch it was filed in, and the shift it ran on.
+    recorded_by: Optional[UUID] = None
+    recorder_name: Optional[str] = None
+    crew_batch_id: Optional[UUID] = None
+    shift_id: Optional[UUID] = None
+
     submitted_at: datetime
     updated_at: datetime
 
@@ -272,3 +279,101 @@ class SubmissionReviewRequest(BaseModel):
     @classmethod
     def _validate_override_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+
+# ==================== Crew-Recorded Training ====================
+
+# A drill is recorded for the crew on hand, not the whole department. The cap
+# keeps one request from writing an unbounded number of rows.
+CREW_MAX_MEMBERS = 100
+
+
+class CrewTrainingCreate(BaseModel):
+    """A drill recorded by a shift officer for every member present.
+
+    Files one pending submission per member; none is credited until the
+    training officer approves it.
+    """
+
+    course_name: str = Field(..., min_length=1, max_length=255)
+    course_code: Optional[str] = Field(None, max_length=50)
+    training_type: str
+    description: Optional[str] = Field(None, max_length=5000)
+
+    completion_date: date
+    start_time: Optional[time] = None
+    hours_completed: float = Field(..., gt=0)
+
+    instructor: Optional[str] = Field(None, max_length=255)
+    location: Optional[str] = Field(None, max_length=255)
+
+    category_id: Optional[UUID] = None
+    shift_id: Optional[UUID] = None
+
+    member_ids: list[UUID] = Field(..., min_length=1, max_length=CREW_MAX_MEMBERS)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("completion_date")
+    @classmethod
+    def _validate_completion_date(cls, v: date) -> date:
+        # Same rule and grace as a self-report: this records training that
+        # has already happened.
+        from datetime import timedelta
+
+        if v > date.today() + timedelta(days=1):
+            raise ValueError("completion_date cannot be in the future")
+        return v
+
+    @field_validator("member_ids")
+    @classmethod
+    def _dedupe_members(cls, v: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(v))
+
+
+class CrewTrainingResult(BaseModel):
+    """What a crew recording filed."""
+
+    crew_batch_id: UUID
+    submissions: list[TrainingSubmissionResponse]
+
+
+class CrewMemberOption(BaseModel):
+    id: UUID
+    name: str
+
+
+class CrewRecordingContext(BaseModel):
+    """Whether the caller may record crew training, and whom they can pick."""
+
+    can_record: bool
+    members: list[CrewMemberOption] = []
+
+
+class CrewShiftOption(BaseModel):
+    """A shift on the chosen day, offered to pre-fill who was present."""
+
+    id: UUID
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    platoon: Optional[str] = None
+    shift_officer_name: Optional[str] = None
+    member_ids: list[UUID]
+
+
+class CrewBatchApproveRequest(BaseModel):
+    reviewer_notes: Optional[str] = Field(None, max_length=5000)
+
+
+class CrewBatchSkipped(BaseModel):
+    submission_id: UUID
+    member_name: Optional[str] = None
+    reason: str
+
+
+class CrewBatchApproveResult(BaseModel):
+    approved: int
+    skipped: list[CrewBatchSkipped]

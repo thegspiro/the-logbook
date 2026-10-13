@@ -38,6 +38,8 @@ def _submission(submitted_by):
         reviewed_by=None,
         reviewed_at=None,
         reviewer_notes=None,
+        recorded_by=None,
+        crew_batch_id=None,
     )
 
 
