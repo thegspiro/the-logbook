@@ -28,6 +28,9 @@ import {
   type AmendmentLogReport,
   type BudgetVsActualReport,
   type FiscalYear,
+  FUNCTIONAL_CLASS_LABELS,
+  type FunctionalExpensesReport,
+  type LateSubstantiationReport,
   type PaymentsRegisterReport,
 } from '../types';
 import { useTablist } from '../../../hooks/useTablist';
@@ -36,6 +39,8 @@ const REPORTS = {
   'budget-vs-actual': 'Budget vs actual',
   'amendment-log': 'Amendment log',
   'payments-register': 'Payments register',
+  'functional-expenses': 'Functional expenses',
+  'late-substantiation': 'Outside the accountable plan',
 } as const;
 type ReportKey = keyof typeof REPORTS;
 const REPORT_KEYS = Object.keys(REPORTS) as ReportKey[];
@@ -451,7 +456,11 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
 // Payments register
 // =============================================================================
 
-const PaymentsRegister: React.FC = () => {
+/**
+ * A From/To period, defaulting to this month so far, with the server's limits
+ * checked before asking it.
+ */
+function usePeriod() {
   const tz = useTimezone();
   const today = getTodayLocalDate(tz);
   const [start, setStart] = useState(`${today.slice(0, 8)}01`);
@@ -466,38 +475,48 @@ const PaymentsRegister: React.FC = () => {
         : span !== null && span >= MAX_REGISTER_DAYS
           ? `Choose a period of at most ${MAX_REGISTER_DAYS} days.`
           : null;
+  return { start, setStart, end, setEnd, rangeError };
+}
+
+const PeriodPicker: React.FC<{ period: ReturnType<typeof usePeriod> }> = ({ period }) => (
+  <div className="flex flex-wrap items-end gap-3 print:hidden">
+    <div>
+      <label htmlFor="register-start" className="form-label">
+        From
+      </label>
+      <input
+        id="register-start"
+        type="date"
+        className="form-input w-44"
+        value={period.start}
+        onChange={(e) => period.setStart(e.target.value)}
+      />
+    </div>
+    <div>
+      <label htmlFor="register-end" className="form-label">
+        To
+      </label>
+      <input
+        id="register-end"
+        type="date"
+        className="form-input w-44"
+        value={period.end}
+        onChange={(e) => period.setEnd(e.target.value)}
+      />
+    </div>
+  </div>
+);
+
+const PaymentsRegister: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
 
   const load = useCallback(() => financeReportService.paymentsRegister(start, end), [start, end]);
   const { data, error, loading } = useReport<PaymentsRegisterReport>(rangeError ? null : load);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3 print:hidden">
-        <div>
-          <label htmlFor="register-start" className="form-label">
-            From
-          </label>
-          <input
-            id="register-start"
-            type="date"
-            className="form-input w-44"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="register-end" className="form-label">
-            To
-          </label>
-          <input
-            id="register-end"
-            type="date"
-            className="form-input w-44"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </div>
-      </div>
+      <PeriodPicker period={period} />
       <ReportFrame
         title="Payments register"
         subtitle={
@@ -575,6 +594,211 @@ const PaymentsRegister: React.FC = () => {
 };
 
 // =============================================================================
+// Functional expenses
+// =============================================================================
+
+const FunctionalExpenses: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
+
+  const load = useCallback(() => financeReportService.functionalExpenses(start, end), [start, end]);
+  const { data, error, loading } = useReport<FunctionalExpensesReport>(rangeError ? null : load);
+  const unclassified = data?.classes.find((c) => c.functionalClass === null);
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker period={period} />
+      <ReportFrame
+        title="Functional expenses"
+        subtitle={
+          data
+            ? `Payments ${formatCalendarDate(data.start)} to ${formatCalendarDate(data.end)}, by function`
+            : 'What the money was spent for, as the Form 990 reports it.'
+        }
+        loading={loading}
+        error={rangeError ?? error}
+        canDownload={Boolean(data) && !rangeError}
+        onDownload={() => financeReportService.functionalExpensesCsv(start, end)}
+      >
+        {data && (
+          <>
+            {unclassified && (
+              <p className="alert-warning text-theme-alert-warning-text mb-3 text-sm">
+                {formatCurrency(unclassified.total)} is not classified yet. Give its budget categories an expense
+                classification in Finance settings, or classify the payments themselves.
+              </p>
+            )}
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Budget category</th>
+                    <th className={`${thClass} text-right`}>Amount</th>
+                  </tr>
+                </thead>
+                {data.classes.map((group) => (
+                  <tbody
+                    key={group.functionalClass ?? 'unclassified'}
+                    aria-labelledby={`functional-${group.functionalClass ?? 'unclassified'}`}
+                    className="border-theme-surface-border border-b"
+                  >
+                    <tr>
+                      <th
+                        id={`functional-${group.functionalClass ?? 'unclassified'}`}
+                        scope="rowgroup"
+                        colSpan={2}
+                        className={`${tdClass} pt-4 text-left font-semibold`}
+                      >
+                        {group.functionalClass ? FUNCTIONAL_CLASS_LABELS[group.functionalClass] : 'Unclassified'}
+                      </th>
+                    </tr>
+                    {group.categories.length === 0 ? (
+                      <tr>
+                        <td className={`${tdClass} text-theme-text-secondary`} colSpan={2}>
+                          Nothing in this period
+                        </td>
+                      </tr>
+                    ) : (
+                      group.categories.map((category) => (
+                        <tr key={category.categoryId ?? 'none'}>
+                          <td className={`${tdClass} pl-6`}>{category.categoryName ?? 'No budget line'}</td>
+                          <td className={numClass}>{formatCurrency(category.amount)}</td>
+                        </tr>
+                      ))
+                    )}
+                    <tr>
+                      <td className={`${tdClass} pl-6 font-semibold`}>Subtotal</td>
+                      <td className={`${numClass} font-semibold`}>{formatCurrency(group.total)}</td>
+                    </tr>
+                  </tbody>
+                ))}
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass}>Total</td>
+                    <td className={numClass}>{formatCurrency(data.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-theme-text-secondary mt-3 text-xs">
+              The same payments as the payments register for the period, net of voided checks. Each takes its own
+              classification if the finance office set one, otherwise its budget category&apos;s (or the parent
+              category&apos;s). Fundraising is the cost of raising money, not what donations bought.
+            </p>
+          </>
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
+// =============================================================================
+// Outside the accountable plan
+// =============================================================================
+
+const LateSubstantiation: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
+
+  const load = useCallback(() => financeReportService.lateSubstantiation(start, end), [start, end]);
+  const { data, error, loading } = useReport<LateSubstantiationReport>(rangeError ? null : load);
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker period={period} />
+      <ReportFrame
+        title="Outside the accountable plan"
+        subtitle={
+          data
+            ? `Reimbursements paid ${formatCalendarDate(data.start)} to ${formatCalendarDate(data.end)}`
+            : 'Expenses reimbursed after they were claimed too late.'
+        }
+        loading={loading}
+        error={rangeError ?? error}
+        canDownload={Boolean(data) && !rangeError}
+        onDownload={() => financeReportService.lateSubstantiationCsv(start, end)}
+      >
+        {data && data.rows.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title="No late expenses"
+            description="Nothing reimbursed in this period was claimed after the deadline."
+          />
+        ) : (
+          data && (
+            <>
+              <div className="overflow-x-auto print:overflow-visible">
+                <table className="rwd-table w-full">
+                  <thead className="border-theme-surface-border border-b text-left">
+                    <tr>
+                      <th className={thClass}>Paid</th>
+                      <th className={thClass}>Member</th>
+                      <th className={thClass}>Expense</th>
+                      <th className={thClass}>Incurred</th>
+                      <th className={thClass}>Submitted</th>
+                      <th className={thClass}>Confirmed by</th>
+                      <th className={`${thClass} text-right`}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-theme-surface-border divide-y">
+                    {data.rows.map((row, index) => (
+                      <tr key={`${row.reportId}-${String(index)}`}>
+                        <td data-label="Paid" className={tdClass}>
+                          {formatCalendarDate(row.paidOn)}
+                        </td>
+                        <td data-label="Member" className={tdClass}>
+                          {row.memberName}
+                        </td>
+                        <td data-label="Expense" className={tdClass}>
+                          {row.description}
+                          <span className="text-theme-text-secondary block text-xs">
+                            {row.reportNumber}
+                            {row.budgetLine ? ` · ${row.budgetLine}` : ''}
+                          </span>
+                        </td>
+                        <td data-label="Incurred" className={tdClass}>
+                          {formatCalendarDate(row.incurredOn)}
+                        </td>
+                        <td data-label="Submitted" className={tdClass}>
+                          {row.submittedOn ? formatCalendarDate(row.submittedOn) : '-'}
+                          {row.daysToSubmit != null && (
+                            <span className="text-theme-text-secondary block text-xs">
+                              {row.daysToSubmit} days later
+                            </span>
+                          )}
+                        </td>
+                        <td data-label="Confirmed by" className={tdClass}>
+                          {row.acknowledgedByName || '-'}
+                        </td>
+                        <td data-label="Amount" className={numClass}>
+                          {formatCurrency(row.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                    <tr>
+                      <td className={tdClass} colSpan={6}>
+                        Total
+                      </td>
+                      <td className={numClass}>{formatCurrency(data.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-theme-text-secondary mt-3 text-xs">
+                These expenses were claimed after the department&apos;s deadline, so their reimbursement falls outside
+                the accountable plan. Ask your payroll or tax adviser whether to report them as taxable pay.
+              </p>
+            </>
+          )
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
+// =============================================================================
 // Page
 // =============================================================================
 
@@ -605,7 +829,8 @@ const FinanceReportsPage: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const needsYear = active !== 'payments-register';
+  const needsYear =
+    active !== 'payments-register' && active !== 'late-substantiation' && active !== 'functional-expenses';
 
   return (
     <div className="space-y-4">
@@ -636,6 +861,10 @@ const FinanceReportsPage: React.FC = () => {
 
       {active === 'payments-register' ? (
         <PaymentsRegister />
+      ) : active === 'functional-expenses' ? (
+        <FunctionalExpenses />
+      ) : active === 'late-substantiation' ? (
+        <LateSubstantiation />
       ) : yearsError ? (
         <p role="alert" className="alert-danger text-sm">
           {yearsError}

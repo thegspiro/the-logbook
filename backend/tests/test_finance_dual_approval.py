@@ -446,10 +446,19 @@ class TestSettingsEndpoint:
         assert Decimal(on["dualApprovalThreshold"]) == Decimal("1000")
         assert off["dualApprovalThreshold"] is None
 
-    async def test_a_member_without_a_finance_role_cannot_read_it(
+    async def test_a_member_without_a_finance_permission_cannot_read_it(
         self, db_session, dept
     ):
-        async with _client(db_session, dept["alice"]) as client:
+        # finance.request reads it (the expense form warns about the
+        # substantiation deadline from it); holding no finance permission does
+        # not.
+        nobody = await _user(
+            db_session,
+            dept["org_id"],
+            "visitor",
+            [await _position(db_session, dept["org_id"], "Visitor", ["events.view"])],
+        )
+        async with _client(db_session, nobody) as client:
             resp = await client.get("/finance/settings")
 
         assert resp.status_code == 403

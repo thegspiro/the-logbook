@@ -115,13 +115,6 @@ function memberName(member: ConsentRosterMember): string {
   return formatMemberName(member) || 'Unnamed member';
 }
 
-/**
- * `SortableHeader` puts `aria-sort` on its own <button>, where ARIA does not
- * define it — the attribute belongs on the columnheader. Moving it into the
- * shared component would change six other tables in a commit scoped to this
- * page, and the component renders the button rather than the <th> that owns
- * the attribute, so the call site has to apply it either way.
- */
 const SortTh: React.FC<{
   label: string;
   field: SortField;
@@ -129,11 +122,7 @@ const SortTh: React.FC<{
   sortDirection: SortDirection;
   onSort: (field: string, direction: SortDirection) => void;
 }> = ({ label, field, sortField, sortDirection, onSort }) => (
-  <th
-    scope="col"
-    className="px-4 py-3 text-left"
-    aria-sort={sortField === field && sortDirection ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-  >
+  <th scope="col" className="px-4 py-3 text-left">
     <SortableHeader
       label={label}
       field={field}

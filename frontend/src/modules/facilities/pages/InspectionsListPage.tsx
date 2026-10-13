@@ -249,6 +249,7 @@ export default function InspectionsListPage() {
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}
               </h2>
               <button
+                data-dialog-close
                 onClick={() => setShowModal(false)}
                 aria-label="Close dialog"
                 className="text-theme-text-muted hover:text-theme-text-primary"

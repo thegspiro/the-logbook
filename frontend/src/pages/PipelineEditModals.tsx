@@ -14,6 +14,7 @@ import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker'
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
+import { ProgramEnrollmentRulesFields } from '../components/training/ProgramEnrollmentRulesFields';
 import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
 import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
@@ -84,6 +85,7 @@ const ModalShell: React.FC<{
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-lg font-bold">{title}</h2>
         <button
+          data-dialog-close
           type="button"
           onClick={onClose}
           aria-label="Close"
@@ -145,6 +147,12 @@ export const EditProgramModal: React.FC<{
   const [recertInterval, setRecertInterval] = useState(program.recert_interval_months?.toString() ?? '24');
   const [recertAnchorMonth, setRecertAnchorMonth] = useState(program.recert_anchor_month?.toString() ?? '');
   const [recertAnchorDay, setRecertAnchorDay] = useState(program.recert_anchor_day?.toString() ?? '');
+  // Seeded from the resolved list when the response carries it, so an id whose
+  // program was deleted is dropped on save rather than refused by the server.
+  const [prerequisiteIds, setPrerequisiteIds] = useState<string[]>(
+    program.prerequisite_programs?.map((p) => p.id) ?? program.prerequisite_program_ids ?? []
+  );
+  const [allowsConcurrent, setAllowsConcurrent] = useState(program.allows_concurrent_enrollment !== false);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
@@ -190,6 +198,9 @@ export const EditProgramModal: React.FC<{
         recert_interval_months: recertEnabled && recertInterval ? Number(recertInterval) : undefined,
         recert_anchor_month: recertEnabled && recertAnchorMonth ? Number(recertAnchorMonth) : undefined,
         recert_anchor_day: recertEnabled && recertAnchorDay ? Number(recertAnchorDay) : undefined,
+        // Always sent: an emptied list must reach the server as [] to clear.
+        prerequisite_program_ids: prerequisiteIds,
+        allows_concurrent_enrollment: allowsConcurrent,
       });
       toast.success('Pipeline updated');
       onSaved();
@@ -338,6 +349,14 @@ export const EditProgramModal: React.FC<{
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active
         </label>
       </div>
+      <ProgramEnrollmentRulesFields
+        excludeProgramId={program.id}
+        knownPrerequisites={program.prerequisite_programs}
+        selectedIds={prerequisiteIds}
+        onSelectedIdsChange={setPrerequisiteIds}
+        allowsConcurrent={allowsConcurrent}
+        onAllowsConcurrentChange={setAllowsConcurrent}
+      />
       <div className="border-theme-surface-border space-y-3 rounded-md border p-3">
         <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" checked={recertEnabled} onChange={(e) => setRecertEnabled(e.target.checked)} />

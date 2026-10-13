@@ -2085,6 +2085,7 @@ const IntegrationsPage: React.FC = () => {
                     }}
                     className="relative w-full max-w-lg"
                     role="dialog"
+                    aria-modal="true"
                     aria-labelledby="integration-connect-title"
                   >
                     <div className="px-6 pt-5 pb-4">
@@ -2098,6 +2099,7 @@ const IntegrationsPage: React.FC = () => {
                           </h3>
                         </div>
                         <button
+                          data-dialog-close
                           onClick={() => {
                             setShowConnectModal(null);
                             resetFormState();

@@ -11,7 +11,8 @@ import { ArrowLeft, AlertTriangle, FileCheck, CheckCircle, Clock, XCircle, Ban, 
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
-import { checkRequestService } from '../services/api';
+import { checkRequestService, functionalClassService } from '../services/api';
+import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -270,6 +271,15 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
+          <FunctionalClassControl
+            value={cr.functionalClass}
+            effective={cr.effectiveFunctionalClass}
+            subject={cr.requestNumber}
+            onChange={async (next) => {
+              await functionalClassService.setCheckRequest(cr.id, next);
+              await fetchCheckRequest(cr.id);
+            }}
+          />
           {cr.qbExportedAt && (
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>

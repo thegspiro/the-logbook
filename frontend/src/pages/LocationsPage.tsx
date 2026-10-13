@@ -326,6 +326,7 @@ function LocationSetupWizard({
               </span>
               {onDismiss && (
                 <button
+                  data-dialog-close
                   onClick={onDismiss}
                   className="text-theme-text-muted hover:text-theme-text-primary touch:mobile-touch-target transition-colors"
                   aria-label="Close wizard"
@@ -1536,6 +1537,7 @@ export default function LocationsPage() {
                 {editingStation ? 'Edit Station' : 'Add Station'}
               </h2>
               <button
+                data-dialog-close
                 onClick={() => setShowStationModal(false)}
                 aria-label="Close dialog"
                 className="text-theme-text-muted hover:text-theme-text-primary"
@@ -1663,6 +1665,7 @@ export default function LocationsPage() {
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
               </h2>
               <button
+                data-dialog-close
                 onClick={() => setShowRoomModal(false)}
                 aria-label="Close dialog"
                 className="text-theme-text-muted hover:text-theme-text-primary"

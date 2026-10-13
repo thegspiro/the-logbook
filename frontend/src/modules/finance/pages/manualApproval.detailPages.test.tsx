@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
 let storeState: Record<string, unknown> = {};
 vi.mock('../store/financeStore', () => ({
@@ -114,11 +115,13 @@ describe.each(pages)('$name detail page', ({ path, url, Page, state }) => {
   const renderWith = (over: Record<string, unknown> = {}) => {
     storeState = { isLoading: false, error: null, ...state(over) };
     return render(
-      <MemoryRouter initialEntries={[url]}>
-        <Routes>
-          <Route path={path} element={<Page />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path={path} element={<Page />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     );
   };
 

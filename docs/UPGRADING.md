@@ -431,6 +431,40 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Expenses can be classified as program, management & general or fundraising (2026-10-13)
+
+Migration `390fa30d0200` adds a nullable `functional_class` to budget
+categories, purchase requests, check requests and expense line items. Nothing
+is backfilled and nothing changes until a department classifies its
+categories: **Finance › Reports › Functional expenses** lists every payment as
+unclassified until then. Downgrading drops the columns and every
+classification set.
+
+### Expense reports can enforce a deadline for claiming expenses (2026-10-12)
+
+Migration `afaca8c1f812` adds `submitted_at`, `late_acknowledged_by` and
+`late_acknowledged_at` to expense reports and `substantiated_late` to expense
+line items. Nothing is backfilled.
+
+- **Nothing changes until you turn it on.** The new organization settings
+  `finance.substantiation_mode` (`off` by default, `warn` or `block`) and
+  `finance.substantiation_days` (1–60, default 60) are set by a member with
+  `settings.manage` on **Finance > Settings > Approval Chains**. Under `warn` a
+  report with a line older than the deadline still submits, but every approval
+  of it must confirm the late lines (`acknowledgeLateSubstantiation` on the
+  approve endpoints, `acknowledge_late_substantiation` on the emailed-token
+  endpoint; 400 without it). Under `block` it cannot be submitted.
+- **Reports submitted before this upgrade are never graded**, whatever the
+  setting: when they were submitted was not recorded.
+- **`GET /finance/settings` now answers `finance.request`**, so the expense form
+  can warn a member about a late date. It returns only the department's finance
+  rules.
+- **A receipt's download name now carries the date the expense was incurred**,
+  as written. It used the day before in time zones west of UTC.
+- **Downgrading** drops the columns. Which lines were late, and who confirmed
+  them, are lost; a report held for that confirmation stays waiting for
+  approval, and the previous version lets any approver approve it.
+
 ### Program requirements with a due-after-enrollment setting start sending reminders (2026-10-12)
 
 A program requirement's **due after enrollment (days)** setting was stored —

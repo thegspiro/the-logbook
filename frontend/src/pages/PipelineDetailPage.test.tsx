@@ -22,6 +22,7 @@ const mockCreateProgramPhase = vi.fn();
 const mockDeleteProgramPhase = vi.fn();
 const mockDeleteProgram = vi.fn();
 const mockReopenEnrollment = vi.fn();
+const mockGetPrograms = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -42,6 +43,7 @@ vi.mock('../services/api', () => ({
     deleteProgramPhase: (...a: unknown[]) => mockDeleteProgramPhase(...a) as unknown,
     deleteProgram: (...a: unknown[]) => mockDeleteProgram(...a) as unknown,
     reopenEnrollment: (...a: unknown[]) => mockReopenEnrollment(...a) as unknown,
+    getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
   },
 }));
 
@@ -142,6 +144,8 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     mockCreateProgramPhase.mockResolvedValue({ id: 'ph-new', program_id: 'prog-1', phase_number: 1, name: 'Intro' });
     mockDeleteProgramPhase.mockResolvedValue(undefined);
     mockDeleteProgram.mockResolvedValue(undefined);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
   });
 
   // Generated from the URL now rather than passed as items, so these set the
@@ -938,5 +942,44 @@ describe('PipelineDetailPage — checklist sign-off and expiry', () => {
   it('shows no expiry banner on a healthy enrollment', async () => {
     const dialog = await openProgress();
     expect(within(dialog).queryByText(/Deadline passed/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PipelineDetailPage — enrollment rules', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('names the prerequisite programs and says concurrency is flagged', async () => {
+    mockGetProgram.mockResolvedValue({
+      ...program,
+      allows_concurrent_enrollment: false,
+      prerequisite_program_ids: ['prog-a', 'prog-b'],
+      prerequisite_programs: [
+        { id: 'prog-a', name: 'Recruit School' },
+        { id: 'prog-b', name: 'Hazmat Operations' },
+      ],
+    });
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Recruit School, Hazmat Operations')).toBeInTheDocument();
+    expect(screen.getByText('Not allowed — flagged when enrolling')).toBeInTheDocument();
+  });
+
+  it('says there are none and that concurrency is allowed', async () => {
+    mockGetProgram.mockResolvedValue({ ...program, prerequisite_programs: [] });
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Prerequisite programs:')).toBeInTheDocument();
+    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByText('Allowed')).toBeInTheDocument();
   });
 });

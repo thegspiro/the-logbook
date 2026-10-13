@@ -216,6 +216,7 @@ export default function InspectionsSection({ facilityId, canEdit, canDelete }: P
                 {editingInspection ? 'Edit Inspection' : 'New Inspection'}
               </h2>
               <button
+                data-dialog-close
                 onClick={() => setShowModal(false)}
                 className="text-theme-text-muted hover:text-theme-text-primary"
                 aria-label="Close dialog"

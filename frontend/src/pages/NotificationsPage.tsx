@@ -1164,6 +1164,7 @@ const NotificationsPage: React.FC = () => {
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-theme-text-primary text-lg font-medium">Create Notification Rule</h3>
                     <button
+                      data-dialog-close
                       onClick={() => {
                         setShowCreateModal(false);
                         setCreateError(null);
