@@ -9,7 +9,9 @@ script's functions and check what they generate; when nginx is installed they
 also have it parse the result.
 """
 
+import re
 import shutil
+import socket
 import subprocess
 from pathlib import Path
 
@@ -212,9 +214,23 @@ class TestNginxAcceptsTheConfigs:
         )
         return cert, key
 
+    @staticmethod
+    def _free_port() -> int:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            return sock.getsockname()[1]
+
     def _nginx_t(self, tmp_path, certs, *configs: str) -> subprocess.CompletedProcess:
         cert, key = certs
         includes = []
+        # `nginx -t` opens every listening socket, and an unprivileged CI
+        # runner may not bind 80 or 443, so each port moves to a free one.
+        ports: dict[str, str] = {}
+
+        def move_port(match: re.Match) -> str:
+            port = ports.setdefault(match[2], str(self._free_port()))
+            return f"{match[1]}{port}"
+
         for i, config in enumerate(configs):
             # Point at throwaway certificates, and drop IPv6 listeners, which
             # a container without IPv6 cannot open even for a syntax test.
@@ -232,6 +248,7 @@ class TestNginxAcceptsTheConfigs:
             config = "\n".join(
                 line for line in config.splitlines() if "listen [::]" not in line
             )
+            config = re.sub(r"(listen\s+(?:[\d.]+:)?)(\d+)", move_port, config)
             path = tmp_path / f"site{i}.conf"
             path.write_text(config.replace("/var/log/nginx/", f"{tmp_path}/"))
             includes.append(f"include {path};")
@@ -240,6 +257,9 @@ class TestNginxAcceptsTheConfigs:
         main.write_text(
             f"pid {tmp_path}/nginx.pid;\nerror_log {tmp_path}/error.log;\n"
             "events {}\nhttp {\n"
+            # nginx opens its compiled-in access log unless the http block
+            # names one, and an unprivileged CI runner cannot open that.
+            f"access_log {tmp_path}/access.log;\n"
             + (f"include {mime};\n" if mime.exists() else "")
             + "\n".join(includes)
             + "\n}\n"
