@@ -142,8 +142,28 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editEquipment ? 'Edit Equipment' : 'Add Equipment'} size="md">
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editEquipment ? 'Edit Equipment' : 'Add Equipment'}
+      size="md"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
+            {saving ? 'Saving...' : editEquipment ? 'Save Changes' : 'Add Equipment'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         {/* Name & Quantity */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="sm:col-span-2">
@@ -250,21 +270,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
           <label className={labelClass}>Notes</label>
           <textarea className={inputClass} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} />
         </div>
-
-        {/* Actions */}
-        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editEquipment ? 'Save Changes' : 'Add Equipment'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
