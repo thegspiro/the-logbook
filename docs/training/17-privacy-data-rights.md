@@ -175,6 +175,10 @@ the same ordinary member.**]**
   through the same redaction as reads. That role also no longer gets edit forms
   on a redacted profile: they were seeded from what was on screen, so saving one
   would have erased every field it could not see.
+- **Only membership leadership edits a colleague's profile** _(2026-10-13)_.
+  The API now refuses a colleague's profile or contact-information save from a
+  role holding `users.edit` without `members.manage`, which closes what hiding
+  the forms left open. You can always edit your own.
 
 - **Date of birth and emergency contacts are restricted to leadership**
   _(2026-08-02)_ — the chiefs, captains, president, vice-president,

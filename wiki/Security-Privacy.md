@@ -352,6 +352,12 @@ field the editor was never shown. Which viewer got the full record is read from
 the payload (the server keeps `profile_visibility` only for those it does not
 redact), not re-derived from local permissions.
 
+**Editing a colleague's profile needs `members.manage`** _(2026-10-13)_. Hiding
+the forms left the two write routes open to a `users.edit` holder calling the
+API directly. `PATCH /users/{id}/profile` and `/contact-info` now accept only
+the member themselves and `members.manage` holders, so the write responses
+need no redaction of their own.
+
 **A colleague's ID card is not directory information** _(2026-09-30)_. The ID
 Card page assembled a scannable badge — QR code and barcode — for any member
 holding `members.view`, which is every member. It now opens for your own card,
