@@ -495,6 +495,29 @@ describe('MyTrainingPage', () => {
       expect(screen.getByLabelText('Nov 2025: 2 hours')).toBeInTheDocument();
     });
 
+    it('lists an unmet rolling hours requirement in the upcoming list by what is left to earn', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        requirements_detail: [
+          {
+            id: 'hours',
+            name: 'Annual Training Hours',
+            frequency: 'annual',
+            required_hours: 72,
+            completed_hours: 19.5,
+            progress_percentage: 27,
+            is_met: false,
+            due_date: null,
+            days_until_due: null,
+            window_months: 12,
+            monthly_hours: [{ month: '2025-11', hours: 19.5 }],
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('52.5 hrs to go')).toBeInTheDocument();
+    });
+
     it('moves the full history to its own tab and shows only recent records on the landing view', async () => {
       renderWithRouter(<MyTrainingPage />);
       expect(await screen.findByText('Recent Training')).toBeInTheDocument();

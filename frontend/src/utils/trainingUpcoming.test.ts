@@ -169,4 +169,80 @@ describe('buildUpcomingItems', () => {
   it('is empty when the server withheld both lists', () => {
     expect(buildUpcomingItems(summary(), TODAY)).toEqual([]);
   });
+
+  describe('an hours requirement with no deadline', () => {
+    const rolling = (overrides: Partial<RequirementDetail> = {}): RequirementDetail =>
+      requirement({
+        id: 'hours',
+        name: 'Annual Training Hours',
+        due_date: null,
+        days_until_due: null,
+        required_hours: 72,
+        completed_hours: 19.5,
+        monthly_hours: [
+          { month: '2025-11', hours: 2 },
+          { month: '2026-10', hours: 17.5 },
+        ],
+        ...overrides,
+      });
+
+    it('is listed with the hours still to earn, and no date', () => {
+      const items = buildUpcomingItems(summary({ requirements_detail: [rolling()] }), TODAY);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        kind: 'shortfall',
+        title: 'Annual Training Hours',
+        date: null,
+        days: null,
+        hoursShort: 52.5,
+        urgency: 'soon',
+      });
+      expect(items[0]?.detail).toBe('19.5/72 hrs · counting Nov 2025 – Oct 2026');
+    });
+
+    it('sorts after every dated item', () => {
+      const items = buildUpcomingItems(
+        summary({
+          requirements_detail: [
+            rolling(),
+            requirement({ id: 'late', name: 'Late', days_until_due: 150, due_date: '2027-03-12' }),
+            requirement({ id: 'sooner', name: 'Sooner', days_until_due: 10, due_date: '2026-10-23' }),
+          ],
+        }),
+        TODAY
+      );
+      expect(items.map((i) => i.title)).toEqual(['Sooner', 'Late', 'Annual Training Hours']);
+    });
+
+    it('is not listed once the requirement is met', () => {
+      const items = buildUpcomingItems(
+        summary({ requirements_detail: [rolling({ is_met: true, completed_hours: 72 })] }),
+        TODAY
+      );
+      expect(items).toEqual([]);
+    });
+
+    it('is not listed when it has no monthly breakdown, as with a one-time requirement', () => {
+      const items = buildUpcomingItems(summary({ requirements_detail: [rolling({ monthly_hours: null })] }), TODAY);
+      expect(items).toEqual([]);
+    });
+
+    it('never shows a negative shortfall', () => {
+      const items = buildUpcomingItems(
+        summary({ requirements_detail: [rolling({ completed_hours: 80, required_hours: 72 })] }),
+        TODAY
+      );
+      expect(items[0]?.hoursShort).toBe(0);
+    });
+
+    it('keeps a calendar-year hours requirement on its due date', () => {
+      const items = buildUpcomingItems(
+        summary({
+          requirements_detail: [rolling({ due_date: '2026-12-31', days_until_due: 79 })],
+        }),
+        TODAY
+      );
+      expect(items[0]).toMatchObject({ kind: 'requirement', days: 79 });
+    });
+  });
 });
