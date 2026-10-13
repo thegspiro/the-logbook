@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**:
+**PR [#3169](https://github.com/thegspiro/the-logbook/pull/3169)**:
 branch `claude/security-review-facilities`, Feature 12 (Facilities), pass 8
 (watchdog pickup). 0 application-code fixes needed, 0 new security findings
 — FAC-13 (HIGH, standing flagged as of pass 7) re-verified **already fixed**,
