@@ -821,12 +821,12 @@ module folder on that module's rights.
 
 - **Resolved 2026-10-12: custom folder rights now have a screen.** The Create
   Folder and Manage folder dialogs set positions and required permissions
-  (decision 27). Two narrower gaps remain:
-  - Positions are stored by slug. Renaming a position's slug, or deleting the
-    position, leaves the folder refusing its former holders until it is
-    edited. This fails closed.
+  (decision 27). One narrower gap remains:
   - A folder restricted to a permission that nobody holds can still be made by
     a full administrator. Only the editor's own access is checked.
+- **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
+  a position takes it out of every folder, and is refused while it alone opens
+  a folder. A position created later with the same name inherits nothing.
 - **Facility files still need `documents.manage` to upload.** The facility
   Files section uploads through `POST /documents/upload` and then links the
   document, so a facilities manager holding `facilities.edit` but not

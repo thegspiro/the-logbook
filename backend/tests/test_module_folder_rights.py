@@ -40,13 +40,13 @@ MIGRATION = (
 
 def _position(slug: str, uid: str = "u1"):
     role = SimpleNamespace(
-        permissions=DEFAULT_POSITIONS[slug]["permissions"], slug=slug
+        permissions=DEFAULT_POSITIONS[slug]["permissions"], slug=slug, id=slug
     )
     return SimpleNamespace(id=uid, roles=[role], rank=None)
 
 
 def _grants(*permissions: str, uid: str = "u1"):
-    role = SimpleNamespace(permissions=list(permissions), slug="custom")
+    role = SimpleNamespace(permissions=list(permissions), slug="custom", id="custom")
     return SimpleNamespace(id=uid, roles=[role], rank=None)
 
 

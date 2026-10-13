@@ -52,7 +52,7 @@ from app.services import file_storage_service
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
-    _get_user_role_slugs,
+    _get_user_position_ids,
     _is_full_admin,
 )
 
@@ -72,11 +72,14 @@ async def _general_root(db_session, org_id) -> DocumentFolder:
 
 
 def _user(uid="u1", roles=None, rank=None):
-    # roles: list of (permissions_list, slug)
+    # roles: list of (permissions_list, position) -- the second element is the
+    # position's id, which is what a folder's allowed_roles lists, and doubles
+    # as its slug here.
     # `rank` is part of a real User and carries its own default permissions,
     # so the stand-in declares it rather than leaving the attribute absent.
     role_objs = [
-        SimpleNamespace(permissions=perms, slug=slug) for perms, slug in (roles or [])
+        SimpleNamespace(permissions=perms, slug=pid, id=pid)
+        for perms, pid in (roles or [])
     ]
     return SimpleNamespace(id=uid, roles=role_objs, rank=rank)
 
@@ -124,9 +127,9 @@ class TestHelpers:
         user = _user(roles=[(["a", "b"], "r1"), (["b", "c"], "r2")])
         assert _get_user_permissions(user) == {"a", "b", "c"}
 
-    async def test_collect_role_slugs(self):
+    async def test_collect_position_ids(self):
         user = _user(roles=[([], "chief"), ([], "secretary")])
-        assert _get_user_role_slugs(user) == {"chief", "secretary"}
+        assert _get_user_position_ids(user) == {"chief", "secretary"}
 
     async def test_only_the_wildcard_is_a_full_admin(self):
         assert _is_full_admin({"*"}) is True
