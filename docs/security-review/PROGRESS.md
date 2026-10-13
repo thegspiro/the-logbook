@@ -16,15 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None, as of this commit.** PR #3142 (Feature 06, Elections & ballots,
-pass 8) merged 2026-10-13T01:40:06Z — 0 fixed, 0 new findings; log entry
-already recorded below and rotation row 06 stays ✅. This iteration (also a
-watchdog pickup — confirmed via `search_pull_requests`
+**PR [#3145](https://github.com/thegspiro/the-logbook/pull/3145)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 8 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged, current
+line numbers updated for file growth. New surface this pass (a narrower
+`GET /users/directory`, an account-unlock action, an undo-drop window,
+consolidated phone validation, upload malware scanning, a
+baseline-role-removal guard, and a repo-wide MCP permission gate affecting
+this feature's two MCP tool files) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 8** section
+for detail. Row 07 stays ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3142's merge, Feature 06, Elections & ballots, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3142 (Feature 06, Elections & ballots, pass 8) merged
+2026-10-13T01:40:06Z — 0 fixed, 0 new findings; log entry already recorded
+below and rotation row 06 stays ✅. This iteration (also a watchdog
+pickup — confirmed via `search_pull_requests`
 `is:open head:claude/security-review-`, 0 results, and no stray remote
-branch) picks up Feature 07 (Users & organizations), the state PR #3142
-opened from. This commit's own PR (branch
-`claude/security-review-users-organizations`) is recorded here in a
-follow-up commit once opened, per this file's own convention.
+branch) picked up Feature 07 (Users & organizations), the state PR #3142
+opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 8, PR #3142, before it merged), preserved for history</summary>
