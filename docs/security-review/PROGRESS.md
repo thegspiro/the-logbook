@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3149](https://github.com/thegspiro/the-logbook/pull/3149)**: branch
+`claude/security-review-membership-pipeline`, Feature 08 (Membership
+pipeline), pass 9 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (MP-10, MP-22, MP-26) re-confirmed unchanged, and one
+(MP-19) closed by other work (owner decision, 2026-10-11). New surface
+this pass (a widget-summary scaling fix, W23-1 stranded-applicant
+placement, referral fields with an XC-1 guard, an auto-purge warning
+email, the file-storage hardening fully wired for prospect documents, and
+a `create_election_package` 500 fix) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 9** section
+for detail. Row 08 stays ✅ (pending this PR's merge); next is Feature 09
+(Medical screening).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3145's merge, Feature 07, Users & organizations, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
 **None, as of this commit.** PR #3145 (Feature 07, Users & organizations,
 pass 8) merged 2026-10-13T03:24:09Z — 0 fixed, 0 new findings; log entry
 already recorded below and rotation row 07 stays ✅. This iteration
@@ -24,9 +41,9 @@ repos/thegspiro/the-logbook/pulls?state=open`, the REST endpoint rather
 than GraphQL `search_pull_requests`, which this environment blocks for
 Code sessions; 0 `claude/security-review-*` branches among the open PRs
 returned) picks up Feature 08 (Membership pipeline), the state PR #3145
-opened from. This commit's own PR (branch
-`claude/security-review-membership-pipeline`) is recorded here in a
-follow-up commit once opened, per this file's own convention.
+opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 8, PR #3145, before it merged), preserved for history</summary>
