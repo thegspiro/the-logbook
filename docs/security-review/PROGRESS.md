@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)
+(Feature 05, Finance & approvals, pass 8, watchdog pickup) merged
+2026-10-12 23:00:53 UTC (`pull_request_read`: `merged: true`) — 0 fixed, 1
+new finding flagged (FIN8-05-1); log entry already recorded below and
+rotation row 05 stays ✅. This iteration (also a watchdog pickup —
+confirmed via `search_pull_requests` `is:open head:claude/security-review-`,
+0 results) picks up Feature 06 (Elections & ballots), the state this PR
+opened from.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 8, PR #3137, before it merged), preserved for history</summary>
+
 **PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)**: branch
 `claude/security-review-finance-approvals`, Feature 05 (Finance &
 approvals), pass 8 (watchdog pickup). 0 fixed, 1 new finding flagged
@@ -30,6 +42,8 @@ status-transition locks FIN-31 deferred, now fixed and guarded by commit
 `docs/security-review/FIN-05-finance-approvals.md`'s **Pass 8** section
 for detail. Row 05 → ✅ (pending this PR's merge); next is Feature 06
 (Elections & ballots).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3128's merge, Feature 04, Storefront & payments, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18709,6 +18723,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 06 (Elections & ballots, pass 8) — 0 fixed, 0 new findings; 1 standing item (ELEC-14) resolved by other work, 3 re-confirmed unchanged (watchdog pickup)
+
+**Closure.** PR #3137 (Feature 05, Finance & approvals, pass 8) merged
+clean 2026-10-12 23:00:53 UTC (`pull_request_read`: `merged: true`; 1 fix
+flagged — FIN8-05-1 — not fixed in that pass), not docs-only (the FIN8-05-1
+finding and two standing-item corrections landed with it) but already
+fully recorded in its own Log entry below, so nothing further to record
+beyond clearing the **Open PR** row above. Independently re-confirmed via
+`search_pull_requests` (`is:open head:claude/security-review-`, 0 results)
+that no `claude/security-review-*` PR was open before this iteration
+started — this iteration is itself a watchdog pickup, the dedicated
+`/loop 30m /security-review` session having gone quiet after #3137
+merged.
+
+**Real delta since pass 7's closing merge (`3d4d6b14`, PR #2947,
+2026-10-05): 71 files, 9,852 insertions / 576 deletions** across the
+feature's full domain — `election_service.py` alone grew by 2,280 lines.
+Read as a real delta rather than sampled: 4 new routes (69, up from 65 —
+in-app ballot self-service with proxy support, and a POST form for
+receipt verification), every new service method read in full. One
+standing finding resolved: **ELEC-14** (receipt credential as a GET query
+parameter) — a new `POST /{election_id}/verify-receipt` carries it in the
+body instead, with the frontend already migrated and the GET kept only as
+a labeled-deprecated fallback for undocumented external callers. Three
+standing items re-confirmed unchanged: ELEC-12 (`SavedBallotTemplate` list
+still unpaginated, though bounded in practice by its existing 200/org
+creation cap), ELEC-16 (`list_manual_ballot_batches` unbounded, accepted
+as-is), ELEC-28 (in-app ballot still can't render a ballot-item/multi-seat
+contest, converges with W50-10; W50-11's tally half is separately fixed —
+see below). ELEC-40 also re-confirmed unchanged (dedup helpers untouched
+by this window's diff).
+
+New security-relevant surface verified sound rather than re-derived: the
+in-app ballot's `proxy_authorization_id` is validated against the
+caller's own user id before anything is read or written (closing the
+obvious IDOR that parameter would otherwise open); the new vote-signing
+key rotation (`VOTE_SIGNING_KEY`, `signing_key_id`) bounds a legacy-key
+fallback to a cutover date so `SECRET_KEY` cannot become a silent
+permanent second signing key, and keeps `hmac.compare_digest` throughout;
+`voting_tokens.user_id` (W50-3) is gated so an anonymous election's link
+votes cannot become attributable through it regardless of what the
+column holds. Multi-seat tallying (W50-11) and the already-landed
+ELEC-45/46 fixes (void-aware integrity chain, labeled/frozen on-behalf
+nomination acceptance) were re-verified against current code and hold.
+All five new election-table migrations are idempotent,
+`create_all`-guarded, and the two new FKs are `nullable=True` +
+`ondelete="SET NULL"`.
+
+**Gate:** backend `flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` (575 revisions, single head
+`7a849409c1d0` — this PR also carries the `main`-wide
+dashboard-pulse/practical-skills merge revision, landing independently via
+PR #3139); `check_route_permissions.py --strict` (266 routes, 0
+errors/warnings); `generate_schema_docs.py` re-run (one-line column-count
+diff, carried in this PR per Pitfall #30c); `check_docs_links.py` (425
+files, 0 broken links); scoped pytest (565 passed, 1 pre-existing skip);
+frontend `typecheck` (0 errors), `lint` (0 errors/warnings), 33
+elections/ballot/receipt frontend test files (172 tests) passed,
+`testingRegistry.test.ts` (12 passed) and the mobile-route-integrity e2e
+spec (1 passed).
+
+Findings doc: [`ELEC-06-elections-ballots.md`](./ELEC-06-elections-ballots.md)
+→ **Pass 8**. Rotation row 06 stays ✅ (pending this PR's merge). Next:
+Feature 07 (Users & organizations).
 
 ### 2026-10-12 — Feature 05 (Finance & approvals, pass 8) — 0 fixed, 1 new finding flagged; one standing item corrected, two closed by other work (watchdog pickup)
 
