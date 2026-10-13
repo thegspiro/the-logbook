@@ -48,6 +48,7 @@ import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { DEFAULT_PAGE_SIZE, EVENT_MISSED_LOOKBACK_DAYS } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { CalendarView } from '../components/CalendarView';
@@ -161,6 +162,7 @@ export const EventsPage: React.FC = () => {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const moreMenuRef = React.useRef<HTMLDivElement>(null);
+  const moreTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   // CSV Import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -175,6 +177,7 @@ export const EventsPage: React.FC = () => {
   const [showSavePresetInput, setShowSavePresetInput] = useState(false);
   const [presetName, setPresetName] = useState('');
   const presetMenuRef = React.useRef<HTMLDivElement>(null);
+  const presetTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   const handleSavePreset = useCallback(() => {
     const name = presetName.trim();
@@ -244,6 +247,13 @@ export const EventsPage: React.FC = () => {
   }, [showMoreMenu]);
 
   const closeMoreMenu = useCallback(() => setShowMoreMenu(false), []);
+  const closePresetMenu = useCallback(() => {
+    setShowPresetMenu(false);
+    setShowSavePresetInput(false);
+    setPresetName('');
+  }, []);
+  useEscapeToClose(showMoreMenu, closeMoreMenu, moreMenuRef, moreTriggerRef);
+  useEscapeToClose(showPresetMenu, closePresetMenu, presetMenuRef, presetTriggerRef);
 
   const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
@@ -717,6 +727,11 @@ export const EventsPage: React.FC = () => {
     if (importFileRef.current) {
       importFileRef.current.value = '';
     }
+    // The dialog was opened from an item in the More menu, which closed as it
+    // opened, so there is no opener left to restore focus to. The trigger that
+    // menu belonged to is where the user started; after the dialog's own
+    // focus restore has had its turn.
+    window.setTimeout(() => moreTriggerRef.current?.focus(), 0);
   }, []);
 
   // Clear selection when filters change
@@ -793,11 +808,11 @@ export const EventsPage: React.FC = () => {
             {hasMoreActions && (
               <div className="relative shrink-0" ref={moreMenuRef}>
                 <button
+                  ref={moreTriggerRef}
                   type="button"
                   onClick={() => setShowMoreMenu((prev) => !prev)}
                   className="btn-secondary btn-auto btn-icon"
                   aria-label="More event actions"
-                  aria-haspopup="true"
                   aria-expanded={showMoreMenu}
                 >
                   <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
@@ -1039,6 +1054,7 @@ export const EventsPage: React.FC = () => {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
                 className="form-input appearance-none pr-8 pl-9"
+                aria-label="Sort events"
               >
                 <option value="date">Sort by Date</option>
                 <option value="title">Sort by Title</option>
@@ -1049,6 +1065,9 @@ export const EventsPage: React.FC = () => {
             {/* Filter Presets */}
             <div className="relative" ref={presetMenuRef}>
               <button
+                ref={presetTriggerRef}
+                type="button"
+                aria-expanded={showPresetMenu}
                 onClick={() => {
                   setShowPresetMenu((prev) => !prev);
                   setShowSavePresetInput(false);

@@ -30,6 +30,7 @@ import {
   type FiscalYear,
   type PaymentsRegisterReport,
 } from '../types';
+import { useTablist } from '../../../hooks/useTablist';
 
 const REPORTS = {
   'budget-vs-actual': 'Budget vs actual',
@@ -578,6 +579,7 @@ const PaymentsRegister: React.FC = () => {
 // =============================================================================
 
 const FinanceReportsPage: React.FC = () => {
+  const tablist = useTablist();
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('report');
   const active: ReportKey = isReportKey(requested) ? requested : 'budget-vs-actual';
@@ -615,7 +617,7 @@ const FinanceReportsPage: React.FC = () => {
         Finance reports
       </h1>
 
-      <div className="tab-scroll print:hidden" role="tablist" aria-label="Reports">
+      <div className="tab-scroll print:hidden" role="tablist" {...tablist} aria-label="Reports">
         {REPORT_KEYS.map((key) => (
           <button
             key={key}

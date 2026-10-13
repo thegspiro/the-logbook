@@ -35,6 +35,7 @@ import type {
   ProgramStructureType,
   TrainingProgram,
 } from '../types/training';
+import { useTablist } from '../hooks/useTablist';
 
 // "Sequential" is deliberately absent: nothing in the system ever enforced an
 // order between requirements, so it behaved exactly like Flexible while telling
@@ -554,6 +555,7 @@ export const RequirementFormModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ programId, phaseId, link, sortOrder, linkedRequirementIds = [], onClose, onSaved }) => {
+  const tablist = useTablist();
   const req = link?.requirement;
   const [name, setName] = useState(req?.name ?? '');
   const [description, setDescription] = useState(req?.description ?? '');
@@ -710,7 +712,7 @@ export const RequirementFormModal: React.FC<{
       submitLabel={linkingExisting ? 'Link requirement' : 'Save'}
     >
       {!link && (
-        <div className="tab-scroll" role="tablist" aria-label="How to add the requirement">
+        <div className="tab-scroll" role="tablist" {...tablist} aria-label="How to add the requirement">
           {(
             [
               { value: 'existing', label: 'Use an existing requirement' },

@@ -671,6 +671,11 @@ const IntegrationsPage: React.FC = () => {
         prev.map((i) => (i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i))
       );
       toast.success(`${integration?.name ?? 'Integration'} ${activation ? 'deactivated' : 'disconnected'}`);
+      // The Disconnect button is replaced by Connect, so focus fell to <body>;
+      // hand it to the control that took its place, once it has rendered.
+      window.setTimeout(() => {
+        document.querySelector<HTMLButtonElement>(`[data-integration-connect="${CSS.escape(integrationId)}"]`)?.focus();
+      }, 0);
     } catch (err: unknown) {
       toast.error(
         getErrorMessage(err, activation ? 'Failed to deactivate integration' : 'Failed to disconnect integration')
@@ -1717,6 +1722,8 @@ const IntegrationsPage: React.FC = () => {
                   )}
                   {integration.status === 'available' && canManage && (
                     <button
+                      type="button"
+                      data-integration-connect={integration.id}
                       onClick={() => {
                         resetFormState(integration);
                         setShowConnectModal(integration.id);

@@ -37,6 +37,7 @@ import { NotificationLogScope } from '../constants/enums';
 import NotificationCard from '../components/NotificationCard';
 import NotificationStack from '../components/NotificationStack';
 import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../utils/notificationStacks';
+import { useTablist } from '../hooks/useTablist';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -145,6 +146,7 @@ const INBOX_PAGE_SIZE = 20;
 const LOG_PAGE_SIZE = 50;
 
 const NotificationsPage: React.FC = () => {
+  const tablist = useTablist();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { checkPermission } = useAuthStore();
@@ -678,6 +680,7 @@ const NotificationsPage: React.FC = () => {
         <div
           className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
           role="tablist"
+          {...tablist}
           aria-label="Notification views"
         >
           <button

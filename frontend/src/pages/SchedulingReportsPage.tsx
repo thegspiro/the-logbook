@@ -39,6 +39,7 @@ import { DateRangePicker } from '../components/ux/DateRangePicker';
 import { useAuthStore } from '../stores/authStore';
 import { ExternalApparatusSummary } from './scheduling/ExternalApparatusSummary';
 import { ExternalShiftsReview } from './scheduling/ExternalShiftsReview';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
 
@@ -141,6 +142,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, className = '' 
 // ============================================
 
 export const SchedulingReportsPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const { formatRank } = useRanks();
   const checkPermission = useAuthStore((s) => s.checkPermission);
@@ -353,6 +355,7 @@ export const SchedulingReportsPage: React.FC = () => {
       <div
         className="tab-scroll mb-6"
         role="tablist"
+        {...tablist}
         aria-label="Scheduling reports"
         data-mobile-scroll-region
         tabIndex={0}
