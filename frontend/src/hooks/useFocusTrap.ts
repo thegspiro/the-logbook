@@ -9,6 +9,26 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+interface ActiveTrap {
+  container: HTMLElement;
+  opener: HTMLElement | null;
+  fallback: HTMLElement | null;
+}
+
+/**
+ * Traps that are currently active. A dialog opened from inside another dialog
+ * records that dialog's opener as its fallback: a confirmation raised by a
+ * picker that closes as it opens has an opener inside the picker, which is gone
+ * by the time the confirmation closes, and focus would otherwise fall to <body>.
+ */
+const activeTraps: ActiveTrap[] = [];
+
+const fallbackFor = (opener: HTMLElement | null): HTMLElement | null => {
+  if (!opener) return null;
+  const parent = activeTraps.find((trap) => trap.container.contains(opener));
+  return parent ? (parent.opener?.isConnected ? parent.opener : parent.fallback) : null;
+};
+
 /**
  * Custom hook to trap focus within a container element
  * Useful for modals, mobile menus, and other overlay elements
@@ -25,7 +45,9 @@ const FOCUSABLE_SELECTOR = [
 export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
   const containerRef = useRef<T>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const fallbackElement = useRef<HTMLElement | null>(null);
   const wasActive = useRef(false);
+  const running = useRef(false);
 
   // The opener is read during render, not in the effect: a child's `autoFocus`
   // runs in the commit before this effect does, so by then document.activeElement
@@ -33,6 +55,7 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
   // just been unmounted, dropping a keyboard user back at <body>.
   if (isActive && !wasActive.current && typeof document !== 'undefined') {
     previousActiveElement.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    fallbackElement.current = fallbackFor(previousActiveElement.current);
   }
   wasActive.current = isActive;
 
@@ -41,9 +64,17 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
 
     const container = containerRef.current;
     if (!container) return;
+    running.current = true;
 
     const opener = previousActiveElement.current;
     if (opener && container.contains(opener)) previousActiveElement.current = null;
+
+    const trap: ActiveTrap = {
+      container,
+      opener: previousActiveElement.current,
+      fallback: fallbackElement.current,
+    };
+    activeTraps.push(trap);
 
     const getFocusableElements = (): HTMLElement[] =>
       Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
@@ -87,12 +118,22 @@ export function useFocusTrap<T extends HTMLElement>(isActive: boolean) {
     // Cleanup: restore focus and remove listener
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      const index = activeTraps.indexOf(trap);
+      if (index !== -1) activeTraps.splice(index, 1);
+      running.current = false;
 
-      // An opener that has since been removed from the page cannot take focus
-      // back; focusing it is a silent no-op that leaves focus on <body>.
-      const target = previousActiveElement.current;
-      if (target?.isConnected) target.focus();
-      previousActiveElement.current = null;
+      // Deferred, and skipped if the trap is running again by then: StrictMode
+      // runs this cleanup and the effect back to back on mount, and restoring
+      // here pulled focus out of a dialog that had only just opened. An opener
+      // since removed from the page cannot take focus back, so the fallback
+      // recorded at open is tried before giving up.
+      queueMicrotask(() => {
+        if (running.current) return;
+        // A dialog that opened as this one closed already holds focus.
+        if (activeTraps.some((other) => other.container.contains(document.activeElement))) return;
+        const target = [trap.opener, trap.fallback].find((element) => element?.isConnected);
+        target?.focus();
+      });
     };
   }, [isActive]);
 
