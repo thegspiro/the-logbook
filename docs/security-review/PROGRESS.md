@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3142](https://github.com/thegspiro/the-logbook/pull/3142)**: branch
+`claude/security-review-elections-ballots`, Feature 06 (Elections &
+ballots), pass 8 (watchdog pickup). 0 fixed, 0 new findings — one
+standing item resolved by other work (ELEC-14: receipt credential moved
+off the GET query string onto a new POST body), three standing items
+(ELEC-12, ELEC-16, ELEC-28) and ELEC-40 re-confirmed unchanged. New
+surface this pass (in-app ballot self-service with proxy voting, vote
+signing-key rotation, multi-seat tallying) reviewed and verified sound —
+see the Log entry below and
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 8** section
+for detail. Also carries the `main`-wide Alembic merge-heads revision so
+this PR's own gate isn't blocked by unrelated `main` breakage (identical
+content landing independently via #3139). Row 06 stays ✅ (pending this
+PR's merge); next is Feature 07 (Users & organizations).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3137's merge, Feature 05, Finance & approvals, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
 **None.** PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)
 (Feature 05, Finance & approvals, pass 8, watchdog pickup) merged
 2026-10-12 23:00:53 UTC (`pull_request_read`: `merged: true`) — 0 fixed, 1
@@ -24,6 +42,8 @@ rotation row 05 stays ✅. This iteration (also a watchdog pickup —
 confirmed via `search_pull_requests` `is:open head:claude/security-review-`,
 0 results) picks up Feature 06 (Elections & ballots), the state this PR
 opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 8, PR #3137, before it merged), preserved for history</summary>
