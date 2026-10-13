@@ -845,6 +845,16 @@ its own, and one that had created its own `compliance_officer` position gets
 that position as the reviewer. If no position carries that slug, the box is
 created closed, because an open box needs a reviewer.
 
+### Submitting to a box with questions _(2026-10-12)_
+
+A box with intake questions shows them first, on a step of their own, with a
+**Continue** button. Title, details and screenshots follow on a second step with a
+**Back** button that keeps your answers. The answers decide where the submission
+goes and whether it can be anonymous, so you see that before writing anything. A
+box with no questions keeps its single page.
+
+_[Screenshot needed: the question step of the Compliance box ("What kind of concern is this?") with Continue; and step two with Back.]_
+
 ### Setting up a box
 
 **Required Permission:** `suggestions.manage`

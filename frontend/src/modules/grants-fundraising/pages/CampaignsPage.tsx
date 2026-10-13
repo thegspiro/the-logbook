@@ -16,6 +16,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { CampaignRestrictionControl } from '../components/CampaignRestrictionControl';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -63,6 +64,8 @@ interface CreateFormData {
   goal_amount: string;
   start_date: string;
   status: string;
+  is_restricted: boolean;
+  restriction_purpose: string;
 }
 
 const INITIAL_FORM: CreateFormData = {
@@ -72,6 +75,8 @@ const INITIAL_FORM: CreateFormData = {
   goal_amount: '',
   start_date: '',
   status: 'draft',
+  is_restricted: false,
+  restriction_purpose: '',
 };
 
 const inputClass =
@@ -164,6 +169,11 @@ const CampaignsPage: React.FC = () => {
       return;
     }
 
+    if (formData.is_restricted && !formData.restriction_purpose.trim()) {
+      toast.error('Say what the donors to a restricted fund are giving for');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await fundraisingService.createCampaign({
@@ -173,6 +183,9 @@ const CampaignsPage: React.FC = () => {
         goalAmount: Number(formData.goal_amount),
         startDate: formData.start_date,
         status: formData.status as FundraisingCampaign['status'],
+        ...(formData.is_restricted
+          ? { isRestricted: true, restrictionPurpose: formData.restriction_purpose.trim() }
+          : {}),
       });
       toast.success('Campaign created');
       setFormData(INITIAL_FORM);
@@ -328,6 +341,39 @@ const CampaignsPage: React.FC = () => {
                 className={inputClass}
               />
             </div>
+
+            {/* Restricted fund (full width) */}
+            <div className="md:col-span-2">
+              <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  checked={formData.is_restricted}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, is_restricted: e.target.checked }))}
+                />
+                Restricted fund — donors are giving for a stated purpose
+              </label>
+              {formData.is_restricted && (
+                <div className="mt-2">
+                  <label htmlFor="create-restriction-purpose" className={labelClass}>
+                    What the donors are giving for *
+                  </label>
+                  <textarea
+                    id="create-restriction-purpose"
+                    name="restriction_purpose"
+                    rows={2}
+                    value={formData.restriction_purpose}
+                    onChange={handleFormChange}
+                    placeholder="e.g. Replacing Engine 2"
+                    className={inputClass}
+                  />
+                  <p className="text-theme-text-secondary mt-1 text-xs">
+                    Finance requests can be charged to a restricted fund, and no more than it has received can be spent
+                    from it.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -474,6 +520,12 @@ const CampaignsPage: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                <CampaignRestrictionControl
+                  campaign={campaign}
+                  canManage={canManage}
+                  onChanged={() => void loadCampaigns()}
+                />
 
                 {/* Date Range */}
                 <div className="text-theme-text-secondary flex items-center gap-2 text-sm">

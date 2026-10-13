@@ -211,7 +211,8 @@ async def list_folder_role_options(
     """
     The department's positions, for restricting a folder to specific roles.
 
-    Names and slugs only. Served here rather than read from ``GET /roles``
+    Ids (what a folder stores), names and slugs. Served here rather than
+    read from ``GET /roles``
     because that needs ``positions.view``, which a documents manager such as
     the seeded historian does not hold.
 
@@ -219,11 +220,14 @@ async def list_folder_role_options(
     **Requires permission: documents.manage**
     """
     rows = await db.execute(
-        select(Position.slug, Position.name)
+        select(Position.id, Position.slug, Position.name)
         .where(Position.organization_id == str(current_user.organization_id))
         .order_by(Position.name, Position.slug)
     )
-    return [FolderRoleOption(slug=slug, name=name) for slug, name in rows.all()]
+    return [
+        FolderRoleOption(id=str(pid), slug=slug, name=name)
+        for pid, slug, name in rows.all()
+    ]
 
 
 @router.patch("/folders/{folder_id}", response_model=DocumentFolderResponse)

@@ -198,8 +198,23 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
       onClose={onClose}
       title={editRecord ? 'Edit Maintenance Record' : 'Add Maintenance Record'}
       size="lg"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
+            {saving ? 'Saving...' : editRecord ? 'Save Changes' : 'Add Record'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
+            Cancel
+          </button>
+        </>
+      }
     >
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+      <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           For work already done, tick Mark as completed and set the Completed Date. For upcoming work, leave it unticked
           and set a Due Date; it then counts toward Maintenance Due on the fleet page as the date approaches.
@@ -412,21 +427,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
           <label className={labelClass}>Notes</label>
           <textarea className={inputClass} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} />
         </div>
-
-        {/* Actions */}
-        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editRecord ? 'Save Changes' : 'Add Record'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

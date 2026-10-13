@@ -185,52 +185,12 @@ const MedicalCategoriesPage: React.FC = () => {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         title={editing ? 'Edit medical supply category' : 'New medical supply category'}
-      >
-        <form onSubmit={(e) => void handleSubmit(e)}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="mc-name" className="form-label">
-                Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="mc-name"
-                className="form-input w-full"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Airway"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="mc-description" className="form-label">
-                Description
-              </label>
-              <textarea
-                id="mc-description"
-                className="form-input w-full"
-                rows={2}
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="mc-threshold" className="form-label">
-                Low stock threshold
-              </label>
-              <input
-                id="mc-threshold"
-                type="number"
-                min="0"
-                className="form-input w-full"
-                value={form.low_stock_threshold}
-                onChange={(e) => setForm((f) => ({ ...f, low_stock_threshold: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+        onSubmit={(e) => void handleSubmit(e)}
+        footer={
+          <>
+            <button type="submit" className="btn-primary" disabled={isSaving}>
+              {isSaving ? 'Saving…' : editing ? 'Save changes' : 'Create category'}
+            </button>
             <button
               type="button"
               onClick={() => setShowModal(false)}
@@ -238,11 +198,51 @@ const MedicalCategoriesPage: React.FC = () => {
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={isSaving}>
-              {isSaving ? 'Saving…' : editing ? 'Save changes' : 'Create category'}
-            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="mc-name" className="form-label">
+              Name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="mc-name"
+              className="form-input w-full"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Airway"
+              required
+            />
           </div>
-        </form>
+
+          <div>
+            <label htmlFor="mc-description" className="form-label">
+              Description
+            </label>
+            <textarea
+              id="mc-description"
+              className="form-input w-full"
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="mc-threshold" className="form-label">
+              Low stock threshold
+            </label>
+            <input
+              id="mc-threshold"
+              type="number"
+              min="0"
+              className="form-input w-full"
+              value={form.low_stock_threshold}
+              onChange={(e) => setForm((f) => ({ ...f, low_stock_threshold: e.target.value }))}
+            />
+          </div>
+        </div>
       </Modal>
     </div>
   );

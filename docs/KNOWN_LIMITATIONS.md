@@ -821,12 +821,12 @@ module folder on that module's rights.
 
 - **Resolved 2026-10-12: custom folder rights now have a screen.** The Create
   Folder and Manage folder dialogs set positions and required permissions
-  (decision 27). Two narrower gaps remain:
-  - Positions are stored by slug. Renaming a position's slug, or deleting the
-    position, leaves the folder refusing its former holders until it is
-    edited. This fails closed.
+  (decision 27). One narrower gap remains:
   - A folder restricted to a permission that nobody holds can still be made by
     a full administrator. Only the editor's own access is checked.
+- **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
+  a position takes it out of every folder, and is refused while it alone opens
+  a folder. A position created later with the same name inherits nothing.
 - **Facility files still need `documents.manage` to upload.** The facility
   Files section uploads through `POST /documents/upload` and then links the
   document, so a facilities manager holding `facilities.edit` but not
@@ -1181,7 +1181,7 @@ Owner-decision items from the feature-by-feature review under
 | **Medical/gear supplies: a single item's stock-lot list has no row cap**                                                             | ✅ Accepted by the owner (2026-10-05: leave as is; LOW)                                                  | `InventoryService.list_lots` (backs `GET /medical-supplies/items/{id}/lots` and the equivalent gear-side route) returns every lot ever recorded against one item with no `limit`/pagination, and neither frontend screen pages through the result — both treat it as the item's complete lot history. An item restocked frequently over years without its depleted lots ever being deleted accumulates an unbounded row count. Not a mechanical patch: a cap changes what "the item's lots" means to both callers, with no pagination UI on either screen to receive a later page — needs the same kind of per-caller page-size decision MSUP-4 needed, not a drive-by limit. Found by Codex review, security-review PR #2301 (MSUP-23 pass 3); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-11 (this row was mislabeled MSUP-10 until security review pass 11, 2026-09-11 — MSUP-10 is a different, already-fixed finding in that same pass, the `add_lot` opening-balance race). (MSUP-11) **Owner decision (2026-10-05): leave as is.** An item's lot list stays its complete history, unpaginated, with depleted lots included.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Medical/gear supplies: the general item edit form has no lot-stocked awareness**                                                   | ✅ Resolved (2026-10-11, owner decision, docket MSUP-15: hide with a read-only lot note)                 | **Resolved 2026-10-11:** `ItemFormModal.tsx` now reads `is_lot_stocked` off the item being edited (the list and detail endpoints already attach it via `_attach_lot_stock`); for a lot-stocked item it replaces the Quantity input with the same read-only "N from stock lots — adjust by receiving a delivery or editing the item's lots" note `MedicalItemFormModal` shows, and leaves `quantity` out of the update payload. Items with no lots, and creation, are unchanged; `PATCH /inventory/items/{id}` itself still accepts `quantity` for an API caller. Pinned by `ItemFormModal.test.tsx` ("a lot-stocked pool item"). Original finding: `modules/inventory/components/ItemFormModal.tsx`'s "Quantity" input always reads from and writes to `InventoryItem.quantity` directly, with no indication that for a lot-stocked item that column is a best-effort mirror, not the authoritative on-hand count (the sum of the item's in-date stock lots). An admin who opens this form for a lot-stocked item, sees the stale mirror value, and "corrects" it to match the detail page's lot-derived number writes into a column no lot backs, until the next delivery's carry-forward silently overwrites it again. No data corruption occurs today from this alone — nothing treats the edited mirror value as authoritative over the lots — so it is not gated as a security finding, but it is a live trap for exactly the workflow this module exists to support. `modules/medical-supplies/components/MedicalItemFormModal.tsx` (the medical-domain-specific form `MedicalSuppliesPage.tsx` actually uses) already has this awareness — it hides the Quantity input behind a read-only "N from stock lots" note for a lot-stocked item and omits `quantity` from the update payload entirely — so this is reachable today only through the general Inventory page's edit flow on a medical item (a broad `inventory.manage` holder can reach any item's detail page and its edit modal, by design), not through the medical supplies module's own screens. Closing it needs a decision — hide/disable/relabel the field for a lot-stocked item, or route an edit through a lot adjustment instead of the raw column — which is a UX/product call, not a mechanical patch. Found by Codex review, security-review PR #2301 (MSUP-23 pass 4); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-15. (MSUP-15) |
 | **Reports: date-range filters use UTC, not the organization's local timezone**                                                       | ✅ Resolved (owner decision 2026-10-08: org timezone via the org_timezone helpers, UTC fallback; GF-24a) | A report end date of "June 15" used to mean June 15 in UTC, so a non-UTC department's report could take in the next day's early records or drop the selected day's late evening. **Resolved 2026-10-11:** every report date-range filter on a timestamp column now goes through `app/utils/org_timezone.py` — `reporting_timezone` (the organization's timezone, **UTC** when it has none or an invalid one, deliberately not scheduling's America/New_York default), `local_range_utc` (local midnight inclusive to the next local midnight exclusive, so DST days are bounded by the calendar) and `resolve_local_range_utc` (which loads nothing for an unbounded range). Converted: the department overview's event and check-in counts, admin hours, the prospect pipeline report, the event attendance report (moved from the scheduling fallback to the reporting one), the grant report, the fundraising report and the donation list. Date columns (training `completion_date`, call `call_date`, `shift_date`) compare against the dates directly and were already right. `tests/test_report_range_timezone.py` covers it. See `docs/security-review/GF-22-grants-fundraising.md` GF-24a.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Inventory: storage-area barcodes are assigned but the scanner cannot resolve them**                                                | ✅ Resolved (2026-10-11, owner decision: extend the scan lookup)                                         | `GET /inventory/lookup` now also returns `storage_areas` — an additive list on `ScanLookupListResponse` (default empty; `total` still counts items) of active, in-org storage areas whose `barcode` equals the scanned code exactly, case-insensitively (`InventoryService.find_storage_areas_by_code`). Exact rather than substring so a partial item search never pulls every `SA-…` shelf into its results. `InventoryScanModal` (the assign/return scanner) shows a scanned shelf label as "SA-… is the label for the storage area _name_, not an item" instead of "No item found", adds nothing to the list, and offers **Open storage area** (`/inventory/storage-areas?area=<id>`) to holders of `inventory.manage`. The Storage Areas page's own scan, Put away and Check contents already matched shelf codes locally and are unchanged. The form's "so it can be scanned" copy is now accurate. Pinned by `tests/test_inventory_scan_storage_area_lookup.py` and `InventoryScanModal.test.tsx`. (INV-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Inventory: storage-area barcodes are assigned but the scanner cannot resolve them**                                                | ✅ Resolved (2026-10-11, owner decision: extend the scan lookup)                                         | `GET /inventory/lookup` now also returns `storage_areas` — an additive list on `ScanLookupListResponse` (default empty; `total` still counts items) of active, in-org storage areas whose `barcode` equals the scanned code exactly, case-insensitively (`InventoryService.find_storage_areas_by_code`). Exact rather than substring so a partial item search never pulls every `SA-…` shelf into its results. `InventoryScanModal` (the assign/return scanner) shows a scanned shelf label as "SA-… is the label for the storage area _name_, not an item" instead of "No item found", adds nothing to the list, and offers **Open storage area** (`/inventory/storage-areas?area=<id>`) to holders of `inventory.manage`. The Storage Areas page's own scan, Put away and Check contents already matched shelf codes locally and are unchanged. The form's "so it can be scanned" copy is now accurate. Pinned by `tests/test_inventory_scan_storage_area_lookup.py` and `InventoryScanModal.test.tsx`. (Tracked internally as "INV-8" in the commit that shipped it — unrelated to, and not to be confused with, this rotation's own security-review finding INV-8/INV-9 below, "Two Cross-Member Reads Sit Behind the Baseline `.view` Grant"; corrected here, security review INV-11 pass 8, 2026-10-13.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Client IP recorded as the proxy address**                                                                                          | ✅ Resolved (2026-08-05); historical rows documented, accepted by the owner (2026-10-05)                 | `request.client.host` was used instead of `get_client_ip(request)` in 39 places across 8 files, so behind the production nginx every record stored one identical internal IP. Worst case was **elections**: per-vote IPs drive the fraud detection documented in `BALLOT_FORENSICS_GUIDE.md`, so `unique_ip_count` collapsed to 1 and every election permanently tripped the `suspicious_ips` threshold. The sweep also caught a live **availability** bug the survey had missed: `public_portal_security.py` keyed the public-portal _rate limiter_ on the peer IP, so all anonymous visitors shared one bucket and a single caller could lock out everyone (the H5 shape, still live on the public surface). Verified behavior-neutral: identical test results before and after. **Accepted by the owner (2026-10-05):** rows already written still hold proxy IPs and are indistinguishable from real ones; they are left as they are, because rewriting hash-chained audit history would break `verify_integrity`. The cutover date is documented in `BALLOT_FORENSICS_GUIDE.md` (Step 3, "IP cutover — 2026-08-05") so a reviewer dates the evidence instead. (AXC-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Error Monitoring Coverage (2026-08-07)
@@ -1479,6 +1479,37 @@ pending a decision:
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
 
+## Finance — Restricted Funds: What They Do Not Cover (2026-10-13)
+
+Described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#restricted-funds-2026-10-13). Left out
+on purpose:
+
+- **One fund per payment.** A purchase or check is charged to one fund, or
+  none; an expense report can charge a different fund on each line. Paying one
+  invoice partly from a fund and partly from operating money means two
+  requests.
+- **Pledges are not money in until paid.** A department cannot spend a pledge
+  it has not received; it shows in the fund's balance once the donation is
+  recorded as completed.
+- **Grants are not funds here.** A grant's own budget items and overspend
+  check (the Grants module) are separate; a restricted grant is tracked there,
+  not as a campaign.
+- **No release of restrictions or transfers between funds.** When a purpose is
+  met and donors agree to redirect the remainder, that is recorded by the
+  treasurer outside the module; there is no "release" entry.
+- **Not sent to QuickBooks.** The export does not carry the fund; a department
+  that tracks restricted net assets in QuickBooks (as Classes or Locations)
+  sets them there.
+- **A refund after a payment can leave a fund overspent.** The balance follows
+  the donations as they stand, so a refunded gift lowers it even when payments
+  were already approved against it; the report marks the fund Overspent rather
+  than undoing anything.
+- **Requests created before this change cannot be charged retroactively except
+  by editing them,** which a purchase request allows while it is a draft or
+  submitted; a check request has no edit screen, and an expense line none
+  after creation.
+
 ## Finance — Functional Expense Classification: What It Does Not Cover (2026-10-13)
 
 Described in
@@ -1544,7 +1575,7 @@ purpose:
 - **Not yet built from the original plan:** expense summary by member, dues
   collection with delinquency, and purchase orders by vendor. Restricted funds
   and functional expense classification (program / management / fundraising)
-  are separate work and appear on none of these reports.
+  have reports of their own (Restricted funds, Functional expenses).
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
@@ -5365,6 +5396,47 @@ facility grid: total metadata plus pages, with filters and search applied by the
 server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
+
+## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
+
+`PATCH /elections/settings` accepts `default_voting_method`,
+`default_victory_condition`, `default_victory_percentage`,
+`default_anonymous_voting`, `default_allow_write_ins`, `default_quorum_type` and
+`default_quorum_value`. The handler writes them into
+`org.settings["election_defaults"]` and `GET /elections/settings` returns them
+back — and that is the whole of their life. Nothing reads `election_defaults`
+anywhere else in the backend (the service, the create path and the schemas do
+not), no frontend code reads them (the only references are the type definition
+and one test fixture), and the settings screen renders no control for any of
+them.
+
+The wiki already says so: _"there are no organization-wide election defaults"_
+(`wiki/Module-Elections.md`, Election Settings). The API disagrees with it in
+the one place a person or an integrator would look. A client that PATCHes
+`default_voting_method: "ranked_choice"` gets a 200 and sees the value come back
+on the next GET, which reads as "this is now my department's default" — and the
+next election created still starts as simple majority. This is CLAUDE.md pitfall
+#19 (a setting with no reader) in its API-only form: no screen misleads anyone,
+which is why it is rated low, but the contract does.
+
+**Not changed in the review pass that found it**, because both fixes alter the
+public API or add a feature:
+
+1. **Remove them** — drop the seven fields from `ElectionSettingsUpdate`, from
+   `ElectionSettingsResponse`, from both handlers, and from the frontend
+   `ElectionSettings` type. Consistent with the wiki. Senders are not broken
+   (unknown keys on the request are ignored), but the GET response loses seven
+   keys, and any `election_defaults` already stored in an organization's
+   settings becomes dead data unless a migration clears it.
+2. **Wire a reader** — have the create-election form seed its starting values
+   from them, and add the missing controls to the settings screen. This is the
+   feature the endpoint appears to promise; it also needs a decision on whether a
+   stored default may override the form's own initial values for an officer who
+   never touched the setting.
+3. **Leave it and say so** — document the seven fields as reserved and unused in
+   the API reference. Cheapest, and it leaves the trap in place.
+
+Until one is chosen, the fields are harmless to set and useless.
 
 ## Process
 

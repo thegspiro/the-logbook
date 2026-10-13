@@ -821,18 +821,7 @@
   }
 }
 
-/* --- Mobile-Responsive Patterns --- (#12 drawer slide-in animation) */
-@utility drawer-panel {
-  /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
-  @apply fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl;
-  @apply bg-theme-surface-modal border-theme-surface-border border-l;
-  animation: slideInRight 0.25s ease-out;
-  max-width: 100%;
-  @media (min-width: 640px) {
-    max-width: 32rem; /* ~512px, equivalent to max-w-lg */
-  }
-}
-
+/* --- Mobile-Responsive Patterns --- */
 @utility action-bar {
   /* Drawer / modal action-button bars — wrap gracefully on small screens */
   @apply flex flex-wrap items-center gap-2;
@@ -1520,8 +1509,7 @@
  * panel classes carry it too. Page-level action bars sit outside both subtrees
  * and keep the allowance — the bar is still there for them. */
 .modal-overlay,
-.modal-panel,
-.drawer-panel {
+.modal-panel {
   --bottom-nav-height: 0px;
 }
 

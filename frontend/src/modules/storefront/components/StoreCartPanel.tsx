@@ -100,16 +100,23 @@ export const StoreCartPanel: React.FC<StoreCartPanelProps> = ({
                         <button
                           type="button"
                           aria-label={`Decrease quantity of ${line.productName}`}
-                          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex h-11 w-11 items-center justify-center md:h-7 md:w-7"
+                          className="text-theme-text-secondary hover:text-theme-text-primary touch:h-11 touch:w-11 inline-flex h-7 w-7 items-center justify-center"
                           onClick={() => onUpdateQuantity(line, line.quantity - 1)}
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </button>
-                        <span className="text-theme-text-primary w-6 text-center text-[13px]">{line.quantity}</span>
+                        <span
+                          className="text-theme-text-primary w-6 text-center text-[13px]"
+                          aria-live="polite"
+                          aria-atomic="true"
+                        >
+                          {line.quantity}
+                          <span className="sr-only"> in cart</span>
+                        </span>
                         <button
                           type="button"
                           aria-label={`Increase quantity of ${line.productName}`}
-                          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex h-11 w-11 items-center justify-center md:h-7 md:w-7"
+                          className="text-theme-text-secondary hover:text-theme-text-primary touch:h-11 touch:w-11 inline-flex h-7 w-7 items-center justify-center"
                           onClick={() => onUpdateQuantity(line, line.quantity + 1)}
                         >
                           <Plus className="h-3.5 w-3.5" />
@@ -117,7 +124,7 @@ export const StoreCartPanel: React.FC<StoreCartPanelProps> = ({
                       </div>
                       <button
                         type="button"
-                        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex min-h-[44px] items-center text-xs underline decoration-dotted md:min-h-0"
+                        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center text-xs underline decoration-dotted"
                         onClick={() => onRemove(line)}
                       >
                         Remove

@@ -656,14 +656,13 @@ export const MemberProfilePage: React.FC = () => {
   // member.
   const canViewRestrictedPii = receivedFullRecord;
   // Contact, address and emergency-contact edits go to PATCH
-  // /users/{id}/contact-info and /profile, which accept the member, users.edit
-  // or members.manage. They are also gated on the full record because every
-  // form is seeded from what is on screen: on a redacted record a hidden phone,
-  // address or contact list reads as blank, and an update sends blanks as
-  // null, so saving would erase what the editor was never shown. A users.edit
-  // holder without members.manage therefore gets no edit controls on a
-  // colleague's profile.
-  const canEdit = receivedFullRecord && (isSelf || canManageMembers || checkPermission('users.edit'));
+  // /users/{id}/contact-info and /profile, which accept only the member and
+  // members.manage — users.edit does not reach a colleague's record. They are
+  // also gated on the full record because every form is seeded from what is
+  // on screen: on a redacted record a hidden phone, address or contact list
+  // reads as blank, and an update sends blanks as null, so saving would erase
+  // what the editor was never shown.
+  const canEdit = receivedFullRecord && (isSelf || canManageMembers);
   // POST/DELETE /users/{id}/photo accept only the member or members.manage.
   const canEditPhoto = isSelf || canManageMembers;
 

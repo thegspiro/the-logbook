@@ -57,19 +57,18 @@ export const ManualEntrySettingsPanel: React.FC = () => {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
+      // Every field the panel owns is sent, cleared ones as [] or null: the
+      // update is partial, so an omitted key kept the old value. Unchecking
+      // every apparatus ("allow any") kept the old restriction in force.
+      // The start time goes out as null, never '', which fails the HH:MM check.
       const updates: Record<string, unknown> = {
         manual_entry_enabled: enabled,
         manual_entry_require_apparatus: requireApparatus,
+        manual_entry_apparatus_ids: Array.from(selectedApparatusIds),
+        manual_entry_default_start_time: defaultStartTime || null,
+        manual_entry_default_duration_hours:
+          typeof defaultDuration === 'number' && defaultDuration > 0 ? defaultDuration : null,
       };
-      if (selectedApparatusIds.size > 0) {
-        updates.manual_entry_apparatus_ids = Array.from(selectedApparatusIds);
-      }
-      if (defaultStartTime) {
-        updates.manual_entry_default_start_time = defaultStartTime;
-      }
-      if (typeof defaultDuration === 'number' && defaultDuration > 0) {
-        updates.manual_entry_default_duration_hours = defaultDuration;
-      }
       const result = await trainingModuleConfigService.updateConfig(updates);
       setConfig(result);
       toast.success('Settings saved');

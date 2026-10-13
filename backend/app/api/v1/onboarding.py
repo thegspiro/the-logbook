@@ -2137,8 +2137,12 @@ async def get_session_key_custody(request: Request, db: AsyncSession = Depends(g
     """
     The encryption key's fingerprint (an HMAC, never the key) and whether it
     has been confirmed as stored separately.
+
+    A read, so no CSRF token, like the other GETs here: the setup screen sends
+    one only with its writes. Requiring it refused this step's own first
+    request with a 403 and stopped every new installation's setup at it.
     """
-    await validate_session(request, db)
+    await validate_session(request, db, require_csrf=False)
     record = await key_custody_service.confirmation_for_current_key(db)
     return KeyCustodyStatus(
         key_fingerprint=key_custody_service.current_fingerprint(),

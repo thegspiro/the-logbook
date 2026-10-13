@@ -1165,13 +1165,35 @@ class CrossTemplateLinkRequest(BaseModel):
     links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
 
 
+class SkippedLinkPosition(BaseModel):
+    """A position somebody linked in the builder after the report loaded.
+
+    Left as they linked it. Both items are named so the officer can decide
+    whether to open the template and change it.
+    """
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    template_id: str
+    template_name: str
+    compartment_name: Optional[str] = None
+    current_inventory_item_id: str
+    # None when the current link points at an item outside the organization.
+    current_inventory_item_name: Optional[str] = None
+    chosen_inventory_item_id: str
+    chosen_inventory_item_name: Optional[str] = None
+
+
 class CrossTemplateLinkResponse(BaseModel):
-    """How many positions were linked, and how many had been linked meanwhile."""
+    """How many positions were linked, and which had been linked meanwhile."""
 
     model_config = _camel_config
 
     linked: int = 0
     skipped: int = 0
+    skipped_positions: List[SkippedLinkPosition] = Field(default_factory=list)
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the

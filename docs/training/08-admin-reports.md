@@ -3061,6 +3061,8 @@ _The two documents are tabs on one screen rather than side-by-side cards._
 | `legal.publish`   | All of the above, plus publish and revert to default | —           |
 | `settings.manage` | Reaches the screen and can publish                   | —           |
 
+**Long lists load in pages** _(2026-10-12)_: each document shows its first 10 drafts and 10 published versions, with **Load more proposals** / **Load more versions** for the rest, and the heading counts every proposal. A member may hold at most **10 open drafts per document type**; the eleventh is refused with "You already have 10 open proposals for the privacy policy. Publish or withdraw one first." Publishing or withdrawing frees a slot.
+
 This is how a department gets "the secretary drafts, an officer approves"
 without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
@@ -3154,6 +3156,23 @@ back empty. A member who lacks `finance.manage` but holds `fundraising.view` or
 `events.manage` still sees Department pulse; what is missing from it is the
 money cards. The member pictured here holds none of the three, which is why the
 whole heading is gone.
+
+### Customizing Department pulse _(2026-10-12)_
+
+**Customize** (top right of the section) lets you choose which cards show, their
+order, their titles and the period the section opens on. There are two scopes:
+
+- **Save for me** keeps the layout for you only. **Use department layout** (or
+  **Use built-in layout** when the department has no default) removes it.
+- **Save as department default** (shown only to those who may set it) is what
+  everyone without a layout of their own sees. **Clear department default**
+  removes it.
+
+A layout is **preference only**: the server still decides which cards you may see,
+so saving a card you do not have access to reveals nothing. If you hide every card
+the section says "All cards are hidden. Choose Customize to show some."
+
+_[Screenshot needed: the Customize panel with two cards reordered and one retitled; and the empty "All cards are hidden" state.]_
 
 ---
 

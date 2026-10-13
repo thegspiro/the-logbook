@@ -610,6 +610,7 @@ class TrainingService:
             counts_shift_attendance,
             credited_shifts_in_window,
             hours_record_counts,
+            next_window_opens,
             recency_cutoff,
         )
 
@@ -943,6 +944,9 @@ class TrainingService:
             "cert_expired": cert_expired,
             "blocks_activity": blocks_activity,
             "catch_up_deadline": str(deadline) if deadline else None,
+            "next_window_opens": (
+                str(opens) if (opens := next_window_opens(req, real_today)) else None
+            ),
         }
 
     async def check_requirement_progress(

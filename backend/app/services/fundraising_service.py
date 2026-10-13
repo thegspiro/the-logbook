@@ -24,6 +24,7 @@ from app.models.grant import (
     Pledge,
     PledgeStatus,
 )
+from app.services.restricted_funds import is_charged
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import (
     local_date,
@@ -143,11 +144,25 @@ class FundraisingService:
         campaign = await self.get_campaign(campaign_id, organization_id)
         if not campaign:
             return None
+        # A restricted fund that payments are charged to stays restricted:
+        # unmarking it would drop those charges out of every fund balance
+        # while the donors' restriction still binds the money.
+        if (
+            campaign.is_restricted
+            and data.get("is_restricted") is False
+            and await is_charged(self.db, organization_id, campaign_id)
+        ):
+            raise ValueError(
+                "Payments are charged to this restricted fund, so it cannot be "
+                "made unrestricted."
+            )
         apply_updates(
             campaign,
             _json_safe_amounts(data),
             skip={"organization_id", "id"},
         )
+        if campaign.is_restricted and not (campaign.restriction_purpose or "").strip():
+            raise ValueError("A restricted fund needs the purpose it is for.")
         await self.db.flush()
         return campaign
 

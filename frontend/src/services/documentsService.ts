@@ -5,6 +5,13 @@
 import api from './apiClient';
 import type { DocumentFolder, DocumentRecord, DocumentsSummary } from './formsServices';
 
+/** A position a folder can be restricted to; `allowed_roles` holds its `id`. */
+export interface FolderRoleOption {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export const documentsService = {
   async getFolders(params?: {
     parent_id?: string;
@@ -53,9 +60,9 @@ export const documentsService = {
     return response.data;
   },
 
-  /** Positions a folder can be restricted to (documents.manage). */
-  async getFolderRoleOptions(): Promise<Array<{ slug: string; name: string }>> {
-    const response = await api.get<Array<{ slug: string; name: string }>>('/documents/folders/role-options');
+  /** Positions a folder can be restricted to (documents.manage). A folder stores their ids. */
+  async getFolderRoleOptions(): Promise<FolderRoleOption[]> {
+    const response = await api.get<FolderRoleOption[]>('/documents/folders/role-options');
     return response.data;
   },
 

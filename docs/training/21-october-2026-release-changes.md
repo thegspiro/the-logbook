@@ -125,3 +125,25 @@ Screenshots to create or replace are in
 | Election ballot and results changes                                         | [14 — Elections](./14-elections.md)                            |
 | Prospect referral fields, auto-purge warning, Department Email              | [15](./15-prospective-members.md), [08](./08-admin-reports.md) |
 | Give everyone all calls at close-out                                        | [03 — Scheduling](./03-scheduling.md)                          |
+
+---
+
+# October 12–13, 2026 workflow updates
+
+Index for the sixth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-12--13-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                         | Now in                                                                           |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Two-person approval, accountable-plan deadline, expense classes, board reports                | [11 — Finance](./11-finance.md)                                                  |
+| Practical Skills: Skills Testing or shift report sign-offs                                    | [02 — Training](./02-training.md), [09 — Skills Testing](./09-skills-testing.md) |
+| Prerequisite programs, requirement due dates, compliance emails, cleared fields now saved     | [02 — Training](./02-training.md)                                                |
+| Weekend Only preset; day/night shifts per weekday                                             | [03 — Scheduling](./03-scheduling.md)                                            |
+| Catalog Links; inspect a received return; Record inspection closes the schedule; reorder item | [05 — Inventory](./05-inventory.md)                                              |
+| Attendance request resend count; "Being corrected" minutes                                    | [04 — Events & Meetings](./04-events-meetings.md)                                |
+| Folder access by position; suggestion-box question step                                       | [07 — Documents & Forms](./07-documents-forms.md)                                |
+| Saved reports; Department pulse Customize; Legal Documents Load more                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
+| Grant lifecycle and overspend; anonymous donors hidden                                        | [12 — Grants & Fundraising](./12-grants-fundraising.md)                          |
+| Claude (MCP) Settings button and connection walkthrough; Salesforce client credentials        | [16 — Integrations](./16-integrations.md)                                        |

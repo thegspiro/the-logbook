@@ -44,6 +44,7 @@ vi.mock('../hooks/useRequestFormOptions', () => ({
 const mockGetSettings = vi.fn();
 vi.mock('../services/api', () => ({
   financeSettingsService: { get: (...args: unknown[]) => mockGetSettings(...args) as unknown },
+  fundService: { list: () => Promise.resolve([]) },
   approvalService: { manualApprove: vi.fn(), manualDeny: vi.fn() },
   expenseReportService: { uploadLineItemReceipt: vi.fn(), downloadLineItemReceipt: vi.fn() },
 }));
@@ -55,6 +56,7 @@ const rules = (substantiationMode: string, substantiationDays = 60) => ({
   dualApprovalThreshold: null,
   substantiationMode,
   substantiationDays,
+  fundOverspendMode: 'warn',
 });
 
 beforeEach(() => {

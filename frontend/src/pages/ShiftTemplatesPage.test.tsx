@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { ShiftTemplateRecord } from '../modules/scheduling/services/api';
 import ShiftTemplatesPage from './ShiftTemplatesPage';
 
 const mockGetTemplates = vi.fn();
+const mockDeleteTemplate = vi.fn();
 
 vi.mock('../modules/scheduling/services/api', async () => {
   const actual = await vi.importActual<typeof import('../modules/scheduling/services/api')>(
@@ -14,6 +16,7 @@ vi.mock('../modules/scheduling/services/api', async () => {
     ...actual,
     schedulingService: {
       getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
+      deleteTemplate: (...args: unknown[]) => mockDeleteTemplate(...args) as unknown,
       getPatterns: vi.fn().mockResolvedValue([]),
       getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     },
@@ -79,5 +82,41 @@ describe('ShiftTemplatesPage', () => {
     });
     expect(screen.getByText('Officer')).toBeInTheDocument();
     expect(screen.getByText('Driver/Operator')).toBeInTheDocument();
+  });
+});
+
+// Deleting a template used to fire on the first click of the trash icon, one
+// tab-stop from Edit, with nothing to undo it.
+describe('ShiftTemplatesPage template delete', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([buildTemplate(['officer'])]);
+    mockDeleteTemplate.mockReset();
+    mockDeleteTemplate.mockResolvedValue(undefined);
+  });
+
+  it('asks before deleting, and keeps the template on "Keep it"', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Delete "Day Shift"?');
+    await user.click(screen.getByRole('button', { name: 'Keep it' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteTemplate).not.toHaveBeenCalled();
+  });
+
+  it('deletes once the officer confirms', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(mockDeleteTemplate).toHaveBeenCalledWith('tmpl-1'));
   });
 });

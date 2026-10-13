@@ -20,7 +20,7 @@ vi.mock('../services/api', () => ({
     deleteDocument: vi.fn(),
     createFolder: (...args: unknown[]) => mockCreateFolder(...args) as unknown,
     // Read by the folder access fields when a folder dialog opens.
-    getFolderRoleOptions: () => Promise.resolve([{ slug: 'quartermaster', name: 'Quartermaster' }]),
+    getFolderRoleOptions: () => Promise.resolve([{ id: 'pos-qm', slug: 'quartermaster', name: 'Quartermaster' }]),
   },
   roleService: {
     getPermissionsByCategory: () => Promise.resolve([]),
@@ -379,9 +379,7 @@ describe('DocumentsPage', () => {
     await user.click(await within(dialog).findByRole('checkbox', { name: 'Quartermaster' }));
     await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
 
-    await waitFor(() =>
-      expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['quartermaster'] })
-    );
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['pos-qm'] }));
   });
 
   it('keeps the create dialog open with the server’s reason when it is refused', async () => {

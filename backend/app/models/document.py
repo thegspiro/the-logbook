@@ -428,9 +428,12 @@ class DocumentFolder(Base):
     owner_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    allowed_roles: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, nullable=True
-    )  # List of role slugs; null = no restriction
+    # Position ids (Position.id), any one of which admits; null = no
+    # restriction. Ids, not slugs, since 2026-10-13: an id is never reused, so a
+    # position created later can never inherit a deleted one's folders, and
+    # deleting a position cleans it out of every folder
+    # (RoleService.delete_role). Only read on an organization folder.
+    allowed_roles: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # List of permission names, ANY of which admits the holder; null = no
     # restriction. Distinct from allowed_roles because a module's own contract

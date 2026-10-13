@@ -492,13 +492,23 @@ function FacilityCard({ facility, onClick }: FacilityCardProps) {
           </span>
         )}
         {facility.statusRecord && (
+          // The status colour is the department's choice, stored as data, so it
+          // cannot be trusted as text: "Operational" in its own #16a34a on a
+          // tint of itself measured 2.87:1. The colour stays as a tint and a
+          // dot; the label uses the theme's text colour.
           <span
-            className="rounded-full px-2.5 py-1 text-xs font-medium"
+            className="text-theme-text-primary inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
             style={{
               backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined,
-              color: facility.statusRecord.color || undefined,
             }}
           >
+            {facility.statusRecord.color && (
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: facility.statusRecord.color }}
+                aria-hidden="true"
+              />
+            )}
             {facility.statusRecord.name}
           </span>
         )}

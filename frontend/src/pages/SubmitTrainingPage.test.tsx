@@ -12,10 +12,12 @@ const mockCreateSubmission = vi.fn();
 const mockUploadAttachment = vi.fn();
 const mockSubmitDraft = vi.fn();
 const mockCreateWithAttachment = vi.fn();
+const mockGetCrewContext = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
     getConfig: (...args: unknown[]) => mockGetConfig(...args) as unknown,
+    getCrewRecordingContext: (...args: unknown[]) => mockGetCrewContext(...args) as unknown,
     getMySubmissions: (...args: unknown[]) => mockGetMySubmissions(...args) as unknown,
     createSubmission: (...args: unknown[]) => mockCreateSubmission(...args) as unknown,
     createSubmissionWithAttachment: (...args: unknown[]) => mockCreateWithAttachment(...args) as unknown,
@@ -90,6 +92,8 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
 describe('SubmitTrainingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetCrewContext.mockReset();
+    mockGetCrewContext.mockResolvedValue({ can_record: false, members: [] });
     mockGetConfig.mockResolvedValue(mockConfig);
     mockGetMySubmissions.mockResolvedValue([]);
     mockGetCategories.mockResolvedValue([
@@ -127,6 +131,45 @@ describe('SubmitTrainingPage', () => {
       },
       { id: 'requirement-archived', name: 'Archived Certification', active: false, requirement_type: 'certification' },
     ]);
+  });
+
+  describe('crew training', () => {
+    it('offers crew recording only to members who can serve as a shift officer', async () => {
+      renderWithRouter(<SubmitTrainingPage />);
+      await screen.findByText('Submit External Training');
+      expect(screen.queryByRole('link', { name: /Record crew training/ })).not.toBeInTheDocument();
+    });
+
+    it('links an eligible officer to the crew form', async () => {
+      mockGetCrewContext.mockResolvedValue({ can_record: true, members: [] });
+      renderWithRouter(<SubmitTrainingPage />);
+      expect(await screen.findByRole('link', { name: /Record crew training/ })).toHaveAttribute(
+        'href',
+        '/training/record-crew'
+      );
+    });
+
+    it('does not let a member edit or delete an entry their officer recorded', async () => {
+      mockGetMySubmissions.mockResolvedValue([
+        {
+          id: 'crew-1',
+          course_name: 'Hose Advancement Drill',
+          training_type: 'skills_practice',
+          completion_date: '2026-10-11',
+          hours_completed: 0.75,
+          status: 'pending_review',
+          crew_batch_id: 'batch-1',
+          recorded_by: 'officer-1',
+          recorder_name: 'Lee Crew',
+          submitted_at: '2026-10-11T18:00:00Z',
+          updated_at: '2026-10-11T18:00:00Z',
+        },
+      ]);
+      renderWithRouter(<SubmitTrainingPage />);
+      expect(await screen.findByText(/Recorded by Lee Crew/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Edit Hose Advancement Drill' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Delete Hose Advancement Drill' })).not.toBeInTheDocument();
+    });
   });
 
   it('renders the submit training page', async () => {

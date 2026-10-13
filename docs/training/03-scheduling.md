@@ -3143,6 +3143,22 @@ The four basic pattern types in **Manual Setup**:
 | **Platoon Rotation** | Rotates on and off days in a cycle   | Career departments on 24/48, 48/96 or Kelly schedules             |
 | **Custom Dates**     | Only the dates you choose            | One-off details, special events, holiday cover                    |
 
+**Weekly patterns can separate day and night shifts** _(2026-10-12)_. In Manual
+Setup, choose **Weekly**, then tick **Separate day and night shifts**. Each weekday
+you pick carries **Day**, **Night** or both, so one weekday (Saturday) can
+generate both shifts. Day and night shift templates are required for whichever
+shift types you use, so a night shift can no longer take the day template's
+hours. The **Weekend Only** preset under **Fire Dept Presets** builds the common
+case: Friday night, Saturday day and night, Sunday day. In the pattern list, a
+weekly pattern shows sun and moon glyphs on the covered weekdays, and its expanded
+details list the shifts per weekday.
+
+**The start date means different things by type.** Rotations count their cycle
+from it. Daily, weekly and custom-date patterns have no cycle, so for them the date
+only bounds when automatic generation begins.
+
+_[Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs.]_
+
 Select **Create Pattern** to save it.
 
 **A pattern needs a template.** Generating from a pattern with no template

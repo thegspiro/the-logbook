@@ -44,46 +44,17 @@ const SuggestionPublishModal: React.FC<SuggestionPublishModalProps> = ({ detail,
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={isEdit ? 'Edit published copy' : 'Publish to the idea board'} size="lg">
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="space-y-4">
-          <div className="alert-info text-sm">
-            <p className="text-theme-text-primary">
-              Every member can read this and vote on it. Write it in your own words: the submission itself, its
-              screenshots and who sent it are never shown.
-              {hasResponse ? ' The latest response to the submitter will also be shown with it.' : ''}
-            </p>
-          </div>
-          <div>
-            <label htmlFor="publish-title" className="form-label">
-              Title
-            </label>
-            <input
-              id="publish-title"
-              className="form-input"
-              value={title}
-              maxLength={MAX_TITLE}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="publish-summary" className="form-label">
-              Summary
-            </label>
-            <textarea
-              id="publish-summary"
-              className="form-input"
-              rows={5}
-              maxLength={MAX_SUMMARY}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="What is being suggested, without names or anything that identifies who sent it."
-              required
-            />
-          </div>
-        </div>
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEdit ? 'Edit published copy' : 'Publish to the idea board'}
+      size="lg"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" className="btn-primary" disabled={isSaving || !title.trim() || !summary.trim()}>
+            {isSaving ? 'Publishing…' : isEdit ? 'Save copy' : 'Publish'}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -91,11 +62,46 @@ const SuggestionPublishModal: React.FC<SuggestionPublishModalProps> = ({ detail,
           >
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={isSaving || !title.trim() || !summary.trim()}>
-            {isSaving ? 'Publishing…' : isEdit ? 'Save copy' : 'Publish'}
-          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="alert-info text-sm">
+          <p className="text-theme-text-primary">
+            Every member can read this and vote on it. Write it in your own words: the submission itself, its
+            screenshots and who sent it are never shown.
+            {hasResponse ? ' The latest response to the submitter will also be shown with it.' : ''}
+          </p>
         </div>
-      </form>
+        <div>
+          <label htmlFor="publish-title" className="form-label">
+            Title
+          </label>
+          <input
+            id="publish-title"
+            className="form-input"
+            value={title}
+            maxLength={MAX_TITLE}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="publish-summary" className="form-label">
+            Summary
+          </label>
+          <textarea
+            id="publish-summary"
+            className="form-input"
+            rows={5}
+            maxLength={MAX_SUMMARY}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder="What is being suggested, without names or anything that identifies who sent it."
+            required
+          />
+        </div>
+      </div>
     </Modal>
   );
 };

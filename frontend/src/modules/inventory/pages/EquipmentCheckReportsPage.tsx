@@ -261,7 +261,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                   )}
                   <span className="text-theme-text-muted">Pass / Fail:</span>
                   <span className="text-theme-text-secondary">
-                    <span className="text-green-600">{a.passCount}</span>
+                    <span className="text-green-800 dark:text-green-400">{a.passCount}</span>
                     {' / '}
                     <span className={a.failCount > 0 ? 'text-red-600' : ''}>{a.failCount}</span>
                   </span>
@@ -326,7 +326,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                     <tr key={m.userId} className="border-theme-surface-border border-b last:border-0">
                       <td className="text-theme-text-primary px-4 py-2">{m.userName}</td>
                       <td className="text-theme-text-secondary px-4 py-2 text-right">{m.checksCompleted}</td>
-                      <td className="px-4 py-2 text-right text-green-600">{m.passCount}</td>
+                      <td className="px-4 py-2 text-right text-green-800 dark:text-green-400">{m.passCount}</td>
                       <td className="px-4 py-2 text-right text-red-600">{m.failCount}</td>
                       <td className="text-theme-text-secondary px-4 py-2 text-right">{rate}%</td>
                     </tr>
@@ -434,7 +434,10 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
         </button>
       </div>
 
-      {loading ? (
+      {/* Only the first load swaps the table for a spinner. A page change keeps
+          the table and its Pagination mounted, so the page button the user
+          pressed keeps focus instead of dropping it to <body>. */}
+      {loading && !data ? (
         <div className="text-theme-text-muted flex items-center justify-center py-12" role="status" aria-live="polite">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading failures...
         </div>
@@ -445,10 +448,12 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
         </div>
       ) : (
         <>
-          <p className="text-theme-text-muted text-xs">{data.total} total failures</p>
+          <p className="text-theme-text-muted text-xs" role="status" aria-live="polite">
+            {loading ? 'Loading failures...' : `${data.total} total failures`}
+          </p>
 
           <div className="card overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm aria-busy:opacity-60" aria-busy={loading}>
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">

@@ -99,6 +99,12 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     - Access is set in the Create Folder dialog too.
     - A save that would shut its editor out of the folder is refused, unless
       the editor is a full administrator.
+28. **Folders name positions by id** (2026-10-13), not by slug, so a position
+    created later can never inherit a deleted one's folders.
+    - Deleting a position removes it from every folder that names it.
+    - Deletion is refused while it is the only position opening a folder,
+      naming those folders, so nothing opens to the whole department by
+      accident.
 
 ## Phases
 
