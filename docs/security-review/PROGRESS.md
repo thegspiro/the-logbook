@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3169](https://github.com/thegspiro/the-logbook/pull/3169)**:
+branch `claude/security-review-facilities`, Feature 12 (Facilities), pass 8
+(watchdog pickup). 0 application-code fixes needed, 0 new security findings
+— FAC-13 (HIGH, standing flagged as of pass 7) re-verified **already fixed**,
+by an owner-direct commit that landed after pass 7 closed (`29627a64f`,
+2026-10-11, "open operational facility folders to any facilities access"),
+not reviewed by this rotation before now — the same "reviewed-after-the-fact"
+shape every pass-8 iteration this cycle has hit. FAC-30 (P2, owner-accepted
+"leave as is" 2026-10-05) re-confirmed unchanged; FAC-41/FAC-44 re-confirmed
+still fixed and untouched in this window. One cross-cutting fix applied
+before anything else: `alembic heads` showed two heads (`3decd3ff6ce5`
+restricted-funds, `5b2e9c7d4a18` folder-positions-by-id — two parallel
+branches merged independently off the same parent minutes apart, neither
+Facilities-specific), merged with `alembic merge` into a single head
+(`05ec84735fcf`) so `validate_migrations.py --strict` and every DB-backed
+test could run at all. Separately confirmed the repo-wide MCP OAuth-gating
+commit (`6c45efd38`, landed before pass 7) already covers
+`mcp/tools/facilities.py`'s three tools with `permissions=` matching their
+REST equivalents exactly — `test_mcp_member_gating.py` 12/12. Real delta
+since pass 7 was 27 non-merge commits across this feature's scope plus shared
+dependencies, each read via `git show`; aside from the two fixes above, every
+other commit was either another feature's own reviewed scope (shared
+`documents_service.py`/`audit.py` machinery) or a repo-wide mypy/accessibility
+sweep with no facilities-specific behavior change (verified by diffing each
+touched hunk, not assumed from the commit message). 98 routes re-enumerated
+by AST (unchanged from pass 6/7), each confirmed to carry a permission
+dependency. See the Log entry below and
+`docs/security-review/FAC-12-facilities.md`'s **Pass 8** section for detail.
+Row 12 stays ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 8, PR #3166, merged), preserved for history</summary>
+
 **PR [#3166](https://github.com/thegspiro/the-logbook/pull/3166)**: branch
 `claude/security-review-inventory`, Feature 11
 (Inventory), pass 8 (watchdog pickup). 0 code fixes needed, 0 new security
@@ -41,6 +75,8 @@ rotation's own INV-8 finding id — corrected in `KNOWN_LIMITATIONS.md` with a
 disambiguating note. See the Log entry below and
 `docs/security-review/INV-11-inventory.md`'s **Pass 8** section for detail.
 Row 11 stays ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 8, PR #3160, merged), preserved for history</summary>
@@ -18889,6 +18925,103 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 12 (Facilities, pass 8) — 0 application fixes, 0 new security findings; FAC-13 (HIGH) re-verified already fixed by owner-direct work; 1 cross-cutting migration-head conflict diagnosed and fixed (watchdog pickup)
+
+**Closure.** PR #3166 (Feature 11, Inventory, pass 8) merged — visible at
+`origin/main`'s head (`9ce5dc78`) with no security-review activity since.
+Independently confirmed before starting (`gh api repos/.../pulls?state=open`
+filtered on `head.ref` containing `security-review`, 0 matches) that no
+security-review PR or branch was open — this iteration is itself a watchdog
+pickup, picking up Feature 12 (Facilities), the next `⬜`/next-pointer row per
+`PROGRESS.md`'s own Open-PR narrative pointer and per PR #3166's own body.
+
+**Migration-head conflict diagnosed and fixed before anything else.** This
+session's startup hook reported `alembic upgrade head` failing with "Multiple
+head revisions are present." `alembic heads` showed two:
+`3decd3ff6ce5` (`restricted_funds`, a Finance feature) and `5b2e9c7d4a18`
+(`folder_positions_by_id`, a Documents feature), both declaring
+`down_revision = "4d8807bdd737"` — two branches, each adding one migration
+off the same parent, merged to `main` independently within the same window
+and neither aware of the other. Confirmed this was a genuine repo-wide
+collision rather than a stale local artifact (both files are present and
+committed on `origin/main`, not just in a local working tree) — the ordinary
+multi-branch-migration race, not a defect in either feature's own commit, and
+not Facilities-specific, but blocking `validate_migrations.py --strict` and
+every DB-backed test regardless of which feature's rotation turn it falls on.
+Fixed with `alembic merge` → a new no-op merge revision `05ec84735fcf`
+(`20261013_1548_..._merge_restricted_funds_and_folder_.py`); verified
+`alembic heads` → single head, `validate_migrations.py --strict` → 588
+revisions, single head, VALIDATION PASSED. Not mirrored into
+`KNOWN_LIMITATIONS.md` — it was fixed in this commit, not left open, and
+describes a one-time migration-tree state rather than an ongoing operator
+decision.
+
+**Prior art loaded first.** Read `docs/security-review/FAC-12-facilities.md`
+in full (all seven prior passes), `docs/module-audit/facilities.md` and its
+appended product-delivery review, and the matching `docs/KNOWN_LIMITATIONS.md`
+entries for FAC-13 and FAC-30, before touching any application code.
+
+**Real delta since pass 7 (`46e650f27`, PR #2968's merge, 2026-10-06) was 27
+non-merge commits** touching this feature's declared scope plus its shared
+dependencies (`documents_service.py`, `core/permissions.py`,
+`utils/org_scoping.py`, `core/audit.py`), each read via `git show`, not
+sampled. One owner-direct commit (`29627a64f`, 2026-10-11) fixed the
+standing FAC-13 (HIGH) finding — re-derived against current code rather than
+taken on its own "FIXED" annotation: `FACILITY_ACCESS_PERMISSIONS`
+(`facilities.view`/`.view_sensitive`/`.edit`/`.manage`) now gates the
+operational facility-folder tree (Photos, Maintenance Records, Inspection
+Reports) that previously required the narrower sensitive-only set, closing
+the exact over-restriction the finding described; the sensitive families
+(Blueprints & Permits, Insurance & Leases, Capital Projects, a new Facility
+Documents sub-folder) correctly keep the sensitive gate, and a migration
+refiles pre-existing files so loosening the parent folder does not newly
+expose anything sitting in it. FAC-30 (P2, owner-accepted "leave as is")
+and FAC-41/FAC-44 (fixed, pass 6/7) both re-confirmed unchanged. Separately
+confirmed — per this task's own prompt — that the repo-wide MCP OAuth-gating
+commit mentioned in the Inventory/Users pass-8 entries (`6c45efd38`, landed
+2026-10-05, before pass 7) already covers `mcp/tools/facilities.py`: all
+three tools carry `permissions=` matching their REST equivalents exactly,
+and `test_mcp_member_gating.py` passes 12/12. Every other commit in the
+27-commit delta was either another feature's own reviewed scope touching a
+shared dependency file, or a repo-wide mypy/accessibility sweep with no
+facilities-specific behavior change — confirmed by diffing each touched hunk
+directly rather than assumed from the commit message (the mypy sweeps bind
+`result.scalar_one_or_none()` returns to annotated locals and add
+`ensure_found(...)` reloads; zero `organization_id` filter changed anywhere).
+98 routes re-enumerated by AST (not grep alone) — unchanged from pass 6/7 —
+every one confirmed to carry a `require_permission`/`require_all_permissions`
+dependency, including the one route (`list_facility_documents`) whose call
+is a starred module-level constant rather than inline literals.
+
+**One environment note, no code/test change.** The local `pytest` run
+initially failed 22 tests + 1 error with `Unknown column
+'under_correction_since'` — this session's shell had `DB_NAME=intranet_db`
+pre-exported, shadowing `tests/conftest.py`'s own
+`os.environ.setdefault("DB_NAME", "intranet_test")`, so tests ran against a
+stale pre-existing database one migration behind
+(`create_all(checkfirst=True)` never adds a missing column to a table that
+already exists — exactly what `conftest.py`'s own docstring warns about).
+Running with `DB_NAME` unset let a fresh `intranet_test` database build from
+current models; the full suite then passed.
+
+**Completion gate, full and green:** `flake8`/`black --check`/`isort
+--check-only` (`app/ tests/ alembic/`) clean; `validate_migrations.py
+--strict` — single head `05ec84735fcf`, 588 revisions (post-merge-fix);
+`check_route_permissions.py --strict` — 268 routes, 0 errors/warnings;
+`pytest tests/ -k "facilit"` — 229 passed, 1 pre-existing skip (`pywebpush`);
+the tenancy/security guard tests (`test_endpoint_auth_coverage`,
+`test_like_escaping`, `test_capacity_locking`, `test_csv_writer_sweep`,
+`test_org_scoping_ratchet`, `test_mcp_member_gating`) — 99 passed; the
+migration guard tests (`test_alembic_migrations`,
+`test_migration_create_all_tables`) — 80 passed; frontend
+`typecheck`/`lint` clean; `npx vitest run src/modules/facilities` — 124
+passed (18 files).
+
+No application-code fix was needed beyond the cross-cutting migration merge
+— the one standing HIGH finding was already fixed by owner-direct work, and
+every item of new real delta was reviewed fresh and found sound. Row 12
+stays ✅ (pending this PR's merge). Next: Feature 13 (Apparatus & NFC).
 
 ### 2026-10-13 — Feature 11 (Inventory, pass 8) — 0 code fixes, 0 new security findings; four standing findings re-verified already fixed by owner-direct work; one doc correction (watchdog pickup)
 

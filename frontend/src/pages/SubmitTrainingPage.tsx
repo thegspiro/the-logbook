@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
 import { Breadcrumbs } from '../components/ux';
 import {
   AttachmentField,
@@ -924,11 +924,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           >
             <ul className="flex flex-col">
               {recentSubmissions.map((submission) => {
-                const canEdit = EDITABLE_STATUSES.includes(submission.status);
+                // An entry the member's officer recorded is the officer's
+                // statement; only the training officer may change it.
+                const crewRecorded = !!submission.crew_batch_id;
+                const canEdit = !crewRecorded && EDITABLE_STATUSES.includes(submission.status);
                 const meta = [
                   `${formatHours(submission.hours_completed)}h`,
                   formatCalendarDate(submission.completion_date, { month: 'short', day: 'numeric' }),
-                  submission.issuing_agency || submission.instructor,
+                  crewRecorded
+                    ? `Recorded by ${submission.recorder_name || 'your officer'}`
+                    : submission.issuing_agency || submission.instructor,
                 ]
                   .filter(Boolean)
                   .join(' · ');
@@ -1053,6 +1058,7 @@ const SubmitTrainingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
+  const [canRecordCrew, setCanRecordCrew] = useState(false);
 
   /**
    * `silent` refreshes the lists without swapping the page for the spinner.
@@ -1087,6 +1093,15 @@ const SubmitTrainingPage: React.FC = () => {
 
   useEffect(() => {
     void loadData();
+  }, []);
+
+  // Offered only to members who can serve as a shift officer. A failure just
+  // leaves the link hidden; it never blocks the member's own submission.
+  useEffect(() => {
+    trainingSubmissionService
+      .getCrewRecordingContext()
+      .then((context) => setCanRecordCrew(context.can_record))
+      .catch(() => setCanRecordCrew(false));
   }, []);
 
   const handleDelete = async (submissionId: string) => {
@@ -1166,6 +1181,18 @@ const SubmitTrainingPage: React.FC = () => {
             <p className="text-theme-text-muted text-sm">Report training you completed outside the department.</p>
           </div>
         </div>
+
+        {canRecordCrew && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              Ran a drill on shift? Record it once for everyone who was there.
+            </p>
+            <Link to="/training/record-crew" className="btn-secondary touch:min-h-11 flex items-center gap-1.5 text-sm">
+              <Users className="h-4 w-4" />
+              <span>Record crew training</span>
+            </Link>
+          </div>
+        )}
 
         {returnedSubmission && editingSubmission?.id !== returnedSubmission.id && (
           <RevisionNotice
