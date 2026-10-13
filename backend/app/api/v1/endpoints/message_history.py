@@ -199,6 +199,17 @@ async def send_test_email(
 
     # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)
+    # With email switched off the send is skipped and writes no history row,
+    # which used to fall through to a 500 claiming "Email sent but failed to
+    # log history" — the opposite of what happened. Say so instead.
+    if not email_svc.can_send:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Email is not set up on this server, so no test email can be "
+                "sent. Ask whoever runs the server to configure email."
+            ),
+        )
     success_count, failure_count = await email_svc.send_email(
         to_emails=[to_email],
         subject=subject,

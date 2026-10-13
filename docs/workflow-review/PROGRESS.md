@@ -110,7 +110,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ✅     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ✅     |
-| W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
+| W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ✅     |
 | W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
 | W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
 | W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ✅     |
@@ -175,7 +175,7 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W57, W58, W59** — on the top-navigation layout these screens had no menu
+- **W58, W59** — on the top-navigation layout these screens had no menu
   entry until W55; check them from the navigation, not a typed URL.
 - **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
   "Read this version" summary are 20px tall (W54-6).
@@ -191,12 +191,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `user_id`; confirm on the audit page. Also `GET /audit-logs?event_type=runoff_election_created`
   returned 0 for a row visibly present in the table (W50, A10) — check the
   event-type filter.
-- **W57** — the shipped ballot template gained `meeting_date_html` /
-  `meeting_date_text` and reworded callouts (W50-68, carried into stored
-  templates by `cbd97eb`); a department that saved its own
-  `ballot_notification` keeps the old body. Check that the editor's variable
-  palette lists the two and that the preview's "Quorum Met" sample value
-  (`email_template_service.py` ~1062) reads as an example, not a claim.
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
@@ -208,6 +202,48 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W57 — Email templates: edit, preview, restore — 2026-10-13
+
+Driven as:
+
+- `admin` editing Event Reminder, switching templates mid-edit, saving,
+  resetting, sending a test with email off, and reading the Ballot
+  Notification and Election Report previews;
+- `member` refused;
+- the list at 390×844.
+
+Database continued from W56; `main` merged in first.
+
+Held:
+
+- the live preview follows the draft;
+- a double-clicked Save wrote once, and a tab change keeps the draft;
+- Reset asks, and truthfully says it cannot be undone;
+- the member was refused everywhere.
+
+The W50-68 lead is resolved: the meeting-date variables are in the palette,
+and the preview's quorum line is labelled sample data.
+
+Fixed:
+
+- W57-1 (MED — picking another template silently discarded an unsaved
+  edit; refresh now warns too);
+- W57-2 (MED — a test send with email off came back as a 500 "Email sent but
+  failed to log history", and both screens hid the reason);
+- W57-3 (LOW — unlabelled filter and preview member picker);
+- W57-4 (LOW — 28px group headers on a phone).
+
+Also updated `MessagesAdminPage.delivery.test.tsx`, new from `main`, to W55's
+per-message button names.
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; flake8, black and isort are clean on the
+changed Python files. 258 communications frontend tests pass (4 new), as do 13
+test-send and history backend tests (1 new).
+
+Next: W58.
 
 ### W56 — Notification rules and logs, the in-app bell — 2026-10-12
 
