@@ -25,7 +25,18 @@ from app.schemas.reports import (
     SavedReportUpdate,
 )
 from app.services.reports_service import ReportsService
+from app.services.saved_report_schedule import (
+    PII_REPORT_PERMISSIONS as _PII_REPORT_PERMISSIONS,
+)
+from app.services.saved_report_schedule import (
+    REPORT_PERIODS,
+    disallowed_pii_recipients,
+    next_run_on_or_after,
+    report_dates,
+    validate_schedule,
+)
 from app.utils.model_updates import apply_updates
+from app.utils.org_timezone import resolve_org_today
 
 router = APIRouter()
 
@@ -49,16 +60,9 @@ router = APIRouter()
 # load; a cap on writes here is what keeps that read bounded (RPT-29).
 MAX_ACTIVE_SAVED_REPORTS_PER_ORG = 200
 
-PII_REPORT_PERMISSIONS: dict[str, str] = {
-    "member_roster": "members.view",
-    "pipeline_overview": "prospective_members.view",
-    "training_summary": "training.manage",
-    "training_progress": "training.manage",
-    "annual_training": "training.manage",
-    "certification_expiration": "training.manage",
-    "compliance_status": "training.manage",
-    "admin_hours": "admin_hours.manage",
-}
+# The map itself lives in saved_report_schedule so the scheduled sender, which
+# has no request to hang a dependency on, enforces the identical gate.
+PII_REPORT_PERMISSIONS = _PII_REPORT_PERMISSIONS
 
 
 def _enforce_report_pii_permission(current_user: User, report_type: str) -> None:
@@ -135,6 +139,76 @@ async def generate_report(
 # ============================================
 
 
+def _saved_response(r: SavedReport) -> SavedReportResponse:
+    return SavedReportResponse(
+        id=str(r.id),
+        name=r.name,
+        description=r.description,
+        report_type=r.report_type,
+        filters=r.filters,
+        is_scheduled=r.is_scheduled,
+        schedule_frequency=r.schedule_frequency,
+        schedule_day=r.schedule_day,
+        email_recipients=r.email_recipients,
+        last_run_at=r.last_run_at.isoformat() if r.last_run_at else None,
+        next_run_at=(str(r.next_run_date) if r.next_run_date else None),
+        # RPT2-29-2: the saved_report_delivery task now reads the schedule.
+        enforced=bool(r.is_scheduled),
+        created_by=str(r.created_by) if r.created_by else "",
+        created_at=r.created_at.isoformat() if r.created_at else "",
+        updated_at=r.updated_at.isoformat() if r.updated_at else "",
+    )
+
+
+async def _settle_schedule(
+    db: AsyncSession, report: SavedReport, current_user: User
+) -> None:
+    """Validate a saved report's schedule as it now stands and set its next run.
+
+    Raises HTTPException(400) for a schedule that could not be sent as saved,
+    or that would email a PII-bearing report to someone the PII gate refuses
+    (RPT2-29-2; see saved_report_schedule).
+    """
+    org_id = str(current_user.organization_id)
+    recipients = [r.strip() for r in (report.email_recipients or []) if r.strip()]
+    period = (report.filters or {}).get("period")
+    if period is not None and period not in REPORT_PERIODS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown reporting period. Expected one of: {', '.join(REPORT_PERIODS)}",
+        )
+    try:
+        validate_schedule(
+            bool(report.is_scheduled),
+            report.schedule_frequency,
+            report.schedule_day,
+            recipients,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if not report.is_scheduled:
+        report.next_run_date = None
+        return
+    refused = await disallowed_pii_recipients(
+        db, org_id, report.report_type, recipients
+    )
+    if refused:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This report lists member data, so it can only be emailed to "
+                "active members who hold the "
+                f"'{PII_REPORT_PERMISSIONS[report.report_type]}' permission. "
+                f"Not allowed: {', '.join(refused)}"
+            ),
+        )
+    report.email_recipients = recipients
+    today = await resolve_org_today(db, org_id)
+    report.next_run_date = next_run_on_or_after(
+        report.schedule_frequency or "", report.schedule_day, today
+    )
+
+
 @router.get("/saved", response_model=List[SavedReportResponse])
 async def list_saved_reports(
     db: AsyncSession = Depends(get_db),
@@ -149,27 +223,7 @@ async def list_saved_reports(
         )
         .order_by(SavedReport.name)
     )
-    reports = result.scalars().all()
-
-    return [
-        SavedReportResponse(
-            id=str(r.id),
-            name=r.name,
-            description=r.description,
-            report_type=r.report_type,
-            filters=r.filters,
-            is_scheduled=r.is_scheduled,
-            schedule_frequency=r.schedule_frequency,
-            schedule_day=r.schedule_day,
-            email_recipients=r.email_recipients,
-            last_run_at=r.last_run_at.isoformat() if r.last_run_at else None,
-            next_run_at=(str(r.next_run_date) if r.next_run_date else None),
-            created_by=str(r.created_by) if r.created_by else "",
-            created_at=r.created_at.isoformat() if r.created_at else "",
-            updated_at=r.updated_at.isoformat() if r.updated_at else "",
-        )
-        for r in reports
-    ]
+    return [_saved_response(r) for r in result.scalars().all()]
 
 
 @router.post("/saved", response_model=SavedReportResponse)
@@ -179,6 +233,9 @@ async def create_saved_report(
     current_user: User = Depends(require_permission("reports.manage")),
 ):
     """Create a new saved report configuration"""
+    # Saving (and especially scheduling) a PII-bearing report needs the same
+    # permission as running it (RPT-3, RPT2-29-2).
+    _enforce_report_pii_permission(current_user, request.report_type)
     count_result = await db.execute(
         select(func.count()).where(
             SavedReport.organization_id == str(current_user.organization_id),
@@ -206,26 +263,11 @@ async def create_saved_report(
         email_recipients=request.email_recipients or [],
         created_by=str(current_user.id),
     )
+    await _settle_schedule(db, report, current_user)
     db.add(report)
     await db.commit()
     await db.refresh(report)
-
-    return SavedReportResponse(
-        id=str(report.id),
-        name=report.name,
-        description=report.description,
-        report_type=report.report_type,
-        filters=report.filters,
-        is_scheduled=report.is_scheduled,
-        schedule_frequency=report.schedule_frequency,
-        schedule_day=report.schedule_day,
-        email_recipients=report.email_recipients,
-        last_run_at=None,
-        next_run_at=(str(report.next_run_date) if report.next_run_date else None),
-        created_by=str(report.created_by) if report.created_by else "",
-        created_at=(report.created_at.isoformat() if report.created_at else ""),
-        updated_at=(report.updated_at.isoformat() if report.updated_at else ""),
-    )
+    return _saved_response(report)
 
 
 @router.patch("/saved/{report_id}", response_model=SavedReportResponse)
@@ -243,32 +285,26 @@ async def update_saved_report(
         )
     )
     report = ensure_found(result.scalar_one_or_none(), "Saved report")
+    _enforce_report_pii_permission(current_user, report.report_type)
 
     update_data = request.model_dump(exclude_unset=True)
     try:
         apply_updates(report, update_data, skip={"organization_id", "id"})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    schedule_fields = {
+        "filters",
+        "is_scheduled",
+        "schedule_frequency",
+        "schedule_day",
+        "email_recipients",
+    }
+    if schedule_fields & update_data.keys():
+        await _settle_schedule(db, report, current_user)
 
     await db.commit()
     await db.refresh(report)
-
-    return SavedReportResponse(
-        id=str(report.id),
-        name=report.name,
-        description=report.description,
-        report_type=report.report_type,
-        filters=report.filters,
-        is_scheduled=report.is_scheduled,
-        schedule_frequency=report.schedule_frequency,
-        schedule_day=report.schedule_day,
-        email_recipients=report.email_recipients,
-        last_run_at=(report.last_run_at.isoformat() if report.last_run_at else None),
-        next_run_at=(str(report.next_run_date) if report.next_run_date else None),
-        created_by=str(report.created_by) if report.created_by else "",
-        created_at=(report.created_at.isoformat() if report.created_at else ""),
-        updated_at=(report.updated_at.isoformat() if report.updated_at else ""),
-    )
+    return _saved_response(report)
 
 
 @router.delete("/saved/{report_id}")
@@ -311,11 +347,16 @@ async def run_saved_report(
 
     service = ReportsService(db)
     filters = report.filters or {}
+    # A relative period (filters.period) runs for the period as of today, the
+    # same way the scheduled send resolves it.
+    start_date, end_date = report_dates(
+        filters, await resolve_org_today(db, str(current_user.organization_id))
+    )
     report_data = await service.generate_report(
         current_user.organization_id,
         report.report_type,
-        start_date=filters.get("start_date"),
-        end_date=filters.get("end_date"),
+        start_date=start_date,
+        end_date=end_date,
         filters=filters,
         hidden_prospect_ids=hidden_prospect_ids,
     )

@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { Link } from 'react-router';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import {
   FileText,
@@ -136,8 +137,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'training-summary',
-    title: 'Training Summary',
-    description: 'Training hours and completion rates by member, course, and requirement',
+    title: 'Training & Program Progress Summary',
+    description:
+      'Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance',
     icon: 'TrendingUp',
     category: 'training',
     available: true,
@@ -197,8 +199,9 @@ const REPORT_CARDS: ReportCardDefinition[] = [
   },
   {
     id: 'compliance-status',
-    title: 'Compliance Status',
-    description: "Each member's compliance with training requirements, with overdue items and upcoming deadlines",
+    title: 'Program Requirement Progress',
+    description:
+      "Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance",
     icon: 'Shield',
     category: 'compliance',
     available: true,
@@ -271,6 +274,7 @@ export const ReportsPage: React.FC = () => {
     generatingReportType,
     activeReportData,
     activeReportType,
+    activeReportLabel,
     datePreset,
     startDate,
     endDate,
@@ -428,12 +432,20 @@ export const ReportsPage: React.FC = () => {
               <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Reports</h1>
               <p className="text-theme-text-secondary">Run department reports and export them to CSV or PDF</p>
             </div>
-            <HelpLink
-              topic="reports"
-              variant="icon"
-              tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
-              tooltipPosition="left"
-            />
+            <div className="flex items-center gap-2">
+              <Link
+                to="/reports/saved"
+                className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
+              >
+                Saved reports
+              </Link>
+              <HelpLink
+                topic="reports"
+                variant="icon"
+                tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
+                tooltipPosition="left"
+              />
+            </div>
           </div>
         </div>
 
@@ -633,10 +645,16 @@ export const ReportsPage: React.FC = () => {
                         <h3 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
                           {activeCard.title}
                         </h3>
-                        {activeCard.usesDateRange && startDate && endDate && (
-                          <p className="text-theme-text-muted mt-0.5 text-xs">
-                            {startDate} — {endDate}
-                          </p>
+                        {activeReportLabel ? (
+                          <p className="text-theme-text-muted mt-0.5 text-xs">Saved report: {activeReportLabel}</p>
+                        ) : (
+                          activeCard.usesDateRange &&
+                          startDate &&
+                          endDate && (
+                            <p className="text-theme-text-muted mt-0.5 text-xs">
+                              {startDate} — {endDate}
+                            </p>
+                          )
                         )}
                       </div>
                     </div>

@@ -1195,7 +1195,9 @@ async def export_orders(
 ) -> Any:
     """Line-level CSV export for the vendor order and the treasurer."""
     service = StorefrontService(db)
-    content = await service.export_orders_csv(
+    # Streamed a page of orders at a time (AH-16); the request's session stays
+    # open until the body has been sent.
+    chunks = await service.stream_orders_csv(
         str(current_user.organization_id),
         window_id=window_id,
         status=status_filter,
@@ -1210,7 +1212,7 @@ async def export_orders(
         username=current_user.username,
     )
     return StreamingResponse(
-        iter([content]),
+        chunks,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=store_orders.csv"},
     )

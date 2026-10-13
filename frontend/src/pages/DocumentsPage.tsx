@@ -31,6 +31,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { asArray } from '../utils/asArray';
 import { FolderManageDialog } from '../components/documents/FolderManageDialog';
+import { DocumentCorrectionNotice } from '../components/documents/DocumentCorrectionNotice';
 import { FolderAccessFields } from '../components/documents/FolderAccessFields';
 import {
   EMPTY_FOLDER_ACCESS,
@@ -742,6 +743,9 @@ const DocumentsPage: React.FC = () => {
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}
+                          {doc.under_correction_since && (
+                            <DocumentCorrectionNotice since={doc.under_correction_since} className="mt-2" />
+                          )}
                           {/* Download and delete sit on the size row, not beside the
                               title: at their 44px touch size beside it, a 320px
                               phone showed under a third of a document's name. */}
@@ -843,6 +847,12 @@ const DocumentsPage: React.FC = () => {
                                 </p>
                                 {doc.description && (
                                   <p className="text-theme-text-muted max-w-xs truncate text-xs">{doc.description}</p>
+                                )}
+                                {doc.under_correction_since && (
+                                  <DocumentCorrectionNotice
+                                    since={doc.under_correction_since}
+                                    className="mt-1 max-w-md"
+                                  />
                                 )}
                               </div>
                             </div>

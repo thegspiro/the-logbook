@@ -345,8 +345,8 @@ async def check_ip_rate_limit(
 
 async def log_access(
     request: Request,
-    organization_id: str,
-    config_id: str,
+    organization_id: str | None,
+    config_id: str | None,
     api_key_id: str | None,
     status_code: int,
     response_time_ms: int | None,
@@ -359,8 +359,9 @@ async def log_access(
 
     Args:
         request: The FastAPI request object
-        organization_id: Organization ID
-        config_id: Config ID
+        organization_id: Organization ID, or None for a failed authentication
+            that matches no stored key (a platform-level row, PUB-8)
+        config_id: Config ID, None exactly when organization_id is
         api_key_id: API key ID (None if invalid/missing)
         status_code: HTTP status code
         response_time_ms: Response time in milliseconds
@@ -463,7 +464,7 @@ async def detect_anomalies(
 
 async def _log_refusal(
     request: Request,
-    api_key_obj: PublicPortalAPIKey,
+    api_key_obj: PublicPortalAPIKey | None,
     status_code: int,
     reason: str,
     db: AsyncSession,
@@ -475,20 +476,36 @@ async def _log_refusal(
     back on the way out, so a flushed row would be discarded exactly when it
     matters. The only pending write at this point is this row.
 
+    ``api_key_obj`` is None when the presented key matches no stored key (or
+    none was presented): the row is then platform-level, with no organization
+    or config, which no department's view reads. A key that was found but
+    refused (revoked, expired, over its limit) is attributed to its own
+    department — it is that department's key being used.
+
+    A 401 also runs the anomaly detector first, so the failed-authentication
+    count it reads — which this row now feeds — flags the attempt that crosses
+    its threshold, not only a later authenticated request from the same IP.
+
     Best-effort throughout. An audit write must never replace the answer the
-    caller was about to receive — here, the 429 that protects the service.
+    caller was about to receive — the 401, or the 429 that protects the
+    service.
     """
     try:
+        flagged, flag_reason = False, reason
+        if status_code == status.HTTP_401_UNAUTHORIZED:
+            flagged, anomaly = await detect_anomalies(get_client_ip(request), None, db)
+            if flagged:
+                flag_reason = f"{reason}; {anomaly}"
         await log_access(
             request=request,
-            organization_id=str(api_key_obj.organization_id),
-            config_id=str(api_key_obj.config_id),
-            api_key_id=str(api_key_obj.id),
+            organization_id=(str(api_key_obj.organization_id) if api_key_obj else None),
+            config_id=str(api_key_obj.config_id) if api_key_obj else None,
+            api_key_id=str(api_key_obj.id) if api_key_obj else None,
             status_code=status_code,
             response_time_ms=None,
             db=db,
-            flagged_suspicious=False,
-            flag_reason=reason,
+            flagged_suspicious=flagged,
+            flag_reason=flag_reason,
         )
         await db.commit()
     except Exception as exc:
@@ -530,6 +547,9 @@ async def authenticate_api_key(
     await validate_ip_rate_limit(request)
 
     if not api_key:
+        await _log_refusal(
+            request, None, status.HTTP_401_UNAUTHORIZED, "No API key", db
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required. Include X-API-Key header.",
@@ -558,20 +578,25 @@ async def authenticate_api_key(
             api_key_obj = candidate
             break
 
+    # Every 401 below is recorded before it is raised (PUB-8): the detector's
+    # failed-authentication count reads these rows, and nothing wrote one
+    # while an unknown key had no department to be filed under.
     if not api_key_obj:
+        await _log_refusal(
+            request, None, status.HTTP_401_UNAUTHORIZED, "Invalid API key", db
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
 
     # Check if key is active
     if not api_key_obj.is_active:
-        # Unlike the "unknown key" 401 above, this key is already resolved —
-        # organization_id and config_id are in hand, so this half of PUB-8's
-        # gap needs no nullable-column migration, exactly as the 429 fix
-        # below needed none. A revoked key repeatedly presented is itself the
-        # anomaly detect_anomalies' 401 counter exists to catch.
         await _log_refusal(
-            request, api_key_obj, status.HTTP_401_UNAUTHORIZED, "API key revoked", db
+            request,
+            api_key_obj,
+            status.HTTP_401_UNAUTHORIZED,
+            "Revoked API key",
+            db,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has been revoked"
@@ -580,7 +605,11 @@ async def authenticate_api_key(
     # Check if key is expired
     if api_key_obj.is_expired:
         await _log_refusal(
-            request, api_key_obj, status.HTTP_401_UNAUTHORIZED, "API key expired", db
+            request,
+            api_key_obj,
+            status.HTTP_401_UNAUTHORIZED,
+            "Expired API key",
+            db,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has expired"
@@ -599,11 +628,8 @@ async def authenticate_api_key(
         # written and the admin dashboard's "Rate Limits Hit" tile, and the
         # alert condition that reads it, were structurally stuck at zero.
         #
-        # This is the attributable half of PUB-8's flagged 401 problem, and it
-        # needs none of what that one is blocked on: an unknown key cannot be
-        # attributed to an organization, but a rate-limited key is one we have
-        # just resolved, so organization_id and config_id are both in hand and
-        # no nullability migration is required.
+        # A rate-limited key is one we have just resolved, so the row is
+        # attributed to its department (an unknown key's 401 is not — PUB-8).
         await _log_refusal(
             request,
             api_key_obj,

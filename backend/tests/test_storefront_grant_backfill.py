@@ -74,6 +74,7 @@ _LATER_GRANTS = (
     _VERSIONS / "20261002_2303_5bed4c485d2f_grant_nfc_tag_writers.py",
     _VERSIONS / "20261004_1459_84819ea78a79_grant_training_view_analytics_to_.py",
     _VERSIONS / "20261007_2305_7db20aa49329_grant_finance_request_to_members.py",
+    _VERSIONS / "20261011_2305_9e8b0b6f3fe8_grant_quartermaster_locations_create.py",
 )
 
 

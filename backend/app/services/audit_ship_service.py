@@ -6,10 +6,11 @@ deletion of the whole table by an attacker with database access. Shipping a
 copy to an external collector (SIEM, log archive, another host) closes that
 gap: the off-host copy is outside the attacker's reach.
 
-Delivery model: a scheduled task POSTs new rows as NDJSON batches to
-``AUDIT_SHIP_WEBHOOK_URL``. Each request carries an HMAC-SHA256 signature of
-the body (``X-Logbook-Signature: sha256=<hex>``, keyed with the audit
-signing key) so the collector can authenticate the sender. The high-water
+Delivery model: a scheduled task POSTs newly sealed rows, in chain order, as
+NDJSON batches to ``AUDIT_SHIP_WEBHOOK_URL``. Each request carries an
+HMAC-SHA256 signature of the body (``X-Logbook-Signature: sha256=<hex>``,
+keyed with the audit signing key) so the collector can authenticate the
+sender. The high-water
 mark (``audit_ship_state``) advances only after the collector acknowledges
 with a 2xx — failed deliveries are simply retried next run.
 
@@ -140,9 +141,13 @@ async def ship_new_audit_logs(
             rows = (
                 (
                     await db.execute(
+                        # Chain order, sealed rows only (NULL chain_seq never
+                        # compares greater): an unsealed row has no hashes to
+                        # ship, and an id watermark would step over a row
+                        # sealed after higher ids (SEC2-28-10).
                         select(AuditLog)
-                        .where(AuditLog.id > state.last_shipped_id)
-                        .order_by(AuditLog.id)
+                        .where(AuditLog.chain_seq > state.last_shipped_id)
+                        .order_by(AuditLog.chain_seq)
                         .limit(settings.AUDIT_SHIP_BATCH_SIZE)
                     )
                 )
@@ -170,6 +175,10 @@ async def ship_new_audit_logs(
                     "X-Logbook-Signature": f"sha256={_sign(payload)}",
                     "X-Logbook-First-Id": str(rows[0].id),
                     "X-Logbook-Last-Id": str(rows[-1].id),
+                    # Ids in a batch are not contiguous or even ordered; the
+                    # chain positions are, and are what to deduplicate on.
+                    "X-Logbook-First-Seq": str(rows[0].chain_seq),
+                    "X-Logbook-Last-Seq": str(rows[-1].chain_seq),
                 },
             )
             if response.status_code < 200 or response.status_code >= 300:
@@ -178,7 +187,12 @@ async def ship_new_audit_logs(
 
             # Advance the watermark durably per acknowledged batch, so a
             # failure mid-run never re-ships confirmed rows.
-            state.last_shipped_id = rows[-1].id
+            last_seq = rows[-1].chain_seq
+            if last_seq is None:
+                # The batch query selects sealed rows only; an unsealed one
+                # has no chain position for the watermark to advance to.
+                raise RuntimeError(f"Shipped audit row {rows[-1].id} is not sealed")
+            state.last_shipped_id = last_seq
             state.last_shipped_at = datetime.now(UTC)
             await db.commit()
             results["shipped_entries"] += len(rows)

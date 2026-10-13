@@ -113,6 +113,20 @@ def _scalars(items):
     return result
 
 
+class _StreamedResult:
+    """Stands in for the AsyncResult ``db.stream`` returns."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    async def partitions(self, size):
+        for start in range(0, len(self._rows), size):
+            yield self._rows[start : start + size]
+
+
 class TestHelpers:
     def test_today_is_the_departments_date(self):
         assert org_today(_org()) == LOCAL_TODAY
@@ -325,9 +339,9 @@ class TestTrainingCertificationCsv:
             expiration_date=LOCAL_TODAY,
         )
         db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[_one(_org()), _scalars([user]), _scalars([record])]
-        )
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([user])])
+        # The records are read through a server-side cursor (AH-16).
+        db.stream = AsyncMock(return_value=_StreamedResult([record]))
 
         csv_text = await ReportExportService(db).generate_certification_csv("org-1")
 
@@ -829,6 +843,9 @@ class TestMembership:
         db.execute = AsyncMock(
             side_effect=[_one(org), _scalars([member]), _scalars([])]
         )
+        # advance_all commits on every path: it is what releases the
+        # Organization lock the scan holds (USR-10a).
+        db.commit = AsyncMock()
 
         result = await MembershipTierService(db).advance_all("org-1", "admin")
 

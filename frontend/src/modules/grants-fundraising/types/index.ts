@@ -22,6 +22,43 @@ export const ApplicationStatus = {
 } as const;
 export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
+/**
+ * Named sets of statuses the grants dashboard counts (GF-27a). Which statuses
+ * belong to each is defined once, on the backend (`APPLICATION_STATUS_GROUPS`);
+ * the list endpoint's `status_group` filter applies it, so a dashboard card
+ * opens exactly the set it counted.
+ */
+export const ApplicationStatusGroup = {
+  ACTIVE: 'active',
+  PENDING: 'pending',
+  FUNDED: 'funded',
+} as const;
+export type ApplicationStatusGroup = (typeof ApplicationStatusGroup)[keyof typeof ApplicationStatusGroup];
+
+export const APPLICATION_STATUS_GROUP_LABELS: Record<ApplicationStatusGroup, string> = {
+  active: 'Active grants (active + reporting)',
+  pending: 'Pending (not yet decided)',
+  funded: 'Funded (awarded through closed)',
+};
+
+/** Query for one page of the applications list (GF-33). */
+export interface GrantApplicationQuery {
+  status?: string | undefined;
+  statusGroup?: ApplicationStatusGroup | undefined;
+  priority?: string | undefined;
+  search?: string | undefined;
+  sort?: string | undefined;
+  order?: 'asc' | 'desc' | undefined;
+  skip?: number | undefined;
+  limit?: number | undefined;
+}
+
+export interface GrantApplicationPage {
+  items: GrantApplication[];
+  /** Every application matching the filters, across all pages. */
+  total: number;
+}
+
 export const GrantCategory = {
   EQUIPMENT: 'equipment',
   STAFFING: 'staffing',
@@ -277,6 +314,12 @@ export interface GrantApplication {
   complianceTasks?: GrantComplianceTask[];
   expenditures?: GrantExpenditure[];
   grantNotes?: GrantNote[];
+  /** Statuses the grant lifecycle allows next (GF-7); detail responses only. */
+  allowedNextStatuses?: ApplicationStatus[];
+  /** Sum of every expenditure (GF-7). Decimal, serialized as a string. */
+  totalExpended?: number | string;
+  /** How far spending exceeds the amount awarded; null when it does not. */
+  overspentBy?: number | string | null;
 }
 
 // =============================================================================
@@ -296,6 +339,8 @@ export interface GrantBudgetItem {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** How far this line's spending exceeds its budget; null when it does not (GF-7). */
+  overspentBy?: number | string | null;
 }
 
 // =============================================================================
@@ -319,6 +364,8 @@ export interface GrantExpenditure {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Overspend warnings returned with a create or update (GF-7: never blocked). */
+  warnings?: string[];
 }
 
 // =============================================================================

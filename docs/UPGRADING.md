@@ -134,6 +134,40 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Audit rows are sealed onto the hash chain after they commit (2026-10-12)
+
+This does not stop a boot, but it changes what the audit-integrity screens and
+the off-host collector see, and it makes one migration refuse to downgrade.
+
+Migration `bcd688674099` adds `audit_logs.chain_seq`, makes
+`previous_hash`/`current_hash` nullable and creates `audit_chain_head`. It
+backfills every existing row, so the chain carries on from where it was; on a
+large audit table the backfill `UPDATE` and the new unique index take a while
+on the first start.
+
+From then on an audit row is written without hashes and joined to the chain a
+moment later, by a sealer that runs after the commit, at startup, and as the
+new `audit_chain_seal` scheduled task every minute. Nothing needs configuring.
+What you may notice:
+
+- **The integrity check reports `pending_seal`.** Those rows are waiting for
+  their seal and are not verified yet; they are not tampering. A count that
+  stays above zero for more than a couple of minutes means sealing is failing —
+  look for `Audit chain sealing failed` or `After-commit audit sealing failed`
+  in the backend log.
+- **Off-host shipping sends a row only once it is sealed**, in chain order, and
+  its watermark now counts chain positions (the same numbers as ids for every
+  row written before the upgrade). Each batch also carries
+  `X-Logbook-First-Seq` / `X-Logbook-Last-Seq`; deduplicate on those, since the
+  ids in a batch are no longer guaranteed to be contiguous or ascending.
+- **Exports and archives gain a `chain_seq` field.** An offline verifier must
+  walk rows by `chain_seq`, not by `id`.
+- **Downgrading past this revision refuses while any row is unsealed.** Run the
+  `audit_chain_seal` task (`/api/v1/scheduled/run-task?task=audit_chain_seal`)
+  and retry. After a downgrade the previous code verifies in id order, so the
+  few rows that were sealed out of id order read as broken links until you
+  upgrade again.
+
 ### A duplicate migration revision stops a production boot (2026-10-11)
 
 When two files in `backend/alembic/versions/` declare the same `revision`,
@@ -430,6 +464,67 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Public-portal access-log rows older than 90 days are deleted (2026-10-12)
+
+A new daily scheduled task, `prune_public_portal_access_log`, deletes rows in
+`public_portal_access_log` older than 90 days — successful requests and refused
+ones alike, including the rows that carry no organization. Nothing pruned the
+table before, so **the first run after the upgrade deletes every row older
+than 90 days at once**, in batches of 1,000 with a commit after each. If you
+need that history (for an investigation, or an export kept outside the
+application), copy it out before upgrading.
+
+What a department will notice: the public portal's **Access Logs** tab lists
+only the last 90 days, and the Usage Statistics screen's average response
+time, which averaged every row ever kept, now averages the last 90 days. The
+other all-time figures in the usage-statistics API response —
+`total_requests`, `unique_ips` and `flagged_requests`, which the screen does
+not display — cover the last 90 days too. The anomaly detector (the last few
+minutes) and the request-count tiles (at most 30 days) look back far less than
+90 days and are unchanged.
+
+### A failed equipment-check item needs a note on the server too (2026-10-12)
+
+The server now refuses, with a 400, an equipment check that marks an item
+**Fail** or **Out of service** without a note, unless a count, a reading or a
+past expiry date already explains it — the rule the check form has enforced
+since 2026-10-04. Nothing changes for anyone using the form. The one case to
+know about: a check saved for offline sending on a device that has not
+reloaded the app since before 2026-10-04, holding such an item, is refused when
+it finally sends, and the offline queue gives up on it after its retries. If
+crews may have such checks waiting, have them open the app online **before**
+upgrading so the queue sends them while the old rule still applies.
+
+### Facility folders open to every facilities role, and some files move (2026-10-11)
+
+The upgrade (migration `65128d5ccd50`) gives the Facility Files root, each
+facility's folder, and its Photos, Maintenance Records and Inspection Reports
+sub-folders to anyone with any facilities access — `facilities.view` upwards —
+where before they needed `facilities.view_sensitive`, `.edit` or `.manage`.
+Blueprints & Permits, Insurance & Leases and Capital Projects stay restricted.
+
+So that nothing restricted until now becomes readable as a side effect, files
+that sat loose in a facility's folder (or in Facility Files itself) are moved
+into restricted folders — a new **Facility Documents** sub-folder per
+facility, and a **Restricted Facility Files** folder under the root where no
+facility can be identified — and files a facility photo points to move into
+Photos. Folders a department created inside the tree are given the restricted
+tier. Every move and restamp is recorded, and a downgrade reverses them.
+
+After upgrading, look through **Photos**, **Maintenance Records** and
+**Inspection Reports**: anything filed there by hand is now readable by every
+facilities role.
+
+### A setup-wizard session ends 24 hours after it began (2026-10-11)
+
+Only matters to an installation whose setup wizard is still open. An
+onboarding session used to live as long as it kept being used; it now ends 24
+hours after it was issued, however active. A setup left open across the
+upgrade for longer than that gets "Your onboarding session reached its
+24-hour limit" on its next step: refresh the page and a new session picks up
+the saved answers, as after a 30-minute idle lapse. Signed-in members'
+sessions are not affected.
 
 ### Expenses can be classified as program, management & general or fundraising (2026-10-13)
 
@@ -1371,6 +1466,34 @@ Compliance Matrix and member status now **honour role-scoped requirements**
 (My Training always did), and the compliance exports and forecast print **N/A**
 where a requirement does not apply to a member, rather than grading them
 against it. Expect some percentages to move once.
+
+### Compliance settings start emailing members (2026-10-11)
+
+The two **Notifications** settings on the Compliance configuration screen —
+reminder days before a deadline (`notify_days_before_deadline`) and the
+non-compliance notice (`notify_non_compliant_members`) — were stored but never
+read. A new daily task, `compliance_member_notices`, now sends them. A
+department whose saved configuration already holds reminder days (the screen
+suggests 30, 14 and 7) or has the notice switched on will start emailing
+members on the first run after upgrade. A department with no compliance
+configuration sends nothing, as before.
+
+The emails are training-reminder mail, so a member who turned training
+reminders off is not sent them unless the department made that kind required.
+Each email is logged and not sent twice. To keep things quiet, clear the
+reminder days and switch the notice off before upgrading.
+
+### The seeded Quartermaster gains `locations.create` (2026-10-11)
+
+Migration `9e8b0b6f3fe8` **adds** `locations.create` to the stored seeded
+Quartermaster position, so a quartermaster can add the rooms and storage
+locations the inventory screens ask for. Only creating is granted — not
+editing or deleting locations. The grant is written only while the row still
+holds `inventory.manage` (so a Quartermaster your department re-purposed is
+left alone), and not where the row already covers it through
+`locations.manage`, `locations.*` or `*`. Remove it on the positions screen if
+your department keeps location setup with the facilities officer.
+Downgrading the revision revokes it from the same rows.
 
 ### Seeded positions gain checklist, NFC-tag and ID-card grants (2026-09-30, 2026-10-02)
 

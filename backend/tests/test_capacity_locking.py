@@ -699,14 +699,11 @@ class TestMembershipTierEligibility:
     to serialize the two against *each other* — whichever gets the lock
     first is fully committed before the other's own lock request is granted,
     so neither can act on a config the other is still in the middle of
-    changing. It is deliberately not extended to
-    `_tier_member_counts`/`MembershipTierService.advance_all`: making the
-    roster count itself a locking read would need per-member row locks that
-    `advance_all` already acquires one at a time across its own unattended
-    scan, and the two lock orders are not consistently nested today — closing
-    that edge is a change to that service's own locking scheme, flagged
-    rather than reached for here (see USR-10 in the security-review findings
-    doc).
+    changing. `MembershipTierService.advance_all` takes the same lock for its
+    whole scan (USR-10a), and the config edit reads its occupancy count in a
+    snapshot taken after the lock, so the count sees whatever any of the three
+    committed first. ``test_membership_tier_lock_race.py`` drives the scan
+    against the edit on real connections.
     """
 
     def test_change_membership_type_locks_the_organization_row(self):
@@ -735,22 +732,38 @@ class TestMembershipTierEligibility:
         )
 
     def test_the_organization_lock_is_taken_before_the_member_lock(self):
-        """Lock order matters, not just presence. `change_membership_type`
-        also locks its target `User` row (a pre-existing, unrelated lock for
-        the rank/class invariant). `update_membership_tier_config` never
-        locks an individual member row — if it ever grew to, taking the
-        organization lock second would open exactly the AB/BA deadlock this
-        suite exists to keep out: one transaction holding a member row and
-        waiting on the organization row, the other holding the organization
-        row and waiting on that same member row.
+        """Lock order matters, not just presence. Every writer of a member's
+        tier locks the Organization row first and the member row second:
+        `change_membership_type` (whose member lock is a pre-existing one for
+        the rank/class invariant) and `MembershipTierService.advance_all`,
+        which holds the Organization lock for its whole scan (USR-10a) and
+        locks members one at a time inside it. Either taking them the other
+        way round is the AB/BA deadlock: one transaction holding a member row
+        and waiting on the organization row, the other holding the
+        organization row and waiting on that same member row.
         """
-        source = _source_of(member_status.change_membership_type)
-        org_lock_pos = source.find("select(Organization)")
-        user_lock_pos = source.find(".with_for_update()")
-        assert 0 <= user_lock_pos < org_lock_pos, (
-            "change_membership_type's own User lock must be taken before "
-            "the Organization lock so update_membership_tier_config (which "
-            "only ever locks Organization) can never deadlock against it."
+        from app.services.membership_tier_service import MembershipTierService
+
+        # advance_all's member reads and locks live in the scan it calls.
+        for writer, member_marker in (
+            (member_status.change_membership_type, "select(User)"),
+            (MembershipTierService.advance_all, "self._advance_members("),
+        ):
+            source = _source_of(writer)
+            org_lock_pos = source.find("select(Organization)")
+            user_lock_pos = source.find(member_marker)
+            assert 0 <= org_lock_pos < user_lock_pos, (
+                f"{writer.__qualname__} must lock the Organization row before "
+                "any member row."
+            )
+            assert ".with_for_update()" in source[org_lock_pos:user_lock_pos], (
+                f"{writer.__qualname__} reads the Organization row first but "
+                "does not lock it."
+            )
+        scan = _source_of(MembershipTierService._advance_members)
+        assert "select(Organization)" not in scan, (
+            "the scan must not take the Organization lock itself; advance_all "
+            "holds it for the scan's whole duration"
         )
 
         no_member_lock_source = _source_of(member_status.update_membership_tier_config)
@@ -758,6 +771,18 @@ class TestMembershipTierEligibility:
             "update_membership_tier_config taking an individual member row "
             "lock would reintroduce the AB/BA ordering this test guards "
             "against — see the class docstring."
+        )
+
+    def test_the_occupancy_count_is_read_after_the_lock_in_a_fresh_snapshot(self):
+        """The count is a plain read; its snapshot must postdate the lock."""
+        source = _source_of(member_status.update_membership_tier_config)
+        commit_pos = source.find("await db.commit()")
+        lock_pos = source.find(".with_for_update()")
+        count_pos = source.find("_tier_member_counts(")
+        assert 0 <= commit_pos < lock_pos < count_pos, (
+            "update_membership_tier_config must end its read-only transaction "
+            "before taking the Organization lock, so the occupancy count is "
+            "not answered from a snapshot older than the lock."
         )
 
 
@@ -801,3 +826,29 @@ class TestProgramEnrollmentLocking:
         assert source.index("lock_organization_scope(") < source.index(
             "with_for_update()"
         )
+
+
+class TestLegalDraftCap:
+    """A member's open legal drafts are capped per type (DOC-8): a count then
+    an insert. ``test_legal_documents_draft_cap.py`` drives the race on real
+    connections."""
+
+    def test_the_proposer_row_is_locked_before_counting(self):
+        from app.services.legal_service import LegalDocumentService
+
+        source = _source_of(LegalDocumentService._assert_under_draft_cap)
+        assert source.count("with_for_update()") == 2
+        assert source.index("select(User.id)") < source.index("func.count(")
+
+    def test_the_open_draft_count_is_a_locking_read(self):
+        from app.services.legal_service import LegalDocumentService
+
+        _assert_every_count_locks(
+            LegalDocumentService._assert_under_draft_cap, expected=1
+        )
+
+    def test_create_draft_runs_the_check(self):
+        from app.services.legal_service import LegalDocumentService
+
+        source = _source_of(LegalDocumentService.create_draft)
+        assert source.index("_assert_under_draft_cap(") < source.index("self.db.add(")

@@ -37,6 +37,8 @@ async def _write_logs(db, count: int, tag: str) -> list[AuditLog]:
         )
         assert row is not None
         rows.append(row)
+    # Sealed in this session: the rows are uncommitted, so no other could.
+    await audit_logger.seal_pending(db)
     return rows
 
 
@@ -83,6 +85,7 @@ class TestArchiveFileHardening:
             ip_address=None,
             user_agent=None,
             event_data={"i": i},
+            chain_seq=i,
             previous_hash="00" * 32,
             current_hash=f"{i:02x}" * 32,
             hash_version=3,
@@ -113,6 +116,10 @@ class TestArchiveFileHardening:
                     MagicMock(scalar_one_or_none=MagicMock(return_value=rows[0])),
                     _scalars_result([checkpoint]),
                     MagicMock(scalar=MagicMock(return_value=old_ts)),
+                    # _is_chain_prefix: nothing unsealed, last position 2,
+                    # no rows beyond the boundary.
+                    MagicMock(one=MagicMock(return_value=(0, 2))),
+                    MagicMock(scalar=MagicMock(return_value=None)),
                     _scalars_result(rows),
                     MagicMock(),  # DELETE
                 ]

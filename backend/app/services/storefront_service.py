@@ -12,11 +12,10 @@ quantities only.
 """
 
 import csv
-import io
 import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
 from sqlalchemy import case, delete, func, or_, select
@@ -52,7 +51,7 @@ from app.models.user import Organization, User
 from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
-from app.utils.csv_export import SafeCsvWriter
+from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.embroidery import (
     normalize_personalization_method,
     normalize_thread_color,
@@ -3238,6 +3237,19 @@ class StorefrontService:
         window_id: Optional[str] = None,
         status: Optional[str] = None,
     ) -> str:
+        """The order export as one string (see ``stream_orders_csv``)."""
+        return await collect_csv(
+            await self.stream_orders_csv(
+                organization_id, window_id=window_id, status=status
+            )
+        )
+
+    async def stream_orders_csv(
+        self,
+        organization_id: str,
+        window_id: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> AsyncIterator[str]:
         """Order export for the vendor purchase order / treasurer hand-off.
 
         Written with SafeCsvWriter — member names and notes are free text and
@@ -3245,7 +3257,9 @@ class StorefrontService:
 
         Pages through the whole result set rather than taking the first page:
         an export that silently stopped at the page size would send the
-        department to the vendor with the wrong quantities.
+        department to the vendor with the wrong quantities. Each page is
+        written and handed to the response before the next is read (AH-16),
+        so memory is bounded by the page, not the window.
 
         Every order is included, unpaid ones too, because this doubles as the
         treasurer's record. Under a policy that holds unpaid orders back, the
@@ -3255,26 +3269,23 @@ class StorefrontService:
         """
         settings = await self.get_settings(organization_id)
         holds_unpaid = settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
-        orders: List[StoreOrder] = []
-        page = 1
-        while True:
-            batch, total = await self.list_orders(
-                organization_id,
-                window_id=window_id,
-                status=status,
-                page=page,
-                page_size=_EXPORT_PAGE_SIZE,
-            )
-            orders.extend(batch)
-            if len(orders) >= total or not batch:
-                break
-            page += 1
         # Submitted times in the department's zone, labelled with it, like the
         # other exports -- a treasurer reconciling against the week's orders
         # reads local time.
         tz = await resolve_scheduling_timezone(self.db, organization_id)
-        output = io.StringIO()
-        writer = SafeCsvWriter(output, quoting=csv.QUOTE_MINIMAL)
+        return self._order_csv_chunks(
+            organization_id, window_id, status, holds_unpaid, tz
+        )
+
+    async def _order_csv_chunks(
+        self,
+        organization_id: str,
+        window_id: Optional[str],
+        status: Optional[str],
+        holds_unpaid: bool,
+        tz,
+    ) -> AsyncIterator[str]:
+        writer = SafeCsvChunks(quoting=csv.QUOTE_MINIMAL)
         writer.writerow(
             [
                 "Order Number",
@@ -3302,57 +3313,77 @@ class StorefrontService:
                 "Member Notes",
             ]
         )
-        for order in orders:
-            balance = _money(
-                Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        yield writer.drain()
+
+        fetched = 0
+        page = 1
+        while True:
+            batch, total = await self.list_orders(
+                organization_id,
+                window_id=window_id,
+                status=status,
+                page=page,
+                page_size=_EXPORT_PAGE_SIZE,
             )
-            submitted = _as_aware(order.submitted_at)
-            for item in order.items:
-                writer.writerow(
-                    [
-                        order.order_number,
-                        (
-                            to_local(submitted, tz).strftime("%Y-%m-%d %H:%M %Z")
-                            if submitted
-                            else ""
-                        ),
-                        order.customer_name,
-                        order.customer_email or "",
-                        item.product_name,
-                        item.variant_label or "",
-                        item.personalization_text or "",
-                        (
-                            personalization_verb(item.personalization_method)
-                            if item.personalization_text
-                            else ""
-                        ),
-                        (
-                            thread_color_label(item.personalization_thread_color)
-                            if item.personalization_text
-                            and uses_thread_color(item.personalization_method)
-                            else ""
-                        ),
-                        item.sku or "",
-                        item.quantity,
-                        f"{_money(item.unit_price)}",
-                        f"{_money(item.line_total)}",
-                        f"{_money(order.total)}",
-                        f"{_money(order.amount_paid)}",
-                        f"{balance}",
-                        order.status.value if order.status else "",
-                        order.payment_status.value if order.payment_status else "",
-                        ("yes" if holds_unpaid and not _is_settled(order) else "no"),
-                        order.payment_method.value if order.payment_method else "",
-                        order.payment_reference or "",
-                        (
-                            order.fulfillment_method.value
-                            if order.fulfillment_method
-                            else ""
-                        ),
-                        order.member_notes or "",
-                    ]
+            for order in batch:
+                balance = _money(
+                    Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
                 )
-        return output.getvalue()
+                submitted = _as_aware(order.submitted_at)
+                for item in order.items:
+                    writer.writerow(
+                        [
+                            order.order_number,
+                            (
+                                to_local(submitted, tz).strftime("%Y-%m-%d %H:%M %Z")
+                                if submitted
+                                else ""
+                            ),
+                            order.customer_name,
+                            order.customer_email or "",
+                            item.product_name,
+                            item.variant_label or "",
+                            item.personalization_text or "",
+                            (
+                                personalization_verb(item.personalization_method)
+                                if item.personalization_text
+                                else ""
+                            ),
+                            (
+                                thread_color_label(item.personalization_thread_color)
+                                if item.personalization_text
+                                and uses_thread_color(item.personalization_method)
+                                else ""
+                            ),
+                            item.sku or "",
+                            item.quantity,
+                            f"{_money(item.unit_price)}",
+                            f"{_money(item.line_total)}",
+                            f"{_money(order.total)}",
+                            f"{_money(order.amount_paid)}",
+                            f"{balance}",
+                            order.status.value if order.status else "",
+                            order.payment_status.value if order.payment_status else "",
+                            (
+                                "yes"
+                                if holds_unpaid and not _is_settled(order)
+                                else "no"
+                            ),
+                            order.payment_method.value if order.payment_method else "",
+                            order.payment_reference or "",
+                            (
+                                order.fulfillment_method.value
+                                if order.fulfillment_method
+                                else ""
+                            ),
+                            order.member_notes or "",
+                        ]
+                    )
+            yield writer.drain()
+            fetched += len(batch)
+            if fetched >= total or not batch:
+                break
+            page += 1
 
     # ==================================================================
     # Payment instructions

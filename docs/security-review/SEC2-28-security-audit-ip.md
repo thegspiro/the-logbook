@@ -963,6 +963,48 @@ convention (see SEC2-28-5/-6/-7, none of which carry one either), a guard
 test is added for a fix, not for an open finding; a permanently-red test
 would itself be a new CI failure this pass would be leaving behind.
 
+**Status: ✅ RESOLVED (2026-10-12, owner decision: "keep rows in the caller's
+transaction and seal the chain in a separate step").** The fix sketched
+above — the head lock inside `create_log_entry` — would still have locked the
+head inside the caller's transaction, so the owner chose to split the write
+from the chain instead:
+
+- `create_log_entry` inserts the row in the caller's transaction, as before
+  (a rolled-back action leaves no row), but unsealed: `chain_seq`,
+  `previous_hash`, `current_hash`, `hash_version` and `signing_key_id` are
+  NULL. It no longer reads the chain at all.
+- `AuditLogger.seal_pending` runs in its own short transaction: it locks the
+  one `audit_chain_head` row `FOR UPDATE`, seals the committed unsealed rows
+  in id order under the existing v4 HMAC scheme, advances the head and
+  commits. Sealers serialize on that row, so two can never extend the chain
+  from the same tail; no lock is ever held inside a caller's transaction.
+  The per-row `UPDATE ... WHERE chain_seq IS NULL` refuses to re-seal a row.
+- It runs after every commit that carried audit rows (a `Session`
+  `after_commit` hook, single-flight per process so the unauthenticated
+  burst this finding describes cannot open a connection per row), at
+  startup before the integrity check, and as the `audit_chain_seal`
+  scheduled task every minute — the backstop.
+- Chain order is `chain_seq`, not id: a transaction that inserts early and
+  commits late is sealed after higher ids. `verify_integrity` and
+  `rehash_chain` walk by `chain_seq` and report unsealed rows as
+  `pending_seal`, not as tampering; shipping (SEC2-28-9) ships only sealed
+  rows in chain order with a chain-position watermark; retention purges only
+  at a checkpoint boundary that is a clean prefix of the chain; checkpoints
+  refuse a range with an unsealed row.
+- Migration `bcd688674099` adds `chain_seq` (unique, backfilled to `id`),
+  relaxes NOT NULL on the two hash columns and creates `audit_chain_head`
+  seeded from the current tail, so existing chains continue unbroken.
+
+Residual, accepted: a row is unsealed — unverified and unshipped — between
+its commit and its seal, normally milliseconds and at most about a minute
+when the after-commit seal fails. Guard tests:
+`backend/tests/test_audit_chain_sealing.py` (eight concurrent committing
+writers plus two concurrent sealers verify as one chain; a late committer is
+sealed after higher ids and still verifies; the after-commit hook seals
+unprompted; a rolled-back row is never sealed; pending rows are not
+tampering while a tampered sealed row still is; a retention boundary inside
+the chain is refused).
+
 ### Completion gate (Pass 4)
 
 No code changed this pass (findings-only: all prior fixes re-verified

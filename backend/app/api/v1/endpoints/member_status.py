@@ -861,7 +861,10 @@ async def archive_member(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only dropped members can be archived. Current status: {member.status.value}",
+            detail=(
+                "Only dropped members can be archived. Current status: "
+                f"{member.status.value if member.status else 'unknown'}"
+            ),
         )
 
     try:
@@ -1016,6 +1019,30 @@ async def change_membership_type(
 
     Requires `members.manage` permission.
     """
+    # Validate the tier exists in org settings. Locked (Pitfall #27): this is
+    # the same read-then-write shape as a capacity check, racing against
+    # PUT /membership-tiers/config's own removal validation. Under InnoDB's
+    # default REPEATABLE READ, a plain SELECT here would still be the
+    # transaction's first read of the Organization row, but only a locking
+    # read is guaranteed current if the two transactions interleave —
+    # without it, this member can be set to a tier id that
+    # update_membership_tier_config's own "occupied_and_gone" check missed
+    # because this write hadn't committed yet, landing a member on a tier
+    # that no longer exists in either transaction's eventual view of the
+    # config.
+    #
+    # Taken BEFORE the member row lock below: Organization, then member, is
+    # the order MembershipTierService.advance_all uses for its whole scan
+    # (USR-10a). The opposite order here would let this request hold a member
+    # the scan is waiting on while waiting on the Organization the scan holds.
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.id == current_user.organization_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    organization = org_result.scalar_one_or_none()
+
     # Locked, and locked here rather than only in the profile endpoint: this is
     # the other half of the same read-then-write. A request setting a rank and
     # this one setting the class to administrative can otherwise both read an
@@ -1038,23 +1065,6 @@ async def change_membership_type(
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
 
-    # Validate the tier exists in org settings. Locked (Pitfall #27): this is
-    # the same read-then-write shape as a capacity check, racing against
-    # PUT /membership-tiers/config's own removal validation. Under InnoDB's
-    # default REPEATABLE READ, a plain SELECT here would still be the
-    # transaction's first read of the Organization row, but only a locking
-    # read is guaranteed current if the two transactions interleave —
-    # without it, this member can be set to a tier id that
-    # update_membership_tier_config's own "occupied_and_gone" check missed
-    # because this write hadn't committed yet, landing a member on a tier
-    # that no longer exists in either transaction's eventual view of the
-    # config.
-    org_result = await db.execute(
-        select(Organization)
-        .where(Organization.id == current_user.organization_id)
-        .with_for_update()
-    )
-    organization = org_result.scalar_one_or_none()
     tier_config = (organization.settings or {}).get("membership_tiers", {})
     valid_tier_ids = [t["id"] for t in tier_config.get("tiers", [])]
     # This column holds TWO vocabularies, so gating on one of them rejects half
@@ -1234,18 +1244,14 @@ async def _tier_member_counts(db: AsyncSession, organization_id: str) -> dict[st
     reporting it.
 
     Deliberately a plain read, not a locking one. `update_membership_tier_config`
-    locks the organization row before calling this, which is enough to
-    serialize against a concurrent `change_membership_type` (that endpoint
-    locks the same row before validating a tier id — see its own comment) —
-    but not against `MembershipTierService.advance_all`'s unattended batch
-    advancement, which writes `membership_type` without taking this lock at
-    all. Making this count itself a locking read would close that gap, but
-    only by also taking per-member row locks that `advance_all` acquires one
-    at a time across its own scan — the two lock orders are not consistently
-    nested today, and forcing them to be is a change to that service's own,
-    separately-tuned locking scheme (fixed for a different race in pass 2),
-    not a one-file fix. Flagged rather than reached for here; see USR-10 in
-    the security-review findings doc.
+    locks the organization row in a fresh transaction before calling this, and
+    every writer of a tier — `change_membership_type` and
+    `MembershipTierService.advance_all`, which holds that lock for its whole
+    scan (USR-10a) — takes the same lock first and commits before releasing
+    it. So the snapshot this read is answered from, taken after the lock is
+    granted, already holds every such write. A locking count would instead
+    take a row lock on every member, after the organization lock, against
+    writers that lock a member first.
     """
     result = await db.execute(
         select(User.membership_type, func.count(User.id))
@@ -1287,10 +1293,24 @@ async def update_membership_tier_config(
     # can't land a member on a tier this request is about to remove between
     # the count and the commit — which is exactly what an unlocked read here
     # would allow.
+    #
+    # The lock alone is not enough, because the count below is a plain read and
+    # InnoDB answers a plain read from the snapshot taken at the transaction's
+    # FIRST plain read — the auth dependency's own User lookup, before this
+    # handler ran. A tier change or an advance_all scan (which holds this lock
+    # for its whole run, USR-10a) that committed while this request waited for
+    # the lock is invisible to that snapshot, and the occupied tier would be
+    # removed anyway. Ending the read-only transaction here makes the lock the
+    # first statement of a new one, so the count's snapshot is taken after the
+    # lock is granted and sees every write the lock serialized against —
+    # without taking per-member locks, whose order against the member-first
+    # writers is what made a locking count unsafe.
+    await db.commit()
     org_result = await db.execute(
         select(Organization)
         .where(Organization.id == current_user.organization_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 

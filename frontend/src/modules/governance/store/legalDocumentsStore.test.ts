@@ -4,6 +4,7 @@ const mockGetOverview = vi.fn();
 const mockCreateRevision = vi.fn();
 const mockUpdateRevision = vi.fn();
 const mockPublishRevision = vi.fn();
+const mockListRevisions = vi.fn();
 
 vi.mock('../services/api', () => ({
   legalDocumentsService: {
@@ -13,6 +14,7 @@ vi.mock('../services/api', () => ({
     deleteRevision: vi.fn(),
     publishRevision: (...args: unknown[]) => mockPublishRevision(...args) as unknown,
     revertToDefault: vi.fn(),
+    listRevisions: (...args: unknown[]) => mockListRevisions(...args) as unknown,
   },
 }));
 
@@ -22,9 +24,17 @@ const emptyOverview = { organizationName: 'Test FD', canPublish: true, documents
 
 describe('useLegalDocumentsStore', () => {
   beforeEach(() => {
-    useLegalDocumentsStore.setState({ overview: null, isLoading: false, isSaving: false, error: null });
+    useLegalDocumentsStore.setState({
+      overview: null,
+      isLoading: false,
+      isSaving: false,
+      loadingMore: null,
+      error: null,
+    });
     vi.clearAllMocks();
+    mockGetOverview.mockReset();
     mockGetOverview.mockResolvedValue(emptyOverview);
+    mockListRevisions.mockReset();
   });
 
   it('loads the overview', async () => {
@@ -76,5 +86,71 @@ describe('useLegalDocumentsStore', () => {
     await expect(useLegalDocumentsStore.getState().publishRevision('rev-1')).rejects.toThrow();
     expect(useLegalDocumentsStore.getState().error).toBe('403');
     expect(useLegalDocumentsStore.getState().isSaving).toBe(false);
+  });
+  describe('loadMore', () => {
+    const revision = (id: string) => ({
+      id,
+      documentType: 'privacy_policy' as const,
+      status: 'archived' as const,
+      body: 'Text.',
+      changeNote: 'Why.',
+    });
+    const withHistory = {
+      ...emptyOverview,
+      documents: [
+        {
+          documentType: 'privacy_policy' as const,
+          publicPath: '/privacy',
+          usingPlatformDefault: false,
+          drafts: [],
+          draftsTotal: 0,
+          history: [revision('h-1'), revision('h-2')],
+          historyTotal: 4,
+        },
+      ],
+    };
+
+    it('asks for the page after what is shown and appends it', async () => {
+      useLegalDocumentsStore.setState({ overview: withHistory });
+      mockListRevisions.mockResolvedValue({
+        items: [revision('h-3'), revision('h-4')],
+        total: 4,
+        offset: 2,
+        limit: 10,
+      });
+
+      await useLegalDocumentsStore.getState().loadMore('privacy_policy', 'history');
+
+      expect(mockListRevisions).toHaveBeenCalledWith('privacy_policy', 'history', 2);
+      const doc = useLegalDocumentsStore.getState().overview?.documents[0];
+      expect(doc?.history.map((r) => r.id)).toEqual(['h-1', 'h-2', 'h-3', 'h-4']);
+      expect(useLegalDocumentsStore.getState().loadingMore).toBeNull();
+    });
+
+    it('does not repeat a revision a newer one pushed onto the next page', async () => {
+      useLegalDocumentsStore.setState({ overview: withHistory });
+      mockListRevisions.mockResolvedValue({
+        items: [revision('h-2'), revision('h-3')],
+        total: 5,
+        offset: 2,
+        limit: 10,
+      });
+
+      await useLegalDocumentsStore.getState().loadMore('privacy_policy', 'history');
+
+      const doc = useLegalDocumentsStore.getState().overview?.documents[0];
+      expect(doc?.history.map((r) => r.id)).toEqual(['h-1', 'h-2', 'h-3']);
+      expect(doc?.historyTotal).toBe(5);
+    });
+
+    it('keeps what is shown and reports a failed page', async () => {
+      useLegalDocumentsStore.setState({ overview: withHistory });
+      mockListRevisions.mockRejectedValue(new Error('network'));
+
+      await useLegalDocumentsStore.getState().loadMore('privacy_policy', 'history');
+
+      expect(useLegalDocumentsStore.getState().error).toBe('network');
+      expect(useLegalDocumentsStore.getState().overview?.documents[0]?.history).toHaveLength(2);
+    });
   });
 });

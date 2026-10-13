@@ -97,6 +97,19 @@ ONBOARDING_LEGACY_MODULES = [
 ]
 
 
+# Every module row the Positions step's permission editor renders: the whole
+# frontend MODULE_REGISTRY, System entries included (RoleSetup passes the full
+# registry to buildPermissionCategories). A position's ``permissions`` keys are
+# checked against this before anything is stored (owner decision ONB-7): the
+# expansion turns any key into ``{key}.view`` / ``{key}.*`` grants, so without
+# an allowlist a setup session could mint ``users.*`` or ``audit.*`` — modules
+# the editor never shows. tests/test_onboarding_role_clamps.py holds it to the
+# registry file.
+ONBOARDING_POSITION_EDITOR_MODULE_IDS: frozenset[str] = frozenset(
+    {*ONBOARDING_CORE_MODULES, *ONBOARDING_OFFERED_MODULES, "positions", "settings"}
+)
+
+
 def _with_hyphenated(ids: set[str]) -> set[str]:
     """Accept "hr-payroll" wherever "hr_payroll" is accepted.
 

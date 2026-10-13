@@ -121,6 +121,9 @@ def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
         "document_type": iso(d.document_type),
         "status": iso(d.status),
         "source_type": iso(d.source_type),
+        # Non-null while the minutes it was published from are reopened for
+        # correction: the text is superseded and a replacement is pending.
+        "under_correction_since": iso(d.under_correction_since),
         "version": d.version,
         "tags": tags,
         "tags_truncated": tags_cut,

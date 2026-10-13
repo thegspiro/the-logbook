@@ -130,6 +130,9 @@ class DocumentResponse(UTCResponseBase):
     uploaded_by: Optional[UUID] = None
     uploader_name: Optional[str] = None
     folder_name: Optional[str] = None
+    # Set while the minutes this document was published from are reopened for
+    # correction (MM-17); the Documents screen shows a "Being corrected" notice.
+    under_correction_since: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -192,6 +195,7 @@ class PublishedDocumentResponse(UTCResponseBase):
     content_html: Optional[str] = None
     source_type: Optional[str] = None
     source_id: Optional[str] = None
+    under_correction_since: Optional[datetime] = None
     tags: Optional[List[str]] = None
     created_by: Optional[str] = None
     created_at: datetime

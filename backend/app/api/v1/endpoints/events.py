@@ -103,6 +103,7 @@ from app.services.event_service import (
     PHASE_GATE_PREFIX,
     EventService,
     FinalizeOutcome,
+    SeriesPhaseGateWarning,
     attendance_lock_reason,
     resolve_attendee_visibility,
 )
@@ -1844,11 +1845,20 @@ async def create_or_update_rsvp(
 async def rsvp_to_series(
     event_id: UUID,
     rsvp_data: RSVPCreate,
+    override: bool = Query(
+        False,
+        description="Proceed despite training-pipeline phase warnings on sessions",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     RSVP to all future events in a recurring series
+
+    A "going" response to a series containing training sessions ahead of the
+    member's pipeline phase returns 409 with ``warning_type: "phase_gate"``
+    and an ``occurrences`` list naming every such session; nothing is written
+    until the request is repeated with ``override=true``.
 
     **Authentication required**
     """
@@ -1877,6 +1887,21 @@ async def rsvp_to_series(
             user_id=current_user.id,
             organization_id=current_user.organization_id,
             rsvp_data=rsvp_data,
+            override=override,
+        )
+    except SeriesPhaseGateWarning as warning:
+        count = len(warning.occurrences)
+        noun = "session is" if count == 1 else "sessions are"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "warning_type": "phase_gate",
+                "message": (
+                    f"{count} {noun} in this series ahead of your current "
+                    "training phase."
+                ),
+                "occurrences": warning.occurrences,
+            },
         )
     except ValueError as e:
         raise HTTPException(

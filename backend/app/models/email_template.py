@@ -71,6 +71,7 @@ class EmailTemplateType(str, enum.Enum):
     EXTERNAL_COURSE_MATCH = "external_course_match"
     TRAINING_RECORD_VOIDED = "training_record_voided"
     TRAINING_RECORD_CHANGED = "training_record_changed"
+    EVENT_WAITLIST_PROMOTION = "event_waitlist_promotion"
     CUSTOM = "custom"
 
 

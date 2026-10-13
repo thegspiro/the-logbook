@@ -446,20 +446,17 @@ class TestVoteIntegrity(TestElectionSetup):
             text(
                 "INSERT INTO audit_logs "
                 "(event_type, event_category, severity, event_data, "
-                " organization_id, timestamp, timestamp_nanos, "
-                " previous_hash, current_hash) "
+                " organization_id, timestamp, timestamp_nanos) "
                 "VALUES ('election_opened', 'elections', 'info', :data, "
-                "        :org, :ts, :nanos, :prev, :cur)"
+                "        :org, :ts, :nanos)"
             ),
             {
                 "data": f'{{"election_id": "{data["election_id"]}"}}',
                 "org": data["org_id"],
                 "ts": datetime.now(timezone.utc),
+                # Left unsealed (no chain columns): this row exists to be
+                # *read back* by the report, which does not touch the chain.
                 "nanos": time.time_ns(),
-                # The chain columns are NOT NULL; their values are irrelevant
-                # here — this row exists to be *read back* by the report.
-                "prev": "0" * 64,
-                "cur": "1" * 64,
             },
         )
         await db_session.flush()
@@ -1145,5 +1142,9 @@ class TestAnonymousAuditIpMinimization(TestElectionSetup):
         )
         assert err is None
 
+        # Seal the vote's audit rows (uncommitted, so only this session can),
+        # or the check below would pass without having hashed them at all.
+        await AuditLogger().seal_pending(db_session)
         result = await AuditLogger().verify_integrity(db_session)
         assert result["verified"] is True, result
+        assert result["pending_seal"] == 0
