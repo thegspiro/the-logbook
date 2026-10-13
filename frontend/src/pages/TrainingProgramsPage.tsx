@@ -39,10 +39,12 @@ import type {
   RegistryInfo,
   SampleTemplateSummary,
 } from '../types/training';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'programs' | 'requirements' | 'templates';
 
 const TrainingProgramsPage: React.FC = () => {
+  const tablist = useTablist();
   const navigate = useNavigate();
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
   const [activeTab, setActiveTab] = useState<TabView>('programs');
@@ -320,6 +322,7 @@ const TrainingProgramsPage: React.FC = () => {
           <div
             className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
             role="tablist"
+            {...tablist}
             aria-label="Training program views"
           >
             <button
@@ -403,7 +406,10 @@ const TrainingProgramsPage: React.FC = () => {
         ) : (
           <>
             {visibleTab === 'programs' || visibleTab === 'templates' ? (
-              <div id="tab-panel-programs" role={panelRole}>
+              // Programs and Templates share this panel, so it takes the id of
+              // whichever tab is showing; a fixed id left the Templates tab's
+              // aria-controls pointing at nothing.
+              <div id={visibleTab === 'templates' ? 'tab-panel-templates' : 'tab-panel-programs'} role={panelRole}>
                 {canManage && visibleTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
                   <section className="mb-8" aria-label="Sample templates">
                     <div className="mb-1 flex items-center space-x-2">

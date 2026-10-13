@@ -1156,6 +1156,11 @@ adding the `aria-label`s above and switching the test to `getByLabelText`
 
 #### GF-27a — LOW-MED, FLAGGED, not fixed — the dashboard's KPI-card status links don't match the multi-status aggregate the KPI itself counts
 
+> **✅ Resolved 2026-10-11 (owner decision: grouped filter option).** One
+> definition, `APPLICATION_STATUS_GROUPS`, now feeds both the dashboard counts
+> and a `status_group` list filter; the cards link to `?group=…`. See the
+> KNOWN_LIMITATIONS row. The finding below is kept as written.
+
 **What:** Caught by Codex review, round 5, on GF-27's own fix. The
 dashboard's "Active Grants" and "Pending Applications" KPI numbers come
 from `GrantService.get_dashboard_data()`, which counts **multiple**
@@ -1294,6 +1299,11 @@ newer request's result. Verified to fail before the fix (the store held
 the stale `'reporting'` result) and pass after.
 
 #### GF-33 — LOW-MED, partially fixed / FLAGGED — a status-filtered fetch was still capped, just at a higher ceiling
+
+> **✅ Resolved 2026-10-11 (owner decision: build pagination).** The list
+> endpoint reports `X-Total-Count` and filters, searches and sorts in SQL; the
+> table pages and each pipeline column loads in batches with **Show more**. See
+> the KNOWN_LIMITATIONS row. The finding below is kept as written.
 
 **What:** Also caught by Codex reviewing the GF-31 commit: fixing "the
 filter runs after an unfiltered, 100-capped fetch" (GF-31) did not fix

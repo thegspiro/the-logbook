@@ -115,7 +115,12 @@ interface FinanceState {
   // Approval Actions
   fetchPendingApprovals: () => Promise<void>;
   /** `overrideReason`: an approvals admin acting on a step they are not the named approver of. */
-  approveStep: (stepRecordId: string, notes?: string, overrideReason?: string) => Promise<void>;
+  approveStep: (
+    stepRecordId: string,
+    notes?: string,
+    overrideReason?: string,
+    acknowledgeLate?: boolean
+  ) => Promise<void>;
   denyStep: (stepRecordId: string, notes?: string, overrideReason?: string) => Promise<void>;
 
   // Purchase Request Actions
@@ -353,8 +358,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   // refusal, a step that moved on), and the page-level banner `error` feeds is
   // shared with whatever that page loaded. Refreshing the list afterwards is
   // best-effort — the decision itself has already been recorded.
-  approveStep: async (stepRecordId, notes, overrideReason) => {
-    await approvalService.approve(stepRecordId, notes, overrideReason);
+  approveStep: async (stepRecordId, notes, overrideReason, acknowledgeLate) => {
+    if (acknowledgeLate) {
+      await approvalService.approve(stepRecordId, notes, overrideReason, true);
+    } else {
+      await approvalService.approve(stepRecordId, notes, overrideReason);
+    }
     try {
       const pendingApprovals = await approvalService.getPending();
       set({ pendingApprovals });

@@ -48,6 +48,7 @@ import {
   STARTER_TEMPLATES,
   type StarterTemplate,
 } from './formConstants';
+import { useTablist } from '../hooks/useTablist';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
 
@@ -61,6 +62,8 @@ const ONE_PER_PERSON_HINT =
   'Each member can submit once, whether in the app or through the public link. Submitting then requires signing in.';
 
 const FormsPage: React.FC = () => {
+  const tablist = useTablist();
+  const tablist2 = useTablist();
   const { checkPermission } = useAuthStore();
   const { confirm } = useConfirm();
   const canManage = checkPermission('forms.manage');
@@ -510,6 +513,7 @@ const FormsPage: React.FC = () => {
         <div
           className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
           role="tablist"
+          {...tablist}
           aria-label="Forms views"
           data-mobile-scroll-region
         >
@@ -994,6 +998,7 @@ const FormsPage: React.FC = () => {
               <div
                 className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
                 role="tablist"
+                {...tablist2}
                 aria-label="Form editor views"
                 data-mobile-scroll-region
               >
@@ -1119,6 +1124,7 @@ const FormsPage: React.FC = () => {
                       Create Form
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowCreateModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
@@ -1254,6 +1260,7 @@ const FormsPage: React.FC = () => {
                       <span>Share Form</span>
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowShareModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
@@ -1497,6 +1504,7 @@ const FormsPage: React.FC = () => {
                       <span>Integrations</span>
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowIntegrationModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"

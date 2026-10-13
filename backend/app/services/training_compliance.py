@@ -1760,3 +1760,91 @@ async def compute_org_compliance_tally(
         not_applicable=not_applicable_count,
         active_requirements=len(requirements),
     )
+
+
+@dataclass(frozen=True)
+class MemberCompliance:
+    """One member's standing and the per-requirement evaluations behind it."""
+
+    member: User
+    standing: str
+    pct: Optional[float]
+    evaluations: Tuple[Tuple[TrainingRequirement, RequirementEvaluation], ...]
+
+
+async def grade_org_members(
+    db: AsyncSession,
+    org_id: str,
+    today: date,
+    config: Optional[ComplianceConfig] = None,
+) -> List[MemberCompliance]:
+    """Grade every active, non-exempt member, keeping each requirement's detail.
+
+    The same population, configuration, record load and rules as
+    :func:`compute_org_compliance_tally` -- ``ComplianceGrading.for_member``,
+    :func:`evaluate_member_requirement_detail`, :func:`tally_standing` and the
+    member's thresholds -- for a caller that needs to know *which*
+    requirements are unmet and when they fall due, not only the count (the
+    member compliance notices, CMP2-1). ``config`` is the org's
+    ``ComplianceConfig`` with profiles loaded, when the caller already has it.
+    """
+    members_result = await db.execute(
+        select(User)
+        .options(selectinload(User.positions))
+        .where(
+            User.organization_id == org_id,
+            User.status == UserStatus.ACTIVE,
+            User.compliance_exempt.is_(False),
+            User.deleted_at.is_(None),
+        )
+    )
+    members = members_result.scalars().all()
+    if not members:
+        return []
+    reqs_result = await db.execute(
+        select(TrainingRequirement).where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active.is_(True),
+        )
+    )
+    requirements = list(reqs_result.scalars().all())
+    if not requirements:
+        return []
+
+    if config is None:
+        config = await _load_compliance_config(db, org_id)
+    grading = ComplianceGrading.from_config(config)
+    member_ids = [m.id for m in members]
+    records_by_user: Dict[str, list] = {}
+    for r in await load_graded_records(
+        db, org_id, member_ids, requirements, today, grading.include_current_month
+    ):
+        records_by_user.setdefault(r.user_id, []).append(r)
+    shifts_by_user = await load_credited_shift_dates(
+        db, org_id, member_ids, requirements, today, grading.include_current_month
+    )
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
+
+    graded: List[MemberCompliance] = []
+    for member in members:
+        member_grading = grading.for_member(member, requirements)
+        join_date = member_join_date(member)
+        evaluations = tuple(
+            (
+                req,
+                evaluate_member_requirement_detail(
+                    req,
+                    records_by_user.get(member.id, []),
+                    today,
+                    waivers=waivers_by_user.get(str(member.id), []),
+                    org_include_current_month=grading.include_current_month,
+                    join_date=join_date,
+                    shift_dates=shifts_by_user.get(str(member.id), []),
+                ),
+            )
+            for req in member_grading.requirements
+        )
+        met, total = tally_standing(ev.status for _, ev in evaluations)
+        standing, pct = grading.classify(member_grading, met, total)
+        graded.append(MemberCompliance(member, standing, pct, evaluations))
+    return graded

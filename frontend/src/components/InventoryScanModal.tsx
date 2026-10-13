@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { Modal } from './Modal';
 import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search, Nfc } from 'lucide-react';
@@ -24,6 +25,7 @@ import {
   inventoryService,
   ScanLookupResponse,
   ScanLookupResult,
+  type StorageAreaScanHit,
   DistributeItemsResponse,
   type BatchScanItem,
   BatchReturnResponse,
@@ -106,6 +108,9 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [activeScanner, setActiveScanner] = useState<ActiveScanner>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  // A scanned shelf label (INV-8). It is not an item, so it never joins the
+  // list; the officer is told which storage area it is and offered the way there.
+  const [scannedArea, setScannedArea] = useState<StorageAreaScanHit | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ResultItem[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -391,6 +396,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setScannedItems([]);
       setManualCode('');
       setLookupError(null);
+      setScannedArea(null);
       setResults(null);
       setTransferResult(null);
       setSearchResults([]);
@@ -436,6 +442,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         try {
           const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
           if (controller.signal.aborted) return;
+          setScannedArea(response.results.length === 0 ? (response.storage_areas?.[0] ?? null) : null);
           setSearchResults(response.results);
           setShowDropdown(response.results.length > 0);
           setActiveDropdownIndex(-1);
@@ -530,6 +537,13 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
     try {
       const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+      // A whole shelf label wins over an item that merely contains the code.
+      const area = response.storage_areas?.[0];
+      if (area) {
+        setScannedArea(area);
+        return;
+      }
+      setScannedArea(null);
       if (response.results.length === 0) {
         setLookupError(`No item found for "${trimmed}"`);
         setTimeout(() => setLookupError(null), 3000);
@@ -1074,6 +1088,27 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 </div>
               )}
 
+              {scannedArea && (
+                <div
+                  className="border-theme-surface-border bg-theme-surface-secondary flex flex-wrap items-center gap-2 rounded-lg border p-2"
+                  role="status"
+                >
+                  <Package className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                  <p className="text-theme-text-primary min-w-0 flex-1 text-sm">
+                    <span className="font-mono">{scannedArea.barcode}</span> is the label for the storage area{' '}
+                    <span className="font-medium">{scannedArea.name}</span>, not an item.
+                  </p>
+                  {canTransfer && (
+                    <Link
+                      to={`/inventory/storage-areas?area=${encodeURIComponent(scannedArea.id)}`}
+                      className="btn-secondary btn-sm"
+                    >
+                      Open storage area
+                    </Link>
+                  )}
+                </div>
+              )}
+
               {/* Lookup error */}
               {lookupError && (
                 <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-800 dark:bg-yellow-900/20">
@@ -1219,8 +1254,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         {/* Confirmation overlay */}
         {showConfirm && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
-            <DialogPanel onClose={() => setShowConfirm(false)} className="mx-4 max-w-sm p-5">
-              <h4 className="text-theme-text-primary mb-2 font-medium">
+            <DialogPanel
+              onClose={() => setShowConfirm(false)}
+              className="mx-4 max-w-sm p-5"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="scan-confirm-title"
+            >
+              <h4 id="scan-confirm-title" className="text-theme-text-primary mb-2 font-medium">
                 Confirm {mode === 'distribute' ? 'Distribution' : 'Return'}
               </h4>
               <p className="text-theme-text-secondary mb-4 text-sm">
@@ -1266,8 +1307,16 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         )}
         {transferResult?.conflict && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/50">
-            <DialogPanel onClose={() => closeTransfer()} className="mx-4 max-w-md space-y-3 p-5">
-              <h4 className="text-theme-text-primary font-bold">Confirm custody transfer</h4>
+            <DialogPanel
+              onClose={() => closeTransfer()}
+              className="mx-4 max-w-md space-y-3 p-5"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="scan-transfer-title"
+            >
+              <h4 id="scan-transfer-title" className="text-theme-text-primary font-bold">
+                Confirm custody transfer
+              </h4>
               <label className="flex gap-2 text-sm">
                 <input
                   type="checkbox"

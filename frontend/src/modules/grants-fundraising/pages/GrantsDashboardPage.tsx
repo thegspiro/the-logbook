@@ -571,21 +571,21 @@ const GrantsDashboardPage: React.FC = () => {
           value={formatCurrencyWhole(dashboard?.totalGrantFunding ?? 0)}
           icon={<DollarSign className="h-5 w-5 text-green-600" />}
           iconBgClass="bg-green-100 dark:bg-green-500/20"
-          linkTo="/grants/applications"
+          linkTo="/grants/applications?group=funded"
         />
         <KpiCard
           label="Active Grants"
           value={String(dashboard?.activeGrants ?? 0)}
           icon={<FileText className="h-5 w-5 text-blue-600" />}
           iconBgClass="bg-blue-100 dark:bg-blue-500/20"
-          linkTo="/grants/applications?status=active"
+          linkTo="/grants/applications?group=active"
         />
         <KpiCard
           label="Pending Applications"
           value={String(dashboard?.pendingApplications ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
-          linkTo="/grants/applications?status=submitted"
+          linkTo="/grants/applications?group=pending"
         />
         <KpiCard
           label="Total Raised YTD"

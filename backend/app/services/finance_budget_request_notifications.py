@@ -718,9 +718,9 @@ async def _already_told(
     offset: int,
 ) -> set[str]:
     """Members sent this reminder, or the open notice inside its window."""
-    if not users:
-        return set()
     deadline = fy.request_deadline
+    if not users or deadline is None:
+        return set()
     window_start = deadline - timedelta(days=offset)
     result = await db.execute(
         select(NotificationLog).where(
@@ -779,7 +779,11 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
     )
     total = 0
     for fy in years.scalars().all():
-        offset = due_offset(fy.request_deadline, today)
+        # The query excludes a year with no deadline; this narrows the type.
+        request_deadline = fy.request_deadline
+        if request_deadline is None:
+            continue
+        offset = due_offset(request_deadline, today)
         if offset is None:
             continue
         owners = await year_owners(db, org_id, fy.id)
@@ -792,8 +796,8 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
         )
         if not recipients:
             continue
-        deadline = long_date(fy.request_deadline)
-        days_left = (fy.request_deadline - today).days
+        deadline = long_date(request_deadline)
+        days_left = (request_deadline - today).days
         when = {0: "today", 1: "tomorrow"}.get(days_left, f"in {days_left} days")
         subject = f"Reminder: budget requests for {fy.name} close {deadline}"
         lead = (
@@ -827,7 +831,7 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
             subject=subject,
             metadata={
                 "fiscal_year_id": str(fy.id),
-                "deadline": fy.request_deadline.isoformat(),
+                "deadline": request_deadline.isoformat(),
                 "offset_days": offset,
                 "org_date": today.isoformat(),
             },

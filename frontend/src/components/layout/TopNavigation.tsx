@@ -103,6 +103,23 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, toggle);
   }, []);
 
+  // Escape closes an open dropdown and returns focus to its trigger. These
+  // closed only on an outside click or a second press of the trigger, so a
+  // keyboard user who opened one could not put it away from inside it.
+  useEffect(() => {
+    if (!openDropdown) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const trigger = document.querySelector<HTMLElement>(`[data-dropdown-trigger="${CSS.escape(openDropdown)}"]`);
+      const active = document.activeElement;
+      const focusInside = active instanceof Node && trigger?.parentElement?.contains(active);
+      setOpenDropdown(null);
+      if (focusInside) trigger?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openDropdown]);
+
   // Escape dismisses the mobile menu, matching every other overlay in the app.
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -532,9 +549,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       return (
         <div key={item.label} className="relative shrink-0">
           <button
+            type="button"
+            data-dropdown-trigger={item.label}
             onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
             aria-expanded={openDropdown === item.label}
-            aria-haspopup="true"
             className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
               active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
             }`}
@@ -628,9 +646,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 {overflowNavItems.length > 0 && (
                   <div className="relative shrink-0">
                     <button
+                      type="button"
+                      data-dropdown-trigger={MORE_MENU}
                       onClick={() => setOpenDropdown(openDropdown === MORE_MENU ? null : MORE_MENU)}
                       aria-expanded={openDropdown === MORE_MENU}
-                      aria-haspopup="true"
                       className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                         moreActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}

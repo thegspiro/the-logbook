@@ -624,6 +624,22 @@ election package, so they cannot be put on a ballot or advanced past this stage
 yet." — and offers **Create Package**. A pipeline with no vote stage is
 unaffected.
 
+**Regenerating replaces the package** _(2026-10-11)_. Using **Create
+Package** again for an applicant who already has a **Draft** or **Ready**
+package builds a fresh snapshot and removes the old one, so the applicant
+never has more than one package being prepared. Your coordinator notes and
+supporting statement carry over. A package already **Added to Ballot**,
+**Elected** or **Not Elected** is the record of that vote and is kept.
+
+**Pipelines with more than one vote stage** _(2026-10-11)_. If the applicant
+is not on a vote stage when a package is requested, and the pipeline has two
+or more vote stages, the request is refused with "This pipeline has more than
+one election vote stage and the applicant is not on any of them. Choose which
+election vote stage this package is for." — the package's privacy settings
+come from its vote stage, and the system no longer guesses which one. Create
+the package while the applicant is on the vote stage (an integration calling
+the API can instead send that stage as `step_id`).
+
 ### Package Workflow
 
 | Status              | Description                            |
@@ -1154,6 +1170,16 @@ _[Public Application Status page for an active applicant → the "Withdraw your 
 > and since the token can now withdraw the application, that was a credential
 > on a sticker. Badges print a short id now. Destroy any applicant badges
 > printed before that date.
+>
+> **Revoking badges you cannot recover** _(2026-10-11)_. If badges printed
+> before that date may be in the wrong hands, ask your administrator to rotate
+> your department's status tokens
+> (`scripts/rotate_applicant_status_tokens.py --org "<your department>"
+--apply`). Every applicant in the department gets a new token, so every
+> printed badge **and every status link already emailed** stops working. No
+> new link is sent automatically: an applicant gets one with the next pipeline
+> email that carries the status tracker, or re-send it from their record.
+> Rotation is per department and only on request.
 
 ![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
 

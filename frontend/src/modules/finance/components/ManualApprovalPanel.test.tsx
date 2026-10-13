@@ -179,4 +179,42 @@ describe('ManualApprovalPanel', () => {
       expect(onDecided).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('late expenses', () => {
+    const ER_PANEL = { entityType: ApprovalEntityType.EXPENSE_REPORT, entityId: 'er-1' };
+
+    it('shows on a report held until its late lines are confirmed, despite its approval steps', () => {
+      renderPanel({ ...ER_PANEL, approvalStepCount: 1, lateLineCount: 2, awaitingLateAcknowledgement: true });
+      expect(
+        screen.getByText(
+          'This report has expenses submitted after the deadline. An approver has to confirm them before it is approved.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('asks the approver to confirm the late lines, then approves acknowledging them', async () => {
+      const user = userEvent.setup();
+      renderPanel({ ...ER_PANEL, lateLineCount: 2 });
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+      await user.click(await dialogButton('Approve'));
+      await user.click(await screen.findByRole('button', { name: "I've reviewed them, approve" }));
+
+      await waitFor(() =>
+        expect(mockManualApprove).toHaveBeenCalledWith(ApprovalEntityType.EXPENSE_REPORT, 'er-1', undefined, true)
+      );
+      expect(onDecided).toHaveBeenCalledTimes(1);
+    });
+
+    it('approves nothing when the approver goes back', async () => {
+      const user = userEvent.setup();
+      renderPanel({ ...ER_PANEL, lateLineCount: 1 });
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+      await user.click(await dialogButton('Approve'));
+      await user.click(await screen.findByRole('button', { name: 'Go back' }));
+
+      expect(mockManualApprove).not.toHaveBeenCalled();
+    });
+  });
 });

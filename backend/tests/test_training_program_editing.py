@@ -100,7 +100,12 @@ class TestUpdateProgram:
         assert error == "Training program not found"
 
     async def test_updates_fields(self):
-        prog = SimpleNamespace(name="Old", description=None, structure_type=None)
+        prog = SimpleNamespace(
+            name="Old",
+            description=None,
+            structure_type=None,
+            prerequisite_program_ids=None,
+        )
         db = RecordingSession([])
         svc = TrainingProgramService(db)
         svc.get_program_by_id = AsyncMock(return_value=prog)

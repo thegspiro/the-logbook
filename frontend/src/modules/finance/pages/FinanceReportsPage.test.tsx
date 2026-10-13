@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
-import type { AmendmentLogReport, BudgetVsActualReport, FiscalYear, PaymentsRegisterReport } from '../types';
+import type {
+  AmendmentLogReport,
+  BudgetVsActualReport,
+  FiscalYear,
+  FunctionalExpensesReport,
+  LateSubstantiationReport,
+  PaymentsRegisterReport,
+} from '../types';
 
 const mockListYears = vi.fn();
 const mockBudgetVsActual = vi.fn();
@@ -11,6 +18,10 @@ const mockAmendmentLog = vi.fn();
 const mockAmendmentLogCsv = vi.fn();
 const mockRegister = vi.fn();
 const mockRegisterCsv = vi.fn();
+const mockLate = vi.fn();
+const mockFunctional = vi.fn();
+const mockFunctionalCsv = vi.fn();
+const mockLateCsv = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -22,6 +33,10 @@ vi.mock('../services/api', async (importOriginal) => ({
     amendmentLogCsv: (...args: unknown[]) => mockAmendmentLogCsv(...args) as unknown,
     paymentsRegister: (...args: unknown[]) => mockRegister(...args) as unknown,
     paymentsRegisterCsv: (...args: unknown[]) => mockRegisterCsv(...args) as unknown,
+    lateSubstantiation: (...args: unknown[]) => mockLate(...args) as unknown,
+    functionalExpenses: (...args: unknown[]) => mockFunctional(...args) as unknown,
+    functionalExpensesCsv: (...args: unknown[]) => mockFunctionalCsv(...args) as unknown,
+    lateSubstantiationCsv: (...args: unknown[]) => mockLateCsv(...args) as unknown,
   },
 }));
 
@@ -141,6 +156,51 @@ const april: PaymentsRegisterReport = {
   ],
 };
 
+const functionalReport: FunctionalExpensesReport = {
+  start: '2026-10-01',
+  end: '2026-10-12',
+  total: '195.00',
+  classes: [
+    {
+      functionalClass: 'program',
+      total: '100.00',
+      categories: [{ categoryId: 'c-gear', categoryName: 'Turnout gear', amount: '100.00' }],
+    },
+    { functionalClass: 'management_general', total: '0.00', categories: [] },
+    {
+      functionalClass: 'fundraising',
+      total: '65.00',
+      categories: [{ categoryId: 'c-raffle', categoryName: 'Raffle', amount: '65.00' }],
+    },
+    {
+      functionalClass: null,
+      total: '30.00',
+      categories: [{ categoryId: null, categoryName: null, amount: '30.00' }],
+    },
+  ],
+};
+
+const lateReport: LateSubstantiationReport = {
+  start: '2026-10-01',
+  end: '2026-10-12',
+  total: '25.00',
+  rows: [
+    {
+      paidOn: '2026-10-09',
+      reportId: 'er-1',
+      reportNumber: 'ER-2026-0004',
+      memberName: 'Jamie Rivera',
+      description: 'Hotel, state conference',
+      budgetLine: 'Training, FY2026',
+      incurredOn: '2026-06-01',
+      submittedOn: '2026-09-15',
+      daysToSubmit: 106,
+      amount: '25.00',
+      acknowledgedByName: 'Pat Treasurer',
+    },
+  ],
+};
+
 const openAt = (search = '') => {
   window.history.pushState({}, '', `/finance/reports${search}`);
   return renderWithRouter(<FinanceReportsPage />);
@@ -156,6 +216,10 @@ describe('FinanceReportsPage', () => {
       mockAmendmentLogCsv,
       mockRegister,
       mockRegisterCsv,
+      mockLate,
+      mockFunctional,
+      mockFunctionalCsv,
+      mockLateCsv,
       mockSaveFile,
     ]) {
       mock.mockReset();
@@ -166,6 +230,8 @@ describe('FinanceReportsPage', () => {
     );
     mockAmendmentLog.mockResolvedValue(amendments);
     mockRegister.mockResolvedValue(april);
+    mockLate.mockResolvedValue(lateReport);
+    mockFunctional.mockResolvedValue(functionalReport);
   });
 
   afterEach(() => {
@@ -272,5 +338,61 @@ describe('FinanceReportsPage', () => {
 
     expect(await screen.findByText('Glove Depot')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Payments register' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  describe('outside the accountable plan', () => {
+    it('lists late expenses paid this month so far, with who confirmed them', async () => {
+      openAt('?report=late-substantiation');
+
+      const row = await screen.findByRole('row', { name: /Hotel, state conference/ });
+      expect(mockLate).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+      expect(within(row).getByText('Jamie Rivera')).toBeInTheDocument();
+      expect(within(row).getByText('106 days later')).toBeInTheDocument();
+      expect(within(row).getByText('Pat Treasurer')).toBeInTheDocument();
+      expect(mockListYears).toHaveBeenCalled();
+    });
+
+    it('downloads the CSV for the period shown', async () => {
+      const file = { blob: new Blob(['x']), filename: 'outside-accountable-plan.csv' };
+      mockLateCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=late-substantiation');
+      await screen.findByRole('row', { name: /Hotel, state conference/ });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
+      expect(mockLateCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+    });
+  });
+
+  describe('functional expenses', () => {
+    it('groups the period by function and flags what is not classified', async () => {
+      openAt('?report=functional-expenses');
+
+      const program = await screen.findByRole('rowgroup', { name: 'Program services' });
+      expect(mockFunctional).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+      expect(within(program).getByRole('row', { name: /Turnout gear/ })).toHaveTextContent('$100.00');
+      expect(
+        within(screen.getByRole('rowgroup', { name: 'Management & general' })).getByText('Nothing in this period')
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('rowgroup', { name: 'Unclassified' })).getByText('No budget line')
+      ).toBeInTheDocument();
+      expect(screen.getByText(/\$30\.00 is not classified yet/)).toBeInTheDocument();
+    });
+
+    it('downloads the CSV for the period shown', async () => {
+      const file = { blob: new Blob(['x']), filename: 'functional-expenses.csv' };
+      mockFunctionalCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=functional-expenses');
+      await screen.findByRole('rowgroup', { name: 'Program services' });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
+      expect(mockFunctionalCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+    });
   });
 });

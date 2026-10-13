@@ -5,7 +5,7 @@ Tests for the event analytics summary
 The aggregation SQL needs a database, but the per-query Python math and
 shaping (attendance/check-in rates, avg check-in lead time, type
 distribution, monthly buckets, and top-events attendance rate) are tested
-here by mocking the six query results in order. DB mocked; no MySQL.
+here by mocking the seven query results in order. DB mocked; no MySQL.
 """
 
 from datetime import datetime
@@ -50,8 +50,14 @@ def _db(side_effect):
 
 
 def _full_db():
-    """A db whose six executes return a representative analytics dataset."""
+    """A db whose seven executes return a representative analytics dataset."""
     agg_row = SimpleNamespace(total_rsvps=20, going_count=16, checked_in_count=12)
+    # Two past events: 9/10 and 1/2 -> per-event mean 0.7 (pooled would be
+    # 10/12). Upcoming events are excluded by the query itself.
+    per_event_rows = [
+        SimpleNamespace(going_count=10, checked_in_count=9),
+        SimpleNamespace(going_count=2, checked_in_count=1),
+    ]
     type_rows = [
         SimpleNamespace(event_type=EventType.TRAINING, cnt=5),
         SimpleNamespace(event_type=EventType.SOCIAL, cnt=3),
@@ -78,6 +84,7 @@ def _full_db():
         [
             _scalar(10),  # total events
             _one(agg_row),  # rsvp/checkin aggregates
+            _rows(per_event_rows),  # per past event going / checked-in
             _scalar(900),  # avg seconds before start (15 min)
             _rows(type_rows),  # type distribution
             _starts(month_starts),  # event start times, for monthly counts
@@ -92,8 +99,8 @@ class TestAnalyticsSummary:
         assert out["total_events"] == 10
         assert out["total_rsvps"] == 20
         assert out["total_checked_in"] == 12
-        # checked_in / going = 12/16, checked_in / rsvps = 12/20
-        assert out["avg_attendance_rate"] == 0.75
+        # mean of per-past-event rates (0.9, 0.5); checked_in / rsvps = 12/20
+        assert out["avg_attendance_rate"] == 0.7
         assert out["check_in_rate"] == 0.6
         # 900 seconds / 60 = 15.0 minutes before start
         assert out["avg_checkin_minutes_before"] == 15.0
@@ -125,6 +132,7 @@ class TestAnalyticsSummary:
             [
                 _scalar(0),  # total events
                 _one(agg_row),  # aggregates all zero
+                _rows([]),  # no past events with anyone Going
                 _scalar(None),  # no avg seconds
                 _rows([]),  # no types
                 _starts([]),  # no months
@@ -136,6 +144,35 @@ class TestAnalyticsSummary:
         assert out["check_in_rate"] == 0.0
         assert out["avg_checkin_minutes_before"] is None
         assert out["top_events"] == []
+
+    async def test_attendance_rate_query_covers_only_ended_events(self):
+        """W21-6: the per-event query is restricted to events that have ended,
+        grouped per event, so an upcoming event's Going RSVPs are not read
+        as no-shows."""
+        db = _full_db()
+        await EventService(db).get_analytics_summary("org-1")
+        per_event_sql = str(db.execute.await_args_list[2].args[0])
+        assert "end_datetime <=" in per_event_sql
+        assert "GROUP BY events.id" in per_event_sql
+        assert "HAVING" in per_event_sql
+
+    async def test_one_upcoming_event_does_not_drag_the_average(self):
+        """The review case: one past event at 100%, one upcoming at 0%.
+        Only the past event reaches the per-event query."""
+        agg_row = SimpleNamespace(total_rsvps=3, going_count=3, checked_in_count=1)
+        db = _db(
+            [
+                _scalar(2),
+                _one(agg_row),
+                _rows([SimpleNamespace(going_count=1, checked_in_count=1)]),
+                _scalar(None),
+                _rows([]),
+                _starts([]),
+                _rows([]),
+            ]
+        )
+        out = await EventService(db).get_analytics_summary("org-1")
+        assert out["avg_attendance_rate"] == 1.0
 
 
 if __name__ == "__main__":  # pragma: no cover

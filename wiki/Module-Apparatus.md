@@ -467,7 +467,7 @@ From workflow review W48 (#2848) and the plain-language pass (#2782):
 Equipment checklist changes from the same window (W46: the builder offers only
 Apparatus-module units, a failure needs a note, the failure-log total, and the
 Quartermaster's `inventory.check_manage`) are in
-[Inventory → September 24 – October 4, 2026](Module-Inventory#september-24--october-4-2026).
+[Inventory → September 24 – October 4, 2026](Module-Inventory#authoring-and-performing-a-check).
 
 ---
 

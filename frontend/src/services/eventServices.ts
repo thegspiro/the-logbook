@@ -528,10 +528,21 @@ export const eventService = {
   /**
    * RSVP to all future events in a recurring series
    */
-  async rsvpToSeries(parentEventId: string, rsvpData: RSVPCreate): Promise<{ message: string; rsvp_count: number }> {
+  /**
+   * RSVP to every future occurrence of a series. A "going" response to a
+   * series with training sessions ahead of the member's phase is a 409 listing
+   * them (see getSeriesPhaseGateWarning); repeat with `override` once the
+   * member has confirmed.
+   */
+  async rsvpToSeries(
+    parentEventId: string,
+    rsvpData: RSVPCreate,
+    override = false
+  ): Promise<{ message: string; rsvp_count: number }> {
     const response = await api.post<{ message: string; rsvp_count: number }>(
       `/events/${parentEventId}/rsvp-series`,
-      rsvpData
+      rsvpData,
+      override ? { params: { override: true } } : undefined
     );
     return response.data;
   },
@@ -1069,7 +1080,8 @@ export interface LowStockAlert {
   item_type: string;
   current_stock: number;
   threshold: number;
-  items?: Array<{ name: string; quantity: number }>;
+  /** `id` lets a reorder raised from the alert link the item (W41-5). */
+  items?: Array<{ id?: string | null; name: string; quantity: number }>;
 }
 
 export interface MaintenanceRecord {
@@ -1360,7 +1372,8 @@ export interface InventoryItemCreate {
   /** Nullable for the same reason as `standard_size`: clearing the style on an
    *  edit has to send an explicit null, not omit the key. */
   style_attributes?: string[] | null | undefined;
-  variant_group_id?: string | undefined;
+  /** Nullable so an edit can take the item out of its group (W40-7). */
+  variant_group_id?: string | null | undefined;
 }
 
 export interface ItemVariantGroup {
@@ -1867,6 +1880,8 @@ export interface ReorderRequestCreate {
 }
 
 export interface ReorderRequestUpdate {
+  /** Refused by the server once stock has been received against the link. */
+  item_id?: string | null | undefined;
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;
@@ -1907,9 +1922,20 @@ export interface ScanLookupResult {
   matched_value: string;
 }
 
+/** A storage area whose label barcode is exactly the scanned code (INV-8). */
+export interface StorageAreaScanHit {
+  id: string;
+  name: string;
+  barcode: string;
+  storage_type: string;
+  location_id?: string | null;
+}
+
 export interface ScanLookupResponse {
   results: ScanLookupResult[];
+  /** Item results only; a shelf label comes back in `storage_areas`. */
   total: number;
+  storage_areas?: StorageAreaScanHit[];
 }
 
 export interface BatchScanItem {

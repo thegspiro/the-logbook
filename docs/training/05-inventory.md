@@ -156,15 +156,17 @@ A room is the place an item is kept: a station bay, a gear room, a supply
 closet. Name is the only required field; building and room number are optional
 and only help you tell two similar rooms apart later.
 
-> **Adding a room needs a location permission** _(2026-09-29)_. A room is a
-> location record, and creating one needs `locations.create` or
-> `locations.manage` — which the seeded Quartermaster position does not hold.
-> Without either, this step shows no form; it reads _"Adding a room needs
-> permission to create locations, which your position does not have. Use a room
-> listed above, or ask someone who manages locations to add the one you need."_
-> Before this, the form was offered anyway and every save failed with a
-> permission error. Whether quartermasters should be able to add rooms is an
-> open owner decision (see `docs/KNOWN_LIMITATIONS.md`).
+> **Adding a room needs a location permission** _(updated 2026-10-11)_. A room
+> is a location record, and creating one needs `locations.create` or
+> `locations.manage`. The seeded **Quartermaster** position now holds
+> `locations.create` — on departments onboarded before this change too, via a
+> migration that adds it to the stored Quartermaster position when that
+> position still manages inventory. It can add rooms but not edit or delete
+> them; that stays with whoever manages locations. A position without either
+> grant (for example, one an administrator removed it from) still sees no form
+> here; the step reads _"Adding a room needs permission to create locations,
+> which your position does not have. Use a room listed above, or ask someone
+> who manages locations to add the one you need."_
 
 ![Step 1 of the inventory setup workflow, with no rooms declared yet](./images/05-73-setup-rooms.png)
 
@@ -667,9 +669,16 @@ When available stock drops to or below the reorder point, the item appears on th
 
 1. Navigate to **Inventory Admin > Reorder** (`/inventory/admin/reorder`).
 2. Click **Create Reorder Request**.
-3. Select the item to reorder.
+3. Under **Inventory item**, search for and pick the item the order restocks.
+   The item name fills in from it if you have not typed one. A **Quick fill
+   from low stock** chip links the category's lowest item for you.
 4. Enter the requested quantity and any notes.
 5. Submit the request.
+
+**Link the item** _(2026-10-11)_: stock can only be received against a linked
+item. A request can still be saved without one; link it later with **Edit**
+while it is pending or approved, or when you receive it (below). Once stock has
+been received against a request, its linked item can no longer be changed.
 
 ### Reorder Request Workflow
 
@@ -686,21 +695,26 @@ Each status transition is audit-logged with the user, timestamp, and any notes.
 The list, the status filter and the badges show these words _(2026-09-29)_ —
 they used to show the stored values (`partially_received`).
 
-> **Known limitation — a reorder made here cannot be received** _(2026-09-29,
-> workflow review W41-5)_. **Receive stock** needs the request linked to an
-> inventory item, and nothing on this page sets that link: the create and edit
-> forms have no item picker, and the low-stock quick fill copies only the item's
-> name. The **Receive stock** dialog now says an unlinked request cannot be
-> received here and is disabled, rather than failing at submit. Receive the
-> delivery with **Receive Stock** on the items list instead (see
-> [Receiving a delivery](#receiving-a-delivery)) until this is decided; it is
-> open in `docs/KNOWN_LIMITATIONS.md`.
+> **Receiving an order that was never linked** _(2026-10-11, workflow review
+> W41-5)_. **Receive stock** on a request with no linked item now opens with an
+> **Inventory item** search first: pick the item the delivery goes onto, then
+> fill in the quantity, storage location and unit cost as usual. The request
+> stays linked to that item. Until an item is picked, the receive fields stay
+> hidden and the button stays disabled.
 
 ![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
 <!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/reorder: an Ordered request created on this page, with Receive stock open showing the red notice "This request isn't linked to an inventory item, so its stock can't be received here…" and the disabled Receive stock button. Do not submit.]_
+_[Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item, with Receive stock open showing the Inventory item search and the note "This order isn't linked to an inventory item yet…", Receive stock disabled. Do not submit.]_
 -->
+
+> **Editing an order that has started arriving** _(2026-10-11)_: **Edit** can
+> still change the quantity, vendor details and notes after a partial receipt,
+> but it refuses a **Quantity requested** lower than what has already been
+> received ("Quantity requested cannot be lower than the 6 already received").
+> To stop waiting for the rest, cancel the remainder through the workflow
+> rather than shrinking the order. An edit and a receipt arriving at the same
+> moment are applied one after the other, never interleaved.
 
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
@@ -936,6 +950,12 @@ own. You choose the person and what you are doing first, then scan; there is no
 4. Repeat for every item, then confirm the whole batch.
 
 If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
+
+**Scanning a shelf label by mistake** _(2026-10-11)_: a storage area's `SA-…`
+label is not an item, so it is not added to the list. The scanner names the
+storage area instead and offers **Open storage area**, which jumps to it on
+**Storage Areas**. Only an exact, whole label matches, so a partial code never
+pulls shelves into the item results.
 
 > **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
 
@@ -1320,7 +1340,10 @@ barcode; an area that has no barcode yet is given one when it prints.
 and jumps to that area, opening its parents and its item list. The address then
 ends in `?area=…`, so the view can be bookmarked or linked to. Shelf codes are
 read here and by **Put away** and **Check contents** on the same page. The assign
-and return scanner does not read them.
+and return scanner recognises them too _(2026-10-11)_: scanning a shelf label
+there adds nothing to the list and says "SA-0007 is the label for the storage
+area Glove shelf, not an item", with **Open storage area** (for anyone who
+manages inventory) jumping to it here.
 
 <!-- Screenshot needed:
 _[Quartermaster at /inventory/storage-areas/print-labels?ids=<3–4 storage area ids>: the Print Storage Area Labels page with Settings closed, previews showing each area's name, its location/parent trail and its SA- barcode. Seeded areas only; if a printer is registered, show only an RFC 5737 documentation address.]_
@@ -1648,6 +1671,50 @@ Two fixes from workflow review W42:
 - **The completion date defaults to today in the department's timezone.** It
   defaulted to the UTC date, which from 7 PM Central onwards is tomorrow.
 
+### Complete work closes the open record _(2026-10-11)_
+
+**Complete work** used to log a new, completed record every time, so the repair
+or scheduled job it finished stayed open beside it forever — still counted as
+open maintenance on the item. It now closes the open record instead:
+
+- **One open record** — the form says "This completes the open repair (due …)"
+  and saving marks that record complete. Its task description is kept; what you
+  type under **Performed Work** is added to its notes as "Work performed: …",
+  with the technician, condition, cost and next due date you enter.
+- **Several open records** — an **Open record being completed** picker lists
+  them, with the earliest selected. Pick the one you actually finished; the
+  others stay open.
+- **No open records** — the work is logged as a new completed record, as before.
+
+Open **inspections** are never offered: Complete work records no pass or fail,
+and closing an inspection would move the item's inspection clock without a
+result. Record those with **Record inspection**. **Save Record** waits until the
+open records have loaded; if they cannot be loaded, close the form and try again
+rather than logging a duplicate. The item still stays out of service until you
+choose **Return to service**.
+
+### Record inspection closes the scheduled inspection _(2026-10-12)_
+
+**Record inspection** used to record a new inspection every time, so an
+inspection scheduled with **Schedule maintenance** stayed open forever beside
+the one that was actually done. It now closes the scheduled inspection, the
+same way Complete work closes open work:
+
+- **One scheduled inspection** — the form says "This closes the scheduled
+  inspection (due …)" and saving marks it complete with the pass or fail and
+  completion date you enter. Its task description is kept; what you type under
+  **Task Description** is added to its notes as "Inspection notes: …".
+- **Several scheduled inspections** — a **Scheduled inspection being recorded**
+  picker lists them, with the earliest selected. The others stay open.
+- **None scheduled** — a new, completed inspection is recorded, as before.
+
+Only open inspections are offered here; open repairs and other work are closed
+with **Complete work**. Closing a scheduled inspection does exactly what
+recording a new one does: the item's last inspection becomes the completion
+date and its next inspection due is worked out from the inspection interval,
+and a **Fail** marks the item out of service. As with Complete work, **Save
+Record** waits until the scheduled inspections have loaded.
+
 ### Only an inspection moves the inspection clock _(2026-09-13)_
 
 An item on an inspection interval carries two dates: **last inspection** and
@@ -1807,18 +1874,19 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 
 ### Stock Lot Edge Cases
 
-| Scenario                                                 | Behavior                                                                                                                                                                                                                                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A lot passes its expiration date                         | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                                                                                                                                                                     |
-| Every lot for an item has expired                        | On hand reads **zero**, not the item's stale Quantity value                                                                                                                                                                                                               |
-| An item has no lots at all                               | Untouched — it keeps reporting its issued/total pool figure                                                                                                                                                                                                               |
-| A lot is drawn to zero by a swap                         | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                                                                                                                                      |
-| A lot is deleted while units from it are on an apparatus | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own                                                                                                                                         |
-| One line of a Receive Stock batch fails validation       | **Nothing is written.** Fix the line and resubmit the whole delivery                                                                                                                                                                                                      |
-| An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                                                                                                                                                               |
-| A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                                                                                                                                                         |
-| A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up                                                                                                                                                    |
-| Editing "On hand" on a **lot-stocked** item              | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
+| Scenario                                                      | Behavior                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A lot passes its expiration date                              | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                                                                                                                                                                     |
+| Every lot for an item has expired                             | On hand reads **zero**, not the item's stale Quantity value                                                                                                                                                                                                               |
+| An item has no lots at all                                    | Untouched — it keeps reporting its issued/total pool figure                                                                                                                                                                                                               |
+| A lot is drawn to zero by a swap                              | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                                                                                                                                      |
+| A lot is deleted while units from it are on an apparatus      | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own                                                                                                                                         |
+| One line of a Receive Stock batch fails validation            | **Nothing is written.** Fix the line and resubmit the whole delivery                                                                                                                                                                                                      |
+| An Add Several line names an item that already exists         | Skipped and reported. The rest of the list is still created                                                                                                                                                                                                               |
+| A CSV field contains a comma                                  | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                                                                                                                                                         |
+| A lot has no expiration date                                  | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up                                                                                                                                                    |
+| Editing "On hand" on a **lot-stocked** item                   | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
+| Editing **Quantity** on a lot-stocked item from **All Items** | _(2026-10-11)_ The general item form behaves the same way: for a lot-stocked item the Quantity box is replaced by "N from stock lots — adjust by receiving a delivery or editing the item's lots", and saving the form leaves the stored figure alone                     |
 
 ### CSV Import: Supplier Names _(2026-08-17)_
 
@@ -2195,20 +2263,20 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Edge Cases
 
-| Scenario               | Behavior                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| Group with no variants | Group exists but has no linked items, **and nothing in the app can add one** — see the note below |
-| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                    |
-| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows      |
+| Scenario               | Behavior                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| Group with no variants | Group exists but has no linked items; add one with the item form's **Variant Group** picker (below) |
+| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                      |
+| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows        |
 
-> **Known limitation — a group made here stays empty** _(2026-09-29, workflow
-> review W40-7)_. The item form has no variant-group field, and **Generate
-> Sizes & Styles** creates a group of its own rather than filling
-> an existing one, so a group created on this page can never receive an item.
-> Its empty state now says so instead of pointing at a step that does not exist.
-> To get a populated group, start from **Generate Sizes & Styles** on the Add
-> Item form. Open in
-> `docs/KNOWN_LIMITATIONS.md`.
+> **Filling a group made here** _(2026-10-11, workflow review W40-7)_. The Add
+> Item and Edit Item forms on **All Items** have a **Variant Group** picker
+> beside Tracking Type. Choose the group to put the item in it, or **— None —**
+> to take an item out of its group. Only active groups are offered; an item
+> already in a deactivated group shows it marked "(inactive)". The picker is
+> hidden while **Generate Sizes & Styles** is on, because generating variants
+> still creates a new group of its own. An empty group's detail view now points
+> at the picker.
 
 ---
 
@@ -3327,14 +3395,34 @@ recorded as "charged $0.00" against the member.
 
 Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
 
-- **Receiving gear back another way leaves the member's return notice open**
-  (W39-5). If you take the gear through **Return** on the members page instead
-  of receiving the notice, the notice stays in the returns queue, on the hub's
-  attention list and in the member's **Pending requests**, and can then only be
-  denied. Receive through the notice when there is one.
-- **A write-off raised for one returned pool unit retires the whole item**
-  (W41-6). The review dialog says so and requires a note and an
-  acknowledgement; there is no quantity write-off yet.
+- ~~**Receiving gear back another way leaves the member's return notice open**
+  (W39-5).~~ **Resolved 2026-10-11:** taking the gear back through **Return**
+  on the members page, a pool return, or a loan check-in now marks the
+  member's open notice for that holding **received**. It leaves the returns
+  queue, the hub's attention list and the member's **Pending requests**; find
+  it under **Status: Received another way** in the returns panel, with the note
+  "Received through a direct return, not through this notice; not inspected
+  here." The condition you recorded on the return itself is the record of what
+  came back — the notice does not claim an inspection. A pool return of fewer
+  units than the notice announced leaves the notice open. Receiving through the
+  notice is still the better path when there is one, because it records the
+  inspection and any safety follow-up against the member's report.
+  **Since 2026-10-12** a received notice can also be inspected afterwards:
+  press **Inspect** on its row, choose the **Observed condition**, a **Safety
+  follow-up** if the gear is poor, damaged or out of service, and any notes,
+  then **Record inspection**. The notice is completed with your inspection
+  added under the original "Received through …" note. Nothing is returned to
+  stock again — there is no barcode or count to enter — but a serialized item
+  you find unsafe while it is still on the shelf is moved to maintenance.
+- ~~**A write-off raised for one returned pool unit retires the whole item**
+  (W41-6).~~ **Resolved 2026-10-11:** receiving a damaged pool return no
+  longer offers **Write-off review** as a safety follow-up — only
+  **Maintenance**, **Charge review** or **Automatic**, and Automatic picks
+  Maintenance for an out-of-service pool return where it used to raise a
+  write-off. The units that came back damaged are already kept out of issuable
+  stock by the receipt itself; a write-off request names the whole item, so
+  approving one retired the shelf and ended every other member's issuance.
+  Individual items still offer Write-off review.
 
 ### The "Transfer is immediate" checkbox is gone
 
@@ -3566,7 +3654,9 @@ include **Check Reports** or the fleet board, which stay with
   what is wrong before **Submit**: the note button reads **Note required**, the
   box asks "What's wrong with it? (required)", and submitting without it says
   "Add a note to each failed item saying what's wrong." and moves focus to the
-  note. (This closes W46-13.)
+  note. (This closes W46-13.) Since 2026-10-12 the server applies the same
+  rule, so a check sent by any other route — an older offline copy, a script —
+  is refused with the same items named rather than filed without a reason.
 - **Only Submit is pinned** at the bottom of the screen. **Overall Notes** was
   pinned with it and covered about a third of a phone screen for the whole check.
 - **Pass and Fail are grouped under the item's name** and announce which is
@@ -3596,8 +3686,15 @@ include **Check Reports** or the fleet board, which stay with
   against the matching failures — one failed flashlight read as "4 total
   failures".
 
-**Still open** (in `docs/KNOWN_LIMITATIONS.md`): a new or re-scoped checklist
-counts as missed on days before it existed (W46-19).
+**A new checklist is owed from when it was created** _(2026-10-11)_. The
+fleet board, the check log and Check Reports used to count a brand-new
+checklist against every shift in their window, so one written at 9:54 PM made
+the day before a missed check and put the rig in **Needs attention** minutes
+later. Now a shift that was already over when the checklist was created owes
+nothing; a shift still under way at that moment does, because the crew can
+still do it. A shift with no recorded end time owes it from the checklist's
+creation day on your department's calendar. Changing an existing checklist's
+apparatus or type does not restart the clock — it counts from creation.
 
 **Check Reports counts what was expected** _(2026-10-11)_. Each unit under
 **Apparatus Compliance** reads "_n_ of _m_ expected" and, when any were

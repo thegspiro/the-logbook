@@ -936,6 +936,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/finance', maxSmallTargets: 0, maxTinyText: 0, permissions: ['finance.view'] },
   { path: '/grants', maxSmallTargets: 0, maxTinyText: 0, permissions: ['fundraising.view'] },
   { path: '/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view'] },
+  { path: '/reports/saved', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view', 'reports.manage'] },
   { path: '/medical-screening', maxSmallTargets: 0, maxTinyText: 0, permissions: ['medical_screening.view'] },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },

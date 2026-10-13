@@ -302,6 +302,10 @@ To propose a revision:
 6. **Save draft.** It is now visible to the other officers, and still not
    public.
 
+You can have at most **ten open proposals per document** at once. An eleventh
+is refused with a message saying so; discard one you no longer need, or have
+one published, and you can save again.
+
 An officer with publishing rights reviews the draft and clicks **Publish to
 members**, which replaces the live page immediately. The version that was live
 is archived, not deleted, so the department can always answer what a member was

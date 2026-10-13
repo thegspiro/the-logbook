@@ -670,6 +670,13 @@ that makes the option necessary in production.
 
 **AH-16 — MED — `export_entries_csv` remains unbounded/non-streaming — 🚩 FLAGGED (carried forward, not newly introduced)**
 
+> **✅ Resolved 2026-10-11 (owner decision: stream all three sibling exports,
+> no cap).** `stream_entries_csv` reads through a server-side cursor
+> (`app/utils/streamed_query.py`) and the endpoint hands the iterator to
+> `StreamingResponse`; the storefront order export and the training report
+> CSVs stream the same way. See the KNOWN_LIMITATIONS row; tests in
+> `tests/test_streamed_exports.py`. The finding below is kept as written.
+
 **What:** `GET /admin-hours/entries/export` runs one org-scoped query with
 no `.limit()` and builds the full CSV in memory before the response
 starts. For a long-tenured department's complete, unfiltered history, this

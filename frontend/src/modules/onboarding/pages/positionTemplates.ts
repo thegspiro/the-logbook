@@ -271,7 +271,7 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Board of Directors',
         description: 'Governing board with oversight of organizational operations',
         icon: Building2,
-        priority: 85,
+        priority: 70,
         permissions: generateRolePermissions(modules, 'leadership'),
       },
     ],
@@ -400,7 +400,7 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Historian',
         description: 'Maintains organizational history, archives, and records',
         icon: ClipboardList,
-        priority: 45,
+        priority: 50,
         permissions: generateRolePermissions(modules, 'specialist', ['documents', 'events']),
       },
       {
@@ -432,7 +432,7 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Fundraising Chair',
         description: 'Coordinates fundraising activities and campaigns',
         icon: BadgeCheck,
-        priority: 50,
+        priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents', 'reports']),
       },
       {

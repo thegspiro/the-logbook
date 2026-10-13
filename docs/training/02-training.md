@@ -426,7 +426,7 @@ Every requirement inside a pipeline has a **type** that determines how it is com
 
 Navigate to **Training > Programs** and click **Create Program** to open the pipeline wizard. The wizard builds the entire program — program info, phases, requirements, and milestones — and **saves everything in one step**.
 
-1. **Program information** — Enter the program **name**, **description**, program **type**, and a **program code** (a short identifier such as `PROB-FF` used to reference the program in reports and imports).
+1. **Program information** — Enter the program **name**, **description**, program **type**, and a **program code** (a short identifier such as `PROB-FF` used to reference the program in reports and imports). Optionally tick **Prerequisite programs** — members must complete these programs before they can enroll — and untick **Allow members to be enrolled in other programs at the same time** if this program should be someone's only one (see [Enrolling Members](#enrolling-members) for what each does).
 2. **Add phases** — Add one or more **phases** in the order members will complete them. For each phase, enter a name and, optionally, check **Require officer approval to advance** if an officer must sign off before a member can move to the next phase (see [Phases & Advancing](#phases--advancing)).
 3. **Add requirements to each phase** — Within a phase, click **Add Requirement** and choose the requirement type (hours, courses, shifts, calls, skills evaluation, certification, checklist, or knowledge test). Enter the type's target value — for example, required hours, the course list, or a knowledge-test passing score and maximum attempts.
 4. **Add milestones** — Add **milestone** checkpoints that mark key achievements within the program.
@@ -485,14 +485,23 @@ hides the rest. Turn it off and the members who cannot be enrolled are listed
 with the reason on the row and an **Enrolled** badge, and they cannot be
 selected. A member is ineligible when they:
 
-- have **not met the program's prerequisites**,
-- are already enrolled in a program that **does not allow concurrent
-  enrollment**, or
+- have **not completed every prerequisite program**, or
 - are already on this program.
 
+A program whose **Allow members to be enrolled in other programs at the same
+time** box is unticked does not make anyone ineligible: a member already active
+in another program is listed as eligible with the note "Also enrolled in another
+program", and you can still enroll them.
+
+Both settings are shown under the program's name on its detail page and are
+changed from **Edit** there. A program cannot require itself, and a choice that
+would make the prerequisites circular — Driver Operator requiring Recruit
+School while Recruit School requires Driver Operator — is refused with a
+message naming the program that already requires this one.
+
 So there is no after-the-fact summary of who was skipped and why: you can see it
-before you commit. Correct the underlying issue — complete the prerequisite, or
-finish or cancel the conflicting enrollment — and the member becomes selectable.
+before you commit. Once the member completes the missing prerequisite program,
+they become selectable.
 
 ![The Enroll Members picker — members selected, the ineligible listed with their reason, and the button counting the selection](./images/02-96-bulk-enroll-picker.png)
 
@@ -1544,6 +1553,34 @@ Departments that hold drills late in the month often saw members flagged non-com
 
 ![Compliance thresholds configuration including the evaluation-period setting](./images/02-66-compliance-thresholds.png)
 
+### Compliance Emails to Members _(2026-10-11)_
+
+The **Notifications** panel on the same **Thresholds** tab now does what it
+says (it used to carry a "Not yet active" warning). Once a day, by email only:
+
+- **Reminder Days Before Deadline** — for each requirement a member has not yet
+  met, a reminder when its deadline is that many days away. With `30, 14, 7`, a
+  member behind on an annual requirement hears at 30, 14 and 7 days before the
+  end of the year. If the system was down on a reminder day, the reminder goes
+  out on the next run. A member is never sent two reminders for the same
+  deadline on one day. **Leave the box empty to send no reminders.**
+- **Notify members when they become non-compliant** — a notice listing every
+  requirement they have not met, sent when their standing turns
+  **non-compliant** (an at-risk member is not sent it). They are not told again
+  every day; they are told again when they fall short of a further requirement,
+  or of the same one in a new period.
+
+The deadline is the end of the requirement's current compliance period, or the
+member's catch-up deadline while one protects them. Members are judged exactly
+as the Training dashboard and the compliance matrix judge them — profiles,
+thresholds, waivers and grandfathering included. A member who switched off
+**Training and certification reminders** in their own email settings is not
+sent these unless the department has made that email required.
+
+> **On upgrade:** a department that saved its compliance configuration with the
+> suggested `30, 14, 7` will start sending reminders the first day after
+> upgrading. Clear the box first if you do not want them.
+
 ### Requirements with several categories _(2026-10-04)_
 
 A requirement can be linked to more than one training category, and a finalized
@@ -2165,6 +2202,8 @@ Navigate to **Training Admin > Reports** for department-wide exports:
 ![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
+
+> **Hint:** The CSV downloads have no row limit. A lifetime export of a large department is written and sent a member (or a batch of records) at a time, so the download starts straight away and grows while it runs; leave the tab open until your browser shows it finished. The PDFs are still built whole before they download.
 
 ---
 

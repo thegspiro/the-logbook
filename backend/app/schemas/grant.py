@@ -10,11 +10,14 @@ from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 from pydantic.alias_generators import to_camel
 
+from app.models.grant import allowed_next_statuses as _allowed_next_statuses
 from app.schemas.base import UTCResponseBase
 from app.utils.external_url import validate_external_http_url
+from app.utils.grant_spending import application_overspend, budget_item_overspend
+from app.utils.grant_spending import total_expended as _total_expended
 
 _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -366,6 +369,24 @@ class GrantApplicationResponse(GrantApplicationBase):
 
     model_config = _response_config
 
+    # GF-7: the lifecycle and overspend are decided here, on the server, so
+    # the status picker and the overspend banner read the same rule the
+    # update path enforces rather than re-deriving it.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def allowed_next_statuses(self) -> List[str]:
+        return _allowed_next_statuses(self.application_status)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def total_expended(self) -> Decimal:
+        return _total_expended(self.expenditures)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def overspent_by(self) -> Optional[Decimal]:
+        return application_overspend(self.amount_awarded, self.expenditures)
+
 
 class GrantApplicationListResponse(UTCResponseBase):
     """Schema for grant application list item"""
@@ -437,6 +458,12 @@ class GrantBudgetItemResponse(GrantBudgetItemBase):
 
     model_config = _response_config
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def overspent_by(self) -> Optional[Decimal]:
+        """How far this line's spending exceeds its budget (GF-7)."""
+        return budget_item_overspend(self.amount_budgeted, self.amount_spent)
+
 
 # ============================================
 # Grant Expenditure Schemas
@@ -500,6 +527,9 @@ class GrantExpenditureResponse(GrantExpenditureBase):
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+    # Set on the response to a create or update when the write leaves the
+    # grant or its budget line overspent (GF-7: warn, never block).
+    warnings: List[str] = []
 
     model_config = _response_config
 

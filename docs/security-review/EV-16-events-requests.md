@@ -21,6 +21,19 @@ pass — see Pass 7 below)
 
 ---
 
+## EV-23 resolved (2026-10-11, owner decision)
+
+Built as the owner chose — list every ahead-of-phase occurrence in the 409.
+`POST /events/{id}/rsvp-series` takes `override`; a **going** series RSVP
+evaluates `_evaluate_session_phase_warning` for every future occurrence
+before writing, and raises `SeriesPhaseGateWarning`, which the endpoint turns
+into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
+branch confirms against the list and retries with `override=true`. Tests:
+`test_event_rsvp_waitlist.py::TestRsvpToSeries`,
+`test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
 ## Pass 7 (2026-10-06) — real delta (33 commits), 0 fixes needed, EV-26 confirmed fixed, scope widened by 3 files
 
 **Watchdog pickup.** PR #2971 (Feature 15, Scheduling, pass 7) had merged

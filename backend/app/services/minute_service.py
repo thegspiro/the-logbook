@@ -5,7 +5,7 @@ Business logic for meeting minutes management.
 """
 
 from datetime import datetime, time, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
 from app.core.utils import generate_uuid
+from app.models.document import Document
 from app.models.event import Event
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
@@ -593,6 +594,66 @@ class MinuteService:
 
         await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id)
+
+    async def reopen_minutes(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> Optional[Tuple[MeetingMinutes, dict]]:
+        """Return approved minutes to draft so a correction can be made.
+
+        MM-17 (owner decision): approved minutes are locked — content, motions,
+        action items and the quorum settings — and a correction goes through
+        this path rather than through an exemption on any one endpoint. The
+        record leaves APPROVED, so members stop seeing it as ratified until it
+        is submitted and approved again, by someone other than its submitter
+        (approve_minutes' separation of duties applies to the re-approval as
+        it did to the first). The prior approval is returned so the caller can
+        write it into the audit trail, which is the only place it survives.
+        """
+        minutes = await self.get_minutes(minutes_id, organization_id)
+        if not minutes:
+            return None
+
+        if minutes.status != MinutesStatus.APPROVED.value:
+            raise ValueError("Only approved minutes can be reopened")
+
+        prior = {
+            "previous_approved_by": minutes.approved_by,
+            "previous_approved_at": (
+                minutes.approved_at.isoformat() if minutes.approved_at else None
+            ),
+            "previous_submitted_by": minutes.submitted_by,
+        }
+
+        minutes.status = MinutesStatus.DRAFT
+        minutes.approved_at = None
+        minutes.approved_by = None
+        minutes.submitted_at = None
+        minutes.submitted_by = None
+        minutes.rejected_at = None
+        minutes.rejected_by = None
+        minutes.rejection_reason = None
+
+        # Owner decision (2026-10-12): a document already published from the
+        # approved version stays readable, flagged as being corrected, until
+        # the corrected minutes are republished over it (publish_minutes
+        # clears the flag). Resolved in-org: published_document_id is a plain
+        # column with no FK, so it is never trusted on its own.
+        if minutes.published_document_id:
+            doc_result = await self.db.execute(
+                select(Document).where(
+                    Document.id == minutes.published_document_id,
+                    Document.organization_id == str(organization_id),
+                )
+            )
+            published = doc_result.scalar_one_or_none()
+            if published is not None:
+                published.under_correction_since = datetime.now(timezone.utc)
+
+        await self.db.commit()
+        refreshed = await self.get_minutes(minutes_id, organization_id)
+        if refreshed is None:
+            return None
+        return refreshed, prior
 
     # ============================================
     # Motion CRUD

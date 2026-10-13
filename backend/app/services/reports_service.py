@@ -29,7 +29,6 @@ from app.models.operational_rank import OperationalRank
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
-    RequirementProgress,
     RequirementProgressStatus,
     Shift,
     ShiftCompletionReport,
@@ -299,9 +298,12 @@ class ReportsService:
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
 
-        # Get active, non-exempt users
+        # Get active, non-exempt users. positions eager-loaded for the
+        # per-requirement applicability check below.
         users_result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .options(selectinload(User.positions))
+            .where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
                 User.compliance_exempt.is_(False),
@@ -381,10 +383,18 @@ class ReportsService:
                 course_stats[cid]["total_hours"] += float(record.hours_completed)
         course_breakdown = list(course_stats.values())
 
-        # ── Per-requirement completion (TC3) ──
-        # Use a single aggregated query instead of N+1 individual queries.
-        # Count COMPLETED and VERIFIED progress per requirement, scoped to
-        # active enrollments for non-deleted users in this organization.
+        # ── Per-requirement program progress (TC3, RPT5-29-1) ──
+        # This measures training-PROGRAM progress: a requirement counts as
+        # met when the member's program enrollment marked it complete. It is
+        # deliberately not the requirement compliance the training dashboard
+        # and compliance matrix report (app/services/training_compliance.py);
+        # the owner chose to label it as program progress rather than change
+        # its numbers to that evaluator's.
+        #
+        # Who each requirement grades does follow the shared rules, the same
+        # ones _generate_compliance_status applies: requirement_applies_to_user
+        # (scope and grandfathering) and catch_up_deadline (an existing member
+        # still inside a catch-up period is neither met nor unmet yet).
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == str(organization_id),
@@ -392,75 +402,80 @@ class ReportsService:
             )
         )
         requirements = req_result.scalars().all()
-        req_ids = [r.id for r in requirements]
-
-        # Batch-fetch completed counts for all requirements at once
-        completed_by_req: Dict[str, int] = {}
-        if req_ids:
-            agg_result = await self.db.execute(
-                select(
-                    RequirementProgress.requirement_id,
-                    func.count(RequirementProgress.id),
-                )
-                .join(
-                    ProgramEnrollment,
-                    RequirementProgress.enrollment_id == ProgramEnrollment.id,
-                )
-                .join(User, User.id == ProgramEnrollment.user_id)
-                .where(
-                    RequirementProgress.requirement_id.in_(req_ids),
-                    RequirementProgress.status.in_(
-                        [
-                            RequirementProgressStatus.COMPLETED,
-                            RequirementProgressStatus.VERIFIED,
-                        ]
-                    ),
-                    ProgramEnrollment.organization_id == str(organization_id),
-                    ProgramEnrollment.status.in_(
-                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
-                    ),
-                    User.deleted_at.is_(None),
-                )
-                .group_by(RequirementProgress.requirement_id)
-            )
-            for row in agg_result.all():
-                completed_by_req[str(row[0])] = row[1]
-
-        # Count enrolled (non-deleted) users as the denominator per requirement
-        enrolled_count = 0
-        if req_ids:
-            enrolled_result = await self.db.execute(
-                select(func.count(func.distinct(ProgramEnrollment.user_id)))
-                .join(User, User.id == ProgramEnrollment.user_id)
-                .where(
-                    ProgramEnrollment.organization_id == str(organization_id),
-                    ProgramEnrollment.status.in_(
-                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
-                    ),
-                    User.deleted_at.is_(None),
-                )
-            )
-            enrolled_count = enrolled_result.scalar() or 0
-
-        # Fall back to active user count if no enrollments exist
-        denominator = enrolled_count if enrolled_count > 0 else len(users)
 
         requirement_breakdown = []
-        for req in requirements:
-            completed_for_req = completed_by_req.get(str(req.id), 0)
-            requirement_breakdown.append(
-                {
-                    "requirement_id": str(req.id),
-                    "requirement_name": req.name,
-                    "total_members": denominator,
-                    "completed": completed_for_req,
-                    "completion_pct": (
-                        round(completed_for_req / denominator * 100, 1)
-                        if denominator > 0
-                        else 0
+        if requirements:
+            enrollments_result = await self.db.execute(
+                select(ProgramEnrollment)
+                .options(selectinload(ProgramEnrollment.requirement_progress))
+                .join(User, User.id == ProgramEnrollment.user_id)
+                .where(
+                    ProgramEnrollment.organization_id == str(organization_id),
+                    ProgramEnrollment.status.in_(
+                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
                     ),
-                }
+                    User.deleted_at.is_(None),
+                )
             )
+            completed_by_user: Dict[str, set] = {}
+            for enrollment in enrollments_result.scalars().unique().all():
+                done = completed_by_user.setdefault(str(enrollment.user_id), set())
+                for rp in enrollment.requirement_progress or []:
+                    if rp.status in (
+                        RequirementProgressStatus.COMPLETED,
+                        RequirementProgressStatus.VERIFIED,
+                    ):
+                        done.add(str(rp.requirement_id))
+
+            # The population is the enrolled members; with no enrollments at
+            # all, the active members (as before).
+            if completed_by_user:
+                population_result = await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == str(organization_id),
+                        User.id.in_(list(completed_by_user)),
+                        User.deleted_at.is_(None),
+                    )
+                )
+                population = list(population_result.scalars().all())
+            else:
+                population = list(users)
+
+            today = (
+                await resolve_org_today(self.db, str(organization_id))
+                if any(r.existing_member_deadline for r in requirements)
+                else None
+            )
+
+            for req in requirements:
+                rid = str(req.id)
+                graded = 0
+                met = 0
+                for member in population:
+                    if not requirement_applies_to_user(req, member):
+                        continue
+                    is_met = rid in completed_by_user.get(str(member.id), set())
+                    if (
+                        not is_met
+                        and today is not None
+                        and catch_up_deadline(req, member_join_date(member), today)
+                    ):
+                        continue
+                    graded += 1
+                    met += 1 if is_met else 0
+                requirement_breakdown.append(
+                    {
+                        "requirement_id": rid,
+                        "requirement_name": req.name,
+                        "total_members": graded,
+                        "completed": met,
+                        "completion_pct": (
+                            round(met / graded * 100, 1) if graded > 0 else 0
+                        ),
+                    }
+                )
 
         return {
             "report_type": "training_summary",
@@ -1610,8 +1625,8 @@ class ReportsService:
                 },
                 {
                     "id": "training_summary",
-                    "title": "Training Summary",
-                    "description": "Overview of training completion rates, hours logged, and compliance status.",
+                    "title": "Training & Program Progress Summary",
+                    "description": "Training hours and course completion by member and course, and training-program progress by requirement. Not requirement compliance: the Training dashboard reports that.",
                     "category": "training",
                     "available": True,
                 },
@@ -1653,8 +1668,8 @@ class ReportsService:
                 },
                 {
                     "id": "compliance_status",
-                    "title": "Compliance Status",
-                    "description": "Member-by-member compliance tracking against training requirements with gap analysis.",
+                    "title": "Program Requirement Progress",
+                    "description": "Each member's progress on training requirements through their training-program enrollments, with outstanding items and upcoming deadlines. Not requirement compliance: the Training dashboard reports that.",
                     "category": "compliance",
                     "available": True,
                 },
