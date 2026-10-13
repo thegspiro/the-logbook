@@ -659,7 +659,15 @@ describe('clearing a field on an edit sends null', () => {
   });
 
   it('clears a phase’s description and time limit', async () => {
-    const skills = { ...phases[1], id: 'ph-2', program_id: 'prog-1', phase_number: 2, name: 'Skills' };
+    const skills = {
+      id: 'ph-2',
+      program_id: 'prog-1',
+      phase_number: 2,
+      name: 'Skills',
+      requires_manual_advancement: false,
+      created_at: '',
+      updated_at: '',
+    };
     const user = userEvent.setup();
     renderWithRouter(
       <PhaseFormModal
