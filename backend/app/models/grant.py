@@ -1004,6 +1004,14 @@ class FundraisingCampaign(Base):
     suggested_amounts: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
+    # Restricted fund: the donors gave for a stated purpose, so what was
+    # raised may be spent only on it. Finance payments charge such a campaign
+    # through their fund_campaign_id; app/services/restricted_funds.py.
+    is_restricted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="0"
+    )
+    restriction_purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Active flag
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
 

@@ -810,6 +810,8 @@ export interface PendingApproval {
   requiresOverride: boolean;
   /** Expense reports: lines submitted after the substantiation deadline; approving must acknowledge them. */
   lateLineCount?: number;
+  /** How far it would take its restricted funds past what they have left; null when it fits. */
+  fundShortfall?: MonetaryAmount | null;
 }
 
 /** Why nobody can act on an approval step, from the approver-coverage report. */
@@ -852,6 +854,8 @@ export interface UnroutedApproval {
   lateLineCount?: number;
   /** Held until an approver acknowledges the late lines. */
   awaitingLateAcknowledgement?: boolean;
+  /** How far it would take its restricted funds past what they have left; null when it fits. */
+  fundShortfall?: MonetaryAmount | null;
 }
 
 export const SubstantiationMode = {
@@ -872,9 +876,18 @@ export interface FinanceSettings {
   substantiationMode: SubstantiationMode;
   /** Days allowed between incurring an expense and submitting it (1-60). */
   substantiationDays: number;
+  /** A payment charged to a restricted fund for more than it has left. */
+  fundOverspendMode: FundOverspendMode;
 }
 
-export interface PurchaseRequest extends FunctionalClassFields {
+export const FundOverspendMode = {
+  OFF: 'off',
+  WARN: 'warn',
+  BLOCK: 'block',
+} as const;
+export type FundOverspendMode = (typeof FundOverspendMode)[keyof typeof FundOverspendMode];
+
+export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -917,7 +930,7 @@ export interface PurchaseRequest extends FunctionalClassFields {
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface ExpenseLineItem extends FunctionalClassFields {
+export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   id: string;
   expenseReportId: string;
   budgetId?: string;
@@ -969,13 +982,15 @@ export interface ExpenseReport {
   lateAcknowledgedAt?: string | null;
   /** Held until an approver acknowledges the late lines (detail responses only). */
   awaitingLateAcknowledgement?: boolean;
+  /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
+  fundShortfall?: MonetaryAmount | null;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface CheckRequest extends FunctionalClassFields {
+export interface CheckRequest extends FunctionalClassFields, FundFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -1322,6 +1337,47 @@ export interface LateSubstantiationReport {
   end: string;
   rows: LateSubstantiationRow[];
   total: MonetaryAmount;
+}
+
+/** The restricted fund a payment is charged to (a fundraising campaign marked restricted). */
+export interface FundFields {
+  fundCampaignId?: string | null;
+  /** Detail responses only. */
+  fundName?: string | null;
+  /** How far it would take its fund past what it has left, until approved; null when it fits (detail responses). */
+  fundShortfall?: MonetaryAmount | null;
+}
+
+/** `GET /finance/funds`: an active restricted fund a payment may be charged to. */
+export interface FundOption {
+  campaignId: string;
+  name: string;
+  purpose?: string | null;
+  available: MonetaryAmount;
+}
+
+/** One restricted fund's balance today (`GET /finance/reports/fund-balances`). */
+export interface FundBalance {
+  campaignId: string;
+  name: string;
+  purpose?: string | null;
+  /** False once the campaign is deleted; its charges still count. */
+  active: boolean;
+  received: MonetaryAmount;
+  spent: MonetaryAmount;
+  committed: MonetaryAmount;
+  /** Submitted and not yet decided; not subtracted from available. */
+  awaitingApproval: MonetaryAmount;
+  available: MonetaryAmount;
+}
+
+export interface FundBalancesReport {
+  funds: FundBalance[];
+  received: MonetaryAmount;
+  spent: MonetaryAmount;
+  committed: MonetaryAmount;
+  awaitingApproval: MonetaryAmount;
+  available: MonetaryAmount;
 }
 
 /** One payment's own class, and the one it takes once its category's applies (detail responses). */

@@ -15,6 +15,8 @@ import { useFinanceStore } from '../store/financeStore';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { useFundOptions } from '../hooks/useFundOptions';
+import { FundSelect } from '../components/FundSelect';
 import type { CheckRequest } from '../types';
 
 const checkRequestSchema = z.object({
@@ -25,6 +27,7 @@ const checkRequestSchema = z.object({
   purpose: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
   budgetId: z.string().optional(),
+  fundCampaignId: z.string().optional(),
 });
 
 type CheckRequestFormData = z.infer<typeof checkRequestSchema>;
@@ -42,6 +45,7 @@ const CheckRequestFormPage: React.FC = () => {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CheckRequestFormData>({
     resolver: zodResolver(checkRequestSchema),
@@ -51,6 +55,7 @@ const CheckRequestFormPage: React.FC = () => {
   // options endpoints, which a member holding only finance.request can read.
   const fiscalYearId = watch('fiscalYearId');
   const { fiscalYears, budgetOptions, fiscalYearsLoaded } = useRequestFormOptions(fiscalYearId);
+  const { funds, mode: fundMode } = useFundOptions();
 
   const onSubmit = async (data: CheckRequestFormData) => {
     try {
@@ -63,6 +68,7 @@ const CheckRequestFormPage: React.FC = () => {
       if (data.memo?.trim()) payload.memo = data.memo.trim();
       if (data.purpose?.trim()) payload.purpose = data.purpose.trim();
       if (data.budgetId) payload.budgetId = data.budgetId;
+      if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
       const created = await createCheckRequest(payload);
       toast.success('Check request created');
       void navigate(`/finance/check-requests/${created.id}`);
@@ -154,6 +160,15 @@ const CheckRequestFormPage: React.FC = () => {
               ))}
             </select>
           </div>
+
+          <FundSelect
+            id="fundCampaignId"
+            value={watch('fundCampaignId') ?? ''}
+            onChange={(fundId) => setValue('fundCampaignId', fundId, { shouldDirty: true })}
+            amount={watch('amount') || 0}
+            funds={funds}
+            mode={fundMode}
+          />
 
           <div>
             <label htmlFor="purpose" className={labelClass}>

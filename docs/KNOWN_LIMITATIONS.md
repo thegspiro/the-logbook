@@ -1479,6 +1479,37 @@ pending a decision:
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
 
+## Finance — Restricted Funds: What They Do Not Cover (2026-10-13)
+
+Described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#restricted-funds-2026-10-13). Left out
+on purpose:
+
+- **One fund per payment.** A purchase or check is charged to one fund, or
+  none; an expense report can charge a different fund on each line. Paying one
+  invoice partly from a fund and partly from operating money means two
+  requests.
+- **Pledges are not money in until paid.** A department cannot spend a pledge
+  it has not received; it shows in the fund's balance once the donation is
+  recorded as completed.
+- **Grants are not funds here.** A grant's own budget items and overspend
+  check (the Grants module) are separate; a restricted grant is tracked there,
+  not as a campaign.
+- **No release of restrictions or transfers between funds.** When a purpose is
+  met and donors agree to redirect the remainder, that is recorded by the
+  treasurer outside the module; there is no "release" entry.
+- **Not sent to QuickBooks.** The export does not carry the fund; a department
+  that tracks restricted net assets in QuickBooks (as Classes or Locations)
+  sets them there.
+- **A refund after a payment can leave a fund overspent.** The balance follows
+  the donations as they stand, so a refunded gift lowers it even when payments
+  were already approved against it; the report marks the fund Overspent rather
+  than undoing anything.
+- **Requests created before this change cannot be charged retroactively except
+  by editing them,** which a purchase request allows while it is a draft or
+  submitted; a check request has no edit screen, and an expense line none
+  after creation.
+
 ## Finance — Functional Expense Classification: What It Does Not Cover (2026-10-13)
 
 Described in
@@ -1544,7 +1575,7 @@ purpose:
 - **Not yet built from the original plan:** expense summary by member, dues
   collection with delinquency, and purchase orders by vendor. Restricted funds
   and functional expense classification (program / management / fundraising)
-  are separate work and appear on none of these reports.
+  have reports of their own (Restricted funds, Functional expenses).
 
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 

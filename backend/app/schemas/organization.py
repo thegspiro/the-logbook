@@ -1343,6 +1343,14 @@ class FinanceSettingsUpdate(BaseModel):
             "submitted. At most 60, the IRS safe harbor; 60 when unset."
         ),
     )
+    fund_overspend_mode: Optional[Literal["off", "warn", "block"]] = Field(
+        None,
+        description=(
+            "A payment charged to a restricted fund for more than the fund has "
+            "left: off (not checked), warn (the default; flagged, and the "
+            "approval goes through) or block (it cannot be approved)."
+        ),
+    )
 
     model_config = ConfigDict(extra="allow")
 

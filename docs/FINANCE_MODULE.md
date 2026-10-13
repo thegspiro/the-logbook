@@ -762,6 +762,58 @@ then by budget category, with subtotals. The three classes are always listed;
 unclassified only when there is some, and the screen says how much. Payments
 with no budget line appear under no category. CSV via `SafeCsvWriter`.
 
+## Restricted funds _(2026-10-13)_
+
+A gift given for a stated purpose is restricted to it: spending it on anything
+else, or spending more than was given, breaches the donor's terms. A
+**fundraising campaign** marked restricted is such a fund (migration
+`3decd3ff6ce5`):
+
+- `fundraising_campaigns.is_restricted`, `restriction_purpose` — set on
+  `POST`/`PUT /grants/campaigns` (`fundraising.manage`). A restricted campaign
+  needs a purpose (400 without one). Unmarking is refused while any payment is
+  charged to it.
+- `fund_campaign_id` (`SET NULL`) on `purchase_requests`, `check_requests` and
+  `expense_line_items`, set by the requester on create / update
+  (`fundCampaignId`). It must be an **active restricted fund of the caller's
+  department** (`assert_chargeable`, via `_validate_finance_fks`; 400
+  otherwise).
+
+**Balance** (`fund_balances`, `app/services/restricted_funds.py`), computed
+from the records rather than kept as a running total, so it cannot drift:
+
+| Figure            | Counts                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| received          | `donations` with `payment_status = completed` — the campaign's raised total                                  |
+| spent             | purchase requests `paid` (actual, else estimate), checks `issued`, lines on `paid` reports                   |
+| committed         | purchase requests `approved`/`ordered`/`received` (estimate), checks `approved`, lines on `approved` reports |
+| awaiting approval | `submitted` / `pending_approval` — reported, not subtracted                                                  |
+| available         | received − spent − committed                                                                                 |
+
+**Overspending** — organization setting `finance.fund_overspend_mode`
+(`app/utils/finance_settings.py`): `warn` (default), `block` or `off`, written
+through `PATCH /organization/settings` (`settings.manage`) and reported by
+`GET /finance/settings` as `fundOverspendMode`. Under `block`,
+`FinanceService._finalize_approval` refuses an approval its funds cannot cover
+(`FundBalanceExceededError`, a `BudgetLimitExceededError`, so every approve
+path answers 409), and `mark_pr_paid` refuses an actual amount above the
+estimate that the fund cannot cover. Both take the campaign rows and every sum
+as locking reads (Pitfall #27). An expense report's lines are summed per fund.
+
+**Where it shows:**
+
+- Detail responses carry `fundName` (per line on an expense report) and, until
+  approval, `fundShortfall`: how far the payment would take its funds past what
+  they have left, excluding its own charge. `GET /finance/approvals/pending`
+  and `/approvals/unrouted` carry `fundShortfall` per row; the pending list
+  projects whether a row charges a fund in its one query, so payments charging
+  none cost nothing extra.
+- `GET /finance/funds` (`finance.request` and up) — the active restricted funds
+  with `available`, for the request forms' picker.
+- `GET /finance/reports/fund-balances?format` (`finance.view`) —
+  **Finance › Reports › Restricted funds**: every restricted fund, closed ones
+  included, with the five figures and totals. CSV via `SafeCsvWriter`.
+
 ## The deadline for claiming expenses _(2026-10-12)_
 
 Under an IRS accountable plan, a reimbursement is tax-free only if the expense

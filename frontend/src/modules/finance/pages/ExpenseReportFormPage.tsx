@@ -19,6 +19,8 @@ import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { ExpenseType, EXPENSE_TYPE_LABELS, SubstantiationMode, type FinanceSettings } from '../types';
 import { financeSettingsService } from '../services/api';
+import { useFundOptions } from '../hooks/useFundOptions';
+import { FundSelect } from '../components/FundSelect';
 import { useTimezone } from '@/hooks/useTimezone';
 import { calendarDaysBetween, getTodayLocalDate } from '@/utils/dateFormatting';
 
@@ -48,6 +50,7 @@ interface LineItemEntry {
   dateIncurred: string;
   expenseType: string;
   merchant: string;
+  fundCampaignId: string;
 }
 
 // =============================================================================
@@ -138,6 +141,7 @@ const ExpenseReportFormPage: React.FC = () => {
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
   const lateWarning = useLateLineWarning();
+  const { funds, mode: fundMode } = useFundOptions();
 
   const {
     register,
@@ -167,6 +171,18 @@ const ExpenseReportFormPage: React.FC = () => {
     return lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
   }, [lineItems]);
 
+  // A fund's warning weighs every line charged to it, since together they
+  // are what an approval would take out of it.
+  const chargedToFund = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const item of lineItems) {
+      if (item.fundCampaignId) {
+        totals[item.fundCampaignId] = (totals[item.fundCampaignId] ?? 0) + (item.amount || 0);
+      }
+    }
+    return totals;
+  }, [lineItems]);
+
   const addLineItem = () => {
     setLineItems((prev) => [
       ...prev,
@@ -176,6 +192,7 @@ const ExpenseReportFormPage: React.FC = () => {
         dateIncurred: '',
         expenseType: ExpenseType.GENERAL,
         merchant: '',
+        fundCampaignId: '',
       },
     ]);
   };
@@ -238,6 +255,7 @@ const ExpenseReportFormPage: React.FC = () => {
           };
           const merchant = item.merchant?.trim();
           if (merchant) li.merchant = merchant;
+          if (item.fundCampaignId) li.fundCampaignId = item.fundCampaignId;
           return li;
         }),
       };
@@ -441,6 +459,16 @@ const ExpenseReportFormPage: React.FC = () => {
                         placeholder="Store or vendor"
                         value={item.merchant}
                         onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <FundSelect
+                        id={`line-${String(index)}-fund`}
+                        value={item.fundCampaignId}
+                        onChange={(fundId) => updateLineItem(index, 'fundCampaignId', fundId)}
+                        amount={item.fundCampaignId ? (chargedToFund[item.fundCampaignId] ?? 0) : 0}
+                        funds={funds}
+                        mode={fundMode}
                       />
                     </div>
                   </div>

@@ -75,6 +75,8 @@ import type {
   LateSubstantiationReport,
   FunctionalClass,
   FunctionalExpensesReport,
+  FundBalancesReport,
+  FundOption,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -470,6 +472,15 @@ const stepDecisionBody = (notes?: string, overrideReason?: string, acknowledgeLa
   ...(acknowledgeLate ? { acknowledgeLateSubstantiation: true } : {}),
 });
 
+/** Restricted funds: fundraising campaigns marked restricted. */
+export const fundService = {
+  /** The active funds a payment may be charged to, with what each has left. */
+  async list(): Promise<FundOption[]> {
+    const response = await api.get<FundOption[]>('/finance/funds');
+    return asArray(response.data);
+  },
+};
+
 export const financeSettingsService = {
   /** The finance rules as the approval path reads them. */
   async get(): Promise<FinanceSettings> {
@@ -533,6 +544,15 @@ export const financeReportService = {
   async functionalExpensesCsv(start: string, end: string): Promise<DownloadedFile> {
     const query = new URLSearchParams({ start, end, format: 'csv' });
     return fetchFile(api, `/finance/reports/functional-expenses?${query.toString()}`, 'functional-expenses.csv');
+  },
+
+  async fundBalances(): Promise<FundBalancesReport> {
+    const response = await api.get<FundBalancesReport>('/finance/reports/fund-balances');
+    return response.data;
+  },
+
+  async fundBalancesCsv(): Promise<DownloadedFile> {
+    return fetchFile(api, '/finance/reports/fund-balances?format=csv', 'fund-balances.csv');
   },
 
   async lateSubstantiation(start: string, end: string): Promise<LateSubstantiationReport> {
