@@ -121,6 +121,10 @@ _PRIOR_STEP_SATISFIED = frozenset(
 )
 
 
+# The three payment documents, where a helper picks one by kind.
+_FinanceDocument = type[PurchaseRequest] | type[ExpenseReport] | type[CheckRequest]
+
+
 class BudgetLimitExceededError(Exception):
     """A proposed finance transaction would exceed its organization's budget.
 
@@ -690,7 +694,7 @@ class FinanceService:
             )
             .order_by(BudgetAmendment.created_at, BudgetAmendment.id)
         )
-        for budget_id, category, reason, amount in pending.all():
+        for budget_id, category, reason, amendment_amount in pending.all():
             items.append(
                 {
                     "kind": "budget_amendment",
@@ -698,7 +702,7 @@ class FinanceService:
                     "number": f"Amendment to {category or 'a budget line'}",
                     "description": reason,
                     "status": BudgetAmendmentStatus.PENDING.value,
-                    "amount": amount,
+                    "amount": amendment_amount,
                 }
             )
         return items
@@ -1596,7 +1600,7 @@ class FinanceService:
         budget = result.scalar_one_or_none()
         if not budget:
             raise FinanceEntityNotFoundError("Budget not found")
-        result = await self.db.execute(
+        amendment_result = await self.db.execute(
             select(BudgetAmendment)
             .where(
                 BudgetAmendment.id == amendment_id,
@@ -1605,7 +1609,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        target = result.scalar_one_or_none()
+        target = amendment_result.scalar_one_or_none()
         if not target:
             raise FinanceEntityNotFoundError("Amendment not found")
         # A reversal is final: money it took back is restored by recording a
@@ -3620,7 +3624,7 @@ class FinanceService:
         # The three models name the requester differently — `requested_by` on
         # purchases and checks, `submitted_by` on expense reports — so the
         # column is part of the mapping, not assumed.
-        mapping = {
+        mappings: dict[ApprovalEntityType, tuple[_FinanceDocument, Any]] = {
             ApprovalEntityType.PURCHASE_REQUEST: (
                 PurchaseRequest,
                 PurchaseRequest.requested_by,
@@ -3633,7 +3637,8 @@ class FinanceService:
                 CheckRequest,
                 CheckRequest.requested_by,
             ),
-        }.get(entity_type)
+        }
+        mapping = mappings.get(entity_type)
         if mapping is None:
             return None
 
@@ -3922,29 +3927,29 @@ class FinanceService:
                 # anyway subtracted from the budget's shared amount_encumbered
                 # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
+            report_result = await self.db.execute(
                 select(ExpenseReport).where(
                     ExpenseReport.id == entity_id,
                     ExpenseReport.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = ExpenseReportStatus.DENIED
-                entity.approved_by = denier_id
-                entity.denial_reason = reason
+            report = report_result.scalar_one_or_none()
+            if report:
+                report.status = ExpenseReportStatus.DENIED
+                report.approved_by = denier_id
+                report.denial_reason = reason
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
+            check_result = await self.db.execute(
                 select(CheckRequest).where(
                     CheckRequest.id == entity_id,
                     CheckRequest.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = CheckRequestStatus.DENIED
-                entity.approved_by = denier_id
-                entity.denial_reason = reason
+            check = check_result.scalar_one_or_none()
+            if check:
+                check.status = CheckRequestStatus.DENIED
+                check.approved_by = denier_id
+                check.denial_reason = reason
 
         await self.db.flush()
 
@@ -3971,34 +3976,34 @@ class FinanceService:
                     "submitted_at": entity.created_at,
                 }
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
+            report_result = await self.db.execute(
                 select(ExpenseReport).where(
                     ExpenseReport.id == entity_id,
                     ExpenseReport.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
+            report = report_result.scalar_one_or_none()
+            if report:
                 return {
-                    "title": entity.title,
-                    "amount": entity.total_amount,
+                    "title": report.title,
+                    "amount": report.total_amount,
                     "requester_name": "",
-                    "submitted_at": entity.created_at,
+                    "submitted_at": report.created_at,
                 }
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
+            check_result = await self.db.execute(
                 select(CheckRequest).where(
                     CheckRequest.id == entity_id,
                     CheckRequest.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
+            check = check_result.scalar_one_or_none()
+            if check:
                 return {
-                    "title": f"Check to {entity.payee_name}",
-                    "amount": entity.amount,
+                    "title": f"Check to {check.payee_name}",
+                    "amount": check.amount,
                     "requester_name": "",
-                    "submitted_at": entity.created_at,
+                    "submitted_at": check.created_at,
                 }
         return None
 
@@ -4025,20 +4030,17 @@ class FinanceService:
             # year on a US department's New Year's Eve.
             year = str((await resolve_org_today(self.db, org_id)).year)
 
-        table_map = {
-            "PR": PurchaseRequest,
-            "ER": ExpenseReport,
-            "CK": CheckRequest,
+        # Expense reports name the column report_number; the others,
+        # request_number.
+        table_map: dict[str, tuple[_FinanceDocument, Any]] = {
+            "PR": (PurchaseRequest, PurchaseRequest.request_number),
+            "ER": (ExpenseReport, ExpenseReport.report_number),
+            "CK": (CheckRequest, CheckRequest.request_number),
         }
-        model = table_map.get(prefix)
-        if not model:
+        entry = table_map.get(prefix)
+        if not entry:
             raise ValueError(f"Unknown prefix: {prefix}")
-
-        number_col = (
-            model.request_number
-            if hasattr(model, "request_number")
-            else model.report_number
-        )
+        model, number_col = entry
         # System-generated prefix, so the trailing % is a deliberate wildcard.
         # Renamed off `like_pattern` so it cannot shadow the shared helper.
         number_prefix = f"{prefix}-{year}-%"
@@ -5611,10 +5613,17 @@ class FinanceService:
             org_id, exported_by, date_start, date_end, file_format
         )
 
+        def line_accounts(budget_id: Optional[str]) -> tuple[str, str]:
+            # _resolve_export_accounts refused the export if any payment had
+            # no budget line, or one it could not map, so every id is a key.
+            if budget_id is None:
+                raise KeyError(budget_id)
+            return accounts[budget_id]
+
         def check_accounts(cr: CheckRequest) -> tuple[str, str]:
             if cr.qb_export_account and cr.qb_export_offset_account:
                 return cr.qb_export_account, cr.qb_export_offset_account
-            return accounts[cr.budget_id]
+            return line_accounts(cr.budget_id)
 
         def journal_lines(
             number: str,
@@ -5677,7 +5686,12 @@ class FinanceService:
                 # recorded on the export log like any other interruption.
                 org_tz = await resolve_scheduling_timezone(self.db, org_id)
 
-                def local_day(value: datetime) -> str:
+                def local_day(value: Optional[datetime]) -> str:
+                    # Every exported payment is selected by its date, so a
+                    # missing one is a row that lost it since; refuse rather
+                    # than date the entry wrongly.
+                    if value is None:
+                        raise ValueError("An exported payment has no date")
                     aware = (
                         value if value.tzinfo else value.replace(tzinfo=timezone.utc)
                     )
@@ -5691,7 +5705,7 @@ class FinanceService:
                 ):
                     lines = []
                     for pr in purchases:
-                        account, paid_from = accounts[pr.budget_id]
+                        account, paid_from = line_accounts(pr.budget_id)
                         lines += journal_lines(
                             pr.request_number,
                             local_day(pr.paid_at),
@@ -5748,7 +5762,7 @@ class FinanceService:
                         break
                     lines = []
                     for item, er in records:
-                        account, paid_from = accounts[item.budget_id]
+                        account, paid_from = line_accounts(item.budget_id)
                         lines += journal_lines(
                             er.report_number,
                             local_day(er.paid_at),
