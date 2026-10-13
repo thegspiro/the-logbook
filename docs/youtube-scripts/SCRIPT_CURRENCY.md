@@ -1,5 +1,29 @@
 # Script currency
 
+## Flagged by the 2026-10-12 → 10-13 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-12--13-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 15 and 16 (Practical Skills choice hides one
+system), 02 (setup now has an Encryption Key step), 03 and 04 (finance).
+
+| Script                            | Beat                            | Was                                | Now                                                                                                                              |
+| --------------------------------- | ------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **02** (first-time setup)         | Onboarding steps                | No key step                        | **Encryption Key** step: confirm the key is stored apart from the server before setup finishes; the wizard lapses after 24 hours |
+| **03 / 04** (leadership, finance) | Approvals (if shown)            | One approver completes any request | Above a department threshold a second, different approver is needed; late expense lines need acknowledgement                     |
+| **04**                            | Finance reports (new beat)      | None                               | Board reports: budget vs actual, amendment log, payments register; functional expenses                                           |
+| **05 / 09 / 15 / 16**             | Skills (training officer)       | Both skills systems always visible | One chosen under Training Administration > Settings & Data > Practical Skills; Skills Testing screens vanish under sign-offs     |
+| **05 / 09**                       | Programs                        | Prerequisites set only by import   | Prerequisite programs and concurrent enrollment on the wizard; per-requirement due dates                                         |
+| **05**                            | Compliance (if shown)           | Notification settings stored only  | Members get deadline reminders and non-compliance emails                                                                         |
+| **03**                            | Scheduling patterns             | Weekly pattern: one shift type     | Weekend Only preset; Separate day and night shifts per weekday                                                                   |
+| **03 / 07**                       | Inventory checklists (if shown) | Link lines one rig at a time       | **Catalog Links** page                                                                                                           |
+| **07**                            | Documents                       | Folder rights by module only       | Access editor by position and permission; Facility Documents folder                                                              |
+| **07**                            | Suggestion boxes                | One page                           | Questions step then details step                                                                                                 |
+| **06** (member guide)             | Dashboard                       | Fixed Department pulse             | **Customize** cards, order, titles, period                                                                                       |
+| **08** (quick tips)               | Keyboard                        | —                                  | Arrow keys on tab lists; Escape closes menus and returns focus; skip link                                                        |
+| **All**                           | Any dialog                      | Buttons scroll with the form       | Save / Cancel pinned in the footer on 19 more forms; applicant view is a centred dialog                                          |
+
 ## Flagged by the 2026-10-11 → 10-12 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).

@@ -32,6 +32,13 @@ Skills Testing lives within the Training module and integrates with Training Req
 
 ## Overview
 
+> **Skills Testing is one of two practical-skills systems** _(2026-10-12)_. A
+> department chooses **Skills Testing** or **Shift report sign-offs** under
+> **Training Administration > Settings & Data > Practical Skills**. If your
+> department chose sign-offs, the Skills Testing screens in this guide are
+> hidden and record nothing new (nothing is deleted). See
+> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system-2026-10-12).
+
 Many fire departments and EMS agencies conduct psychomotor skills evaluations as part of certification, recertification, and internal proficiency checks. These evaluations follow standardized skill sheets (such as those published by the NREMT) where an examiner observes a candidate performing a procedure and scores each step.
 
 The Skills Testing module digitizes this process, providing:
