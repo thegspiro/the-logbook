@@ -111,7 +111,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ✅     |
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ✅     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ✅     |
-| W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
+| W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ✅     |
 | W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
 | W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ✅     |
 
@@ -175,7 +175,7 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W58, W59** — on the top-navigation layout these screens had no menu
+- **W59** — on the top-navigation layout this screen had no menu
   entry until W55; check them from the navigation, not a typed URL.
 - **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
   "Read this version" summary are 20px tall (W54-6).
@@ -202,6 +202,44 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W58 — Suggestion boxes and suggestions — 2026-10-13
+
+Driven as:
+
+- `admin` creating, editing and (cancelling) deleting a box;
+- `member` submitting named and anonymous, then following both up (My
+  submissions, and the key);
+- `secretary` reviewing: disposition, response, internal note, reply, and
+  publish to the board;
+- `member2` voting and probing others' submissions;
+- `admin` as a box manager who reviews nothing;
+- board and submit form at 390×844.
+
+Database continued from W57; `main` merged in first.
+
+Held:
+
+- double-clicks acted once;
+- anonymity end to end: no name in review, in the key view or on the
+  board;
+- the internal note stays internal;
+- only reviewers read a box, and the manager cannot;
+- the vote toggles and survives a reload;
+- deleting a box with submissions requires its name and offers archive;
+- reviewer and submitter notices.
+
+Fixed: W58-1 (HIGH — every box made without intake questions, the screen's
+default, stored NULL. The review summary 500'd on it, so its reviewers never
+saw the Review tab).
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; flake8, black and isort are clean on the
+changed Python files; 142 suggestion backend tests pass (2 new). The local test
+database had to be brought up to a migration from today's merge first.
+
+Next: W59.
 
 ### W57 — Email templates: edit, preview, restore — 2026-10-13
 
