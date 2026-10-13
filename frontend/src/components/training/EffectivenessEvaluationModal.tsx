@@ -96,8 +96,28 @@ export const EffectivenessEvaluationModal: React.FC<EffectivenessEvaluationModal
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Submit Evaluation" size="md">
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Submit Evaluation"
+      size="md"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" disabled={saving || !member} className="btn-primary px-6 py-2">
+            {saving ? 'Saving...' : 'Record Evaluation'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
+          >
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <p className="text-theme-text-secondary text-sm">
           Member: <span className="text-theme-text-primary font-medium">{member?.memberName}</span>
         </p>
@@ -227,20 +247,7 @@ export const EffectivenessEvaluationModal: React.FC<EffectivenessEvaluationModal
             />
           </div>
         )}
-
-        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
-          >
-            Cancel
-          </button>
-          <button type="submit" disabled={saving || !member} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : 'Record Evaluation'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

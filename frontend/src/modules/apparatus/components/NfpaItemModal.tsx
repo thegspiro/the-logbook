@@ -123,8 +123,23 @@ export const NfpaItemModal: React.FC<NfpaItemModalProps> = ({ isOpen, onClose, o
       onClose={onClose}
       title={editItem ? 'Edit Compliance Item' : 'Add Compliance Item'}
       size="md"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
+            {saving ? 'Saving...' : editItem ? 'Save Changes' : 'Add Item'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
+            Cancel
+          </button>
+        </>
+      }
     >
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="form-label" htmlFor="nfpa-standard">
@@ -244,20 +259,7 @@ export const NfpaItemModal: React.FC<NfpaItemModalProps> = ({ isOpen, onClose, o
             onChange={(e) => up('notes', e.target.value)}
           />
         </div>
-
-        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="btn-primary px-6 py-2">
-            {saving ? 'Saving...' : editItem ? 'Save Changes' : 'Add Item'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

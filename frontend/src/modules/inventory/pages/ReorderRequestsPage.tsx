@@ -223,13 +223,21 @@ const ReorderFormModal: React.FC<{
       onClose={onClose}
       title={editRequest ? 'Edit Reorder Request' : 'New Reorder Request'}
       size="lg"
+      onSubmit={(e) => {
+        void submit(e);
+      }}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
+            {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+        </>
+      }
     >
-      <form
-        onSubmit={(e) => {
-          void submit(e);
-        }}
-        className="space-y-4 p-4"
-      >
+      <div className="space-y-4 p-4">
         {/* Quick-fill from low stock alerts */}
         {!editRequest && lowStockAlerts.length > 0 && (
           <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
@@ -448,16 +456,7 @@ const ReorderFormModal: React.FC<{
             />
           </div>
         </div>
-
-        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
-            {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
@@ -549,8 +548,27 @@ const WorkflowActionModal: React.FC<{
     }
   };
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={action ? ACTION_LABELS[action] : 'Update order'} size="md">
-      <form onSubmit={(e) => void submit(e)} className="space-y-4 p-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={action ? ACTION_LABELS[action] : 'Update order'}
+      size="md"
+      onSubmit={(e) => void submit(e)}
+      footer={
+        <>
+          <button
+            disabled={saving || (action === 'receive' && !receivingItemId)}
+            className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}
+          >
+            {saving ? 'Saving…' : action && ACTION_LABELS[action]}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Back
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4 p-4">
         {action === 'mark_ordered' && (
           <>
             <div>
@@ -673,18 +691,7 @@ const WorkflowActionModal: React.FC<{
             Cancel this request? This action is recorded in the audit log.
           </p>
         )}
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t pt-3">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
-            Back
-          </button>
-          <button
-            disabled={saving || (action === 'receive' && !receivingItemId)}
-            className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}
-          >
-            {saving ? 'Saving…' : action && ACTION_LABELS[action]}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
