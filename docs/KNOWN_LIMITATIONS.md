@@ -5455,6 +5455,29 @@ public API or add a feature:
 
 Until one is chosen, the fields are harmless to set and useless.
 
+## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
+
+Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
+
+- **What the screen offers:** My Account → Privacy → Privacy Choices shows
+  photo use, public roster listing and SMS texts as one checkbox each. An
+  unanswered choice is an unticked box marked "(not answered)".
+- **What goes wrong:** leaving the box unticked records nothing. A member who
+  means "no" must tick it, which records an agreement, and then untick it.
+  - The audit ledger, which is the consent record, then shows an agreement
+    the member never gave.
+  - A member who does not find that trick stays "Not answered". The
+    photo-use roster says those members "can still be asked", so the PIO
+    keeps asking someone who has refused.
+- **Why it was not changed in the review:** an explicit Yes / No choice is
+  the obvious fix, but the same control carries the SMS consent, a TCPA
+  record whose switch also sets the SMS notification preference through a
+  shared handler.
+- **Decisions needed:**
+  - whether each choice becomes an explicit Yes / No;
+  - whether SMS changes with the other two, or keeps its switch on the
+    Notifications section.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

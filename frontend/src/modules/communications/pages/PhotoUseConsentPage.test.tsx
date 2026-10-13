@@ -581,3 +581,30 @@ describe('PhotoUseConsentPage station filter', () => {
     expect(rowNames()).toEqual(SERVER_ORDER);
   });
 });
+
+describe('PhotoUseConsentPage on a phone (W59)', () => {
+  beforeEach(() => {
+    mockGetRoster.mockReset();
+    mockGetRoster.mockResolvedValue(roster);
+  });
+
+  it('sends members to the section that actually holds the choice', async () => {
+    renderWithRouter(<PhotoUseConsentPage />);
+    // "Security" is the two-factor section; the choice lives under Privacy.
+    expect(await screen.findByText(/My Account → Privacy → Privacy Choices/)).toBeInTheDocument();
+    expect(screen.queryByText(/Security → Privacy Choices/)).not.toBeInTheDocument();
+  });
+
+  it('gives every filter control a touch-sized target', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PhotoUseConsentPage />);
+    await screen.findByText('Dana Agreed');
+    await user.type(screen.getByLabelText('Search members'), 'a');
+
+    // 18px and 16px before W59 at 390px wide.
+    expect(screen.getByRole('button', { name: 'Clear the search' })).toHaveClass('touch-target-phone');
+    expect(screen.getByRole('button', { name: 'Clear all' })).toHaveClass('touch:min-h-11');
+    expect(screen.getByText('Include inactive members')).toHaveClass('touch:min-h-11');
+    expect(screen.getByRole('link', { name: 'Dana Agreed' })).toHaveClass('touch:leading-11');
+  });
+});

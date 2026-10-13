@@ -112,7 +112,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ✅     |
 | W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ✅     |
 | W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ✅     |
-| W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
+| W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ✅     |
 | W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ✅     |
 
 ## Tier 9 — Money
@@ -175,8 +175,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W59** — on the top-navigation layout this screen had no menu
-  entry until W55; check them from the navigation, not a typed URL.
+- **Any run that merges `main`** — two pull requests that each join the same
+  Alembic fork leave two heads, and nothing starts until a merge revision
+  joins them (W59-1). Run `alembic heads` after a merge that brings in
+  migrations.
 - **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
   "Read this version" summary are 20px tall (W54-6).
 - **W79** — the checklist builder's header and chip controls are 30–40px tall
@@ -202,6 +204,43 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W59 — Photo-use consent — 2026-10-13
+
+Driven as:
+
+- `member` agreeing, and `member2` declining, from My Account → Privacy;
+- `admin` reaching the roster from the Admin menu, then using its tiles,
+  chips, search, sort and the inactive toggle;
+- eight roles against the roster API, and three against the menu link;
+- 390×844 for the roster.
+
+Held:
+
+- both choices reach the roster, dated, and survive a reload;
+- the roster is read-only;
+- the API, the page and the menu agree on who may see it;
+- no console errors or failed requests.
+
+Fixed:
+
+- W59-1 (HIGH — `main` had two Alembic heads, so no install could upgrade
+  and the harness would not start; joined by an empty merge revision, pushed
+  on its own first).
+- W59-2 (MED — the roster told members to answer under Settings → Security;
+  it is My Account → Privacy).
+- W59-4 (LOW — chip clear buttons, "Clear all", the inactive toggle and name
+  links were 16–20px on a phone).
+
+Flagged: W59-3 (MED — a member cannot record "no" without first recording
+"yes", so the ledger shows an agreement that never happened and refusers stay
+"not answered").
+
+Gate: typecheck and lint are clean; 261 communications tests pass (2 new);
+`test_alembic_migrations.py` passes; flake8, black and isort are clean on the
+migration.
+
+Next: W61.
 
 ### W58 — Suggestion boxes and suggestions — 2026-10-13
 
