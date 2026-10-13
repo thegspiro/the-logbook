@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**304 tables · 5026 columns · 1012 foreign keys**
+**304 tables · 5034 columns · 1017 foreign keys**
 
 ---
 
@@ -258,16 +258,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 12 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 30 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 31 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 13 | Individual line item within an expense report |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 24 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
-| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 31 | Purchase request submitted by a member |
+| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 32 | Purchase request submitted by a member |
 
 ### Forms
 
@@ -288,7 +288,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`donations`](#donations) | `Donation` | 26 | Donation model mapping to the existing donations table. |
 | [`donors`](#donors) | `Donor` | 26 | Donor model mapping to the existing donors table. |
-| [`fundraising_campaigns`](#fundraising_campaigns) | `FundraisingCampaign` | 22 | Fundraising campaign model mapping to the existing fundraising_campaigns table. |
+| [`fundraising_campaigns`](#fundraising_campaigns) | `FundraisingCampaign` | 24 | Fundraising campaign model mapping to the existing fundraising_campaigns table. |
 | [`fundraising_events`](#fundraising_events) | `FundraisingEvent` | 22 | Fundraising event model mapping to the existing fundraising_events table. |
 | [`grant_applications`](#grant_applications) | `GrantApplication` | 33 | Individual grant application tracked through the pipeline. |
 | [`grant_budget_items`](#grant_budget_items) | `GrantBudgetItem` | 13 | Budget line item for a grant application. |
@@ -677,7 +677,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
-| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
+| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 28 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
 
@@ -3893,6 +3893,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
+| `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
 | `payee_address` | TEXT | yes |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
@@ -3919,6 +3920,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_check_requests_fund_campaign_id` (`fund_campaign_id`)
 - `ix_check_requests_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -3994,6 +3996,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expense_report_id` | VARCHAR(36) | no | FK, IDX |  | → `expense_reports.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
+| `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `description` | VARCHAR(500) | no |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
 | `date_incurred` | DATETIME | no |  |  |  |
@@ -4006,6 +4009,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_expense_line_items_fund_campaign_id` (`fund_campaign_id`)
 - `ix_expense_line_items_report` (`expense_report_id`)
 
 ### `expense_reports`
@@ -4177,6 +4181,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
+| `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `title` | VARCHAR(300) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
@@ -4205,6 +4210,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_purchase_requests_fund_campaign_id` (`fund_campaign_id`)
 - `ix_purchase_requests_org_fy` (`organization_id`, `fiscal_year_id`)
 - `ix_purchase_requests_org_status` (`organization_id`, `status`)
 
@@ -4452,6 +4458,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `minimum_donation` | NUMERIC(10, 2) | yes |  |  |  |
 | `suggested_amounts` | JSON | yes |  |  |  |
 | `custom_fields` | JSON | yes |  |  |  |
+| `is_restricted` | BOOL | no |  | `0` |  |
+| `restriction_purpose` | TEXT | yes |  |  |  |
 | `active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -10191,6 +10199,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `reviewer_notes` | TEXT | yes |  |  |  |
 | `training_record_id` | VARCHAR(36) | yes | FK |  | → `training_records.id` ON DELETE SET NULL |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `crew_batch_id` | VARCHAR(36) | yes | IDX |  |  |
+| `shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -10199,6 +10210,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_submission_date` (`completion_date`)
 - `idx_submission_org_status` (`organization_id`, `status`)
 - `idx_submission_user` (`submitted_by`, `status`)
+- `ix_training_submissions_crew_batch_id` (`crew_batch_id`)
 - `ix_training_submissions_status` (`status`)
 
 ### `training_waivers`
@@ -10594,7 +10606,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (374 references)
+### → `users` (375 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10959,6 +10971,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_sessions` | `created_by` | SET NULL | yes |
 | `training_sessions` | `finalized_by` | SET NULL | yes |
 | `training_sessions` | `instructor_id` | SET NULL | yes |
+| `training_submissions` | `recorded_by` | SET NULL | yes |
 | `training_submissions` | `reviewed_by` | SET NULL | yes |
 | `training_submissions` | `submitted_by` | CASCADE | no |
 | `training_waivers` | `granted_by` | SET NULL | yes |
@@ -11335,6 +11348,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `shifts` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+| `training_submissions` | `shift_id` | SET NULL | yes |
+
 ### → `positions` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -11349,21 +11378,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_box_watchers` | `position_id` | CASCADE | yes |
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
-
-### → `shifts` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_courses` (10 references)
 
@@ -11460,6 +11474,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `external_user_mappings` | `provider_id` | CASCADE | no |
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
+
+### → `fundraising_campaigns` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_requests` | `fund_campaign_id` | SET NULL | yes |
+| `donations` | `campaign_id` | SET NULL | yes |
+| `expense_line_items` | `fund_campaign_id` | SET NULL | yes |
+| `fundraising_events` | `campaign_id` | CASCADE | yes |
+| `grant_applications` | `linked_campaign_id` | SET NULL | yes |
+| `pledges` | `campaign_id` | SET NULL | yes |
+| `purchase_requests` | `fund_campaign_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -11623,15 +11649,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
 | `expense_reports` | `qb_export_log_id` | SET NULL | yes |
 | `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
-
-### → `fundraising_campaigns` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `donations` | `campaign_id` | SET NULL | yes |
-| `fundraising_events` | `campaign_id` | CASCADE | yes |
-| `grant_applications` | `linked_campaign_id` | SET NULL | yes |
-| `pledges` | `campaign_id` | SET NULL | yes |
 
 ### → `grant_applications` (4 references)
 
@@ -12221,7 +12238,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `encryption_key_custody` | `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
 | `event_request_activity` | `event_requests`, `users` |
-| `expense_line_items` | `budgets`, `documents`, `expense_reports` |
+| `expense_line_items` | `budgets`, `documents`, `expense_reports`, `fundraising_campaigns` |
 | `form_fields` | `forms` |
 | `grant_budget_items` | `grant_applications` |
 | `grant_compliance_tasks` | `grant_applications`, `users` |

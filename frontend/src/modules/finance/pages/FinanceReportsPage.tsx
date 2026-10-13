@@ -30,6 +30,7 @@ import {
   type FiscalYear,
   FUNCTIONAL_CLASS_LABELS,
   type FunctionalExpensesReport,
+  type FundBalancesReport,
   type LateSubstantiationReport,
   type PaymentsRegisterReport,
 } from '../types';
@@ -40,6 +41,7 @@ const REPORTS = {
   'amendment-log': 'Amendment log',
   'payments-register': 'Payments register',
   'functional-expenses': 'Functional expenses',
+  'fund-balances': 'Restricted funds',
   'late-substantiation': 'Outside the accountable plan',
 } as const;
 type ReportKey = keyof typeof REPORTS;
@@ -693,6 +695,88 @@ const FunctionalExpenses: React.FC = () => {
 };
 
 // =============================================================================
+// Restricted fund balances
+// =============================================================================
+
+const loadFundBalances = () => financeReportService.fundBalances();
+
+const FundBalances: React.FC = () => {
+  const { data, error, loading } = useReport<FundBalancesReport>(loadFundBalances);
+
+  return (
+    <ReportFrame
+      title="Restricted funds"
+      subtitle="Each restricted fund's balance today: what donors gave for it, and what has been spent or committed."
+      loading={loading}
+      error={error}
+      canDownload={Boolean(data)}
+      onDownload={() => financeReportService.fundBalancesCsv()}
+    >
+      {data &&
+        (data.funds.length === 0 ? (
+          <EmptyState
+            title="No restricted funds"
+            description="Mark a fundraising campaign as a restricted fund, with what its donors gave for, and payments can be charged to it."
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Fund</th>
+                    <th className={`${thClass} text-right`}>Received</th>
+                    <th className={`${thClass} text-right`}>Spent</th>
+                    <th className={`${thClass} text-right`}>Committed</th>
+                    <th className={`${thClass} text-right`}>Available</th>
+                    <th className={`${thClass} text-right`}>Awaiting approval</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-theme-surface-border divide-y">
+                  {data.funds.map((fund) => (
+                    <tr key={fund.campaignId}>
+                      <td className={tdClass}>
+                        <span className="font-medium">{fund.name}</span>
+                        {!fund.active && <span className="text-theme-text-secondary"> (closed)</span>}
+                        {fund.purpose && <p className="text-theme-text-secondary text-xs">{fund.purpose}</p>}
+                      </td>
+                      <td className={numClass}>{formatCurrency(fund.received)}</td>
+                      <td className={numClass}>{formatCurrency(fund.spent)}</td>
+                      <td className={numClass}>{formatCurrency(fund.committed)}</td>
+                      <td className={`${numClass} font-semibold`}>
+                        {formatCurrency(fund.available)}
+                        {Number(fund.available) < 0 && (
+                          <span className="block text-xs font-normal text-red-700 dark:text-red-400">Overspent</span>
+                        )}
+                      </td>
+                      <td className={numClass}>{formatCurrency(fund.awaitingApproval)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass}>Total</td>
+                    <td className={numClass}>{formatCurrency(data.received)}</td>
+                    <td className={numClass}>{formatCurrency(data.spent)}</td>
+                    <td className={numClass}>{formatCurrency(data.committed)}</td>
+                    <td className={numClass}>{formatCurrency(data.available)}</td>
+                    <td className={numClass}>{formatCurrency(data.awaitingApproval)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-theme-text-secondary mt-3 text-xs">
+              Received is completed donations to the campaign; pledges count once they are paid. Spent is payments made;
+              committed is approved and not yet paid. Available is received less both. Awaiting approval is shown, not
+              subtracted.
+            </p>
+          </>
+        ))}
+    </ReportFrame>
+  );
+};
+
+// =============================================================================
 // Outside the accountable plan
 // =============================================================================
 
@@ -830,7 +914,10 @@ const FinanceReportsPage: React.FC = () => {
   };
 
   const needsYear =
-    active !== 'payments-register' && active !== 'late-substantiation' && active !== 'functional-expenses';
+    active !== 'payments-register' &&
+    active !== 'late-substantiation' &&
+    active !== 'functional-expenses' &&
+    active !== 'fund-balances';
 
   return (
     <div className="space-y-4">
@@ -863,6 +950,8 @@ const FinanceReportsPage: React.FC = () => {
         <PaymentsRegister />
       ) : active === 'functional-expenses' ? (
         <FunctionalExpenses />
+      ) : active === 'fund-balances' ? (
+        <FundBalances />
       ) : active === 'late-substantiation' ? (
         <LateSubstantiation />
       ) : yearsError ? (

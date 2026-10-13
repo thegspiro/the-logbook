@@ -16,6 +16,101 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3169](https://github.com/thegspiro/the-logbook/pull/3169)**:
+branch `claude/security-review-facilities`, Feature 12 (Facilities), pass 8
+(watchdog pickup). 0 application-code fixes needed, 0 new security findings
+— FAC-13 (HIGH, standing flagged as of pass 7) re-verified **already fixed**,
+by an owner-direct commit that landed after pass 7 closed (`29627a64f`,
+2026-10-11, "open operational facility folders to any facilities access"),
+not reviewed by this rotation before now — the same "reviewed-after-the-fact"
+shape every pass-8 iteration this cycle has hit. FAC-30 (P2, owner-accepted
+"leave as is" 2026-10-05) re-confirmed unchanged; FAC-41/FAC-44 re-confirmed
+still fixed and untouched in this window. One cross-cutting fix applied
+before anything else: `alembic heads` showed two heads (`3decd3ff6ce5`
+restricted-funds, `5b2e9c7d4a18` folder-positions-by-id — two parallel
+branches merged independently off the same parent minutes apart, neither
+Facilities-specific), merged with `alembic merge` into a single head
+(`05ec84735fcf`) so `validate_migrations.py --strict` and every DB-backed
+test could run at all. Separately confirmed the repo-wide MCP OAuth-gating
+commit (`6c45efd38`, landed before pass 7) already covers
+`mcp/tools/facilities.py`'s three tools with `permissions=` matching their
+REST equivalents exactly — `test_mcp_member_gating.py` 12/12. Real delta
+since pass 7 was 27 non-merge commits across this feature's scope plus shared
+dependencies, each read via `git show`; aside from the two fixes above, every
+other commit was either another feature's own reviewed scope (shared
+`documents_service.py`/`audit.py` machinery) or a repo-wide mypy/accessibility
+sweep with no facilities-specific behavior change (verified by diffing each
+touched hunk, not assumed from the commit message). 98 routes re-enumerated
+by AST (unchanged from pass 6/7), each confirmed to carry a permission
+dependency. See the Log entry below and
+`docs/security-review/FAC-12-facilities.md`'s **Pass 8** section for detail.
+Row 12 stays ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 8, PR #3166, merged), preserved for history</summary>
+
+**PR [#3166](https://github.com/thegspiro/the-logbook/pull/3166)**: branch
+`claude/security-review-inventory`, Feature 11
+(Inventory), pass 8 (watchdog pickup). 0 code fixes needed, 0 new security
+findings — INV-8, INV-9, INV-16 and INV-17 (pass 7's full list of standing
+open/flagged items) all re-verified **already fixed**, by five owner-direct
+commits that landed between pass 7's merge and now (`21afaf34d`, `d84bcc8bb`,
+`da1b5a9fe`, `4e18814f0`, 2026-10-11/12), none reviewed by this rotation
+before now — the same "reviewed-after-the-fact" shape pass 8 of Documents &
+legal and Medical screening both hit this cycle. INV-22 re-confirmed still
+open and owner-accepted ("leave as is"), unchanged. Real delta since pass 7
+was substantial — 50 non-merge commits touching this feature's files (of 530
+landed repo-wide in the same window) — including an XC-1 sweep across three
+endpoints (`f60d0f252`), two new return-notice workflow features (W39-5),
+a temporary-assignment control, a low-stock lot-sum correctness fix, a new
+`AutoReorderService` wired from the equipment-check swap path (locked,
+org-scoped, server-derived ids throughout), and five mechanical mypy/typing
+commits — every one read in full and verified sound. Zero routes added or
+removed across all five of this feature's endpoint files (confirmed by
+diffing `@router.` decorator lines directly, not just an unchanged count).
+One doc-only fix: a 2026-10-11 feature commit reused the "INV-8" label for an
+unrelated storage-area-barcode feature, confusingly duplicating this
+rotation's own INV-8 finding id — corrected in `KNOWN_LIMITATIONS.md` with a
+disambiguating note. See the Log entry below and
+`docs/security-review/INV-11-inventory.md`'s **Pass 8** section for detail.
+Row 11 stays ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 8, PR #3160, merged), preserved for history</summary>
+
+**PR [#3160](https://github.com/thegspiro/the-logbook/pull/3160)**: branch
+`claude/security-review-documents-legal`, Feature 10
+(Documents & legal), pass 8 (watchdog pickup). 0 fixed, 0 new findings — DOC-8
+(MED, standing OPEN as of pass 7) re-verified **already fully fixed**, by two
+owner-direct commits that landed after pass 7 closed (`d7a7fadd`, 2026-10-11,
+paging; `46bc7ff7`, 2026-10-12, a per-member-per-type open-draft cap), neither
+reviewed by this rotation before now. Real delta since pass 7 was substantial,
+not zero — an owner-direct file-storage hardening project
+(`docs/FILE_STORAGE_HARDENING.md`, phases 1–5, 2026-10-08 → 2026-10-12) landed
+squarely in this feature's files: every document is now filed in a folder (no
+more org-wide "unfiled" documents), a folder-access editor lets a custom
+folder be restricted by position and/or permission, module folders (Training,
+Events, Apparatus, Member Separations, a new Finance root) opened to their own
+module's rights instead of document leadership, and every stored file is now
+malware-scanned and encrypted at rest. All of it read in full against current
+code (not sampled against the diff) and verified sound — no self-escalation
+path through the new access editor, no ancestor-bypass through nesting, no
+arbitrary-document read through the finance-receipt/apparatus-photo download
+paths, module-rights gating checked against the baseline permission set to
+confirm it narrows rather than widens exposure. 22 routes re-enumerated (up
+from 20 at pass 7, both additions verified sound). See the Log entry below and
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 8** section for
+detail. Row 10 stays ✅ (pending this PR's merge); next is Feature 11
+(Inventory).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 8, PR #3151, merged), preserved for history</summary>
+
 **PR [#3151](https://github.com/thegspiro/the-logbook/pull/3151)**: branch
 `claude/security-review-medical-screening`, Feature 09
 (Medical screening, PHI), pass 8 (watchdog pickup). 0 fixed, 1 new finding
@@ -29,6 +124,8 @@ sound; MS-14 re-confirmed unchanged. See the Log entry below and
 `docs/security-review/MS-09-medical-screening.md`'s **Pass 8** section for
 detail. Row 09 stays ✅ (pending this PR's merge); next is Feature 10
 (Documents & legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 9, PR #3149, before it merged), preserved for history</summary>
@@ -18828,6 +18925,298 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 12 (Facilities, pass 8) — 0 application fixes, 0 new security findings; FAC-13 (HIGH) re-verified already fixed by owner-direct work; 1 cross-cutting migration-head conflict diagnosed and fixed (watchdog pickup)
+
+**Closure.** PR #3166 (Feature 11, Inventory, pass 8) merged — visible at
+`origin/main`'s head (`9ce5dc78`) with no security-review activity since.
+Independently confirmed before starting (`gh api repos/.../pulls?state=open`
+filtered on `head.ref` containing `security-review`, 0 matches) that no
+security-review PR or branch was open — this iteration is itself a watchdog
+pickup, picking up Feature 12 (Facilities), the next `⬜`/next-pointer row per
+`PROGRESS.md`'s own Open-PR narrative pointer and per PR #3166's own body.
+
+**Migration-head conflict diagnosed and fixed before anything else.** This
+session's startup hook reported `alembic upgrade head` failing with "Multiple
+head revisions are present." `alembic heads` showed two:
+`3decd3ff6ce5` (`restricted_funds`, a Finance feature) and `5b2e9c7d4a18`
+(`folder_positions_by_id`, a Documents feature), both declaring
+`down_revision = "4d8807bdd737"` — two branches, each adding one migration
+off the same parent, merged to `main` independently within the same window
+and neither aware of the other. Confirmed this was a genuine repo-wide
+collision rather than a stale local artifact (both files are present and
+committed on `origin/main`, not just in a local working tree) — the ordinary
+multi-branch-migration race, not a defect in either feature's own commit, and
+not Facilities-specific, but blocking `validate_migrations.py --strict` and
+every DB-backed test regardless of which feature's rotation turn it falls on.
+Fixed with `alembic merge` → a new no-op merge revision `05ec84735fcf`
+(`20261013_1548_..._merge_restricted_funds_and_folder_.py`); verified
+`alembic heads` → single head, `validate_migrations.py --strict` → 588
+revisions, single head, VALIDATION PASSED. Not mirrored into
+`KNOWN_LIMITATIONS.md` — it was fixed in this commit, not left open, and
+describes a one-time migration-tree state rather than an ongoing operator
+decision.
+
+**Prior art loaded first.** Read `docs/security-review/FAC-12-facilities.md`
+in full (all seven prior passes), `docs/module-audit/facilities.md` and its
+appended product-delivery review, and the matching `docs/KNOWN_LIMITATIONS.md`
+entries for FAC-13 and FAC-30, before touching any application code.
+
+**Real delta since pass 7 (`46e650f27`, PR #2968's merge, 2026-10-06) was 27
+non-merge commits** touching this feature's declared scope plus its shared
+dependencies (`documents_service.py`, `core/permissions.py`,
+`utils/org_scoping.py`, `core/audit.py`), each read via `git show`, not
+sampled. One owner-direct commit (`29627a64f`, 2026-10-11) fixed the
+standing FAC-13 (HIGH) finding — re-derived against current code rather than
+taken on its own "FIXED" annotation: `FACILITY_ACCESS_PERMISSIONS`
+(`facilities.view`/`.view_sensitive`/`.edit`/`.manage`) now gates the
+operational facility-folder tree (Photos, Maintenance Records, Inspection
+Reports) that previously required the narrower sensitive-only set, closing
+the exact over-restriction the finding described; the sensitive families
+(Blueprints & Permits, Insurance & Leases, Capital Projects, a new Facility
+Documents sub-folder) correctly keep the sensitive gate, and a migration
+refiles pre-existing files so loosening the parent folder does not newly
+expose anything sitting in it. FAC-30 (P2, owner-accepted "leave as is")
+and FAC-41/FAC-44 (fixed, pass 6/7) both re-confirmed unchanged. Separately
+confirmed — per this task's own prompt — that the repo-wide MCP OAuth-gating
+commit mentioned in the Inventory/Users pass-8 entries (`6c45efd38`, landed
+2026-10-05, before pass 7) already covers `mcp/tools/facilities.py`: all
+three tools carry `permissions=` matching their REST equivalents exactly,
+and `test_mcp_member_gating.py` passes 12/12. Every other commit in the
+27-commit delta was either another feature's own reviewed scope touching a
+shared dependency file, or a repo-wide mypy/accessibility sweep with no
+facilities-specific behavior change — confirmed by diffing each touched hunk
+directly rather than assumed from the commit message (the mypy sweeps bind
+`result.scalar_one_or_none()` returns to annotated locals and add
+`ensure_found(...)` reloads; zero `organization_id` filter changed anywhere).
+98 routes re-enumerated by AST (not grep alone) — unchanged from pass 6/7 —
+every one confirmed to carry a `require_permission`/`require_all_permissions`
+dependency, including the one route (`list_facility_documents`) whose call
+is a starred module-level constant rather than inline literals.
+
+**One environment note, no code/test change.** The local `pytest` run
+initially failed 22 tests + 1 error with `Unknown column
+'under_correction_since'` — this session's shell had `DB_NAME=intranet_db`
+pre-exported, shadowing `tests/conftest.py`'s own
+`os.environ.setdefault("DB_NAME", "intranet_test")`, so tests ran against a
+stale pre-existing database one migration behind
+(`create_all(checkfirst=True)` never adds a missing column to a table that
+already exists — exactly what `conftest.py`'s own docstring warns about).
+Running with `DB_NAME` unset let a fresh `intranet_test` database build from
+current models; the full suite then passed.
+
+**Completion gate, full and green:** `flake8`/`black --check`/`isort
+--check-only` (`app/ tests/ alembic/`) clean; `validate_migrations.py
+--strict` — single head `05ec84735fcf`, 588 revisions (post-merge-fix);
+`check_route_permissions.py --strict` — 268 routes, 0 errors/warnings;
+`pytest tests/ -k "facilit"` — 229 passed, 1 pre-existing skip (`pywebpush`);
+the tenancy/security guard tests (`test_endpoint_auth_coverage`,
+`test_like_escaping`, `test_capacity_locking`, `test_csv_writer_sweep`,
+`test_org_scoping_ratchet`, `test_mcp_member_gating`) — 99 passed; the
+migration guard tests (`test_alembic_migrations`,
+`test_migration_create_all_tables`) — 80 passed; frontend
+`typecheck`/`lint` clean; `npx vitest run src/modules/facilities` — 124
+passed (18 files).
+
+No application-code fix was needed beyond the cross-cutting migration merge
+— the one standing HIGH finding was already fixed by owner-direct work, and
+every item of new real delta was reviewed fresh and found sound. Row 12
+stays ✅ (pending this PR's merge). Next: Feature 13 (Apparatus & NFC).
+
+### 2026-10-13 — Feature 11 (Inventory, pass 8) — 0 code fixes, 0 new security findings; four standing findings re-verified already fixed by owner-direct work; one doc correction (watchdog pickup)
+
+**Closure.** PR #3160 (Feature 10, Documents & legal, pass 8) merged
+2026-10-13T11:31:55Z — docs-only (findings doc, `PROGRESS.md`,
+`KNOWN_LIMITATIONS.md`; no application code), so per this file's own rule it
+is not an independently recordable event. Open PR row cleared and rotation
+row 10 stays ✅ with no log edit of its own. Independently re-confirmed before
+starting (`search_pull_requests`, `is:open head:claude/security-review-`, 0
+results; `git fetch --prune` + `git branch -r`, 0 matches) that no
+security-review PR or branch was open — this iteration is itself a watchdog
+pickup, picking up Feature 11 (Inventory), the next `⬜`/next-pointer row per
+PR #3160's own body.
+
+**Prior art loaded first.** Read `docs/security-review/INV-11-inventory.md`
+in full (all six prior passes, 2314 lines) before touching any code. As of
+pass 7 (2026-10-06), the full standing list was INV-8/INV-9 (`.view`-gated
+cross-member reads, owner decision), INV-16 (unlocked reorder-edit PATCH,
+narrowed by an external MSUP-25 fix), INV-17 ("Complete work" never closing
+an existing open maintenance record) and INV-22 (unbounded fulfillment-
+options/requestable-categories reads, already owner-accepted as "leave as
+is" per `KNOWN_LIMITATIONS.md`, dated 2026-10-05).
+
+**Real delta since pass 7 (`b892afba`, PR #2966's merge, 2026-10-06T03:49:27Z)
+was substantial, not zero.** The local clone was shallow again — unshallowed
+before counting anything, per pass 7's own documented warning about this
+exact failure mode. 50 non-merge commits touched this feature's declared
+scope files (of 530 landed repo-wide in the same window); all 50 read via
+`git show`, not sampled. Four owner-direct commits
+(`21afaf34d`/`d84bcc8bb`/`da1b5a9fe`/`4e18814f0`, 2026-10-11–12) fixed every
+one of pass 7's standing findings — none reviewed by this rotation before
+now, the same "reviewed-after-the-fact" shape pass 8 of Documents & legal and
+Medical screening both hit this cycle. Each re-derived against current code
+rather than taken on its `KNOWN_LIMITATIONS.md` entry: INV-8/INV-9's
+`_require_self_or_quartermaster` guard (self-or-`inventory.manage`, matching
+the existing clearance-route gate) has no org-membership check of its own,
+but both downstream service reads filter `organization_id` in the same
+`WHERE` as the id, so a foreign-org id answers empty/default rather than
+leaking — no residual XC-3 gap. INV-16's fix is a locked, org-scoped read
+(`.with_for_update()` + `populate_existing=True`) plus a floor check refusing
+`quantity_requested` below `quantity_received`, closing the race without the
+`expected_version` contract change the original finding assumed was
+necessary. INV-17's two fixes (Complete work, Record inspection) share one
+helper so both grade a closed record identically, and the PATCH path now
+also carries the create path's failed-inspection quarantine it previously
+lacked. INV-22 unchanged — the two functions' only diff in this window is a
+mypy-driven `UUID → UUID | str` signature widening, confirmed by diffing
+exactly those signatures.
+
+**New real delta, all reviewed fresh and found sound:** an XC-1 sweep across
+three endpoints (`f60d0f252` — `category_id`/`user_id`/`role_id`, each now
+`assert_in_org`-checked before the write, 18 new integration tests); two
+W39-5 return-notice workflow features (a direct return now marks the
+member's open notice "received", lock-ordered notice-then-item to match the
+existing review path and avoid a Pitfall #22/#27 deadlock; a follow-on lets
+that notice be inspected afterward, sharing one follow-up helper with the
+receipt path so the two cannot disagree); a Permanent/Temporary assignment
+control; a low-stock lot-sum correctness fix (W47-6); a pool-issuance
+write-off exclusion (W41-6); a new `app/services/auto_reorder_service.py`
+wired from the equipment-check swap path (item lookup locked and org-scoped,
+the "already open" check itself a locked read per Pitfall #27, every id
+server-derived, email HTML-escaped and routed through the existing
+low-stock-audience resolver per Pitfall #18); an MCP OAuth-gating groundwork
+commit whose inventory slice declares permission tuples matching the
+equivalent endpoints exactly; and five mechanical mypy/typing commits whose
+only behavioral deltas are strict robustness improvements (`if error or obj
+is None` guards; a `ChargeStatus(...)` enum conversion; `Mapped`/
+`mapped_column` typing on `label_printer.py` with every nullability/`ondelete`
+argument preserved, confirmed by diffing them explicitly). Zero routes added
+or removed across all five of this feature's endpoint files (`inventory.py`,
+`labels.py`, `inventory_kiosk.py`, `inventory_last_seen.py`,
+`inventory_nfc.py`) since pass 7 — confirmed by diffing `@router.` decorator
+lines directly, not inferred from an unchanged AST route count (149/12/4/2/24
+respectively; the latter three counted explicitly for the first time this
+pass).
+
+**One doc correction, no code change.** The 2026-10-11 storage-area-barcode
+scan-lookup feature (`bbaff4888`) labeled itself "(INV-8)" in its own commit
+message and `KNOWN_LIMITATIONS.md` entry — the same calendar day the actual
+INV-8/INV-9 security-review finding was fixed under the same label. The two
+are unrelated (one a security-review finding tracked in this file, the other
+a feature docket that reused the short label); nothing was miscategorized in
+code or tests, but a future reader searching this file for "INV-8" would find
+two unrelated entries. Corrected with a disambiguating parenthetical rather
+than a renumbering.
+
+**Completion gate, full and green:** `flake8`/`black --check`/`isort
+--check-only` (repo-wide `app/ tests/ alembic/`) clean; `validate_migrations.py
+--strict` — single head, 585 revisions (one migration landed touching this
+feature, `9e8b0b6f3fe8` grant-quartermaster-locations-create, an exemplary
+Pitfall #23 addition-gated-on-evidence migration, reviewed and sound);
+`check_route_permissions.py --strict` — 268 routes, 0 errors/warnings;
+scoped backend suite (`-k "inventory or label or nfc or kiosk"`) — 1657
+passed, 1 pre-existing skip; the 10 new/touched guard-test files re-run
+individually (118 tests, all pass); frontend `typecheck`/`lint` clean;
+`npx vitest run src/modules/inventory` — 1652 passed (113 files).
+
+No application-code fix was needed — the four standing findings were already
+fixed by owner-direct work, and every item of new real delta was reviewed
+fresh and found sound. The one change is the `KNOWN_LIMITATIONS.md`
+disambiguation above plus this pass's own findings-doc section. Row 11 stays
+✅ (pending this PR's merge). Next: Feature 12 (Facilities).
+
+### 2026-10-13 — Feature 10 (Documents & legal, pass 8) — 0 fixed, 0 new findings; one standing finding re-verified already fixed by owner-direct work (watchdog pickup)
+
+**Closure.** PR #3151 (Feature 09, Medical screening, pass 8) merged
+2026-10-13T09:12:47Z (`pull_request_read`: `merged: true`; local `HEAD` was
+stale at the previous feature's merge commit, so `git fetch` + `git checkout
+main` + fast-forward to `origin/main` was needed before starting) —
+docs-only (findings doc, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`; no application
+code), so per this file's own rule it is not an independently recordable
+event. Open PR row cleared and rotation row 09 stays ✅ with no log edit of
+its own. Independently re-confirmed before starting (`search_pull_requests`,
+`is:open head:claude/security-review-`, 0 results; `git branch -r`, 0 matches)
+that no security-review PR or branch was open — this iteration is itself a
+watchdog pickup, picking up Feature 10 (Documents & legal), the next `⬜` row
+per `PROGRESS.md`'s own Open-PR narrative pointer and per PR #3151's own body.
+
+**Prior art loaded first.** Read `docs/security-review/DOC-10-documents-legal.md`
+in full (all seven prior passes) before touching any code. As of pass 7
+(2026-10-06), the only standing item was DOC-8 (MED, `list_revisions`/
+`get_legal_documents` unbounded), left as an owner decision; DOC-9 and DOC-30
+had both been fixed by an external PR (#2954) just before pass 7 began, and
+re-traced independently that pass.
+
+**Real delta since pass 7 (`fe6876cd`, PR #2962's merge, 2026-10-06T02:35Z) was
+substantial — not a zero-delta pass, unlike passes 6 and 7.** An owner-direct
+file-storage hardening project (`docs/FILE_STORAGE_HARDENING.md`, phases 1–5,
+2026-10-08 → 2026-10-12, none of it from this rotation) landed in this
+feature's files: every document is now filed in a folder (closing the
+org-wide "unfiled document" gap), a folder-access editor (decision 27) lets a
+custom folder be restricted by position and/or permission with a shut-out
+guard, module folders (Training, Events, Apparatus, Member Separations, a new
+Finance root) opened to their own module's rights instead of blanket document
+leadership, and every stored file is now malware-scanned and encrypted at
+rest. Confirmed via direct content-diff against the pass-7 baseline for every
+declared file — `git log` on this range re-surfaced the same orphan/squash-merge
+artifact prior passes documented (a commit attributed to an unrelated
+feature's pass appeared in the path-filtered log for `api/public/legal.py`
+but changed zero lines of it on a direct `git diff`) — so content-diffing, not
+log output, is what this pass's delta claim rests on.
+
+Also found and verified, outside the hardening project: **DOC-8 was fully
+resolved** by two owner-direct commits after pass 7 closed — `d7a7fadd`
+(2026-10-11, pagination) and `46bc7ff7` (2026-10-12, a 10-open-drafts-per-member-
+per-type cap under a locked `users` row and a locking count, pitfall #27's
+both halves) — neither reviewed by the rotation before now. Re-verified
+directly against current code (not credited from the commit message or
+`KNOWN_LIMITATIONS.md`'s own already-correct "Resolved" note): a real SQL
+`LIMIT`/`OFFSET` query, a locking read ahead of the cap check, and the new
+`GET /legal-documents/{document_type}/revisions` route actually enforcing it.
+
+**22 routes re-enumerated via an AST walk** (up from 20 at pass 7): `GET
+/folders/role-options` (position slugs/names for the folder-access editor,
+`documents.manage`-gated, org-scoped, nothing sensitive) and `GET
+/{document_type}/revisions` (DOC-8's paging route). Every route still carries
+an explicit auth dependency; no OR-gate includes a baseline/rank-default
+permission.
+
+**No new findings.** Checked specifically for the three risks this iteration's
+own brief called out: (1) no self-escalation path through the new
+folder-access editor — `required_permissions` is validated against the real
+permission catalog, `allowed_roles` against the org's own `Position` rows, a
+personal folder's access is frozen, and every access-changing write re-checks
+the acting user would not be shut out before committing; (2) nesting a
+wide-open child folder under a restrictive parent (e.g. Member Separations)
+does not leak, because `can_access_folder`'s ancestry walk is an AND all the
+way to the root; (3) the two `folder_rights=False` finance-receipt download
+routes, and the two apparatus-photo download routes, all resolve their
+document id off an already org/record-scoped row (`pr.receipt_document_id`,
+`item.receipt_document_id`, `photo.document_id`) — never client-supplied —
+so the folder-ACL bypass those routes deliberately use cannot be reached for
+an arbitrary document. Module-rights gating was checked against
+`DEFAULT_POSITIONS["member"]`: `training.view`/`events.view` are baseline (no
+widening — those folders were already org-wide), `apparatus.*`/
+`finance.*`/`members.manage` are not (correctly narrower than before). The new
+shared storage/encryption infrastructure (`file_storage_service.py`,
+`file_encryption.py`) was read to the extent this feature's own invariants
+depend on it — path confinement correctly appends `os.sep` before the prefix
+check, so `/uploads/org-1` cannot match `/uploads/org-12` — but a full review
+of that cross-feature infrastructure belongs to Feature 00/33, not here.
+
+**Completion gate:** flake8/black/isort clean on `app/`, `tests/`, `alembic/`;
+`validate_migrations.py --strict` clean (585 revisions, single head); scoped
+backend pytest (`-k "document or legal or station_document or
+facility_folder"`) 505 passed, 1 pre-existing skip (first run failed on a
+local DB one migration behind — `documents.under_correction_since` — fixed
+with `alembic upgrade head`, the same pre-existing-stale-DB shape pass 7 hit);
+full no-database backend unit suite 14,600 passed, 1 pre-existing skip, 0
+failed; `check_route_permissions.py --strict` clean (268 routes, 0
+errors/warnings); frontend `npm run typecheck` and `npm run lint` both clean;
+scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`,
+`legalDocumentsStore`, `FolderManageDialog`) 61 passed across 4 files. Full
+write-up: `docs/security-review/DOC-10-documents-legal.md` → **Pass 8**. Row
+10 stays ✅ (pending this PR's merge). Next: Feature 11 (Inventory).
 
 ### 2026-10-13 — Feature 09 (Medical screening, PHI, pass 8) — 0 fixed, 1 new finding flagged; a dating error in this feature's own findings doc found and corrected (watchdog pickup)
 

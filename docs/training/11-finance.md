@@ -1522,7 +1522,7 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 ## Board Reports
 
 Navigate to **Finance > Reports** (or the **Reports** quick link on the
-dashboard). You need `finance.view`. Five reports sit on tabs across the top:
+dashboard). You need `finance.view`. Six reports sit on tabs across the top:
 
 - **Budget vs actual** -- every budget line for a fiscal year: its original
   amount, confirmed amendments, the amended budget, what has been spent, what
@@ -1535,6 +1535,9 @@ dashboard). You need `finance.view`. Five reports sit on tabs across the top:
 - **Functional expenses** -- a period's payments by what they were for:
   program services, management & general, and fundraising, each by budget
   category. See [Classifying Expenses](#classifying-expenses).
+- **Restricted funds** -- each restricted fund's balance today: what donors
+  gave, what has been spent or committed, and what is left. See
+  [Restricted Funds](#restricted-funds).
 - **Outside the accountable plan** -- every expense reimbursed in a period that
   was claimed after the department's deadline, with who confirmed it. See
   [The Deadline for Claiming Expenses](#the-deadline-for-claiming-expenses).
@@ -1615,6 +1618,52 @@ class, then by budget category, with subtotals and a CSV. It counts the same
 payments as the payments register, so the totals agree. Anything without a
 class is listed as **Unclassified**, with a reminder above the table, rather
 than guessed at.
+
+### Restricted Funds
+
+When donors give for a stated purpose -- new turnout gear, replacing Engine 2,
+a community CPR program -- that money is **restricted**: it can be spent only
+on that purpose, and no more than was given. In The Logbook a restricted fund
+is a **fundraising campaign** marked as restricted.
+
+**Making a campaign a restricted fund** (`fundraising.manage`): on
+**Fundraising > Campaigns**, tick **Restricted fund** when creating the
+campaign and say what the donors are giving for, or use **Mark as restricted
+fund** on an existing campaign's card. **Make unrestricted** undoes it, but
+only while nothing is charged to the fund.
+
+**Charging a payment to a fund:** the **Restricted fund** picker on the
+purchase request, check request and expense report forms (on each expense
+line) lists the department's open restricted funds with what each has left.
+The requester picks it -- they know what the money is for. If the request is
+more than the fund has left, the form says so before it is saved.
+
+**What a fund has:**
+
+| Figure                | What it counts                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Received**          | Completed donations to the campaign. Pending, failed, refunded and cancelled ones, and unpaid pledges, are not counted |
+| **Spent**             | Purchases paid, checks issued (a voided check stops counting), expense lines on paid reports                           |
+| **Committed**         | Approved and not yet paid                                                                                              |
+| **Available**         | Received less spent and committed                                                                                      |
+| **Awaiting approval** | Submitted and not yet decided -- shown, but not subtracted                                                             |
+
+**When a payment is more than its fund has left**, the department's rule on
+**Finance > Settings > Approval Chains** decides (a settings administrator
+changes it):
+
+- **Warn** (the default) -- the requester sees it on the form, and approvers
+  see **Over fund by $…** on the Approvals screen and a warning on the
+  request's page. It can still be approved.
+- **Block** -- it cannot be approved, and a purchase cannot be paid for more
+  than its estimate, until the fund has enough. The approver gets a message
+  saying by how much it is over.
+- **Off** -- funds are not checked.
+
+> **Hint:** A fund's balance is worked out from the donations and payments
+> themselves, every time, so it always agrees with them. If a donation is
+> refunded, the fund's balance drops straight away -- and a payment already
+> approved against it may now show the fund as **Overspent** on the report.
 
 ---
 

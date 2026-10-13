@@ -53,6 +53,7 @@ from app.models.finance import (
 from app.models.user import User
 from app.services.expense_substantiation import incurred_day
 from app.services.functional_expenses import FunctionalClassifier
+from app.services.restricted_funds import fund_balances
 from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -814,6 +815,46 @@ class FinanceReportService:
             "classes": classes,
             "total": sum((c["total"] for c in classes), ZERO),
         }
+
+    # ------------------------------------------------------------------
+    # Restricted fund balances
+    # ------------------------------------------------------------------
+
+    async def fund_balances(self, org_id: str) -> dict:
+        """Every restricted fund's balance today, by name, and their totals.
+
+        A fund is a fundraising campaign marked restricted; a deleted one is
+        still listed, since what was charged to it still has to be accounted
+        for (app/services/restricted_funds.py)."""
+        balances = sorted(
+            (await fund_balances(self.db, org_id)).values(),
+            key=lambda f: (f.name.lower(), f.campaign_id),
+        )
+        funds = [
+            {
+                "campaign_id": f.campaign_id,
+                "name": f.name,
+                "purpose": f.purpose,
+                "active": f.active,
+                "received": f.received,
+                "spent": f.spent,
+                "committed": f.committed,
+                "awaiting_approval": f.awaiting_approval,
+                "available": f.available,
+            }
+            for f in balances
+        ]
+        totals = {
+            key: sum((getattr(f, key) for f in balances), ZERO)
+            for key in (
+                "received",
+                "spent",
+                "committed",
+                "awaiting_approval",
+                "available",
+            )
+        }
+        return {"funds": funds, **totals}
 
     async def _line_labels(self, org_id: str) -> dict[str, str]:
         station = aliased(Facility)

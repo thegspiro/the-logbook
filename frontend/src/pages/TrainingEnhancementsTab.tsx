@@ -129,13 +129,31 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Recertification Pathway" size="md">
-      <form
-        onSubmit={(e) => {
-          void handleSubmit(e);
-        }}
-        className="space-y-4"
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Recertification Pathway"
+      size="md"
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Creating...' : 'Create Pathway'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <div>
           <label className={labelClass}>Name *</label>
           <input
@@ -206,20 +224,7 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Creating...' : 'Create Pathway'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
@@ -272,13 +277,31 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Competency Matrix" size="md">
-      <form
-        onSubmit={(e) => {
-          void handleSubmit(e);
-        }}
-        className="space-y-4"
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Competency Matrix"
+      size="md"
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Creating...' : 'Create Matrix'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <div>
           <label className={labelClass}>Name *</label>
           <input
@@ -310,20 +333,7 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
           />
         </div>
         <p className="text-theme-text-muted text-xs">Skill requirements can be added after creating the matrix.</p>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Creating...' : 'Create Matrix'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
@@ -394,13 +404,31 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Instructor Qualification" size="md">
-      <form
-        onSubmit={(e) => {
-          void handleSubmit(e);
-        }}
-        className="space-y-4"
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Instructor Qualification"
+      size="md"
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Adding...' : 'Add Qualification'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <div>
           <label className={labelClass}>User ID *</label>
           <input
@@ -476,20 +504,7 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Adding...' : 'Add Qualification'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
@@ -568,13 +583,31 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Multi-Agency Exercise" size="lg">
-      <form
-        onSubmit={(e) => {
-          void handleSubmit(e);
-        }}
-        className="space-y-4"
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Multi-Agency Exercise"
+      size="lg"
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Creating...' : 'Create Exercise'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         <div>
           <label className={labelClass}>Exercise Name *</label>
           <input
@@ -685,20 +718,7 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             NIMS/ICS Compliant
           </label>
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-secondary rounded-lg px-4 py-2 text-sm">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-primary flex items-center gap-1 rounded-lg px-4 py-2 text-sm"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Creating...' : 'Create Exercise'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

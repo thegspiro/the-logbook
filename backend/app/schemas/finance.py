@@ -986,6 +986,9 @@ class PendingApprovalResponse(UTCResponseBase):
     # Expense reports: lines submitted after the substantiation deadline. An
     # approval must acknowledge them (acknowledgeLateSubstantiation).
     late_line_count: int = 0
+    # How far it would take its restricted funds past what they have left;
+    # null when it fits or charges no fund.
+    fund_shortfall: Optional[Decimal] = None
 
 
 class ApproverCoverageResponse(UTCResponseBase):
@@ -1026,6 +1029,9 @@ class UnroutedApprovalResponse(UTCResponseBase):
     # whether the report waits for an approver to acknowledge them.
     late_line_count: int = 0
     awaiting_late_acknowledgement: bool = False
+    # How far it would take its restricted funds past what they have left;
+    # null when it fits or charges no fund.
+    fund_shortfall: Optional[Decimal] = None
 
 
 # ============================================
@@ -1171,6 +1177,47 @@ class FunctionalExpensesReportResponse(BaseModel):
     total: Decimal
 
 
+class FundBalanceResponse(BaseModel):
+    """One restricted fund: what it has received, what is charged to it, and
+    what it has left (app/services/restricted_funds.py)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    campaign_id: str
+    name: str
+    purpose: Optional[str] = None
+    # False once the campaign is deleted; its charges still count.
+    active: bool = True
+    received: Decimal
+    spent: Decimal
+    committed: Decimal
+    # Submitted and not yet decided; not subtracted from available.
+    awaiting_approval: Decimal
+    available: Decimal
+
+
+class FundBalancesReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    funds: list[FundBalanceResponse]
+    received: Decimal
+    spent: Decimal
+    committed: Decimal
+    awaiting_approval: Decimal
+    available: Decimal
+
+
+class FundOptionResponse(BaseModel):
+    """A restricted fund a payment may be charged to, for the request forms."""
+
+    model_config = _RESPONSE_CONFIG
+
+    campaign_id: str
+    name: str
+    purpose: Optional[str] = None
+    available: Decimal
+
+
 class LateSubstantiationRowResponse(BaseModel):
     """One expense line reimbursed outside the accountable plan."""
 
@@ -1212,6 +1259,9 @@ class FinanceSettingsResponse(BaseModel):
     # "block", and the days allowed between incurring and submitting.
     substantiation_mode: str = "off"
     substantiation_days: int = 60
+    # A payment charged to a restricted fund for more than it has left:
+    # "off", "warn" or "block".
+    fund_overspend_mode: str = "warn"
 
 
 class ManualDenyRequest(BaseModel):
@@ -1244,6 +1294,9 @@ class PurchaseRequestCreate(BaseModel):
 
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # A restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py.
+    fund_campaign_id: Optional[str] = None
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
@@ -1262,6 +1315,9 @@ class PurchaseRequestUpdate(BaseModel):
     _check_priority = field_validator("priority")(_enum_check(_PRIORITIES, "priority"))
 
     budget_id: Optional[str] = None
+    # A restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py.
+    fund_campaign_id: Optional[str] = None
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
@@ -1293,6 +1349,14 @@ class PurchaseRequestResponse(UTCResponseBase):
     # category's is applied (detail responses; app/services/functional_expenses.py).
     functional_class: Optional[str] = None
     effective_functional_class: Optional[str] = None
+    # The restricted fund this payment spends, and its name (detail
+    # responses; app/services/restricted_funds.py).
+    fund_campaign_id: Optional[str] = None
+    fund_name: Optional[str] = None
+    # How far this payment would take its restricted funds past what they
+    # have left, while it is not yet approved; null when it fits or charges
+    # no fund (detail responses).
+    fund_shortfall: Optional[Decimal] = None
     requested_by: str
     title: str
     description: Optional[str] = None
@@ -1356,6 +1420,9 @@ class ExpenseLineItemCreate(BaseModel):
     )
 
     budget_id: Optional[str] = None
+    # A restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py.
+    fund_campaign_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
     amount: Decimal = Field(..., gt=0, decimal_places=2)
     date_incurred: datetime
@@ -1395,6 +1462,10 @@ class ExpenseLineItemResponse(UTCResponseBase):
     # category's is applied (detail responses; app/services/functional_expenses.py).
     functional_class: Optional[str] = None
     effective_functional_class: Optional[str] = None
+    # The restricted fund this payment spends, and its name (detail
+    # responses; app/services/restricted_funds.py).
+    fund_campaign_id: Optional[str] = None
+    fund_name: Optional[str] = None
     created_at: datetime
 
     _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
@@ -1468,6 +1539,10 @@ class ExpenseReportResponse(UTCResponseBase):
     late_acknowledged_by: Optional[str] = None
     late_acknowledged_at: Optional[datetime] = None
     awaiting_late_acknowledgement: bool = False
+    # How far this payment would take its restricted funds past what they
+    # have left, while it is not yet approved; null when it fits or charges
+    # no fund (detail responses).
+    fund_shortfall: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
@@ -1493,6 +1568,9 @@ class CheckRequestCreate(BaseModel):
 
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # A restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py.
+    fund_campaign_id: Optional[str] = None
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
     amount: Decimal = Field(..., gt=0, decimal_places=2)
@@ -1507,6 +1585,9 @@ class CheckRequestUpdate(BaseModel):
     model_config = _REQUEST_CONFIG
 
     budget_id: Optional[str] = None
+    # A restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py.
+    fund_campaign_id: Optional[str] = None
     payee_name: Optional[str] = Field(None, min_length=1, max_length=300)
     payee_address: Optional[str] = None
     amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
@@ -1532,6 +1613,14 @@ class CheckRequestResponse(UTCResponseBase):
     # category's is applied (detail responses; app/services/functional_expenses.py).
     functional_class: Optional[str] = None
     effective_functional_class: Optional[str] = None
+    # The restricted fund this payment spends, and its name (detail
+    # responses; app/services/restricted_funds.py).
+    fund_campaign_id: Optional[str] = None
+    fund_name: Optional[str] = None
+    # How far this payment would take its restricted funds past what they
+    # have left, while it is not yet approved; null when it fits or charges
+    # no fund (detail responses).
+    fund_shortfall: Optional[Decimal] = None
     payee_name: str
     payee_address: Optional[str] = None
     amount: Decimal

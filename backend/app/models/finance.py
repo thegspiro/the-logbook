@@ -930,6 +930,14 @@ class PurchaseRequest(Base):
         SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
+    # The restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py. Null: none.
+    fund_campaign_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -1213,6 +1221,14 @@ class ExpenseLineItem(Base):
         SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
+    # The restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py. Null: none.
+    fund_campaign_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     date_incurred: Mapped[datetime] = mapped_column(
@@ -1286,6 +1302,14 @@ class CheckRequest(Base):
     functional_class: Mapped[Optional[FunctionalClass]] = mapped_column(
         SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
+    )
+    # The restricted fund (a fundraising campaign marked restricted) this
+    # payment spends; app/services/restricted_funds.py. Null: none.
+    fund_campaign_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("fundraising_campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
     payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

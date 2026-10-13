@@ -77,8 +77,9 @@ class DocumentFolderResponse(UTCResponseBase):
 
 
 class FolderRoleOption(BaseModel):
-    """A position a folder can be restricted to (``allowed_roles`` holds slugs)."""
+    """A position a folder can be restricted to (``allowed_roles`` holds ids)."""
 
+    id: str
     slug: str
     name: str
 

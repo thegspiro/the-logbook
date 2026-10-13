@@ -5,6 +5,92 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 12 – 13, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-12--13-2026).
+Predecessor: [October 11 – 12](#recent-changes-october-11--12-2026).
+
+**The headline:** a **finance pass** (two-person approval, the IRS accountable-plan
+deadline, expense classes and board reports), a **keyboard and screen-reader pass**
+over every dialog, menu and tab list, and a department can now choose **one
+practical-skills system**.
+
+### Read this first
+
+**If you run the server:** fourteen new migrations (check `alembic heads` reports
+one head). Two move data: facility folders are refiled and restamped, and the
+practical-skills setting is backfilled. A fresh installation could not finish setup
+because the Encryption Key step returned a 403; that is fixed. A setup wizard left
+open more than 24 hours must be refreshed. The universal installer now sets
+`ALLOWED_ORIGINS` from `--public-url`, so a new install no longer refuses requests
+made under the department's own hostname.
+
+**If you administer a department:**
+
+- **Pick a practical-skills system** under Training Administration > Settings &
+  Data > Practical Skills: **Skills Testing** or **Shift report sign-offs**. The
+  other is hidden, nothing is deleted.
+- **Facility folders** (Photos, Maintenance Records, Inspection Reports) now open to
+  anyone with facilities access; blueprints, insurance and capital projects stay
+  restricted. Check who holds `facilities.view`.
+- **Compliance emails are live.** Members start receiving deadline reminders and
+  non-compliance notices if your saved settings ask for them.
+- Editing someone else's profile or contact details needs `members.manage`.
+- Public-portal access logs are kept 90 days.
+
+### What changed, by area
+
+**Finance.** Requests at or above a threshold you set need **two different
+approvers**. Expenses can enforce the **accountable-plan deadline** (off, warn or
+block; 60 days is the IRS safe harbor). Budget categories and purchases carry a
+**functional class**. **Finance > Reports** has budget vs actual, an amendment log,
+a payments register, functional expenses and a late-claims report, each on screen,
+as CSV and printable. You can no longer record a payment against your own dues.
+
+**Training.** Programs can name **prerequisite programs** and allow concurrent
+enrollment. Requirements can have their **own due date**, member-facing wording
+and a completion message; reminders and one overdue notice follow the program's
+ramp. Editors that silently kept an old value after you cleared a field (programs,
+phases, milestones, skill templates, records, requirement years and dates, shift
+report drafts) now save the clear. Program-progress reports are renamed to say they
+are not requirement compliance.
+
+**Scheduling.** A **Weekend Only** pattern preset, and weekly patterns can choose
+day, night or both for each weekday. Deleting a shift template or pattern asks first.
+
+**Inventory.** A **Catalog Links** page links unlinked checklist lines across every
+template at once. A return notice received another way can be **inspected**. Record
+inspection closes the scheduled inspection. Reorder requests link to an item. The
+items list shows serial numbers and says **No location**.
+
+**Events, documents, grants.** Attendance requests show how often they were resent.
+Published minutes show **Being corrected** while reopened. Folder access can be set
+by position and permission. Suggestion boxes ask their questions first. Grant
+applications follow a lifecycle and warn on overspend; anonymous donors are hidden
+from view-only holders.
+
+**Dashboard and reports.** **Customize** the Department pulse (yours, or the
+department default). A **Saved reports** screen and scheduled email delivery.
+
+**Accessibility.** Every dialog has a role, a name and sensible focus; tab lists
+take arrow keys; menus close on Escape and give focus back; pagination keeps
+focus; 19 more dialogs keep Save and Cancel in view.
+
+**Wiki.** Installation has one page per platform. The Training, Inventory,
+Scheduling, Events and Elections module pages are split into a user page and a
+Developer page and no longer carry dated notes. A new
+[Shift History Import](Scheduling-History-Import) guide has a sample file and ten
+screenshots.
+
+### Screenshots and videos
+
+Training screenshots to create or replace are listed in
+[`SCREENSHOT_CURRENCY.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/SCREENSHOT_CURRENCY.md#queued-by-the-october-12--13-documentation-pass);
+video beats to re-record in
+[`SCRIPT_CURRENCY.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/youtube-scripts/SCRIPT_CURRENCY.md).
+
 ## Recent changes: October 11 – 12, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

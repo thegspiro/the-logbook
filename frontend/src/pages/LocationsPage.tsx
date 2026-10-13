@@ -605,8 +605,11 @@ function LocationSetupWizard({
                   Add a custom room
                 </label>
                 <div>
-                  <label className={labelCls}>Room Name *</label>
+                  <label htmlFor="wizard-room-room-name" className={labelCls}>
+                    Room Name *
+                  </label>
                   <input
+                    id="wizard-room-room-name"
                     type="text"
                     value={roomForm.name}
                     onChange={(e) => setRoomForm((p) => ({ ...p, name: e.target.value }))}
@@ -622,8 +625,11 @@ function LocationSetupWizard({
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
-                    <label className={labelCls}>Room #</label>
+                    <label htmlFor="wizard-room-room-number" className={labelCls}>
+                      Room #
+                    </label>
                     <input
+                      id="wizard-room-room-number"
                       type="text"
                       value={roomForm.room_number}
                       onChange={(e) => setRoomForm((p) => ({ ...p, room_number: e.target.value }))}
@@ -632,8 +638,11 @@ function LocationSetupWizard({
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Floor</label>
+                    <label htmlFor="wizard-room-floor" className={labelCls}>
+                      Floor
+                    </label>
                     <input
+                      id="wizard-room-floor"
                       type="text"
                       value={roomForm.floor}
                       onChange={(e) => setRoomForm((p) => ({ ...p, floor: e.target.value }))}
@@ -642,8 +651,11 @@ function LocationSetupWizard({
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Capacity</label>
+                    <label htmlFor="wizard-room-capacity" className={labelCls}>
+                      Capacity
+                    </label>
                     <input
+                      id="wizard-room-capacity"
                       type="number"
                       value={roomForm.capacity}
                       onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
@@ -825,6 +837,7 @@ function RoomCard({
 }) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const qrPanelId = `room-qr-${room.id}`;
 
   const kioskUrl = room.display_code ? `${window.location.origin}/display/${room.display_code}` : null;
 
@@ -887,8 +900,11 @@ function RoomCard({
                 when it only appeared on hover with the edit/delete actions */}
             {kioskUrl && (
               <button
+                type="button"
                 onClick={() => setShowQR((prev) => !prev)}
                 aria-label="Toggle QR code"
+                aria-expanded={showQR}
+                aria-controls={showQR ? qrPanelId : undefined}
                 className="text-theme-text-muted touch-target-phone rounded-sm p-1 transition-colors hover:text-blue-500"
                 title="Show QR code"
               >
@@ -921,10 +937,13 @@ function RoomCard({
         </div>
       )}
       {showQR && kioskUrl && (
-        <div className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3">
+        <div
+          id={qrPanelId}
+          className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3"
+        >
           {' '}
           {/* bg-white intentional for QR code readability */}
-          <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin />
+          <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin title={`Kiosk QR code for ${room.name}`} />
           <p className="text-theme-text-muted text-center font-mono text-[10px] break-all">{kioskUrl}</p>
         </div>
       )}
@@ -1382,7 +1401,7 @@ export default function LocationsPage() {
       ) : stations.length === 0 && !rooms.has('__other__') ? (
         <div className="py-20 text-center">
           <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h3>
+          <h2 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h2>
           {canCreate && (
             <>
               <p className="text-theme-text-muted mb-4">
@@ -1409,7 +1428,7 @@ export default function LocationsPage() {
                     <Building2 className="h-5 w-5 text-red-500" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-theme-text-primary text-lg font-semibold">{station.name}</h3>
+                    <h2 className="text-theme-text-primary text-lg font-semibold">{station.name}</h2>
                     {address && (
                       <p className="text-theme-text-secondary mt-0.5 flex items-center gap-1.5 text-sm">
                         <MapPin className="h-3.5 w-3.5 shrink-0" /> {address}
@@ -1441,10 +1460,13 @@ export default function LocationsPage() {
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => toggleStation(station.name)}
+                      aria-expanded={isExpanded}
+                      aria-controls={isExpanded ? `station-rooms-${station.id}` : undefined}
                       className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
                     >
-                      <DoorOpen className="h-4 w-4" />
+                      <DoorOpen className="h-4 w-4" aria-hidden="true" />
                       <span>
                         {stationRooms.length} room{stationRooms.length !== 1 ? 's' : ''}
                       </span>
@@ -1455,9 +1477,12 @@ export default function LocationsPage() {
 
                 {/* Rooms Panel */}
                 {isExpanded && (
-                  <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-2 border-t p-4">
+                  <div
+                    id={`station-rooms-${station.id}`}
+                    className="border-theme-surface-border bg-theme-surface-hover/30 space-y-2 border-t p-4"
+                  >
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-theme-text-primary text-sm font-semibold">Rooms</h4>
+                      <h3 className="text-theme-text-primary text-sm font-semibold">Rooms</h3>
                       {canCreate && (
                         <button
                           onClick={() => openAddRoom(station.name)}
@@ -1498,7 +1523,7 @@ export default function LocationsPage() {
           {/* Orphan rooms (rooms without a station) */}
           {rooms.has('__other__') && (
             <div className="card p-5">
-              <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
+              <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h2>
               <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                 {(rooms.get('__other__') || []).map((room) => (
                   <RoomCard
@@ -1675,8 +1700,11 @@ export default function LocationsPage() {
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <label className={labelCls}>Room Name *</label>
+                <label htmlFor="room-form-room-name" className={labelCls}>
+                  Room Name *
+                </label>
                 <input
+                  id="room-form-room-name"
                   type="text"
                   value={roomForm.name}
                   onChange={(e) => setRoomForm((p) => ({ ...p, name: e.target.value }))}
@@ -1686,8 +1714,11 @@ export default function LocationsPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Room Number</label>
+                  <label htmlFor="room-form-room-number" className={labelCls}>
+                    Room Number
+                  </label>
                   <input
+                    id="room-form-room-number"
                     type="text"
                     value={roomForm.room_number}
                     onChange={(e) => setRoomForm((p) => ({ ...p, room_number: e.target.value }))}
@@ -1696,8 +1727,11 @@ export default function LocationsPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Floor</label>
+                  <label htmlFor="room-form-floor" className={labelCls}>
+                    Floor
+                  </label>
                   <input
+                    id="room-form-floor"
                     type="text"
                     value={roomForm.floor}
                     onChange={(e) => setRoomForm((p) => ({ ...p, floor: e.target.value }))}
@@ -1707,8 +1741,11 @@ export default function LocationsPage() {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Capacity</label>
+                <label htmlFor="room-form-capacity" className={labelCls}>
+                  Capacity
+                </label>
                 <input
+                  id="room-form-capacity"
                   type="number"
                   value={roomForm.capacity}
                   onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
@@ -1717,8 +1754,11 @@ export default function LocationsPage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Description</label>
+                <label htmlFor="room-form-description" className={labelCls}>
+                  Description
+                </label>
                 <textarea
+                  id="room-form-description"
                   value={roomForm.description}
                   onChange={(e) => setRoomForm((p) => ({ ...p, description: e.target.value }))}
                   rows={2}

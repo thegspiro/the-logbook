@@ -94,7 +94,7 @@ describe('CatalogLinkReportPage', () => {
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockGetLinkReport.mockResolvedValue(report());
-    mockLinkAcrossTemplates.mockResolvedValue({ linked: 2, skipped: 0 });
+    mockLinkAcrossTemplates.mockResolvedValue({ linked: 2, skipped: 0, skippedPositions: [] });
   });
 
   it('pre-selects exact matches only', async () => {
@@ -186,16 +186,71 @@ describe('CatalogLinkReportPage', () => {
     expect(screen.getAllByText('Draft')).toHaveLength(1);
   });
 
-  it('says when positions had been linked by someone else meanwhile', async () => {
-    const user = userEvent.setup();
-    mockLinkAcrossTemplates.mockResolvedValue({ linked: 1, skipped: 1 });
-    renderWithRouter(<CatalogLinkReportPage />);
+  describe('positions linked by someone else meanwhile', () => {
+    const skippedPosition = {
+      templateItemId: 'ti-2',
+      itemName: 'Gauze Pads 4x4',
+      templateId: 't-Medic 2',
+      templateName: 'Medic 2',
+      compartmentName: 'Jump Bag',
+      currentInventoryItemId: 'inv-gauze-sterile',
+      currentInventoryItemName: 'Gauze Pads 4x4 Sterile',
+      chosenInventoryItemId: 'inv-gauze',
+      chosenInventoryItemName: 'Gauze Pads 4x4',
+    };
 
-    await user.click(await screen.findByRole('button', { name: 'Link 2 positions' }));
+    beforeEach(() => {
+      mockLinkAcrossTemplates.mockReset();
+      mockLinkAcrossTemplates.mockResolvedValue({ linked: 1, skipped: 1, skippedPositions: [skippedPosition] });
+    });
 
-    await waitFor(() => {
+    it('lists each one with both items and a way into its template', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Link 2 positions' }));
+
+      const panel = await screen.findByRole('region', { name: '1 position was left as it was' });
+      expect(panel).toHaveTextContent('Gauze Pads 4x4 · Medic 2 · Jump Bag');
+      expect(panel).toHaveTextContent('Linked to Gauze Pads 4x4 Sterile; you chose Gauze Pads 4x4.');
+      expect(screen.getByRole('link', { name: 'Open Medic 2' })).toHaveAttribute(
+        'href',
+        '/inventory/admin/checklists/templates/t-Medic 2'
+      );
       expect(mockToastSuccess).toHaveBeenCalledWith(
-        'Linked 1 position; 1 had been linked by someone else and were left as they were'
+        'Linked 1 position; 1 had been linked by someone else — see the list above'
+      );
+    });
+
+    it('stays after the report reloads, until dismissed', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Link 2 positions' }));
+      await screen.findByRole('region', { name: '1 position was left as it was' });
+      await waitFor(() => {
+        expect(mockGetLinkReport).toHaveBeenCalledTimes(2);
+      });
+      expect(screen.getByRole('region', { name: '1 position was left as it was' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Dismiss skipped positions' }));
+
+      expect(screen.queryByRole('region', { name: /left as/ })).not.toBeInTheDocument();
+    });
+
+    it('says so when the current link is to an item outside the inventory', async () => {
+      const user = userEvent.setup();
+      mockLinkAcrossTemplates.mockResolvedValue({
+        linked: 1,
+        skipped: 1,
+        skippedPositions: [{ ...skippedPosition, currentInventoryItemName: null }],
+      });
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Link 2 positions' }));
+
+      expect(await screen.findByRole('region', { name: '1 position was left as it was' })).toHaveTextContent(
+        'Linked to an item outside your inventory; you chose Gauze Pads 4x4.'
       );
     });
   });

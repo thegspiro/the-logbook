@@ -19,12 +19,14 @@ import {
   Info,
   Edit2,
   Paperclip,
+  Users,
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
 import type {
@@ -315,17 +317,21 @@ const ReviewPanel: React.FC<{
           <CheckCircle2 className="h-4 w-4" />
           <span>Approve</span>
         </button>
-        <button
-          onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
-          className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-            action === SubmissionStatus.REVISION_REQUESTED
-              ? 'bg-orange-700 text-white'
-              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-          }`}
-        >
-          <RotateCcw className="h-4 w-4" />
-          <span>Request Revision</span>
-        </button>
+        {/* The member cannot edit an entry their officer recorded, so a crew
+            entry is corrected here on approval or rejected — never sent back. */}
+        {!submission.crew_batch_id && (
+          <button
+            onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
+            className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              action === SubmissionStatus.REVISION_REQUESTED
+                ? 'bg-orange-700 text-white'
+                : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
+            }`}
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>Request Revision</span>
+          </button>
+        )}
         <button
           onClick={() => setAction('reject')}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -450,14 +456,17 @@ const EditRecordPanel: React.FC<{
         updates.credit_hours = fields.hours_completed;
       }
       if (fields.completion_date !== submission.completion_date) updates.completion_date = fields.completion_date;
+      // A changed field that is now blank goes out as null: an omitted key
+      // leaves the record's stored value alone, so emptying a certification
+      // number or expiry kept the old one behind a success toast.
       if (fields.certification_number !== (submission.certification_number || ''))
-        updates.certification_number = fields.certification_number || undefined;
+        updates.certification_number = blankToNull(fields.certification_number);
       if (fields.issuing_agency !== (submission.issuing_agency || ''))
-        updates.issuing_agency = fields.issuing_agency || undefined;
+        updates.issuing_agency = blankToNull(fields.issuing_agency);
       if (fields.expiration_date !== (submission.expiration_date || ''))
-        updates.expiration_date = fields.expiration_date || undefined;
-      if (fields.instructor !== (submission.instructor || '')) updates.instructor = fields.instructor || undefined;
-      if (fields.location !== (submission.location || '')) updates.location = fields.location || undefined;
+        updates.expiration_date = blankToNull(fields.expiration_date);
+      if (fields.instructor !== (submission.instructor || '')) updates.instructor = blankToNull(fields.instructor);
+      if (fields.location !== (submission.location || '')) updates.location = blankToNull(fields.location);
 
       if (Object.keys(updates).length === 0) {
         setEditing(false);
@@ -631,6 +640,12 @@ const SubmissionCard: React.FC<{
                 <User className="h-3 w-3" />
                 <span>{submission.submitter_name || submission.submitted_by}</span>
               </span>
+              {submission.recorded_by && (
+                <span className="flex items-center space-x-1">
+                  <Users className="h-3 w-3" />
+                  <span>Recorded by {submission.recorder_name || 'an officer'}</span>
+                </span>
+              )}
               <span className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
                 <span>{formatCalendarDate(submission.completion_date)}</span>
@@ -1047,6 +1062,86 @@ const ConfigEditor: React.FC<{
 
 type ActiveView = 'pending' | 'all' | 'config';
 
+// ==================== Crew Entries ====================
+
+/** One crew recording in the queue, or a lone self-reported submission. */
+type QueueItem =
+  { kind: 'single'; submission: TrainingSubmission } | { kind: 'crew'; batchId: string; members: TrainingSubmission[] };
+
+/** Group crew entries under their batch, keeping the queue's order. */
+const groupQueue = (submissions: TrainingSubmission[]): QueueItem[] => {
+  const items: QueueItem[] = [];
+  const crews = new Map<string, TrainingSubmission[]>();
+  for (const submission of submissions) {
+    const batchId = submission.crew_batch_id;
+    if (!batchId) {
+      items.push({ kind: 'single', submission });
+      continue;
+    }
+    const members = crews.get(batchId);
+    if (members) {
+      members.push(submission);
+    } else {
+      const created = [submission];
+      crews.set(batchId, created);
+      items.push({ kind: 'crew', batchId, members: created });
+    }
+  }
+  return items;
+};
+
+const CrewGroup: React.FC<{
+  batchId: string;
+  members: TrainingSubmission[];
+  onReview: (id: string, review: SubmissionReviewRequest) => Promise<void>;
+  onApproveAll: (batchId: string) => Promise<void>;
+  onRecordUpdated: () => void;
+}> = ({ batchId, members, onReview, onApproveAll, onRecordUpdated }) => {
+  const [approving, setApproving] = useState(false);
+  const first = members[0];
+  const pending = members.filter((m) => m.status === SubmissionStatus.PENDING_REVIEW).length;
+  if (!first) return null;
+
+  return (
+    <section className="card p-4" aria-label={`Crew training: ${first.course_name}`}>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
+            <Users className="h-4 w-4" />
+            <span>Crew training: {first.course_name}</span>
+          </h3>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Recorded by {first.recorder_name || 'an officer'} · {formatCalendarDate(first.completion_date)} ·{' '}
+            {formatHours(first.hours_completed)}h · {members.length} {members.length === 1 ? 'member' : 'members'}
+          </p>
+        </div>
+        {pending > 0 && (
+          <button
+            type="button"
+            className="btn-success touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm"
+            disabled={approving}
+            onClick={() => {
+              setApproving(true);
+              void onApproveAll(batchId).finally(() => setApproving(false));
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            <span>{approving ? 'Approving…' : `Approve all ${pending}`}</span>
+          </button>
+        )}
+      </div>
+      <p className="text-theme-text-muted mb-3 text-xs">
+        Approve the whole crew as recorded, or open a member to adjust their hours or reject their entry first.
+      </p>
+      <div className="space-y-2">
+        {members.map((member) => (
+          <SubmissionCard key={member.id} submission={member} onReview={onReview} onRecordUpdated={onRecordUpdated} />
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const ReviewSubmissionsPage: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('pending');
   const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
@@ -1096,6 +1191,19 @@ const ReviewSubmissionsPage: React.FC = () => {
     } catch (err: unknown) {
       const msg = getErrorDetail(err) || 'Failed to review submission';
       toast.error(msg);
+    }
+  };
+
+  const handleApproveCrew = async (batchId: string) => {
+    try {
+      const result = await trainingSubmissionService.approveCrewBatch(batchId);
+      toast.success(`Approved ${result.approved} crew ${result.approved === 1 ? 'entry' : 'entries'}`);
+      for (const skipped of result.skipped) {
+        toast(`${skipped.member_name || 'One entry'}: ${skipped.reason}`);
+      }
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorDetail(err) || 'Failed to approve crew training');
     }
   };
 
@@ -1226,16 +1334,29 @@ const ReviewSubmissionsPage: React.FC = () => {
                 </p>
               </div>
             )}
-            {submissions.map((sub) => (
-              <SubmissionCard
-                key={sub.id}
-                submission={sub}
-                onReview={handleReview}
-                onRecordUpdated={() => {
-                  void loadData();
-                }}
-              />
-            ))}
+            {groupQueue(submissions).map((item) =>
+              item.kind === 'crew' ? (
+                <CrewGroup
+                  key={item.batchId}
+                  batchId={item.batchId}
+                  members={item.members}
+                  onReview={handleReview}
+                  onApproveAll={handleApproveCrew}
+                  onRecordUpdated={() => {
+                    void loadData();
+                  }}
+                />
+              ) : (
+                <SubmissionCard
+                  key={item.submission.id}
+                  submission={item.submission}
+                  onReview={handleReview}
+                  onRecordUpdated={() => {
+                    void loadData();
+                  }}
+                />
+              )
+            )}
           </div>
         )}
       </div>

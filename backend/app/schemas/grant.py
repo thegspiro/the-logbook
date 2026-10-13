@@ -10,7 +10,14 @@ from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic.alias_generators import to_camel
 
 from app.models.grant import allowed_next_statuses as _allowed_next_statuses
@@ -665,10 +672,20 @@ class CampaignBase(BaseModel):
     allow_anonymous: bool = True
     minimum_donation: Optional[Decimal] = Field(None, ge=0)
     suggested_amounts: Optional[List[Decimal]] = None
+    # A restricted fund: donors gave for this purpose, and finance payments
+    # can be charged to it (app/services/restricted_funds.py).
+    is_restricted: bool = False
+    restriction_purpose: Optional[str] = Field(None, max_length=2000)
 
 
 class CampaignCreate(CampaignBase):
     """Schema for creating a new fundraising campaign"""
+
+    @model_validator(mode="after")
+    def _restricted_needs_purpose(self):
+        if self.is_restricted and not (self.restriction_purpose or "").strip():
+            raise ValueError("A restricted fund needs the purpose it is for.")
+        return self
 
 
 class CampaignUpdate(BaseModel):
@@ -692,6 +709,8 @@ class CampaignUpdate(BaseModel):
     allow_anonymous: Optional[bool] = None
     minimum_donation: Optional[Decimal] = Field(None, ge=0)
     suggested_amounts: Optional[List[Decimal]] = None
+    is_restricted: Optional[bool] = None
+    restriction_purpose: Optional[str] = Field(None, max_length=2000)
 
 
 class CampaignResponse(CampaignBase):
