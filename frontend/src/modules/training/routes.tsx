@@ -18,6 +18,9 @@ import { CourseLibraryRoute } from './components/CourseLibraryRoute';
 // Training Module - Member-facing
 const MyTrainingPage = lazyWithRetry(() => import('../../pages/MyTrainingPage'));
 const SubmitTrainingPage = lazyWithRetry(() => import('../../pages/SubmitTrainingPage'));
+// Gated by the backend (members who can serve as a shift officer), not by a
+// permission the route could name; the page explains itself to anyone else.
+const RecordCrewTrainingPage = lazyWithRetry(() => import('../../pages/RecordCrewTrainingPage'));
 const TrainingProgramsPage = lazyWithRetry(() => import('../../pages/TrainingProgramsPage'));
 const PipelineDetailPage = lazyWithRetry(() => import('../../pages/PipelineDetailPage'));
 const MyProgramProgressPage = lazyWithRetry(() => import('../../pages/MyProgramProgressPage'));
@@ -87,6 +90,14 @@ export const getTrainingRoutes = () => {
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <SubmitTrainingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/record-crew"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <RecordCrewTrainingPage />
           </ProtectedRoute>
         }
       />
