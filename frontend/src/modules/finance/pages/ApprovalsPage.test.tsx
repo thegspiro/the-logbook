@@ -389,4 +389,27 @@ describe('ApprovalsPage requests decided on their own page', () => {
     expect(screen.queryByRole('region', { name: 'Waiting for a decision on their own page' })).not.toBeInTheDocument();
     expect(mockGetUnrouted).not.toHaveBeenCalled();
   });
+
+  describe('an expense report with late lines', () => {
+    beforeEach(() => {
+      mockGetPending.mockResolvedValue([{ ...mileageClaim, lateLineCount: 1 }]);
+    });
+
+    it('marks the row', async () => {
+      renderPage();
+
+      expect(await screen.findByText('1 late line')).toBeInTheDocument();
+    });
+
+    it('confirms the late line before approving, and says so to the API', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Approve Conference mileage' }));
+      await user.click(within(dialog()).getByRole('button', { name: 'Approve' }));
+      await user.click(await screen.findByRole('button', { name: "I've reviewed it, approve" }));
+
+      await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('sr-2', undefined, undefined, true));
+    });
+  });
 });

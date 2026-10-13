@@ -9,8 +9,11 @@
  * step-based action needs a step. This is the only way such a request moves.
  * The same goes for a request the department's dual-approval threshold holds
  * after its first approval (`awaitingSecondApproval`, the backend's reading):
- * its chain, if it had one, has nothing left. Renders nothing unless the
- * request is in one of those states and the viewer holds `finance.approve`.
+ * its chain, if it had one, has nothing left. Likewise an expense report held
+ * until an approver confirms its late lines (`awaitingLateAcknowledgement`).
+ * Renders nothing unless the request is in one of those states and the viewer
+ * holds `finance.approve`. Approving a report with late lines asks the
+ * approver to confirm them first; the API refuses without that.
  */
 
 import React, { useState } from 'react';
@@ -18,9 +21,11 @@ import { CheckCircle, Info, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PromptDialog } from '@/components/ux/PromptDialog';
 import { useAuthStore } from '@/stores/authStore';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { approvalService } from '../services/api';
 import type { ApprovalEntityType } from '../types';
+import { lateLinesConfirmation } from './lateLinesConfirmation';
 
 const PENDING_APPROVAL = 'pending_approval';
 
@@ -33,6 +38,10 @@ interface ManualApprovalPanelProps {
   awaitingSecondApproval?: boolean | undefined;
   /** Who gave the first approval, when one was given outside a chain. */
   firstApprovedBy?: string | null | undefined;
+  /** Expense reports: lines submitted after the substantiation deadline. */
+  lateLineCount?: number | undefined;
+  /** Held until an approver confirms the late lines. */
+  awaitingLateAcknowledgement?: boolean | undefined;
   /** Who raised the request. They cannot approve it (the backend refuses too). */
   requesterId: string;
   /** Called after a decision is recorded, to reload the request. */
@@ -46,17 +55,20 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
   approvalStepCount,
   awaitingSecondApproval = false,
   firstApprovedBy,
+  lateLineCount = 0,
+  awaitingLateAcknowledgement = false,
   requesterId,
   onDecided,
 }) => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
+  const { confirm } = useConfirm();
   const userId = useAuthStore((s) => s.user?.id);
   const [dialog, setDialog] = useState<'approve' | 'deny' | null>(null);
   const [saving, setSaving] = useState(false);
 
   if (
     status !== PENDING_APPROVAL ||
-    (approvalStepCount > 0 && !awaitingSecondApproval) ||
+    (approvalStepCount > 0 && !awaitingSecondApproval && !awaitingLateAcknowledgement) ||
     !checkPermission('finance.approve')
   ) {
     return null;
@@ -68,10 +80,16 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
   const approvedAlready = Boolean(userId) && userId === firstApprovedBy;
 
   const decide = async (action: 'approve' | 'deny', value: string) => {
+    const acknowledgeLate = action === 'approve' && lateLineCount > 0;
+    if (acknowledgeLate && !(await confirm(lateLinesConfirmation(lateLineCount)))) return;
     setSaving(true);
     try {
       if (action === 'approve') {
-        await approvalService.manualApprove(entityType, entityId, value || undefined);
+        if (acknowledgeLate) {
+          await approvalService.manualApprove(entityType, entityId, value || undefined, true);
+        } else {
+          await approvalService.manualApprove(entityType, entityId, value || undefined);
+        }
         // Under the dual-approval threshold this may be the first of two; the
         // reloaded request says which.
         toast.success('Approval recorded');
@@ -97,9 +115,11 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
           <Info className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-theme-text-primary text-sm font-medium">
-              {awaitingSecondApproval
-                ? 'This request needs a second approval from someone who has not approved it yet.'
-                : 'No approval chain applies to this request. Approve or deny it here.'}
+              {awaitingLateAcknowledgement
+                ? 'This report has expenses submitted after the deadline. An approver has to confirm them before it is approved.'
+                : awaitingSecondApproval
+                  ? 'This request needs a second approval from someone who has not approved it yet.'
+                  : 'No approval chain applies to this request. Approve or deny it here.'}
             </p>
             {approvedAlready && (
               <p className="text-theme-text-secondary mt-1 text-sm">

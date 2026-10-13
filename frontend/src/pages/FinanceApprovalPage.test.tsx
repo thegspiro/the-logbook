@@ -98,4 +98,53 @@ describe('FinanceApprovalPage', () => {
     await waitFor(() => expect(screen.queryByText('Loading approval…')).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
+
+  it('needs the late expenses confirmed before an expense report can be approved', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        step_name: 'Treasurer',
+        entity_type: 'expense_report',
+        status: 'pending',
+        actionable: true,
+        expired: false,
+        late_line_count: 2,
+      },
+    });
+    mockPost.mockResolvedValue({ data: { status: 'approved', message: 'Approval recorded. Thank you.' } });
+    const user = userEvent.setup();
+
+    renderAt('tok-late');
+
+    const approve = await screen.findByRole('button', { name: /approve/i });
+    expect(screen.getByText(/2 expenses on this report were submitted after/)).toBeInTheDocument();
+    expect(approve).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'I have reviewed the late expenses' }));
+    await user.click(approve);
+
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith('/api/public/v1/finance/approvals/tok-late/approve', {
+        notes: undefined,
+        acknowledge_late_substantiation: true,
+      })
+    );
+  });
+
+  it('keeps the notes box focused while the approver types', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        step_name: 'Treasurer',
+        entity_type: 'check_request',
+        status: 'pending',
+        actionable: true,
+        expired: false,
+      },
+    });
+    const user = userEvent.setup();
+
+    renderAt('tok-notes');
+
+    await user.type(await screen.findByLabelText('Notes (optional)'), 'Matches the invoice');
+
+    expect(screen.getByLabelText('Notes (optional)')).toHaveValue('Matches the invoice');
+  });
 });

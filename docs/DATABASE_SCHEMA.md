@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5010 columns · 1011 foreign keys**
+**303 tables · 5018 columns · 1012 foreign keys**
 
 ---
 
@@ -254,19 +254,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
 | [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
-| [`budget_categories`](#budget_categories) | `BudgetCategory` | 11 | Budget category (hierarchical) |
+| [`budget_categories`](#budget_categories) | `BudgetCategory` | 12 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 29 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 30 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 11 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 21 | Expense report submitted by a member for reimbursement |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 13 | Individual line item within an expense report |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 24 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
-| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 30 | Purchase request submitted by a member |
+| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 31 | Purchase request submitted by a member |
 
 ### Forms
 
@@ -3784,6 +3784,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `qb_account_name` | VARCHAR(200) | yes |  |  |  |
+| `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -3872,6 +3873,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
+| `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
 | `payee_address` | TEXT | yes |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
@@ -3972,6 +3974,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `expense_report_id` | VARCHAR(36) | no | FK, IDX |  | → `expense_reports.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
+| `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `description` | VARCHAR(500) | no |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
 | `date_incurred` | DATETIME | no |  |  |  |
@@ -3979,6 +3982,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
 | `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
+| `substantiated_late` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -4008,6 +4012,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
+| `submitted_at` | DATETIME | yes |  |  |  |
+| `late_acknowledged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `late_acknowledged_at` | DATETIME | yes |  |  |  |
 | `qb_exported_at` | DATETIME | yes |  |  |  |
 | `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `payment_method` | VARCHAR(50) | yes |  |  |  |
@@ -4150,6 +4157,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `request_number` | VARCHAR(20) | no |  |  |  |
 | `fiscal_year_id` | VARCHAR(36) | no | FK |  | → `fiscal_years.id` ON DELETE CASCADE |
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
+| `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `title` | VARCHAR(300) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
@@ -10567,7 +10575,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (373 references)
+### → `users` (374 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10682,6 +10690,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `updated_by` | RESTRICT | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |
 | `expense_reports` | `first_approved_by` | SET NULL | yes |
+| `expense_reports` | `late_acknowledged_by` | SET NULL | yes |
 | `expense_reports` | `submitted_by` | RESTRICT | no |
 | `external_category_mappings` | `mapped_by` | SET NULL | yes |
 | `external_course_mappings` | `mapped_by` | SET NULL | yes |

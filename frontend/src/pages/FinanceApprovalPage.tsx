@@ -8,6 +8,10 @@
  * approval endpoints. These endpoints live under /api/public/v1, so we call
  * them with the raw axios client (the app instance is scoped to /api/v1 and
  * attaches session/CSRF the external approver doesn't have).
+ *
+ * An expense report with lines submitted after the department's deadline
+ * (`late_line_count`) can be approved only once the approver ticks that they
+ * have reviewed them; the API refuses the approval without it.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -22,6 +26,7 @@ interface ApprovalDetail {
   status: string;
   actionable: boolean;
   expired: boolean;
+  late_line_count?: number;
 }
 
 const BASE = '/api/public/v1/finance/approvals';
@@ -42,12 +47,25 @@ const prettyEntity = (raw: string): string =>
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(' ');
 
+// Declared outside the page: a component defined in its render is a new type on
+// every render, so React remounted the whole page on each keystroke and the
+// notes box lost focus after every character.
+const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex min-h-screen items-center justify-center p-4">
+    <main id="main-content" className="card w-full max-w-md">
+      <h1 className="text-theme-text-primary mb-4 text-xl font-semibold">Approval Request</h1>
+      {children}
+    </main>
+  </div>
+);
+
 export const FinanceApprovalPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const [detail, setDetail] = useState<ApprovalDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
@@ -84,6 +102,7 @@ export const FinanceApprovalPage: React.FC = () => {
       try {
         const res = await axios.post<{ status: string; message: string }>(`${BASE}/${token}/${action}`, {
           notes: notes.trim() || undefined,
+          ...(action === 'approve' && acknowledged ? { acknowledge_late_substantiation: true } : {}),
         });
         setResultMessage(res.data.message);
       } catch (err: unknown) {
@@ -94,16 +113,7 @@ export const FinanceApprovalPage: React.FC = () => {
         setSubmitting(false);
       }
     },
-    [token, notes]
-  );
-
-  const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <main id="main-content" className="card w-full max-w-md">
-        <h1 className="text-theme-text-primary mb-4 text-xl font-semibold">Approval Request</h1>
-        {children}
-      </main>
-    </div>
+    [token, notes, acknowledged]
   );
 
   if (loading) {
@@ -161,6 +171,8 @@ export const FinanceApprovalPage: React.FC = () => {
     );
   }
 
+  const lateLines = detail.late_line_count ?? 0;
+
   return (
     <Shell>
       <dl className="mb-4 space-y-2 text-sm">
@@ -173,6 +185,27 @@ export const FinanceApprovalPage: React.FC = () => {
           <dd className="text-theme-text-primary">{detail.step_name}</dd>
         </div>
       </dl>
+
+      {lateLines > 0 && (
+        <div className="alert-warning mb-4">
+          <p className="text-theme-alert-warning-text text-sm">
+            {lateLines === 1
+              ? '1 expense on this report was submitted after the department’s deadline for claiming expenses.'
+              : `${lateLines} expenses on this report were submitted after the department’s deadline for claiming expenses.`}{' '}
+            Reimbursing them falls outside the accountable plan, so the department may have to report them as taxable
+            pay.
+          </p>
+          <label className="text-theme-text-primary mt-2 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+            />
+            I have reviewed the late expenses
+          </label>
+        </div>
+      )}
 
       <label htmlFor="approval-notes" className="form-label">
         Notes (optional)
@@ -193,7 +226,7 @@ export const FinanceApprovalPage: React.FC = () => {
         <button
           type="button"
           className="btn-primary flex-1 justify-center"
-          disabled={submitting}
+          disabled={submitting || (lateLines > 0 && !acknowledged)}
           onClick={() => void act('approve')}
         >
           {submitting ? 'Submitting…' : 'Approve'}

@@ -11,6 +11,7 @@ import type React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { ApprovalStepRecord } from '../types';
 
 let storeState: Record<string, unknown> = {};
@@ -139,11 +140,13 @@ const renderCase = (c: PageCase, status: string, steps: ApprovalStepRecord[] = a
     denyStep: vi.fn(),
   };
   render(
-    <MemoryRouter initialEntries={[c.path.replace(':id', 'e-1')]}>
-      <Routes>
-        <Route path={c.path} element={<c.Page />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[c.path.replace(':id', 'e-1')]}>
+        <Routes>
+          <Route path={c.path} element={<c.Page />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
   return { fetch, approveStep };
 };
