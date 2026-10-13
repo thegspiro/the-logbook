@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)**: branch `claude/security-review-documents-legal`, Feature 10
+**PR [#3160](https://github.com/thegspiro/the-logbook/pull/3160)**: branch
+`claude/security-review-documents-legal`, Feature 10
 (Documents & legal), pass 8 (watchdog pickup). 0 fixed, 0 new findings — DOC-8
 (MED, standing OPEN as of pass 7) re-verified **already fully fixed**, by two
 owner-direct commits that landed after pass 7 closed (`d7a7fadd`, 2026-10-11,
