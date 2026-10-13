@@ -409,8 +409,8 @@ describe('ApprovalsPage requests decided on their own page', () => {
     mockGetPending.mockResolvedValue([{ ...mileageClaim, fundShortfall: null }]);
     renderPage();
 
-    await screen.findByRole('link', { name: mileageClaim.entityTitle });
-    expect(screen.queryByText(/Over fund by/)).not.toBeInTheDocument();
+    const row = await screen.findByRole('row', { name: new RegExp(mileageClaim.entityTitle) });
+    expect(row).not.toHaveTextContent(/Over fund by/);
   });
 
   describe('an expense report with late lines', () => {
