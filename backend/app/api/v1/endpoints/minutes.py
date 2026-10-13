@@ -858,10 +858,13 @@ async def update_template(
 ):
     """Update a minutes template"""
     service = TemplateService(db)
-    tpl = ensure_found(
-        await service.update_template(template_id, current_user.organization_id, data),
-        "Template",
-    )
+    # The service raises ValueError when the payload clears a NOT NULL column
+    # (apply_updates); without this wrapper that escaped as a 500.
+    async with handle_service_errors("Failed to update template"):
+        updated = await service.update_template(
+            template_id, current_user.organization_id, data
+        )
+    tpl = ensure_found(updated, "Template")
     await log_audit_event(
         db=db,
         event_type="template_updated",

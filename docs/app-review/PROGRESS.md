@@ -44,7 +44,7 @@ from its open list.
 | B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ⬜     |
-| B6  | meetings & minutes         | MM2    | ⬜     |
+| B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ⬜     |
 | B8  | documents                  | DOC2   | ⬜     |
 | B9  | membership pipeline        | MP2    | ⬜     |
@@ -3003,3 +3003,31 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   dependency) · new file routes to the integration job only (0 under the unit
   job's marker expression, 4 under `integration`) · flake8 / black clean on the
   changed Python.
+- **B6 meetings & minutes ✅ (pass 5) — a template update answered a cleared
+  NOT NULL column with a 500 (MM5-1).** Drove the four minutes update endpoints
+  over HTTP against the real schema, sending `null` for every NOT NULL field (13).
+  The motion, action-item and minutes handlers refuse it with a 400 through
+  `handle_service_errors`; `PUT /templates/{id}` was the one handler without that
+  wrapper, so the `ValueError` from `apply_updates` escaped as a 500 for `name`,
+  `meeting_type`, `is_default` and `sections` (4 of 13 failed on the unmodified
+  handler). **Fixed** by wrapping the call. **Dead code (MM5-2):** an AST scan of
+  the four B6 services found one method with no production caller,
+  `TemplateService.get_default_for_type`; removed with its two tests.
+  **Stale comment (MM5-3)** in `schemas/meetings.py` corrected. **Flagged
+  (MM5-4):** the minutes page saves, reorders, adds and deletes sections by PUTting
+  the whole `sections` array from its local copy and the server replaces the list
+  wholesale, so two editors on one draft silently overwrite each other — needs an
+  API decision (per-section update or a version precondition); mirrored to
+  KNOWN_LIMITATIONS. **Verified good:** meetings updates use `exclude_unset` +
+  `apply_updates` (the three `exclude_none` calls are create-only); the quorum
+  routes added since pass 2 are `minutes.manage`-only and `GET /quorum` writes
+  nothing; frontend update payloads are discrete partials with an explicit
+  `event_id: null` for unlink; the shared `createApiClient` is used. **Not read:**
+  `MinutesPage`, `AttendanceDashboardPage`, the store, `MeetingAttendance`, and
+  the render half of `MinutesDetailPage` (the module is 3,166 lines; update paths
+  only). A mistake caught on the way: my first draft test used `PATCH` against
+  `PUT` routes and a loose `4xx` assertion would have passed on the resulting 405,
+  so the assertion is `in (400, 422)`. Gate: flake8 / black / isort clean ·
+  `tsc` 0 · new file 17 pass, 4 fail without the fix, 0 under the unit job's marker
+  expression · related backend suites **1607 passed, 1 skipped**. See
+  meetings-minutes.md → Pass 5. Next: B7 equipment-check.

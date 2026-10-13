@@ -1,7 +1,126 @@
 # Application Review — Meetings & Minutes (Tier B)
 
 **Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-13 (pass 5)
+
+---
+
+## Pass 5 (2026-10-13) — the template update answered a cleared NOT NULL column with a 500 (1 fixed, 1 dead method removed, 1 flagged)
+
+Lens for this pass: the update-payload discipline CLAUDE.md #1 spells out
+(`exclude_unset`, `apply_updates`, an explicit `null` on a NOT NULL column) driven
+through the **real handlers** rather than read off the service, plus the
+`modules/minutes` frontend that no earlier pass had opened.
+
+### MM5-1 — LOW/MED — `PUT /minutes-records/templates/{id}` returned a 500 for `{"name": null}` — ✅ FIXED
+
+`TemplateUpdate` types every field `Optional`; four of the columns behind it are
+NOT NULL (`name`, `meeting_type`, `is_default`, `sections`).
+`TemplateService.update_template` applies updates through `apply_updates`, which
+correctly refuses a cleared NOT NULL column by raising `ValueError`
+(`Field 'name' cannot be cleared`) — but the handler
+(`endpoints/minutes.py`, `update_template`) was the only update handler in the
+file not wrapped in `handle_service_errors`, so the `ValueError` escaped as an
+unhandled 500. The service comment above that call says it "raises a clean 400";
+it did not reach the client as one.
+
+**Reproduced before fixing:** a new test file drives the minutes router over HTTP
+against the real schema and sends `null` for every NOT NULL field on all four
+update endpoints (13 fields). On the unmodified handler 4 of 13 failed, all
+template fields, each with the `ValueError` above; the other 9 (minutes, motions,
+action items) already returned 400 through `handle_service_errors`. With the
+wrapper added, all 17 tests pass.
+
+The assertion is `status in (400, 422)`, not "any 4xx". My first draft of the test
+used the wrong HTTP verb (these routes are `PUT`, not `PATCH`) and got a 405,
+which a `400 <= status < 500` check would have counted as a pass — a test that
+could not tell a refused null from a wrong URL. Tightening it is what made the
+mistake visible.
+
+The nullable half is paired with the NOT NULL half (`location`, `moved_by`,
+`assignee_name`, `description` on a template still clear), so a guard that
+rejected every null would fail this file too.
+
+### MM5-2 — INFO — `TemplateService.get_default_for_type` had no caller — ✅ REMOVED
+
+An AST scan of the four B6 services (every `def` against every `Attribute` /
+`Name` / string reference under `app/` and `scripts/`, not a text grep — a
+comment or docstring mention does not count as a use) found exactly one method
+with no production reference. Only its own two unit tests called it. Removed with
+those tests. Nothing in the docs, wiki or frontend named it.
+
+### MM5-3 — INFO — a schema comment still described the `setattr` loop that was gone — ✅ FIXED
+
+`schemas/meetings.py` justified its enum validators by saying the meeting update
+paths "apply these via a blind `setattr`". They have gone through `apply_updates`
+since MM-9; the validators are still needed (`apply_updates` checks nullability,
+not enum membership) but for a different reason, which the comment now states.
+
+### MM5-4 — MED — section edits send the whole array, so two editors silently overwrite each other — 🚩 FLAGGED
+
+`modules/minutes/pages/MinutesDetailPage.tsx` saves, reorders, adds and deletes a
+section by PUTting the **entire** `sections` list built from the page's local copy
+(`handleSaveSection`, `handleReorderSection`, `handleAddSection`,
+`handleDeleteSection`), and `MinuteService.update_minutes` replaces the stored
+list wholesale ("Full sections replacement" in `MinutesUpdate`). There is no
+version, ETag or per-section endpoint. If two secretaries have the same draft
+open, the second save writes back the first one's stale copy of every section the
+second did not touch, and the first person's text is gone with a success toast.
+
+Not fixed: the cure is an API change (a per-section update, or an `If-Match` /
+`updated_at` precondition on the PUT) and a decision about how a conflict is
+shown to the user. Mirrored to `docs/KNOWN_LIMITATIONS.md` as MM5-4. Same
+lost-update class as SF-9, but here on text people typed.
+
+### Verified good ✅ (this pass)
+
+- **Meetings update path.** `PATCH /meetings/{id}` and `PATCH /meetings/action-items/{id}`
+  dump with `exclude_unset=True`, so an explicit null reaches `apply_updates`. The
+  three `exclude_none` calls in `endpoints/meetings.py` are on create (`create_meeting`,
+  `create_action_item`) only, where dropping a blank is correct. A cleared NOT NULL
+  column comes back as a 400 through `safe_error_detail`, and
+  `test_meetings_service.py` already asserts it at the service level.
+- **Quorum endpoints** (`GET /{id}/quorum`, `PATCH /{id}/quorum-config`) — the routes
+  added since pass 2 — are `minutes.manage` only, and managers already see
+  executive-session minutes, so they open no read path the list/detail restriction
+  closes. `GET /quorum` is named like a write but only calls `calculate_quorum` and
+  returns a dict; nothing is persisted.
+- **Frontend update payloads.** Every `updateMinutes` / `updateActionItem` call
+  sends a discrete partial (`sections`, `event_id`, `status`); unlinking an event
+  sends an explicit `event_id: null`, which `update_minutes` clears. There is no
+  free-text edit form here that could omit a cleared field. `modules/minutes`
+  builds its axios instance through the shared `createApiClient` (auth + CSRF
+  inherited). No `window.confirm` / `alert` / `prompt`.
+- **Assignee self-service (W52-7)** is reachable: `ActionItemsPage` calls the same
+  endpoint for a non-manager, which is why `MinutesDetailPage` gating its status
+  select on `canManage` is correct rather than a gap.
+- **Docs.** `MEETING_MINUTES_MODULE.md`'s route table matches the router (verified
+  against the 27 route decorators in `endpoints/minutes.py`); no doc or wiki page names
+  the removed method.
+
+### Not read (scope, stated plainly)
+
+The minutes frontend is 3,166 lines; this pass read `services/api.ts` and the
+section, publish, action-item and event-link handlers of `MinutesDetailPage.tsx`
+(the update paths), not its rendering, and did not open `MinutesPage.tsx` (865),
+`AttendanceDashboardPage.tsx` (244), the store, or
+`components/MeetingAttendance.tsx`. Backend business logic
+(`minute_service` approval/reopen/publish, `meetings_service` attendance windows)
+was covered by earlier passes and was only re-read where it touches update
+semantics.
+
+### Completion gate (pass 5)
+
+| Check                                                                                       | Result                                                                                                                           |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/`                                                                        | ✅ no output (0 violations)                                                                                                      |
+| `black --check app/ tests/`                                                                 | ✅ 1672 files unchanged                                                                                                          |
+| `isort --check-only` (changed files)                                                        | ✅ clean                                                                                                                         |
+| `npm run typecheck`                                                                         | ✅ exit 0 (no frontend file changed this pass, so `eslint` was not re-run)                                                       |
+| new test file, mutation-checked                                                             | ✅ 17 pass with the fix; **4 fail with the handler change stashed** (all template fields), 13 pass                               |
+| marker routing                                                                              | ✅ `-m "not integration and not slow and not docker" --collect-only` selects 0 of 17 — the file runs only in the integration job |
+| backend tests (minutes, meetings, templates, quorum, org-scoping, CSV/LIKE/capacity sweeps) | ✅ **1607 passed, 1 skipped** (optional `pywebpush` dependency)                                                                  |
 
 ---
 
