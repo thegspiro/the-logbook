@@ -274,9 +274,9 @@ Links requirements to programs/phases.
   and the member's page shows it locked with the reason. Automatic credit from
   logged training is deliberately not blocked.
 - `sort_order`: Display order
-- `program_specific_description`: Override requirement description
-- `custom_deadline_days`: Override requirement time_limit_days
-- `notification_message`: Custom message when assigned
+- `program_specific_description`: Shown to members in place of the requirement's description
+- `custom_deadline_days`: Due this many days after enrollment (derived on read; daily `program_requirement_deadlines` reminders)
+- `notification_message`: Emailed to the member once, when they complete the requirement
 
 ### ProgramMilestone
 
