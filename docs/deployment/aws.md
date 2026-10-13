@@ -320,7 +320,7 @@ Method 2 starts it with one more compose file,
   (see [Backups](#method-2-rds) for what replaces the sidecar).
 
 Everything else — `docker-compose.prod.yml`'s hardening, the TLS settings, the
-optional `--profile with-clamav` — works as it does in Method 1.
+`clamav` malware scanner — works as it does in Method 1.
 
 **Fetch the CA certificates.** The production stack refuses to start unless
 both connections use TLS with a verified certificate, and both managed
@@ -402,13 +402,13 @@ spelled out:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.external-services.yml up -d
 
-# backend and frontend only — no mysql, redis or backup
+# backend, frontend and clamav — no mysql, redis or backup
 docker compose ps
 ```
 
 To check which services a set of files will start before starting anything,
 run `docker compose config --services`; with the three files above it prints
-`backend` and `frontend` (and `clamav` with `--profile with-clamav`).
+`backend`, `clamav` and `frontend`.
 
 Never run `docker compose up -d mysql` (or `redis`) against this stack: compose
 starts a service you name even when its profile is off, and nothing would use
@@ -464,16 +464,14 @@ AWS_REGION=us-east-1
 # AWS_SECRET_ACCESS_KEY=
 ```
 
-### Malware Scanning (Optional)
+### Malware Scanning
 
-Uploaded self-report training certificates can be scanned with ClamAV by
-starting the bundled `clamav` service and enabling the flag:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile with-clamav up -d
-# .env
-CLAMAV_ENABLED=true
-```
+Every uploaded file is scanned with ClamAV before it is stored. The bundled
+`clamav` service starts with the rest of the stack — there is no profile to
+turn on — and `CLAMAV_ENABLED` defaults to `true`. Setting it to `false`
+accepts files unscanned behind a standing warning to administrators; see
+[Security Configuration → Malware scanning](../../wiki/Configuration-Security.md#malware-scanning-of-uploads)
+first.
 
 clamd holds its signature database in memory — allow 1.5–3 GB of RAM on top of
 the stack, so a `t3.small` is too small for it; use `t3.medium` or larger, or
