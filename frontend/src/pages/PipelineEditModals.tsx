@@ -14,11 +14,19 @@ import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker'
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
+import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
 import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
+import {
+  programRequirementSettingsError,
+  programRequirementSettingsFrom,
+  toProgramRequirementSettingsCreate,
+  toProgramRequirementSettingsUpdate,
+  type ProgramRequirementSettingsForm,
+} from '../utils/programRequirementSettings';
 import type {
   ChecklistItem,
   ProgramMilestone,
@@ -564,6 +572,11 @@ export const RequirementFormModal: React.FC<{
   // requirement too. Defaults to yes, which is what adding always did.
   const [applyToCurrent, setApplyToCurrent] = useState(true);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
+  // The link's own settings, for this program only — editable on a shared
+  // department requirement too, since they never reach the department's copy.
+  const [linkSettings, setLinkSettings] = useState<ProgramRequirementSettingsForm>(() =>
+    programRequirementSettingsFrom(link)
+  );
   const [submitting, setSubmitting] = useState(false);
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
   const linksCourses = type === 'courses' || type === 'certification';
@@ -585,6 +598,11 @@ export const RequirementFormModal: React.FC<{
       toast.error('Pick a requirement to link');
       return;
     }
+    const settingsProblem = programRequirementSettingsError(linkSettings);
+    if (settingsProblem) {
+      toast.error(settingsProblem);
+      return;
+    }
     setSubmitting(true);
     try {
       await trainingProgramService.addProgramRequirement(programId, {
@@ -596,6 +614,7 @@ export const RequirementFormModal: React.FC<{
         // The department owns this one; unlinking must not delete it.
         owns_requirement: false,
         apply_to_current_enrollments: applyToCurrent,
+        ...toProgramRequirementSettingsCreate(linkSettings),
       });
       toast.success('Requirement linked');
       onSaved();
@@ -613,6 +632,11 @@ export const RequirementFormModal: React.FC<{
     }
     if (!name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+    const settingsProblem = programRequirementSettingsError(linkSettings);
+    if (settingsProblem) {
+      toast.error(settingsProblem);
       return;
     }
     setSubmitting(true);
@@ -643,9 +667,12 @@ export const RequirementFormModal: React.FC<{
       };
       if (link) {
         await trainingProgramService.updateRequirementEnhanced(link.requirement_id, payload);
-        if (isRequired !== (link.is_required !== false)) {
-          await trainingProgramService.updateProgramRequirement(programId, link.id, { is_required: isRequired });
-        }
+        // Every link field the form owns goes on every save, a cleared one as
+        // null — an omitted key would leave the old value in place.
+        await trainingProgramService.updateProgramRequirement(programId, link.id, {
+          is_required: isRequired,
+          ...toProgramRequirementSettingsUpdate(linkSettings),
+        });
         toast.success('Requirement updated');
       } else {
         const created = await trainingProgramService.createRequirementEnhanced({
@@ -662,6 +689,7 @@ export const RequirementFormModal: React.FC<{
           // Created here for this program, so unlinking may clean it up.
           owns_requirement: true,
           apply_to_current_enrollments: applyToCurrent,
+          ...toProgramRequirementSettingsCreate(linkSettings),
         });
         toast.success('Requirement added');
       }
@@ -724,7 +752,8 @@ export const RequirementFormModal: React.FC<{
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           <p className="text-theme-text-secondary text-sm">
             This is a department requirement linked into the program. Changes here apply everywhere it is used — only
-            &ldquo;Required to complete the phase&rdquo; is specific to this phase.
+            &ldquo;Required to complete the phase&rdquo; and the &ldquo;In this program&rdquo; settings are specific to
+            this program.
           </p>
         </div>
       )}
@@ -891,6 +920,11 @@ export const RequirementFormModal: React.FC<{
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
         Required to complete the phase
       </label>
+      <ProgramRequirementSettingsFields
+        idPrefix="rq"
+        value={linkSettings}
+        onChange={(field, value) => setLinkSettings((current) => ({ ...current, [field]: value }))}
+      />
       {!link && (
         <fieldset className="space-y-2">
           <legend className="form-label">Members already enrolled</legend>

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**303 tables · 5010 columns · 1012 foreign keys**
+**303 tables · 5014 columns · 1012 foreign keys**
 
 ---
 
@@ -647,7 +647,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`program_requirements`](#program_requirements) | `ProgramRequirement` | 12 | Program Requirement model |
 | [`recertification_pathways`](#recertification_pathways) | `RecertificationPathway` | 21 | Recertification Pathway model |
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
-| [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 14 | Requirement Progress model |
+| [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 18 | Requirement Progress model |
 | [`requirement_progress_credits`](#requirement_progress_credits) | `RequirementProgressCredit` | 10 | Idempotency ledger for automated requirement-progress credit. |
 | [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 15 | Self-Report Configuration model |
 | [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 15 | Assigns a specific member to a specific shift with a designated position. |
@@ -9128,6 +9128,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `verified_at` | DATETIME | yes |  |  |  |
 | `verified_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `verification_notes` | TEXT | yes |  |  |  |
+| `due_warning_sent_for` | DATE | yes |  |  |  |
+| `due_warning_days_before` | INTEGER | yes |  |  |  |
+| `overdue_notice_sent_for` | DATE | yes |  |  |  |
+| `completion_notice_sent_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

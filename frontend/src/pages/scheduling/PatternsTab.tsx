@@ -261,6 +261,17 @@ export const PatternsTab: React.FC = () => {
     return creationMode === 'manual' && createForm.pattern_type === 'weekly' && splitDayNight;
   };
 
+  /**
+   * A rotation counts its cycle from the start date; daily, weekly and
+   * custom-date patterns have no cycle to anchor, so for them the date only
+   * bounds when the automatic generator begins creating shifts.
+   */
+  const isRotationPattern = (): boolean => {
+    if (creationMode === 'preset' && selectedPreset) return selectedPreset.patternType === 'platoon';
+    if (creationMode === 'custom') return true;
+    return createForm.pattern_type === 'platoon';
+  };
+
   const handleCreate = async () => {
     if (!createForm.name || !createForm.start_date) {
       toast.error('Name and start date are required');
@@ -896,7 +907,11 @@ export const PatternsTab: React.FC = () => {
                         }
                         className={inputCls}
                       />
-                      <p className="text-theme-text-muted mt-1 text-[11px]">The cycle begins counting from this date</p>
+                      <p className="text-theme-text-muted mt-1 text-[11px]">
+                        {isRotationPattern()
+                          ? 'The cycle begins counting from this date'
+                          : 'Automatic generation starts on or after this date'}
+                      </p>
                     </div>
                     <div>
                       <label

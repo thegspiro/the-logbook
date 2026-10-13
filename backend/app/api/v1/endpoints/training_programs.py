@@ -59,6 +59,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
 )
+from app.services.program_requirement_deadlines import annotate_progress_rows
 from app.services.sample_program_templates import (
     SAMPLE_TEMPLATES,
     list_sample_template_summaries,
@@ -150,6 +151,10 @@ def _member_program_requirement(program_requirement) -> ProgramRequirementRespon
     response: ProgramRequirementResponse = ProgramRequirementResponse.model_validate(
         program_requirement
     )
+    # The completion message is the officer's word to a member who has just
+    # finished; it arrives by email then, not ahead of time on the member's
+    # own copy of the program.
+    response = response.model_copy(update={"notification_message": None})
     if response.requirement is None:
         return response
     member_view: ProgramRequirementResponse = response.model_copy(
@@ -1516,6 +1521,11 @@ async def get_enrollment_progress(
             enrollment = refreshed
     await service.mark_linked_rows(
         enrollment.program_id, list(enrollment.requirement_progress)
+    )
+    # Per-requirement due dates and the program's own description, decided on
+    # the department's calendar so the page never re-derives them.
+    await annotate_progress_rows(
+        db, enrollment, enrollment.requirement_progress, org_tz, today
     )
 
     # Calculate time remaining

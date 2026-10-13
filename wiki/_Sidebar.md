@@ -95,6 +95,7 @@
 - [Training — Developer](Module-Training-Developer)
 - [Events — Developer](Module-Events-Developer)
 - [Elections — Developer](Module-Elections-Developer)
+- [Inventory — Developer](Module-Inventory-Developer)
 - [Scheduling — Developer](Module-Scheduling-Developer)
 - [Role System](Role-System)
 - [Tech Stack](Technology-Stack)

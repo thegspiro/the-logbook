@@ -330,6 +330,39 @@ export interface InventoryLinkResult {
   coverage: LinkCoverage;
 }
 
+/** One unlinked position on the department-wide link report. */
+export interface LinkReportPosition {
+  templateItemId: string;
+  templateId: string;
+  templateName: string;
+  /** False for a draft template. */
+  templateActive: boolean;
+  compartmentName?: string | null;
+  checkType?: string | null;
+}
+
+/** Every unlinked position sharing one normalized name, across templates. */
+export interface LinkReportGroup {
+  key: string;
+  name: string;
+  positionCount: number;
+  templateCount: number;
+  positions: LinkReportPosition[];
+  suggestions: InventoryMatchSuggestion[];
+}
+
+export interface LinkReportResult {
+  coverage: LinkCoverage;
+  templateCount: number;
+  groups: LinkReportGroup[];
+}
+
+export interface CrossTemplateLinkResult {
+  linked: number;
+  /** Positions somebody linked in the builder after the report loaded. */
+  skipped: number;
+}
+
 export interface CheckTemplateItemCreate {
   name: string;
   description?: string | undefined;

@@ -21,15 +21,12 @@ be built by ``create_all`` rather than a migration, so each step is skipped
 when its table is absent; ``create_all`` then builds it from the model,
 columns included.
 
-This revision also joins the two heads ``a51a4e1d2443`` and ``bde76b481a16``,
-which were published with the same parent and left the chain with two heads.
-
 The downgrade drops the columns. Which lines were late, and who acknowledged
 them, are lost with them; a report held for that acknowledgement stays waiting
 for approval, and the previous revision's code lets any approver approve it.
 
 Revision ID: afaca8c1f812
-Revises: a51a4e1d2443, bde76b481a16
+Revises: 5372d41aaf3e
 Create Date: 2026-10-12 22:04:36.000000
 
 """
@@ -41,7 +38,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "afaca8c1f812"
-down_revision: Union[str, Sequence[str], None] = ("a51a4e1d2443", "bde76b481a16")
+down_revision: Union[str, None] = "5372d41aaf3e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

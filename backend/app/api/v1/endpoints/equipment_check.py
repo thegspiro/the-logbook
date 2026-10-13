@@ -42,6 +42,8 @@ from app.schemas.equipment_check import (
     CheckTemplateItemUpdate,
     CompartmentReplaceRequest,
     ComplianceReportResponse,
+    CrossTemplateLinkRequest,
+    CrossTemplateLinkResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
@@ -58,6 +60,7 @@ from app.schemas.equipment_check import (
     ItemRestockStateResponse,
     ItemTrendResponse,
     ItemUsedRequest,
+    LinkReportResponse,
     LotSwapRequest,
     LotSwapResponse,
     ReorderRequest,
@@ -382,6 +385,48 @@ async def link_inventory_items(
         template_id, current_user.organization_id
     )
     return {"linked": changed, "coverage": coverage or {}}
+
+
+@router.get("/inventory-link-report", response_model=LinkReportResponse)
+async def get_inventory_link_report(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Every unlinked checklist position in the department, grouped by name.
+
+    Covers active and draft templates. Each group carries catalog suggestions;
+    names with a plausible match come first. Read-only — links are applied
+    through ``POST /inventory-links``.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_link_report(str(current_user.organization_id))
+
+
+@router.post("/inventory-links", response_model=CrossTemplateLinkResponse)
+async def link_inventory_items_across_templates(
+    data: CrossTemplateLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Apply links reviewed on the department-wide report, across templates.
+
+    All or nothing. Positions linked by someone else since the report loaded
+    are left as they are and counted in ``skipped``.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.link_inventory_items_across_templates(
+            str(current_user.organization_id),
+            data.links,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 # =====================================================================

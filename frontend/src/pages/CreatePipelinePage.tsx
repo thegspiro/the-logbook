@@ -24,6 +24,7 @@ import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker'
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
+import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
@@ -36,6 +37,11 @@ import type {
   TrainingRequirementEnhanced,
 } from '../types/training';
 import { getErrorDetail } from '../utils/errorHandling';
+import {
+  emptyProgramRequirementSettings,
+  programRequirementSettingsError,
+  toProgramRequirementSettingsCreate,
+} from '../utils/programRequirementSettings';
 
 // ==================== Types ====================
 
@@ -77,6 +83,12 @@ interface RequirementFormData {
   allows_external_credit: boolean;
   is_required: boolean;
   sort_order: number;
+  // This program's own settings for the link — a due date counted from
+  // enrollment, the member-facing description, the completion message.
+  // Library and new entries both carry them.
+  custom_deadline_days: string;
+  program_specific_description: string;
+  notification_message: string;
 }
 
 interface MilestoneFormData {
@@ -161,6 +173,7 @@ const emptyRequirement = (sortOrder: number, source: 'library' | 'new' = 'new'):
   allows_external_credit: false,
   is_required: true,
   sort_order: sortOrder,
+  ...emptyProgramRequirementSettings(),
 });
 
 const emptyMilestone = (): MilestoneFormData => ({
@@ -171,7 +184,8 @@ const emptyMilestone = (): MilestoneFormData => ({
   notification_message: '',
 });
 
-// A linked entry sends only the id and the Required toggle. The build payload
+// A linked entry sends only the id, the Required toggle and the link's own
+// settings. The build payload
 // rejects a requirement carrying both an id and a name, so the two shapes stay
 // strictly separate.
 const toRequirementPayload = (reqData: RequirementFormData) =>
@@ -180,6 +194,7 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         requirement_id: reqData.requirement_id,
         is_required: reqData.is_required,
         sort_order: reqData.sort_order,
+        ...toProgramRequirementSettingsCreate(reqData),
       }
     : {
         name: reqData.name,
@@ -200,6 +215,7 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         allows_external_credit: reqData.allows_external_credit,
         is_required: reqData.is_required,
         sort_order: reqData.sort_order,
+        ...toProgramRequirementSettingsCreate(reqData),
       };
 
 const toMilestonePayload = (msData: MilestoneFormData) => ({
@@ -698,9 +714,15 @@ const StepRequirements: React.FC<{
                       </label>
                       <HelpText>
                         The requirement&apos;s own settings — hours, linked courses, freshness window — stay under the
-                        department&apos;s control. Only this toggle is specific to the phase.
+                        department&apos;s control. This toggle and the settings below are specific to the program.
                       </HelpText>
                     </div>
+                    <ProgramRequirementSettingsFields
+                      idPrefix={`wizard-${req.id}`}
+                      compact
+                      value={req}
+                      onChange={(field, value) => onUpdateRequirement(phase.key, req.id, field, value)}
+                    />
                   </div>
                 ) : (
                   <div key={req.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
@@ -964,6 +986,13 @@ const StepRequirements: React.FC<{
                         </div>
                       </div>
                     )}
+
+                    <ProgramRequirementSettingsFields
+                      idPrefix={`wizard-${req.id}`}
+                      compact
+                      value={req}
+                      onChange={(field, value) => onUpdateRequirement(phase.key, req.id, field, value)}
+                    />
                   </div>
                 )
               )}
@@ -1266,6 +1295,11 @@ const StepReview: React.FC<{
                         Must be completed within the last {req.recency_days} days
                       </p>
                     )}
+                    {req.custom_deadline_days.trim() && (
+                      <p className="text-theme-text-muted pl-5 text-xs">
+                        Due {req.custom_deadline_days.trim()} days after enrollment
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1498,6 +1532,10 @@ const CreatePipelinePage: React.FC = () => {
           (req.requirement_type === 'calls' && !req.required_calls.trim());
         if (req.source === 'new' && missingTarget) {
           return `"${req.name.trim()}" in ${group.title} needs a number to count toward, or nobody can ever complete it.`;
+        }
+        const settingsProblem = programRequirementSettingsError(req);
+        if (settingsProblem) {
+          return `${group.title}: ${settingsProblem}.`;
         }
       }
       for (const ms of group.milestones) {

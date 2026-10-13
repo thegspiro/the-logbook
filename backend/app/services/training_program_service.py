@@ -61,6 +61,7 @@ from app.schemas.training_program import (
     TrainingRequirementEnhancedCreate,
 )
 from app.services.notifications_service import NotificationsService
+from app.services.program_requirement_deadlines import notify_completed_requirements
 from app.services.training_compliance import (
     RequirementEvaluation,
     evaluate_member_requirement_detail,
@@ -163,6 +164,22 @@ class ProgramImportResult:
 
     summary: Dict[str, Any]
     program: Optional[TrainingProgram] = None
+
+
+def _link_customization(source: Any) -> Dict[str, Any]:
+    """The per-program settings a create or build payload carries for a link.
+
+    Read with ``getattr`` so a caller passing an older payload shape (the
+    sample templates, a stub in a test) simply sets none of them.
+    """
+    return {
+        field: getattr(source, field, None)
+        for field in (
+            "program_specific_description",
+            "custom_deadline_days",
+            "notification_message",
+        )
+    }
 
 
 class TrainingProgramService:
@@ -1057,6 +1074,7 @@ class TrainingProgramService:
                         is_prerequisite=getattr(req_input, "is_prerequisite", False),
                         sort_order=req_input.sort_order or idx,
                         owns_requirement=False,
+                        **_link_customization(req_input),
                     )
                 )
                 continue
@@ -1109,6 +1127,7 @@ class TrainingProgramService:
                     # The requirement was created just above for this program,
                     # so unlinking it may clean it up.
                     owns_requirement=True,
+                    **_link_customization(req_input),
                 )
             )
         return None
@@ -1885,6 +1904,7 @@ class TrainingProgramService:
             is_prerequisite=program_requirement_data.is_prerequisite,
             sort_order=program_requirement_data.sort_order,
             owns_requirement=program_requirement_data.owns_requirement,
+            **_link_customization(program_requirement_data),
         )
 
         self.db.add(program_requirement)
@@ -4188,6 +4208,11 @@ class TrainingProgramService:
         row.verified_at = None
         row.verified_by = None
         row.verification_notes = None
+        # A fresh cycle owes its own reminders and its own completion message.
+        row.due_warning_sent_for = None
+        row.due_warning_days_before = None
+        row.overdue_notice_sent_for = None
+        row.completion_notice_sent_at = None
 
     async def reset_requirement_progress(
         self,
@@ -4748,6 +4773,16 @@ class TrainingProgramService:
                     )
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
+
+        # A requirement's own completion message. Every progress write ends in
+        # this rollup, so this is the one place that sees every path that can
+        # complete a requirement; the per-row stamp keeps it to once per
+        # completion. A member who is no longer running the program is
+        # stamped but not written to. Best-effort, like the milestones above.
+        try:
+            await notify_completed_requirements(self.db, enrollment, send=was_active)
+        except Exception as e:
+            logger.error(f"Failed to send requirement completion message: {e}")
 
     # ==================== Requirement Prerequisite Methods ====================
 

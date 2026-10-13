@@ -35,6 +35,8 @@ import type {
   FailureLogResponse,
   FleetReadinessResponse,
   InventoryLinkResult,
+  LinkReportResult,
+  CrossTemplateLinkResult,
   InventoryMatchesResult,
   ItemDeployedLots,
   ItemDeployment,
@@ -310,6 +312,16 @@ export const equipmentCheckService = {
     const response = await api.get<InventoryMatchesResult>(
       `/equipment-checks/templates/${templateId}/inventory-matches`
     );
+    return response.data;
+  },
+  /** Every unlinked position in the department, grouped by name. Read-only. */
+  async getLinkReport(): Promise<LinkReportResult> {
+    const response = await api.get<LinkReportResult>('/equipment-checks/inventory-link-report');
+    return response.data;
+  },
+  /** Apply reviewed links that may span many templates. All or nothing. */
+  async linkAcrossTemplates(links: Record<string, string>): Promise<CrossTemplateLinkResult> {
+    const response = await api.post<CrossTemplateLinkResult>('/equipment-checks/inventory-links', { links });
     return response.data;
   },
   async linkInventoryItems(templateId: string, links: Record<string, string | null>): Promise<InventoryLinkResult> {
