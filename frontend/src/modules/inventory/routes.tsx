@@ -54,6 +54,7 @@ const InventoryKioskPage = lazyWithRetry(() => import('./pages/InventoryKioskPag
 const EquipmentCheckTemplateBuilder = lazyWithRetry(() => import('./pages/EquipmentCheckTemplateBuilder'));
 const EquipmentCheckReportsPage = lazyWithRetry(() => import('./pages/EquipmentCheckReportsPage'));
 const SupplyExpiringPage = lazyWithRetry(() => import('./pages/SupplyExpiringPage'));
+const CatalogLinkReportPage = lazyWithRetry(() => import('./pages/CatalogLinkReportPage'));
 const FleetBoardPage = lazyWithRetry(() => import('./pages/FleetBoardPage'));
 const CheckLogPage = lazyWithRetry(() => import('./pages/CheckLogPage'));
 const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
@@ -610,6 +611,23 @@ export const getInventoryRoutes = () => {
           >
             <Suspense fallback={null}>
               <SupplyExpiringPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Matches what `GET /equipment-checks/inventory-link-report` and
+          `POST /equipment-checks/inventory-links` accept. */}
+      <Route
+        path="/inventory/admin/checklists/catalog-links"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <CatalogLinkReportPage />
             </Suspense>
           </ProtectedRoute>
         }

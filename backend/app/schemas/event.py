@@ -1574,6 +1574,9 @@ class AttendancePetitionResponse(UTCResponseBase):
     reviewed_at: Optional[datetime] = None
     review_note: Optional[str] = None
     created_at: datetime
+    # How many times the member withdrew and resent this request, so a reviewer
+    # notified more than once can see why.
+    withdrawal_count: int = 0
 
     model_config = _response_config
 

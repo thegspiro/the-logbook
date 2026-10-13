@@ -19,6 +19,7 @@ const mockCreateProgramPhase = vi.fn();
 const mockUpdateProgramPhase = vi.fn();
 const mockUpdateProgram = vi.fn();
 const mockUpdateRequirementEnhanced = vi.fn();
+const mockUpdateProgramRequirement = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -29,6 +30,7 @@ vi.mock('../services/api', () => ({
     updateProgramPhase: (...a: unknown[]) => mockUpdateProgramPhase(...a) as unknown,
     updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
     updateRequirementEnhanced: (...a: unknown[]) => mockUpdateRequirementEnhanced(...a) as unknown,
+    updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
   },
   trainingService: {
     getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
@@ -217,6 +219,93 @@ describe('RequirementFormModal', () => {
         expect.objectContaining({ required_hours: null, requirement_type: 'shifts' })
       )
     );
+  });
+});
+
+describe('RequirementFormModal — the requirement’s settings in this program', () => {
+  const existingLink = {
+    id: 'link-1',
+    program_id: 'prog-1',
+    phase_id: 'phase-1',
+    requirement_id: 'req-cpr',
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: false,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: cprRequirement,
+    custom_deadline_days: 30,
+    program_specific_description: 'Book the county class.',
+    notification_message: 'Bring your card in.',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement, hipaaRequirement]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockAddProgramRequirement.mockReset();
+    mockAddProgramRequirement.mockResolvedValue({ id: 'link-1' });
+    mockUpdateRequirementEnhanced.mockReset();
+    mockUpdateRequirementEnhanced.mockResolvedValue({});
+    mockUpdateProgramRequirement.mockReset();
+    mockUpdateProgramRequirement.mockResolvedValue({});
+  });
+
+  it('sends them when linking an existing requirement, omitting blanks', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.type(screen.getByLabelText(/Due after enrollment/), '45');
+    await user.type(screen.getByLabelText('Message when completed'), 'Welcome aboard.');
+    await user.click(screen.getByRole('button', { name: 'Link requirement' }));
+
+    await waitFor(() => expect(mockAddProgramRequirement).toHaveBeenCalledTimes(1));
+    const sent = mockAddProgramRequirement.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(sent.custom_deadline_days).toBe(45);
+    expect(sent.notification_message).toBe('Welcome aboard.');
+    expect(sent.program_specific_description).toBeUndefined();
+  });
+
+  it('loads the saved values when editing', async () => {
+    renderModal({ link: existingLink });
+
+    expect(await screen.findByLabelText(/Due after enrollment/)).toHaveValue(30);
+    expect(screen.getByLabelText('Description members see')).toHaveValue('Book the county class.');
+    expect(screen.getByLabelText('Message when completed')).toHaveValue('Bring your card in.');
+  });
+
+  it('sends every field on an edit, and a cleared one as null', async () => {
+    const user = userEvent.setup();
+    renderModal({ link: existingLink });
+
+    await user.clear(await screen.findByLabelText(/Due after enrollment/));
+    await user.clear(screen.getByLabelText('Message when completed'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgramRequirement).toHaveBeenCalledWith('prog-1', 'link-1', {
+        is_required: true,
+        custom_deadline_days: null,
+        program_specific_description: 'Book the county class.',
+        notification_message: null,
+      })
+    );
+  });
+
+  it('refuses a due-after value outside 1–3650', async () => {
+    const user = userEvent.setup();
+    renderModal({ link: existingLink });
+
+    const days = await screen.findByLabelText(/Due after enrollment/);
+    await user.clear(days);
+    await user.type(days, '4000');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockUpdateProgramRequirement).not.toHaveBeenCalled();
+    expect(mockUpdateRequirementEnhanced).not.toHaveBeenCalled();
   });
 });
 

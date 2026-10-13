@@ -5188,6 +5188,40 @@ choice for its own, already-settled case) — before any code changes.
 Found in security-review SF-04 pass 8 (2026-10-12); see
 `docs/security-review/SF-04-storefront-payments.md` → SF8-04-3.
 
+## FIN8-05-1 — Deciding A Budget Request Has No Separation-Of-Duties Guard, Unlike Its Own Sibling (2026-10-12)
+
+`FinanceBudgetRequestService.decide_request` — the Treasurer's
+`finance.manage`-gated approve/adjust/decline on a submitted budget
+request — has no `assert_different_person` check against the request's
+`submitted_by`. `review_request`, the leadership-review step one stage
+later in the same new feature, explicitly has one:
+
+```python
+if str(request.submitted_by or "") == str(reviewer_id) or (
+    await self._acts_as_owner(request, org_id, reviewer_id)
+):
+    raise BudgetRequestForbiddenError(...)
+```
+
+A `finance.manage` holder who also holds a position that owns a budget
+line can create a request for that line (`create_request` lets a manager
+create one for any line, bypassing the ownership check it enforces on
+everyone else) and then decide it themselves — approving their own
+requested amount into the draft-year budget with no second person
+involved at the Treasurer-decision step. A department that uses the
+leadership-review planning stage still gets `review_request`'s guard as a
+backstop; one that doesn't has no check on this path at all.
+
+**Why it is here rather than fixed.** The same tension this page already
+records for FIN-4 (disbursement SoD) and OPS-8 (`record_dues_payment`):
+an unconditional guard would also block the only-finance-officer
+department from ever deciding a request they raised themselves. Whether
+to accept that cost, add a narrow override, or treat leadership review as
+the sole intended backstop is an owner decision, not a drive-by fix.
+
+Found in security-review FIN-05 pass 8 (2026-10-12); see
+`docs/security-review/FIN-05-finance-approvals.md` → FIN8-05-1.
+
 ## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12)
 
 `.github/workflows/ci.yml`'s Backend Lint job installs
