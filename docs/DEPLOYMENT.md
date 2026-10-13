@@ -155,6 +155,12 @@ docker compose up -d
 
 **Best for:** Advanced users who want full control
 
+**Needs Python 3.13 or newer.** Debian 13 and Ubuntu 25.04 or later include
+it. On an older release, install `python3.13` and `python3.13-venv` first (on
+Ubuntu, for example, from the deadsnakes PPA). The script checks before it
+installs anything and stops with this explanation if no suitable Python is
+found; it does not add package sources itself.
+
 **Steps:**
 
 1. **Run Installation Script**

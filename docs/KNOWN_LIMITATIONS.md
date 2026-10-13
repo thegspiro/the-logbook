@@ -965,6 +965,42 @@ What remains for the owner:
 | **Scanner outage fails closed**              | Owner's decision 2026-10-08 | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`) — on every upload path. The owner confirmed it for the on-by-default rollout: a host that upgrades without a running scanner refuses uploads until it has one. |
 | **Files stored before scanning was enabled** | Open                        | Not rescanned. Scanning covers new uploads only; files already on disk (and logos, photos and images already in the database) were never scanned.                                                                                                                                                                     |
 
+## Unraid Community Apps Template — Not Installable Yet (2026-10-13)
+
+**Open decision.** `unraid/the-logbook.xml` is a Community Applications
+template for a single container, `ghcr.io/thegspiro/the-logbook:latest`,
+answering on 3000 (web) and 3001 (API). Two things stand between it and a
+working install:
+
+- **Nothing builds or publishes that image.** No workflow pushes to ghcr.io,
+  and there is no root `Dockerfile`; `UNRAID-INSTALLATION.md` already warns
+  that a pull fails with "manifest unknown".
+- **The project has no combined image to publish.** It ships two:
+  `backend/Dockerfile` (uvicorn on 3001, fixed uid 1000) and
+  `frontend/Dockerfile` (nginx on port 80, forwarding `/api` to a host named
+  `backend`). Publishing either one under the template's name would not
+  give it a container that answers on both ports.
+
+The template is marked as a draft in its own header, its overview and its
+`Status:Beta` category, so nobody submits it as it stands. The settings no
+image reads were removed: `/app/data`, `PUID`/`PGID` (the backend runs as uid
+1000 whatever they say) and a placeholder donate link. The Docker Compose path
+(`unraid/QUICK-START.md`) remains the supported Unraid install.
+
+**To make it installable, choose one:**
+
+1. **A combined image**: nginx and the backend under one process supervisor,
+   plus a workflow that publishes it to ghcr.io on each release. That needs
+   package-write permission on the repository and someone owning releases.
+   MySQL, Redis and ClamAV stay separate containers the user installs (the
+   template already asks for their hosts).
+2. **Two templates**: publish the existing backend and frontend images and
+   split the template in two. The frontend's nginx would need the backend
+   address made configurable instead of the fixed `backend` hostname.
+
+Related and not changed here: `unraid/docker-compose-unraid.yml` also passes
+`PUID`/`PGID` to the backend and frontend, where nothing reads them either.
+
 ## Scheduling Module
 
 ### Naming: scheduled vs. worked (resolved 2026-08-01)

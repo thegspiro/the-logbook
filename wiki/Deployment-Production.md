@@ -240,8 +240,6 @@ loudly every night until fixed.
 | `VERIFY_EVERY_N_BACKUPS` | `7`     | Restore-drill cadence; `0` disables |
 
 There is no on/off switch: backups run whenever the service runs.
-`BACKUP_ENABLED` and `BACKUP_SCHEDULE` in `.env.example` are not read by
-either backup script.
 
 ```bash
 docker compose logs backup
