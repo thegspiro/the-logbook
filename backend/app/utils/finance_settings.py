@@ -30,6 +30,17 @@ of these defaults.
     from 1 to 60, defaulting to 60: the IRS safe harbor for "a reasonable
     time" is 60 days, so a department may be stricter but not looser. Anything
     unreadable falls back to the default rather than raising.
+
+``fund_overspend_mode``
+    What happens when a payment charged to a restricted fund (a fundraising
+    campaign marked restricted; ``app/services/restricted_funds.py``) is more
+    than the fund has left. ``warn`` (the default) flags it to the requester
+    and the approvers and lets the approval through; ``block`` refuses the
+    approval, and a purchase paid for more than its estimate; ``off`` checks
+    nothing. Warn is the default because nothing is charged to a fund until
+    someone chooses one, so no existing request changes, and a restricted gift
+    spent past what was given is a breach of the donor's terms a department
+    should hear about without first finding the setting.
 """
 
 from dataclasses import dataclass
@@ -50,6 +61,12 @@ SUBSTANTIATION_OFF = "off"
 SUBSTANTIATION_WARN = "warn"
 SUBSTANTIATION_BLOCK = "block"
 SUBSTANTIATION_MODES = (SUBSTANTIATION_OFF, SUBSTANTIATION_WARN, SUBSTANTIATION_BLOCK)
+FUND_OVERSPEND_MODE_KEY = "fund_overspend_mode"
+FUND_OVERSPEND_OFF = "off"
+FUND_OVERSPEND_WARN = "warn"
+FUND_OVERSPEND_BLOCK = "block"
+FUND_OVERSPEND_MODES = (FUND_OVERSPEND_OFF, FUND_OVERSPEND_WARN, FUND_OVERSPEND_BLOCK)
+
 # The IRS safe harbor for substantiating an expense "within a reasonable time"
 # under an accountable plan (Treas. Reg. 1.62-2(g)(2)).
 MAX_SUBSTANTIATION_DAYS = 60
@@ -64,6 +81,7 @@ class FinanceSettings:
     dual_approval_threshold: Optional[Decimal]
     substantiation_mode: str = SUBSTANTIATION_OFF
     substantiation_days: int = MAX_SUBSTANTIATION_DAYS
+    fund_overspend_mode: str = FUND_OVERSPEND_WARN
 
 
 def finance_settings_in(settings: Any) -> FinanceSettings:
@@ -92,10 +110,14 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
         and 1 <= days <= MAX_SUBSTANTIATION_DAYS
     ):
         days = MAX_SUBSTANTIATION_DAYS
+    fund_mode = section.get(FUND_OVERSPEND_MODE_KEY)
+    if fund_mode not in FUND_OVERSPEND_MODES:
+        fund_mode = FUND_OVERSPEND_WARN
     return FinanceSettings(
         dual_approval_threshold=threshold,
         substantiation_mode=mode,
         substantiation_days=days,
+        fund_overspend_mode=fund_mode,
     )
 
 

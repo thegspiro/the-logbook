@@ -95,6 +95,8 @@ from app.schemas.finance import (
     FiscalYearUpdate,
     FunctionalClassUpdate,
     FunctionalExpensesReportResponse,
+    FundBalancesReportResponse,
+    FundOptionResponse,
     LateSubstantiationReportResponse,
     ManualDenyRequest,
     MemberDuesPayment,
@@ -145,10 +147,16 @@ from app.services.finance_service import (
     ManualApprovalConflictError,
 )
 from app.services.functional_expenses import FunctionalClassifier
+from app.services.restricted_funds import (
+    charges_of,
+    fund_balances,
+    fund_names,
+    shortfalls,
+)
 from app.utils import download_names
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import load_finance_settings
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -2253,6 +2261,98 @@ async def functional_expenses_report(
     )
 
 
+@router.get("/reports/fund-balances", response_model=FundBalancesReportResponse)
+async def fund_balances_report(
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Each restricted fund's balance today.
+
+    **Requires permission: finance.view**
+
+    A restricted fund is a fundraising campaign marked restricted. Received is
+    its completed donations; spent and committed are the payments charged to
+    it that are paid, and approved but not yet paid; available is received
+    less both. Awaiting approval is shown and not subtracted. ``format=csv``
+    downloads the same rows.
+    """
+    try:
+        report = await FinanceReportService(db).fund_balances(
+            str(current_user.organization_id)
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    rows: list[list[Any]] = [
+        [
+            "Fund",
+            "Purpose",
+            "Received",
+            "Spent",
+            "Committed",
+            "Available",
+            "Awaiting approval",
+        ]
+    ]
+    for fund in [*report["funds"], {"name": "Total", "purpose": "", **report}]:
+        rows.append(
+            [
+                fund["name"],
+                fund["purpose"] or "",
+                _amount_cell(fund["received"]),
+                _amount_cell(fund["spent"]),
+                _amount_cell(fund["committed"]),
+                _amount_cell(fund["available"]),
+                _amount_cell(fund["awaiting_approval"]),
+            ]
+        )
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "fund-balances",
+            await resolve_org_today(db, str(current_user.organization_id)),
+            extension=".csv",
+        ),
+    )
+
+
+@router.get("/funds", response_model=list[FundOptionResponse])
+async def list_restricted_funds(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "finance.request",
+            "finance.view",
+            "finance.approve",
+            "finance.manage",
+        )
+    ),
+):
+    """The active restricted funds a payment may be charged to, with what each
+    has left, for the request forms.
+
+    **Requires permission: finance.request, finance.view, finance.approve or
+    finance.manage**
+    """
+    org_id = str(current_user.organization_id)
+    balances = await fund_balances(db, org_id)
+    return sorted(
+        (
+            FundOptionResponse(
+                campaign_id=f.campaign_id,
+                name=f.name,
+                purpose=f.purpose,
+                available=f.available,
+            )
+            for f in balances.values()
+            if f.active
+        ),
+        key=lambda f: f.name.lower(),
+    )
+
+
 async def _set_functional_class(db, entity, value, current_user, kind: str):
     entity.functional_class = value
     await log_audit_event(
@@ -2367,7 +2467,9 @@ async def get_finance_settings(
     ``dualApprovalThreshold`` is null when off. ``substantiationMode`` and
     ``substantiationDays`` are the accountable-plan deadline for expense
     reports; ``finance.request`` reads them so the expense form can warn a
-    member before they submit a late line. All are changed through
+    member before they submit a late line. ``fundOverspendMode`` is what
+    happens to a payment charged to a restricted fund for more than it has
+    left. All are changed through
     ``PATCH /organization/settings`` (``settings.manage``), never here: they
     bind the finance officers themselves.
     """
@@ -2376,6 +2478,7 @@ async def get_finance_settings(
         dual_approval_threshold=resolved.dual_approval_threshold,
         substantiation_mode=resolved.substantiation_mode,
         substantiation_days=resolved.substantiation_days,
+        fund_overspend_mode=resolved.fund_overspend_mode,
     )
 
 
@@ -2712,6 +2815,11 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+# A payment not yet approved: its charge to a restricted fund is not yet part
+# of what the fund has committed.
+_UNDECIDED_STATUSES = frozenset({"draft", "submitted", "pending_approval"})
+
+
 async def _with_approval_steps(
     service, payload, entity_type, entity_id, org_id, viewer: User
 ):
@@ -2760,6 +2868,26 @@ async def _with_approval_steps(
         payload.effective_functional_class = effective(
             payload.functional_class, payload.budget_id
         )
+    charged = (
+        list(payload.line_items)
+        if entity_type == ApprovalEntityType.EXPENSE_REPORT
+        else [payload]
+    )
+    names = await fund_names(service.db, org_id, [c.fund_campaign_id for c in charged])
+    for c in charged:
+        c.fund_name = names.get(c.fund_campaign_id) if c.fund_campaign_id else None
+    # Once approved, the charge is part of what the fund has committed; the
+    # shortfall is the question an approver answers, so it is reported until
+    # then.
+    if payload.status in _UNDECIDED_STATUSES:
+        kind = entity_type.value
+        over = await shortfalls(
+            service.db,
+            org_id,
+            charges_of(kind, payload),
+            exclude=(kind, str(payload.id)),
+        )
+        payload.fund_shortfall = sum(over.values(), Decimal("0")) if over else None
     if entity_type == ApprovalEntityType.EXPENSE_REPORT:
         payload.awaiting_late_acknowledgement = (
             service.is_awaiting_late_acknowledgement(payload, records)
