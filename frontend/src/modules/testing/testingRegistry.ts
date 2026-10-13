@@ -333,6 +333,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training', label: 'Training home', module: 'training' },
       { path: '/training/my-training', label: 'My training', module: 'training' },
       { path: '/training/submit', label: 'Submit training', module: 'training' },
+      { path: '/training/record-crew', label: 'Record crew training', module: 'training' },
       { path: '/training/courses', label: 'Course library', module: 'training' },
       { path: '/training/programs', label: 'Training programs', module: 'training' },
       { path: '/training/programs/:programId', label: 'Program detail', module: 'training' },

@@ -1540,6 +1540,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/training/record-crew',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'officer-only sibling of /training/submit, which is the representative ratchet route; every control comes from the shared 44px form-input, form-checkbox and button utilities',
+  },
+  {
     path: '/training/courses',
     source: 'src/modules/training/routes.tsx',
     coverage: 'ratchet',

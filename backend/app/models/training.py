@@ -2896,6 +2896,15 @@ class TrainingSubmission(Base):
     """
 
     __tablename__ = "training_submissions"
+    # Lets the two display names below be declared as plain attributes rather
+    # than columns. Anything else on this class still needs Mapped[...].
+    __allow_unmapped__ = True
+
+    # Not stored. TrainingSubmissionService._attach_submitter_names resolves
+    # them for the review queue, which TrainingSubmissionResponse reads with
+    # from_attributes; the model has no relationship to User to read them from.
+    submitter_name: Optional[str] = None
+    recorder_name: Optional[str] = None
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
@@ -2970,6 +2979,21 @@ class TrainingSubmission(Base):
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
         nullable=True,
+    )
+
+    # Crew-recorded training. A shift officer who ran (or oversaw) a drill files
+    # one submission per member present, all sharing ``crew_batch_id``, so the
+    # training officer can approve the crew in one action. ``submitted_by`` is
+    # still the member credited; ``recorded_by`` is the officer who vouched for
+    # it, and is barred from approving it. NULL on every self-reported row.
+    recorded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    crew_batch_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps

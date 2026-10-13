@@ -166,6 +166,11 @@ class TestBackendDockerfile:
             c.split()[0].rstrip("/") == "scripts" for c in copies
         ), f"Production stage must COPY scripts/ directory, got: {copies}"
 
+    def test_production_drops_the_test_user_seeder(self):
+        prod = next(s for s in self.stages if s["name"] == "production")
+        runs = " ".join(_get_instructions(prod, "RUN"))
+        assert "rm -f scripts/seed_test_users.py" in runs
+
     def test_production_has_cmd(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         cmds = _get_instructions(prod, "CMD")
