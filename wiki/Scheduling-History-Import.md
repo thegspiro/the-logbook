@@ -188,6 +188,8 @@ The file is read and you're taken straight to its review page. The **Imports**
 list on the main page shows every draft and committed import, with the time zone
 each one was read in. **Review** reopens a draft, and the bin icon discards one.
 
+![The Shift History Import page with sample.csv chosen, the time zone left as the department's, and the Upload and review button](images/history-import-upload.png)
+
 ---
 
 ## Review
@@ -210,12 +212,17 @@ A good order to work in:
 **Columns & time zone → Members → Units → Positions → Shifts → Issues**.
 Settling one member or unit often clears dozens of issues at once.
 
+The screenshots in this section show the [sample file](#sample-file) being
+reviewed.
+
 ### Issues
 
 Every problem that blocks the commit, in plain language, for example "No member
 matches 'Dana Former'" or "Line 3 is a 70% match…". Click **Resolve** to jump to
 the tab that fixes it. When the list is empty, the page says _Nothing blocks
 this import_.
+
+![The review page for sample.csv: the summary bar with 3 new shifts and 1 outside-agency entry, and one issue, "No member matches 'Dana Former'", with a Resolve button](images/history-import-issues.png)
 
 ### Columns & time zone
 
@@ -225,6 +232,8 @@ this import_.
 - **Columns:** which column of your file feeds each field. Pick
   _Not in this file_ for anything the file doesn't have, then click **Save
   columns**. Re-mapping keeps any per-row edits you've made.
+
+![The Columns & time zone tab: times read in America/New York, and each import field mapped to the matching column of the template](images/history-import-columns.png)
 
 ### Members
 
@@ -241,6 +250,8 @@ to see everyone.
 | **More than one match** | Two or more members have this name                                                              |
 | **No match**            | Nobody in the department matches                                                                |
 | **Remembered**          | Settled by a decision from an earlier import (see [below](#importing-several-files))            |
+
+![The Members tab with one person needing a decision: Dana Former, #77, marked No match, with the Create all 1 unmatched as archived button above](images/history-import-members.png)
 
 For each person, open the dropdown and choose one of:
 
@@ -277,6 +288,8 @@ For each, choose one of:
 Unit names only match **exactly** (ignoring case and spacing), so `A106` never
 matches `A106E`.
 
+![The Units tab: A106 (County EMS) matched to the outside agency's unit, and A106E matched to the department's Ambulance 106E](images/history-import-units.png)
+
 ### Positions
 
 Only rows on your own units take a seat. Positions show up here once every
@@ -289,6 +302,8 @@ row's member and unit is settled.
   - any custom seat your department has, if the name matches exactly.
 - **Anything else**, such as "Acting Lt" or "Rider", needs mapping. Choose one
   of your seats from the dropdown.
+
+![The Positions tab: a blank position matched to the firefighter seat, and Driver, EMT and Officer matched automatically](images/history-import-positions.png)
 
 ### Shifts
 
@@ -314,6 +329,8 @@ see all of them.
 Rows on outside agencies' units are listed under **Outside-agency hours** at
 the bottom of the tab.
 
+![The Shifts tab with every shift shown: Dana Former held as an 85% match with Same shift and Keep separate buttons, a night shift crossing midnight, a 25.5-hour attendance joined from two entries with a Split apart button, and 12 outside-agency hours on County EMS's A106](images/history-import-shifts.png)
+
 ### Rows
 
 This tab is every line of the file, for fixing or leaving out individual rows.
@@ -331,6 +348,8 @@ Filters: **Need attention** (the default), **All**, **Skipped** and
 Rows marked cancelled or no-show in the `status` column appear under
 **Skipped** automatically.
 
+![The Rows tab filtered to All: nine lines, line 4 flagged as an 85% match, and line 10 skipped because the file marks it Cancelled](images/history-import-rows.png)
+
 ---
 
 ## Commit
@@ -339,6 +358,8 @@ Rows marked cancelled or no-show in the `status` column appear under
 shows exactly what will be written: new shifts, existing shifts added to,
 attendance and outside-agency entries, and any former members to be created.
 Confirm with **Commit import**, or choose **Keep reviewing**.
+
+![The Commit this import? dialog: 3 new shifts, 7 attendance and outside-agency entries and 1 archived former member, with a warning that the commit cannot be undone as a batch](images/history-import-commit-confirm.png)
 
 **What a commit does:**
 
@@ -364,6 +385,8 @@ Confirm with **Commit import**, or choose **Keep reviewing**.
 - The Imports list keeps a record of it.
 - **There is no batch undo.** To correct an imported shift, open it on the
   schedule and fix it like any other.
+
+![A committed import's summary: 3 shifts created, 6 attendance records, 1 outside-agency entry, 1 former member created and 1 row skipped](images/history-import-committed.png)
 
 > **Check before you commit.** Spend a minute on the **Shifts** tab with
 > **Only shifts that need a decision** unticked, and spot-check a few busy days.
