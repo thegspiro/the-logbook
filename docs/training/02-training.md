@@ -426,7 +426,7 @@ Every requirement inside a pipeline has a **type** that determines how it is com
 
 Navigate to **Training > Programs** and click **Create Program** to open the pipeline wizard. The wizard builds the entire program — program info, phases, requirements, and milestones — and **saves everything in one step**.
 
-1. **Program information** — Enter the program **name**, **description**, program **type**, and a **program code** (a short identifier such as `PROB-FF` used to reference the program in reports and imports).
+1. **Program information** — Enter the program **name**, **description**, program **type**, and a **program code** (a short identifier such as `PROB-FF` used to reference the program in reports and imports). Optionally tick **Prerequisite programs** — members must complete these programs before they can enroll — and untick **Allow members to be enrolled in other programs at the same time** if this program should be someone's only one (see [Enrolling Members](#enrolling-members) for what each does).
 2. **Add phases** — Add one or more **phases** in the order members will complete them. For each phase, enter a name and, optionally, check **Require officer approval to advance** if an officer must sign off before a member can move to the next phase (see [Phases & Advancing](#phases--advancing)).
 3. **Add requirements to each phase** — Within a phase, click **Add Requirement** and choose the requirement type (hours, courses, shifts, calls, skills evaluation, certification, checklist, or knowledge test). Enter the type's target value — for example, required hours, the course list, or a knowledge-test passing score and maximum attempts.
 4. **Add milestones** — Add **milestone** checkpoints that mark key achievements within the program.
@@ -485,14 +485,23 @@ hides the rest. Turn it off and the members who cannot be enrolled are listed
 with the reason on the row and an **Enrolled** badge, and they cannot be
 selected. A member is ineligible when they:
 
-- have **not met the program's prerequisites**,
-- are already enrolled in a program that **does not allow concurrent
-  enrollment**, or
+- have **not completed every prerequisite program**, or
 - are already on this program.
 
+A program whose **Allow members to be enrolled in other programs at the same
+time** box is unticked does not make anyone ineligible: a member already active
+in another program is listed as eligible with the note "Also enrolled in another
+program", and you can still enroll them.
+
+Both settings are shown under the program's name on its detail page and are
+changed from **Edit** there. A program cannot require itself, and a choice that
+would make the prerequisites circular — Driver Operator requiring Recruit
+School while Recruit School requires Driver Operator — is refused with a
+message naming the program that already requires this one.
+
 So there is no after-the-fact summary of who was skipped and why: you can see it
-before you commit. Correct the underlying issue — complete the prerequisite, or
-finish or cancel the conflicting enrollment — and the member becomes selectable.
+before you commit. Once the member completes the missing prerequisite program,
+they become selectable.
 
 ![The Enroll Members picker — members selected, the ineligible listed with their reason, and the button counting the selection](./images/02-96-bulk-enroll-picker.png)
 

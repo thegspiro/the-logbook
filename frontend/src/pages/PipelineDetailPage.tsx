@@ -1616,6 +1616,24 @@ const PipelineDetailPage: React.FC = () => {
                   </span>
                 )}
               </div>
+              <dl className="text-theme-text-secondary mt-3 space-y-1 text-sm" aria-label="Enrollment rules">
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Prerequisite programs:</dt>
+                  <dd>
+                    {program.prerequisite_programs?.length
+                      ? program.prerequisite_programs.map((p) => p.name).join(', ')
+                      : 'None'}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-theme-text-muted">Enrolled in other programs at the same time:</dt>
+                  <dd>
+                    {program.allows_concurrent_enrollment === false
+                      ? 'Not allowed — flagged when enrolling'
+                      : 'Allowed'}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
 
