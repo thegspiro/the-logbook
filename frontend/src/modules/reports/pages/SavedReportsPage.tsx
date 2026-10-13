@@ -365,6 +365,7 @@ export const SavedReportsPage: React.FC = () => {
           <DialogPanel
             onClose={closeForm}
             role="dialog"
+            aria-modal="true"
             aria-labelledby="saved-report-form-title"
             className="modal-panel-scroll w-full max-w-lg"
           >
