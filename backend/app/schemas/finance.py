@@ -20,6 +20,7 @@ from app.models.finance import (
     DuesFrequency,
     ExpenseType,
     ExportMappingType,
+    FunctionalClass,
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCResponseBase
@@ -232,6 +233,8 @@ class BudgetCategoryCreate(BaseModel):
     sort_order: int = 0
     qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
+    # Null inherits the parent category's (app/services/functional_expenses.py).
+    functional_class: Optional[FunctionalClass] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -247,6 +250,8 @@ class BudgetCategoryUpdate(BaseModel):
     qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
     owner_position_id: Optional[str] = None
+    # Omitted leaves it alone; an explicit null inherits the parent's again.
+    functional_class: Optional[FunctionalClass] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -264,6 +269,7 @@ class BudgetCategoryResponse(UTCResponseBase):
     qb_account_name: Optional[str] = None
     owner_position_id: Optional[str] = None
     owner_position_name: Optional[str] = None
+    functional_class: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -943,6 +949,9 @@ class ApprovalActionRequest(BaseModel):
     # Only an approvals admin (finance.configure_approvals) who is not the
     # step's named approver needs this; it is recorded in the audit log.
     override_reason: Optional[str] = Field(None, max_length=2000)
+    # Approving an expense report with lines submitted after the department's
+    # substantiation deadline needs this set: the approver has reviewed them.
+    acknowledge_late_substantiation: bool = False
 
     @field_validator("override_reason")
     @classmethod
@@ -974,6 +983,9 @@ class PendingApprovalResponse(UTCResponseBase):
     # may act only by giving an override reason.
     can_act: bool = False
     requires_override: bool = False
+    # Expense reports: lines submitted after the substantiation deadline. An
+    # approval must acknowledge them (acknowledgeLateSubstantiation).
+    late_line_count: int = 0
 
 
 class ApproverCoverageResponse(UTCResponseBase):
@@ -1010,6 +1022,10 @@ class UnroutedApprovalResponse(UTCResponseBase):
     # Held for a second, different approver by the dual-approval threshold.
     awaiting_second_approval: bool = False
     first_approved_by: Optional[str] = None
+    # Expense reports: lines submitted after the substantiation deadline, and
+    # whether the report waits for an approver to acknowledge them.
+    late_line_count: int = 0
+    awaiting_late_acknowledgement: bool = False
 
 
 # ============================================
@@ -1119,6 +1135,71 @@ class PaymentsRegisterReportResponse(BaseModel):
     total: Decimal
 
 
+class FunctionalClassUpdate(BaseModel):
+    """Set or clear one payment's functional classification (finance.manage)."""
+
+    model_config = _REQUEST_CONFIG
+
+    # Null clears the override, so the payment takes its category's again.
+    functional_class: Optional[FunctionalClass]
+
+
+class FunctionalExpenseCategoryResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # Null: payments with no budget line.
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    amount: Decimal
+
+
+class FunctionalExpenseClassResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # program, management_general or fundraising; null is unclassified.
+    functional_class: Optional[str] = None
+    categories: list[FunctionalExpenseCategoryResponse]
+    total: Decimal
+
+
+class FunctionalExpensesReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    classes: list[FunctionalExpenseClassResponse]
+    total: Decimal
+
+
+class LateSubstantiationRowResponse(BaseModel):
+    """One expense line reimbursed outside the accountable plan."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # The department's calendar day the report was paid.
+    paid_on: date
+    report_id: str
+    report_number: str
+    member_name: str
+    description: str
+    budget_line: Optional[str] = None
+    incurred_on: date
+    # Null for a report submitted before submission was recorded.
+    submitted_on: Optional[date] = None
+    days_to_submit: Optional[int] = None
+    amount: Decimal
+    acknowledged_by_name: Optional[str] = None
+
+
+class LateSubstantiationReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    rows: list[LateSubstantiationRowResponse]
+    total: Decimal
+
+
 class FinanceSettingsResponse(BaseModel):
     """The finance rules the server applies (app/utils/finance_settings.py)."""
 
@@ -1127,6 +1208,10 @@ class FinanceSettingsResponse(BaseModel):
     # None: off. Otherwise requests of this amount or more need two different
     # approvers.
     dual_approval_threshold: Optional[Decimal] = None
+    # The accountable-plan deadline for expense reports: "off", "warn" or
+    # "block", and the days allowed between incurring and submitting.
+    substantiation_mode: str = "off"
+    substantiation_days: int = 60
 
 
 class ManualDenyRequest(BaseModel):
@@ -1204,6 +1289,10 @@ class PurchaseRequestResponse(UTCResponseBase):
     request_number: str
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     requested_by: str
     title: str
     description: Optional[str] = None
@@ -1299,6 +1388,13 @@ class ExpenseLineItemResponse(UTCResponseBase):
     receipt_document_id: Optional[str] = None
     receipt_file_url: Optional[str] = None
     merchant: Optional[str] = None
+    # Submitted after the department's substantiation deadline; decided at
+    # submission.
+    substantiated_late: bool = False
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     created_at: datetime
 
     _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
@@ -1362,10 +1458,27 @@ class ExpenseReportResponse(UTCResponseBase):
     payment_method: Optional[str] = None
     qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
+    # When the member submitted it; null on reports submitted before this was
+    # recorded.
+    submitted_at: Optional[datetime] = None
+    # The substantiation deadline: how many lines were submitted after it, who
+    # first acknowledged them on approval, and whether the report is waiting
+    # for that acknowledgement (set on detail responses).
+    late_line_count: int = 0
+    late_acknowledged_by: Optional[str] = None
+    late_acknowledged_at: Optional[datetime] = None
+    awaiting_late_acknowledgement: bool = False
     created_at: datetime
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    @model_validator(mode="after")
+    def _count_late_lines(self):
+        self.late_line_count = sum(
+            1 for item in self.line_items if item.substantiated_late
+        )
+        return self
 
 
 # ============================================
@@ -1415,6 +1528,10 @@ class CheckRequestResponse(UTCResponseBase):
     requested_by: str
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     payee_name: str
     payee_address: Optional[str] = None
     amount: Decimal

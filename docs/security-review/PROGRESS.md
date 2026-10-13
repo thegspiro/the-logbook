@@ -16,6 +16,107 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3145](https://github.com/thegspiro/the-logbook/pull/3145)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 8 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged, current
+line numbers updated for file growth. New surface this pass (a narrower
+`GET /users/directory`, an account-unlock action, an undo-drop window,
+consolidated phone validation, upload malware scanning, a
+baseline-role-removal guard, and a repo-wide MCP permission gate affecting
+this feature's two MCP tool files) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 8** section
+for detail. Row 07 stays ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3142's merge, Feature 06, Elections & ballots, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3142 (Feature 06, Elections & ballots, pass 8) merged
+2026-10-13T01:40:06Z — 0 fixed, 0 new findings; log entry already recorded
+below and rotation row 06 stays ✅. This iteration (also a watchdog
+pickup — confirmed via `search_pull_requests`
+`is:open head:claude/security-review-`, 0 results, and no stray remote
+branch) picked up Feature 07 (Users & organizations), the state PR #3142
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 8, PR #3142, before it merged), preserved for history</summary>
+
+**PR [#3142](https://github.com/thegspiro/the-logbook/pull/3142)**: branch
+`claude/security-review-elections-ballots`, Feature 06 (Elections &
+ballots), pass 8 (watchdog pickup). 0 fixed, 0 new findings — one
+standing item resolved by other work (ELEC-14: receipt credential moved
+off the GET query string onto a new POST body), three standing items
+(ELEC-12, ELEC-16, ELEC-28) and ELEC-40 re-confirmed unchanged. New
+surface this pass (in-app ballot self-service with proxy voting, vote
+signing-key rotation, multi-seat tallying) reviewed and verified sound —
+see the Log entry below and
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 8** section
+for detail. Also carries the `main`-wide Alembic merge-heads revision so
+this PR's own gate isn't blocked by unrelated `main` breakage (identical
+content landing independently via #3139). Row 06 stays ✅ (pending this
+PR's merge); next is Feature 07 (Users & organizations).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3137's merge, Feature 05, Finance & approvals, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)
+(Feature 05, Finance & approvals, pass 8, watchdog pickup) merged
+2026-10-12 23:00:53 UTC (`pull_request_read`: `merged: true`) — 0 fixed, 1
+new finding flagged (FIN8-05-1); log entry already recorded below and
+rotation row 05 stays ✅. This iteration (also a watchdog pickup —
+confirmed via `search_pull_requests` `is:open head:claude/security-review-`,
+0 results) picks up Feature 06 (Elections & ballots), the state this PR
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 8, PR #3137, before it merged), preserved for history</summary>
+
+**PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)**: branch
+`claude/security-review-finance-approvals`, Feature 05 (Finance &
+approvals), pass 8 (watchdog pickup). 0 fixed, 1 new finding flagged
+(FIN8-05-1, MED: `decide_budget_request` has no separation-of-duties
+guard, unlike its sibling `review_budget_request`; needs an owner call,
+mirrors FIN-4/OPS-8). One standing item corrected
+(`get_pending_approvals` per-assignee filtering — pass 7's "still
+unchanged" claim was already wrong when written; the fix landed
+2026-10-04) and one closed by other work (the eight non-ledger
+status-transition locks FIN-31 deferred, now fixed and guarded by commit
+`1eae838d`, 2026-10-07). See the Log entry below and
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 8** section
+for detail. Row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3128's merge, Feature 04, Storefront & payments, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3128 (Feature 04, Storefront & payments, pass 8) merged
+clean 2026-10-12 18:01:52 UTC (`pull_request_read`: `merged: true`; 5
+files changed — `PROGRESS.md`, `SF-04-storefront-payments.md`,
+`storefront_service.py`, `test_storefront_payment_race.py`,
+`KNOWN_LIMITATIONS.md`). Not docs-only (the SF8-04-1 `refund_order` locking
+fix and its guard test landed with it), but it is already fully recorded
+in the Log entry below, so there is nothing further to add here. Rotation
+row 04 stays ✅. Confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR is open. Proceeding to Feature 05 (Finance &
+approvals), pass 8.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3128, Feature 04, Storefront & payments, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3128](https://github.com/thegspiro/the-logbook/pull/3128)**: branch `claude/security-review-storefront-payments`,
 Feature 04 (Storefront & payments), pass 8 (watchdog pickup). 2 fixed
 (SF8-04-1, a `refund_order` lost-update race of the same shape SF-9 was
@@ -34,6 +135,8 @@ entry below and
 `docs/security-review/SF-04-storefront-payments.md`'s **Pass 8** section for
 detail. Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3105's merge, Feature 03, Public surface & webhooks, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18672,6 +18775,200 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 07 (Users & organizations, pass 8) — 0 fixed, 0 new findings; 3 standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged (watchdog pickup)
+
+**Watchdog pickup.** PR #3142 (Feature 06, Elections & ballots, pass 8)
+merged 2026-10-13T01:40:06Z and its own body named Feature 07 as next,
+matching this row's own `PROGRESS.md` note. Independently re-confirmed via
+`search_pull_requests` (`is:open head:claude/security-review-`, 0 results)
+and a remote-branch check (no `claude/security-review-*` ref) that no
+security-review PR was open before this iteration started. Docs-only — the
+merged PR touched only the Elections findings file and `PROGRESS.md`, so
+nothing further to record beyond clearing the **Open PR** row above.
+
+**Real delta since pass 7's closing merge (`cc55dff6`, PR #2952,
+2026-10-05): 629 commits in the window, 14 touching a declared file
+directly, 1,060 insertions / 320 deletions across all twelve of this
+feature's declared files** (the four endpoint files, their services, models
+and schemas, and its MCP surface). Read as a real delta rather than
+sampled — every hunk of every file's diff — not a zero-diff pass: a
+narrower `GET /users/directory` endpoint (USR-8's owner-chosen remedy from
+pass 7, now shipped and verified), a lockout-unlock admin action
+(`POST /users/{user_id}/unlock`), an "undo a mistaken drop" one-week window
+(`GET`/`POST /users/{user_id}/undo-drop`), phone-number validation
+consolidated onto one new-writes-only helper applied to both mutation
+paths, malware scanning added to the member-photo and organization-logo
+upload paths, a guard against stripping the baseline `member` position from
+an active account, and a near-total `Column(...)` → `Mapped[...]` mypy
+conversion across every model in `models/user.py`. Also read, though
+outside the four declared files because it is load-bearing for this
+feature's two MCP tool files or extends the `User` model: a cross-cutting
+change making `app/mcp/registry.py`'s per-tool `permissions` gate a
+required, no-default argument (closing a prior gap where an OAuth-connected
+member's own permissions were never checked against an MCP tool, only
+module enablement — this feature's five tools each now carry a
+`permissions=` tuple matching the equivalent REST endpoint's own gate), and
+the new member-badge-code feature (`member_badges.py`,
+`member_badge_service.py`) — org-scoped throughout, enumeration-safe,
+rate-limited, migration tolerant of a `create_all`-only install.
+
+All 77 routes across the four principal files enumerated mechanically (not
+sampled): every one carries a permission dependency or a bare
+`get_current_user` with self-or-admin gating in the handler body. Three
+standing findings re-confirmed unchanged, current line numbers updated for
+file growth: **USR-5** (unbounded lists, narrowed by the owner in pass 7),
+**USR-8** (full-roster `GET /users`, narrowed by the owner in pass 7 via
+the directory split verified this pass), **USR-10a**
+(`_tier_member_counts` not a locking read against
+`MembershipTierService.advance_all` — that service's only change this
+window is an unrelated mypy fix, so the disposition from pass 5 is
+unchanged). `docs/KNOWN_LIMITATIONS.md`'s three matching entries cite
+functions/files rather than line numbers, so no edit was needed there.
+**0 application-code defects found, 0 fixes needed.** Completion gate: all
+green — see `docs/security-review/USR-07-users-organizations.md`'s **Pass
+8** section for every check's result, including a full
+`pytest tests/ -m "not integration and not slow and not docker"` run
+(14,328 passed) given the cross-cutting MCP permission change in this
+window's diff.
+
+### 2026-10-12 — Feature 06 (Elections & ballots, pass 8) — 0 fixed, 0 new findings; 1 standing item (ELEC-14) resolved by other work, 3 re-confirmed unchanged (watchdog pickup)
+
+**Closure.** PR #3137 (Feature 05, Finance & approvals, pass 8) merged
+clean 2026-10-12 23:00:53 UTC (`pull_request_read`: `merged: true`; 1 fix
+flagged — FIN8-05-1 — not fixed in that pass), not docs-only (the FIN8-05-1
+finding and two standing-item corrections landed with it) but already
+fully recorded in its own Log entry below, so nothing further to record
+beyond clearing the **Open PR** row above. Independently re-confirmed via
+`search_pull_requests` (`is:open head:claude/security-review-`, 0 results)
+that no `claude/security-review-*` PR was open before this iteration
+started — this iteration is itself a watchdog pickup, the dedicated
+`/loop 30m /security-review` session having gone quiet after #3137
+merged.
+
+**Real delta since pass 7's closing merge (`3d4d6b14`, PR #2947,
+2026-10-05): 71 files, 9,852 insertions / 576 deletions** across the
+feature's full domain — `election_service.py` alone grew by 2,280 lines.
+Read as a real delta rather than sampled: 4 new routes (69, up from 65 —
+in-app ballot self-service with proxy support, and a POST form for
+receipt verification), every new service method read in full. One
+standing finding resolved: **ELEC-14** (receipt credential as a GET query
+parameter) — a new `POST /{election_id}/verify-receipt` carries it in the
+body instead, with the frontend already migrated and the GET kept only as
+a labeled-deprecated fallback for undocumented external callers. Three
+standing items re-confirmed unchanged: ELEC-12 (`SavedBallotTemplate` list
+still unpaginated, though bounded in practice by its existing 200/org
+creation cap), ELEC-16 (`list_manual_ballot_batches` unbounded, accepted
+as-is), ELEC-28 (in-app ballot still can't render a ballot-item/multi-seat
+contest, converges with W50-10; W50-11's tally half is separately fixed —
+see below). ELEC-40 also re-confirmed unchanged (dedup helpers untouched
+by this window's diff).
+
+New security-relevant surface verified sound rather than re-derived: the
+in-app ballot's `proxy_authorization_id` is validated against the
+caller's own user id before anything is read or written (closing the
+obvious IDOR that parameter would otherwise open); the new vote-signing
+key rotation (`VOTE_SIGNING_KEY`, `signing_key_id`) bounds a legacy-key
+fallback to a cutover date so `SECRET_KEY` cannot become a silent
+permanent second signing key, and keeps `hmac.compare_digest` throughout;
+`voting_tokens.user_id` (W50-3) is gated so an anonymous election's link
+votes cannot become attributable through it regardless of what the
+column holds. Multi-seat tallying (W50-11) and the already-landed
+ELEC-45/46 fixes (void-aware integrity chain, labeled/frozen on-behalf
+nomination acceptance) were re-verified against current code and hold.
+All five new election-table migrations are idempotent,
+`create_all`-guarded, and the two new FKs are `nullable=True` +
+`ondelete="SET NULL"`.
+
+**Gate:** backend `flake8`/`black --check`/`isort --check-only` clean;
+`validate_migrations.py --strict` (575 revisions, single head
+`7a849409c1d0` — this PR also carries the `main`-wide
+dashboard-pulse/practical-skills merge revision, landing independently via
+PR #3139); `check_route_permissions.py --strict` (266 routes, 0
+errors/warnings); `generate_schema_docs.py` re-run (one-line column-count
+diff, carried in this PR per Pitfall #30c); `check_docs_links.py` (425
+files, 0 broken links); scoped pytest (565 passed, 1 pre-existing skip);
+frontend `typecheck` (0 errors), `lint` (0 errors/warnings), 33
+elections/ballot/receipt frontend test files (172 tests) passed,
+`testingRegistry.test.ts` (12 passed) and the mobile-route-integrity e2e
+spec (1 passed).
+
+Findings doc: [`ELEC-06-elections-ballots.md`](./ELEC-06-elections-ballots.md)
+→ **Pass 8**. Rotation row 06 stays ✅ (pending this PR's merge). Next:
+Feature 07 (Users & organizations).
+
+### 2026-10-12 — Feature 05 (Finance & approvals, pass 8) — 0 fixed, 1 new finding flagged; one standing item corrected, two closed by other work (watchdog pickup)
+
+**Closure.** PR #3128 (Feature 04, Storefront & payments, pass 8) merged
+clean 2026-10-12 18:01:52 UTC (`pull_request_read`: `merged: true`; 5
+files changed — `PROGRESS.md`, `SF-04-storefront-payments.md`,
+`storefront_service.py`, `test_storefront_payment_race.py`,
+`KNOWN_LIMITATIONS.md`), not docs-only (the SF8-04-1 locking fix and its
+guard test landed with it) but already fully recorded in its own Log
+entry below, so nothing further to record beyond clearing the **Open PR**
+row above. Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR was open before this iteration started.
+
+**Feature 05, pass 8 (watchdog pickup — no `claude/security-review-*` PR
+or branch existed anywhere in the repo since PR #3128 merged).** Pass 7's
+closing merge (`2c2ebaa7`, PR #2941) is **82 files, 20,664 insertions**
+behind `origin/main` scoped to this feature's domain — the feature roughly
+tripled in size (41 → 69 → 105 routes across the module's history;
+`finance.py` 1,370 → 3,650 lines; `finance_service.py` grew to 5,867
+lines, plus a new 1,145-line `finance_budget_request_service.py`). Real
+new surface, read in full rather than diffed-and-trusted: a budget-amendment
+second-officer-confirmation workflow with a reversing-entry correction
+path; fiscal-year planning stages, year-end close/lock and
+copy-last-year's-lines; a position-based budget-line-ownership model
+backing a whole self-service "my budgets" / "budget requests" surface with
+no `finance.*` permission (self-scoped instead, enumerated and verified);
+and receipts on purchase requests/expense line items through the
+already-reviewed shared upload service.
+
+**One new finding (FIN8-05-1, MED, flagged):** `decide_budget_request`
+(the Treasurer's decision on a submitted budget request) has no
+separation-of-duties guard, unlike its own sibling `review_budget_request`
+(leadership review, one stage later in the same new feature), which
+explicitly refuses a reviewer who owns the line or submitted the request.
+A `finance.manage` holder who also owns a budget line can submit a
+request for it and decide it themselves. Not fixed — the same
+single-officer-department tension this page already records for FIN-4 and
+OPS-8 applies, so it needs an owner call rather than an unconditional
+guard. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Three standing items re-verified, one correction and two closures —
+by direct read of current code, not taken on any prior pass's word:**
+FIN-30 (`list_dues_payments` unbounded) is unchanged, still correctly
+flagged. `get_pending_approvals` per-assignee filtering — pass 7
+(2026-10-05) claimed this was "still unchanged," which was already wrong
+when written (`KNOWN_LIMITATIONS.md` dates the actual fix to 2026-10-04);
+corrected here rather than carried forward. The eight non-ledger
+status-transition locks FIN-31 (pass 5) deliberately deferred — re-verified
+**fixed by other, non-security-review work**: commit `1eae838d`
+("let every member raise their own finance requests," 2026-10-07, two days
+after pass 7) routed all eight through the locked-read getter path while
+adding self-service scoping, with its own guard test
+(`TestFinanceWorkflowLocking`) already in place and passing (55/55 in
+`test_capacity_locking.py`).
+
+Full write-up:
+[`FIN-05-finance-approvals.md`](./FIN-05-finance-approvals.md) → Pass 8.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` (CI's pins: flake8 7.3.0, isort 9.0.1) — clean.
+`validate_migrations.py --strict` — 572 revisions, single head. `check_
+route_permissions.py --strict` — 265 routes, 0 errors/0 warnings.
+`generate_schema_docs.py` — zero diff. Scoped pytest (`-k "finance or dues
+or approval or budget or export"`) — 1,097 passed, 1 skipped
+(pre-existing). Full backend unit suite — 14,262 passed, 1 skipped, 0
+failed. Frontend: `vitest run src/modules/finance/` — 435 passed;
+`testingRegistry.test.ts` — 12 passed; `mobile-route-integrity.spec.ts` —
+1 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/0
+warnings.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots).
 
 ### 2026-10-12 — Feature 04 (Storefront & payments, pass 8) — 2 fixed (1 new, SF8-04-1; plus SF-9/SF-11 re-verified fixed by other work), 2 new findings flagged (watchdog pickup)
 

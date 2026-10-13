@@ -152,6 +152,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-theme-text-primary text-lg font-semibold">{title}</h3>
           <button
+            data-dialog-close
             type="button"
             onClick={onClose}
             aria-label="Close"

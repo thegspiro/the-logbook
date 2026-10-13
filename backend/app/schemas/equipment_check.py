@@ -1116,6 +1116,64 @@ class InventoryLinkResponse(BaseModel):
     coverage: LinkCoverage
 
 
+class LinkReportPosition(BaseModel):
+    """One unlinked checklist position, and where it sits."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    template_id: str
+    template_name: str
+    # False for a draft — labelled on the report so an officer can tell a rig
+    # crews run today from one still being built.
+    template_active: bool
+    compartment_name: Optional[str] = None
+    check_type: Optional[str] = None
+
+
+class LinkReportGroup(BaseModel):
+    """Every unlinked position sharing one normalized name."""
+
+    model_config = _camel_config
+
+    key: str
+    name: str
+    position_count: int
+    template_count: int
+    positions: List[LinkReportPosition] = []
+    suggestions: List[InventoryMatchSuggestion] = []
+
+
+class LinkReportResponse(BaseModel):
+    """The department's unlinked checklist positions. Nothing has been written."""
+
+    model_config = _camel_config
+
+    coverage: LinkCoverage
+    template_count: int = 0
+    groups: List[LinkReportGroup] = []
+
+
+class CrossTemplateLinkRequest(BaseModel):
+    """Links reviewed on the department-wide report.
+
+    Maps template item id -> inventory item id. No nulls: the report only shows
+    unlinked positions, so there is nothing on it to unlink. Capped so one
+    request cannot hold a row lock over an unbounded set.
+    """
+
+    links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
+
+
+class CrossTemplateLinkResponse(BaseModel):
+    """How many positions were linked, and how many had been linked meanwhile."""
+
+    model_config = _camel_config
+
+    linked: int = 0
+    skipped: int = 0
+
+
 # CheckTemplateItemResponse references DeployedLot, which is declared with the
 # supply schemas further down; bind the forward reference now that it exists.
 CheckTemplateItemResponse.model_rebuild()

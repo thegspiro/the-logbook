@@ -258,6 +258,7 @@ export default function MaintenanceListPage() {
                 {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
               </h2>
               <button
+                data-dialog-close
                 onClick={() => setShowModal(false)}
                 aria-label="Close dialog"
                 className="text-theme-text-muted hover:text-theme-text-primary"

@@ -1119,6 +1119,7 @@ const FormsPage: React.FC = () => {
                       Create Form
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowCreateModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
@@ -1254,6 +1255,7 @@ const FormsPage: React.FC = () => {
                       <span>Share Form</span>
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowShareModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"
@@ -1497,6 +1499,7 @@ const FormsPage: React.FC = () => {
                       <span>Integrations</span>
                     </h3>
                     <button
+                      data-dialog-close
                       onClick={() => setShowIntegrationModal(false)}
                       className="text-theme-text-muted hover:text-theme-text-primary"
                       aria-label="Close dialog"

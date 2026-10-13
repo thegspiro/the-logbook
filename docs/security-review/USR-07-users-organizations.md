@@ -1,6 +1,274 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 8 (2026-10-13, watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session had no
+open security-review PR or branch (`search_pull_requests
+head:claude/security-review-` returned nothing, and `git branch -r` showed no
+stray branch). PR #3142 (Feature 06, Elections & ballots, pass 8) had merged
+at 2026-10-13T01:40:06Z and its own body named Feature 07 as next, matching
+`PROGRESS.md`'s Open PR note.
+
+**Scope:** full diff since pass 7's merge commit `cc55dff6` (PR #2952) across
+the four principal files plus their services, models and schemas, and this
+feature's MCP surface — the same twelve files pass 6/7 declared:
+`endpoints/users.py`, `endpoints/organizations.py`,
+`endpoints/member_status.py`, `endpoints/member_leaves.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`services/member_leave_service.py`, `models/user.py`, `schemas/user.py`,
+`schemas/organization.py`, `app/mcp/tools/members.py`,
+`app/mcp/tools/organization.py`. **Baseline:** `cc55dff6`. **Head:**
+`8f1855a3`. 629 commits landed in the window; 14 of them touch a declared
+file directly (`git log --oneline cc55dff6..origin/main -- <declared files>`).
+
+**Not a zero-delta pass.** Real feature work landed in all twelve files
+(1,060 insertions / 320 deletions across the twelve, per `git diff --stat`):
+a narrower member directory endpoint and the owner-accepted `GET /users`
+narrowing from pass 7 shipping in full, a lockout-unlock admin action, an
+"undo a mistaken drop" window, phone-number validation consolidated onto one
+new-writes-only helper, malware scanning added to the member-photo and
+organization-logo upload paths, a guard against stripping the baseline
+`member` position from an active account, and a near-total `Column(...)` →
+`Mapped[...]/mapped_column(...)` mypy conversion across every model in
+`models/user.py` (matching SEC-00 pass 8's codebase-wide finding about this
+same migration, read here to confirm it changed annotations only). Every
+hunk of every file's diff read in full against the checklist, not sampled.
+
+**Read directly though outside the four principal files, because it extends
+the `User` model or the MCP surface this feature owns:**
+`app/mcp/registry.py` (a cross-cutting, already-landed change — not part of
+this pass's own diff window by authorship, but load-bearing for the two MCP
+files that are declared scope) and the new `member_badges.py` /
+`member_badge_service.py` (badge-code issuance, outside the four declared
+files, spot-checked because it adds a column and a unique index to `User`).
+
+### Verified good ✅ (new this pass)
+
+- **`GET /users/directory` (USR-8's narrowing, now reviewed end to end) is
+  correctly org- and visibility-scoped.** `list_member_directory`
+  (`users.py:198`) gates on the same `users.view`/`members.view`/
+  `members.manage` OR-set as `GET /users` and delegates to
+  `UserService.get_directory_for_organization` (`user_service.py:77`), which
+  filters `organization_id == str(organization_id)` (the caller's own, never
+  client-supplied), excludes soft-deleted and archived rows, and reuses the
+  same `_visible_contact_fields` helper `get_users_for_organization` uses —
+  so the directory and the management roster cannot disagree about which
+  contact fields a given visibility setting shows. `MemberDirectoryEntry`
+  (`schemas/user.py:547`) carries no `username`, `hire_date`, `station`,
+  `platoon`, `membership_type` or classification field — confirmed by
+  reading the schema, not the docstring's claim.
+- **`POST /users/{user_id}/unlock` (new, `users.py:2439`) is sound.**
+  `members.manage`-gated, rate-limited via the same `_rate_limit_admin_reset`
+  dependency the reset-password/reset-mfa routes share, loads the target
+  `User` row with `.with_for_update()` **and** an explicit
+  `organization_id == current_user.organization_id` filter (XC-3), runs
+  `_enforce_account_reset_ceiling` before mutating, refuses a 400 when the
+  account is not actually locked (checked against a tz-aware "now", not a
+  naive comparison that could mis-read a naive-stored timestamp), and clears
+  both `locked_until` and `failed_login_attempts` together so the member
+  gets the full attempt allowance back rather than landing re-locked on the
+  next bad attempt. Audits `target_user_id`/`target_username`/
+  `locked_until` — `target_username` matches the existing convention every
+  other admin-action audit event in this file already uses (see below).
+- **`GET`/`POST /users/{user_id}/undo-drop` (new, "undo a mistaken drop",
+  `member_status.py`) are sound.** Both `members.manage`-gated; `_load_member`
+  (`:145`) filters `organization_id` and `deleted_at.is_(None)` on every
+  call, and the mutating path adds
+  `.with_for_update().execution_options(populate_existing=True)` — two
+  officers racing to undo the same drop cannot both reopen a service stint
+  (Pitfall #27). `UNDO_DROP_RESTORE_STATUSES` deliberately excludes
+  `suspended` — undoing a drop must not be usable to launder an unresolved
+  suspension into an ordinary status — and the one-week window
+  (`UNDO_DROP_WINDOW_DAYS`) is computed server-side from the row's own
+  `status_changed_at`, never from client input. `MemberServiceHistoryService
+.undo_separation` is a no-commit, no-exception helper that degrades to
+  "nothing to reopen" rather than raising, so a hand-entered history record
+  with no stint to reopen cannot 500 the endpoint.
+- **`change_member_status`'s new lock ordering closes a last-administrator
+  race this pass's own diff introduces the lock for.** When the target
+  status is anything but `ACTIVE`, `lock_administrator_continuity` is now
+  taken (`member_status.py:319-321`) **before** the target `User` row's own
+  `.with_for_update()` lock, matching the file's own documented invariant
+  that every path lock in the same order (the member-row-then-org-row
+  ordering USR-10/pass-5 established for the membership-tier race is a
+  different pair of locks and does not conflict with this one, since
+  `change_member_status` never holds both the continuity lock and a
+  _different_ member's row lock at once). `assert_not_last_administrator` —
+  called only after both locks are held — now sees a consistent count rather
+  than a snapshot that predates a concurrent demotion.
+- **Malware scanning closed a gap on two image-upload paths in this
+  feature's scope.** `users.py`'s `upload_photo` (`:2660-2672`) now calls
+  `reject_if_malicious` on the decoded bytes before Pillow re-encodes them,
+  and `organizations.py`'s `update_organization_profile` logo path
+  (`:1562-1565`) now routes through `scan_and_validate_logo`, which decodes
+  the base64 payload and calls the same `reject_if_malicious` before
+  `validate_logo_image` runs — both now match the repo-wide pattern already
+  in place at ten other upload sites (confirmed by reading
+  `app/services/upload_scanning.py`'s `reject_if_malicious`/
+  `scan_and_validate_logo` directly, not inferring from the call site).
+- **`_refuse_base_position_removal` (W11-9, `users.py:1128-1148`) is applied
+  on both role-mutation paths that can remove it** — the full-set replace
+  (`assign_user_roles`) and the single-role removal
+  (`remove_role_from_user`) — and is a 400 refusal, not a silent no-op, with
+  an explicit archived-member exemption (an archived account's roles may
+  still be edited). This is an availability/correctness guard, not a
+  privilege-escalation path: it can only make a role grant _harder_ to
+  remove, never easier to add.
+- **`_validated_phone_changes` (W04-7, `users.py:133-150`) is applied
+  identically on both mutation paths that accept a phone/mobile value**
+  (`update_contact_info`, `update_user_profile`), each raising a 400 naming
+  the field before anything else in the request is applied — so a rejected
+  number does not leave the rest of the save half-applied. Read
+  `validate_member_phone` (`app/utils/phone_numbers.py`) directly: blank
+  clears to `None` (Pitfall #1's clearing semantics, not `??`), a value equal
+  to what is already stored passes unchanged (grandfathers a number that
+  predates the rule), and only a genuinely new value is validated against
+  the 7–15-digit/extension pattern. No SQL or template built from this value
+  — it is a stored field only.
+- **Lock-state disclosure is now minimized, not merely present
+  (W02-4, `users.py:874-889`).** `_redact_contact_fields` clears
+  `locked_until` to `None` for every viewer who is not `members.manage`
+  (the only role that can act on a lock), and clears it for an admin viewer
+  too once the lock has actually expired — "a lock still in force is news;
+  an expired timestamp is history," per the code's own comment. Checklist
+  §5 ("list responses do not over-serialize") is satisfied here by
+  construction rather than by a reviewer's judgment call.
+- **`AdminUserCreate.status` cannot be used to create a member in a status
+  that should only be reached through the status-change machinery
+  (W08-1, `schemas/user.py:350-376`).** `_creatable_status` validates against
+  a closed `CREATABLE_MEMBER_STATUSES = {"active", "inactive", "leave"}`
+  allowlist — `dropped_voluntary`/`dropped_involuntary`/`retired`/
+  `suspended`/`archived` are all rejected with a 400 naming the allowed set,
+  so a create cannot bypass the property-return report, service-history
+  stint-closing, or audit trail that `PATCH /{user_id}/status` triggers for
+  those transitions. `users.py`'s own `create_member` then applies
+  `UserStatus(user_data.status) if user_data.status else UserStatus.ACTIVE`
+  — the validator, not the endpoint, is what makes this safe, confirmed by
+  reading both together rather than trusting the field's description text.
+- **The new `badge_code` column and its feature (`member_badges.py`,
+  `member_badge_service.py`) are sound, spot-checked though outside this
+  feature's four declared files.** Every query in `MemberBadgeService` filters
+  `organization_id` directly on `User` (no parent-resolution needed — `User`
+  carries the column). `get_member_badge` returns 404 (not 403) for a
+  colleague's badge when the caller is neither the subject nor a badge
+  officer, so the response does not confirm the member exists under that id.
+  `resolve_badge` is rate-limited (120/min) and the legacy-short-id fallback
+  only matches when exactly one row matches (`len(users) == 1`), refusing to
+  guess between two collisions. The migration
+  (`20261005_1810_ad3b979746f1_add_users_badge_code.py`) is idempotent and
+  tolerates a `create_all`-only table (checklist §7's "a migration must
+  tolerate a table only `create_all` builds" — guards on `_has_column("users",
+"id")` first), and the new unique index is `(organization_id, badge_code)`,
+  not global — a collision across organizations is not even possible, let
+  alone exploitable. `badge_code` is confirmed absent from every response
+  schema in `schemas/user.py` (grepped the file directly), matching the
+  model's own doc comment that it must never reach a general user response.
+- **The MCP permission gap this rotation's own checklist exists to catch is
+  now closed for every MCP tool, including this feature's five.**
+  `app/mcp/registry.py`'s `permissions` parameter is now a required,
+  no-default keyword argument (confirmed by reading the function signature,
+  not the docstring), so a tool cannot be registered without a decision, and
+  `McpPrincipal.member_allows` (`app/mcp/principal.py:80-93`) fails closed
+  for an OAuth-connected member — an empty permission tuple or an
+  unresolved `member_permissions` refuses the call — while a service key is
+  exempt by design (documented, and not this feature's trust boundary to
+  second-guess). This feature's five tools (`list_members`, `get_member`,
+  `get_department_profile`, `list_locations`, `get_location_description`)
+  each now carry a `permissions=` tuple matching the equivalent REST
+  endpoint's own gate (e.g. `list_members` → `("users.view", "members.view",
+"members.manage")`, the same OR-set as `GET /users`). This change's own
+  authorship is outside this pass's diff window (an unrelated mypy-fix
+  commit, `c1b56a4b`), but it is load-bearing for two declared files, so it
+  is read and confirmed here rather than assumed from its commit message.
+- **All 77 routes across the four principal files enumerated mechanically,
+  not sampled** (32 in `users.py`, 24 in `organizations.py`, 14 in
+  `member_status.py`, 7 in `member_leaves.py`) — every one carries either a
+  `require_permission`/`require_all_permissions` dependency or a bare
+  `get_current_user` (self-or-admin-gated in the handler body for every
+  by-id route in that category, re-confirmed unchanged for the five sites
+  pass 4 named). `organizations.py` still carries no by-id path parameter
+  except the pre-existing, allowlist-validated
+  `/retention-policy/{record_class}`.
+- **`member_name`/`target_username` in `log_audit_event`'s `event_data`
+  on the two new endpoints (`admin_unlock_account`, `undo_member_drop`) is
+  consistent with every other status-changing audit call in this file**
+  (`change_member_status`, `archive_member`, `change_membership_type`,
+  `set_compliance_exemption` all already carry `member_name` — grepped and
+  compared directly), not a new PII-in-audit-log pattern. Naming the subject
+  of an administrative action on their own record is the audit trail's own
+  purpose; this is unchanged review territory, not re-litigated here.
+- **No new `.ilike()`/`.like()` without `escape=`, raw `csv.writer`, or
+  `window.confirm`/`alert`/`prompt`** in any of the twelve backend files or
+  the frontend consumers of the new endpoints (`UndoDropControl.tsx`,
+  `undoDropService.ts`, `memberDirectoryService.ts`, `memberBadgeService.ts`
+  — grepped fresh this pass, 0 hits; `UndoDropControl.tsx` uses `useConfirm()`
+  and `reason.trim() || undefined`, matching Pitfalls #16 and #1).
+- **`Session`'s dead `previous_refresh_token`/`previous_refresh_expires_at`
+  columns are fully gone, not merely unused** — confirmed 0 remaining
+  references anywhere in `backend/app/`, and the removal is accompanied by
+  its own migration
+  (`20261004_2240_3b66b78c770b_drop_dead_refresh_rotation_grace_columns.py`).
+  Outside this feature's declared scope (Auth/session lifecycle), read only
+  because the column lived in `models/user.py`.
+
+### Re-verified, not re-derived — all three standing findings unchanged
+
+- **USR-5** (LOW/MED, unbounded lists; narrowed by the owner in pass 7) —
+  `get_archived_members` now `member_status.py:946` (was `:771`),
+  `list_users_with_roles` now `users.py:892` (was `:824`),
+  `MemberLeaveService.list_leaves` still `member_leave_service.py:160`. All
+  three unchanged in shape; line movement is this window's own insertions
+  landing above them, not a regression. `leave_widget_summary`'s SQL-
+  aggregate fix (already recorded `✅ Fixed` in `KNOWN_LIMITATIONS.md`) is
+  unchanged this pass.
+- **USR-8** (MED, `GET /users` sends the full roster record to every
+  `members.view` holder; narrowed by the owner in pass 7) —
+  `UserService.get_users_for_organization` still `user_service.py:22`,
+  `UserListResponse` still `schemas/user.py` (grown but unchanged in shape),
+  `list_users` still `users.py:123`. Still accepted unchanged by the owner's
+  own pass-7 decision; the new `/directory` split is the owner's chosen
+  remedy and is verified above, not re-litigated.
+- **USR-10a** (LOW, `_tier_member_counts` not a locking read against
+  `MembershipTierService.advance_all`) — `_tier_member_counts` now
+  `member_status.py:1226` (was `:1051`), `update_membership_tier_config`
+  now `:1263` (was `:1088`), its occupancy-check call site now `:1380`.
+  `membership_tier_service.py`'s only change in this window is a
+  type-annotation (mypy) fix to `current_stint_start` — confirmed by reading
+  the diff — no locking or behavioral change, so the disposition and
+  reasoning from pass 5 are unchanged. `docs/KNOWN_LIMITATIONS.md`'s three
+  matching entries re-read and confirmed still accurate (they cite
+  functions/files, not line numbers, so no edit is needed).
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** Every
+new surface this pass's real feature work introduced — a narrower directory
+endpoint, an account-unlock action, an undo-drop window, consolidated phone
+validation, upload malware scanning, a baseline-role-removal guard, and a
+repo-wide MCP permission gate — was reviewed against the checklist and found
+already correctly guarded by its own authors.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Result                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | ✅ clean (2202 files unchanged)                              |
+| `isort --check-only app/ tests/ alembic/` — run against both the repo's declared 9.0.2 and CI's separately-pinned 9.0.1 (`.github/workflows/ci.yml` installs it explicitly in the lint job)                                                                                                                                                                                                                                                                                                                      | ✅ clean under both versions                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 576 revisions, single head `5372d41aaf3e`                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 267 routes, 0 errors, 0 warnings                          |
+| `pytest tests/ -q -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative or membership_tier or capacity_locking or navigation_layout or setup_checklist or mcp or preferred_name or display_name or membership_number or membership_id or bottom_nav or email_choices or email_link_domain or service_period or rejoin or badge or undo_drop or directory or unlock or dashboard_pulse"` | ✅ 1,509 passed, 1 pre-existing skip (`py_vapid`), 0 failed  |
+| `pytest tests/ -m "not integration and not slow and not docker"` (full unit suite — run broadly since this window touched the cross-cutting MCP permission gate and the `User`/`Organization` models' own mypy conversion)                                                                                                                                                                                                                                                                                       | ✅ 14,328 passed, 1 pre-existing skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ✅ 0 errors, 0 warnings                                      |
+| Scoped frontend suite (`UndoDropControl`, `Members`, `MemberAdminEditPage`, `AddMember`, `UserSettingsPage`, `MemberProfilePage` — 5 files)                                                                                                                                                                                                                                                                                                                                                                      | ✅ 145 passed                                                |
+
+`npm ci` was run at the worktree root first — this worktree had no
+`node_modules` installed at all (not merely stale), consistent with pass 4's
+documented quirk about a fresh worktree needing it before the first
+`npm run lint`/`typecheck` attempt.
 
 ---
 

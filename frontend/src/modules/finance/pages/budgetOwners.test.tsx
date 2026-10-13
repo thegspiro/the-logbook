@@ -442,6 +442,7 @@ describe('FiscalYearSettingsPage category owner', () => {
         description: null,
         ownerPositionId: null,
         qbAccountName: null,
+        functionalClass: null,
       })
     );
   });
@@ -482,6 +483,46 @@ describe('FiscalYearSettingsPage category QuickBooks account', () => {
       expect(updateCategory).toHaveBeenCalledWith(
         'cat-training',
         expect.objectContaining({ name: 'Training', qbAccountName: null })
+      )
+    );
+  });
+});
+
+describe('FiscalYearSettingsPage category expense classification', () => {
+  it('creates a category with a classification', async () => {
+    const user = userEvent.setup();
+    createCategory.mockResolvedValue(category('cat-new', 'Raffle'));
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: /new category/i }));
+    await user.type(screen.getByLabelText('Name'), 'Raffle');
+    await user.selectOptions(screen.getByLabelText('Expense classification'), 'fundraising');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(createCategory).toHaveBeenCalledWith({ name: 'Raffle', functionalClass: 'fundraising' })
+    );
+  });
+
+  it('clears a classification on edit with null, so the parent category supplies it again', async () => {
+    const user = userEvent.setup();
+    updateCategory.mockResolvedValue(category('cat-training', 'Training'));
+    storeState = {
+      ...storeState,
+      budgetCategories: [{ ...category('cat-training', 'Training'), functionalClass: 'program' }],
+    };
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: 'Edit Training' }));
+    const select = screen.getByLabelText('Expense classification');
+    expect(select).toHaveValue('program');
+    await user.selectOptions(select, '');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(updateCategory).toHaveBeenCalledWith(
+        'cat-training',
+        expect.objectContaining({ name: 'Training', functionalClass: null })
       )
     );
   });

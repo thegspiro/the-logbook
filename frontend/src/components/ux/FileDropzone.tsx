@@ -128,13 +128,19 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
           className="hidden"
           aria-hidden="true"
         />
-        <Upload className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+        <Upload className="text-theme-text-muted mx-auto mb-2 h-8 w-8" aria-hidden="true" />
         <p className="text-theme-text-secondary text-sm">{label}</p>
         <p className="text-theme-text-muted mt-1 text-xs">Max {maxSizeMB}MB per file</p>
       </div>
 
-      {/* Error */}
-      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {/* Error — announced: it appears after a drop or a file pick, with focus
+          elsewhere, so a screen-reader user would otherwise never hear why
+          the file was not added. */}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
 
       {/* File previews */}
       {files.length > 0 && (

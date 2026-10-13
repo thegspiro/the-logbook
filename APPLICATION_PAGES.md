@@ -970,6 +970,7 @@ resumes rather than restarting:
 | `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
 | `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `inventory.check_view`, `inventory.manage`                            |
+| `/inventory/admin/checklists/catalog-links`         | Catalog Links                    | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/settings`              | Checklist Settings               | any of `settings.manage`, `organization.update_settings`                     |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |
@@ -1037,6 +1038,21 @@ Summary pills count rows needing attention, rows with ready stock, and rows that
 need ordering. **Expired shelf stock is struck through and cannot be swapped** —
 offering it would put expired supplies in service and fail the item on the next
 check.
+
+#### Catalog Links (`/inventory/admin/checklists/catalog-links`) _(added 2026-10-12)_
+
+Every checklist line not yet connected to inventory or Medical Supplies, across
+every template (drafts labelled), grouped by name. Reached from **Equipment
+Checklists** admin. Exact matches are pre-selected; the bottom bar links every
+position under each chosen name in one step. Names with no plausible catalog
+match are collapsed at the end.
+
+| Control            | Options                                                       |
+| ------------------ | ------------------------------------------------------------- |
+| Per-name selector  | Don't link · each suggested catalog item · Search the catalog |
+| "_n_ positions"    | Expands to the templates and compartments carrying the name   |
+| No catalog match   | Expands the names nothing in the catalog resembles            |
+| Link _n_ positions | Applies every chosen name; reloads the report afterwards      |
 
 #### Apparatus Inventory (`/inventory/checklists/apparatus-inventory`) _(added 2026-08-10)_
 

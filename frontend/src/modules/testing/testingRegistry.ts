@@ -648,6 +648,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/checklists/catalog-links',
+        label: 'Checklist catalog links',
+        permission: 'inventory.check_manage',
+        module: 'inventory',
+      },
+      {
         path: '/inventory/admin/checklists/templates/new',
         label: 'New equipment check template',
         permission: 'inventory.check_manage',

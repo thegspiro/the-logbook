@@ -26,6 +26,7 @@ import {
 import { trainingProgramService } from '../services/api';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -73,6 +74,7 @@ const RequirementRow: React.FC<{
   // the reason rather than hidden — a step that vanishes reads as a bug, and a
   // step offered without explanation gets attempted and refused.
   const locked = !done && !!lockedBy?.length;
+  const description = record.program_specific_description || record.requirement?.description;
   return (
     <div
       className={`bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3 ${
@@ -89,8 +91,12 @@ const RequirementRow: React.FC<{
         )}
         <div className="min-w-0 flex-1">
           <p className="text-theme-text-primary truncate text-sm">{record.requirement?.name || 'Requirement'}</p>
+          {/* The program's own wording for this requirement replaces the
+              department's generic description when an officer wrote one. */}
+          {description && <p className="text-theme-text-secondary mt-0.5 text-xs">{description}</p>}
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
             <span className={meta.className}>{meta.label}</span>
+            <RequirementDueDate dueDate={record.due_date} isOverdue={record.is_overdue} done={done} />
             {target && <span className="text-theme-text-secondary font-medium tabular-nums">· {target}</span>}
             {typeof score === 'number' && <span className="text-theme-text-muted">· score {score}%</span>}
             {record.verified_by && (

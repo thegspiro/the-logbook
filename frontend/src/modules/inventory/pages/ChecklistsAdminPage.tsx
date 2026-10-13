@@ -14,10 +14,11 @@
 
 import React from 'react';
 import { Link } from 'react-router';
-import { BarChart3, ClipboardList, Clock, SlidersHorizontal, Truck } from 'lucide-react';
+import { BarChart3, ClipboardList, Clock, Link2, SlidersHorizontal, Truck } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { EquipmentCheckTemplateList } from '../components/EquipmentCheckTemplateList';
 import { Breadcrumbs } from '../../../components/ux';
+import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 
 interface RelatedLink {
   label: string;
@@ -77,6 +78,14 @@ const RELATED: RelatedLink[] = [
     anyPermission: ['inventory.check_view', 'inventory.manage'],
   },
   {
+    label: 'Catalog links',
+    description: 'Checklist lines not yet connected to inventory, matched once across every template',
+    path: '/inventory/admin/checklists/catalog-links',
+    icon: Link2,
+    // The report and the link step both run on the authoring grant.
+    anyPermission: ['inventory.check_manage'],
+  },
+  {
     label: 'Checklist settings',
     description: 'When crews are prompted, and how long they have to check in',
     path: '/inventory/admin/checklists/settings',
@@ -109,18 +118,23 @@ export const ChecklistsAdminPage: React.FC = () => {
         </p>
       </header>
 
-      <nav aria-label="Related checklist screens" className="hscroll mb-6 flex gap-2">
-        {related.map(({ label, description, path, icon: Icon }) => (
-          <Link
-            key={path}
-            to={path}
-            title={description}
-            className="btn-secondary btn-auto mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
-          >
-            <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
-            {label}
-          </Link>
-        ))}
+      {/* Five links do not fit across a 320px phone. The row scrolls, the cue
+          shows that it does, and the marker tells the mobile reflow pass the
+          overflow is deliberate. */}
+      <nav aria-label="Related checklist screens" className="mb-6">
+        <ScrollCueRow className="flex gap-2" data-mobile-scroll-region aria-label="Related checklist screens">
+          {related.map(({ label, description, path, icon: Icon }) => (
+            <Link
+              key={path}
+              to={path}
+              title={description}
+              className="btn-secondary btn-auto mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
+            >
+              <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
+              {label}
+            </Link>
+          ))}
+        </ScrollCueRow>
       </nav>
 
       <EquipmentCheckTemplateList />

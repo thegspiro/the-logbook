@@ -68,6 +68,7 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import Position, User
+from app.services.expense_substantiation import describe_late, late_items
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
     ApproverDecision,
@@ -86,7 +87,11 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
-from app.utils.finance_settings import load_finance_settings
+from app.utils.finance_settings import (
+    SUBSTANTIATION_BLOCK,
+    SUBSTANTIATION_OFF,
+    load_finance_settings,
+)
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
@@ -211,6 +216,10 @@ def _raise_not_found(label: str, requester_id: Optional[str]) -> NoReturn:
 
 class ManualApprovalConflictError(ValueError):
     """The request cannot take a manual decision in its current state (→ 409)."""
+
+
+class LateSubstantiationNotAcknowledgedError(ValueError):
+    """Approving a report with late lines without confirming them (→ 400)."""
 
 
 class ApprovalTokenNotValidError(ValueError):
@@ -2559,6 +2568,7 @@ class FinanceService:
         *,
         org_id: str,
         override_reason: Optional[str] = None,
+        acknowledge_late: bool = False,
     ) -> ApprovalStepRecord:
         # Scope the lookup to the caller's org via the owning chain. The endpoint
         # only proves the caller holds finance.approve in their OWN org, so
@@ -2595,6 +2605,10 @@ class FinanceService:
             await self._entity_creator_id(record.entity_type, record.entity_id, org_id),
             action="approve",
             record=record.entity_type.value.replace("_", " "),
+        )
+
+        await self._take_late_acknowledgement(
+            record.entity_type, record.entity_id, org_id, approver_id, acknowledge_late
         )
 
         now = datetime.now(timezone.utc)
@@ -2689,7 +2703,7 @@ class FinanceService:
             raise ApprovalTokenNotValidError("Approval not found")
 
     async def approve_by_token(
-        self, token: str, notes: Optional[str] = None
+        self, token: str, notes: Optional[str] = None, acknowledge_late: bool = False
     ) -> ApprovalStepRecord:
         """Approve a step via email token (for external approvers).
 
@@ -2745,6 +2759,10 @@ class FinanceService:
                     "the same person; self-approval is not allowed for this "
                     "step."
                 )
+
+        await self._take_late_acknowledgement(
+            record.entity_type, record.entity_id, org_id, None, acknowledge_late
+        )
 
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.APPROVED
@@ -2989,6 +3007,15 @@ class FinanceService:
             )
         if not admin:
             approvals = approvals[skip : skip + limit]
+        late = await self._late_line_state(
+            [
+                a["entity_id"]
+                for a in approvals
+                if a["entity_type"] == ApprovalEntityType.EXPENSE_REPORT.value
+            ]
+        )
+        for a in approvals:
+            a["late_line_count"] = late.get(a["entity_id"], (0, None))[0]
         return approvals
 
     async def step_actor_flags(
@@ -3232,6 +3259,7 @@ class FinanceService:
         approver_id: str,
         *,
         org_id: str,
+        acknowledge_late: bool = False,
     ):
         """Approve a request that no approval chain applies to.
 
@@ -3258,6 +3286,9 @@ class FinanceService:
                 "You have already approved this request. It needs a second "
                 "approval from someone else."
             )
+        await self._take_late_acknowledgement(
+            entity_type, entity_id, org_id, approver_id, acknowledge_late
+        )
         # Shared with the chain path so status, approved_by/approved_at and
         # budget encumbrance are handled identically.
         completed = await self._finalize_approval(
@@ -3418,6 +3449,20 @@ class FinanceService:
                     "first_approved_by": row.first_approved_by,
                 }
             )
+        late = await self._late_line_state(
+            [
+                r["entity_id"]
+                for r in rows
+                if r["entity_type"] == ApprovalEntityType.EXPENSE_REPORT.value
+            ]
+        )
+        for r in rows:
+            count, acknowledged_at = late.get(r["entity_id"], (0, None))
+            r["late_line_count"] = count
+            r["awaiting_late_acknowledgement"] = count > 0 and acknowledged_at is None
+            # The acknowledgement is the first thing a held report waits for.
+            if r["awaiting_late_acknowledgement"]:
+                r["awaiting_second_approval"] = False
         return rows
 
     async def preview_approval_chain(
@@ -3600,6 +3645,96 @@ class FinanceService:
             people.add(str(entity.first_approved_by))
         return people
 
+    async def _late_line_state(
+        self, er_ids: list[str]
+    ) -> dict[str, tuple[int, Optional[datetime]]]:
+        """Per expense report: late lines, and when they were acknowledged."""
+        if not er_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                ExpenseReport.id,
+                func.count(ExpenseLineItem.id),
+                ExpenseReport.late_acknowledged_at,
+            )
+            .join(
+                ExpenseLineItem,
+                and_(
+                    ExpenseLineItem.expense_report_id == ExpenseReport.id,
+                    ExpenseLineItem.substantiated_late.is_(True),
+                ),
+            )
+            .where(ExpenseReport.id.in_(er_ids))
+            .group_by(ExpenseReport.id, ExpenseReport.late_acknowledged_at)
+        )
+        return {row[0]: (row[1], row[2]) for row in result.all()}
+
+    def is_awaiting_late_acknowledgement(self, report, records) -> bool:
+        """A report held until an approver acknowledges its late lines.
+
+        Waiting for approval, nothing left in its chain, lines submitted after
+        the substantiation deadline, and nobody has acknowledged them —
+        _finalize_approval's hold, read for the screen (CLAUDE.md pitfall #29).
+        """
+        if report.status != ExpenseReportStatus.PENDING_APPROVAL.value:
+            return False
+        if any(r.status == ApprovalStepStatus.PENDING for r in records):
+            return False
+        return report.late_line_count > 0 and report.late_acknowledged_at is None
+
+    async def late_line_count(self, er_id: str) -> int:
+        return (
+            await self.db.execute(
+                select(func.count())
+                .select_from(ExpenseLineItem)
+                .where(
+                    ExpenseLineItem.expense_report_id == er_id,
+                    ExpenseLineItem.substantiated_late.is_(True),
+                )
+            )
+        ).scalar_one()
+
+    async def _take_late_acknowledgement(
+        self,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        approver_id: Optional[str],
+        acknowledged: bool,
+    ) -> None:
+        """Require an approver of a report with late lines to confirm them.
+
+        Under the department's "warn" substantiation rule a report with lines
+        submitted past the deadline still goes through, but every approval of
+        it must say the approver has reviewed them: a late line is reimbursed
+        outside the accountable plan, which the department may treat as wages.
+        The first confirmation is recorded on the report; an emailed-token
+        approval records the time with no user.
+        """
+        if entity_type != ApprovalEntityType.EXPENSE_REPORT:
+            return
+        late = await self.late_line_count(entity_id)
+        if late == 0:
+            return
+        if not acknowledged:
+            raise LateSubstantiationNotAcknowledgedError(
+                f"This report has {late} line{'s' if late != 1 else ''} "
+                "submitted after the department's substantiation deadline. "
+                "Confirm you have reviewed them to approve it."
+            )
+        er = (
+            await self.db.execute(
+                select(ExpenseReport).where(
+                    ExpenseReport.id == entity_id,
+                    ExpenseReport.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if er is not None and er.late_acknowledged_at is None:
+            er.late_acknowledged_by = approver_id
+            er.late_acknowledged_at = datetime.now(timezone.utc)
+            await self.db.flush()
+
     async def _held_for_second_approver(
         self,
         entity_type: ApprovalEntityType,
@@ -3672,6 +3807,18 @@ class FinanceService:
         if await self._held_for_second_approver(
             entity_type, entity, approver_id, org_id
         ):
+            return False
+        # A chain that completes with nobody confirming the late lines — an
+        # auto-approve chain, or one whose last approval came from someone else
+        # — leaves the report for a manual decision, where an approver must.
+        if (
+            entity_type == ApprovalEntityType.EXPENSE_REPORT
+            and entity.late_acknowledged_at is None
+            and await self.late_line_count(entity.id) > 0
+        ):
+            logger.info(
+                "expense_report {} held for late-line acknowledgement", entity.id
+            )
             return False
 
         now = datetime.now(timezone.utc)
@@ -4387,6 +4534,26 @@ class FinanceService:
                 "Attach a receipt to every line before submitting. Missing: "
                 f"{named}{more}."
             )
+
+        rules = await load_finance_settings(self.db, org_id)
+        now = datetime.now(timezone.utc)
+        late = []
+        if rules.substantiation_mode != SUBSTANTIATION_OFF:
+            submitted_day = now.astimezone(
+                await resolve_scheduling_timezone(self.db, org_id)
+            ).date()
+            late = late_items(er.line_items, submitted_day, rules.substantiation_days)
+            if late and rules.substantiation_mode == SUBSTANTIATION_BLOCK:
+                raise ValueError(
+                    "Expenses must be submitted within "
+                    f"{rules.substantiation_days} days of being incurred. "
+                    f"{describe_late(late, rules.substantiation_days)}. "
+                    "Ask the Treasurer how to claim them."
+                )
+        late_ids = {item.id for item in late}
+        for item in er.line_items:
+            item.substantiated_late = item.id in late_ids
+        er.submitted_at = now
 
         er.status = ExpenseReportStatus.SUBMITTED
 
