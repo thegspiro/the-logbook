@@ -107,3 +107,34 @@ def should_send_warning(
     if threshold >= 100.0:
         return True
     return bool((progress_percentage or 0.0) < threshold)
+
+
+def due_warning_offset(
+    days_left: int,
+    progress_percentage: Optional[float],
+    conditions: Dict[str, Any],
+) -> Optional[int]:
+    """The most urgent reminder whose window has begun, or ``None``.
+
+    :func:`should_send_warning` asks "is today exactly a warning day", which
+    suits a sweep that never misses one. A per-requirement due date is
+    recorded against the offset that was sent instead, so this answers "which
+    step of the ramp are we in": the 7-day warning is due from seven days out,
+    a day the scheduler missed still sends on the next run, and once a closer
+    step has begun the earlier one is skipped rather than replayed.
+
+    ``None`` before the first window, once the date has passed (that is the
+    overdue notice's job), and for a member at or above the program's
+    ``send_if_below_percentage`` mark.
+    """
+    if days_left < 0:
+        return None
+    begun: List[int] = [
+        int(day) for day in conditions["days_before_deadline"] if days_left <= day
+    ]
+    if not begun:
+        return None
+    threshold = conditions["send_if_below_percentage"]
+    if threshold < 100.0 and (progress_percentage or 0.0) >= threshold:
+        return None
+    return min(begun)

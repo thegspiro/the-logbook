@@ -32,7 +32,7 @@ import type { ShiftPattern } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, formatTimeOfDay } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import type { PresetPatternDef, CycleEntry } from './shiftPatternPresets';
+import type { PresetPatternDef, CycleEntry, WeekdayShiftType } from './shiftPatternPresets';
 import { PlatoonSelector } from './PlatoonSelector';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
@@ -50,6 +50,26 @@ const PATTERN_TYPE_LABELS: Record<string, string> = {
 };
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * The shifts a stored weekly pattern carries per weekday, or null when it has
+ * none (a plain weekly pattern). schedule_config is unvalidated JSON, so
+ * anything malformed is dropped, mirroring what the generator will accept.
+ */
+const readWeekdayShifts = (config: Record<string, unknown>): Partial<Record<number, WeekdayShiftType[]>> | null => {
+  const raw = config.weekday_shifts;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const parsed: Partial<Record<number, WeekdayShiftType[]>> = {};
+  for (const [key, types] of Object.entries(raw)) {
+    const weekday = Number(key);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !Array.isArray(types)) continue;
+    const valid = (['day', 'night'] as const).filter((t) => types.includes(t));
+    if (valid.length > 0) parsed[weekday] = valid;
+  }
+  return Object.keys(parsed).length > 0 ? parsed : null;
+};
 
 const inputCls = 'form-input px-3 text-sm focus:ring-violet-500';
 
@@ -128,6 +148,13 @@ export const PatternsTab: React.FC = () => {
   });
   const [creating, setCreating] = useState(false);
 
+  // Manual weekly patterns: when on, each active weekday carries day and/or
+  // night shifts instead of one shift from a single template. A weekday with
+  // no entry in the map defaults to both, so switching the option on or
+  // adding a day needs no extra clicks.
+  const [splitDayNight, setSplitDayNight] = useState(false);
+  const [weekdayShiftChoices, setWeekdayShiftChoices] = useState<Partial<Record<number, WeekdayShiftType[]>>>({});
+
   // Platoons declared by a rotation pattern (membership lives on profiles)
   const { members, loadMembers, platoonsEnabled, loadSettings } = useSchedulingStore();
   const [platoons, setPlatoons] = useState<string[]>(['A', 'B', 'C']);
@@ -204,6 +231,8 @@ export const PatternsTab: React.FC = () => {
     setCreationMode('preset');
     setSelectedPreset(null);
     setCustomCyclePattern(Array.from({ length: 7 }, () => 'off' as const));
+    setSplitDayNight(false);
+    setWeekdayShiftChoices({});
     setPlatoons(['A', 'B', 'C']);
     setCreateForm({
       name: '',
@@ -229,7 +258,7 @@ export const PatternsTab: React.FC = () => {
     if (creationMode === 'custom') {
       return customCyclePattern.some((e) => e === 'day' || e === 'night');
     }
-    return false;
+    return creationMode === 'manual' && createForm.pattern_type === 'weekly' && splitDayNight;
   };
 
   const handleCreate = async () => {
@@ -251,16 +280,21 @@ export const PatternsTab: React.FC = () => {
       let daysOn: number | undefined;
       let daysOff: number | undefined;
       let rotationDays: number | undefined;
+      let weekdayShifts: Partial<Record<number, WeekdayShiftType[]>> | undefined;
 
       if (creationMode === 'preset' && selectedPreset) {
         patternType = selectedPreset.patternType;
-        if (selectedPreset.cyclePattern) {
-          scheduleConfig.cycle_pattern = selectedPreset.cyclePattern;
+        if (selectedPreset.weekdayShifts) {
+          weekdayShifts = selectedPreset.weekdayShifts;
         } else {
-          daysOn = selectedPreset.daysOn;
-          daysOff = selectedPreset.daysOff;
+          if (selectedPreset.cyclePattern) {
+            scheduleConfig.cycle_pattern = selectedPreset.cyclePattern;
+          } else {
+            daysOn = selectedPreset.daysOn;
+            daysOff = selectedPreset.daysOff;
+          }
+          rotationDays = selectedPreset.cycleDays;
         }
-        rotationDays = selectedPreset.cycleDays;
       } else if (creationMode === 'custom') {
         patternType = 'platoon';
         const hasOnDuty = customCyclePattern.some((e) => e !== 'off');
@@ -275,12 +309,50 @@ export const PatternsTab: React.FC = () => {
         // Manual mode
         if (patternType === 'weekly') {
           scheduleConfig.weekdays = createForm.weekdays;
+          if (splitDayNight) {
+            if (createForm.weekdays.length === 0) {
+              toast.error('Choose at least one active day');
+              setCreating(false);
+              return;
+            }
+            weekdayShifts = {};
+            for (const day of createForm.weekdays) {
+              weekdayShifts[day] = weekdayShiftChoices[day] ?? ['day', 'night'];
+            }
+            if (Object.values(weekdayShifts).some((shifts) => !shifts || shifts.length === 0)) {
+              toast.error('Choose Day, Night or both for every active day');
+              setCreating(false);
+              return;
+            }
+          }
         }
         if (patternType === 'platoon') {
           daysOn = createForm.days_on;
           daysOff = createForm.days_off;
           rotationDays = createForm.rotation_days;
         }
+      }
+
+      if (weekdayShifts) {
+        // A night shift generated from the day template would carry day hours
+        // without a word, so each shift type in use needs its own template.
+        const used = new Set(Object.values(weekdayShifts).flat());
+        if (used.has('day') && !createForm.day_template_id) {
+          toast.error('Choose a day shift template');
+          setCreating(false);
+          return;
+        }
+        if (used.has('night') && !createForm.night_template_id) {
+          toast.error('Choose a night shift template');
+          setCreating(false);
+          return;
+        }
+        // The generator reads weekday_shifts; weekdays is written alongside
+        // so the pattern list's day chips show which days are covered.
+        scheduleConfig.weekday_shifts = weekdayShifts;
+        scheduleConfig.weekdays = Object.keys(weekdayShifts)
+          .map(Number)
+          .sort((a, b) => a - b);
       }
 
       // Attach day/night template IDs if the pattern uses them
@@ -513,6 +585,70 @@ export const PatternsTab: React.FC = () => {
                         </button>
                       ))}
                     </div>
+
+                    <label className="text-theme-text-secondary mt-3 flex items-center gap-2 text-xs font-medium">
+                      <input
+                        type="checkbox"
+                        checked={splitDayNight}
+                        onChange={(e) => setSplitDayNight(e.target.checked)}
+                        className="form-checkbox"
+                      />
+                      Separate day and night shifts
+                    </label>
+
+                    {splitDayNight && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-theme-text-muted text-[11px]">
+                          Choose the shifts each active day carries. A day can have both.
+                        </p>
+                        {createForm.weekdays.length === 0 && (
+                          <p className="text-theme-text-muted text-[11px]">Select an active day above first.</p>
+                        )}
+                        {createForm.weekdays.map((day) => {
+                          const chosen = weekdayShiftChoices[day] ?? ['day', 'night'];
+                          return (
+                            <div
+                              key={day}
+                              role="group"
+                              aria-label={`${WEEKDAY_LABELS[day] ?? ''} shifts`}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="text-theme-text-secondary w-10 text-xs font-medium">
+                                {WEEKDAY_LABELS[day]}
+                              </span>
+                              {(['day', 'night'] as const).map((shiftType) => {
+                                const pressed = chosen.includes(shiftType);
+                                return (
+                                  <button
+                                    key={shiftType}
+                                    type="button"
+                                    aria-pressed={pressed}
+                                    onClick={() =>
+                                      setWeekdayShiftChoices((prev) => ({
+                                        ...prev,
+                                        [day]: pressed ? chosen.filter((s) => s !== shiftType) : [...chosen, shiftType],
+                                      }))
+                                    }
+                                    className={`touch-target-phone flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                                      pressed
+                                        ? 'border-violet-600 bg-violet-600 text-white'
+                                        : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
+                                    }`}
+                                  >
+                                    {shiftType === 'day' ? (
+                                      <Sun className="h-3 w-3" aria-hidden="true" />
+                                    ) : (
+                                      <Moon className="h-3 w-3" aria-hidden="true" />
+                                    )}
+                                    {shiftType === 'day' ? 'Day' : 'Night'}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -843,6 +979,7 @@ export const PatternsTab: React.FC = () => {
             const templateName = templates.find((t) => t.id === pattern.template_id)?.name;
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
+            const weekdayShifts = readWeekdayShifts(config);
             const cyclePattern = config.cycle_pattern as string[] | undefined;
             const patternPlatoons = Array.isArray(config.platoons)
               ? config.platoons.filter((platoon): platoon is string => typeof platoon === 'string')
@@ -914,18 +1051,30 @@ export const PatternsTab: React.FC = () => {
                         </p>
                         {weekdays && weekdays.length > 0 && (
                           <div className="mt-1 flex gap-1">
-                            {WEEKDAY_LABELS.map((label, i) => (
-                              <span
-                                key={i}
-                                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                  weekdays.includes(i)
-                                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                                    : 'text-theme-text-muted opacity-40'
-                                }`}
-                              >
-                                {label.charAt(0)}
-                              </span>
-                            ))}
+                            {WEEKDAY_LABELS.map((label, i) => {
+                              const shifts = weekdayShifts?.[i] ?? [];
+                              return (
+                                <span
+                                  key={i}
+                                  className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                                    weekdays.includes(i)
+                                      ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                                      : 'text-theme-text-muted opacity-40'
+                                  }`}
+                                >
+                                  {label.charAt(0)}
+                                  {shifts.includes('day') && (
+                                    <Sun className="h-2.5 w-2.5 text-amber-500" aria-hidden="true" />
+                                  )}
+                                  {shifts.includes('night') && (
+                                    <Moon
+                                      className="h-2.5 w-2.5 text-indigo-700 dark:text-indigo-400"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                         {cyclePattern && <CycleStrip config={config} />}
@@ -999,6 +1148,26 @@ export const PatternsTab: React.FC = () => {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {weekdayShifts && (
+                      <div className="space-y-2">
+                        <p className="text-theme-text-secondary text-xs font-medium">Weekly shifts</p>
+                        <ul className="flex flex-wrap gap-1.5">
+                          {WEEKDAY_NAMES.map((name, i) => {
+                            const shifts = weekdayShifts[i];
+                            if (!shifts) return null;
+                            return (
+                              <li
+                                key={name}
+                                className="text-theme-text-secondary rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[11px]"
+                              >
+                                {name}: {shifts.map((s) => (s === 'day' ? 'Day' : 'Night')).join(' + ')}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     )}
 

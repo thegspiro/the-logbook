@@ -53,6 +53,13 @@ describe('AttendanceRequestsPage', () => {
     window.history.replaceState({}, '', '/events/attendance-requests');
   });
 
+  it('says when a member withdrew and resent the request', async () => {
+    mockGetPending.mockResolvedValue([pending({ withdrawal_count: 1 })]);
+    renderWithRouter(<AttendanceRequestsPage />);
+
+    expect(await screen.findByText(/Withdrawn and sent again once/)).toBeInTheDocument();
+  });
+
   it('lists requests on the viewer’s own events, linked to each event', async () => {
     renderWithRouter(<AttendanceRequestsPage />);
 

@@ -1,7 +1,7 @@
 /**
  * Applicant Action Panels
  *
- * Status-conditional footer action sections for the ApplicantDetailDrawer.
+ * Status-conditional footer action sections for the ApplicantDetailDialog.
  * Renders different action buttons based on applicant status:
  * Active, On Hold, Withdrawn, or Inactive.
  */

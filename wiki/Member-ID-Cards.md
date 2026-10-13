@@ -209,7 +209,7 @@ An NFC tap can land inside the check-in window but well before the event
 starts. That is **flagged and never credited as attendance**: the tap time
 stays the honest record of when the member arrived, and the event's manager is
 shown how early it was rather than having to compare timestamps by eye. See
-[Events → Early check-in](Module-Events#ranked-events-list-and-early-check-in-2026-08-23--08-24).
+[Events → Early check-in](Module-Events#early-check-in).
 
 ## API
 

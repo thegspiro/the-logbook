@@ -50,7 +50,7 @@ from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import best_matches
+from app.utils.name_matching import best_matches, normalize_name
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import (
     local_day_start_utc,
@@ -4525,6 +4525,231 @@ class EquipmentCheckService:
 
         await self.db.commit()
         return changed
+
+    async def get_link_report(
+        self, organization_id: str, limit_per_group: int = 3
+    ) -> Dict[str, Any]:
+        """Every unlinked checklist position in the department, grouped by name.
+
+        The per-template match tool asks the same question once per rig: a
+        department with six ambulances answers "which catalog item is 4x4
+        gauze" six times. Grouping by normalized name across every template —
+        active and draft — turns that into one decision applied everywhere the
+        name appears.
+
+        Groups with a plausible catalog match come first, strongest match and
+        most positions first. Names nothing in the catalog resembles go last:
+        they are usually tasks ("Check tire pressure") rather than stock, and
+        ``function`` — the type a task carries — is also the default for a
+        free-typed supply line, so the type alone cannot tell the two apart.
+
+        Suggests only; nothing is written.
+        """
+        rows = await self.db.execute(
+            select(
+                CheckTemplateItem.id,
+                CheckTemplateItem.name,
+                CheckTemplateItem.check_type,
+                CheckTemplateItem.inventory_item_id,
+                EquipmentCheckTemplate.id,
+                EquipmentCheckTemplate.name,
+                EquipmentCheckTemplate.is_active,
+                CheckTemplateCompartment.name,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(EquipmentCheckTemplate.organization_id == organization_id)
+            .order_by(
+                EquipmentCheckTemplate.name.asc(),
+                CheckTemplateCompartment.sort_order.asc(),
+                CheckTemplateItem.sort_order.asc(),
+            )
+        )
+
+        linkable = 0
+        linked = 0
+        groups: Dict[str, Dict[str, Any]] = {}
+        spellings: Dict[str, Dict[str, int]] = {}
+        for (
+            item_id,
+            name,
+            check_type,
+            inventory_item_id,
+            template_id,
+            template_name,
+            template_active,
+            compartment_name,
+        ) in rows.all():
+            # Same rule as _linkable_items, so the totals here agree with the
+            # coverage line each template shows in the builder.
+            if (check_type or "") in self._UNLINKABLE_CHECK_TYPES:
+                continue
+            display = (name or "").strip()
+            key = normalize_name(display)
+            if not key:
+                continue
+            linkable += 1
+            if inventory_item_id:
+                linked += 1
+                continue
+            group = groups.setdefault(
+                key, {"key": key, "positions": [], "template_ids": set()}
+            )
+            group["positions"].append(
+                {
+                    "template_item_id": item_id,
+                    "template_id": template_id,
+                    "template_name": template_name,
+                    "template_active": bool(template_active),
+                    "compartment_name": compartment_name,
+                    "check_type": check_type,
+                }
+            )
+            group["template_ids"].add(template_id)
+            counts = spellings.setdefault(key, {})
+            counts[display] = counts.get(display, 0) + 1
+
+        catalog = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+            )
+        )
+        candidates = [(cid, cname) for cid, cname in catalog.all() if cname]
+
+        result: List[Dict[str, Any]] = []
+        for key, group in groups.items():
+            # The spelling most templates use, ties broken alphabetically so
+            # the label is stable between loads.
+            name = sorted(spellings[key].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+            result.append(
+                {
+                    "key": key,
+                    "name": name,
+                    "position_count": len(group["positions"]),
+                    "template_count": len(group["template_ids"]),
+                    "positions": group["positions"],
+                    "suggestions": best_matches(
+                        name, candidates, limit=limit_per_group
+                    ),
+                }
+            )
+
+        result.sort(
+            key=lambda g: (
+                not g["suggestions"],
+                -(g["suggestions"][0]["score"] if g["suggestions"] else 0),
+                -g["position_count"],
+                g["name"].lower(),
+            )
+        )
+        template_ids = {
+            p["template_id"] for g in groups.values() for p in g["positions"]
+        }
+        return {
+            "coverage": {
+                "linkable": linkable,
+                "linked": linked,
+                "unlinked": linkable - linked,
+            },
+            "template_count": len(template_ids),
+            "groups": result,
+        }
+
+    async def link_inventory_items_across_templates(
+        self,
+        organization_id: str,
+        links: Dict[str, str],
+        *,
+        user_id: str,
+        user_name: str,
+    ) -> Dict[str, int]:
+        """Apply a reviewed set of links that may span many templates.
+
+        All or nothing, for the same reason as ``link_inventory_items``.
+
+        Only positions that are still unlinked are written. The report the
+        officer reviewed was a snapshot; if somebody linked one of those
+        positions in the builder since, their choice stands and the position
+        comes back in ``skipped`` rather than being silently overwritten.
+        Unlinking is not offered here — this screen only ever showed unlinked
+        positions, so there is nothing on it to undo.
+        """
+        if not links:
+            return {"linked": 0, "skipped": 0}
+
+        # XC-1: every template item id is resolved through an org-scoped
+        # template, never by id alone.
+        result = await self.db.execute(
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id.in_(list(links)),
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        unknown = set(links) - set(found)
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} checklist item(s) were not found and nothing "
+                f"was linked"
+            )
+
+        wanted = {str(v) for v in links.values()}
+        known = await self.db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.id.in_(wanted),
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+        missing = wanted - set(known.scalars().all())
+        if missing:
+            raise ValueError(
+                f"{len(missing)} inventory item(s) are not in your inventory "
+                f"and nothing was linked"
+            )
+
+        linked = 0
+        skipped = 0
+        for item_id, inventory_item_id in links.items():
+            item, template_id = found[item_id]
+            if item.inventory_item_id:
+                skipped += 1
+                continue
+            item.inventory_item_id = str(inventory_item_id)
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=template_id,
+                user_id=user_id,
+                user_name=user_name,
+                action="update",
+                entity_type="item",
+                entity_id=item_id,
+                entity_name=item.name,
+                changes={
+                    "inventory_item_id": {"old": None, "new": item.inventory_item_id},
+                    "source": "catalog_link_report",
+                },
+            )
+            linked += 1
+
+        await self.db.commit()
+        return {"linked": linked, "skipped": skipped}
 
     # ------------------------------------------------------------------
     # Private Helpers

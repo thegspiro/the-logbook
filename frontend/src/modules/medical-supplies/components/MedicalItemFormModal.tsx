@@ -134,182 +134,17 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={isEdit ? 'Edit medical supply' : 'Add medical supply'} size="lg">
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="space-y-4">
-          {/*
-           * A failed category load is reported whether or not options survived
-           * it. With options retained the list is not empty, but it is out of
-           * date: a category another session just created is missing, and one
-           * that was deleted is still offered -- selectable right up to the
-           * save that rejects it.
-           */}
-          {categoriesError && categories.length === 0 ? (
-            <div className="alert-danger">
-              The category list could not be loaded: {categoriesError} Close this and select Retry on the All supplies
-              tab.
-            </div>
-          ) : categoriesError ? (
-            <div className="alert-warning">
-              Showing previously loaded categories — the list could not be refreshed: {categoriesError} New categories
-              may be missing, and removed ones may still be listed.
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="alert-warning">
-              No medical supply categories exist yet. Add one on the{' '}
-              <Link to="/medical-supplies/categories" className="underline">
-                Medical Supply Categories
-              </Link>{' '}
-              page first — a supply&apos;s category is what makes it medical.
-            </div>
-          ) : null}
-
-          <div>
-            <label htmlFor="ms-name" className="form-label">
-              Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="ms-name"
-              className="form-input w-full"
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="e.g. 4x4 Gauze Pads"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="ms-category" className="form-label">
-              Category <span aria-hidden="true">*</span>
-            </label>
-            <select
-              id="ms-category"
-              className="form-input w-full"
-              value={form.category_id}
-              onChange={(e) => set('category_id', e.target.value)}
-              required
-            >
-              <option value="">Select a category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label htmlFor="ms-qty" className="form-label">
-                On hand
-              </label>
-              {isLotStocked ? (
-                // The count for a lot-stocked item lives in its lots, and this
-                // field writes `quantity` — a separate ledger the page never
-                // displays for such an item. Editing it would change nothing
-                // visible behind a success toast, so the field states where the
-                // real number comes from instead of pretending to own it.
-                <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
-                  {formatNumber(item?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or editing the
-                  item&apos;s lots.
-                </p>
-              ) : (
-                <input
-                  id="ms-qty"
-                  type="number"
-                  min="0"
-                  className="form-input w-full"
-                  value={form.quantity}
-                  onChange={(e) => set('quantity', e.target.value)}
-                />
-              )}
-            </div>
-            <div>
-              <label htmlFor="ms-unit" className="form-label">
-                Unit
-              </label>
-              <input
-                id="ms-unit"
-                list="ms-unit-options"
-                className="form-input w-full"
-                value={form.unit_of_measure}
-                onChange={(e) => set('unit_of_measure', e.target.value)}
-              />
-              <datalist id="ms-unit-options">
-                {MEDICAL_UNITS.map((u) => (
-                  <option key={u} value={u} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label htmlFor="ms-reorder" className="form-label">
-                Reorder at
-              </label>
-              <input
-                id="ms-reorder"
-                type="number"
-                min="0"
-                className="form-input w-full"
-                value={form.reorder_point}
-                onChange={(e) => set('reorder_point', e.target.value)}
-                placeholder="Flag as low at or below this"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="ms-manufacturer" className="form-label">
-                Manufacturer
-              </label>
-              <input
-                id="ms-manufacturer"
-                className="form-input w-full"
-                value={form.manufacturer}
-                onChange={(e) => set('manufacturer', e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="ms-vendor" className="form-label">
-                Vendor
-              </label>
-              <input
-                id="ms-vendor"
-                className="form-input w-full"
-                value={form.vendor}
-                onChange={(e) => set('vendor', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="ms-storage" className="form-label">
-              Storage location
-            </label>
-            <input
-              id="ms-storage"
-              className="form-input w-full"
-              value={form.storage_location}
-              onChange={(e) => set('storage_location', e.target.value)}
-              placeholder="e.g. EMS Room, Shelf B-3"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="ms-description" className="form-label">
-              Notes
-            </label>
-            <textarea
-              id="ms-description"
-              className="form-input w-full"
-              rows={2}
-              value={form.description}
-              onChange={(e) => set('description', e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="border-theme-surface-border flex justify-end gap-2 border-t px-5 py-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEdit ? 'Edit medical supply' : 'Add medical supply'}
+      size="lg"
+      onSubmit={(e) => void handleSubmit(e)}
+      footer={
+        <>
+          <button type="submit" className="btn-primary" disabled={isSaving || categories.length === 0}>
+            {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Add supply'}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -317,11 +152,181 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           >
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={isSaving || categories.length === 0}>
-            {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Add supply'}
-          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/*
+         * A failed category load is reported whether or not options survived
+         * it. With options retained the list is not empty, but it is out of
+         * date: a category another session just created is missing, and one
+         * that was deleted is still offered -- selectable right up to the
+         * save that rejects it.
+         */}
+        {categoriesError && categories.length === 0 ? (
+          <div className="alert-danger">
+            The category list could not be loaded: {categoriesError} Close this and select Retry on the All supplies
+            tab.
+          </div>
+        ) : categoriesError ? (
+          <div className="alert-warning">
+            Showing previously loaded categories — the list could not be refreshed: {categoriesError} New categories may
+            be missing, and removed ones may still be listed.
+          </div>
+        ) : categories.length === 0 ? (
+          <div className="alert-warning">
+            No medical supply categories exist yet. Add one on the{' '}
+            <Link to="/medical-supplies/categories" className="underline">
+              Medical Supply Categories
+            </Link>{' '}
+            page first — a supply&apos;s category is what makes it medical.
+          </div>
+        ) : null}
+
+        <div>
+          <label htmlFor="ms-name" className="form-label">
+            Name <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="ms-name"
+            className="form-input w-full"
+            value={form.name}
+            onChange={(e) => set('name', e.target.value)}
+            placeholder="e.g. 4x4 Gauze Pads"
+            required
+          />
         </div>
-      </form>
+
+        <div>
+          <label htmlFor="ms-category" className="form-label">
+            Category <span aria-hidden="true">*</span>
+          </label>
+          <select
+            id="ms-category"
+            className="form-input w-full"
+            value={form.category_id}
+            onChange={(e) => set('category_id', e.target.value)}
+            required
+          >
+            <option value="">Select a category</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label htmlFor="ms-qty" className="form-label">
+              On hand
+            </label>
+            {isLotStocked ? (
+              // The count for a lot-stocked item lives in its lots, and this
+              // field writes `quantity` — a separate ledger the page never
+              // displays for such an item. Editing it would change nothing
+              // visible behind a success toast, so the field states where the
+              // real number comes from instead of pretending to own it.
+              <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
+                {formatNumber(item?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or editing the
+                item&apos;s lots.
+              </p>
+            ) : (
+              <input
+                id="ms-qty"
+                type="number"
+                min="0"
+                className="form-input w-full"
+                value={form.quantity}
+                onChange={(e) => set('quantity', e.target.value)}
+              />
+            )}
+          </div>
+          <div>
+            <label htmlFor="ms-unit" className="form-label">
+              Unit
+            </label>
+            <input
+              id="ms-unit"
+              list="ms-unit-options"
+              className="form-input w-full"
+              value={form.unit_of_measure}
+              onChange={(e) => set('unit_of_measure', e.target.value)}
+            />
+            <datalist id="ms-unit-options">
+              {MEDICAL_UNITS.map((u) => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label htmlFor="ms-reorder" className="form-label">
+              Reorder at
+            </label>
+            <input
+              id="ms-reorder"
+              type="number"
+              min="0"
+              className="form-input w-full"
+              value={form.reorder_point}
+              onChange={(e) => set('reorder_point', e.target.value)}
+              placeholder="Flag as low at or below this"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="ms-manufacturer" className="form-label">
+              Manufacturer
+            </label>
+            <input
+              id="ms-manufacturer"
+              className="form-input w-full"
+              value={form.manufacturer}
+              onChange={(e) => set('manufacturer', e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="ms-vendor" className="form-label">
+              Vendor
+            </label>
+            <input
+              id="ms-vendor"
+              className="form-input w-full"
+              value={form.vendor}
+              onChange={(e) => set('vendor', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="ms-storage" className="form-label">
+            Storage location
+          </label>
+          <input
+            id="ms-storage"
+            className="form-input w-full"
+            value={form.storage_location}
+            onChange={(e) => set('storage_location', e.target.value)}
+            placeholder="e.g. EMS Room, Shelf B-3"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="ms-description" className="form-label">
+            Notes
+          </label>
+          <textarea
+            id="ms-description"
+            className="form-input w-full"
+            rows={2}
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+          />
+        </div>
+      </div>
     </Modal>
   );
 };

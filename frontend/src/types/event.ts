@@ -130,6 +130,8 @@ export interface AttendancePetition {
   reviewed_at?: string | null;
   review_note?: string | null;
   created_at: string;
+  /** How many times the member withdrew and resent this request. */
+  withdrawal_count?: number;
 }
 
 /** A pending request with the event it is about, for the cross-event list. */

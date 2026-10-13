@@ -440,6 +440,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/finance/reports',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/finance/settings/quickbooks',
     source: 'src/modules/finance/routes.tsx',
     coverage: 'exempt',
@@ -1383,6 +1389,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/inventory/admin/checklists/reports',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/inventory/admin/checklists/catalog-links',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',

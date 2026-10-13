@@ -56,6 +56,7 @@ import { useScrollOverflow } from '../../hooks/useScrollOverflow';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
@@ -127,6 +128,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const navListRef = useRef<HTMLElement>(null);
   const { canScrollUp, canScrollDown } = useScrollOverflow(navListRef);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const practicalSkillsMethod = usePracticalSkillsMethod();
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
@@ -233,11 +235,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 icon: BookOpen,
               },
               { label: 'Programs', path: '/training/programs', icon: Layers },
-              {
-                label: 'Skills Testing',
-                path: '/training/skills-testing',
-                icon: ClipboardCheck,
-              },
+              // Hidden for a department that records skills on shift reports.
+              ...(offersSkillsTesting(practicalSkillsMethod)
+                ? [
+                    {
+                      label: 'Skills Testing',
+                      path: '/training/skills-testing',
+                      icon: ClipboardCheck,
+                    },
+                  ]
+                : []),
               {
                 label: 'Knowledge Tests',
                 path: '/training/knowledge-tests',

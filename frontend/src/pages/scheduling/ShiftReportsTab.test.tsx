@@ -18,6 +18,7 @@ const mockGetOfficerAnalytics = vi.fn();
 const mockGetShiftCrewStatus = vi.fn();
 const mockGetShift = vi.fn();
 const mockBatchCreate = vi.fn();
+const mockUpdateReport = vi.fn();
 const mockGetOrgSettings = vi.fn();
 let canManage = true;
 let canViewAnalytics = false;
@@ -34,6 +35,7 @@ vi.mock('../../services/api', () => ({
     getMyStats: () => Promise.resolve(null),
     getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
     batchCreateReports: (...a: unknown[]) => mockBatchCreate(...a) as unknown,
+    updateReport: (...a: unknown[]) => mockUpdateReport(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
@@ -467,6 +469,72 @@ describe('ShiftReportsTab — calls are counted per member', () => {
   });
 });
 
+describe('ShiftReportsTab — skills observed on a trainee', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockBatchCreate.mockReset();
+    mockGetConfig.mockResolvedValue({ practical_skills_method: 'shift_signoffs' });
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Engine 5',
+      call_count: 4,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Sam Ortiz',
+        has_active_enrollment: true,
+        enrollment_id: 'en-1',
+        program_name: 'Probationary Firefighter',
+        has_existing_report: false,
+        calls_responded: 4,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockBatchCreate.mockResolvedValue({ created: 1, skipped: 0, report_ids: ['r1'] });
+  });
+
+  // The chips wrap across the row, so a picked skill's score is set in the
+  // list under them; this pins that the pair still lands on the right skill.
+  it('scores a picked skill from the list under the chips and files it', async () => {
+    const user = userEvent.setup();
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Evaluate/ }));
+    await user.click(screen.getByRole('button', { name: 'Ladder operations' }));
+    expect(screen.getByRole('button', { name: '\u2713 Ladder operations' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: /Ladder operations: score 4/ }));
+    await user.click(screen.getByRole('button', { name: /Submit Report/ }));
+
+    expect(mockBatchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trainee_evaluations: [
+          expect.objectContaining({
+            user_id: 'u2',
+            skills_observed: [{ skill_name: 'Ladder operations', demonstrated: true, score: 4 }],
+          }),
+        ],
+      })
+    );
+  });
+
+  it('offers no score until a skill is picked', async () => {
+    const user = userEvent.setup();
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /Evaluate/ }));
+
+    expect(screen.getByRole('button', { name: 'Ladder operations' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('Score:')).not.toBeInTheDocument();
+  });
+});
+
 describe('ShiftReportsTab — reports filed by the officer on the rig', () => {
   const shift = (id: string, officer: string) => ({
     id,
@@ -622,5 +690,108 @@ describe('ShiftReportsTab — flagged reports with review switched off', () => {
     await screen.findByRole('heading', { name: 'No shift reports yet' });
     expect(mockGetFlagged).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Flagged/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — completing a draft sends every field the form owns', () => {
+  // PUT /training/shift-reports/{id} dumps with exclude_unset, so a key the
+  // payload omits means "leave it alone". A field the officer emptied has to
+  // go out as null (text, rating) or [] (lists) or the old value survives
+  // behind "Draft saved".
+  const draft: ShiftCompletionReport = {
+    id: 'd1',
+    organization_id: 'org-1',
+    shift_id: 'sh1',
+    shift_date: '2026-10-03',
+    trainee_id: 'u2',
+    officer_id: 'user-1',
+    trainee_name: 'Sam Ortiz',
+    hours_on_shift: 12,
+    calls_responded: 2,
+    call_types: ['fire'],
+    performance_rating: 3,
+    areas_of_strength: 'Calm on scene',
+    areas_for_improvement: 'Radio discipline',
+    officer_narrative: 'Solid first shift.',
+    skills_observed: [{ skill_name: 'Hose Lines', demonstrated: true }],
+    tasks_performed: [{ task: 'Truck check' }],
+    review_status: 'draft',
+    trainee_acknowledged: false,
+    created_at: '2026-10-03T23:00:00Z',
+    updated_at: '2026-10-03T23:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue({ shift_review_default_skills: ['Hose Lines', 'Ladders'] });
+    mockGetDraftReports.mockReset();
+    mockGetDraftReports.mockResolvedValue([structuredClone(draft)]);
+    mockUpdateReport.mockReset();
+    mockUpdateReport.mockResolvedValue(structuredClone(draft));
+  });
+
+  const openDraft = async () => {
+    renderWithRouter(<ShiftReportsTab />);
+    await userEvent.click(await screen.findByRole('button', { name: /Drafts/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Sam Ortiz/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Complete Draft/ }));
+    await screen.findByRole('heading', { name: 'Complete Draft Report' });
+  };
+
+  it('sends null and [] for the fields the officer emptied', async () => {
+    await openDraft();
+
+    await userEvent.clear(screen.getByPlaceholderText(/Summary of trainee performance/));
+    await userEvent.clear(screen.getByLabelText('Areas of Strength'));
+    await userEvent.clear(screen.getByLabelText('Areas for Improvement'));
+    // Clicking the selected star again clears the rating, as on the new-report form.
+    await userEvent.click(screen.getByRole('button', { name: '3 stars' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Hose Lines' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => expect(mockUpdateReport).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReport).toHaveBeenCalledWith('d1', {
+      hours_on_shift: 12,
+      calls_responded: 2,
+      call_types: ['fire'],
+      performance_rating: null,
+      areas_of_strength: null,
+      areas_for_improvement: null,
+      officer_narrative: null,
+      skills_observed: [],
+      tasks_performed: [{ task: 'Truck check' }],
+    });
+  });
+
+  it('sends the unchanged fields as they were', async () => {
+    await openDraft();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => expect(mockUpdateReport).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReport).toHaveBeenCalledWith('d1', {
+      hours_on_shift: 12,
+      calls_responded: 2,
+      call_types: ['fire'],
+      performance_rating: 3,
+      areas_of_strength: 'Calm on scene',
+      areas_for_improvement: 'Radio discipline',
+      officer_narrative: 'Solid first shift.',
+      skills_observed: [{ skill_name: 'Hose Lines', demonstrated: true }],
+      tasks_performed: [{ task: 'Truck check' }],
+    });
+  });
+
+  it('clears on submit as well as on save', async () => {
+    await openDraft();
+
+    await userEvent.clear(screen.getByPlaceholderText(/Summary of trainee performance/));
+    await userEvent.click(screen.getByRole('button', { name: /Submit Report/ }));
+
+    await waitFor(() => expect(mockUpdateReport).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReport).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({ officer_narrative: null, review_status: 'approved' })
+    );
   });
 });

@@ -16,6 +16,81 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3137](https://github.com/thegspiro/the-logbook/pull/3137)**: branch
+`claude/security-review-finance-approvals`, Feature 05 (Finance &
+approvals), pass 8 (watchdog pickup). 0 fixed, 1 new finding flagged
+(FIN8-05-1, MED: `decide_budget_request` has no separation-of-duties
+guard, unlike its sibling `review_budget_request`; needs an owner call,
+mirrors FIN-4/OPS-8). One standing item corrected
+(`get_pending_approvals` per-assignee filtering — pass 7's "still
+unchanged" claim was already wrong when written; the fix landed
+2026-10-04) and one closed by other work (the eight non-ledger
+status-transition locks FIN-31 deferred, now fixed and guarded by commit
+`1eae838d`, 2026-10-07). See the Log entry below and
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 8** section
+for detail. Row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3128's merge, Feature 04, Storefront & payments, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3128 (Feature 04, Storefront & payments, pass 8) merged
+clean 2026-10-12 18:01:52 UTC (`pull_request_read`: `merged: true`; 5
+files changed — `PROGRESS.md`, `SF-04-storefront-payments.md`,
+`storefront_service.py`, `test_storefront_payment_race.py`,
+`KNOWN_LIMITATIONS.md`). Not docs-only (the SF8-04-1 `refund_order` locking
+fix and its guard test landed with it), but it is already fully recorded
+in the Log entry below, so there is nothing further to add here. Rotation
+row 04 stays ✅. Confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR is open. Proceeding to Feature 05 (Finance &
+approvals), pass 8.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3128, Feature 04, Storefront & payments, pass 8, before it merged), preserved for history</summary>
+
+**PR [#3128](https://github.com/thegspiro/the-logbook/pull/3128)**: branch `claude/security-review-storefront-payments`,
+Feature 04 (Storefront & payments), pass 8 (watchdog pickup). 2 fixed
+(SF8-04-1, a `refund_order` lost-update race of the same shape SF-9 was
+fixed for; one guard test added) — plus SF-9 and SF-11, both standing OPEN
+findings since pass 7, re-verified **already fixed by other,
+non-security-review work** that landed between passes (SF-9: `record_payment`
+et al. now lock the order row, 2026-10-05 owner decision; SF-11: an order's
+`items` array now carries `max_length=200`). 2 new findings flagged
+(SF8-04-2, `update_order_status`'s settlement branch has the same unlocked
+shape SF8-04-1 just fixed, needs an owner call on scope; SF8-04-3,
+`waive_order_payment` can downgrade an already-settled order's
+`payment_status`, a business-rule gap rather than a locking one), plus one
+repo-wide tooling note (CI-1: `requirements.txt`'s `flake8`/`isort` versions
+have drifted from the Backend Lint workflow's own pin again). See the Log
+entry below and
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 8** section for
+detail. Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3105's merge, Feature 03, Public surface & webhooks, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None.** PR #3105 (Feature 03, Public surface & webhooks, pass 8) merged
+clean 2026-10-12 16:15:06 UTC (`pull_request_read`: `merged: true`; 5 files
+changed — `PROGRESS.md`, `PUB-03-public-surface-webhooks.md`,
+`public_portal_security.py`, `test_public_portal_usage_stats.py`,
+`KNOWN_LIMITATIONS.md`). Not docs-only (the PUB-8 401-logging fix and its
+guard tests landed with it), but it is already fully recorded in the Log
+entry below, so there is nothing further to add here. Rotation row 03 stays
+✅. Confirmed via `search_pull_requests` (`is:open head:claude/security-review-`,
+0 results) that no `claude/security-review-*` PR is open. Proceeding to
+Feature 04 (Storefront & payments), pass 8.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3105, Feature 03, Public surface & webhooks, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3105](https://github.com/thegspiro/the-logbook/pull/3105)**: branch
 `claude/security-review-public-webhooks`, Feature 03 (Public surface &
 webhooks), pass 8 (watchdog pickup). 1 fixed (a further
@@ -28,6 +103,8 @@ and found sound. See the Log entry below and
 `docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 8** section
 for detail. Row 03 → ✅ (pending this PR's merge); next is Feature 04
 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3097, Feature 02, Permissions & roles, pass 8, merged clean), preserved for history</summary>
@@ -18632,6 +18709,158 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-12 — Feature 05 (Finance & approvals, pass 8) — 0 fixed, 1 new finding flagged; one standing item corrected, two closed by other work (watchdog pickup)
+
+**Closure.** PR #3128 (Feature 04, Storefront & payments, pass 8) merged
+clean 2026-10-12 18:01:52 UTC (`pull_request_read`: `merged: true`; 5
+files changed — `PROGRESS.md`, `SF-04-storefront-payments.md`,
+`storefront_service.py`, `test_storefront_payment_race.py`,
+`KNOWN_LIMITATIONS.md`), not docs-only (the SF8-04-1 locking fix and its
+guard test landed with it) but already fully recorded in its own Log
+entry below, so nothing further to record beyond clearing the **Open PR**
+row above. Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR was open before this iteration started.
+
+**Feature 05, pass 8 (watchdog pickup — no `claude/security-review-*` PR
+or branch existed anywhere in the repo since PR #3128 merged).** Pass 7's
+closing merge (`2c2ebaa7`, PR #2941) is **82 files, 20,664 insertions**
+behind `origin/main` scoped to this feature's domain — the feature roughly
+tripled in size (41 → 69 → 105 routes across the module's history;
+`finance.py` 1,370 → 3,650 lines; `finance_service.py` grew to 5,867
+lines, plus a new 1,145-line `finance_budget_request_service.py`). Real
+new surface, read in full rather than diffed-and-trusted: a budget-amendment
+second-officer-confirmation workflow with a reversing-entry correction
+path; fiscal-year planning stages, year-end close/lock and
+copy-last-year's-lines; a position-based budget-line-ownership model
+backing a whole self-service "my budgets" / "budget requests" surface with
+no `finance.*` permission (self-scoped instead, enumerated and verified);
+and receipts on purchase requests/expense line items through the
+already-reviewed shared upload service.
+
+**One new finding (FIN8-05-1, MED, flagged):** `decide_budget_request`
+(the Treasurer's decision on a submitted budget request) has no
+separation-of-duties guard, unlike its own sibling `review_budget_request`
+(leadership review, one stage later in the same new feature), which
+explicitly refuses a reviewer who owns the line or submitted the request.
+A `finance.manage` holder who also owns a budget line can submit a
+request for it and decide it themselves. Not fixed — the same
+single-officer-department tension this page already records for FIN-4 and
+OPS-8 applies, so it needs an owner call rather than an unconditional
+guard. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Three standing items re-verified, one correction and two closures —
+by direct read of current code, not taken on any prior pass's word:**
+FIN-30 (`list_dues_payments` unbounded) is unchanged, still correctly
+flagged. `get_pending_approvals` per-assignee filtering — pass 7
+(2026-10-05) claimed this was "still unchanged," which was already wrong
+when written (`KNOWN_LIMITATIONS.md` dates the actual fix to 2026-10-04);
+corrected here rather than carried forward. The eight non-ledger
+status-transition locks FIN-31 (pass 5) deliberately deferred — re-verified
+**fixed by other, non-security-review work**: commit `1eae838d`
+("let every member raise their own finance requests," 2026-10-07, two days
+after pass 7) routed all eight through the locked-read getter path while
+adding self-service scoping, with its own guard test
+(`TestFinanceWorkflowLocking`) already in place and passing (55/55 in
+`test_capacity_locking.py`).
+
+Full write-up:
+[`FIN-05-finance-approvals.md`](./FIN-05-finance-approvals.md) → Pass 8.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` (CI's pins: flake8 7.3.0, isort 9.0.1) — clean.
+`validate_migrations.py --strict` — 572 revisions, single head. `check_
+route_permissions.py --strict` — 265 routes, 0 errors/0 warnings.
+`generate_schema_docs.py` — zero diff. Scoped pytest (`-k "finance or dues
+or approval or budget or export"`) — 1,097 passed, 1 skipped
+(pre-existing). Full backend unit suite — 14,262 passed, 1 skipped, 0
+failed. Frontend: `vitest run src/modules/finance/` — 435 passed;
+`testingRegistry.test.ts` — 12 passed; `mobile-route-integrity.spec.ts` —
+1 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/0
+warnings.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots).
+
+### 2026-10-12 — Feature 04 (Storefront & payments, pass 8) — 2 fixed (1 new, SF8-04-1; plus SF-9/SF-11 re-verified fixed by other work), 2 new findings flagged (watchdog pickup)
+
+**Closure.** PR #3105 (Feature 03, Public surface & webhooks, pass 8) merged
+clean 2026-10-12 16:15:06 UTC (`pull_request_read`: `merged: true`; 5 files
+changed), not docs-only (the PUB-8 401-logging fix and its guard tests
+landed with it) but already fully recorded in its own Log entry below, so
+nothing further to record beyond clearing the **Open PR** row above.
+Independently re-confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR exists. Proceeded to Feature 04.
+
+**Feature 04, pass 8.** Diffed pass 7's closing merge (`01b1bc26`, PR #2940)
+against current `HEAD`: 18 non-merge commits touched this domain, none
+zero-delta. The headline items: product image uploads now route through the
+app-wide scanned-upload service (reviewed as a collaborator, no new trust
+boundary); `models/storefront.py`'s 610-line diff is a mechanical
+`Column` → `Mapped`/`mapped_column` typing migration, verified semantically
+inert by counting `nullable=True`/`nullable=False` occurrences 1:1 before and
+after and re-confirming all 12 `ondelete="SET NULL"` FKs still pair with
+`nullable=True`; 22 frontend files are copy/contrast/layout polish, including
+the "remove nested modal-body scrollers" sweep landing on six storefront
+dialogs.
+
+**Both of pass 7's standing findings were found already fixed by other,
+non-security-review work** (app-review's own track, 2026-10-05, owner
+decision): **SF-9** (concurrent payment recording losing money off the
+ledger) — `get_order`/`get_payment_event` gained a `for_update` flag;
+`record_payment`, `mark_order_paid`, `apply_payment_event` all now lock
+before any read-modify-write on `amount_paid`, with lock order consistently
+event → order. **SF-11** (no cap on an order's line count) — `StoreOrderCreate.items`
+now carries `max_length=200`. Both re-verified directly, not trusted from
+the app-review doc's own claim: `test_storefront_payment_race.py`'s two
+pre-existing tests exercise SF-9's fix under real concurrent connections and
+both pass.
+
+**One new finding, found and fixed this pass: SF8-04-1 (MED).**
+`refund_order` had the exact same unlocked read-modify-write shape SF-9 was
+just fixed for in its siblings — a settlement (the PayPal webhook's
+auto-apply, now locked) landing between `refund_order`'s read and its write
+is silently overwritten once its own blocked `UPDATE` finally lands, computed
+from a balance that predates the settlement. Fixed the same way: its
+`get_order` call now passes `for_update=True`. New guard test
+`test_a_refund_racing_a_payment_does_not_lose_it` (fails against the
+pre-fix code, passes against the fix).
+
+**Two new findings flagged, not fixed — both need an owner call in a
+payments path rather than a guess:** **SF8-04-2** — `update_order_status`'s
+settlement branch is a fourth/fifth self-settlement path with the same
+unlocked shape, but is the generic, heavily-used order-lifecycle endpoint;
+locking it unconditionally would serialize every status change on every
+order, a broader behavior change than this pass's fix bar. **SF8-04-3** —
+`waive_order_payment` unconditionally overwrites `payment_status` even onto
+an already-settled order (no concurrency required to hit it), a business-rule
+gap (should it refuse, like `mark_order_paid` does?) that a lock alone does
+not answer. Both mirrored into `KNOWN_LIMITATIONS.md`
+(SF8-04-2, SF8-04-3).
+
+**One repo-wide tooling note, not a storefront finding:** installing the
+completion gate's linters at CI's exact pin surfaced that
+`backend/requirements.txt`'s `flake8==7.4.1`/`isort==9.0.2` have drifted from
+`.github/workflows/ci.yml`'s own explicit `flake8==7.3.0`/`isort==9.0.1`
+install — the same category of drift that workflow's own comment already
+documents happening once before. Mirrored into `KNOWN_LIMITATIONS.md` as
+CI-1 for whichever pass picks it up; this pass's own gate was run at CI's
+pinned versions, not `requirements.txt`'s.
+
+Gate: backend flake8(7.3.0, CI's pin)/black(26.5.1)/isort(9.0.1, CI's pin,
+installed over the sandbox's pre-existing 9.0.2) clean;
+`validate_migrations.py --strict` (572 revisions, single head);
+`check_route_permissions.py --strict` (265 routes, 0 errors/warnings);
+`check_docs_links.py` (456 files, 0 broken links); scoped pytest 796 unit +
+248 integration passed (1 pre-existing skip each); standing guard suites (87
+passed); full backend unit suite (14,246 passed, 1 skipped, 0 failed);
+frontend typecheck (0 errors) and lint (0 errors, 0 warnings) clean; scoped
+vitest (233 passed, 21 files). Full write-up:
+[`SF-04-storefront-payments.md`](./SF-04-storefront-payments.md) → Pass 8.
+Rotation row 04 → ✅ (pending this PR's merge). Next: Feature 05 (Finance &
+approvals).
 
 ### 2026-10-12 — Feature 03 (Public surface & webhooks, pass 8) — 1 fixed (PUB-8 narrowed further), 0 new findings; a new MCP OAuth 2.1 surface reviewed fresh (watchdog pickup)
 
