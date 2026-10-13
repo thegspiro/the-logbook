@@ -2223,8 +2223,12 @@ Supported integrations:
 The page has three tabs. **Providers** is one card per provider, giving its
 name and platform, whether it is active, when it last synced, and its auto-sync
 interval — with **Test**, **Fetch Categories**, **Sync Now** and **Mappings**
-along the bottom. **Import Queue** and **All Mappings** are what a sync fills;
-both stay empty until one has run.
+along the bottom. **Import Queue** and **All Mappings** are what a sync fills.
+**Import Queue** lists, per provider, the records waiting for review and the ones
+that failed (a count at the page limit is a floor, not a total); **All Mappings**
+lists each provider's mapped and unmapped counts and the names of unmapped
+categories, users and courses. Each has an **Open mappings** button that opens the
+same mapping dialog as the provider card. Both stay empty until a sync has run.
 
 For a **Target Solutions** provider the auto-sync line reads "Every 1h · review
 daily at 02:00": a frequent pull of new completions plus a daily re-check of the
@@ -2878,6 +2882,37 @@ With Skills Testing, examiners can:
 > official result only counts once a training officer **validates** it.
 
 For a comprehensive guide with a realistic NREMT example walkthrough, see the dedicated **[Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)** training guide.
+
+![Skills Testing section within Training Admin showing the template list](./images/02-64-skills-testing-admin.png)
+
+### A department runs one practical-skills system _(2026-10-12)_
+
+Skills Testing (station sheets, scored step by step and validated by an officer)
+and **shift report sign-offs** (the shift officer ticks the skills a member
+demonstrated, which raises their competency) both record practical skills. A
+department now picks one, so officers always know which one counts.
+
+**Where:** **Training Administration > Settings & Data > Practical Skills**.
+**Needs:** `training.manage`.
+
+| Choice                     | What stays                                                                                       | What is hidden                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Skills Testing**         | Skill test templates and records, critical criteria, retest limits, results on My Training       | The skills list on shift reports and the Skill Evaluations those skills match                                                                   |
+| **Shift report sign-offs** | The skills list on shift reports, competency levels that rise with each sign-off, program credit | Skills Testing navigation and command-palette entries, the Evaluations destinations in the Training hub, and My Training's Skills Tests section |
+
+Changing it **deletes nothing**: the hidden system keeps what it recorded, and
+shows it again if you switch back. Existing departments start on Skills Testing,
+except a department that already has shift-report sign-offs and has never run a
+skill test, which starts on sign-offs. The Training hub's skills-test validation
+row and its tests-passed figure follow the choice.
+
+Under Skills Testing, the **Shift Reports** settings tab still lets you edit the
+**Observable Skills** list (Feedback Defaults) and the per-apparatus skills in
+**Apparatus Skills**, but they do nothing: the report form shows no skills list.
+Each now carries a note saying so, with a link to the Practical Skills setting.
+The lists are kept and apply again under sign-offs.
+
+_[Screenshot needed: Training Administration > Settings & Data > Practical Skills, both options visible, Skills Testing selected, with the "Changing this deletes nothing" confirmation open. Replaces nothing; new.]_
 
 ![Skills Testing section within Training Admin showing the template list](./images/02-64-skills-testing-admin.png)
 
