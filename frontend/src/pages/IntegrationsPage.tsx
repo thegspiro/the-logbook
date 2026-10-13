@@ -664,6 +664,20 @@ const IntegrationsPage: React.FC = () => {
     }
   };
 
+  // The Disconnect button is replaced by Connect, so focus fell to <body>.
+  // Focus moves once the replacement has rendered: a timer fired before the
+  // status update committed and found nothing to focus.
+  const [pendingConnectFocus, setPendingConnectFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingConnectFocus) return;
+    const connect = document.querySelector<HTMLButtonElement>(
+      `[data-integration-connect="${CSS.escape(pendingConnectFocus)}"]`
+    );
+    if (!connect) return;
+    connect.focus();
+    setPendingConnectFocus(null);
+  }, [pendingConnectFocus, integrations]);
+
   const handleDisconnect = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (mcpBusy && integration?.integration_type === 'claude-mcp') return;
@@ -674,6 +688,7 @@ const IntegrationsPage: React.FC = () => {
         prev.map((i) => (i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i))
       );
       toast.success(`${integration?.name ?? 'Integration'} ${activation ? 'deactivated' : 'disconnected'}`);
+      setPendingConnectFocus(integrationId);
     } catch (err: unknown) {
       toast.error(
         getErrorMessage(err, activation ? 'Failed to deactivate integration' : 'Failed to disconnect integration')
@@ -1752,6 +1767,8 @@ const IntegrationsPage: React.FC = () => {
                   )}
                   {integration.status === 'available' && canManage && (
                     <button
+                      type="button"
+                      data-integration-connect={integration.id}
                       onClick={() => {
                         resetFormState(integration);
                         setShowConnectModal(integration.id);

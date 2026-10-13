@@ -17,6 +17,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import { formatDateCustom, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { Breadcrumbs } from '../components/ux';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'active' | 'overdue';
 
@@ -27,6 +28,7 @@ interface CheckInModalState {
 }
 
 export const InventoryCheckoutsPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('active');
   const [activeCheckouts, setActiveCheckouts] = useState<UserCheckoutItem[]>([]);
@@ -196,7 +198,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="tab-scroll mb-6" role="tablist" aria-label="Temporary loan views">
+        <div className="tab-scroll mb-6" role="tablist" {...tablist} aria-label="Temporary loan views">
           <button
             onClick={() => setActiveTab('active')}
             role="tab"

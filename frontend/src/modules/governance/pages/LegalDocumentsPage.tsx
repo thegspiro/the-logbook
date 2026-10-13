@@ -14,6 +14,7 @@ import { blankToNull } from '../../../utils/formValues';
 import { RevisionEditorModal } from '../components/RevisionEditorModal';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
 import { LEGAL_DOCUMENT_LABEL, LegalDocumentType, type LegalDocumentState, type LegalRevision } from '../types/legal';
+import { useTablist } from '../../../hooks/useTablist';
 
 /**
  * Governance -> Legal Documents.
@@ -108,6 +109,7 @@ const LoadMore: React.FC<{
   ) : null;
 
 const LegalDocumentsPage: React.FC = () => {
+  const tablist = useTablist();
   const timezone = useTimezone();
   const { confirm } = useConfirm();
   const currentUser = useAuthStore((s) => s.user);
@@ -277,7 +279,7 @@ const LegalDocumentsPage: React.FC = () => {
         </p>
       ) : null}
 
-      <div className="tab-scroll" role="tablist" aria-label="Legal documents">
+      <div className="tab-scroll" role="tablist" {...tablist} aria-label="Legal documents">
         {DOCUMENT_ORDER.map((documentType) => (
           <button
             key={documentType}
