@@ -374,6 +374,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/training`                           | My Training                               | Authenticated     |
 | `/training/my-training`               | My Training                               | Authenticated     |
 | `/training/submit`                    | Submit Training                           | Authenticated     |
+| `/training/record-crew`               | Record Crew Training                      | Authenticated     |
 | `/training/courses`                   | Course Library                            | Authenticated     |
 | `/training/programs`                  | Training Programs                         | Authenticated     |
 | `/training/programs/:programId`       | Program Detail                            | Authenticated     |
