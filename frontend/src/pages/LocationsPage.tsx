@@ -1401,7 +1401,7 @@ export default function LocationsPage() {
       ) : stations.length === 0 && !rooms.has('__other__') ? (
         <div className="py-20 text-center">
           <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h3>
+          <h2 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h2>
           {canCreate && (
             <>
               <p className="text-theme-text-muted mb-4">
@@ -1428,7 +1428,7 @@ export default function LocationsPage() {
                     <Building2 className="h-5 w-5 text-red-500" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-theme-text-primary text-lg font-semibold">{station.name}</h3>
+                    <h2 className="text-theme-text-primary text-lg font-semibold">{station.name}</h2>
                     {address && (
                       <p className="text-theme-text-secondary mt-0.5 flex items-center gap-1.5 text-sm">
                         <MapPin className="h-3.5 w-3.5 shrink-0" /> {address}
@@ -1482,7 +1482,7 @@ export default function LocationsPage() {
                     className="border-theme-surface-border bg-theme-surface-hover/30 space-y-2 border-t p-4"
                   >
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-theme-text-primary text-sm font-semibold">Rooms</h4>
+                      <h3 className="text-theme-text-primary text-sm font-semibold">Rooms</h3>
                       {canCreate && (
                         <button
                           onClick={() => openAddRoom(station.name)}
@@ -1523,7 +1523,7 @@ export default function LocationsPage() {
           {/* Orphan rooms (rooms without a station) */}
           {rooms.has('__other__') && (
             <div className="card p-5">
-              <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
+              <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h2>
               <div className="card-grid items-start gap-2 [--card-grid-min:18rem]">
                 {(rooms.get('__other__') || []).map((room) => (
                   <RoomCard

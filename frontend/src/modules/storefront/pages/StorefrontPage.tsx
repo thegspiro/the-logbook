@@ -42,8 +42,12 @@ const StorefrontPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(ALL_CATEGORIES);
 
+  // The store's isLoading starts false, so before the first fetch begins the
+  // page would render "The store is closed" for an open store — a flash, and
+  // the heading the route announcer then reads out to a screen reader.
+  const [firstLoadDone, setFirstLoadDone] = useState(false);
   useEffect(() => {
-    void loadStorefront();
+    void loadStorefront().finally(() => setFirstLoadDone(true));
   }, [loadStorefront]);
 
   // A category chip is only meaningful against the catalog it was drawn from.
@@ -91,7 +95,7 @@ const StorefrontPage: React.FC = () => {
     void navigate('/store/checkout');
   }, [navigate]);
 
-  if (isLoading && !storefront) {
+  if (!storefront && (isLoading || !firstLoadDone)) {
     return <SkeletonPage />;
   }
 

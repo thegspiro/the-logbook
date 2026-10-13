@@ -554,7 +554,7 @@ export const ReportsPage: React.FC = () => {
                   )}
                 </div>
 
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">{report.title}</h3>
+                <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">{report.title}</h2>
                 <p className="text-theme-text-secondary mb-4 text-sm">{report.description}</p>
 
                 {report.available && (
@@ -592,7 +592,7 @@ export const ReportsPage: React.FC = () => {
         {filteredReports.length === 0 && (
           <div className="py-12 text-center">
             <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-            <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h3>
+            <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h2>
             <p className="text-theme-text-muted">Try selecting a different category</p>
           </div>
         )}
@@ -602,7 +602,7 @@ export const ReportsPage: React.FC = () => {
           <div className="flex items-start space-x-3">
             <AlertCircle className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">How Reports Work</h4>
+              <h2 className="text-theme-alert-info-title mb-1 text-sm font-medium">How Reports Work</h2>
               <p className="text-theme-alert-info-text text-sm">
                 Reports use live data. Reports marked Date Range cover the reporting period above. Export any report to
                 CSV or print it to PDF, and use Compare in an open report to see the previous period of the same length
@@ -635,9 +635,9 @@ export const ReportsPage: React.FC = () => {
                         })}
                       </div>
                       <div>
-                        <h3 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
+                        <h2 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
                           {activeCard.title}
-                        </h3>
+                        </h2>
                         {activeCard.usesDateRange && startDate && endDate && (
                           <p className="text-theme-text-muted mt-0.5 text-xs">
                             {startDate} — {endDate}
@@ -683,10 +683,10 @@ export const ReportsPage: React.FC = () => {
                   {comparisonData && comparisonPeriod && (
                     <div className="border-theme-surface-border mt-6 border-t pt-6">
                       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                           <GitCompareArrows className="h-4 w-4" />
                           Previous Period: {comparisonPeriod.start} — {comparisonPeriod.end}
-                        </h4>
+                        </h3>
                         <button
                           type="button"
                           onClick={clearComparison}
