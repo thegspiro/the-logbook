@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3185](https://github.com/thegspiro/the-logbook/pull/3185)**: branch `claude/security-review-apparatus-nfc`, Feature 13
+(Apparatus & NFC), pass 15 (watchdog pickup). PR #3169 (Facilities, pass 8)
+had already merged by the time this iteration checked GitHub directly for an
+open `claude/security-review-*` PR (Step 0) and found none — this row still
+named #3169 only because that update rides on its own branch and never
+reached `main`. 1 fixed (AP-19, LOW — `update_report_config` used a raw
+`setattr` loop with no NOT NULL guard, so an explicit null against
+`name`/`report_type`/`is_scheduled` reached `db.commit()` as a 500 instead of
+the 400 every sibling update path already gets via `apply_updates`), 0 new
+findings otherwise. Before trusting the commit delta, caught and fixed a
+shallow-clone truncation (`git rev-parse --is-shallow-repository` → `true`;
+`git fetch --unshallow` before re-deriving it) — the same risk pass 14's own
+note warned a later pass about. Real delta since pass 14 (PR #2969): 20
+non-merge commits, 15 a repo-wide mypy-typing sweep (verified mechanical hunk
+by hunk) plus 5 real changes, all read in full — two already-fixed XC-1/
+NOT-NULL hardening commits re-verified intact, a document-escalation guard
+re-verified intact, a camelCase schema-alias fix reviewed fresh (no
+auth/tenancy impact), and a new malware-scanned photo/document upload
+feature (4 new routes) reviewed fresh and found sound (org-scoped,
+write-gated, legacy typed-URL field rejects non-HTTP(S) schemes via
+`safe_external_url`). AP2-4 (app-review rotation's own standing flagged
+item on the EVOC gate's fail-open-on-unresolvable-apparatus behavior)
+re-confirmed unchanged, still awaiting an owner decision. `main` briefly
+carried two Alembic heads again (`cc91959dbaff`, `05ec84735fcf`), which
+turned this PR's first CI run red with "Multiple head revisions" — not this
+pass's own defect. A different session's PR (#3176) merged them while this
+PR was open; this branch merged `main` in once #3176 landed rather than wait
+on it, picking up its merge revision for real (no duplicate of this pass's
+own). Route count: `apparatus.py` 94 (+4 from pass 14's 90 — the new
+upload/download pair); `nfc_tags.py` unchanged at 5. See the Log entry below
+and `docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 15** section for
+detail. Row 13 stays ✅ (pending this PR's merge); next is Feature 14
+(Equipment check & shifts).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 8, PR #3169, merged), preserved for history</summary>
+
 **PR [#3169](https://github.com/thegspiro/the-logbook/pull/3169)**:
 branch `claude/security-review-facilities`, Feature 12 (Facilities), pass 8
 (watchdog pickup). 0 application-code fixes needed, 0 new security findings
@@ -46,6 +83,8 @@ dependency. See the Log entry below and
 `docs/security-review/FAC-12-facilities.md`'s **Pass 8** section for detail.
 Row 12 stays ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
 NFC).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 8, PR #3166, merged), preserved for history</summary>
@@ -18925,6 +18964,103 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 13 (Apparatus & NFC, pass 15) — 1 fixed (AP-19, LOW), 0 new findings; a shallow-clone truncation caught before trusting the commit delta (watchdog pickup)
+
+**Watchdog pickup.** Checked GitHub directly for an open
+`claude/security-review-*` PR (Step 0) and found none — PR #3169 (Feature 12,
+Facilities, pass 8) had already merged, invisible in this file's own Open PR
+row only because that update rides on its own branch and had not yet reached
+`main`. Row 13 (Apparatus & NFC) was the next `⬜`/next-pointer row.
+
+**Shallow-clone truncation caught, not assumed away.** The first attempt at
+`git log --since <pass-14-merge-date> -- <this feature's files>` returned an
+18-commit list whose oldest entry's diff was the entire module's worth of
+files added from nothing — exactly the shallow-clone boundary pass 14's own
+note warned a later pass about, re-happening. `git rev-parse
+--is-shallow-repository` confirmed `true`; `git fetch --unshallow` fixed it,
+and the corrected 20-commit list dropped the bogus entry.
+
+**Prior art loaded first.** Read `docs/security-review/CHECKLIST.md`,
+`docs/security-review/SEC-00-cross-cutting-baseline.md`, and
+`docs/security-review/AP-13-apparatus-nfc.md` in full (all 14 prior passes;
+pass 14 went into this rotation with zero open/flagged items), plus
+`docs/app-review/apparatus.md` and `docs/KNOWN_LIMITATIONS.md`'s apparatus
+entries, before touching any application code.
+
+**Real delta since pass 14's merge (PR #2969, 2026-10-06) was 20 non-merge
+commits**, each read via `git show`. 15 are a repo-wide mypy-typing sweep —
+confirmed mechanical hunk by hunk (`Optional[X] = result.scalar_one_or_none();
+return x`-shape narrowing, parameter widening `str` → `UUID | str`, no logic
+change) rather than taken on the commit message's own "no behaviour change"
+claim. 5 are real changes: two already-fixed hardening commits
+(`80fa67e75` — NOT NULL guard on maintenance-record updates;
+`bb2dddcd4` — XC-1 on equipment/report-config FKs) re-verified intact at
+their current lines; one document-escalation guard (`be7348a8b` — re-filing
+an unfiled document into a vehicle's folder now requires `documents.manage`,
+not just read access) re-verified intact; one camelCase schema-alias fix
+(`3bdd20ccb`) reviewed fresh with no auth/tenancy impact (field names only);
+and one new feature (`d959af0ca` — apparatus photos/documents now upload as
+malware-scanned `Document` rows filed into the vehicle's folder, 4 new
+routes) reviewed fresh and found sound — org-scoped via `_apparatus_in_org`,
+write-gated via `can_access_folder(..., require_write=True)`, and the legacy
+typed-URL field passed through `safe_external_url()`, confirmed to reject
+anything but an absolute `http(s)://` URL with a hostname (a stored
+`javascript:` value raises inside `validate_external_http_url` and is
+withheld rather than ever reaching an `href`/`src`).
+
+**AP-19 (LOW) fixed:** `ApparatusService.update_report_config` applied its
+partial-update payload with a raw `setattr` loop carrying no NOT NULL guard
+— unlike its two siblings in the same file (`update_maintenance_record`,
+`update_nfpa_compliance`), both already on the shared `apply_updates` helper.
+An explicit null against `name`/`report_type`/`is_scheduled` (all NOT NULL)
+reached `db.commit()` as an `IntegrityError` — a 500, reproduced against real
+SQL before fixing — instead of the 400 every sibling path already gets.
+Switched to `apply_updates(config, update_data)`. Guard tests:
+`tests/test_xc1_operations_finance.py::TestApparatusReportConfigRequiredFieldClear`
+(three cases: `name`, `report_type`/`is_scheduled` each refused with
+`ValueError`; a genuinely nullable field, `description`, still clears).
+
+**AP2-4** (app-review rotation's own standing MED, the EVOC gate's
+fail-open-on-unresolvable-apparatus behavior, owner decision pending) —
+re-confirmed unchanged this pass; still only logged, verdict untouched.
+
+**Cross-cutting migration-head conflict surfaced as this PR's first CI
+failure, and resolved by catching up, not by fixing it here.** `main` briefly
+carried two Alembic heads again — `cc91959dbaff` (PR #3094, crew-recorded
+training) and `05ec84735fcf` (PR #3169/#3175, this rotation's own prior
+Facilities pass), each independently joining the same prior pair — which
+failed this PR's integration-test job with "Multiple head revisions," not a
+defect in this pass's own diff. A different session's PR (#3176) merged the
+two with a no-op merge revision (`70070d86ff27`) while this PR was already
+open and its first CI run red; rather than wait on it, `main` was merged into
+this branch once #3176 landed, bringing that revision in for real (verified
+`alembic heads` → single head, `validate_migrations.py --strict` → 590
+revisions, single head, VALIDATION PASSED) — no duplicate merge revision of
+this pass's own.
+
+**Route inventory re-run from scratch:** `apparatus.py` 94 routes (up from
+pass 14's 90 — the new upload/download pair, `grep -c "^@router\."`, not the
+commit message), all four new ones gated `apparatus.edit`/`apparatus.manage`
+(upload) or `apparatus.view`/`apparatus.manage` (download) and confirmed
+org-scoped. `nfc_tags.py` unchanged at 5.
+
+**Completion gate (re-run after merging `main`, per the note above):**
+`flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (590
+revisions, single head — `main`'s own #3176 merge revision, not a duplicate);
+`check_route_permissions.py --strict` passed (269
+routes, 0 errors/warnings, whole app); scoped backend tests (`-k "apparatus
+or nfc or evoc or driver_exception"`) 1118 passed, 1 skipped
+(environment-only — `pywebpush`); frontend `npm run typecheck` 0 errors,
+`npm run lint` 0 errors/warnings; `npx vitest run src/modules/apparatus` 105
+passed (14 files).
+
+Findings doc:
+[`AP-13-apparatus-nfc.md`](./AP-13-apparatus-nfc.md)'s **Pass 15** section.
+No new `KNOWN_LIMITATIONS.md` entry — AP-19 was fixed, not flagged; AP2-4's
+existing entry needed no change. Rotation row 13 → ✅ (pending PR merge).
+Next: Feature 14 (Equipment check & shifts).
 
 ### 2026-10-13 — Feature 12 (Facilities, pass 8) — 0 application fixes, 0 new security findings; FAC-13 (HIGH) re-verified already fixed by owner-direct work; 1 cross-cutting migration-head conflict diagnosed and fixed (watchdog pickup)
 
