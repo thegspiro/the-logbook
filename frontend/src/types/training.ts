@@ -2179,8 +2179,9 @@ export interface RequirementDetail {
   completed_hours: number;
   progress_percentage: number;
   is_met: boolean;
-  due_date?: string;
-  days_until_due?: number;
+  /** Null when the requirement has no deadline, as a rolling hours requirement has not. */
+  due_date?: string | null;
+  days_until_due?: number | null;
   waived_months?: number;
   active_months?: number;
   cert_expired?: boolean;
