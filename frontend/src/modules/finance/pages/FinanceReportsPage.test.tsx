@@ -6,6 +6,7 @@ import type {
   AmendmentLogReport,
   BudgetVsActualReport,
   FiscalYear,
+  FunctionalExpensesReport,
   LateSubstantiationReport,
   PaymentsRegisterReport,
 } from '../types';
@@ -18,6 +19,8 @@ const mockAmendmentLogCsv = vi.fn();
 const mockRegister = vi.fn();
 const mockRegisterCsv = vi.fn();
 const mockLate = vi.fn();
+const mockFunctional = vi.fn();
+const mockFunctionalCsv = vi.fn();
 const mockLateCsv = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
@@ -31,6 +34,8 @@ vi.mock('../services/api', async (importOriginal) => ({
     paymentsRegister: (...args: unknown[]) => mockRegister(...args) as unknown,
     paymentsRegisterCsv: (...args: unknown[]) => mockRegisterCsv(...args) as unknown,
     lateSubstantiation: (...args: unknown[]) => mockLate(...args) as unknown,
+    functionalExpenses: (...args: unknown[]) => mockFunctional(...args) as unknown,
+    functionalExpensesCsv: (...args: unknown[]) => mockFunctionalCsv(...args) as unknown,
     lateSubstantiationCsv: (...args: unknown[]) => mockLateCsv(...args) as unknown,
   },
 }));
@@ -151,6 +156,30 @@ const april: PaymentsRegisterReport = {
   ],
 };
 
+const functionalReport: FunctionalExpensesReport = {
+  start: '2026-10-01',
+  end: '2026-10-12',
+  total: '195.00',
+  classes: [
+    {
+      functionalClass: 'program',
+      total: '100.00',
+      categories: [{ categoryId: 'c-gear', categoryName: 'Turnout gear', amount: '100.00' }],
+    },
+    { functionalClass: 'management_general', total: '0.00', categories: [] },
+    {
+      functionalClass: 'fundraising',
+      total: '65.00',
+      categories: [{ categoryId: 'c-raffle', categoryName: 'Raffle', amount: '65.00' }],
+    },
+    {
+      functionalClass: null,
+      total: '30.00',
+      categories: [{ categoryId: null, categoryName: null, amount: '30.00' }],
+    },
+  ],
+};
+
 const lateReport: LateSubstantiationReport = {
   start: '2026-10-01',
   end: '2026-10-12',
@@ -188,6 +217,8 @@ describe('FinanceReportsPage', () => {
       mockRegister,
       mockRegisterCsv,
       mockLate,
+      mockFunctional,
+      mockFunctionalCsv,
       mockLateCsv,
       mockSaveFile,
     ]) {
@@ -200,6 +231,7 @@ describe('FinanceReportsPage', () => {
     mockAmendmentLog.mockResolvedValue(amendments);
     mockRegister.mockResolvedValue(april);
     mockLate.mockResolvedValue(lateReport);
+    mockFunctional.mockResolvedValue(functionalReport);
   });
 
   afterEach(() => {
@@ -331,6 +363,36 @@ describe('FinanceReportsPage', () => {
 
       await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
       expect(mockLateCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+    });
+  });
+
+  describe('functional expenses', () => {
+    it('groups the period by function and flags what is not classified', async () => {
+      openAt('?report=functional-expenses');
+
+      const program = await screen.findByRole('rowgroup', { name: 'Program services' });
+      expect(mockFunctional).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+      expect(within(program).getByRole('row', { name: /Turnout gear/ })).toHaveTextContent('$100.00');
+      expect(
+        within(screen.getByRole('rowgroup', { name: 'Management & general' })).getByText('Nothing in this period')
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('rowgroup', { name: 'Unclassified' })).getByText('No budget line')
+      ).toBeInTheDocument();
+      expect(screen.getByText(/\$30\.00 is not classified yet/)).toBeInTheDocument();
+    });
+
+    it('downloads the CSV for the period shown', async () => {
+      const file = { blob: new Blob(['x']), filename: 'functional-expenses.csv' };
+      mockFunctionalCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=functional-expenses');
+      await screen.findByRole('rowgroup', { name: 'Program services' });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
+      expect(mockFunctionalCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
     });
   });
 });

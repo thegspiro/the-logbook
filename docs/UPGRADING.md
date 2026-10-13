@@ -431,6 +431,15 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Expenses can be classified as program, management & general or fundraising (2026-10-13)
+
+Migration `390fa30d0200` adds a nullable `functional_class` to budget
+categories, purchase requests, check requests and expense line items. Nothing
+is backfilled and nothing changes until a department classifies its
+categories: **Finance › Reports › Functional expenses** lists every payment as
+unclassified until then. Downgrading drops the columns and every
+classification set.
+
 ### Expense reports can enforce a deadline for claiming expenses (2026-10-12)
 
 Migration `afaca8c1f812` adds `submitted_at`, `late_acknowledged_by` and

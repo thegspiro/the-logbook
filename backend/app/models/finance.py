@@ -166,6 +166,19 @@ class PurchaseRequestPriority(str, enum.Enum):
     URGENT = "urgent"
 
 
+class FunctionalClass(str, enum.Enum):
+    """What an expense was for, as IRS Form 990 Part IX reports it.
+
+    ``fundraising`` is the cost of raising money (printing raffle tickets,
+    renting the hall for a dinner), not what the money raised is spent on: a
+    turnout set bought with donations is ``program``.
+    """
+
+    PROGRAM = "program"
+    MANAGEMENT_GENERAL = "management_general"
+    FUNDRAISING = "fundraising"
+
+
 class ExpenseType(str, enum.Enum):
     """Type of expense line item"""
 
@@ -351,6 +364,12 @@ class BudgetCategory(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     qb_account_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # The default classification of payments against this category's lines.
+    # Null inherits the parent category's; a payment may override it.
+    functional_class: Mapped[Optional[FunctionalClass]] = mapped_column(
+        SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     # The position answerable for this category's lines. A line with no owner
     # of its own inherits this one (app/services/finance_budget_ownership.py).
     owner_position_id: Mapped[Optional[str]] = mapped_column(
@@ -905,6 +924,12 @@ class PurchaseRequest(Base):
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Overrides the budget category's classification for this payment
+    # (app/services/functional_expenses.py); null uses the category's.
+    functional_class: Mapped[Optional[FunctionalClass]] = mapped_column(
+        SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     requested_by: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -1182,6 +1207,12 @@ class ExpenseLineItem(Base):
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Overrides the budget category's classification for this payment
+    # (app/services/functional_expenses.py); null uses the category's.
+    functional_class: Mapped[Optional[FunctionalClass]] = mapped_column(
+        SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     date_incurred: Mapped[datetime] = mapped_column(
@@ -1248,6 +1279,12 @@ class CheckRequest(Base):
     budget_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("budgets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Overrides the budget category's classification for this payment
+    # (app/services/functional_expenses.py); null uses the category's.
+    functional_class: Mapped[Optional[FunctionalClass]] = mapped_column(
+        SQLEnum(FunctionalClass, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)

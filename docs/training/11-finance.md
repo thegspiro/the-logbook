@@ -1515,7 +1515,7 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 ## Board Reports
 
 Navigate to **Finance > Reports** (or the **Reports** quick link on the
-dashboard). You need `finance.view`. Four reports sit on tabs across the top:
+dashboard). You need `finance.view`. Five reports sit on tabs across the top:
 
 - **Budget vs actual** -- every budget line for a fiscal year: its original
   amount, confirmed amendments, the amended budget, what has been spent, what
@@ -1525,6 +1525,9 @@ dashboard). You need `finance.view`. Four reports sit on tabs across the top:
   whether a second officer confirmed or rejected it.
 - **Payments register** -- every payment made in a period: date, type, request
   number, payee, description, budget line and amount, with a total.
+- **Functional expenses** -- a period's payments by what they were for:
+  program services, management & general, and fundraising, each by budget
+  category. See [Classifying Expenses](#classifying-expenses).
 - **Outside the accountable plan** -- every expense reimbursed in a period that
   was claimed after the department's deadline, with who confirmed it. See
   [The Deadline for Claiming Expenses](#the-deadline-for-claiming-expenses).
@@ -1574,6 +1577,37 @@ budget lines.
 | Payment with no budget line                       | On the payments register, with no budget line shown; not on budget vs actual               |
 | An expense report charged to several budget lines | One register row for the whole report, naming every line it was charged to                 |
 | Register period longer than 366 days              | Refused with a message; run it in two parts                                                |
+
+### Classifying Expenses
+
+A nonprofit's annual return (IRS Form 990, Part IX) reports expenses by what
+they were **for**, in three classes:
+
+| Class                    | What belongs there                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| **Program services**     | Running the department: gear, apparatus, training, fuel, community outreach            |
+| **Management & general** | Running the organization: insurance, accounting, bank fees, the annual audit           |
+| **Fundraising**          | The cost of raising money: raffle tickets, a mailer, the hall for a fundraising dinner |
+
+Fundraising is what it **costs** to raise money, not what the money raised
+buys. Turnout gear bought with donations is still program services.
+
+**Setting it up.** On **Finance > Settings**, edit each budget category and
+choose its **Expense classification**. A subcategory left _Not set_ takes its
+parent category's class, so setting the top-level categories is usually
+enough.
+
+**One payment that differs.** On a purchase request or check request, or on a
+line of an expense report, someone with `finance.manage` can change the
+classification for that payment alone — the gloves bought as raffle prizes
+from the gear line, say. Choosing _Category's class_ puts it back. Finance
+viewers see the class; members filing requests do not.
+
+**The report.** **Functional expenses** lists a period's payments under each
+class, then by budget category, with subtotals and a CSV. It counts the same
+payments as the payments register, so the totals agree. Anything without a
+class is listed as **Unclassified**, with a reminder above the table, rather
+than guessed at.
 
 ---
 

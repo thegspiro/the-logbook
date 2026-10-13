@@ -723,6 +723,45 @@ Receipts**, linked by `receipt_document_id`, migration `c0bf0b155719`).
 - **Screen.** _Expense report_ disables **Submit for Approval** while any line
   has no receipt, with the count of lines still missing one beside it.
 
+## Functional expense classification _(2026-10-13)_
+
+A nonprofit reports its expenses by function (IRS Form 990 Part IX):
+**program services**, **management & general** and **fundraising** — what an
+expense was for, not what it bought. Fundraising is the cost of raising money;
+gear bought with donations is program.
+
+**Where it is set** (`FunctionalClass` in `app/models/finance.py`; migration
+`390fa30d0200`):
+
+- `budget_categories.functional_class` — the default for payments against the
+  category's lines. Set on **Finance › Settings**' category dialog
+  (`functionalClass` on `POST`/`PUT /finance/budget-categories`); null inherits.
+- `purchase_requests`, `check_requests`, `expense_line_items`
+  `.functional_class` — an override for one payment, set by `finance.manage`
+  through `PUT /finance/purchase-requests/{id}/functional-class`,
+  `PUT /finance/check-requests/{id}/functional-class` and
+  `PUT /finance/expense-reports/{id}/items/{item}/functional-class`
+  (`{"functionalClass": ... | null}`, null clears; any status, since it is
+  bookkeeping; audit-logged as `finance.functional_class_set`). A line item is
+  reached through its org-scoped report.
+
+**How a payment is classified** (`FunctionalClassifier`,
+`app/services/functional_expenses.py`): its own override, else its budget
+category's class, else the nearest ancestor category's, else none. Detail
+responses carry `functionalClass` (the override) and
+`effectiveFunctionalClass` (the result), computed by the same classifier the
+report uses (CLAUDE.md pitfall #29). Nothing is backfilled: an unclassified
+payment is reported as unclassified rather than guessed.
+
+**Functional expenses report** —
+`GET /finance/reports/functional-expenses?start&end&format` (`finance.view`),
+**Finance › Reports › Functional expenses**. The period's payments — the same
+set as the payments register: paid purchase requests, issued checks less those
+voided in the period, paid expense reports line by line — grouped by class,
+then by budget category, with subtotals. The three classes are always listed;
+unclassified only when there is some, and the screen says how much. Payments
+with no budget line appear under no category. CSV via `SafeCsvWriter`.
+
 ## The deadline for claiming expenses _(2026-10-12)_
 
 Under an IRS accountable plan, a reimbursement is tax-free only if the expense
@@ -1303,6 +1342,7 @@ Pages:
 
 - `GET /finance/reports/budget-vs-actual` _(built 2026-10-12)_ — through a chosen date, rather than over a range; see [Board reports](#board-reports-2026-10-12)
 - `GET /finance/reports/amendment-log` _(built 2026-10-12)_ — see [Board reports](#board-reports-2026-10-12)
+- `GET /finance/reports/functional-expenses` _(built 2026-10-13)_ — payments by function (Form 990 Part IX); see [Functional expense classification](#functional-expense-classification-2026-10-13)
 - `GET /finance/reports/late-substantiation` _(built 2026-10-12)_ — expense lines paid in a period that were claimed after the deadline; see [The deadline for claiming expenses](#the-deadline-for-claiming-expenses-2026-10-12)
 - `GET /finance/reports/payments-register` _(built 2026-10-12)_ — the unified log of money paid out, which the planned `transaction-log` described; see [Board reports](#board-reports-2026-10-12)
 - `GET /finance/reports/expense-summary` — by member, category, date range (planned)

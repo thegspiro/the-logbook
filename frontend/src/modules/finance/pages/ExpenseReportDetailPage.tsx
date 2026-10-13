@@ -19,7 +19,8 @@ import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
-import { expenseReportService } from '../services/api';
+import { expenseReportService, functionalClassService } from '../services/api';
+import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -308,8 +309,22 @@ const ExpenseReportDetailPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
-                      {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                      <span className="capitalize">
+                        {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
+                      </span>
+                      <div className="mt-1">
+                        <FunctionalClassControl
+                          compact
+                          value={item.functionalClass}
+                          effective={item.effectiveFunctionalClass}
+                          subject={item.description}
+                          onChange={async (next) => {
+                            await functionalClassService.setExpenseLine(er.id, item.id, next);
+                            await fetchExpenseReport(er.id);
+                          }}
+                        />
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (

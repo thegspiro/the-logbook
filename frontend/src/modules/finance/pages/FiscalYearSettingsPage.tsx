@@ -38,7 +38,14 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
-import type { BudgetCategory, BudgetPlanningStage, FiscalYear } from '../types';
+import {
+  FUNCTIONAL_CLASS_LABELS,
+  FunctionalClass,
+  isFunctionalClass,
+  type BudgetCategory,
+  type BudgetPlanningStage,
+  type FiscalYear,
+} from '../types';
 import { BudgetAdoptionDialog } from '../components/BudgetAdoptionDialog';
 import { FiscalYearLockDialog } from '../components/FiscalYearLockDialog';
 import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
@@ -195,6 +202,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
   const [description, setDescription] = useState(category?.description ?? '');
   const [ownerPositionId, setOwnerPositionId] = useState(category?.ownerPositionId ?? '');
   const [qbAccountName, setQbAccountName] = useState(category?.qbAccountName ?? '');
+  const [functionalClass, setFunctionalClass] = useState<string>(category?.functionalClass ?? '');
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(category);
   const positionOptions = withCurrent(positions, category?.ownerPositionId, category?.ownerPositionName);
@@ -215,6 +223,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
           description: blankToNull(description),
           ownerPositionId: blankToNull(ownerPositionId),
           qbAccountName: blankToNull(qbAccountName),
+          functionalClass: isFunctionalClass(functionalClass) ? functionalClass : null,
         });
         toast.success('Category saved');
       } else {
@@ -230,12 +239,16 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
         if (qbAccountName.trim()) {
           createData.qbAccountName = qbAccountName.trim();
         }
+        if (isFunctionalClass(functionalClass)) {
+          createData.functionalClass = functionalClass;
+        }
         await budgetCategoryService.create(createData);
         toast.success('Category created');
         setName('');
         setDescription('');
         setOwnerPositionId('');
         setQbAccountName('');
+        setFunctionalClass('');
       }
       onSaved();
       onClose();
@@ -301,6 +314,30 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
             </select>
             <p id="category-owner-hint" className="text-theme-text-secondary mt-1 text-xs">
               Budget lines in this category without an owner of their own belong to this position.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="category-functional-class" className={labelClass}>
+              Expense classification
+            </label>
+            <select
+              id="category-functional-class"
+              className={inputClass}
+              value={functionalClass}
+              onChange={(e) => setFunctionalClass(e.target.value)}
+              aria-describedby="category-functional-class-hint"
+            >
+              <option value="">Not set (use the parent category&apos;s)</option>
+              {Object.values(FunctionalClass).map((value) => (
+                <option key={value} value={value}>
+                  {FUNCTIONAL_CLASS_LABELS[value]}
+                </option>
+              ))}
+            </select>
+            <p id="category-functional-class-hint" className="text-theme-text-secondary mt-1 text-xs">
+              What spending here is for, as the IRS Form 990 reports it. Fundraising is the cost of raising money
+              (raffle tickets, a dinner&apos;s hall) — gear bought with donations is still program services. The finance
+              office can change it on a single payment.
             </p>
           </div>
           <div>

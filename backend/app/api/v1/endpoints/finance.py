@@ -27,6 +27,7 @@ from app.models.finance import (
     ApprovalEntityType,
     ExpenseReportStatus,
     FiscalYearStatus,
+    FunctionalClass,
     PurchaseRequestStatus,
 )
 from app.models.user import User
@@ -92,6 +93,8 @@ from app.schemas.finance import (
     FiscalYearResponse,
     FiscalYearStageChange,
     FiscalYearUpdate,
+    FunctionalClassUpdate,
+    FunctionalExpensesReportResponse,
     LateSubstantiationReportResponse,
     ManualDenyRequest,
     MemberDuesPayment,
@@ -141,6 +144,7 @@ from app.services.finance_service import (
     FinanceService,
     ManualApprovalConflictError,
 )
+from app.services.functional_expenses import FunctionalClassifier
 from app.utils import download_names
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import load_finance_settings
@@ -2192,6 +2196,156 @@ async def late_substantiation_report(
     )
 
 
+_FUNCTIONAL_CLASS_LABELS = {
+    "program": "Program services",
+    "management_general": "Management & general",
+    "fundraising": "Fundraising",
+    None: "Unclassified",
+}
+
+
+@router.get(
+    "/reports/functional-expenses", response_model=FunctionalExpensesReportResponse
+)
+async def functional_expenses_report(
+    start: date = Query(...),
+    end: date = Query(...),
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Payments between two dates by function, then by budget category.
+
+    **Requires permission: finance.view**
+
+    Program services, management & general and fundraising, as IRS Form 990
+    Part IX reports expenses, plus anything not yet classified. The same
+    payments as the payments register for the period, so the totals agree. A
+    period longer than 366 days is 400. ``format=csv`` downloads the same rows.
+    """
+    service = FinanceReportService(db)
+    try:
+        report = await service.functional_expenses(
+            str(current_user.organization_id), start, end
+        )
+    except Exception as e:
+        raise _report_error(e)
+    if format != "csv":
+        return report
+    rows: list[list[Any]] = [["Function", "Budget category", "Amount"]]
+    for group in report["classes"]:
+        label = _FUNCTIONAL_CLASS_LABELS.get(group["functional_class"], "")
+        for category in group["categories"]:
+            rows.append(
+                [
+                    label,
+                    category["category_name"] or "No budget line",
+                    _amount_cell(category["amount"]),
+                ]
+            )
+        rows.append([label, "Subtotal", _amount_cell(group["total"])])
+    rows.append(["Total", "", _amount_cell(report["total"])])
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "functional-expenses", report["start"], report["end"], extension=".csv"
+        ),
+    )
+
+
+async def _set_functional_class(db, entity, value, current_user, kind: str):
+    entity.functional_class = value
+    await log_audit_event(
+        db=db,
+        event_type="finance.functional_class_set",
+        event_category="finance",
+        severity="info",
+        event_data={
+            "entity_type": kind,
+            "entity_id": str(entity.id),
+            "functional_class": value.value if value else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.flush()
+
+
+@router.put("/purchase-requests/{pr_id}/functional-class", status_code=204)
+async def set_purchase_request_functional_class(
+    pr_id: str,
+    data: FunctionalClassUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Classify one purchase request, overriding its budget category's class.
+
+    **Requires permission: finance.manage**
+
+    ``functionalClass`` null clears the override. Allowed in any status: it is
+    bookkeeping, not part of the request the member made.
+    """
+    pr = await FinanceService(db).get_purchase_request(
+        pr_id, str(current_user.organization_id), for_update=True
+    )
+    if pr is None:
+        raise HTTPException(status_code=404, detail="Purchase request not found")
+    await _set_functional_class(
+        db, pr, data.functional_class, current_user, "purchase_request"
+    )
+
+
+@router.put("/check-requests/{cr_id}/functional-class", status_code=204)
+async def set_check_request_functional_class(
+    cr_id: str,
+    data: FunctionalClassUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Classify one check request, overriding its budget category's class.
+
+    **Requires permission: finance.manage**
+
+    ``functionalClass`` null clears the override. Allowed in any status.
+    """
+    cr = await FinanceService(db).get_check_request(
+        cr_id, str(current_user.organization_id), for_update=True
+    )
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Check request not found")
+    await _set_functional_class(
+        db, cr, data.functional_class, current_user, "check_request"
+    )
+
+
+@router.put(
+    "/expense-reports/{er_id}/items/{item_id}/functional-class", status_code=204
+)
+async def set_expense_line_item_functional_class(
+    er_id: str,
+    item_id: str,
+    data: FunctionalClassUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Classify one expense line, overriding its budget category's class.
+
+    **Requires permission: finance.manage**
+
+    The line is found through its report, which is org-scoped.
+    ``functionalClass`` null clears the override. Allowed in any status.
+    """
+    er = await FinanceService(db).get_expense_report(
+        er_id, str(current_user.organization_id)
+    )
+    if er is None:
+        raise HTTPException(status_code=404, detail="Expense report not found")
+    item = await _expense_line_item(er, item_id)
+    await _set_functional_class(
+        db, item, data.functional_class, current_user, "expense_line_item"
+    )
+
+
 @router.get("/settings", response_model=FinanceSettingsResponse)
 async def get_finance_settings(
     db: AsyncSession = Depends(get_db),
@@ -2589,6 +2743,23 @@ async def _with_approval_steps(
     payload.awaiting_second_approval = service.is_awaiting_second_approval(
         entity_type, payload, records
     )
+    classifier = await FunctionalClassifier.load(service.db, org_id)
+
+    def effective(override: Optional[str], budget_id: Optional[str]):
+        fc = classifier.resolve(
+            FunctionalClass(override) if override else None, budget_id
+        )
+        return fc.value if fc else None
+
+    if entity_type == ApprovalEntityType.EXPENSE_REPORT:
+        for item in payload.line_items:
+            item.effective_functional_class = effective(
+                item.functional_class, item.budget_id
+            )
+    else:
+        payload.effective_functional_class = effective(
+            payload.functional_class, payload.budget_id
+        )
     if entity_type == ApprovalEntityType.EXPENSE_REPORT:
         payload.awaiting_late_acknowledgement = (
             service.is_awaiting_late_acknowledgement(payload, records)

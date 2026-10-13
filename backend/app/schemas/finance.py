@@ -20,6 +20,7 @@ from app.models.finance import (
     DuesFrequency,
     ExpenseType,
     ExportMappingType,
+    FunctionalClass,
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCResponseBase
@@ -232,6 +233,8 @@ class BudgetCategoryCreate(BaseModel):
     sort_order: int = 0
     qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
+    # Null inherits the parent category's (app/services/functional_expenses.py).
+    functional_class: Optional[FunctionalClass] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -247,6 +250,8 @@ class BudgetCategoryUpdate(BaseModel):
     qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
     owner_position_id: Optional[str] = None
+    # Omitted leaves it alone; an explicit null inherits the parent's again.
+    functional_class: Optional[FunctionalClass] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -264,6 +269,7 @@ class BudgetCategoryResponse(UTCResponseBase):
     qb_account_name: Optional[str] = None
     owner_position_id: Optional[str] = None
     owner_position_name: Optional[str] = None
+    functional_class: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1129,6 +1135,42 @@ class PaymentsRegisterReportResponse(BaseModel):
     total: Decimal
 
 
+class FunctionalClassUpdate(BaseModel):
+    """Set or clear one payment's functional classification (finance.manage)."""
+
+    model_config = _REQUEST_CONFIG
+
+    # Null clears the override, so the payment takes its category's again.
+    functional_class: Optional[FunctionalClass]
+
+
+class FunctionalExpenseCategoryResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # Null: payments with no budget line.
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    amount: Decimal
+
+
+class FunctionalExpenseClassResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # program, management_general or fundraising; null is unclassified.
+    functional_class: Optional[str] = None
+    categories: list[FunctionalExpenseCategoryResponse]
+    total: Decimal
+
+
+class FunctionalExpensesReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    classes: list[FunctionalExpenseClassResponse]
+    total: Decimal
+
+
 class LateSubstantiationRowResponse(BaseModel):
     """One expense line reimbursed outside the accountable plan."""
 
@@ -1247,6 +1289,10 @@ class PurchaseRequestResponse(UTCResponseBase):
     request_number: str
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     requested_by: str
     title: str
     description: Optional[str] = None
@@ -1345,6 +1391,10 @@ class ExpenseLineItemResponse(UTCResponseBase):
     # Submitted after the department's substantiation deadline; decided at
     # submission.
     substantiated_late: bool = False
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     created_at: datetime
 
     _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
@@ -1478,6 +1528,10 @@ class CheckRequestResponse(UTCResponseBase):
     requested_by: str
     fiscal_year_id: str
     budget_id: Optional[str] = None
+    # This payment's own classification, and the one it takes once its budget
+    # category's is applied (detail responses; app/services/functional_expenses.py).
+    functional_class: Optional[str] = None
+    effective_functional_class: Optional[str] = None
     payee_name: str
     payee_address: Optional[str] = None
     amount: Decimal

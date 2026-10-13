@@ -73,6 +73,8 @@ import type {
   BudgetVsActualReport,
   PaymentsRegisterReport,
   LateSubstantiationReport,
+  FunctionalClass,
+  FunctionalExpensesReport,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -173,6 +175,7 @@ export const budgetCategoryService = {
     sortOrder?: number;
     qbAccountName?: string;
     ownerPositionId?: string;
+    functionalClass?: FunctionalClass;
   }): Promise<BudgetCategory> {
     const response = await api.post<BudgetCategory>('/finance/budget-categories', data);
     return response.data;
@@ -519,6 +522,19 @@ export const financeReportService = {
   },
 
   /** Expense lines paid in the period that were claimed after the substantiation deadline. */
+  /** Payments in the period by function (Form 990 Part IX), then by budget category. */
+  async functionalExpenses(start: string, end: string): Promise<FunctionalExpensesReport> {
+    const response = await api.get<FunctionalExpensesReport>('/finance/reports/functional-expenses', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async functionalExpensesCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/functional-expenses?${query.toString()}`, 'functional-expenses.csv');
+  },
+
   async lateSubstantiation(start: string, end: string): Promise<LateSubstantiationReport> {
     const response = await api.get<LateSubstantiationReport>('/finance/reports/late-substantiation', {
       params: { start, end },
@@ -529,6 +545,24 @@ export const financeReportService = {
   async lateSubstantiationCsv(start: string, end: string): Promise<DownloadedFile> {
     const query = new URLSearchParams({ start, end, format: 'csv' });
     return fetchFile(api, `/finance/reports/late-substantiation?${query.toString()}`, 'outside-accountable-plan.csv');
+  },
+};
+
+/**
+ * Overrides one payment's functional class (finance.manage); null returns it
+ * to its budget category's class.
+ */
+export const functionalClassService = {
+  async setPurchaseRequest(id: string, functionalClass: FunctionalClass | null): Promise<void> {
+    await api.put(`/finance/purchase-requests/${id}/functional-class`, { functionalClass });
+  },
+
+  async setCheckRequest(id: string, functionalClass: FunctionalClass | null): Promise<void> {
+    await api.put(`/finance/check-requests/${id}/functional-class`, { functionalClass });
+  },
+
+  async setExpenseLine(reportId: string, itemId: string, functionalClass: FunctionalClass | null): Promise<void> {
+    await api.put(`/finance/expense-reports/${reportId}/items/${itemId}/functional-class`, { functionalClass });
   },
 };
 

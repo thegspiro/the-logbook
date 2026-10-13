@@ -28,6 +28,8 @@ import {
   type AmendmentLogReport,
   type BudgetVsActualReport,
   type FiscalYear,
+  FUNCTIONAL_CLASS_LABELS,
+  type FunctionalExpensesReport,
   type LateSubstantiationReport,
   type PaymentsRegisterReport,
 } from '../types';
@@ -36,6 +38,7 @@ const REPORTS = {
   'budget-vs-actual': 'Budget vs actual',
   'amendment-log': 'Amendment log',
   'payments-register': 'Payments register',
+  'functional-expenses': 'Functional expenses',
   'late-substantiation': 'Outside the accountable plan',
 } as const;
 type ReportKey = keyof typeof REPORTS;
@@ -590,6 +593,105 @@ const PaymentsRegister: React.FC = () => {
 };
 
 // =============================================================================
+// Functional expenses
+// =============================================================================
+
+const FunctionalExpenses: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
+
+  const load = useCallback(() => financeReportService.functionalExpenses(start, end), [start, end]);
+  const { data, error, loading } = useReport<FunctionalExpensesReport>(rangeError ? null : load);
+  const unclassified = data?.classes.find((c) => c.functionalClass === null);
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker period={period} />
+      <ReportFrame
+        title="Functional expenses"
+        subtitle={
+          data
+            ? `Payments ${formatCalendarDate(data.start)} to ${formatCalendarDate(data.end)}, by function`
+            : 'What the money was spent for, as the Form 990 reports it.'
+        }
+        loading={loading}
+        error={rangeError ?? error}
+        canDownload={Boolean(data) && !rangeError}
+        onDownload={() => financeReportService.functionalExpensesCsv(start, end)}
+      >
+        {data && (
+          <>
+            {unclassified && (
+              <p className="alert-warning text-theme-alert-warning-text mb-3 text-sm">
+                {formatCurrency(unclassified.total)} is not classified yet. Give its budget categories an expense
+                classification in Finance settings, or classify the payments themselves.
+              </p>
+            )}
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Budget category</th>
+                    <th className={`${thClass} text-right`}>Amount</th>
+                  </tr>
+                </thead>
+                {data.classes.map((group) => (
+                  <tbody
+                    key={group.functionalClass ?? 'unclassified'}
+                    aria-labelledby={`functional-${group.functionalClass ?? 'unclassified'}`}
+                    className="border-theme-surface-border border-b"
+                  >
+                    <tr>
+                      <th
+                        id={`functional-${group.functionalClass ?? 'unclassified'}`}
+                        scope="rowgroup"
+                        colSpan={2}
+                        className={`${tdClass} pt-4 text-left font-semibold`}
+                      >
+                        {group.functionalClass ? FUNCTIONAL_CLASS_LABELS[group.functionalClass] : 'Unclassified'}
+                      </th>
+                    </tr>
+                    {group.categories.length === 0 ? (
+                      <tr>
+                        <td className={`${tdClass} text-theme-text-secondary`} colSpan={2}>
+                          Nothing in this period
+                        </td>
+                      </tr>
+                    ) : (
+                      group.categories.map((category) => (
+                        <tr key={category.categoryId ?? 'none'}>
+                          <td className={`${tdClass} pl-6`}>{category.categoryName ?? 'No budget line'}</td>
+                          <td className={numClass}>{formatCurrency(category.amount)}</td>
+                        </tr>
+                      ))
+                    )}
+                    <tr>
+                      <td className={`${tdClass} pl-6 font-semibold`}>Subtotal</td>
+                      <td className={`${numClass} font-semibold`}>{formatCurrency(group.total)}</td>
+                    </tr>
+                  </tbody>
+                ))}
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass}>Total</td>
+                    <td className={numClass}>{formatCurrency(data.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-theme-text-secondary mt-3 text-xs">
+              The same payments as the payments register for the period, net of voided checks. Each takes its own
+              classification if the finance office set one, otherwise its budget category&apos;s (or the parent
+              category&apos;s). Fundraising is the cost of raising money, not what donations bought.
+            </p>
+          </>
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
+// =============================================================================
 // Outside the accountable plan
 // =============================================================================
 
@@ -725,7 +827,8 @@ const FinanceReportsPage: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const needsYear = active !== 'payments-register' && active !== 'late-substantiation';
+  const needsYear =
+    active !== 'payments-register' && active !== 'late-substantiation' && active !== 'functional-expenses';
 
   return (
     <div className="space-y-4">
@@ -756,6 +859,8 @@ const FinanceReportsPage: React.FC = () => {
 
       {active === 'payments-register' ? (
         <PaymentsRegister />
+      ) : active === 'functional-expenses' ? (
+        <FunctionalExpenses />
       ) : active === 'late-substantiation' ? (
         <LateSubstantiation />
       ) : yearsError ? (

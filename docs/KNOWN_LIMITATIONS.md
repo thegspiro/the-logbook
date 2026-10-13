@@ -1479,6 +1479,22 @@ pending a decision:
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.
 
+## Finance — Functional Expense Classification: What It Does Not Cover (2026-10-13)
+
+Described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#functional-expense-classification-2026-10-13).
+Left out on purpose:
+
+- **No splitting one payment across classes.** A payment takes one class. An
+  expense report can be split line by line; a single purchase or check that
+  served two functions cannot. Allocating shared costs (rent, utilities) by
+  percentage is what Form 990 asks for there, and is not built.
+- **Not sent to QuickBooks.** The export does not carry the class; a
+  department that tracks functions in QuickBooks (as Classes) sets them there.
+- **Dues and other income are not classified** — Part IX is expenses only.
+- **Nothing is backfilled.** Existing payments read as unclassified until their
+  categories are set; then they follow their category, overrides aside.
+
 ## Finance — The Expense Deadline: What It Does Not Cover (2026-10-12)
 
 The accountable-plan substantiation deadline is described in

@@ -282,6 +282,26 @@ export interface FiscalYearOpenItem {
   amount?: number | string | null;
 }
 
+/**
+ * What an expense was for, as IRS Form 990 Part IX reports it. Fundraising is
+ * the cost of raising money, not what the money raised buys.
+ */
+export const FunctionalClass = {
+  PROGRAM: 'program',
+  MANAGEMENT_GENERAL: 'management_general',
+  FUNDRAISING: 'fundraising',
+} as const;
+export type FunctionalClass = (typeof FunctionalClass)[keyof typeof FunctionalClass];
+
+export const isFunctionalClass = (value: string | null | undefined): value is FunctionalClass =>
+  (Object.values(FunctionalClass) as string[]).includes(value ?? '');
+
+export const FUNCTIONAL_CLASS_LABELS: Record<FunctionalClass, string> = {
+  [FunctionalClass.PROGRAM]: 'Program services',
+  [FunctionalClass.MANAGEMENT_GENERAL]: 'Management & general',
+  [FunctionalClass.FUNDRAISING]: 'Fundraising',
+};
+
 export interface BudgetCategory {
   id: string;
   organizationId: string;
@@ -294,6 +314,8 @@ export interface BudgetCategory {
   /** The position answerable for this category's lines; a line without its own owner inherits it. */
   ownerPositionId?: string | null;
   ownerPositionName?: string | null;
+  /** Default for payments against its lines; null inherits the parent category's. */
+  functionalClass?: FunctionalClass | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -478,6 +500,7 @@ export interface BudgetCategoryUpdatePayload {
   isActive?: boolean;
   qbAccountName?: string | null;
   ownerPositionId?: string | null;
+  functionalClass?: FunctionalClass | null;
 }
 
 /** `POST /finance/budgets`. Blank optional fields are omitted. */
@@ -851,7 +874,7 @@ export interface FinanceSettings {
   substantiationDays: number;
 }
 
-export interface PurchaseRequest {
+export interface PurchaseRequest extends FunctionalClassFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -894,7 +917,7 @@ export interface PurchaseRequest {
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface ExpenseLineItem {
+export interface ExpenseLineItem extends FunctionalClassFields {
   id: string;
   expenseReportId: string;
   budgetId?: string;
@@ -952,7 +975,7 @@ export interface ExpenseReport {
   approvalSteps: ApprovalStepRecord[];
 }
 
-export interface CheckRequest {
+export interface CheckRequest extends FunctionalClassFields {
   id: string;
   organizationId: string;
   requestNumber: string;
@@ -1298,5 +1321,32 @@ export interface LateSubstantiationReport {
   start: string;
   end: string;
   rows: LateSubstantiationRow[];
+  total: MonetaryAmount;
+}
+
+/** One payment's own class, and the one it takes once its category's applies (detail responses). */
+export interface FunctionalClassFields {
+  functionalClass?: FunctionalClass | null;
+  effectiveFunctionalClass?: FunctionalClass | null;
+}
+
+export interface FunctionalExpenseCategory {
+  /** Null: payments with no budget line. */
+  categoryId?: string | null;
+  categoryName?: string | null;
+  amount: MonetaryAmount;
+}
+
+export interface FunctionalExpenseClass {
+  /** Null is unclassified. */
+  functionalClass: FunctionalClass | null;
+  categories: FunctionalExpenseCategory[];
+  total: MonetaryAmount;
+}
+
+export interface FunctionalExpensesReport {
+  start: string;
+  end: string;
+  classes: FunctionalExpenseClass[];
   total: MonetaryAmount;
 }
