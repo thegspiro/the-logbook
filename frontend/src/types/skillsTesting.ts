@@ -157,16 +157,16 @@ export interface SkillTemplate {
 
 export interface SkillTemplateCreate {
   name: string;
-  description?: string | undefined;
-  category?: string | undefined;
+  description?: string | null | undefined;
+  category?: string | null | undefined;
   sections: SkillTemplateSectionCreate[];
-  time_limit_seconds?: number | undefined;
-  passing_percentage?: number | undefined;
+  time_limit_seconds?: number | null | undefined;
+  passing_percentage?: number | null | undefined;
   require_all_critical?: boolean | undefined;
   score_pass_fail_criteria?: boolean | undefined;
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
-  requirement_id?: string | undefined;
+  requirement_id?: string | null | undefined;
   /** null is meaningful here, not just absent: it says "inherit the department
    *  default" explicitly, which is how an existing override gets cleared. The
    *  backend's exclude_unset would drop an undefined and leave the old value. */
@@ -200,8 +200,8 @@ export interface SkillCriterionCreate {
 
 export interface SkillTemplateUpdate {
   name?: string | undefined;
-  description?: string | undefined;
-  category?: string | undefined;
+  description?: string | null | undefined;
+  category?: string | null | undefined;
   status?: TemplateStatus | undefined;
   visibility?: TemplateVisibility | undefined;
   sections?: SkillTemplateSectionCreate[] | undefined;

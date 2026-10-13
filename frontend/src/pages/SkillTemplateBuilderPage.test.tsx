@@ -38,9 +38,10 @@ vi.mock('../stores/skillsTestingStore', () => ({
 // would silently leave the position list empty.
 const mockGetRoles = vi.fn();
 const mockGetConfig = vi.fn();
+const mockGetRequirements = vi.fn();
 vi.mock('../services/api', () => ({
   trainingProgramService: {
-    getRequirementsEnhanced: () => Promise.resolve([]),
+    getRequirementsEnhanced: () => mockGetRequirements() as Promise<unknown>,
   },
   roleService: {
     getRoles: () => mockGetRoles() as Promise<unknown>,
@@ -66,6 +67,8 @@ describe('SkillTemplateBuilderPage', () => {
     vi.clearAllMocks();
     mockGetRoles.mockResolvedValue([]);
     mockGetConfig.mockResolvedValue({});
+    mockGetRequirements.mockReset();
+    mockGetRequirements.mockResolvedValue([]);
     currentMockTemplate = null;
     mockRouteId = undefined;
   });
@@ -636,6 +639,54 @@ describe('SkillTemplateBuilderPage', () => {
               criteria: [expect.objectContaining({ score_mode: 'points', deduction_points: undefined })],
             }),
           ],
+        })
+      );
+    });
+  });
+
+  // An edit is a partial update on the server: an omitted key keeps the
+  // stored value, so a cleared pass mark or requirement link must go out as
+  // null or new tests keep being graded and credited against the old one.
+  describe('clearing settings on an existing template', () => {
+    it('sends each cleared setting as null, and emptied tags as []', async () => {
+      mockRouteId = 'tpl-1';
+      currentMockTemplate = {
+        id: 'tpl-1',
+        name: 'SCBA Donning',
+        description: 'Don SCBA in under a minute',
+        category: 'SCBA',
+        visibility: 'all_members',
+        time_limit_seconds: 120,
+        passing_percentage: 80,
+        require_all_critical: true,
+        requirement_id: 'req-1',
+        tags: ['scba', 'ppe'],
+        sections: [
+          { name: 'Donning', sort_order: 0, criteria: [{ label: 'Mask seal', type: 'pass_fail', required: true }] },
+        ],
+      };
+      mockGetRequirements.mockResolvedValue([{ id: 'req-1', name: 'SCBA Proficiency' }]);
+      mockUpdateTemplate.mockResolvedValue(currentMockTemplate);
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await screen.findByRole('option', { name: 'SCBA Proficiency' });
+      await user.clear(screen.getByDisplayValue('Don SCBA in under a minute'));
+      for (const label of ['Category', /Global Time Limit/, 'Passing Percentage (%)', /^Tags/]) {
+        await user.clear(screen.getByLabelText(label));
+      }
+      await user.selectOptions(screen.getByLabelText(/Linked Training Requirement/), '');
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      expect(mockUpdateTemplate).toHaveBeenCalledWith(
+        'tpl-1',
+        expect.objectContaining({
+          description: null,
+          category: null,
+          time_limit_seconds: null,
+          passing_percentage: null,
+          requirement_id: null,
+          tags: [],
         })
       );
     });
