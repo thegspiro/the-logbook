@@ -558,10 +558,15 @@ export const ReportsPage: React.FC = () => {
                 <p className="text-theme-text-secondary mb-4 text-sm">{report.description}</p>
 
                 {report.available && (
+                  // aria-disabled rather than disabled: a disabled button drops
+                  // focus to <body>, so the results dialog would record <body>
+                  // as its opener and have nowhere to return focus on close.
                   <button
-                    disabled={isGenerating}
-                    className="btn-primary flex w-full items-center justify-center space-x-2 text-sm font-medium disabled:cursor-wait disabled:opacity-70"
+                    type="button"
+                    aria-disabled={isGenerating}
+                    className="btn-primary flex w-full items-center justify-center space-x-2 text-sm font-medium aria-disabled:cursor-wait aria-disabled:opacity-70"
                     onClick={() => {
+                      if (isGenerating) return;
                       void handleGenerateReport(report);
                     }}
                   >
