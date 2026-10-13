@@ -12,7 +12,7 @@ import secrets
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import NoReturn, Optional
+from typing import Any, NoReturn, Optional
 
 from loguru import logger
 from sqlalchemy import (
@@ -82,12 +82,21 @@ from app.services.finance_approver_matching import (
     user_matches_step,
 )
 from app.services.finance_budget_ownership import owned_budgets_query, resolve_owner
+from app.services.restricted_funds import (
+    KIND_CHECK,
+    KIND_EXPENSE,
+    KIND_PURCHASE,
+    assert_chargeable,
+    charges_of,
+    shortfalls,
+)
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import (
+    FUND_OVERSPEND_BLOCK,
     SUBSTANTIATION_BLOCK,
     SUBSTANTIATION_OFF,
     load_finance_settings,
@@ -125,6 +134,25 @@ class BudgetLimitExceededError(Exception):
 
     def __init__(self) -> None:
         super().__init__("Insufficient available budget")
+
+
+class FundBalanceExceededError(BudgetLimitExceededError):
+    """A payment charged to a restricted fund is more than the fund has left,
+    and the department's rule is ``block`` (app/services/restricted_funds.py).
+
+    A ``BudgetLimitExceededError`` so every path that can complete an approval
+    already reports it as a conflict, with this message rather than the
+    budget's.
+    """
+
+    code = "fund_balance_exceeded"
+
+    def __init__(self, over: Decimal) -> None:
+        Exception.__init__(
+            self,
+            f"This is ${over:,.2f} more than its restricted fund has left, and "
+            "the department does not allow a fund to be overspent.",
+        )
 
 
 class ExportInProgressError(Exception):
@@ -2886,6 +2914,9 @@ class FinanceService:
                 PurchaseRequest.estimated_amount.label("amount"),
                 PurchaseRequest.requested_by.label("requester_id"),
                 PurchaseRequest.created_at.label("submitted_at"),
+                # Whether it charges a restricted fund, so only those are
+                # loaded to work out a shortfall.
+                PurchaseRequest.fund_campaign_id.is_not(None).label("charges_fund"),
             ).where(PurchaseRequest.organization_id == org_id),
             select(
                 ExpenseReport.id,
@@ -2894,6 +2925,10 @@ class FinanceService:
                 ExpenseReport.total_amount,
                 ExpenseReport.submitted_by,
                 ExpenseReport.created_at,
+                exists().where(
+                    ExpenseLineItem.expense_report_id == ExpenseReport.id,
+                    ExpenseLineItem.fund_campaign_id.is_not(None),
+                ),
             ).where(ExpenseReport.organization_id == org_id),
             select(
                 CheckRequest.id,
@@ -2902,6 +2937,7 @@ class FinanceService:
                 CheckRequest.amount,
                 CheckRequest.requested_by,
                 CheckRequest.created_at,
+                CheckRequest.fund_campaign_id.is_not(None),
             ).where(CheckRequest.organization_id == org_id),
         ).subquery("pending_entities")
 
@@ -2915,6 +2951,7 @@ class FinanceService:
                 entities.c.title,
                 entities.c.amount,
                 entities.c.submitted_at,
+                entities.c.charges_fund,
                 ApprovalChainStep.name.label("step_name"),
                 ApprovalChainStep.step_order,
                 ApprovalChainStep.step_type,
@@ -3003,6 +3040,7 @@ class FinanceService:
                     "assignee_label": assignee_label,
                     "can_act": can_act,
                     "requires_override": not can_act,
+                    "charges_fund": bool(row.charges_fund),
                 }
             )
         if not admin:
@@ -3014,8 +3052,17 @@ class FinanceService:
                 if a["entity_type"] == ApprovalEntityType.EXPENSE_REPORT.value
             ]
         )
+        over = await self._fund_shortfalls(
+            org_id,
+            [
+                (a["entity_type"], a["entity_id"])
+                for a in approvals
+                if a.pop("charges_fund")
+            ],
+        )
         for a in approvals:
             a["late_line_count"] = late.get(a["entity_id"], (0, None))[0]
+            a["fund_shortfall"] = over.get(a["entity_id"])
         return approvals
 
     async def step_actor_flags(
@@ -3456,7 +3503,11 @@ class FinanceService:
                 if r["entity_type"] == ApprovalEntityType.EXPENSE_REPORT.value
             ]
         )
+        over = await self._fund_shortfalls(
+            org_id, [(r["entity_type"], r["entity_id"]) for r in rows]
+        )
         for r in rows:
+            r["fund_shortfall"] = over.get(r["entity_id"])
             count, acknowledged_at = late.get(r["entity_id"], (0, None))
             r["late_line_count"] = count
             r["awaiting_late_acknowledgement"] = count > 0 and acknowledged_at is None
@@ -3820,6 +3871,8 @@ class FinanceService:
                 "expense_report {} held for late-line acknowledgement", entity.id
             )
             return False
+
+        await self._enforce_fund_balance(entity_type.value, entity, org_id)
 
         now = datetime.now(timezone.utc)
         entity.approved_by = approver_id
@@ -4254,6 +4307,20 @@ class FinanceService:
         ):
             raise ValueError("Request cannot be marked as paid in this status")
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+
+        # The approval committed the estimate; paying more than it spends the
+        # difference, which the fund must still have.
+        if actual_amount is not None and actual_amount > pr.estimated_amount:
+            await self._enforce_fund_balance(
+                KIND_PURCHASE,
+                pr,
+                org_id,
+                charges=(
+                    {pr.fund_campaign_id: Decimal(str(actual_amount))}
+                    if pr.fund_campaign_id
+                    else {}
+                ),
+            )
 
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
@@ -5953,6 +6020,104 @@ class FinanceService:
     # budget (it becomes a no-op instead). Callers pass the referencing record's
     # organization_id, which is always the caller's own org (records are
     # org-stamped on create).
+    async def _fund_charges(self, kind: str, entity) -> dict[str, Decimal]:
+        """A payment's amount per restricted fund. An expense report's lines
+        are read rather than taken from ``entity.line_items``, which the
+        approval path does not load."""
+        if kind != KIND_EXPENSE:
+            return charges_of(kind, entity)
+        rows = await self.db.execute(
+            select(ExpenseLineItem.fund_campaign_id, ExpenseLineItem.amount).where(
+                ExpenseLineItem.expense_report_id == entity.id,
+                ExpenseLineItem.fund_campaign_id.is_not(None),
+            )
+        )
+        out: dict[str, Decimal] = {}
+        for fund_id, amount in rows.all():
+            if fund_id:  # excluded by the query; narrows the type
+                out[fund_id] = out.get(fund_id, Decimal("0")) + Decimal(str(amount))
+        return out
+
+    async def _enforce_fund_balance(
+        self,
+        kind: str,
+        entity,
+        org_id: str,
+        charges: Optional[dict[str, Decimal]] = None,
+    ) -> None:
+        """Refuse a charge its restricted fund cannot cover, when the
+        department's rule is ``block``. Under ``warn`` the shortfall is shown
+        (``fund_shortfall``) and the approval goes through."""
+        rules = await load_finance_settings(self.db, org_id)
+        if rules.fund_overspend_mode != FUND_OVERSPEND_BLOCK:
+            return
+        if charges is None:
+            charges = await self._fund_charges(kind, entity)
+        over = await shortfalls(
+            self.db, org_id, charges, exclude=(kind, entity.id), lock=True
+        )
+        if over:
+            raise FundBalanceExceededError(sum(over.values(), Decimal("0")))
+
+    async def fund_shortfall(self, kind: str, entity) -> Optional[Decimal]:
+        """How far this payment would take its funds past what they have left,
+        or None when it fits or charges no fund. Reported whatever the rule,
+        so a department on ``off`` that later turns the check on is not
+        surprised."""
+        charges = await self._fund_charges(kind, entity)
+        if not charges:
+            return None
+        over = await shortfalls(
+            self.db, entity.organization_id, charges, exclude=(kind, entity.id)
+        )
+        return sum(over.values(), Decimal("0")) if over else None
+
+    async def _fund_shortfalls(
+        self, org_id: str, refs: list[tuple[str, str]]
+    ) -> dict[str, Decimal]:
+        """``fund_shortfall`` for each listed payment that has one, keyed by
+        its id; payments charging no fund are skipped without being loaded."""
+        wanted: dict[str, list[str]] = {}
+        if not refs:
+            return {}
+        for kind, entity_id in refs:
+            wanted.setdefault(kind, []).append(entity_id)
+        entities: list[tuple[str, Any]] = []
+        for kind, model in (
+            (KIND_PURCHASE, PurchaseRequest),
+            (KIND_CHECK, CheckRequest),
+        ):
+            ids = wanted.get(kind)
+            if ids:
+                found = await self.db.execute(
+                    select(model).where(
+                        model.id.in_(ids),
+                        model.organization_id == org_id,
+                        model.fund_campaign_id.is_not(None),
+                    )
+                )
+                entities += [(kind, e) for e in found.scalars()]
+        ids = wanted.get(KIND_EXPENSE)
+        if ids:
+            found = await self.db.execute(
+                select(ExpenseReport).where(
+                    ExpenseReport.id.in_(ids),
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.id.in_(
+                        select(ExpenseLineItem.expense_report_id).where(
+                            ExpenseLineItem.fund_campaign_id.is_not(None)
+                        )
+                    ),
+                )
+            )
+            entities += [(KIND_EXPENSE, e) for e in found.scalars()]
+        out: dict[str, Decimal] = {}
+        for kind, entity in entities:
+            short = await self.fund_shortfall(kind, entity)
+            if short is not None:
+                out[entity.id] = short
+        return out
+
     async def _encumber_budget(
         self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
@@ -6042,3 +6207,6 @@ class FinanceService:
             await assert_in_org(
                 self.db, Facility, facility_id, org_id, label="Facility"
             )
+        fund_campaign_id = data.get("fund_campaign_id")
+        if fund_campaign_id:
+            await assert_chargeable(self.db, org_id, fund_campaign_id)

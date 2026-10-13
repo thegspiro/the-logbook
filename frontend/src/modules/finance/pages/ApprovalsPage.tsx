@@ -31,6 +31,7 @@ import { useTimezone } from '@/hooks/useTimezone';
 import type { PendingApproval, UnroutedApproval } from '../types';
 import { ApprovalDecisionDialog } from '../components/ApprovalDecisionDialog';
 import { LateLinesBadge } from '../components/LateLinesBadge';
+import { FundShortfallBadge } from '../components/FundShortfallBadge';
 import type { ApprovalDecision } from '../components/ApprovalDecisionDialog';
 import { APPROVAL_ENTITY_LABELS, approvalEntityPath } from '../components/approvalEntities';
 
@@ -186,6 +187,11 @@ const ManualDecisions: React.FC = () => {
                       <LateLinesBadge count={row.lateLineCount} />
                     </div>
                   )}
+                  {row.fundShortfall && (
+                    <div className="mt-1">
+                      <FundShortfallBadge shortfall={row.fundShortfall} />
+                    </div>
+                  )}
                 </td>
                 <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                   {APPROVAL_ENTITY_LABELS[row.entityType]}
@@ -318,6 +324,11 @@ const ApprovalsPage: React.FC = () => {
                       {(row.lateLineCount ?? 0) > 0 && (
                         <div className="mt-1">
                           <LateLinesBadge count={row.lateLineCount} />
+                        </div>
+                      )}
+                      {row.fundShortfall && (
+                        <div className="mt-1">
+                          <FundShortfallBadge shortfall={row.fundShortfall} />
                         </div>
                       )}
                     </td>

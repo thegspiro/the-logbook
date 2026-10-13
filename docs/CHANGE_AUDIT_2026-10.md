@@ -5,6 +5,195 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 12 – 13, 2026
+
+Net changes merged to `main` from the close of the
+[October 11 – 12 pass](#change-audit-october-11--12-2026) to 2026-10-13 12:00 UTC,
+written against `22965b47`. About 145 non-merge commits (about 125 outside the
+security- and app-review ledgers). Three themes: a **finance pass** (two-person
+approval, accountable-plan deadline, expense classes, board reports), an
+**accessibility pass** over every dialog, menu and tab list, and a run of
+**owner-decision builds** from the security and app reviews. The feature pull
+requests updated their own guides; this pass records what they changed, fills the
+guide gaps that remained (practical skills, weekly shift patterns, Catalog Links,
+Department pulse, suggestion-box steps, shift-report settings), and queues
+screenshots and script beats.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-12--13-2026).
+
+**Migration route.** Fourteen new revisions: `3c9c5025a380` (first approver on a
+held request), `43b88e6ec431` (RSVP history), `9e8b0b6f3fe8` (Quartermaster gets
+`locations.create`), `32a58e65eb63` (waitlist promotion email), `e6d21e605d99`
+(portal access-log org/config nullable), `65128d5ccd50` (facility folders: refile
+and restamp), `bcd688674099` (audit chain sealed apart from writes),
+`bde76b481a16` (practical-skills method), `a51a4e1d2443` (per-member Department
+pulse), `4d8807bdd737` (document "Being corrected"), `5372d41aaf3e` (requirement
+due dates and completion stamp), `7a849409c1d0` (merges the last two heads),
+`afaca8c1f812` (expense substantiation) and `390fa30d0200` (functional expense
+class). Run `alembic heads`; it must report a single head. Two of them move or
+reclassify data (`65128d5ccd50`, `bde76b481a16`): read their
+[`UPGRADING.md`](./UPGRADING.md) entries before upgrading.
+
+### Read this first
+
+1. **A department now runs one practical-skills system.** Under **Training
+   Administration > Settings & Data > Practical Skills** a department picks
+   **Skills Testing** (station sheets, validated by an officer) or **Shift report
+   sign-offs** (skills ticked on the shift report). The other is hidden and
+   records nothing new; nothing is deleted. Existing departments start on Skills
+   Testing, except those with sign-offs and no skill test ever run, which start on
+   sign-offs. Changing it needs `training.manage`. The shift-report settings now
+   label the skill lists that are not in effect under Skills Testing.
+2. **Facility folders open to any facilities access.** Photos, Maintenance Records
+   and Inspection Reports now open to anyone holding a `facilities.*` permission;
+   Blueprints & Permits, Insurance & Leases, Capital Projects and a new **Facility
+   Documents** sub-folder stay restricted. The migration refiles loose files.
+   Review who holds `facilities.view`.
+3. **Large finance requests can need two approvers.** With
+   `finance.dual_approval_threshold` set (off by default; `settings.manage`), a
+   purchase request, check request or expense report at or above it is approved
+   only once two different people have approved. The first approval holds it.
+4. **Editing a colleague's profile or contact details needs `members.manage`**
+   (the API used to accept `users.edit` too). A custom position holding
+   `users.edit` without `members.manage` loses that write; no seeded position does.
+5. **Setup's Encryption Key step loaded with a 403** on a fresh installation
+   (its read demanded a CSRF token the screen does not send). Fixed; new
+   installations can finish setup again.
+6. **A setup wizard open longer than 24 hours must refresh** to continue
+   (sessions no longer slide forever). Setup also refuses unknown permission
+   modules and custom positions that reuse a built-in id, and clamps priority.
+7. **Compliance emails are live.** The saved Compliance Notifications settings
+   (reminder days, non-compliance notice) are now read by a daily task. A
+   department whose saved configuration holds `[30, 14, 7]` starts emailing
+   members on the first run.
+8. **Public-portal access logs are pruned at 90 days** and now record every failed
+   API-key authentication (rows that cannot be attributed to a department are
+   platform-only). The Access Logs tab and all-time usage figures cover 90 days.
+9. **Recording a payment against your own dues is refused** (another
+   `finance.manage` holder must do it).
+10. **Grant applications follow a lifecycle.** A status change outside the allowed
+    next steps is refused with a 400; overspend warns but never blocks.
+11. **Audit hash chain is sealed by a separate task** (every minute). Rows appear
+    as "pending seal" for a moment after the write; integrity checks report them
+    separately rather than as tampering.
+
+### User-visible changes, by area
+
+#### Finance
+
+| Change                                                                                                                                                                                                                                                                                                                                | Where documented                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **Two-person approval** above a dollar threshold; Approvals page lists requests awaiting a second approver; threshold edited on the approval-chains settings page                                                                                                                                                                     | training 11; `FINANCE_MODULE.md` |
+| **Accountable-plan deadline** for claiming expenses (`finance.substantiation_mode` off / warn / block, `finance.substantiation_days` 1–60): the expense form warns on an old date, the report marks late lines, approving a report with late lines asks for acknowledgement; Finance > Reports gains **Outside the accountable plan** | training 11; `FINANCE_MODULE.md` |
+| **Functional expense classes** (program, management & general, fundraising) on budget categories with a per-purchase override; Finance > Reports gains **Functional expenses** (IRS Form 990 Part IX shape)                                                                                                                           | training 11; `FINANCE_MODULE.md` |
+| **Board reports** at `/finance/reports`: budget vs actual through a date, amendment log, payments register; each on screen, as CSV and as a print layout                                                                                                                                                                              | training 11; `FINANCE_MODULE.md` |
+| Payment on your own dues refused (FIN-4)                                                                                                                                                                                                                                                                                              | training 11                      |
+| A receipt's download name used the day before the expense in US time zones; emailed-approval page lost focus on each keystroke (both fixed)                                                                                                                                                                                           | `FINANCE_MODULE.md`              |
+
+#### Training and compliance
+
+| Change                                                                                                                                                                                                     | Where documented                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| **Practical Skills** setting (see Read this first)                                                                                                                                                         | training 02, 09; `UPGRADING.md`     |
+| **Prerequisite programs** and **Allow members to be enrolled in other programs at the same time** on the create wizard and Edit pipeline details                                                           | training 02; `TRAINING_PROGRAMS.md` |
+| **Per-requirement due dates** (days after the member's cycle start), member-facing wording and completion messages are now read: reminders on the program's own ramp, one overdue notice, completion email | training 02; `TRAINING_PROGRAMS.md` |
+| Cleared fields now persist on the program, phase, milestone, skill-template, record and manual-shift-entry editors, the requirement form (year, period end, dates) and the shift-report draft editor       | training 02, 09                     |
+| Calls requirement's call types survive the wizard's build                                                                                                                                                  | training 02                         |
+| **Compliance emails to members**: deadline reminders and non-compliance notices                                                                                                                            | training 02; `COMPLIANCE_CONFIG.md` |
+| Program-progress reports relabelled **Program Requirement Progress** and **Training & Program Progress Summary**; grandfathered members graded correctly                                                   | training 08                         |
+| Program-requirement edit scoped to the program in the URL (a wrong program id no longer saves then errors)                                                                                                 | `TRAINING_PROGRAMS.md`              |
+
+#### Scheduling and shift reports
+
+| Change                                                                                                                                                                                                                                                     | Where documented                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **Weekend Only** pattern preset; manual weekly patterns can pick **Separate day and night shifts** per weekday; the pattern list shows sun/moon glyphs and the per-weekday shifts. Day and night templates are required for whichever shift types are used | training 03                      |
+| Pattern start date hint now says what it does per pattern type (rotations count from it; others only bound automatic generation)                                                                                                                           | training 03                      |
+| Shift-report crew form: skills wrap as one group with a score list underneath                                                                                                                                                                              | training 03                      |
+| Shift-report settings label skill lists not in effect under Skills Testing                                                                                                                                                                                 | training 02, 03                  |
+| Shift templates and patterns ask for confirmation before deleting                                                                                                                                                                                          | training 03                      |
+| Shift History Import guide gained a sample CSV and ten screenshots                                                                                                                                                                                         | wiki `Scheduling-History-Import` |
+
+#### Inventory
+
+| Change                                                                                                                                                                                                                           | Where documented                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| **Catalog Links** page (`/inventory/admin/checklists/catalog-links`, `inventory.check_manage`): unlinked checklist lines across every template, grouped by name; lines someone else linked meanwhile are listed, not overwritten | training 05; wiki API reference |
+| **Inspect** a return notice that was received another way                                                                                                                                                                        | training 05                     |
+| **Record inspection** closes the item's scheduled inspection; a failed one quarantines the item                                                                                                                                  | training 05                     |
+| Reorder requests link to an inventory item at create and at receipt                                                                                                                                                              | training 05                     |
+| Issued count agrees with the Members page; serial or asset tag under each item name; "Unassigned" location filter renamed **No location**                                                                                        | training 05                     |
+| A chosen Fail / Out of service needs a note on the server too, including for checks queued offline                                                                                                                               | training 05, 06; `UPGRADING.md` |
+| Phone item editor pairs short fields; Required is a switch                                                                                                                                                                       | training 05                     |
+
+#### Events, documents and minutes
+
+| Change                                                                                                                     | Where documented                         |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Attendance requests show **Withdrawn and sent again once / twice**; reviewers are told when the event is already finalized | training 04                              |
+| Published minutes show **Being corrected** while reopened                                                                  | training 04; `MEETING_MINUTES_MODULE.md` |
+| **Folder access by position and permission** in Create Folder and Manage folder                                            | training 07                              |
+| Suggestion boxes with questions ask them on a first step, then title and details on a second                               | training 07                              |
+| Each document's file lives in its own directory                                                                            | `FILE_STORAGE_HARDENING.md`              |
+| Legal documents page drafts and history load 10 at a time (**Load more**); at most 10 open drafts per member per type      | training 08                              |
+| Anonymous donors hidden from `fundraising.view` holders                                                                    | training 12                              |
+
+#### Grants, reports, integrations and dashboard
+
+| Change                                                                                                                                     | Where documented                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Grant lifecycle, overspend warnings, paged applications list and dashboard cards that open the matching group                              | training 12                                |
+| **Saved reports** screen (`/reports/saved`) and scheduled delivery email (summary only, PII-gated)                                         | training 08                                |
+| **Customize** on the dashboard's **Department pulse**: a department default and a per-member layout (cards, order, titles, opening period) | training 08                                |
+| Claude (MCP) card **Settings** button; claude.ai connection walkthrough                                                                    | training 16; wiki `Integration-Claude-MCP` |
+| Salesforce **Switch to Client Credentials** button                                                                                         | training 16                                |
+| Import Queue and All Mappings tabs on External Training Integrations now list real content                                                 | training 02                                |
+| API key rate limit actually saved and shown                                                                                                | wiki API reference                         |
+
+#### Accessibility and layout (all screens)
+
+- Every `DialogPanel` dialog has a role, `aria-modal` and a name; focus starts on
+  the first control, returns to the opener (also under StrictMode), and Escape
+  closes tooltips, menus and the More menu with focus returning to the trigger.
+- 22 tab lists gained arrow / Home / End keys; the collapsed sidebar rail opens
+  its group on press; one skip link moves focus on every page; pagination keeps
+  focus on a disabled edge button.
+- Dialog action buttons are pinned in the footer on 19 more forms; nested double
+  scrollbars removed from 31 dialogs; the applicant detail view is a centred
+  dialog (not a drawer).
+- Check-In Station cards padded; store and cart steppers announce values.
+
+#### Operations and installation
+
+- `universal-install.sh` now writes `ALLOWED_ORIGINS` from `--public-url`, probes
+  backend health with the image's own check, and the Unraid script reads answers
+  from the terminal under `curl | bash`; `backend/scripts` ships in the production
+  image.
+- Wiki: Installation split into one page per platform; Training, Inventory,
+  Scheduling, Events and Elections module pages split into user and Developer
+  pages with dated notes dropped; change logs filed by month.
+- CI: a mypy error-count ratchet (`mypy-baseline.txt`) and a Backend Type Check job.
+
+### Screenshots
+
+Queued in [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-12--13-documentation-pass).
+Nothing was captured by this pass.
+
+### Scripts
+
+Flagged in [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+Nothing was re-recorded.
+
+### Open items found while writing this pass
+
+- `docs/training/SCREENSHOT_STATUS.md` is generated and was not regenerated.
+- Security-review passes recorded in this window (documents-legal, medical-screening
+  MS-15 flagged, membership-pipeline, users-organizations, elections-ballots,
+  finance-approvals FIN8-05-1 flagged, storefront-payments, public-webhooks,
+  permissions-roles) live in `docs/security-review/PROGRESS.md`; flagged items
+  await the owner.
+
 ## Change audit: October 11 – 12, 2026
 
 Net changes merged to `main` from 2026-10-11 ~12:00 UTC (the tail of the

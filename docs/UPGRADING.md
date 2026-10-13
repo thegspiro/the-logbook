@@ -542,6 +542,25 @@ upgrade for longer than that gets "Your onboarding session reached its
 the saved answers, as after a 30-minute idle lapse. Signed-in members'
 sessions are not affected.
 
+### Fundraising campaigns can be restricted funds that payments spend (2026-10-13)
+
+Migration `3decd3ff6ce5` adds `is_restricted` and `restriction_purpose` to
+fundraising campaigns and a nullable `fund_campaign_id` to purchase requests,
+check requests and expense line items. Nothing is backfilled: every campaign
+starts unrestricted and no payment is charged to a fund, so no approval
+changes until a department marks a campaign restricted and charges it.
+
+- **The new setting `finance.fund_overspend_mode` defaults to `warn`**, not
+  `off`: a payment charged to a fund for more than it has left is flagged and
+  can still be approved. `block` refuses the approval with a 409; `off` checks
+  nothing. It only ever applies to payments someone has charged to a fund.
+- **The request forms read the new `GET /finance/funds`**,
+  open to `finance.request`. It lists the restricted funds' names, purposes
+  and what each has left — figures a department may already publish on a
+  campaign page.
+- **Downgrading** drops the columns: which campaigns were restricted and which
+  payments were charged to them are lost.
+
 ### Expenses can be classified as program, management & general or fundraising (2026-10-13)
 
 Migration `390fa30d0200` adds a nullable `functional_class` to budget
@@ -672,6 +691,27 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Folders name positions by id; deleting a position can be refused (2026-10-13)
+
+Nothing here stops the stack from starting. Migration `5b2e9c7d4a18` rewrites
+each document folder's position list from slugs to position ids. It does this
+within each folder's own department.
+
+- A slug that matches no position (one deleted earlier) is kept as it is. It
+  still opens the folder to nobody, as before. The Manage folder dialog removes
+  it, and says so, the next time the folder is opened.
+- `allowed_roles` in the `/documents/folders` API now carries position ids.
+  `GET /documents/folders/role-options` returns each position's `id` alongside
+  its slug and name. A script that wrote slugs there must send ids instead;
+  a slug is refused as an unknown position.
+- **Deleting a position is refused (400) while it is the only position that
+  opens a document folder.** The message names the folders. Change who can
+  open them, then delete the position. Otherwise, the deleted position is taken
+  out of every folder that lists it, and the folders are named in the audit
+  log.
+
+Rollback: `cd backend && alembic downgrade 4d8807bdd737` maps ids back to slugs.
 
 ### Folder access can be set by position and permission; some saves are refused (2026-10-12)
 

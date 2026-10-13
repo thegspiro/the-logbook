@@ -417,6 +417,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(Boolean(swapTarget));
+  // And off the check itself. A check is a task with its own way out (the back
+  // arrow, which asks before leaving), and the app's navigation under the
+  // Submit bar only competed with it for the bottom of a phone screen — a tap
+  // on Events mid-walk left the check with no confirmation at all.
+  useOverlaySurface(!previewMode);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
@@ -1614,6 +1619,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const nfcSupported = useMemo(() => isNfcSupported(), []);
   const showNfcTap = nfcEnabled && nfcSupported && !previewMode && Boolean(template.id);
   const compartmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const titleBarRef = useRef<HTMLDivElement>(null);
+  // Where the title bar ends, so a location header can pin directly beneath it.
+  // Measured rather than fixed: the bar is two or three lines depending on the
+  // shift context it carries, and sits below the fixed mobile header only
+  // under 768px. A fixed offset left the header tucked under the bar's lower
+  // half, with the items showing through between them.
+  const [titleBarBottom, setTitleBarBottom] = useState(0);
+  useEffect(() => {
+    const bar = titleBarRef.current;
+    if (!bar) return;
+    const measure = () => {
+      const top = Number.parseFloat(window.getComputedStyle(bar).top);
+      setTitleBarBottom(bar.getBoundingClientRect().height + (Number.isFinite(top) ? top : 0));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
 
   /** The first answerable item in a compartment or anything stored inside it. */
   const firstItemUnder = useCallback(
@@ -2022,7 +2050,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Render: Check Input per Type
   // --------------------------------------------------------------------------
 
-  const renderCheckInput = (item: CheckTemplateItem) => {
+  /** `trailing` sits at the end of the answer row — the item's note toggle. */
+  const renderCheckInput = (item: CheckTemplateItem, trailing?: React.ReactNode) => {
     const result = results[item.id];
     const expirationStatus = getExpirationStatus(item, today);
     const isExpired = expirationStatus === 'expired';
@@ -2086,38 +2115,41 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // Every item carries the same four labels, so the group names the item and
     // aria-pressed says which answer is held — the colour alone did both.
     const passFailButtons = (
-      <div className="grid grid-cols-2 gap-2" role="group" aria-label={item.name}>
-        <button
-          type="button"
-          data-action="pass"
-          aria-pressed={effectiveStatus === 'pass'}
-          onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
-          disabled={isExpired}
-          className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-            effectiveStatus === 'pass'
-              ? 'bg-green-800 text-white'
-              : 'border-theme-surface-border text-theme-text-muted border hover:border-green-800 hover:text-green-800'
-          } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
-        >
-          <CheckCircle className="h-4 w-4" />
-          Pass
-        </button>
-        <button
-          type="button"
-          data-action="fail"
-          aria-pressed={effectiveStatus === 'fail'}
-          onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
-          className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-            effectiveStatus === 'fail'
-              ? 'bg-red-800 text-white'
-              : 'border-theme-surface-border text-theme-text-muted border hover:border-red-800 hover:text-red-800'
-          }`}
-        >
-          <XCircle className="h-4 w-4" />
-          Fail
-        </button>
-        {notApplicableButton}
-        {outOfServiceButton}
+      <div className="flex items-stretch gap-2">
+        <div className="grid flex-1 grid-cols-2 gap-2" role="group" aria-label={item.name}>
+          <button
+            type="button"
+            data-action="pass"
+            aria-pressed={effectiveStatus === 'pass'}
+            onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
+            disabled={isExpired}
+            className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+              effectiveStatus === 'pass'
+                ? 'bg-green-800 text-white'
+                : 'border-theme-surface-border text-theme-text-muted border hover:border-green-800 hover:text-green-800'
+            } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
+          >
+            <CheckCircle className="h-4 w-4" />
+            Pass
+          </button>
+          <button
+            type="button"
+            data-action="fail"
+            aria-pressed={effectiveStatus === 'fail'}
+            onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
+            className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+              effectiveStatus === 'fail'
+                ? 'bg-red-800 text-white'
+                : 'border-theme-surface-border text-theme-text-muted border hover:border-red-800 hover:text-red-800'
+            }`}
+          >
+            <XCircle className="h-4 w-4" />
+            Fail
+          </button>
+          {notApplicableButton}
+          {outOfServiceButton}
+        </div>
+        {trailing}
       </div>
     );
 
@@ -2184,58 +2216,61 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <span className="text-theme-text-muted block text-[10px]">Last: {prevQty}</span>
               )}
             </div>
-            <div className="flex items-center gap-0">
-              <button
-                type="button"
-                onClick={() => setQuantity(currentQty - 1)}
-                disabled={isExpired || currentQty <= 0}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-l-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label={`Decrease ${item.name} quantity`}
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <input
-                id={`qty-${item.id}`}
-                type="number"
-                aria-label={`${item.name} quantity found`}
-                min="0"
-                inputMode="numeric"
-                className={`bg-theme-surface focus:ring-theme-focus-ring h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                  hasBeenSet && isCritical
-                    ? 'border-theme-alert-danger-icon text-theme-alert-danger-title border-2'
-                    : hasBeenSet && !isAtPar
-                      ? 'border-theme-alert-warning-icon text-theme-alert-warning-text'
-                      : 'border-theme-surface-border text-theme-text-primary'
-                }`}
-                value={hasBeenSet ? currentQty : ''}
-                onFocus={() => {
-                  // Touching the field is the crew looking at it. That counts
-                  // as the check for a carried number they agree with, which
-                  // is why no per-row "confirm" prompt is needed.
-                  if (isCarriedOver) setQuantity(currentQty);
-                }}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '') {
-                    updateResult(item.id, {
-                      quantityFound: undefined,
-                      status: 'not_checked',
-                    });
-                  } else {
-                    setQuantity(Number(val));
-                  }
-                }}
-                disabled={isExpired}
-              />
-              <button
-                type="button"
-                onClick={() => setQuantity(currentQty + 1)}
-                disabled={isExpired}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-r-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label={`Increase ${item.name} quantity`}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0">
+                <button
+                  type="button"
+                  onClick={() => setQuantity(currentQty - 1)}
+                  disabled={isExpired || currentQty <= 0}
+                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-l-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label={`Decrease ${item.name} quantity`}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <input
+                  id={`qty-${item.id}`}
+                  type="number"
+                  aria-label={`${item.name} quantity found`}
+                  min="0"
+                  inputMode="numeric"
+                  className={`bg-theme-surface focus:ring-theme-focus-ring h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                    hasBeenSet && isCritical
+                      ? 'border-theme-alert-danger-icon text-theme-alert-danger-title border-2'
+                      : hasBeenSet && !isAtPar
+                        ? 'border-theme-alert-warning-icon text-theme-alert-warning-text'
+                        : 'border-theme-surface-border text-theme-text-primary'
+                  }`}
+                  value={hasBeenSet ? currentQty : ''}
+                  onFocus={() => {
+                    // Touching the field is the crew looking at it. That counts
+                    // as the check for a carried number they agree with, which
+                    // is why no per-row "confirm" prompt is needed.
+                    if (isCarriedOver) setQuantity(currentQty);
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      updateResult(item.id, {
+                        quantityFound: undefined,
+                        status: 'not_checked',
+                      });
+                    } else {
+                      setQuantity(Number(val));
+                    }
+                  }}
+                  disabled={isExpired}
+                />
+                <button
+                  type="button"
+                  onClick={() => setQuantity(currentQty + 1)}
+                  disabled={isExpired}
+                  className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-r-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label={`Increase ${item.name} quantity`}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              {trailing}
             </div>
             {/* A counter cannot express "this is not on this apparatus": zero is
                 a shortfall, which the server force-fails. The answer clears the
@@ -2398,7 +2433,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         ref={(el) => {
           itemRefs.current[item.id] = el;
         }}
-        className={`rounded-lg border p-4 transition-colors ${isQuantity ? 'space-y-1' : 'space-y-3'} ${
+        className={`space-y-2 rounded-lg border p-3 transition-colors ${
           effectiveStatus === 'pass'
             ? 'border-theme-alert-success-border bg-theme-alert-success-bg'
             : effectiveStatus === 'fail'
@@ -2421,6 +2456,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   page's one alarm colour. The few optional ones are the news. */}
               {!item.isRequired && <span className="text-theme-text-muted text-[10px] font-medium">Optional</span>}
               {renderExpirationBadge(item)}
+              {/* Show the caption only for a type we have words for. Falling
+                  back to the raw value printed an internal token under the
+                  item name — a template stored with check_type "presence"
+                  captioned every item "presence", which reads as a typo to the
+                  crew. An unrecognised type is now silent rather than
+                  confusing; the backend rejects new ones, so this is for
+                  templates stored before it did. On the name's line rather
+                  than its own, which cost every row a line of height. */}
+              {!isQuantity && CHECK_TYPE_LABELS[item.checkType] && (
+                <span className="text-theme-text-muted ml-auto text-[10px]">{CHECK_TYPE_LABELS[item.checkType]}</span>
+              )}
             </div>
             {swapOverrides[item.id] && (
               <p className="text-theme-alert-success-title mt-1 flex items-center gap-1 text-[11px] font-medium">
@@ -2434,18 +2480,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
             {item.description && (
               <p className={`text-theme-text-muted mt-0.5 text-xs ${isQuantity ? '' : 'ml-6'}`}>{item.description}</p>
-            )}
-            {/* Show the caption only for a type we have words for. Falling back
-                to the raw value printed an internal token under the item name —
-                a template stored with check_type "presence" captioned every
-                item "presence", which reads as a typo to the crew. An
-                unrecognised type is now silent rather than confusing; the
-                backend rejects new ones, so this is for templates stored
-                before it did. */}
-            {!isQuantity && CHECK_TYPE_LABELS[item.checkType] && (
-              <div className="mt-1 ml-6 flex items-center gap-2">
-                <span className="text-theme-text-muted text-[10px]">{CHECK_TYPE_LABELS[item.checkType]}</span>
-              </div>
             )}
             {item.imageUrl && (
               <div className="mt-2">
@@ -2464,28 +2498,48 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         </div>
 
-        {/* Check input area */}
-        {renderCheckInput(item)}
-
-        {/* Notes + Photo */}
-        <div className="flex items-center gap-3">
+        {/* Check input area. The note toggle rides on the answer row as an
+            icon: on its own line under every item it added a row of height to
+            the whole list for a field most items never use. */}
+        {renderCheckInput(
+          item,
           <button
             type="button"
             onClick={() => toggleNotes(item.id)}
             aria-expanded={showNotesField}
             disabled={noteRequired}
-            className="text-theme-text-muted hover:text-theme-text-secondary disabled:hover:text-theme-text-muted flex min-h-[36px] items-center gap-1 text-xs transition-colors disabled:cursor-default"
+            aria-label={
+              noteRequired
+                ? `A note is required for ${item.name}`
+                : showNotesField
+                  ? `Hide the note for ${item.name}`
+                  : `Add a note for ${item.name}`
+            }
+            title={noteRequired ? 'Note required' : showNotesField ? 'Hide note' : 'Add a note or photo'}
+            className={`relative flex min-h-11 w-11 shrink-0 items-center justify-center self-stretch rounded-lg border transition-colors disabled:cursor-default ${
+              noteRequired
+                ? 'border-theme-alert-danger-icon text-theme-alert-danger-title'
+                : showNotesField
+                  ? 'border-theme-accent-blue text-theme-accent-blue'
+                  : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary'
+            }`}
           >
-            <MessageSquare className="h-3 w-3" aria-hidden="true" />
-            {noteRequired ? 'Note required' : showNotesField ? 'Hide' : 'Note'}
+            <MessageSquare className="h-4 w-4" aria-hidden="true" />
             {(result?.photoFiles?.length ?? 0) > 0 && (
-              <span className="text-theme-accent-blue inline-flex items-center gap-0.5 font-medium">
-                <Camera className="h-3 w-3" aria-hidden="true" />
+              <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-blue-800 px-1 text-[10px] font-semibold text-white">
+                <Camera className="h-2.5 w-2.5" aria-hidden="true" />
                 {result?.photoFiles?.length}
               </span>
             )}
           </button>
-          {/* Offered whenever the item is linked to inventory, not only when it
+        )}
+        {noteRequired && (
+          <p className="text-theme-alert-danger-title text-xs font-medium">Note required: say what&apos;s wrong.</p>
+        )}
+
+        {item.inventoryItemId && (
+          <div className="flex items-center gap-3">
+            {/* Offered whenever the item is linked to inventory, not only when it
               is near its date. Expiry is one reason a unit comes off a truck;
               used, damaged, contaminated, missing and recalled are the others,
               and gating on the date left a crew holding an empty bracket with
@@ -2498,31 +2552,32 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               being offered on any inventory-linked item is exactly what makes
               this button reach the refused case most often, since a position
               that is neither expired nor short is the common one. */}
-          {item.inventoryItemId && (
-            <button
-              type="button"
-              disabled={!canSwapStock || swapRefused}
-              onClick={() => {
-                void openSwap(item);
-              }}
-              title={
-                !canSwapStock
-                  ? 'Swaps from stock are recorded by a crew member on the check'
-                  : swapRefused
-                    ? 'Only an officer can draw stock for an item that has not expired yet'
-                    : undefined
-              }
-              className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
-                  ? 'text-theme-accent-blue hover:opacity-80'
-                  : 'text-theme-text-muted hover:text-theme-text-secondary'
-              }`}
-            >
-              <Repeat className="h-3 w-3" aria-hidden="true" />
-              Swap
-            </button>
-          )}
-        </div>
+            {item.inventoryItemId && (
+              <button
+                type="button"
+                disabled={!canSwapStock || swapRefused}
+                onClick={() => {
+                  void openSwap(item);
+                }}
+                title={
+                  !canSwapStock
+                    ? 'Swaps from stock are recorded by a crew member on the check'
+                    : swapRefused
+                      ? 'Only an officer can draw stock for an item that has not expired yet'
+                      : undefined
+                }
+                className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
+                    ? 'text-theme-accent-blue hover:opacity-80'
+                    : 'text-theme-text-muted hover:text-theme-text-secondary'
+                }`}
+              >
+                <Repeat className="h-3 w-3" aria-hidden="true" />
+                Swap
+              </button>
+            )}
+          </div>
+        )}
         {(item.lotsAboard?.length ?? 0) > 0 && (
           <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
             <p className="text-theme-text-secondary text-xs font-medium">Inventory lots aboard</p>
@@ -2665,38 +2720,47 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {/* Compartment header — collapsible */}
                   {/* Sticky: the compartment heading scrolled away, so a member
                       a dozen items into "Cab" had nothing on screen saying so. */}
-                  <button
-                    type="button"
-                    onClick={() => toggleCompartmentCollapse(comp.id)}
-                    className={`bg-theme-bg sticky top-[76px] z-10 w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
-                    aria-expanded={!isCollapsed}
-                    aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
+                  {/* The opaque wrapper carries the stick: the status colours are
+                      translucent, so on the button itself the items scrolled
+                      visibly through the header. */}
+                  <div
+                    data-testid={`compartment-header-${comp.id}`}
+                    className="bg-theme-bg sticky z-10 pb-1"
+                    style={{ top: titleBarBottom }}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base leading-tight font-bold">{comp.name}</p>
-                        {comp.description && <p className="mt-0.5 truncate text-xs opacity-75">{comp.description}</p>}
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-xs opacity-75">
-                            {checked}/{checkable.length} checked
-                          </span>
-                          {status === 'complete' && <CheckCircle className="h-4 w-4" aria-hidden="true" />}
-                          {(status === 'has_failures' || status === 'has_out_of_service') && (
-                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                          )}
+                    <button
+                      type="button"
+                      onClick={() => toggleCompartmentCollapse(comp.id)}
+                      className={`w-full rounded-xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
+                      aria-expanded={!isCollapsed}
+                      aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-base leading-tight font-bold">{comp.name}</p>
+                          {comp.description && <p className="mt-0.5 truncate text-xs opacity-75">{comp.description}</p>}
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-xs opacity-75">
+                              {checked}/{checkable.length} checked
+                            </span>
+                            {status === 'complete' && <CheckCircle className="h-4 w-4" aria-hidden="true" />}
+                            {(status === 'has_failures' || status === 'has_out_of_service') && (
+                              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                            )}
+                          </div>
                         </div>
+                        {isCollapsed ? (
+                          <ChevronDown className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
+                        ) : (
+                          <ChevronUp className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
+                        )}
                       </div>
-                      {isCollapsed ? (
-                        <ChevronDown className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
-                      ) : (
-                        <ChevronUp className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
-                      )}
-                    </div>
-                  </button>
+                    </button>
+                  </div>
 
                   {/* Items — visible when expanded */}
                   {!isCollapsed && (
-                    <div className="mt-3 ml-1 space-y-3">
+                    <div className="mt-2 space-y-2">
                       {/* The seal comes first: on a sealed bag it is the
                           question that decides whether the rest of the list is
                           work at all. */}
@@ -2730,7 +2794,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           Hidden while a seal is standing in for the count —
                           there is nothing left for them to confirm. */}
                       {!previewMode && !sealCleared && checked < checkable.length && (
-                        <div className="flex flex-wrap justify-end gap-2">
+                        <div className={`grid gap-2 ${hasQuantityItems(comp) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                           {hasQuantityItems(comp) && (
                             <button
                               type="button"
@@ -2739,7 +2803,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                                 confirmCountsInCompartment(comp);
                               }}
                               aria-label={`Confirm the counts shown in ${comp.name}`}
-                              className="border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-opacity hover:opacity-90"
+                              className="border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap transition-opacity hover:opacity-90"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                               Confirm Counts
@@ -2760,7 +2824,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                                 ? `Set all items in ${comp.name} to par`
                                 : `Mark all items in ${comp.name} as passed`
                             }
-                            className={`flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                               hasQuantityItems(comp)
                                 ? 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                                 : 'border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title hover:opacity-90'
@@ -3112,7 +3176,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">
+    <div
+      className="mx-auto max-w-lg space-y-4 px-3 pb-4"
+      // The bottom navigation is hidden while a check is open (above), so the
+      // Submit bar's `action-bar-safe` must not keep reserving its height.
+      style={{ '--bottom-nav-height': '0px' } as React.CSSProperties}
+    >
       {revisionNotice && (
         <section
           className="border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text rounded-xl border p-4 text-sm"
@@ -3241,7 +3310,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           real engine inventory a member scrolled to the very end to find out
           they had missed something in the cab. It also carries the shift — the
           template name alone is identical for two trucks running one template. */}
-      <div className="bg-theme-bg sticky top-0 z-20 -mx-3 space-y-2 px-3 pt-2 pb-2">
+      {/* `mobile-header-inset` parks it below the fixed mobile header, which
+          exists only under 768px; at top-0 the header covered its first line. */}
+      <div
+        ref={titleBarRef}
+        className="bg-theme-bg mobile-header-inset sticky z-20 -mx-3 space-y-2 px-3 pt-2 pb-2 md:top-0"
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {onBack && (

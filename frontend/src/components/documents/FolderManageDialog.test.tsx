@@ -75,8 +75,8 @@ describe('FolderManageDialog', () => {
     mockUpdateFolder.mockResolvedValue({});
     mockDeleteFolder.mockResolvedValue(undefined);
     mockGetRoleOptions.mockResolvedValue([
-      { slug: 'captain', name: 'Captain' },
-      { slug: 'lieutenant', name: 'Lieutenant' },
+      { id: 'pos-captain', slug: 'captain', name: 'Captain' },
+      { id: 'pos-lieutenant', slug: 'lieutenant', name: 'Lieutenant' },
     ]);
     mockGetFolders.mockImplementation((params: { parent_id?: string }) =>
       Promise.resolve(
@@ -105,7 +105,7 @@ describe('FolderManageDialog', () => {
         name: 'Operating Procedures',
         description: null,
         visibility: 'organization',
-        allowed_roles: ['captain'],
+        allowed_roles: ['pos-captain'],
         required_permissions: null,
       })
     );
@@ -114,7 +114,7 @@ describe('FolderManageDialog', () => {
 
   it('clears the role list when set back to Organization, and offers Leadership', async () => {
     const user = userEvent.setup();
-    renderDialog(folder({ allowed_roles: ['captain'] }));
+    renderDialog(folder({ allowed_roles: ['pos-captain'] }));
 
     expect(screen.getByRole('radio', { name: 'Specific positions' })).toBeChecked();
     await user.click(screen.getByRole('radio', { name: 'Leadership' }));
@@ -226,7 +226,7 @@ describe('FolderManageDialog', () => {
     await waitFor(() => expect(mockUpdateFolder).toHaveBeenCalledTimes(1));
     const payload = mockUpdateFolder.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('required_permissions');
-    expect(payload).toMatchObject({ allowed_roles: ['captain'] });
+    expect(payload).toMatchObject({ allowed_roles: ['pos-captain'] });
   });
 
   it('describes a personal folder as fixed and sends no access fields', async () => {
@@ -241,6 +241,26 @@ describe('FolderManageDialog', () => {
     const payload = mockUpdateFolder.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('visibility');
     expect(payload).not.toHaveProperty('required_permissions');
+  });
+
+  it('drops a position that no longer exists, and says so', async () => {
+    const user = userEvent.setup();
+    renderDialog(folder({ allowed_roles: ['pos-captain', 'quartermaster'] }));
+
+    expect(await screen.findByText(/A position this folder listed no longer exists/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockUpdateFolder).toHaveBeenCalledWith('f-1', expect.objectContaining({ allowed_roles: ['pos-captain'] }))
+    );
+  });
+
+  it('keeps every entry when the positions cannot be loaded', async () => {
+    mockGetRoleOptions.mockRejectedValue(new Error('offline'));
+    renderDialog(folder({ allowed_roles: ['pos-captain', 'quartermaster'] }));
+
+    expect(await screen.findByText('No positions could be loaded.')).toBeInTheDocument();
+    expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
   });
 
   it('shows the server’s reason when a save is refused', async () => {

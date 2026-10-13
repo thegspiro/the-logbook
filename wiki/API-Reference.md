@@ -211,6 +211,8 @@ PUT    /api/v1/equipment-checks/items/{item_id}/deployed-lots/{lot_id}  # Correc
 
 GET    /api/v1/equipment-checks/templates/{id}/inventory-matches    # Propose catalog links (read-only)
 POST   /api/v1/equipment-checks/templates/{id}/inventory-links      # Apply a reviewed set of links
+GET    /api/v1/equipment-checks/inventory-link-report                # Unlinked positions across all templates, grouped by name (read-only)
+POST   /api/v1/equipment-checks/inventory-links                      # Apply links across templates, all or nothing; response lists skippedPositions
 ```
 
 | Behaviour               | Detail                                                                                                                                                                      |

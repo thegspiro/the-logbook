@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { purchaseRequestService } from '../services/api';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { useFundOptions } from '../hooks/useFundOptions';
+import { FundSelect } from '../components/FundSelect';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority } from '../types';
@@ -33,6 +35,7 @@ const purchaseRequestSchema = z.object({
   estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
   priority: z.string().min(1, 'Priority is required'),
   budgetId: z.string().optional(),
+  fundCampaignId: z.string().optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
 });
 
@@ -93,6 +96,7 @@ const PurchaseRequestFormPage: React.FC = () => {
     formState: { errors, isSubmitting },
     reset,
     watch,
+    setValue,
   } = useForm<PurchaseRequestFormData>({
     resolver: zodResolver(purchaseRequestSchema),
     defaultValues: {
@@ -102,6 +106,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       estimatedAmount: 0,
       priority: PurchaseRequestPriority.MEDIUM,
       budgetId: '',
+      fundCampaignId: '',
       fiscalYearId: '',
     },
   });
@@ -110,6 +115,7 @@ const PurchaseRequestFormPage: React.FC = () => {
   // options endpoints, which a member holding only finance.request can read.
   const fiscalYearId = watch('fiscalYearId');
   const { fiscalYears, budgetOptions } = useRequestFormOptions(fiscalYearId);
+  const { funds, mode: fundMode } = useFundOptions();
 
   // Load purchase request for edit mode
   useEffect(() => {
@@ -139,6 +145,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         estimatedAmount: Number(pr.estimatedAmount),
         priority: pr.priority,
         budgetId: pr.budgetId ?? '',
+        fundCampaignId: pr.fundCampaignId ?? '',
         fiscalYearId: pr.fiscalYearId,
       });
     }
@@ -161,6 +168,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         payload.description = blankToNull(data.description);
         payload.vendor = blankToNull(data.vendor);
         payload.budgetId = data.budgetId || null;
+        payload.fundCampaignId = data.fundCampaignId || null;
 
         await purchaseRequestService.update(id, payload);
         toast.success('Purchase request updated');
@@ -172,6 +180,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         const vendor = data.vendor?.trim();
         if (vendor) payload.vendor = vendor;
         if (data.budgetId) payload.budgetId = data.budgetId;
+        if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
 
         const created = await createPurchaseRequest(payload);
         toast.success('Purchase request created');
@@ -312,6 +321,17 @@ const PurchaseRequestFormPage: React.FC = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <FundSelect
+              id="fundCampaignId"
+              value={watch('fundCampaignId') ?? ''}
+              onChange={(fundId) => setValue('fundCampaignId', fundId, { shouldDirty: true })}
+              amount={watch('estimatedAmount') || 0}
+              funds={funds}
+              mode={fundMode}
+            />
           </div>
         </div>
 

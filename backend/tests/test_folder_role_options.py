@@ -3,7 +3,7 @@
 The Documents screen's "Specific roles" choice needs the department's
 positions, and ``GET /roles`` is gated on positions.view — which a documents
 manager such as the seeded historian lacks. ``GET /documents/folders/role-options``
-serves names and slugs under documents.manage, org-scoped.
+serves ids, names and slugs under documents.manage, org-scoped.
 """
 
 from types import SimpleNamespace
@@ -21,10 +21,12 @@ async def test_lists_this_departments_positions_only(db_session):
     other = Organization(name="Other FD", slug="role-opts-other")
     db_session.add_all([mine, other])
     await db_session.flush()
+    lieutenant = Position(organization_id=mine.id, name="Lieutenant", slug="lieutenant")
+    captain = Position(organization_id=mine.id, name="Captain", slug="captain")
     db_session.add_all(
         [
-            Position(organization_id=mine.id, name="Lieutenant", slug="lieutenant"),
-            Position(organization_id=mine.id, name="Captain", slug="captain"),
+            lieutenant,
+            captain,
             Position(organization_id=other.id, name="Secret", slug="secret"),
         ]
     )
@@ -34,9 +36,10 @@ async def test_lists_this_departments_positions_only(db_session):
         db=db_session, current_user=SimpleNamespace(organization_id=mine.id)
     )
 
-    assert [(o.slug, o.name) for o in options] == [
-        ("captain", "Captain"),
-        ("lieutenant", "Lieutenant"),
+    # The id is what a folder stores; the slug is shown for recognition only.
+    assert [(o.id, o.slug, o.name) for o in options] == [
+        (captain.id, "captain", "Captain"),
+        (lieutenant.id, "lieutenant", "Lieutenant"),
     ]
 
 
