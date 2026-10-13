@@ -21,6 +21,7 @@ const mockUpdateProgram = vi.fn();
 const mockUpdateRequirementEnhanced = vi.fn();
 const mockGetPrograms = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
+const mockUpdateMilestone = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -33,6 +34,7 @@ vi.mock('../services/api', () => ({
     updateRequirementEnhanced: (...a: unknown[]) => mockUpdateRequirementEnhanced(...a) as unknown,
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
+    updateMilestone: (...a: unknown[]) => mockUpdateMilestone(...a) as unknown,
   },
   trainingService: {
     getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
@@ -45,7 +47,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Imported after the mocks so the modal picks them up.
-import { EditProgramModal, PhaseFormModal, RequirementFormModal } from './PipelineEditModals';
+import { EditProgramModal, MilestoneFormModal, PhaseFormModal, RequirementFormModal } from './PipelineEditModals';
 
 const cprRequirement = {
   id: 'req-cpr',
@@ -511,11 +513,11 @@ describe('EditProgramModal — enrollment rules', () => {
     await waitFor(() => {
       expect(mockUpdateProgram).toHaveBeenCalledWith('prog-1', {
         name: 'Recruit School',
-        description: undefined,
-        code: undefined,
+        description: null,
+        code: null,
         structure_type: 'phases',
-        target_position: undefined,
-        time_limit_days: undefined,
+        target_position: null,
+        time_limit_days: null,
         warning_days_before: 30,
         reminder_conditions: { days_before_deadline: [], send_if_below_percentage: undefined },
         is_template: false,
@@ -574,5 +576,145 @@ describe('EditProgramModal — enrollment rules', () => {
       );
     });
     expect(onSaved).not.toHaveBeenCalled();
+  });
+});
+
+// An update is partial on the server: an omitted key keeps the stored value,
+// so each of these forms must send an emptied field as null to clear it.
+describe('clearing a field on an edit sends null', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockUpdateProgramPhase.mockReset();
+    mockUpdateProgramPhase.mockResolvedValue({ id: 'ph-2' });
+    mockUpdateMilestone.mockReset();
+    mockUpdateMilestone.mockResolvedValue({ id: 'ms-1' });
+  });
+
+  it('clears the program’s text, limits and recert schedule', async () => {
+    const filled = {
+      ...program,
+      description: 'Twelve-week academy',
+      code: 'RS-1',
+      target_position: 'firefighter',
+      time_limit_days: 90,
+      warning_days_before: 30,
+      recert_enabled: true,
+      recert_interval_months: 24,
+      recert_anchor_month: 3,
+      recert_anchor_day: 30,
+    };
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={filled} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    for (const label of [
+      /^Description/,
+      /^Code/,
+      /^Target position/,
+      /^Time limit/,
+      /^First warning/,
+      /^Cycle length/,
+      /^Reset day/,
+    ]) {
+      await user.clear(screen.getByLabelText(label));
+    }
+    await user.selectOptions(screen.getByLabelText(/^Reset month/), '');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({
+          description: null,
+          code: null,
+          target_position: null,
+          time_limit_days: null,
+          warning_days_before: null,
+          recert_enabled: true,
+          recert_interval_months: null,
+          recert_anchor_month: null,
+          recert_anchor_day: null,
+        })
+      );
+    });
+  });
+
+  it('leaves the recert schedule untouched while recert is off', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalled();
+    });
+    const payload = mockUpdateProgram.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.recert_enabled).toBe(false);
+    expect(payload.recert_interval_months).toBeUndefined();
+    expect(payload.recert_anchor_month).toBeUndefined();
+    expect(payload.recert_anchor_day).toBeUndefined();
+  });
+
+  it('clears a phase’s description and time limit', async () => {
+    const skills = { ...phases[1], id: 'ph-2', program_id: 'prog-1', phase_number: 2, name: 'Skills' };
+    const user = userEvent.setup();
+    renderWithRouter(
+      <PhaseFormModal
+        programId="prog-1"
+        phase={{ ...skills, description: 'Hands-on drills', time_limit_days: 30 }}
+        allPhases={phases}
+        nextPhaseNumber={3}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    await user.clear(screen.getByLabelText(/^Description/));
+    await user.clear(screen.getByLabelText(/^Time limit/));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgramPhase).toHaveBeenCalledWith(
+        'prog-1',
+        'ph-2',
+        expect.objectContaining({ description: null, time_limit_days: null })
+      );
+    });
+  });
+
+  it('clears a milestone’s description and custom message', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <MilestoneFormModal
+        programId="prog-1"
+        phases={phases}
+        milestone={{
+          id: 'ms-1',
+          program_id: 'prog-1',
+          name: 'Halfway',
+          description: 'Half the program done',
+          completion_percentage_threshold: 50,
+          notification_message: 'Nice work, keep going',
+          created_at: '',
+        }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    await user.clear(screen.getByLabelText(/^Description/));
+    await user.clear(screen.getByLabelText(/^Notification message/));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateMilestone).toHaveBeenCalledWith(
+        'prog-1',
+        'ms-1',
+        expect.objectContaining({ description: null, notification_message: null })
+      );
+    });
   });
 });
