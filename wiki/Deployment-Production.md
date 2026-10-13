@@ -179,10 +179,13 @@ Certbot reruns the deploy hook on every renewal. `cp -L` matters: the files
 under `live/` are symlinks the container cannot follow. Full details:
 [DEPLOYMENT.md → Docker Compose production profile](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#docker-compose-production-profile).
 
-`scripts/setup-ssl.sh <domain> <email>` configures an nginx installed on the
-host (`infrastructure/nginx/nginx.conf`). That config routes `/api/` to
-`127.0.0.1:3001`, which the production override does not publish, so it fits
-the traditional (non-Docker) install rather than the Compose stack.
+`scripts/setup-ssl.sh <domain> <email>` sets up an nginx installed on the
+host, with a Let's Encrypt certificate, in front of either install. For the
+Compose stack it sends everything to the frontend on port 3000 (which forwards
+`/api` itself); for a traditional install it serves `frontend/dist` and sends
+`/api` to `127.0.0.1:3001`. It detects which one it is on, or takes `--docker`
+/ `--traditional`. Details:
+[DEPLOYMENT.md → Automatic SSL Setup](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#automatic-ssl-setup-lets-encrypt).
 
 ---
 
