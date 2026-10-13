@@ -68,6 +68,9 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import EquipmentCheckForm from './EquipmentCheckForm';
+import { useAnyOverlaySurface } from '../../../hooks/useOverlaySurface';
+
+const OverlayProbe = () => <span data-testid="overlay-open">{String(useAnyOverlaySurface())}</span>;
 
 const template = (itemOverrides = {}) => ({
   id: 'tmpl-1',
@@ -222,7 +225,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
   const completeWithPhoto = async (fileName = 'gauze.jpg') => {
     const user = userEvent.setup();
     await user.click(await screen.findByDisplayValue('4'));
-    await user.click(screen.getByRole('button', { name: 'Note' }));
+    await user.click(screen.getByRole('button', { name: 'Add a note for 4x4 Gauze' }));
     const input = screen.getByLabelText('Upload photo for 4x4 Gauze');
     await user.upload(input, new File(['photo'], fileName, { type: 'image/jpeg' }));
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
@@ -583,10 +586,53 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // Collapsed, the row carries two controls rather than four.
     expect(screen.queryByRole('button', { name: /Add photo/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /^Note$/ }));
+    await user.click(screen.getByRole('button', { name: 'Add a note for 4x4 Gauze' }));
 
     expect(await screen.findByRole('button', { name: /Add photo/ })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Notes for this item...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide the note for 4x4 Gauze' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+  });
+
+  it('puts the note toggle on the answer row rather than a row of its own', async () => {
+    render({ name: 'Portable light', checkType: 'function' });
+
+    expect(await screen.findByRole('button', { name: 'Add a note for Portable light' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Note$/ })).not.toBeInTheDocument();
+  });
+
+  it('takes the bottom navigation off while a real check is open, and not in a preview', async () => {
+    const view = renderWithRouter(
+      <>
+        <EquipmentCheckForm shiftId="shift-1" template={template() as never} />
+        <OverlayProbe />
+      </>
+    );
+    await screen.findByRole('button', { name: 'Submit Report' });
+    expect(screen.getByTestId('overlay-open')).toHaveTextContent('true');
+    view.unmount();
+
+    renderWithRouter(
+      <>
+        <EquipmentCheckForm shiftId="preview" template={template() as never} previewMode />
+        <OverlayProbe />
+      </>
+    );
+    expect(await screen.findByTestId('overlay-open')).toHaveTextContent('false');
+  });
+
+  it('pins the location header on an opaque layer directly under the title bar', async () => {
+    render();
+
+    const header = await screen.findByRole('button', { name: /^Front Bumper, 0 of 1 checked/ });
+    // The status colours are translucent, so the stick lives on a wrapper that
+    // paints the page background; on the button the items showed through.
+    expect(header).not.toHaveClass('sticky');
+    const pinned = screen.getByTestId('compartment-header-c-1');
+    expect(pinned).toHaveClass('sticky', 'bg-theme-bg');
+    expect(within(pinned).getByRole('button', { name: /^Front Bumper/ })).toBe(header);
   });
 
   it('treats an adjustment as the check itself', async () => {
