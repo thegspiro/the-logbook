@@ -35,6 +35,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { EmptyState } from '../../../components/ux';
 import { useAuthStore } from '../../../stores/authStore';
+import { useTablist } from '../../../hooks/useTablist';
 
 const TABS = [
   { id: 'checks', label: 'Checks' },
@@ -48,6 +49,7 @@ type TabId = (typeof TABS)[number]['id'];
 const isTabId = (value: string | null): value is TabId => TABS.some((t) => t.id === value);
 
 export const ApparatusDetailPage: React.FC = () => {
+  const tablist = useTablist();
   const { apparatusId = '' } = useParams<{ apparatusId: string }>();
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -196,7 +198,7 @@ export const ApparatusDetailPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="tab-scroll" role="tablist" aria-label="Apparatus sections">
+      <div className="tab-scroll" role="tablist" {...tablist} aria-label="Apparatus sections">
         {TABS.map((tab) => {
           const count =
             tab.id === 'findings' ? unit.failedItemCount + unit.outOfServiceItemCount + unit.expiringItemCount : 0;

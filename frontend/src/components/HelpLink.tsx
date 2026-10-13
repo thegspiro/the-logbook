@@ -5,7 +5,7 @@
  * Links can open documentation pages, tooltips, or external help resources.
  */
 
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useId, useLayoutEffect, useRef, useState } from 'react';
 import { HelpCircle, ExternalLink, X } from 'lucide-react';
 
 interface HelpLinkProps {
@@ -41,6 +41,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
   const [showTooltip, setShowTooltip] = useState(false);
   const [flippedBelow, setFlippedBelow] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
 
   // A popover placed above a "?" that sits in a page header opens under the
   // fixed mobile top bar, or off the top of the viewport, and cannot be read
@@ -117,6 +118,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
           className="text-theme-text-muted hover:text-theme-text-primary touch:mobile-touch-target focus:ring-theme-focus-ring rounded-sm p-1 transition-colors focus:ring-2 focus:outline-hidden"
           aria-label={`Help: ${topic}`}
           aria-expanded={tooltip ? showTooltip : undefined}
+          aria-controls={tooltip && showTooltip ? panelId : undefined}
           type="button"
         >
           <HelpCircle className="h-5 w-5" aria-hidden="true" />
@@ -127,7 +129,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
             it the panel shrinks to the icon's width and wraps a word a line;
             the card's max-w-xs is what bounds it. */}
         {showTooltip && tooltip && (
-          <div ref={panelRef} className={`absolute z-50 w-max ${getTooltipPositionClasses()}`}>
+          <div ref={panelRef} id={panelId} className={`absolute z-50 w-max ${getTooltipPositionClasses()}`}>
             <div className="card text-theme-text-primary max-w-xs p-3 text-sm shadow-xl">
               <div className="mb-2 flex items-start justify-between space-x-2">
                 <p>{tooltip}</p>

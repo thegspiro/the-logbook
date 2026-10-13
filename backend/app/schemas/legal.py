@@ -131,8 +131,24 @@ class LegalDocumentState(UTCResponseBase):
     published_effective_date: Optional[str] = None
     published_at: Optional[datetime] = None
     published_by_name: Optional[str] = None
+    # The first page of each list, newest first (owner decision DOC-8). The
+    # totals say how many exist, so the screen can offer the rest through
+    # GET /legal-documents/{document_type}/revisions.
     drafts: list[LegalRevisionResponse] = []
+    drafts_total: int = 0
     history: list[LegalRevisionResponse] = []
+    history_total: int = 0
+
+
+class LegalRevisionPage(BaseModel):
+    """A further page of one document's drafts or published history."""
+
+    model_config = _RESPONSE_CONFIG
+
+    items: list[LegalRevisionResponse]
+    total: int
+    offset: int
+    limit: int
 
 
 class LegalDocumentsOverview(BaseModel):

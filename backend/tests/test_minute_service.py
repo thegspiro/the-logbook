@@ -108,6 +108,7 @@ def _make_minutes(**overrides) -> MagicMock:
         "rejected_at": None,
         "rejected_by": None,
         "rejection_reason": None,
+        "published_document_id": None,
         "created_by": str(uuid4()),
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -768,6 +769,65 @@ class TestRejectMinutes:
         )
 
         assert result is None
+
+
+class TestReopenMinutes:
+    """MM-17: approved minutes are corrected by reopening them to draft."""
+
+    @pytest.mark.unit
+    async def test_reopen_returns_approved_minutes_to_draft(
+        self, service, mock_db, org_id
+    ):
+        approver, submitter = str(uuid4()), str(uuid4())
+        approved_at = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+        minutes = _make_minutes(
+            status=MinutesStatus.APPROVED.value,
+            approved_by=approver,
+            approved_at=approved_at,
+            submitted_by=submitter,
+            submitted_at=approved_at,
+        )
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        result = await service.reopen_minutes(minutes.id, org_id)
+
+        assert result is not None
+        reopened, prior = result
+        assert reopened is minutes
+        assert minutes.status == MinutesStatus.DRAFT
+        assert minutes.approved_by is None
+        assert minutes.approved_at is None
+        assert minutes.submitted_by is None
+        assert prior == {
+            "previous_approved_by": approver,
+            "previous_approved_at": approved_at.isoformat(),
+            "previous_submitted_by": submitter,
+        }
+        mock_db.commit.assert_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "status",
+        [
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.SUBMITTED.value,
+            MinutesStatus.REJECTED.value,
+        ],
+    )
+    async def test_only_approved_minutes_can_be_reopened(
+        self, service, mock_db, org_id, status
+    ):
+        minutes = _make_minutes(status=status)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        with pytest.raises(ValueError, match="approved"):
+            await service.reopen_minutes(minutes.id, org_id)
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    async def test_reopen_not_found(self, service, org_id):
+        service.get_minutes = AsyncMock(return_value=None)
+        assert await service.reopen_minutes("nope", org_id) is None
 
 
 # ============================================

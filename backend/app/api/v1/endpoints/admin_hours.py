@@ -909,7 +909,9 @@ async def export_entries(
 
     service = AdminHoursService(db)
     try:
-        csv_content = await service.export_entries_csv(
+        # Rows are read and written a batch at a time as the response streams
+        # (AH-16); the request's session stays open until the body is sent.
+        chunks = await service.stream_entries_csv(
             organization_id=str(current_user.organization_id),
             status_filter=status,
             category_id=category_id,
@@ -918,7 +920,7 @@ async def export_entries(
             end_date=parsed_end,
         )
         return StreamingResponse(
-            iter([csv_content]),
+            chunks,
             media_type="text/csv",
             headers={
                 "Content-Disposition": "attachment; filename=admin_hours_export.csv"
@@ -945,7 +947,9 @@ async def close_stale_sessions(
     service = AdminHoursService(db)
     try:
         count = await service.auto_close_stale_sessions(
-            organization_id=str(current_user.organization_id)
+            organization_id=str(current_user.organization_id),
+            actor_user_id=str(current_user.id),
+            actor_username=current_user.username,
         )
         return {"closed_count": count}
     except Exception as e:

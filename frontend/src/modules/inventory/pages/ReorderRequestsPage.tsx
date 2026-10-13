@@ -27,6 +27,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { VendorName } from '../components/VendorName';
+import InventoryItemPicker from '../components/InventoryItemPicker';
 import type {
   ReorderRequest,
   ReorderRequestCreate,
@@ -144,6 +145,7 @@ const ReorderFormModal: React.FC<{
       setF({
         ...EMPTY_CREATE,
         item_name: firstItem?.name ?? prefillAlert.category_name,
+        item_id: firstItem?.id ?? '',
         category_id: prefillAlert.category_id,
         quantity_requested: String(Math.max(1, prefillAlert.threshold - prefillAlert.current_stock)),
       });
@@ -168,6 +170,9 @@ const ReorderFormModal: React.FC<{
     try {
       if (editRequest) {
         const updateData: ReorderRequestUpdate = {
+          // Sent every save, null when unlinked (pitfall #1). The server keeps
+          // it fixed once stock has arrived, and an unchanged id passes.
+          item_id: f.item_id || null,
           item_name: f.item_name.trim(),
           quantity_requested: Number(f.quantity_requested),
           // Explicit nulls so clearing these persists: an omitted key means
@@ -242,6 +247,8 @@ const ReorderFormModal: React.FC<{
                     setF((p) => ({
                       ...p,
                       item_name: firstItem?.name ?? alert.category_name,
+                      // Linked, so the order can be received (W41-5).
+                      item_id: firstItem?.id ?? '',
                       category_id: alert.category_id,
                       quantity_requested: String(Math.max(1, alert.threshold - alert.current_stock)),
                     }));
@@ -255,6 +262,25 @@ const ReorderFormModal: React.FC<{
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <span className={lbl}>Inventory item</span>
+            {/* Receiving posts stock onto this item, and the server refuses a
+                receipt for an order with none (W41-5). */}
+            <InventoryItemPicker
+              value={f.item_id || undefined}
+              placeholder="Search inventory to link…"
+              onChange={(id, name) =>
+                setF((p) => ({
+                  ...p,
+                  item_id: id ?? '',
+                  item_name: id && name && !p.item_name.trim() ? name : p.item_name,
+                }))
+              }
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Link the item this order restocks. Stock can only be received against a linked item.
+            </p>
+          </div>
           <div className="sm:col-span-2">
             <label className={lbl} htmlFor="reorder-item-name">
               Item Name *
@@ -466,8 +492,12 @@ const WorkflowActionModal: React.FC<{
   const [lotNumber, setLotNumber] = useState('');
   const [confirmOver, setConfirmOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  // W41-5: an unlinked order is linked here, at receipt, before stock posts.
+  const [linkItemId, setLinkItemId] = useState('');
+  const receivingItemId = request?.item_id || linkItemId;
   useEffect(() => {
     if (!isOpen || !request) return;
+    setLinkItemId('');
     setVendorId(request.vendor_id ?? '');
     setPONumber(request.purchase_order_number ?? '');
     setQuantity(String(request.quantity_outstanding));
@@ -486,6 +516,11 @@ const WorkflowActionModal: React.FC<{
         if (qty <= 0 || !location.trim() || Number(unitCost) < 0 || unitCost === '') {
           toast.error('Enter a quantity above 0, a storage location, and a unit cost');
           return;
+        }
+        if (!request.item_id && linkItemId) {
+          // The plain edit does not bump `version`, so the receipt below still
+          // matches the version this dialog opened with.
+          await inventoryService.updateReorderRequest(request.id, { item_id: linkItemId });
         }
         await inventoryService.receiveReorderStock(request.id, {
           quantity: qty,
@@ -546,16 +581,23 @@ const WorkflowActionModal: React.FC<{
             </div>
           </>
         )}
-        {action === 'receive' && !request?.item_id && (
+        {action === 'receive' && request && !request.item_id && (
           // Receipts post stock onto a linked item, and the server refuses one
-          // without (W41-5). Nothing on this page links an item yet, so say so
-          // before the quartermaster fills in a form that can only be refused.
-          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-            This request isn&apos;t linked to an inventory item, so its stock can&apos;t be received here. Receive it
-            against the item itself, then cancel this request.
-          </p>
+          // without (W41-5); link it here first.
+          <div>
+            <span className={lbl}>Inventory item *</span>
+            <InventoryItemPicker
+              value={linkItemId || undefined}
+              placeholder="Search inventory to link…"
+              onChange={(id) => setLinkItemId(id ?? '')}
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              This order isn&apos;t linked to an inventory item yet. Choose the item the stock goes onto; the order
+              stays linked to it.
+            </p>
+          </div>
         )}
-        {action === 'receive' && request?.item_id && (
+        {action === 'receive' && receivingItemId && (
           <>
             <p className="text-theme-text-muted text-sm">
               Ordered {request?.quantity_requested ?? 0} · Received {request?.quantity_received ?? 0} · Outstanding{' '}
@@ -636,7 +678,7 @@ const WorkflowActionModal: React.FC<{
             Back
           </button>
           <button
-            disabled={saving || (action === 'receive' && !request?.item_id)}
+            disabled={saving || (action === 'receive' && !receivingItemId)}
             className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}
           >
             {saving ? 'Saving…' : action && ACTION_LABELS[action]}

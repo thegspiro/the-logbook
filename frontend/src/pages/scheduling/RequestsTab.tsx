@@ -20,10 +20,12 @@ import { EXCHANGE_NOT_QUALIFIED_CODE, REQUEST_STATUS_COLORS, RequestStatus } fro
 import { useConfirm } from '../../contexts/ConfirmContext';
 import type { SwapRequestReview } from '../../modules/scheduling/types';
 import { OpenSwapPickups } from './OpenSwapPickups';
+import { useTablist } from '../../hooks/useTablist';
 
 const REQUESTS_PAGE_SIZE = 20;
 
 export const RequestsTab: React.FC = () => {
+  const tablist = useTablist();
   const { confirm } = useConfirm();
   const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
@@ -264,7 +266,7 @@ export const RequestsTab: React.FC = () => {
     <div className="space-y-6">
       {/* Tab + Filter Bar */}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-input-bg flex rounded-lg p-1" role="tablist" aria-label="Request type">
+        <div className="bg-theme-input-bg flex rounded-lg p-1" role="tablist" {...tablist} aria-label="Request type">
           <button
             type="button"
             role="tab"

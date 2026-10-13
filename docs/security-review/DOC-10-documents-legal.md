@@ -1653,7 +1653,20 @@ transient `LegalDocumentRevision`/`SimpleNamespace` user (no DB needed, since
 the guard reads only `created_by` and the caller's `positions`/`rank`):
 `tests/test_legal_documents.py::TestAssertMayModify`.
 
-### DOC-8 — MED — `LegalDocumentService.list_revisions` is unbounded — 🚩 flagged, not fixed
+### DOC-8 — MED — `LegalDocumentService.list_revisions` is unbounded — ✅ resolved (owner decisions 2026-10-11, 2026-10-12)
+
+**Status (2026-10-12):** both halves are closed by owner decision. Reading was
+paged on 2026-10-11 — the overview carries the first ten drafts and the first
+ten history entries plus their totals, and
+`GET /legal-documents/{document_type}/revisions` serves the rest
+(`tests/test_legal_documents_paging.py`). Creation was capped on 2026-10-12 —
+`LegalDocumentService.create_draft` refuses a member's eleventh open draft
+(status `draft`) per document type with a 400, under a lock on the proposer's
+org-scoped `users` row and a locking count (pitfall #27); publishing or
+withdrawing one frees the slot (`tests/test_legal_documents_draft_cap.py`,
+`tests/test_capacity_locking.py::TestLegalDraftCap`). See the
+`KNOWN_LIMITATIONS.md` entry "Documents — Legal Revision History Is Unbounded".
+The original finding follows unchanged.
 
 `list_revisions` (`legal_service.py:97-103`) runs `.all()` with no SQL
 `LIMIT`/`OFFSET`, and `GET /legal-documents` (`legal_documents.py:65-136`)

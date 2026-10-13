@@ -13,12 +13,14 @@ import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, formCoercions } from '../../../utils/formValues';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
+import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import type {
   InventoryItem,
   InventoryCategory,
   InventoryItemCreate,
   InventoryVendor,
+  ItemVariantGroup,
   StorageAreaResponse,
   Location,
   SizeVariantCreate,
@@ -54,6 +56,8 @@ interface FD {
   purchase_date: string;
   vendor: string;
   vendor_id: string;
+  /** Existing variant group this item belongs to, or '' for none (W40-7). */
+  variant_group_id: string;
   warranty_expiration: string;
   replacement_cost: string;
   location_id: string;
@@ -83,6 +87,7 @@ const EMPTY: FD = {
   purchase_date: '',
   vendor: '',
   vendor_id: '',
+  variant_group_id: '',
   warranty_expiration: '',
   replacement_cost: '',
   location_id: '',
@@ -167,6 +172,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // A failed load leaves the picker empty and the free-text name still usable,
   // so it never blocks adding an item.
   const [vendors, setVendors] = useState<InventoryVendor[]>([]);
+  // Same failure contract as vendors: an empty list leaves the item ungrouped
+  // rather than blocking the save.
+  const [variantGroups, setVariantGroups] = useState<ItemVariantGroup[]>([]);
 
   // Variant generation state (only for new items)
   const [generateVariants, setGenerateVariants] = useState(false);
@@ -191,6 +199,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         setVendors(await inventoryService.getVendors({ active_only: false }));
       } catch {
         setVendors([]);
+      }
+    })();
+    void (async () => {
+      try {
+        // Inactive groups too, for the same reason as vendors: an item already
+        // in a deactivated group must show it rather than read as ungrouped.
+        setVariantGroups(await inventoryService.getVariantGroups(false));
+      } catch {
+        setVariantGroups([]);
       }
     })();
   }, [isOpen]);
@@ -223,6 +240,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         purchase_date: editItem.purchase_date ?? '',
         vendor: editItem.vendor ?? '',
         vendor_id: editItem.vendor_id ?? '',
+        variant_group_id: editItem.variant_group_id ?? '',
         warranty_expiration: editItem.warranty_expiration ?? '',
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
         location_id: editItem.location_id ?? '',
@@ -268,6 +286,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   /** Whether the selected category supports variant generation */
   const supportsVariants = !editItem && VARIANT_ITEM_TYPES.has(itemType);
+  // A lot-stocked item's real count is the sum of its in-date stock lots;
+  // `quantity` is a best-effort mirror that the next delivery's carry-forward
+  // overwrites. Matches MedicalItemFormModal: the form neither shows nor sends
+  // it for such an item (MSUP-15).
+  const isLotStocked = Boolean(editItem?.is_lot_stocked);
 
   // Turn off variant generation when category changes to one that doesn't support it
   useEffect(() => {
@@ -396,6 +419,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         purchase_date: pick(f.purchase_date),
         vendor: isEdit ? blankToNull(f.vendor) : f.vendor.trim() || undefined,
         vendor_id: f.vendor_id || (isEdit ? null : undefined),
+        // W40-7: groups made on the Variant Groups page are filled from here.
+        variant_group_id: pick(f.variant_group_id),
         warranty_expiration: pick(f.warranty_expiration),
         replacement_cost: num(f.replacement_cost),
         location_id: pick(f.location_id),
@@ -411,7 +436,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         // `tracking_type` re-shapes how the item is counted and is not a field
         // a blank box should clear.
         tracking_type: f.tracking_type || undefined,
-        quantity: f.quantity ? Number(f.quantity) : undefined,
+        quantity: isLotStocked ? undefined : f.quantity ? Number(f.quantity) : undefined,
         condition: f.condition || undefined,
         // This form has no Status control, but the backend requires an
         // AVAILABLE item to be in excellent/good/fair condition — so the last
@@ -541,6 +566,35 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   : 'Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number.'}
               </p>
             </div>
+            {/* Generating variants creates and fills a group of its own. */}
+            {!generateVariants && (
+              <div>
+                <label className={lbl} htmlFor="item-variant_group_id">
+                  Variant Group
+                </label>
+                <select
+                  id="item-variant_group_id"
+                  aria-describedby="item-variant_group_id-help"
+                  className={inp}
+                  value={f.variant_group_id}
+                  onChange={(e) => up('variant_group_id', e.target.value)}
+                >
+                  <option value="">— None —</option>
+                  {variantGroups
+                    .filter((g) => g.active || g.id === f.variant_group_id)
+                    .map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                        {g.active ? '' : ' (inactive)'}
+                      </option>
+                    ))}
+                </select>
+                <p id="item-variant_group_id-help" className="text-theme-text-muted mt-1 text-xs">
+                  Puts this item with the other sizes and styles of the same product. Groups are created on Variant
+                  Groups.
+                </p>
+              </div>
+            )}
           </div>
         </fieldset>
 
@@ -963,17 +1017,32 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={lbl} htmlFor="item-quantity">
-                  {generateVariants ? 'Starting Quantity (each)' : 'Quantity'}
-                </label>
-                <input
-                  id="item-quantity"
-                  type="number"
-                  min="0"
-                  className={inp}
-                  value={f.quantity}
-                  onChange={(e) => up('quantity', e.target.value)}
-                />
+                {isLotStocked ? (
+                  <>
+                    <span className={lbl}>Quantity</span>
+                    {/* The field would write `quantity`, a column no lot backs;
+                        an admin "correcting" it to the lot total changes nothing
+                        a reader trusts and is overwritten by the next delivery. */}
+                    <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
+                      {formatNumber(editItem?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or
+                      editing the item&apos;s lots.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label className={lbl} htmlFor="item-quantity">
+                      {generateVariants ? 'Starting Quantity (each)' : 'Quantity'}
+                    </label>
+                    <input
+                      id="item-quantity"
+                      type="number"
+                      min="0"
+                      className={inp}
+                      value={f.quantity}
+                      onChange={(e) => up('quantity', e.target.value)}
+                    />
+                  </>
+                )}
               </div>
               <div>
                 <label className={lbl} htmlFor="item-unit_of_measure">

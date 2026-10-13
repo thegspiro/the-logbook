@@ -31,8 +31,9 @@ def _minutes(**kw):
         quorum_type=kw.get("quorum_type"),
         quorum_threshold=kw.get("quorum_threshold"),
         attendees=kw.get("attendees", []),
-        quorum_met=None,
-        quorum_count=None,
+        quorum_met=kw.get("quorum_met"),
+        quorum_count=kw.get("quorum_count"),
+        status=kw.get("status", "draft"),
     )
 
 
@@ -133,6 +134,42 @@ class TestCountQuorum:
             _db([_one(minutes)])
         ).calculate_quorum("min-1", "org-1")
         assert (met, present, required) == (False, 5, 8)
+
+
+class TestApprovedMinutesAreNotRecalculated:
+    """MM-17: approved minutes keep the quorum result they were ratified
+    with; reading quorum must not rewrite it from today's figures."""
+
+    async def test_stored_result_is_reported_and_not_written(self):
+        minutes = _minutes(
+            status="approved",
+            quorum_type="count",
+            quorum_threshold=8,
+            attendees=_attendees(5),
+            quorum_met=True,
+            quorum_count=9,
+        )
+        db = _db([_one(minutes)])
+        met, present, required, _ = await QuorumService(db).calculate_quorum(
+            "min-1", "org-1"
+        )
+        assert (met, present, required) == (True, 9, 8)
+        assert minutes.quorum_met is True
+        assert minutes.quorum_count == 9
+        db.commit.assert_not_awaited()
+
+    async def test_approved_without_a_stored_result_is_not_written_either(self):
+        minutes = _minutes(
+            status="approved",
+            quorum_type="count",
+            quorum_threshold=5,
+            attendees=_attendees(5),
+        )
+        db = _db([_one(minutes)])
+        met, present, _, _ = await QuorumService(db).calculate_quorum("min-1", "org-1")
+        assert (met, present) == (True, 5)
+        assert minutes.quorum_met is None
+        db.commit.assert_not_awaited()
 
 
 class TestPercentageQuorum:

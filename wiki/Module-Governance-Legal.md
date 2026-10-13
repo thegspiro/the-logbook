@@ -113,6 +113,7 @@ Archived rows are kept permanently.
 | Method   | Path                                                 | Permission                                            |
 | -------- | ---------------------------------------------------- | ----------------------------------------------------- |
 | `GET`    | `/legal-documents`                                   | `legal.propose`, `legal.publish` or `settings.manage` |
+| `GET`    | `/legal-documents/{document_type}/revisions`         | `legal.propose`, `legal.publish` or `settings.manage` |
 | `POST`   | `/legal-documents/revisions`                         | `legal.propose`, `legal.publish` or `settings.manage` |
 | `PUT`    | `/legal-documents/revisions/{id}`                    | `legal.propose`, `legal.publish` or `settings.manage` |
 | `DELETE` | `/legal-documents/revisions/{id}`                    | `legal.propose`, `legal.publish` or `settings.manage` |

@@ -4,12 +4,19 @@
  * Manages RSVP modal form state and submission logic for EventDetailPage.
  */
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { RSVPStatus, Event } from '../types/event';
 import { RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { getErrorDetail, getPhaseGateWarning } from '../utils/errorHandling';
+import {
+  getErrorDetail,
+  getPhaseGateWarning,
+  getSeriesPhaseGateWarning,
+  type PhaseGateOccurrence,
+} from '../utils/errorHandling';
+import { useTimezone } from './useTimezone';
+import { formatDateTime } from '../utils/dateFormatting';
 
 import { useConfirm } from '../contexts/ConfirmContext';
 interface UseRSVPFormOptions {
@@ -18,8 +25,33 @@ interface UseRSVPFormOptions {
   onSuccess: () => Promise<void>;
 }
 
+/**
+ * The series phase-gate confirmation: every ahead-of-phase session, by name and
+ * date, so the member knows which ones they are confirming (EV-23).
+ */
+const seriesPhaseGateMessage = (summary: string, occurrences: PhaseGateOccurrence[], tz: string): React.ReactNode =>
+  React.createElement(
+    'div',
+    { className: 'text-left' },
+    React.createElement('p', null, summary),
+    React.createElement(
+      'ul',
+      { className: 'mt-2 list-disc space-y-1 pl-5' },
+      occurrences.map((occurrence) =>
+        React.createElement(
+          'li',
+          { key: occurrence.event_id },
+          React.createElement('span', { className: 'font-medium' }, occurrence.title),
+          occurrence.start_datetime ? ` — ${formatDateTime(occurrence.start_datetime, tz)}` : ''
+        )
+      )
+    ),
+    React.createElement('p', { className: 'mt-2' }, 'RSVP to the whole series anyway?')
+  );
+
 export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) => {
   const { confirm } = useConfirm();
+  const tz = useTimezone();
   const [showRSVPModal, setShowRSVPModal] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
@@ -136,7 +168,29 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
         };
 
         if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
-          const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
+          let result: { rsvp_count: number };
+          try {
+            result = await eventService.rsvpToSeries(eventId, rsvpPayload);
+          } catch (err) {
+            // EV-23: the series form of the phase gate lists every session
+            // ahead of the member's phase; confirm against that list once,
+            // then retry the whole series with override.
+            const warning = getSeriesPhaseGateWarning(err);
+            if (!warning) throw err;
+            if (
+              !(await confirm({
+                title: 'Sessions ahead of your phase',
+                message: seriesPhaseGateMessage(warning.message, warning.occurrences, tz),
+                confirmLabel: 'RSVP to series',
+                cancelLabel: 'Not now',
+                variant: 'warning',
+              }))
+            ) {
+              setSubmitting(false);
+              return;
+            }
+            result = await eventService.rsvpToSeries(eventId, rsvpPayload, true);
+          }
           toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
         } else {
           try {
@@ -173,6 +227,7 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
     },
     [
       confirm,
+      tz,
       eventId,
       event,
       rsvpStatus,

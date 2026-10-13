@@ -124,6 +124,24 @@ def resolve_attendee_visibility(
 # turns this into a 409 the client can override (proceed anyway).
 PHASE_GATE_PREFIX = "PHASE_GATE::"
 
+
+class SeriesPhaseGateWarning(Exception):
+    """A series RSVP includes sessions ahead of the member's training phase.
+
+    EV-23 (owner decision): the series path warns like the single-event path
+    does, listing *every* ahead-of-phase occurrence so the member sees which
+    sessions they are confirming. ``occurrences`` is a list of
+    ``{"event_id", "title", "start_datetime", "message"}`` with the start as a
+    UTC ISO-8601 string. Nothing has been written when this is raised; the
+    endpoint turns it into a 409 the client confirms and retries with
+    ``override``.
+    """
+
+    def __init__(self, occurrences: List[Dict[str, Any]]):
+        super().__init__(f"{len(occurrences)} series session(s) ahead of phase")
+        self.occurrences = occurrences
+
+
 # Sentinel error prefix for the attendance lock. Finalizing an event closes its
 # attendance: the durations it wrote feed admin hours, training records and
 # compliance totals, so every write that could change those numbers is refused
@@ -2052,6 +2070,7 @@ class EventService:
                     "new_status": entry.new_status,
                     "changed_at": entry.changed_at,
                     "changed_by": entry.changed_by,
+                    "is_automatic": bool(entry.is_automatic),
                     "user_name": user_names.get(entry.user_id, "Unknown"),
                     "changer_name": (
                         user_names.get(entry.changed_by, "Unknown")
@@ -2151,6 +2170,20 @@ class EventService:
         waitlisted_rsvp.status = RSVPStatus.GOING
         waitlisted_rsvp.updated_at = datetime.now(dt_timezone.utc)
 
+        # W19-3: record the promotion in RSVP Activity, marked automatic. A row
+        # with only a null changed_by would read as the member's own change.
+        self.db.add(
+            RSVPHistory(
+                rsvp_id=waitlisted_rsvp.id,
+                event_id=str(event_id),
+                user_id=str(waitlisted_rsvp.user_id),
+                old_status=RSVPStatus.WAITLISTED.value,
+                new_status=RSVPStatus.GOING.value,
+                changed_at=datetime.now(dt_timezone.utc),
+                is_automatic=True,
+            )
+        )
+
         await self.db.commit()
         await self.db.refresh(waitlisted_rsvp)
 
@@ -2183,7 +2216,80 @@ class EventService:
                 e,
             )
 
+        # W19-1: and by email, the channel of record (pitfall 18) — the bell
+        # alone left a member who reads only their inbox unaware they now hold
+        # a seat. Their own "Off the waitlist" email switch is the reader for
+        # it. Non-fatal for the same reason as the bell.
+        try:
+            await self._email_waitlist_promotion(
+                event, str(waitlisted_rsvp.user_id), organization_id
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to email waitlist promotion for user {} event {}: {}",
+                waitlisted_rsvp.user_id,
+                event.id,
+                e,
+            )
+
         return waitlisted_rsvp
+
+    async def _email_waitlist_promotion(
+        self, event: Event, user_id: str, organization_id: UUID | str
+    ) -> bool:
+        """Email a member promoted off *event*'s waitlist, unless they have
+        turned that email off. Returns whether an email was handed to the
+        mailer."""
+        from app.models.location import Location
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            member_receives_email,
+        )
+        from app.services.email_service import EmailService
+
+        user = (
+            await self.db.execute(
+                select(User)
+                .where(User.id == user_id)
+                .where(User.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not user or not user.email:
+            return False
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not member_receives_email(
+            user.notification_preferences,
+            EmailKind.EVENT_WAITLIST,
+            department_required_kinds(org),
+        ):
+            return False
+
+        location_name = event.location
+        if event.location_id:
+            location_name = (
+                await self.db.execute(
+                    select(Location.name)
+                    .where(Location.id == str(event.location_id))
+                    .where(Location.organization_id == str(organization_id))
+                )
+            ).scalar_one_or_none() or location_name
+
+        return await EmailService(organization=org).send_waitlist_promotion_email(
+            to_email=user.email,
+            recipient_name=user.display_name or user.email,
+            event_title=event.title,
+            event_start=event.start_datetime,
+            location_name=location_name,
+            event_url=f"{settings.FRONTEND_URL}/events/{event.id}",
+            db=self.db,
+            organization_id=str(organization_id),
+        )
 
     async def rsvp_to_series(
         self,
@@ -2191,9 +2297,16 @@ class EventService:
         user_id: UUID | str,
         organization_id: UUID | str,
         rsvp_data: RSVPCreate,
+        override: bool = False,
     ) -> int:
         """
         RSVP to all future, non-cancelled events in a recurring series.
+
+        A "going" response is first checked against the training-pipeline
+        phase gate for every occurrence; if any is ahead of the member's
+        phase, :class:`SeriesPhaseGateWarning` lists them all and nothing is
+        written. ``override=True`` (the member confirmed that list) skips the
+        check, as the single-event path's ``override`` does.
 
         Each occurrence goes through :meth:`create_or_update_rsvp` rather than
         being written here directly. This used to hand-roll the insert, which
@@ -2225,9 +2338,33 @@ class EventService:
                     Event.recurrence_parent_id == str(parent_event_id),
                 )
             )
+            .order_by(Event.start_datetime.asc(), Event.id.asc())
         )
         series_events = result.scalars().all()
         event_ids = [event.id for event in series_events]
+
+        # EV-23: the same soft gate an individual RSVP applies, but evaluated
+        # across the whole series before anything is written, so the member
+        # confirms once against the full list rather than per occurrence.
+        if not override and rsvp_data.status == "going":
+            ahead: List[Dict[str, Any]] = []
+            for event in series_events:
+                warning = await self._evaluate_session_phase_warning(event, user_id)
+                if not warning:
+                    continue
+                start = event.start_datetime
+                if start is not None and start.tzinfo is None:
+                    start = start.replace(tzinfo=dt_timezone.utc)
+                ahead.append(
+                    {
+                        "event_id": str(event.id),
+                        "title": event.title,
+                        "start_datetime": start.isoformat() if start else None,
+                        "message": warning,
+                    }
+                )
+            if ahead:
+                raise SeriesPhaseGateWarning(ahead)
 
         rsvp_count = 0
         for event_id in event_ids:
@@ -2236,9 +2373,10 @@ class EventService:
             # skipped rather than failing the batch. The member is answering
             # for the rest of the series, not asking to force one date.
             #
-            # override=True: the member confirmed the training phase-gate
-            # warning once for the series, and there is no way to prompt them
-            # again per occurrence.
+            # override=True: the phase gate was already evaluated for every
+            # occurrence above, and either nothing was ahead or the member
+            # confirmed the list (override). Re-checking per occurrence would
+            # only abort the batch half-way through.
             rsvp, error = await self.create_or_update_rsvp(
                 # Passed through as stored. create_or_update_rsvp stringifies
                 # whatever it is given, so coercing to UUID here would only add
@@ -5202,9 +5340,6 @@ class EventService:
         agg_q = (
             select(
                 func.count(EventRSVP.id).label("total_rsvps"),
-                func.sum(
-                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
-                ).label("going_count"),
                 func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)).label(
                     "checked_in_count"
                 ),
@@ -5214,10 +5349,35 @@ class EventService:
         )
         row = (await self.db.execute(agg_q)).one()
         total_rsvps = row.total_rsvps or 0
-        going_count = row.going_count or 0
         checked_in_count = row.checked_in_count or 0
 
-        avg_attendance_rate = checked_in_count / going_count if going_count > 0 else 0.0
+        # W21-6 (owner decision): "Avg Attendance Rate" is the mean of each
+        # past event's own rate, over events that have ended and had anyone
+        # Going. Pooling every check-in over every Going RSVP counted an
+        # upcoming event's Going members as no-shows, so the figure fell
+        # whenever members RSVP'd ahead, and was not an average at all. The
+        # per-event rate is the same checked-in / Going ratio Top Events
+        # reports below.
+        going_expr = func.sum(case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0))
+        checked_in_expr = func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0))
+        per_event_q = (
+            select(
+                going_expr.label("going_count"),
+                checked_in_expr.label("checked_in_count"),
+            )
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(*rsvp_filter, Event.end_datetime <= datetime.now(dt_timezone.utc))
+            .group_by(Event.id)
+            .having(going_expr > 0)
+        )
+        per_event_rates = [
+            (r.checked_in_count or 0) / r.going_count
+            for r in (await self.db.execute(per_event_q)).all()
+            if r.going_count
+        ]
+        avg_attendance_rate = (
+            sum(per_event_rates) / len(per_event_rates) if per_event_rates else 0.0
+        )
         check_in_rate = checked_in_count / total_rsvps if total_rsvps > 0 else 0.0
 
         # 3) Average check-in time before event start (minutes)

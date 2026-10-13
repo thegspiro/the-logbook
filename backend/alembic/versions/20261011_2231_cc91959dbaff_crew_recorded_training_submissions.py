@@ -21,7 +21,7 @@ the queue as ordinary submissions under the member's name; only the record of
 who filed them, and their grouping, is lost.
 
 Revision ID: cc91959dbaff
-Revises: 390fa30d0200
+Revises: 4d8807bdd737
 Create Date: 2026-10-11 22:31:00.000000
 
 """
@@ -33,7 +33,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "cc91959dbaff"
-down_revision: Union[str, None] = "390fa30d0200"
+down_revision: Union[str, None] = "4d8807bdd737"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

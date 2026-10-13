@@ -29,6 +29,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatNumber } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { EmptyState, PromptDialog } from '../components/ux';
+import { useTablist } from '../hooks/useTablist';
 
 type Tab = 'alerts' | 'exports';
 
@@ -79,6 +80,7 @@ const describeDetail = (value: unknown): string => {
 };
 
 const SecurityAlertsPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canAct = checkPermission('audit.export');
@@ -222,7 +224,7 @@ const SecurityAlertsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="tab-scroll mb-4" role="tablist" aria-label="Security monitoring views">
+      <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Security monitoring views">
         {tabButton('alerts', 'Alerts', <BellRing className="h-4 w-4" aria-hidden="true" />)}
         {tabButton('exports', 'Data exports', <Download className="h-4 w-4" aria-hidden="true" />)}
       </div>

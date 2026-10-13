@@ -2216,6 +2216,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
+            # Adding rooms, the inventory setup wizard's first step (owner
+            # decision, workflow review W38-1). Create only: editing and
+            # deleting rooms stay with whoever manages locations. Written to
+            # stored rows by 20261011 (grant_quartermaster_locations_create).
+            LOCATIONS_CREATE.name,
         ],
     },
     "ems_supply_officer": {

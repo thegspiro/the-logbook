@@ -1194,9 +1194,10 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL        | Page    | Permission     |
-| ---------- | ------- | -------------- |
-| `/reports` | Reports | `reports.view` |
+| URL              | Page          | Permission     |
+| ---------------- | ------------- | -------------- |
+| `/reports`       | Reports       | `reports.view` |
+| `/reports/saved` | Saved Reports | `reports.view` |
 
 ---
 

@@ -20,7 +20,7 @@ import app.services.audit_ship_service as audit_ship_module
 from app.core.audit import _get_audit_signing_key, audit_logger
 from app.core.config import settings
 from app.core.database import database_manager
-from app.models.audit import AuditLog, AuditShipState
+from app.models.audit import AuditChainHead, AuditLog, AuditShipState
 from app.services.audit_ship_service import ship_new_audit_logs
 
 pytestmark = pytest.mark.integration
@@ -45,6 +45,9 @@ async def _write_logs(db, count: int) -> list:
             event_data={"i": i},
         )
         rows.append(row)
+    # Only sealed rows ship. Sealed in this session, because db_session's
+    # rows are uncommitted and no other session could see them.
+    await audit_logger.seal_pending(db)
     return rows
 
 
@@ -96,8 +99,9 @@ class TestAuditShipping:
         ).hexdigest()
         assert captured[0].headers["X-Logbook-Signature"] == f"sha256={expected_sig}"
         assert captured[0].headers["X-Logbook-Last-Id"] == str(rows[-1].id)
+        assert captured[0].headers["X-Logbook-Last-Seq"] == str(rows[-1].chain_seq)
 
-        assert await _watermark(db_session) == rows[-1].id
+        assert await _watermark(db_session) == rows[-1].chain_seq
 
     async def test_failed_delivery_does_not_advance_watermark(
         self, db_session, monkeypatch
@@ -159,7 +163,7 @@ class TestAuditShipping:
         assert result["shipped_entries"] == 3
         assert result["batches"] == 3
         assert len(captured) == 3
-        assert await _watermark(db_session) == rows[-1].id
+        assert await _watermark(db_session) == rows[-1].chain_seq
 
 
 @pytest.mark.usefixtures("_initialize_database")
@@ -185,7 +189,7 @@ class TestConcurrentShipRuns:
         async with database_manager.session_factory() as setup:
             rows = await _write_logs(setup, 4)
             await setup.commit()
-            last_id = rows[-1].id
+            last_seq = rows[-1].chain_seq
             # Pre-create the watermark row so this test exercises only the
             # locked steady-state read, not the (separate, far narrower)
             # first-ever-row creation race.
@@ -225,7 +229,7 @@ class TestConcurrentShipRuns:
             assert delivered_ids == {row.id for row in rows}
 
             async with database_manager.session_factory() as verify:
-                assert await _watermark(verify) == last_id
+                assert await _watermark(verify) == last_seq
         finally:
             await session_a.rollback()
             await session_b.rollback()
@@ -238,6 +242,9 @@ class TestConcurrentShipRuns:
             # that runs after it in this session.
             async with database_manager.session_factory() as cleanup:
                 await cleanup.execute(delete(AuditShipState))
+                # The head now points at rows deleted below; left behind, the
+                # next sealed row would link to a hash no row carries.
+                await cleanup.execute(delete(AuditChainHead))
                 await cleanup.execute(
                     delete(AuditLog).where(AuditLog.id.in_([row.id for row in rows]))
                 )

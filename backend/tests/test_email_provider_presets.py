@@ -3354,7 +3354,7 @@ class TestOnboardingSelfHostedLogin:
         with (
             patch("app.api.v1.onboarding.validate_session", AsyncMock()),
             patch(
-                "app.api.v1.onboarding.test_smtp_connection",
+                "app.api.v1.onboarding.test_smtp_connection_uniform",
                 return_value=(True, "SMTP connection successful", {}),
             ) as smtp_test,
         ):

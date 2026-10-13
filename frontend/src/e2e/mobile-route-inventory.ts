@@ -1194,6 +1194,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet — reports hub',
   },
   {
+    path: '/reports/saved',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — saved and scheduled reports',
+  },
+  {
     path: '/scheduling',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',

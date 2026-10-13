@@ -1418,6 +1418,13 @@ You do not need to re-enter the payment method or notes from an earlier
 installment. Leaving them blank records this payment without them; it no longer
 erases what the previous payment said.
 
+**You cannot record a payment against your own dues.** Settling dues is a money
+movement, so — like waiving them — it needs a second person: another
+`finance.manage` holder records it, and the request is refused with a message
+saying so. This is a same-person check only; there is no separate disbursement
+permission, so anyone who holds `finance.manage` may record a payment for any
+other member.
+
 ### Payment History
 
 **Required Permission:** `finance.view`

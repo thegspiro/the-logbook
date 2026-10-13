@@ -34,12 +34,12 @@ it only fires when ``current_step`` itself governed the policy
 (``election_step is current_step``), which is never true once this fallback
 is reached.
 
-The remaining, narrower residual case — a pipeline with multiple
-``election_vote`` stages where neither ``current_step`` nor a supplied
-``step_id`` identifies one of them (``step_id`` omitted, or naming a
-non-election step) — is still genuinely ambiguous by construction and stays
-documented, not "fixed", in ``docs/security-review/MP-08-membership-
-pipeline.md`` and ``docs/KNOWN_LIMITATIONS.md``.
+The remaining case — a pipeline with multiple ``election_vote`` stages
+where neither ``current_step`` nor a supplied ``step_id`` identifies one of
+them (``step_id`` omitted, or naming a non-election step) — used to fall
+through to the sort-order guess. MP-26 (owner decision 2026-10-05) makes it
+an ``ElectionStageAmbiguousError`` (422 at the endpoint) instead, so the two
+tests that pinned the guess now pin the refusal.
 """
 
 import uuid
@@ -48,7 +48,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.membership_pipeline_service import (
+    ElectionStageAmbiguousError,
+    MembershipPipelineService,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -212,13 +215,13 @@ class TestElectionPackageFallbackPrefersAValidatedStepId:
         assert pkg.applicant_snapshot["phone"] == "555-0100"
         assert pkg.applicant_snapshot["address_street"] == "1 Main St"
 
-    async def test_wrong_type_step_id_still_falls_through_to_the_sort_order_guess(
+    async def test_wrong_type_step_id_is_refused_when_stages_are_ambiguous(
         self, db_session: AsyncSession, org_and_admin
     ):
-        """Regression guard: a step_id naming a real, in-pipeline step that
-        is *not* an election_vote step must not be trusted as the policy
-        source -- it still falls through to the existing sort-order
-        fallback, exactly as the pass-4 "wrong step_id" case requires."""
+        """A step_id naming a real, in-pipeline step that is *not* an
+        election_vote step is still not trusted as the policy source, and
+        with two election stages there is no longer a guess to fall back
+        to: the request is refused (MP-26)."""
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, permissive_step, _strict, onboarding_step = (
@@ -229,21 +232,17 @@ class TestElectionPackageFallbackPrefersAValidatedStepId:
         prospect.current_step_id = onboarding_step.id
         await db_session.flush()
 
-        pkg = await svc.create_election_package(
-            prospect.id, org_id, step_id=onboarding_step.id, created_by=admin_id
-        )
+        with pytest.raises(ElectionStageAmbiguousError):
+            await svc.create_election_package(
+                prospect.id, org_id, step_id=onboarding_step.id, created_by=admin_id
+            )
 
-        # Falls through to the sort-order guess, which picks the first
-        # configured election_vote step -- the permissive one -- unchanged
-        # from pass 4 / round 2 behavior.
-        assert pkg.applicant_snapshot["phone"] == "555-0100"
-
-    async def test_omitted_step_id_still_falls_through_to_the_sort_order_guess(
+    async def test_omitted_step_id_is_refused_when_stages_are_ambiguous(
         self, db_session: AsyncSession, org_and_admin
     ):
-        """Regression guard: the residual ambiguous case (no step_id, no
-        current_step match, multiple election_vote steps) is unchanged --
-        still a best-effort sort-order guess, not an error."""
+        """The formerly-guessed case (no step_id, no current_step match,
+        multiple election_vote steps) is now an error naming what is
+        missing, not a sort-order guess (MP-26)."""
         org_id, admin_id = org_and_admin
         svc = MembershipPipelineService(db_session)
         pipeline, permissive_step, _strict, onboarding_step = (
@@ -254,11 +253,8 @@ class TestElectionPackageFallbackPrefersAValidatedStepId:
         prospect.current_step_id = onboarding_step.id
         await db_session.flush()
 
-        pkg = await svc.create_election_package(
-            prospect.id, org_id, created_by=admin_id
-        )
-
-        assert pkg.applicant_snapshot["phone"] == "555-0100"
+        with pytest.raises(ElectionStageAmbiguousError):
+            await svc.create_election_package(prospect.id, org_id, created_by=admin_id)
 
     async def test_single_election_vote_stage_fallback_is_unaffected(
         self, db_session: AsyncSession, org_and_admin

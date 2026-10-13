@@ -97,6 +97,14 @@ export const GrantApplicationFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   const [searchParams] = useSearchParams();
+  const [savedStatus, setSavedStatus] = useState<string | null>(null);
+  // null until an existing application has loaded (and always on create,
+  // where any starting status may be recorded).
+  const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[] | null>(null);
+  const statusOptions =
+    isEditing && savedStatus && allowedNextStatuses
+      ? APPLICATION_STATUS_OPTIONS.filter((opt) => opt.value === savedStatus || allowedNextStatuses.includes(opt.value))
+      : APPLICATION_STATUS_OPTIONS;
   // Read once at mount, not from state — the mount effect below needs this
   // exact value without re-running every time formData.opportunityId changes
   // (e.g. as the user picks a different one from the dropdown).
@@ -158,6 +166,10 @@ export const GrantApplicationFormPage: React.FC = () => {
         try {
           setIsLoading(true);
           const app: GrantApplication = await grantsService.getApplication(id);
+          // GF-7: the statuses this grant may move to come from the server's
+          // lifecycle; the picker offers those plus where it is now.
+          setSavedStatus(app.applicationStatus);
+          setAllowedNextStatuses(app.allowedNextStatuses ?? null);
           setFormData({
             grantProgramName: app.grantProgramName,
             grantAgency: app.grantAgency,
@@ -364,12 +376,15 @@ export const GrantApplicationFormPage: React.FC = () => {
                 onChange={handleChange}
                 className={selectClass}
               >
-                {APPLICATION_STATUS_OPTIONS.map((opt) => (
+                {statusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
               </select>
+              {isEditing && allowedNextStatuses?.length === 0 && (
+                <p className="text-theme-text-secondary mt-1 text-xs">This status is final.</p>
+              )}
             </div>
             <div>
               <label htmlFor="priority" className={labelClass}>

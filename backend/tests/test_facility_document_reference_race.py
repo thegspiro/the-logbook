@@ -371,7 +371,11 @@ class TestReferenceInsertStaysUnderTheDocumentLock:
             # do before they insert the reference row -- validate, and (this
             # document has no folder yet) assign one.
             await _validate_shared_document_reference(
-                creator, f"document:{document_id}", creator_user, str(facility_id)
+                creator,
+                f"document:{document_id}",
+                creator_user,
+                str(facility_id),
+                "documents",
             )
 
             # Step 2: a second, real session races the gap between that
@@ -819,6 +823,7 @@ class TestCreatorLocksTheFolderBeforeTheDocument:
                         f"document:{document_id}",
                         creator_user,
                         str(facility_id),
+                        "documents",
                     )
                 )
                 await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
@@ -925,6 +930,7 @@ class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
                         f"document:{document_id}",
                         creator_user,
                         str(facility_id),
+                        "documents",
                     )
                 )
                 await asyncio.wait_for(about_to_lock_document.wait(), timeout=10)

@@ -44,6 +44,7 @@ import {
   rollUpRequirements,
 } from './training/complianceMatrixModel';
 import type { EvaluatedCell, EvaluatedMember, RequirementRollup } from './training/complianceMatrixModel';
+import { useTablist } from '../hooks/useTablist';
 
 type Axis = 'members' | 'requirements';
 type Sort = 'worst' | 'az';
@@ -169,6 +170,7 @@ const StatTile: React.FC<{ label: string; value: string; note: string }> = ({ la
 );
 
 const ComplianceMatrixTab: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
   const [matrix, setMatrix] = useState<ComplianceMatrix | null>(null);
@@ -421,7 +423,12 @@ const ComplianceMatrixTab: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="segmented-group-secondary hscroll flex" role="tablist" aria-label="Matrix axis">
+            <div
+              className="segmented-group-secondary hscroll flex"
+              role="tablist"
+              {...tablist}
+              aria-label="Matrix axis"
+            >
               {(
                 [
                   ['members', 'By member'],

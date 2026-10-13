@@ -72,14 +72,15 @@ morning — and it changes how you should plan the install.
 > resumable](#a-lapsed-setup-is-now-resumable-2026-09-11) below. The table
 > reflects the current behaviour.
 
-| What you do                                               | What happens                                                                                                           |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                                    |
-| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                                          |
-| **Close the browser** partway through and come back       | **Resumable.** A fresh session is issued — but once the administrator account exists, **only that account may resume** |
-| Leave it sitting for **more than 30 minutes**             | **Resumable.** The server session still expires on its own; reopening the wizard issues a new one                      |
-| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup                     |
-| See "you are not the System Owner"                        | Setup got as far as creating the administrator account. Sign in as that account and resume                             |
+| What you do                                               | What happens                                                                                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Finish the wizard in one tab without closing it           | Normal path. Nothing to think about                                                                                                    |
+| Open `/onboarding` in a **second tab** to check something | That tab starts its own new session. The step you were on will refuse to save                                                          |
+| **Close the browser** partway through and come back       | **Resumable.** A fresh session is issued — but once the administrator account exists, **only that account may resume**                 |
+| Leave it sitting for **more than 30 minutes**             | **Resumable.** The server session still expires on its own; reopening the wizard issues a new one                                      |
+| Keep setup open for **more than 24 hours** _(2026-10-11)_ | **Resumable.** A session ends 24 hours after it began however active it is; refresh the page and a new one picks up your saved answers |
+| See "Onboarding has already been completed"               | This is **not** an expired session. A department already exists; sign in instead of starting setup                                     |
+| See "you are not the System Owner"                        | Setup got as far as creating the administrator account. Sign in as that account and resume                                             |
 
 **The thing to teach:** your typed answers are saved separately and are _not_
 cleared, so the form comes back filled in. Until 2026-09-11 the session behind
@@ -179,6 +180,25 @@ the rest. Every checkbox grants a permission that exists, and unticking one on a
 seeded position removes it.
 
 ![Step 4's permission rows for Chief, with 13 unenabled modules hidden and a Show all modules control](./images/20-10-onboarding-permission-rows.png)
+
+**What step 4 will not save** _(2026-10-11)_. A built-in position keeps the
+rank order the system gives it, and a custom position you add is always ranked
+below the IT Manager (the System Owner's position). A custom position cannot
+use the name of a built-in one — "Fire Chief" when Chief exists, or "Member" —
+because it would take over that position; tick the built-in position instead,
+or name yours differently. The save is refused with a message naming the
+position, and nothing from that save is stored.
+
+**Testing an SMTP server in step 8** _(2026-10-11)_. When **SMTP (any
+provider)** is tested and nothing answering as a mail server could be reached
+— a wrong address, a closed port, a host that does not exist, or something on
+that port that is not SMTP — the wizard gives one answer: _Could not reach an
+SMTP server with these settings_, with the port and encryption to check. It
+does not say which of those it was, because during setup the test can be
+pointed at any address on your network. The exact cause is in the backend log
+(`Onboarding SMTP test could not reach …`). Once a mail server answers, a
+refused password or a TLS mismatch is reported as specifically as before, and
+**Settings → Email → Test Connection** after setup keeps its detailed messages.
 
 ---
 
@@ -603,21 +623,21 @@ Each card says what the report contains _(descriptions rewritten 2026-09-29 to
 match what each report actually returns)_. Cards marked **Date Range** cover the
 reporting period set at the top of the page; the others are a snapshot of now.
 
-| Report                       | Category   | Date Range | What it contains                                                                               |
-| ---------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| **Member Roster**            | Member     |            | Every member, active and inactive, with email, rank, station, and roles                        |
-| **Training Summary**         | Training   | ✓          | Training hours and completion rates by member, course, and requirement                         |
-| **Event Attendance**         | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                    |
-| **Training Progress**        | Training   |            | Each member's progress through their training programs and requirements                        |
-| **Annual Training Report**   | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member        |
-| **Admin Hours Report**       | Admin      | ✓          | Administrative hours logged by members, broken down by category                                |
-| **Department Overview**      | Compliance | ✓          | Department totals for members, training, events, and open action items                         |
-| **Certification Expiration** | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones         |
-| **Compliance Status**        | Compliance |            | Each member's compliance with training requirements, with overdue items and upcoming deadlines |
-| **Fleet / Apparatus Status** | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                            |
-| **Inventory Status**         | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                         |
-| **Incident / Call Volume**   | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                 |
-| **Pipeline Overview**        | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source             |
+| Report                                  | Category   | Date Range | What it contains                                                                                                                                            |
+| --------------------------------------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Member Roster**                       | Member     |            | Every member, active and inactive, with email, rank, station, and roles                                                                                     |
+| **Training & Program Progress Summary** | Training   | ✓          | Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance                        |
+| **Event Attendance**                    | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                                                                                 |
+| **Training Progress**                   | Training   |            | Each member's progress through their training programs and requirements                                                                                     |
+| **Annual Training Report**              | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member                                                                     |
+| **Admin Hours Report**                  | Admin      | ✓          | Administrative hours logged by members, broken down by category                                                                                             |
+| **Department Overview**                 | Compliance | ✓          | Department totals for members, training, events, and open action items                                                                                      |
+| **Certification Expiration**            | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones                                                                      |
+| **Program Requirement Progress**        | Compliance |            | Each member's progress on training requirements through their training programs, with outstanding items and upcoming deadlines — not requirement compliance |
+| **Fleet / Apparatus Status**            | Operations |            | Vehicle status, inspection due dates, mileage, and open work orders                                                                                         |
+| **Inventory Status**                    | Operations |            | Stock levels, assigned equipment, and low-stock alerts                                                                                                      |
+| **Incident / Call Volume**              | Operations | ✓          | Call volume trends, incident type breakdown, and peak activity                                                                                              |
+| **Pipeline Overview**                   | Member     | ✓          | Applicants in the prospective member pipeline, by stage, year, and referral source                                                                          |
 
 > **Corrected 2026-09-29.** Three of the old descriptions were wrong, not just
 > loose: the roster includes inactive members (it said "all active members"),
@@ -626,6 +646,28 @@ reporting period set at the top of the page; the others are a snapshot of now.
 > empty state now reads _"No training program enrollments found."_ Two column
 > headings were renamed: **Days Left** (was Days Until) on the certification
 > and apparatus reports, and **Open Work Orders** (was Open WOs).
+
+> **Renamed 2026-10-11 — two reports measure program progress, not
+> compliance.** **Program Requirement Progress** (was _Compliance Status_) and
+> the requirement tab of the **Training & Program Progress Summary** (was
+> _Training Summary_) count a requirement as met when the member's
+> **training-program enrollment** marked it complete. That is a different
+> question from the requirement compliance the **Training dashboard** and the
+> **compliance matrix** answer — which look at the member's training records in
+> each requirement's window — so the two can disagree, and for a department
+> that does not run its annual requirements through training programs they
+> will. The owner chose to label the reports for what they measure rather than
+> change their figures. On the Program Requirement Progress report the buckets
+> now read **All Requirements Met**, **Some Met** and **None Met**, the
+> percentage column **Program Progress**, and the overdue column
+> **Outstanding**. For requirement compliance, use the Training dashboard.
+>
+> The summary's **Program Progress by Requirement** tab now leaves out a member
+> a requirement does not apply to — including one who joined before the
+> requirement's cutoff date, or who is still inside its catch-up period — the
+> way Program Requirement Progress already did. Those members used to count as
+> not having met it, so a requirement's percentage can rise where grandfathering
+> is in use. Its CSV export also drops a "Compliance %" column that was always 0.
 
 ### Generating a Report
 
@@ -648,6 +690,50 @@ evening. Since 2026-10-11 a custom range is read the same way: "June 1 to
 June 15" means midnight June 1 to the end of June 15 on the department's own
 clock, in every report and in the grant and fundraising reports. A department
 with no timezone set reads its ranges in UTC.
+
+### Saved and Scheduled Reports _(2026-10-11)_
+
+**Required Permission:** `reports.view` to see and run saved reports;
+`reports.manage` to save, schedule, edit or delete them.
+
+Open **Reports > Saved reports** (`/reports/saved`). Each saved report shows
+its report, its reporting period, its schedule, the date of the next email and
+when it last ran.
+
+- **Run** opens the report on the Reports page with the saved settings, the way
+  **Generate Report** does. A saved report of a type your permissions do not
+  cover is listed but has no **Run** button.
+- **New saved report** / **Edit**: a name, the report (only the reports you can
+  run are offered), and a **Reporting period** — _Last 30 days_, _Previous
+  month_, _Previous quarter_, _Year to date_ or _Previous year_ — worked out on
+  the day the report runs, so a monthly email always covers the month just
+  ended. Tick **Email this report on a schedule** and choose **Daily**,
+  **Weekly** (and the day), **Monthly** or **Quarterly** (and the day of the
+  month; 29–31 fall on a shorter month's last day; quarterly sends in January,
+  April, July and October), and up to 25 addresses.
+- **Delete** asks first, and stops the schedule.
+
+**What the email contains.** A summary — the report's totals and figures and a
+**Open saved reports** link — never a list of members. The full report opens in
+the app, where the reader's own access applies.
+
+**Reports that list member data can only be emailed to members allowed to see
+that data.** The roster, the applicant pipeline, the training reports and the
+admin-hours report each need the permission that guards the same records
+(`members.view`, `prospective_members.view`, `training.manage`,
+`admin_hours.manage`). For those reports every recipient must be an active
+member of the department holding it — an outside address, or a member without
+it, is refused when you save, with the addresses named. Other reports (fleet,
+inventory, events, call volume, the department overview) may go to an outside
+address; that send is recorded in the audit log.
+
+**If the person who scheduled a member-data report later loses its
+permission, the emails stop** until someone who holds it saves the schedule
+again. A recipient who loses the permission is left off the next email.
+
+**Upgrading:** a report scheduled through the API before 2026-10-11 (no screen
+offered it) gets its first email at its next scheduled date, not on the day of
+the upgrade.
 
 ### Pipeline Overview Report (2026-03-15)
 
@@ -716,7 +802,13 @@ Navigate to **Settings > Public Portal** (`/admin/public-portal`) to control wha
   data."_ A new key is shown once (**API Key Created**); revoking cuts off
   whatever uses it immediately.
 - **Access Logs** — every request to the public API, rejected ones included,
-  newest first.
+  newest first. _(2026-10-11)_ A refused sign-in is now recorded too: a
+  request using one of **your** keys that has been revoked or has expired
+  appears here as a 401 ("Revoked API key", "Expired API key"). A request with
+  a key that belongs to no department — a guess, a typo, a key from another
+  system — is recorded where only the server operator can see it, not on any
+  department's tab; it still counts towards the suspicious-activity check, so a
+  run of failed keys from one address is flagged.
 - **Statistics** — traffic over the last 24 hours and 7 days, error rate,
   rate-limit hits and suspicious requests, with an **Attention Required**
   banner when one crosses its threshold. _(2026-09-24)_ Before this the tab
@@ -3013,6 +3105,17 @@ publish; publishing to the second group only._
   `legal.publish`.
 - **There is no approval queue.** Saving a draft notifies nobody. Review before
   publishing is a process you run, not a workflow the module enforces.
+- **Long lists come ten at a time** _(2026-10-11)_. **Proposed revisions**
+  and **Published history** each show the newest ten. The heading still counts
+  every proposal, and below the list "Showing 10 of _N_" sits beside **Load
+  more proposals** (or **Load more versions**), which adds the next ten. A
+  publish, edit or discard reloads the screen back to the first ten.
+- **Ten open proposals per person, per document** _(2026-10-12)_. A member can
+  have at most ten drafts open against the privacy notice and ten against the
+  terms at once. An eleventh is refused with "You already have 10 open
+  proposals for … Publish or withdraw one first." Publishing one of them, or
+  discarding it, frees the slot. The limit counts only your own drafts: another
+  officer's proposals never count against you.
 
 ![The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out](./images/08-78-legal-revision-history.png)
 
@@ -3186,6 +3289,14 @@ January 1 to today, not the last 365 days.
   (hours)** and **Max hours per session** are set on each category in the
   **Categories** tab. What the summary ranks is hours logged, not the limits
   they were logged under.
+- **A session that runs past its category's Max hours per session is closed
+  for the member** _(2026-10-11)_. Every 30 minutes the system caps a
+  forgotten clock-in at the limit, sets it to Pending Review and notes
+  "Auto-closed: exceeded _N_h session limit" on the entry. Each one is also
+  written to the audit log as its own `admin_hours.session_auto_closed`
+  event — the member, the entry, the capped times and whether the scheduled
+  run or an officer's **Close Stale Sessions** (Categories tab) did it — so a disputed session
+  can be looked up on its own.
 
 <!-- Screenshot needed:
 _[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_

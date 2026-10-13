@@ -182,6 +182,7 @@ from app.schemas.inventory import (
     SizeVariantCreateResponse,
     StorageAreaCreate,
     StorageAreaResponse,
+    StorageAreaScanHit,
     StorageAreaUpdate,
     UnassignItemRequest,
     UnlinkedVendorName,
@@ -2727,11 +2728,14 @@ async def get_item_maintenance_history(
     item_id: UUID,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    open_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
     Get maintenance history for an item
+
+    ``open_only=true`` returns only records not yet completed, oldest first.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -2742,6 +2746,7 @@ async def get_item_maintenance_history(
         organization_id=current_user.organization_id,
         skip=skip,
         limit=limit,
+        open_only=open_only,
     )
     responses = []
     for record in maintenance_records:
@@ -3357,6 +3362,9 @@ async def lookup_item_by_code(
     """
     Search inventory items by barcode, serial number, asset tag, or name.
 
+    ``storage_areas`` lists active storage areas whose label barcode is exactly
+    the code, so a scanned shelf label resolves to its shelf.
+
     Supports partial matching — type part of a barcode, serial number,
     asset tag, or item name to see all matching items. Searches barcode
     first, then serial number, then asset tag, then name.
@@ -3379,8 +3387,15 @@ async def lookup_item_by_code(
         )
         for item, matched_field, matched_value in matches
     ]
+    areas = await service.find_storage_areas_by_code(
+        code=code, organization_id=current_user.organization_id
+    )
 
-    return ScanLookupListResponse(results=results, total=len(results))
+    return ScanLookupListResponse(
+        results=results,
+        total=len(results),
+        storage_areas=[StorageAreaScanHit.model_validate(area) for area in areas],
+    )
 
 
 @router.post("/distribute-items", response_model=DistributeItemsResponse)
@@ -6407,6 +6422,8 @@ async def review_return_request(
 ):
     """
     Approve or deny a return request. On approval, the actual return is executed.
+    ``inspected`` completes a notice a direct return already marked received,
+    recording the inspection without moving stock again.
 
     **Authentication required**
     **Requires permission: inventory.manage**
@@ -6438,6 +6455,7 @@ async def review_return_request(
         event_data={
             "return_request_id": str(request_id),
             "decision": data.status,
+            "observed_condition": data.observed_condition,
         },
         user_id=str(current_user.id),
         username=current_user.username,

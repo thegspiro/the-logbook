@@ -267,6 +267,21 @@ class MeetingsService:
             if not meeting:
                 return None, "Meeting not found"
 
+            # MM-9: approval is recorded only by approve_meeting, which stamps
+            # approved_by/approved_at and requires PENDING_APPROVAL first. A
+            # plain edit flipping status to approved would mark the record
+            # ratified with no approver and no timestamp. Re-sending the
+            # current status on an already-approved meeting is not a
+            # transition, so it is allowed.
+            if (
+                update_data.get("status") == MeetingStatus.APPROVED.value
+                and meeting.status != MeetingStatus.APPROVED
+            ):
+                return None, (
+                    "A meeting cannot be marked approved by editing it; submit it "
+                    "for approval and use Approve instead"
+                )
+
             apply_updates(meeting, update_data, skip={"organization_id", "id"})
 
             await self.db.commit()
@@ -300,6 +315,17 @@ class MeetingsService:
             meeting = await self.get_meeting_by_id(meeting_id, organization_id)
             if not meeting:
                 return None, "Meeting not found"
+
+            # MM-9 (owner decision): approval stays a single-actor action, but
+            # only from PENDING_APPROVAL, so a draft is submitted before it is
+            # approved and an approved record is not re-stamped.
+            if meeting.status != MeetingStatus.PENDING_APPROVAL:
+                if meeting.status == MeetingStatus.APPROVED:
+                    return None, "This meeting is already approved"
+                return None, (
+                    "Only a meeting pending approval can be approved; submit it "
+                    "for approval first"
+                )
 
             meeting.status = MeetingStatus.APPROVED
             meeting.approved_by = str(approved_by)

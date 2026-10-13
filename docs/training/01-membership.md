@@ -2033,7 +2033,12 @@ _"These tiers have not been saved yet — nothing reads them until you do."_
 
 - **A tier that members hold cannot be removed.** Each row shows how many
   members hold that tier. The remove button stays greyed out while that number
-  is above zero. Move those members to another tier first.
+  is above zero. Move those members to another tier first. The check is made
+  again when you save, against the roster at that moment — so if automatic
+  advancement has just moved someone onto the tier you removed, the save is
+  refused and names it. _(2026-10-11)_ While an advancement run is in progress,
+  **Save tiers** waits for it to finish (normally under a second) rather than
+  saving alongside it.
 - **Renaming is safe.** Changing a tier's name does not move anyone off it.
 - **Higher tiers need at least as many years as lower ones.** If a tier sits
   above another but needs fewer years, the save is refused. The message

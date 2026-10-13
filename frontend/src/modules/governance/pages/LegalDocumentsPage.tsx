@@ -9,10 +9,12 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { LEGAL_SECTIONS, toPlainText } from '../../../pages/legal/legalContent';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { RevisionEditorModal } from '../components/RevisionEditorModal';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
 import { LEGAL_DOCUMENT_LABEL, LegalDocumentType, type LegalDocumentState, type LegalRevision } from '../types/legal';
+import { useTablist } from '../../../hooks/useTablist';
 
 /**
  * Governance -> Legal Documents.
@@ -79,7 +81,35 @@ const RevisionCard: React.FC<{
   </li>
 );
 
+/**
+ * Drafts and history arrive a page at a time (DOC-8): each revision carries a
+ * full document body, and a department's proposal history only grows.
+ */
+const LoadMore: React.FC<{
+  shown: number;
+  total: number;
+  noun: string;
+  loading: boolean;
+  onLoadMore: () => void;
+}> = ({ shown, total, noun, loading, onLoadMore }) =>
+  shown < total ? (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        className="btn-icon flex items-center gap-2 px-3 text-sm"
+        onClick={onLoadMore}
+        disabled={loading}
+      >
+        {loading ? 'Loading…' : `Load more ${noun}`}
+      </button>
+      <p className="text-theme-text-muted text-xs">
+        Showing {shown} of {total}
+      </p>
+    </div>
+  ) : null;
+
 const LegalDocumentsPage: React.FC = () => {
+  const tablist = useTablist();
   const timezone = useTimezone();
   const { confirm } = useConfirm();
   const currentUser = useAuthStore((s) => s.user);
@@ -94,6 +124,8 @@ const LegalDocumentsPage: React.FC = () => {
     deleteRevision,
     publishRevision,
     revertToDefault,
+    loadMore,
+    loadingMore,
   } = useLegalDocumentsStore();
 
   const [activeType, setActiveType] = useState<LegalDocumentType>(LegalDocumentType.PRIVACY_POLICY);
@@ -170,8 +202,8 @@ const LegalDocumentsPage: React.FC = () => {
       }
       toast.success('Draft saved. It is not public until it is published.');
       setEditor(null);
-    } catch {
-      toast.error('Could not save the draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save the draft'));
     }
   };
 
@@ -188,8 +220,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await publishRevision(revision.id);
       toast.success(`${label} published`);
-    } catch {
-      toast.error('Could not publish the revision');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not publish the revision'));
     }
   };
 
@@ -205,8 +237,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await deleteRevision(revision.id);
       toast.success('Draft discarded');
-    } catch {
-      toast.error('Could not discard the draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not discard the draft'));
     }
   };
 
@@ -223,8 +255,8 @@ const LegalDocumentsPage: React.FC = () => {
     try {
       await revertToDefault(doc.documentType);
       toast.success(`${label} reverted to the built-in text`);
-    } catch {
-      toast.error('Could not revert the document');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not revert the document'));
     }
   };
 
@@ -247,7 +279,7 @@ const LegalDocumentsPage: React.FC = () => {
         </p>
       ) : null}
 
-      <div className="tab-scroll" role="tablist" aria-label="Legal documents">
+      <div className="tab-scroll" role="tablist" {...tablist} aria-label="Legal documents">
         {DOCUMENT_ORDER.map((documentType) => (
           <button
             key={documentType}
@@ -343,9 +375,7 @@ const LegalDocumentsPage: React.FC = () => {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-theme-text-primary text-lg font-semibold">
-              Proposed revisions ({active.drafts.length})
-            </h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">Proposed revisions ({active.draftsTotal})</h2>
             {active.drafts.length === 0 ? (
               <EmptyState
                 headingLevel={3}
@@ -368,9 +398,16 @@ const LegalDocumentsPage: React.FC = () => {
                 ))}
               </ul>
             )}
+            <LoadMore
+              shown={active.drafts.length}
+              total={active.draftsTotal}
+              noun="proposals"
+              loading={loadingMore === `${active.documentType}:drafts`}
+              onLoadMore={() => void loadMore(active.documentType, 'drafts')}
+            />
           </section>
 
-          {active.history.length > 0 ? (
+          {active.historyTotal > 0 ? (
             <section className="space-y-3">
               <h2 className="text-theme-text-primary text-lg font-semibold">Published history</h2>
               <p className="text-theme-text-secondary text-sm">
@@ -398,6 +435,13 @@ const LegalDocumentsPage: React.FC = () => {
                   </li>
                 ))}
               </ul>
+              <LoadMore
+                shown={active.history.length}
+                total={active.historyTotal}
+                noun="versions"
+                loading={loadingMore === `${active.documentType}:history`}
+                onLoadMore={() => void loadMore(active.documentType, 'history')}
+              />
             </section>
           ) : null}
         </div>

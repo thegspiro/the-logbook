@@ -1113,6 +1113,9 @@ class RSVPHistoryResponse(UTCResponseBase):
     new_status: str
     changed_at: datetime
     changed_by: Optional[UUID] = None
+    # True when the system made the change (an automatic waitlist promotion);
+    # changed_by is null then and does not mean the member did it.
+    is_automatic: bool = False
 
     # Populated by service
     user_name: Optional[str] = None
