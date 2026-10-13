@@ -109,23 +109,24 @@ async def _reference_names(
     apparatus: dict[str, str] = {}
     stations: dict[str, str] = {}
     if apparatus_ids:
-        rows = await db.execute(
+        apparatus_rows = await db.execute(
             select(Apparatus).where(
                 Apparatus.organization_id == organization_id,
                 Apparatus.id.in_(apparatus_ids),
             )
         )
         apparatus = {
-            a.id: a.unit_number or a.name or a.id for a in rows.scalars().all()
+            a.id: a.unit_number or a.name or a.id
+            for a in apparatus_rows.scalars().all()
         }
     if station_ids:
-        rows = await db.execute(
+        station_rows = await db.execute(
             select(Location).where(
                 Location.organization_id == organization_id,
                 Location.id.in_(station_ids),
             )
         )
-        stations = {loc.id: loc.name for loc in rows.scalars().all()}
+        stations = {loc.id: loc.name for loc in station_rows.scalars().all()}
     return apparatus, stations
 
 

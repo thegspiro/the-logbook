@@ -435,7 +435,7 @@ class AuditLogger:
                 "errors": [],
             }
 
-        results = {
+        results: dict[str, Any] = {
             "verified": True,
             "total_checked": len(logs),
             "first_id": logs[0].id,
@@ -753,7 +753,9 @@ class AuditLogger:
             .where(AuditLogCheckpoint.last_log_id < head_id)
         )
         for cp in result.scalars().all():
-            if not cp.archive_attestation:
+            # last_log_hash is matched against previous_hash above, so it is
+            # never NULL here; the check narrows the column's Optional type.
+            if not cp.archive_attestation or cp.last_log_hash is None:
                 continue
             expected = self.compute_archive_attestation(
                 cp.first_log_id, cp.last_log_id, cp.last_log_hash, keyring.current
@@ -1077,18 +1079,20 @@ async def get_audit_log_status(db: AsyncSession) -> dict[str, Any]:
         Status information including total entries, latest entry, and last checkpoint
     """
     # Get total count
-    result = await db.execute(select(func.count(AuditLog.id)))
-    total_count = result.scalar()
+    count_result = await db.execute(select(func.count(AuditLog.id)))
+    total_count = count_result.scalar()
 
     # Get latest entry
-    result = await db.execute(select(AuditLog).order_by(AuditLog.id.desc()).limit(1))
-    latest_entry = result.scalar_one_or_none()
+    entry_result = await db.execute(
+        select(AuditLog).order_by(AuditLog.id.desc()).limit(1)
+    )
+    latest_entry = entry_result.scalar_one_or_none()
 
     # Get latest checkpoint
-    result = await db.execute(
+    checkpoint_result = await db.execute(
         select(AuditLogCheckpoint).order_by(AuditLogCheckpoint.id.desc()).limit(1)
     )
-    latest_checkpoint = result.scalar_one_or_none()
+    latest_checkpoint = checkpoint_result.scalar_one_or_none()
 
     return {
         "total_entries": total_count,
