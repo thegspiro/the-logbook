@@ -1459,6 +1459,24 @@ export const trainingModuleConfigService = {
     return response.data;
   },
 
+  async getMyTrainingRecords(
+    params: { year?: string; search?: string; trainingType?: string; page?: number; pageSize?: number } = {}
+  ): Promise<import('../types/training').MyTrainingHistoryPage> {
+    const response = await api.get<import('../types/training').MyTrainingHistoryPage>(
+      '/training/module-config/my-training/records',
+      {
+        params: {
+          year: params.year || undefined,
+          search: params.search || undefined,
+          training_type: params.trainingType || undefined,
+          page: params.page ?? 1,
+          page_size: params.pageSize ?? 25,
+        },
+      }
+    );
+    return response.data;
+  },
+
   async getSkillNames(): Promise<{ id: string; name: string; category: string | null }[]> {
     const response = await api.get<{ id: string; name: string; category: string | null }[]>(
       '/training/module-config/skill-names'

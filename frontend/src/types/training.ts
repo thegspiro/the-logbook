@@ -2141,6 +2141,43 @@ export interface RequirementDetail {
    * the met/total summary until it passes.
    */
   catch_up_deadline?: string | null;
+  /**
+   * For a requirement whose completion window crosses the year (November to
+   * January): the date the next window opens. Until then a class taken in the
+   * last window still counts, so the requirement reads as met.
+   */
+  next_window_opens?: string | null;
+}
+
+/** One training record on the History tab, from `/my-training/records`. */
+export interface MyTrainingHistoryRecord {
+  id: string;
+  course_name: string;
+  course_code?: string | null;
+  training_type: string;
+  status: string;
+  completion_date: string | null;
+  expiration_date: string | null;
+  /** Absent when the department hides training hours from members. */
+  hours_completed?: number;
+  instructor?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+}
+
+export interface MyTrainingHistoryYear {
+  /** Four digits, or `undated` for records still awaiting approval. */
+  year: string;
+  records: number;
+  hours?: number;
+}
+
+export interface MyTrainingHistoryPage {
+  items: MyTrainingHistoryRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  years: MyTrainingHistoryYear[];
 }
 
 export interface MyTrainingSummary {
@@ -2173,6 +2210,12 @@ export interface MyTrainingSummary {
      */
     hours_this_month?: number;
     completed_courses: number;
+    /** Calendar year to date, in the department's timezone. */
+    year_to_date_courses?: number;
+    /** Withheld alongside `total_hours`. */
+    year_to_date_hours?: number;
+    /** The calendar year the `year_to_date_*` figures cover. */
+    year?: number;
   };
   requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };
   certifications?: Array<{
