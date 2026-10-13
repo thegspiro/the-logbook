@@ -79,6 +79,9 @@ class TestOrgStamping:
         )
         assert entry is not None
         assert entry.organization_id == org_id
+        # The hash version is stamped when the row is sealed.
+        assert entry.hash_version is None
+        await audit_logger.seal_pending(db_session)
         assert entry.hash_version == 4
 
     async def test_explicit_org_wins_without_user(
@@ -125,6 +128,8 @@ class TestChainIntegrity:
                 user_id=uid,
             )
             assert entry is not None
+        # Uncommitted rows: only this session can seal them.
+        await audit_logger.seal_pending(db_session)
 
         result = await audit_logger.verify_integrity(db_session)
         assert result["verified"] is True, result["errors"]
@@ -162,6 +167,8 @@ class TestChainIntegrity:
             event_data={},
             user_id=user_id,
         )
+        # The version is chosen when the row is sealed, not when it is written.
+        await audit_logger.seal_pending(db_session)
         monkeypatch.undo()
         assert legacy is not None
         assert legacy.hash_version == 2

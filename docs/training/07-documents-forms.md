@@ -727,7 +727,9 @@ _(reorganised 2026-09-28)_:
 - **Email Notifications** — the master switch for the emails a member may turn
   off. Off stops every one of them at once.
 - **Emails you can turn off** — one switch per optional email: **Event
-  reminders**, **Training and certification reminders**, **Shift notices**,
+  reminders**, **Off the waitlist** _(2026-10-11: the email telling a member a
+  spot opened on an event they were waitlisted for)_, **Training and
+  certification reminders**, **Shift notices**,
   **Equipment and inventory updates**, **Store announcements**, **Volunteer
   calls**, **Election notices** and **Suggestion box**. Members who hold a
   management permission also see the officer duty emails (event, scheduling and

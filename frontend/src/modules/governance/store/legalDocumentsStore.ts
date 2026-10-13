@@ -10,6 +10,7 @@ import type {
   LegalDocumentType,
   LegalDocumentsOverview,
   LegalRevisionCreate,
+  LegalRevisionListKind,
   LegalRevisionUpdate,
 } from '../types/legal';
 
@@ -17,9 +18,12 @@ interface LegalDocumentsState {
   overview: LegalDocumentsOverview | null;
   isLoading: boolean;
   isSaving: boolean;
+  /** The list a "Load more" is fetching for, as `${documentType}:${kind}`. */
+  loadingMore: string | null;
   error: string | null;
 
   fetchOverview: () => Promise<void>;
+  loadMore: (documentType: LegalDocumentType, kind: LegalRevisionListKind) => Promise<void>;
   createRevision: (payload: LegalRevisionCreate) => Promise<void>;
   updateRevision: (revisionId: string, payload: LegalRevisionUpdate) => Promise<void>;
   deleteRevision: (revisionId: string) => Promise<void>;
@@ -53,6 +57,7 @@ export const useLegalDocumentsStore = create<LegalDocumentsState>((set, get) => 
     overview: null,
     isLoading: false,
     isSaving: false,
+    loadingMore: null,
     error: null,
 
     fetchOverview: async () => {
@@ -65,6 +70,37 @@ export const useLegalDocumentsStore = create<LegalDocumentsState>((set, get) => 
           isLoading: false,
           error: getErrorMessage(err, 'Could not load the legal documents'),
         });
+      }
+    },
+
+    loadMore: async (documentType, kind) => {
+      const doc = get().overview?.documents.find((d) => d.documentType === documentType);
+      if (!doc) return;
+      set({ loadingMore: `${documentType}:${kind}`, error: null });
+      try {
+        const page = await legalDocumentsService.listRevisions(documentType, kind, doc[kind].length);
+        set((state) => {
+          if (!state.overview) return {};
+          return {
+            overview: {
+              ...state.overview,
+              documents: state.overview.documents.map((d) => {
+                if (d.documentType !== documentType) return d;
+                // Skip ids already shown: a revision created since the first
+                // page shifts every later one down by a place.
+                const seen = new Set(d[kind].map((r) => r.id));
+                const appended = [...d[kind], ...page.items.filter((r) => !seen.has(r.id))];
+                return kind === 'drafts'
+                  ? { ...d, drafts: appended, draftsTotal: page.total }
+                  : { ...d, history: appended, historyTotal: page.total };
+              }),
+            },
+          };
+        });
+      } catch (err: unknown) {
+        set({ error: getErrorMessage(err, 'Could not load more revisions') });
+      } finally {
+        set({ loadingMore: null });
       }
     },
 

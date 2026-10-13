@@ -71,6 +71,7 @@ export type {
   InventoryCategoryCreate,
   ScanLookupResult,
   ScanLookupResponse,
+  StorageAreaScanHit,
   BatchScanItem,
   DistributeItemsRequest,
   DistributeItemsResultItem,

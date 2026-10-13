@@ -124,6 +124,21 @@ describe('TopNavigation overflow into More', () => {
     expect(nav.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('closes More on Escape and returns focus to it', async () => {
+    const user = userEvent.setup();
+    renderNav();
+    const nav = within(mainNav());
+    const more = nav.getByRole('button', { name: 'More' });
+
+    await user.click(more);
+    await user.tab();
+    await user.keyboard('{Escape}');
+
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveFocus();
+    expect(nav.queryByRole('link', { name: 'Documents' })).not.toBeInTheDocument();
+  });
+
   it('opens More onto the groups that did not fit, in order, each under its own name', async () => {
     const user = userEvent.setup();
     renderNav();

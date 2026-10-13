@@ -70,6 +70,12 @@ export const minutesService = {
     return response.data;
   },
 
+  /** Return approved minutes to draft so a correction can be made (MM-17). */
+  async reopen(minutesId: string, reason: string): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/reopen`, { reason });
+    return response.data;
+  },
+
   // ── Publishing ──
 
   async publishMinutes(minutesId: string): Promise<void> {

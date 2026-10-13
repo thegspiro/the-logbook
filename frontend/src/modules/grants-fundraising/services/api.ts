@@ -9,6 +9,8 @@ import type {
   GrantOpportunity,
   GrantOpportunityCreatePayload,
   GrantApplication,
+  GrantApplicationPage,
+  GrantApplicationQuery,
   GrantBudgetItem,
   GrantExpenditure,
   GrantComplianceTask,
@@ -97,6 +99,30 @@ export const grantsService = {
       },
     });
     return asArray(response.data);
+  },
+
+  /**
+   * One page of applications plus the total matching the filters, read from
+   * `X-Total-Count` (GF-33). Filtering, search and sort all happen on the
+   * server so the page can step through every application, not the first
+   * fetch's worth.
+   */
+  async listApplicationsPage(query: GrantApplicationQuery): Promise<GrantApplicationPage> {
+    const response = await api.get<GrantApplication[]>('/grants/applications', {
+      params: {
+        status: query.status || undefined,
+        status_group: query.statusGroup || undefined,
+        priority: query.priority || undefined,
+        search: query.search?.trim() || undefined,
+        sort: query.sort || undefined,
+        order: query.order,
+        skip: query.skip ?? 0,
+        limit: query.limit ?? 25,
+      },
+    });
+    const items = asArray(response.data);
+    const header = Number(response.headers['x-total-count']);
+    return { items, total: Number.isFinite(header) ? header : items.length };
   },
 
   async getApplication(id: string): Promise<GrantApplication> {

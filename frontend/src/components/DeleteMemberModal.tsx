@@ -4,6 +4,7 @@ import { Modal } from './Modal';
 import { userService } from '../services/api';
 import type { DeletionImpact } from '../types/user';
 import { displayNameOf, type MemberNameFields } from '../utils/memberName';
+import { useTablist } from '../hooks/useTablist';
 
 interface DeleteMemberModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
   onSoftDelete,
   onHardDelete,
 }) => {
+  const tablist = useTablist();
   const [activeTab, setActiveTab] = useState<DeleteTab>('soft');
   const [impact, setImpact] = useState<DeletionImpact | null>(null);
   const [loadingImpact, setLoadingImpact] = useState(false);
@@ -95,7 +97,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     >
       {/* Tab Toggle */}
       <div className="mb-4">
-        <div className="inline-flex w-full rounded-md shadow-xs" role="tablist" aria-label="Delete mode">
+        <div className="inline-flex w-full rounded-md shadow-xs" role="tablist" {...tablist} aria-label="Delete mode">
           <button
             type="button"
             role="tab"

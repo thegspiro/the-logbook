@@ -366,8 +366,9 @@ class TestProfileUpdate:
 class TestMembershipTypeChange:
     @staticmethod
     def _db(member, org):
+        # The Organization row is locked first, then the member (USR-10a).
         db = AsyncMock()
-        db.execute.side_effect = [_Result(member), _Result(org)]
+        db.execute.side_effect = [_Result(org), _Result(member)]
         return db
 
     @staticmethod

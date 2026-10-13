@@ -84,6 +84,58 @@ def _authenticate(
     details["auth_attempted"] = False
 
 
+# One answer for every failure before an SMTP greeting, used where the caller
+# is not yet authenticated. See test_smtp_connection_uniform.
+UNIFORM_SMTP_UNREACHABLE_MESSAGE = (
+    "Could not reach an SMTP server with these settings. Check the server "
+    "address, the port (587 for STARTTLS, 465 for SSL/TLS) and the encryption "
+    "type, and that this server is allowed to connect to it."
+)
+
+
+def test_smtp_connection_uniform(
+    config: dict[str, Any],
+) -> tuple[bool, str, dict[str, Any]]:
+    """``test_smtp_connection`` with connection-stage failures made identical.
+
+    The onboarding wizard's self-hosted SMTP test is reachable before any
+    account exists, against a host and port the caller chooses. Telling
+    "connection refused" from "timed out" from "no such host" from "something
+    answered but not SMTP" let that caller map what listens on the internal
+    network (ONB-30-3). Blocking private addresses would break the on-premises
+    relays many departments use, so the owner chose to keep the connection and
+    remove the oracle instead: every failure before a server has greeted us as
+    SMTP returns the same message and the same detail keys, and the specific
+    cause goes to the server log only. Once an SMTP server has answered, its
+    authentication and TLS errors are kept — they are about a mail server the
+    administrator is configuring, and they are what makes the test useful.
+
+    A connection was attempted iff ``host`` was recorded — the input checks
+    (missing fields, a non-numeric port) return before that and keep their own
+    messages, since they echo nothing about the network.
+    """
+    success, message, details = test_smtp_connection(config)
+    if success or details.get("connected") or "host" not in details:
+        return success, message, details
+    logger.warning(
+        "Onboarding SMTP test could not reach {}:{} — {}",
+        details.get("host"),
+        details.get("port"),
+        message,
+    )
+    return (
+        False,
+        UNIFORM_SMTP_UNREACHABLE_MESSAGE,
+        {
+            "host": details.get("host"),
+            "port": details.get("port"),
+            "encryption": details.get("encryption"),
+            "from_email": details.get("from_email"),
+            "error": "connection_failed",
+        },
+    )
+
+
 def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """
     Test SMTP connection with provided configuration

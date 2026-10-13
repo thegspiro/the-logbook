@@ -1553,6 +1553,34 @@ Departments that hold drills late in the month often saw members flagged non-com
 
 ![Compliance thresholds configuration including the evaluation-period setting](./images/02-66-compliance-thresholds.png)
 
+### Compliance Emails to Members _(2026-10-11)_
+
+The **Notifications** panel on the same **Thresholds** tab now does what it
+says (it used to carry a "Not yet active" warning). Once a day, by email only:
+
+- **Reminder Days Before Deadline** — for each requirement a member has not yet
+  met, a reminder when its deadline is that many days away. With `30, 14, 7`, a
+  member behind on an annual requirement hears at 30, 14 and 7 days before the
+  end of the year. If the system was down on a reminder day, the reminder goes
+  out on the next run. A member is never sent two reminders for the same
+  deadline on one day. **Leave the box empty to send no reminders.**
+- **Notify members when they become non-compliant** — a notice listing every
+  requirement they have not met, sent when their standing turns
+  **non-compliant** (an at-risk member is not sent it). They are not told again
+  every day; they are told again when they fall short of a further requirement,
+  or of the same one in a new period.
+
+The deadline is the end of the requirement's current compliance period, or the
+member's catch-up deadline while one protects them. Members are judged exactly
+as the Training dashboard and the compliance matrix judge them — profiles,
+thresholds, waivers and grandfathering included. A member who switched off
+**Training and certification reminders** in their own email settings is not
+sent these unless the department has made that email required.
+
+> **On upgrade:** a department that saved its compliance configuration with the
+> suggested `30, 14, 7` will start sending reminders the first day after
+> upgrading. Clear the box first if you do not want them.
+
 ### Requirements with several categories _(2026-10-04)_
 
 A requirement can be linked to more than one training category, and a finalized
@@ -2174,6 +2202,8 @@ Navigate to **Training Admin > Reports** for department-wide exports:
 ![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
+
+> **Hint:** The CSV downloads have no row limit. A lifetime export of a large department is written and sent a member (or a batch of records) at a time, so the download starts straight away and grows while it runs; leave the tab open until your browser shows it finished. The PDFs are still built whole before they download.
 
 ---
 

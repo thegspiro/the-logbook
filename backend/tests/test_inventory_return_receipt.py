@@ -238,3 +238,104 @@ def test_review_return_request_locks_the_request_row():
         "review_return_request's ReturnRequest lookup must use "
         ".with_for_update() before checking req.status"
     )
+
+
+def _pool_return(quantity=1):
+    req = request(ReturnRequestType.ISSUANCE, quantity=quantity)
+    item = InventoryItem(
+        id=req.item_id,
+        organization_id=req.organization_id,
+        name="Nitrile Gloves",
+        tracking_type=TrackingType.POOL,
+        quantity=12,
+        quantity_issued=4,
+        condition=ItemCondition.GOOD,
+        status=ItemStatus.AVAILABLE,
+    )
+    issuance = ItemIssuance(
+        id=req.issuance_id,
+        organization_id=req.organization_id,
+        item_id=req.item_id,
+        user_id=req.requester_id,
+        quantity_issued=1,
+        is_returned=False,
+    )
+    return req, item, issuance
+
+
+@pytest.mark.asyncio
+async def test_pool_return_refuses_an_explicit_write_off():
+    """W41-6: a write-off names the item, so approving one raised for a single
+    returned box would retire the whole shelf and end every other holder's
+    issuance. It is not offered for a pool issuance at all."""
+    req, item, issuance = _pool_return()
+    svc, db = service_with(req, item, issuance)
+    ok, error = await svc.review_return_request(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        "received",
+        observed_condition="out_of_service",
+        received_quantity=1,
+        follow_up="write_off",
+    )
+    assert not ok
+    assert "not available for pool issuances" in error
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    db.rollback.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pool_return_out_of_service_auto_is_maintenance_not_write_off():
+    req, item, issuance = _pool_return()
+    svc, db = service_with(req, item, issuance)
+    ok, error = await svc.review_return_request(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        "received",
+        observed_condition="out_of_service",
+        received_quantity=1,
+        follow_up="auto",
+    )
+    assert ok, error
+    assert req.follow_up_type == "maintenance"
+    added = db.add.call_args.args[0]
+    assert type(added).__name__ == "MaintenanceRecord"
+    # The pool row itself stays in service for everyone else.
+    assert item.status == ItemStatus.AVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_individual_out_of_service_auto_still_raises_a_write_off():
+    req = request()
+    item = InventoryItem(
+        id=req.item_id,
+        organization_id=req.organization_id,
+        name="Helmet",
+        tracking_type=TrackingType.INDIVIDUAL,
+        serial_number="SN-9",
+        condition=ItemCondition.GOOD,
+        status=ItemStatus.ASSIGNED,
+        assigned_to_user_id=req.requester_id,
+    )
+    hold = ItemAssignment(
+        id=req.assignment_id,
+        organization_id=req.organization_id,
+        item_id=req.item_id,
+        user_id=req.requester_id,
+        is_active=True,
+    )
+    svc, _ = service_with(req, item, hold)
+    ok, error = await svc.review_return_request(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        "received",
+        observed_condition="out_of_service",
+        verified_identifier="SN-9",
+        follow_up="auto",
+    )
+    assert ok, error
+    assert req.follow_up_type == "write_off"

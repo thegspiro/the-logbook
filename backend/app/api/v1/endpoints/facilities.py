@@ -40,6 +40,10 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
+from app.models.document import (
+    FACILITY_DOCUMENTS_SUB_FOLDER,
+    FACILITY_PHOTOS_SUB_FOLDER,
+)
 from app.models.user import User
 from app.schemas.documents import FoldersListResponse
 from app.schemas.facilities import (  # Facility Type; Facility Status; Main Facility; Photos; Documents; Maintenance Types; Maintenance Records; Systems; Inspections; Utility Accounts; Access Keys; Rooms; Emergency Contacts; Shutoff Locations; Capital Projects; Insurance Policies; Occupants; Compliance Checklists
@@ -158,8 +162,17 @@ async def _validate_shared_document_reference(
     file_path: str,
     current_user: User,
     facility_id: str,
+    sub_folder: str,
 ) -> None:
     """Reject forged/cross-organization references, and file the document.
+
+    ``sub_folder`` names the facility sub-folder the file is filed into
+    (FAC-13): a photo's file goes to Photos, open to any facilities access like
+    the photo record itself; a facility document's file goes to the restricted
+    Facility Documents folder, gated like the document record. Nothing is filed
+    directly in the facility's own folder any more — it admits any facilities
+    access, so a sensitive record's file there would be readable more widely
+    than the record.
 
     Validating the reference is only half the job. The upload that produces it
     stores a folderless document, and a folderless document is organization
@@ -246,8 +259,13 @@ async def _validate_shared_document_reference(
     )
     if facility is None:
         raise HTTPException(status_code=404, detail="Facility not found")
-    folder = await documents.ensure_facility_folder(
+    facility_folder = await documents.ensure_facility_folder(
         organization_id, str(facility.id), facility.name
+    )
+    # Still folders before the document (FAC-35): the facility folder is held
+    # locked, then its sub-folder.
+    folder = await documents.ensure_facility_sub_folder(
+        organization_id, facility_folder, sub_folder
     )
 
     # FAC-29 (Codex): for_update=True locks the same row DocumentsService
@@ -886,7 +904,11 @@ async def create_facility_photo(
 
     try:
         await _validate_shared_document_reference(
-            db, photo_data.file_path, current_user, str(photo_data.facility_id)
+            db,
+            photo_data.file_path,
+            current_user,
+            str(photo_data.facility_id),
+            FACILITY_PHOTOS_SUB_FOLDER,
         )
         photo = await service.create_photo(
             photo_data=photo_data,
@@ -1034,7 +1056,11 @@ async def create_facility_document(
 
     try:
         await _validate_shared_document_reference(
-            db, document_data.file_path, current_user, str(document_data.facility_id)
+            db,
+            document_data.file_path,
+            current_user,
+            str(document_data.facility_id),
+            FACILITY_DOCUMENTS_SUB_FOLDER,
         )
         document = await service.create_document(
             document_data=document_data,
@@ -3880,7 +3906,12 @@ async def get_facility_folders(
             ├── Maintenance Records/
             ├── Inspection Reports/
             ├── Insurance & Leases/
-            └── Capital Projects/
+            ├── Capital Projects/
+            └── Facility Documents/
+
+    Lists only the sub-folders the caller may open: Photos, Maintenance
+    Records and Inspection Reports for any facilities access; the other four
+    also need facilities.view_sensitive, .edit or .manage.
 
     **Permissions required:** facilities.view or facilities.manage
     """
@@ -3911,11 +3942,8 @@ async def get_facility_folders(
     # requires documents.view; a document_count here is the same aggregate
     # disclosure DOC-4 already flags for that module's own summary endpoint.
     #
-    # A facilities.view-only caller currently gets an empty folder list here
-    # (not just redacted counts), because every facility folder's
-    # required_permissions is FACILITY_SENSITIVE_PERMISSIONS. See FAC-13
-    # (docs/security-review/FAC-12-facilities.md) for why this is flagged
-    # rather than fixed.
+    # A facilities.view-only caller sees the three operational sub-folders and
+    # none of the sensitive ones (FAC-13, resolved 2026-10-11).
     can_see_counts = user_has_permission(
         current_user, "documents.view"
     ) or user_has_permission(current_user, "documents.manage")

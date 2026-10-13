@@ -157,6 +157,16 @@ ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
 )
 
 
+class ElectionStageAmbiguousError(ValueError):
+    """No single election_vote stage can be named for a package's PII policy.
+
+    A ValueError so every caller that already treats validation failures as
+    a 400 keeps working; the explicit package endpoint maps it to 422 to say
+    the request itself is missing the field that would disambiguate it
+    (MP-26, owner decision 2026-10-05).
+    """
+
+
 # Auto-purge grace period bounds, in days. They match the settings screen's
 # own input limits (PipelineSettingsPage), and a stored value outside them is
 # clamped on read rather than trusted: the setting permanently deletes records.
@@ -6894,8 +6904,20 @@ class MembershipPipelineService:
         package_config: Optional[Dict[str, Any]] = None,
         created_by: Optional[str] = None,
     ) -> Optional[ProspectElectionPackage]:
-        """Create an election package for a prospect"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        """Create, or regenerate, the election package for a prospect.
+
+        Regenerating replaces: any draft or ready package the prospect
+        already has is deleted in the same transaction (MP-10, owner decision
+        2026-10-05), so each application holds at most one package still
+        being assembled, however often it is regenerated. Packages already
+        on a ballot or decided are election history and are left alone.
+        """
+        # The prospect row lock serializes two regenerations of one applicant
+        # (CLAUDE.md Pitfall #27): without it both read "nothing to replace"
+        # and both insert, which is the unbounded growth MP-10 closes.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -7020,17 +7042,27 @@ class MembershipPipelineService:
             ):
                 election_step = named_step
 
-        # Fallback for when neither the prospect's current step nor a
-        # type-checked step_id identifies an election_vote step in the
-        # governing pipeline — e.g. a package requested with step_id omitted
-        # after the applicant already advanced past every vote stage, or a
-        # caller-supplied pipeline_id override with no matching current step
-        # or step_id. Preserves the pass-4 behavior (and is exact whenever a
-        # pipeline has only one election_vote step, the overwhelmingly
-        # common case); a pipeline with several such steps and no current
-        # step or step_id match here remains ambiguous — see
-        # docs/security-review/MP-08-membership-pipeline.md.
+        # Neither the prospect's current step nor a type-checked step_id
+        # identifies an election_vote step — e.g. a package requested after
+        # the applicant already advanced past every vote stage, or under a
+        # pipeline_id override. With one such stage in the pipeline there is
+        # nothing to guess, and the lookup below is exact. With more than
+        # one, picking by sort_order could let an earlier, more permissive
+        # stage's package_fields govern a package meant for a stricter one,
+        # so the caller must name the stage instead (MP-26, owner decision
+        # 2026-10-05: require step_id only in this case, 422 otherwise).
         if election_step is None:
+            election_stage_count = sum(
+                1
+                for s in effective_steps
+                if s.step_type == PipelineStepType.ELECTION_VOTE
+            )
+            if election_stage_count > 1:
+                raise ElectionStageAmbiguousError(
+                    "This pipeline has more than one election vote stage and "
+                    "the applicant is not on any of them. Choose which "
+                    "election vote stage this package is for."
+                )
             election_step = next(
                 (
                     s
@@ -7042,6 +7074,37 @@ class MembershipPipelineService:
                 None,
             )
 
+        # MP-10: regenerating replaces the package still being assembled
+        # rather than stacking another PII-bearing snapshot beside it. Only
+        # draft/ready packages go — a package on a ballot or already decided
+        # is the record of a vote, and the system statuses guard it the same
+        # way update_election_package does. Locking read: Pitfall #27.
+        replaced_result = await self.db.execute(
+            select(ProspectElectionPackage)
+            .where(
+                ProspectElectionPackage.prospect_id == prospect.id,
+                ProspectElectionPackage.status.in_(
+                    sorted(ELECTION_PACKAGE_CALLER_STATUSES)
+                ),
+            )
+            .order_by(ProspectElectionPackage.created_at.desc())
+            .with_for_update()
+        )
+        replaced = list(replaced_result.scalars().all())
+        if replaced:
+            # What a coordinator typed is not part of the snapshot being
+            # refreshed, so it survives the regenerate unless the request
+            # supplies its own. Deep-copied: Pitfall #12.
+            newest = replaced[0]
+            if coordinator_notes is None:
+                coordinator_notes = newest.coordinator_notes
+            carried_config = copy.deepcopy(newest.package_config or {})
+            carried_config.update(package_config or {})
+            package_config = carried_config
+            for old in replaced:
+                await self.db.delete(old)
+            await self.db.flush()
+
         pkg = await self._stage_election_package(
             prospect,
             election_step,
@@ -7050,6 +7113,11 @@ class MembershipPipelineService:
             coordinator_notes=coordinator_notes,
             package_config=package_config,
             created_by=created_by,
+            activity_details=(
+                {"replaced_package_ids": [str(old.id) for old in replaced]}
+                if replaced
+                else None
+            ),
         )
 
         await self.db.commit()

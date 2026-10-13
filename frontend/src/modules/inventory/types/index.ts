@@ -411,6 +411,8 @@ export const REQUEST_STATUS_BADGES: Record<string, string> = {
   approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
   completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
+  // A return notice whose gear came back through a direct return (W39-5).
+  received: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
 };
 
 /**

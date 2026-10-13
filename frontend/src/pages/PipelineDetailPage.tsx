@@ -61,6 +61,7 @@ import type {
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
+import { useTablist } from '../hooks/useTablist';
 
 // Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
 // without a timezone shift: build it at local midnight from its Y-M-D parts so
@@ -1268,6 +1269,7 @@ const EnrollmentProgressModal: React.FC<{
 // ==================== Main Page ====================
 
 const PipelineDetailPage: React.FC = () => {
+  const tablist = useTablist();
   const { programId } = useParams<{ programId: string }>();
   const navigate = useNavigate();
 
@@ -1726,7 +1728,7 @@ const PipelineDetailPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
+        <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist" {...tablist}>
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             ...(canViewEnrollments ? [{ key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users }] : []),

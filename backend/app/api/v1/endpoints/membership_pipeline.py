@@ -102,7 +102,10 @@ from app.services.file_storage_service import (
     StorageArea,
     stored_file_response,
 )
-from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.membership_pipeline_service import (
+    ElectionStageAmbiguousError,
+    MembershipPipelineService,
+)
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -2244,7 +2247,10 @@ async def create_election_package(
     Create an election package for a prospect.
 
     This captures a snapshot of the applicant's information and prepares
-    it for the election/voting process.
+    it for the election/voting process. Regenerating replaces the
+    prospect's existing draft or ready package (MP-10). Returns 422 when the
+    pipeline has more than one election vote stage, the applicant is on
+    none of them, and `step_id` does not name one (MP-26).
 
     **Requires permission: members.manage or prospective_members.manage**
     """
@@ -2258,6 +2264,13 @@ async def create_election_package(
             coordinator_notes=data.coordinator_notes,
             package_config=data.package_config,
             created_by=current_user.id,
+        )
+    except ElectionStageAmbiguousError as e:
+        # MP-26: the request is missing the step_id that would name the
+        # stage, not asking for something invalid — the caller can fix it.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=safe_error_detail(e),
         )
     except ValueError as e:
         raise HTTPException(

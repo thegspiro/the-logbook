@@ -141,9 +141,10 @@ const InventorySetupPage: React.FC = () => {
 
   // Step 1 — room form
   // This page is gated on inventory.manage, but a room is a location and
-  // POST /locations wants locations.create or locations.manage. Offering the
-  // form to a quartermaster without either only produced a 403 toast; the
-  // later steps work from the rooms that already exist.
+  // POST /locations wants locations.create or locations.manage. The seeded
+  // quartermaster holds locations.create (W38-1); a position an administrator
+  // took it from would only get a 403 toast, so it sees an explanation
+  // instead, and the later steps work from the rooms that already exist.
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canAddRooms = checkPermission('locations.create') || checkPermission('locations.manage');
   const [roomName, setRoomName] = useState('');

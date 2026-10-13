@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3149](https://github.com/thegspiro/the-logbook/pull/3149)**: branch
+`claude/security-review-membership-pipeline`, Feature 08 (Membership
+pipeline), pass 9 (watchdog pickup). 0 fixed, 0 new findings — three
+standing items (MP-10, MP-22, MP-26) re-confirmed unchanged, and one
+(MP-19) closed by other work (owner decision, 2026-10-11). New surface
+this pass (a widget-summary scaling fix, W23-1 stranded-applicant
+placement, referral fields with an XC-1 guard, an auto-purge warning
+email, the file-storage hardening fully wired for prospect documents, and
+a `create_election_package` 500 fix) reviewed and verified sound — see the
+Log entry below and
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 9** section
+for detail. Row 08 stays ✅ (pending this PR's merge); next is Feature 09
+(Medical screening).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3145's merge, Feature 07, Users & organizations, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3145 (Feature 07, Users & organizations,
+pass 8) merged 2026-10-13T03:24:09Z — 0 fixed, 0 new findings; log entry
+already recorded below and rotation row 07 stays ✅. This iteration
+(a watchdog pickup — confirmed via `gh api
+repos/thegspiro/the-logbook/pulls?state=open`, the REST endpoint rather
+than GraphQL `search_pull_requests`, which this environment blocks for
+Code sessions; 0 `claude/security-review-*` branches among the open PRs
+returned) picks up Feature 08 (Membership pipeline), the state PR #3145
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users &amp; organizations, pass 8, PR #3145, before it merged), preserved for history</summary>
+
 **PR [#3145](https://github.com/thegspiro/the-logbook/pull/3145)**: branch
 `claude/security-review-users-organizations`, Feature 07 (Users &
 organizations), pass 8 (watchdog pickup). 0 fixed, 0 new findings — three
@@ -29,6 +61,8 @@ Log entry below and
 `docs/security-review/USR-07-users-organizations.md`'s **Pass 8** section
 for detail. Row 07 stays ✅ (pending this PR's merge); next is Feature 08
 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3142's merge, Feature 06, Elections & ballots, pass 8 — the state this pass's PR opened from), preserved for history</summary>
@@ -18776,6 +18810,75 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
+### 2026-10-13 — Feature 08 (Membership pipeline, pass 9) — 0 fixed, 0 new findings; 1 standing item closed by other work, 3 re-confirmed unchanged (watchdog pickup)
+
+**Closure.** PR #3145 (Feature 07, Users & organizations, pass 8) merged
+2026-10-13T03:24:09Z (`pulls/3145`: `merged: true`) — 0 fixed, 0 new
+findings; log entry already recorded above and rotation row 07 stays ✅.
+Independently re-confirmed via `gh api
+repos/thegspiro/the-logbook/pulls?state=open` (0 `claude/security-review-*`
+branches among the open PRs returned; GraphQL `search_pull_requests` is
+blocked for Code sessions in this environment, so the REST listing is the
+check) that no security-review PR was open before this iteration started
+— this iteration is itself a watchdog pickup, the dedicated `/loop 30m
+/security-review` session having gone quiet after #3145 merged. Row 08 was
+the next feature in rotation order.
+
+**Scope confirmation.** Rotation table row 08
+(`membership_pipeline.py`, `membership_pipeline_service.py`) plus this
+feature's established additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`, and `frontend/src/modules/prospective-members/`.
+
+**Real delta since pass 8's closing merge (`0b12efb5`, PR #2955,
+2026-10-06): 961 insertions / 325 deletions** across the four backend
+scope files (the largest single piece, `models/membership_pipeline.py`'s
++464, is a pure SQLAlchemy-2.0 `Mapped[...]` typing refactor — verified
+every `ondelete="SET NULL"` column still carries `nullable=True`), landed
+in 15 commits (two merges) touching: a `pipeline_widget_summary` scaling
+fix (`GROUP BY`/`CASE` counting, capped `details`), the W23-1
+stranded-applicant placement fix + backfill migration, referral-source
+fields in the drawer (with an explicit in-org-only `referred_by_name`
+guard — XC-1), a new auto-purge warning email
+(`warn_upcoming_auto_purges`), the repo-wide file-storage hardening
+(malware scanning, org confinement, AES-256-GCM encryption at rest) now
+fully wired through for prospect documents, and a `create_election_package`
+500 fix. All read in full and re-derived against current code — route
+enumeration (53 routes, auth dependency and permission string checked on
+every one), tenant isolation on every new/changed by-id or aggregate query,
+and the multi-approval self-approval/forged-role path re-traced end to end
+(`block_self_prospect_access` is router-wide for any `{prospect_id}` route;
+`complete_step` discards the client-claimed approval role and re-derives it
+from the signer's own positions). See
+[`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)'s
+**Pass 9** section for the full write-up.
+
+**One standing item closed by other work:** MP-19 (the `/widget-summary`
+half — the `/pipelines` sibling was already fixed in pass 3) is now fully
+✅ resolved — an owner decision landed 2026-10-11 that replaced the full
+`ProspectiveMember` row scan with SQL aggregation and capped the details
+list. Three re-confirmed unchanged: MP-10 (unbounded election-package
+list, no per-prospect creation cap), MP-22 (a document delete / the pass-8
+purge rewrite can lose a file on disk if the commit fails after a
+successful `os.remove` — owner-accepted tradeoff), MP-26 (multiple
+`election_vote` stages with no single "current stage" — the helper was
+refactored for reuse this window but its behavior and callers are
+unchanged). No new findings.
+
+**Gate:** backend `flake8`/`black --check`/`isort --check-only` clean (CI's
+pinned `flake8==7.3.0`/`black==26.5.1`/`isort==9.0.1`, installed into a
+fresh Python 3.13 virtualenv rather than the sandbox's unrelated system
+Python); `validate_migrations.py --strict` (578 revisions, single head
+`390fa30d0200`); `check_route_permissions.py --strict` (267 routes, 0
+errors/warnings); cross-cutting guard tests (212 passed); scoped pytest
+(1638 passed, 0 failed); full backend unit suite (14355 passed, 0 failed);
+frontend `typecheck` (0 errors), `lint` (0 errors/warnings), scoped
+`npx vitest run src/modules/prospective-members` (285 passed, 34 files).
+
+Findings doc: [`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)
+→ **Pass 9**. Rotation row 08 stays ✅ (pending this PR's merge). Next:
+Feature 09 (Medical screening).
+
 ### 2026-10-13 — Feature 07 (Users & organizations, pass 8) — 0 fixed, 0 new findings; 3 standing items (USR-5, USR-8, USR-10a) re-confirmed unchanged (watchdog pickup)
 
 **Watchdog pickup.** PR #3142 (Feature 06, Elections & ballots, pass 8)
@@ -30390,3 +30493,19 @@ Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
 **Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — the one new
 finding was fixed, not flagged. Rotation row 18 → ✅ (pending PR merge).
 Next: Feature 19 (Skills testing).
+
+### 2026-10-12 — Feature 28 (Security, audit & IP): SEC2-28-10 resolved by owner decision
+
+**SEC2-28-10 (HIGH) — fixed.** Owner decision: "keep rows in the caller's
+transaction and seal the chain in a separate step". `create_log_entry` now
+inserts the audit row unsealed in the caller's transaction and never reads
+the chain; `AuditLogger.seal_pending`, in its own short transaction, locks the
+single `audit_chain_head` row `FOR UPDATE` and assigns chain position and
+hashes, so concurrent sealers serialize and the chain cannot fork. It runs
+after every commit carrying audit rows, at startup, and as the
+`audit_chain_seal` scheduled task (every minute). Verification, rehash,
+shipping (SEC2-28-9) and retention follow `chain_seq`; unsealed rows are
+reported as `pending_seal`, not tampering. Migration `bcd688674099`. Guard
+tests: `backend/tests/test_audit_chain_sealing.py`. Details:
+[`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md) →
+SEC2-28-10; the `KNOWN_LIMITATIONS.md` row is marked resolved.

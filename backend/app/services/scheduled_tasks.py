@@ -61,6 +61,9 @@ Recommended crontab (add to host or container cron):
 # Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
 0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
 
+# Every minute — seal audit-log rows that commit-time sealing missed
+* * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_chain_seal
+
 # Daily at 7:00 AM — inventory low stock alerts
 0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_low_stock_alerts
 
@@ -78,6 +81,8 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
 30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
+40 13 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_member_notices
+50 12 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=saved_report_delivery
 
 # Daily at 3:00 AM — message history cleanup (delete records older than 90 days)
 0 3 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=message_history_cleanup
@@ -330,6 +335,12 @@ SCHEDULE = {
         "recommended_time": "Sunday 02:00",
         "cron": "0 2 * * 0",
     },
+    "audit_chain_seal": {
+        "description": "Seal committed audit-log rows onto the hash chain (order, previous_hash, current_hash). Rows are normally sealed right after the commit that wrote them; this is the backstop for any that commit-time sealing missed.",
+        "frequency": "every minute",
+        "recommended_time": "* * * * *",
+        "cron": "* * * * *",
+    },
     "audit_log_ship": {
         "description": "Ship new audit log entries to the off-host collector configured via AUDIT_SHIP_WEBHOOK_URL (HMAC-signed NDJSON batches). No-op when not configured.",
         "frequency": "every 30 minutes",
@@ -407,6 +418,18 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:30",
         "cron": "30 6 * * *",
+    },
+    "compliance_member_notices": {
+        "description": "Email members training-requirement reminders on the department's configured days before each deadline, and a notice when they fall out of compliance (Compliance configuration > Notifications)",
+        "frequency": "daily",
+        "recommended_time": "13:40",
+        "cron": "40 13 * * *",
+    },
+    "saved_report_delivery": {
+        "description": "Email each scheduled saved report that is due today: a summary and a link, sent only to recipients the PII gate allows",
+        "frequency": "daily",
+        "recommended_time": "12:50",
+        "cron": "50 12 * * *",
     },
     "message_history_cleanup": {
         "description": "Delete message history records older than 90 days to prevent unbounded table growth",
@@ -497,6 +520,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "00:45",
         "cron": "45 0 * * *",
+    },
+    "prune_public_portal_access_log": {
+        "description": "Delete public-portal access-log rows older than 90 days, successful and refused alike (each holds a requester's IP address and browser)",
+        "frequency": "daily",
+        "recommended_time": "01:15",
+        "cron": "15 1 * * *",
     },
     "notify_expired_passwords": {
         "description": "Tell members whose password has expired, once, by email and in-app; the API refuses it a grace period later",
@@ -3618,6 +3647,32 @@ async def run_audit_log_ship(db: AsyncSession) -> Dict[str, Any]:
     return result
 
 
+async def run_audit_chain_seal(db: AsyncSession) -> Dict[str, Any]:
+    """Seal audit rows that commit-time sealing missed (SEC2-28-10).
+
+    Every audited commit asks for a seal in the background, but that request
+    lives in the committing process: a worker that exits first, or a sealing
+    attempt that fails, leaves rows unsealed. They stay out of verification
+    and shipping until sealed, so this sweeps them up. Each batch commits on
+    its own, keeping the chain-head lock short.
+    """
+    from app.core.audit import _SEAL_BATCH_SIZE, audit_logger
+
+    sealed = 0
+    try:
+        while True:
+            batch = await audit_logger.seal_pending(db)
+            await db.commit()
+            sealed += batch
+            if batch < _SEAL_BATCH_SIZE:
+                break
+    except Exception as e:
+        logger.error(f"Audit chain sealing failed: {e}")
+        await db.rollback()
+        return {"task": "audit_chain_seal", "total_processed": sealed, "error": str(e)}
+    return {"task": "audit_chain_seal", "total_processed": sealed}
+
+
 async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     """
     Archive old audit logs for HIPAA compliance and long-term retention.
@@ -5528,6 +5583,31 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_compliance_member_notices(db: AsyncSession) -> Dict[str, Any]:
+    """Training-compliance reminders and notices to members (CMP2-1).
+
+    Email only (CLAUDE.md pitfall #18). Which requirements are unmet, when
+    each is due, and the sent-log that keeps a second run the same day from
+    sending again are in ``compliance_member_notices``.
+    """
+    from app.services.compliance_member_notices import send_member_compliance_notices
+
+    return await _for_each_org(
+        db, "compliance_member_notices", send_member_compliance_notices
+    )
+
+
+async def run_saved_report_delivery(db: AsyncSession) -> Dict[str, Any]:
+    """Send the scheduled saved reports due today (RPT2-29-2).
+
+    Email only. The schedule rules, the PII gate and what the email contains
+    are in ``saved_report_schedule``; each report commits on its own.
+    """
+    from app.services.saved_report_schedule import send_due_saved_reports
+
+    return await _for_each_org(db, "saved_report_delivery", send_due_saved_reports)
+
+
 async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email reminders 6 months before a recurring event series ends.
@@ -6832,6 +6912,64 @@ async def run_reap_expired_sessions(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "reap_expired_sessions", "deleted": deleted}
 
 
+# Days a public-portal access-log row is kept, successful and refused alike
+# (owner decision PUB-8, 2026-10-12). The anomaly detector (one and five
+# minutes), the rate-limit backstop (the current hour) and the usage-statistics
+# windows (at most 30 days) all look back far less than this, so pruning never
+# changes what they report; only the unbounded Access Logs listing and the
+# all-time usage figures become "the last 90 days".
+PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS = 90
+_ACCESS_LOG_PRUNE_BATCH = 1000
+
+
+async def run_prune_public_portal_access_log(
+    db: AsyncSession, batch_size: Optional[int] = None
+) -> Dict[str, Any]:
+    """Delete public-portal access-log rows past the retention window.
+
+    Every request to the public API is logged, and since PUB-8 every refused
+    authentication is too, so without pruning the table grows with failed
+    traffic as well as real use and keeps each requester's IP address forever.
+    Platform-wide on purpose: rows with no organization (a key that matched
+    nothing) age out with the rest. Batched by primary key, because the first
+    run on an older installation can find years of rows on a table every
+    public request writes to.
+    """
+    from sqlalchemy import delete
+
+    from app.models.public_portal import PublicPortalAccessLog
+
+    size = batch_size or _ACCESS_LOG_PRUNE_BATCH
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS
+    )
+    deleted = 0
+    while True:
+        ids = (
+            (
+                await db.execute(
+                    select(PublicPortalAccessLog.id)
+                    .where(PublicPortalAccessLog.timestamp < cutoff)
+                    .limit(size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        await db.execute(
+            delete(PublicPortalAccessLog).where(PublicPortalAccessLog.id.in_(ids))
+        )
+        await db.commit()
+        deleted += len(ids)
+        if len(ids) < size:
+            break
+    if deleted:
+        logger.info("Pruned {} public-portal access-log row(s)", deleted)
+    return {"task": "prune_public_portal_access_log", "deleted": deleted}
+
+
 async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
     """Tell each member whose password has expired, once, and start their grace.
 
@@ -7056,6 +7194,7 @@ TASK_RUNNERS = {
     "end_of_shift_summary": run_end_of_shift_summary,
     "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
+    "audit_chain_seal": run_audit_chain_seal,
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
@@ -7069,6 +7208,8 @@ TASK_RUNNERS = {
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
+    "compliance_member_notices": run_compliance_member_notices,
+    "saved_report_delivery": run_saved_report_delivery,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
     "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
@@ -7083,6 +7224,7 @@ TASK_RUNNERS = {
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "reap_expired_sessions": run_reap_expired_sessions,
+    "prune_public_portal_access_log": run_prune_public_portal_access_log,
     "notify_expired_passwords": run_notify_expired_passwords,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "membership_auto_purge": run_membership_auto_purge,
@@ -7105,6 +7247,9 @@ TASK_RUNNERS = {
 # how end_of_shift_summary, shift_auto_checkout, trainee_report_escalation and
 # others were defined and documented but never actually fired.
 TASK_INTERVALS_SECONDS: Dict[str, int] = {
+    # Every loop tick: the backstop for commit-time audit sealing, so it
+    # bounds how long a missed row stays out of verification and shipping.
+    "audit_chain_seal": 60,
     # Every 5 minutes: the first retry of a failed message delivery is due 5
     # minutes after it (MSG-12).
     "retry_message_deliveries": 300,
@@ -7135,6 +7280,12 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,
     "compliance_auto_reports": 86400,
+    # Daily; idempotent per (requirement, deadline, offset) and per unmet set
+    # through a sent-log (compliance_member_notices).
+    "compliance_member_notices": 86400,
+    # Daily; next_run_date advances on each send, so a second run the same
+    # day sends nothing (saved_report_schedule).
+    "saved_report_delivery": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,
     "rolling_recurrence_extend": 86400,
@@ -7144,6 +7295,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
     "reap_expired_sessions": 86400,
+    "prune_public_portal_access_log": 86400,
     "notify_expired_passwords": 86400,
     "membership_inactivity_warnings": 86400,
     "membership_auto_purge": 86400,

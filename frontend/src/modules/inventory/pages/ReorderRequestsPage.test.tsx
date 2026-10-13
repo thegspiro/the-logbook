@@ -11,6 +11,7 @@ const mockCreateReorderRequest = vi.fn();
 const mockUpdateReorderRequest = vi.fn();
 const mockTransitionReorderRequest = vi.fn();
 const mockGetVendors = vi.fn();
+const mockReceiveReorderStock = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -21,7 +22,25 @@ vi.mock('../../../services/api', () => ({
     updateReorderRequest: (...a: unknown[]) => mockUpdateReorderRequest(...a) as unknown,
     transitionReorderRequest: (...a: unknown[]) => mockTransitionReorderRequest(...a) as unknown,
     getVendors: (...a: unknown[]) => mockGetVendors(...a) as unknown,
+    receiveReorderStock: (...a: unknown[]) => mockReceiveReorderStock(...a) as unknown,
   },
+}));
+
+// The picker searches the catalog through its own service import; its search
+// is covered in InventoryItemPicker.test.tsx. Here it only has to hand back a
+// pick, and show what is linked.
+vi.mock('../components/InventoryItemPicker', () => ({
+  default: ({ value, onChange }: { value?: string; onChange: (id: string | undefined, name?: string) => void }) => (
+    <div>
+      <span>{value ? `Linked: ${value}` : 'Not linked'}</span>
+      <button type="button" onClick={() => onChange('it-9', 'Nitrile Gloves L')}>
+        Pick Nitrile Gloves L
+      </button>
+      <button type="button" onClick={() => onChange(undefined)}>
+        Unlink item
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -145,7 +164,41 @@ describe('ReorderRequestsPage', () => {
     expect(mockCreateReorderRequest.mock.calls[0]?.[0]).toMatchObject({
       item_name: 'Hose Couplings',
     });
+    expect((mockCreateReorderRequest.mock.calls[0]?.[0] as Record<string, unknown>).item_id).toBeUndefined();
     expect(mockToastSuccess).toHaveBeenCalledWith('Reorder request created');
+  });
+
+  // W41-5: receiving needs a linked item, and nothing on this page set one.
+  it('links the picked inventory item, naming the order after it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findByText('No reorder requests found');
+
+    await user.click(screen.getByRole('button', { name: /New Request/ }));
+    await user.click(await screen.findByRole('button', { name: 'Pick Nitrile Gloves L' }));
+    expect(screen.getByPlaceholderText('e.g. SCBA Air Cylinders')).toHaveValue('Nitrile Gloves L');
+    await user.click(screen.getByRole('button', { name: 'Create Request' }));
+
+    await waitFor(() => expect(mockCreateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockCreateReorderRequest.mock.calls[0]?.[0]).toMatchObject({
+      item_id: 'it-9',
+      item_name: 'Nitrile Gloves L',
+    });
+  });
+
+  it('sends the link on every edit, and an explicit null once it is removed', async () => {
+    mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'pending', item_id: 'it-1' })]);
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+
+    await user.click(firstButton('Edit'));
+    expect(await screen.findByText('Linked: it-1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Unlink item' }));
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ item_id: null });
   });
 
   it('edits a pending request', async () => {
@@ -298,7 +351,7 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     category_name: 'Nitrile Gloves',
     current_stock: 2,
     threshold: 10,
-    items: [{ name: 'Nitrile Gloves L', quantity: 2 }],
+    items: [{ id: 'it-9', name: 'Nitrile Gloves L', quantity: 2 }],
   };
 
   beforeEach(() => {
@@ -314,6 +367,8 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     mockCreateReorderRequest.mockResolvedValue({});
     mockUpdateReorderRequest.mockReset();
     mockUpdateReorderRequest.mockResolvedValue({});
+    mockReceiveReorderStock.mockReset();
+    mockReceiveReorderStock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -340,17 +395,36 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     expect(await screen.findByRole('dialog', { name: 'Receive stock' })).toBeInTheDocument();
   });
 
-  // Nothing on this page links a request to an inventory item, and the server
-  // refuses a receipt without one, so the form could only ever be refused
-  // after the quartermaster had filled in the location and the cost.
-  it('says an unlinked request cannot be received here', async () => {
+  // The server refuses a receipt for an order with no linked item (W41-5), so
+  // an unlinked order is linked here, at receipt, before any stock posts.
+  it('asks for the item before an unlinked request can be received', async () => {
     window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
     renderWithRouter(<ReorderRequestsPage />);
 
     const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(/isn.t linked to an inventory item/);
+    expect(within(dialog).getByText(/isn.t linked to an inventory item yet/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('textbox', { name: /Storage location/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeDisabled();
+  });
+
+  it('links the picked item and then receives against it', async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
+    renderWithRouter(<ReorderRequestsPage />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
+    await user.click(within(dialog).getByRole('button', { name: 'Pick Nitrile Gloves L' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Storage location *' }), 'Shelf A');
+    await user.type(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($) *' }), '9.99');
+    await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
+
+    await waitFor(() => expect(mockReceiveReorderStock).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReorderRequest).toHaveBeenCalledWith('ro-7', { item_id: 'it-9' });
+    // Linked first: the receipt is refused for an unlinked order.
+    const linkOrder = mockUpdateReorderRequest.mock.invocationCallOrder[0] ?? Infinity;
+    const receiveOrder = mockReceiveReorderStock.mock.invocationCallOrder[0] ?? -Infinity;
+    expect(linkOrder).toBeLessThan(receiveOrder);
+    expect(mockReceiveReorderStock.mock.calls[0]?.[1]).toMatchObject({ quantity: 4, storage_location: 'Shelf A' });
   });
 
   it('names and marks the fields a linked request needs to receive', async () => {
@@ -393,6 +467,8 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     expect(await screen.findByDisplayValue('Nitrile Gloves L')).toBeInTheDocument();
     // 10 par less 2 on hand — the shortfall, which is what to order.
     expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+    // The alert carries the item's id, so the order is linked and receivable.
+    expect(screen.getByText('Linked: it-9')).toBeInTheDocument();
   });
 
   it('does nothing for a category with no low-stock alert', async () => {

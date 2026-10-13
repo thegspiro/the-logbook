@@ -319,6 +319,7 @@ async def verify_audit_integrity(
     return {
         "verified": result["verified"],
         "total_checked": result["total_checked"],
+        "pending_seal": result.get("pending_seal", 0),
         "first_id": result.get("first_id"),
         "last_id": result.get("last_id"),
         "errors": result.get("errors", []),
@@ -633,6 +634,7 @@ async def export_audit_logs(
                 "ip_address": log.ip_address,
                 "user_agent": log.user_agent,
                 "event_data": log.event_data,
+                "chain_seq": log.chain_seq,
                 "previous_hash": log.previous_hash,
                 "current_hash": log.current_hash,
             }

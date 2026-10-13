@@ -147,6 +147,15 @@ Token** empty. Do not enter or store the Run As user's password. The Run As user
 needs **API Enabled** and only the object and field permissions required for the
 selected sync types.
 
+**Moving an existing connection to the service account** _(2026-10-11)_.
+Clearing the **Refresh Token** box and saving does **not** do this — a blank
+secret field always means "leave what is stored". Instead, with Salesforce
+connected, open **Sync** and select **Switch to Client Credentials** under
+**Sign-in method**, then confirm. The stored refresh token (and the cached
+access token) are discarded and nothing else changes; the next sync signs in
+with the Connected App's client ID and secret. Set up the Connected App's
+client-credentials flow and Run As user first, or syncs fail until you do.
+
 Before the first write, run the readiness check and preview. Create the
 recommended `Logbook_*__c` external-ID fields: Contact matching can fall back to
 email, but Task and Event pushes can duplicate records without their external

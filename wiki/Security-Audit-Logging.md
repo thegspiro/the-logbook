@@ -15,6 +15,15 @@ Every significant action in the system is recorded in the audit log with:
 - **Details** — Specific changes (old value → new value)
 - **Hash** — Keyed HMAC-SHA256 hash linking to the previous entry (legacy pre-upgrade rows use unkeyed SHA-256)
 
+**Sealing** _(2026-10-12)_: an entry is written in the same transaction as the
+action it records, without its hash, and joined to the chain moments later by
+a sealer that takes one lock (the `audit_chain_head` row) in its own short
+transaction — so concurrent writers can no longer fork the chain, and a
+rolled-back action never reaches it. Chain order is `chain_seq`, not `id`. The
+integrity check reports entries still waiting as `pending_seal`, not as
+tampering; the `audit_chain_seal` task (every minute) seals anything the
+after-commit sealer missed.
+
 ---
 
 ## What Is Logged
@@ -180,12 +189,14 @@ to catch, so the purge is designed not to look like tampering:
 
 The hash chain makes tampering _detectable_, but it cannot survive an attacker
 deleting the whole table. Set `AUDIT_SHIP_WEBHOOK_URL` and the
-`audit_log_ship` task (every 30 minutes) POSTs new entries to your collector
-or SIEM as NDJSON batches:
+`audit_log_ship` task (every 30 minutes) POSTs newly sealed entries, in chain
+order, to your collector or SIEM as NDJSON batches:
 
 - Each request carries `X-Logbook-Signature: sha256=<hex>` — an HMAC of the
   exact body, keyed with the audit signing key — so the collector can
-  authenticate the sender, plus `X-Logbook-First-Id` / `X-Logbook-Last-Id`.
+  authenticate the sender, plus `X-Logbook-First-Id` / `X-Logbook-Last-Id`
+  and `X-Logbook-First-Seq` / `X-Logbook-Last-Seq` (chain positions — the ones
+  to deduplicate on, since ids in a batch need not be ascending).
 - A durable high-water mark (`audit_ship_state`) advances **only** after the
   collector answers 2xx, per batch. A failed delivery is retried on the next
   run; acknowledged rows are never re-shipped.

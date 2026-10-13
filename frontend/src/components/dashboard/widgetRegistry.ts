@@ -4,6 +4,13 @@
  * The API paths intentionally point at the module that owns each workflow;
  * widgets consume aggregates and link to filtered queues instead of loading
  * sensitive record collections into the dashboard.
+ *
+ * Most of this file is design intent, not a description of what runs (DASH-1,
+ * owner decision 2026-10-05: mark the unwired entries rather than build or
+ * delete them). `wired` and `aggregateEndpoint` say which parts are real, so
+ * the next contributor wiring a widget does not trust a path that was never
+ * built. `widgetRegistry.test.ts` holds `wired` to the actual
+ * `dashboardWidget(...)` readers in the source tree.
  */
 export interface DashboardWidgetDefinition {
   id: string;
@@ -12,6 +19,14 @@ export interface DashboardWidgetDefinition {
   aggregatePath: string;
   queuePath: string;
   defaultEnabled: boolean | 'while-incomplete';
+  /** True only when a screen reads this entry through `dashboardWidget()`. */
+  wired: boolean;
+  /**
+   * Whether `aggregatePath` resolves to a mounted backend route. `not-built`
+   * means the endpoint does not exist and a fetch would 404; building it, with
+   * its own permission scoping, comes before wiring the widget.
+   */
+  aggregateEndpoint: 'mounted' | 'not-built';
 }
 
 export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
@@ -19,9 +34,11 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: 'prospect-pipeline',
     title: 'Prospective-member pipeline',
     permission: 'prospective_members.view',
-    aggregatePath: '/membership-pipeline/widget-summary',
+    aggregatePath: '/prospective-members/widget-summary',
     queuePath: '/prospective-members?status=active',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'mounted',
   },
   {
     id: 'onboarding-completion',
@@ -30,6 +47,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/onboarding/widget-summary',
     queuePath: '/onboarding?status=incomplete',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'not-built',
   },
   {
     id: 'membership-status',
@@ -38,6 +57,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/users/status/widget-summary',
     queuePath: '/members?status_change=pending',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'not-built',
   },
   {
     id: 'leave-oversight',
@@ -46,6 +67,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/users/leaves-of-absence/widget-summary',
     queuePath: '/members?leave=active',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'mounted',
   },
   {
     id: 'admin-hours',
@@ -54,6 +77,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/admin-hours/widget-summary',
     queuePath: '/admin-hours/manage?status=pending',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'not-built',
   },
   {
     id: 'meeting-governance',
@@ -62,6 +87,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/meetings/widget-summary',
     queuePath: '/minutes?status=pending',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'not-built',
   },
   {
     id: 'communications',
@@ -70,14 +97,18 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     aggregatePath: '/messages/widget-summary',
     queuePath: '/messages/manage?acknowledgment=pending',
     defaultEnabled: true,
+    wired: false,
+    aggregateEndpoint: 'not-built',
   },
   {
     id: 'department-setup',
     title: 'Organization setup',
     permission: 'settings.manage',
-    aggregatePath: '/organizations/setup-checklist',
+    aggregatePath: '/organization/setup-checklist',
     queuePath: '/setup',
     defaultEnabled: 'while-incomplete',
+    wired: true,
+    aggregateEndpoint: 'mounted',
   },
 ] as const;
 

@@ -70,6 +70,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EXTERNAL_COURSE_MATCH.value: "95dbdfb6591d",
     EmailTemplateType.TRAINING_RECORD_VOIDED.value: "26ca07c56d0f",
     EmailTemplateType.TRAINING_RECORD_CHANGED.value: "26ca07c56d0f",
+    EmailTemplateType.EVENT_WAITLIST_PROMOTION.value: "32a58e65eb63",
 }
 
 

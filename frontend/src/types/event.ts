@@ -572,6 +572,8 @@ export interface RSVPHistory {
   new_status: string;
   changed_at: string;
   changed_by: string | null;
+  /** The system made the change (an automatic waitlist promotion); changed_by is null then. */
+  is_automatic: boolean;
   user_name: string | null;
   changer_name: string | null;
 }

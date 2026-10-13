@@ -42,10 +42,12 @@ import {
   getPositionOptions,
 } from '../modules/scheduling/components/shiftTemplateTypes';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'templates' | 'patterns';
 
 export const ShiftTemplatesPage: React.FC = () => {
+  const tablist = useTablist();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
@@ -255,7 +257,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="tab-scroll mb-6" role="tablist" aria-label="Templates and patterns">
+      <div className="tab-scroll mb-6" role="tablist" {...tablist} aria-label="Templates and patterns">
         <button
           onClick={() => setActiveTab('templates')}
           role="tab"

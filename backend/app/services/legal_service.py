@@ -15,7 +15,7 @@ import copy
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.legal import (
@@ -45,6 +45,19 @@ EFFECTIVE_DATE_KEY = {
     LegalDocumentType.TERMS_OF_SERVICE: "terms_of_service_effective_date",
 }
 LEGACY_SHARED_DATE_KEY = "last_updated"
+
+# Owner decision DOC-8 (2026-10-12): at most this many open drafts per member
+# per document type. "Open" means status DRAFT — the only state in which a
+# proposal is still pending. Publishing moves it to PUBLISHED (later ARCHIVED)
+# and withdrawing deletes the row, so either frees a slot; nothing else takes a
+# member's draft out of DRAFT.
+MAX_OPEN_DRAFTS_PER_MEMBER = 10
+
+# How the refusal names a document type to the member.
+DOCUMENT_LABEL = {
+    LegalDocumentType.PRIVACY_POLICY: "the privacy policy",
+    LegalDocumentType.TERMS_OF_SERVICE: "the terms of service",
+}
 
 PUBLIC_PATH = {
     LegalDocumentType.PRIVACY_POLICY: "/privacy",
@@ -103,13 +116,65 @@ class LegalDocumentService:
             raise ValueError("Revision not found")
         return revision
 
-    async def list_revisions(self, organization_id: str) -> list[LegalDocumentRevision]:
+    async def list_revisions_page(
+        self,
+        organization_id: str,
+        document_type: LegalDocumentType,
+        drafts: bool,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[LegalDocumentRevision], int]:
+        """One page of a document's drafts, or of its published history.
+
+        Paged (owner decision DOC-8): every revision carries a body of up to
+        100,000 characters, and nothing caps how many drafts a department
+        accumulates, so returning them all made every load of the screen cost
+        more than the last. Newest first, with ``id`` breaking ties so an
+        offset never skips or repeats a row whose ``created_at`` it shares.
+        """
+        status_filter = (
+            LegalDocumentRevision.status == LegalRevisionStatus.DRAFT
+            if drafts
+            else LegalDocumentRevision.status != LegalRevisionStatus.DRAFT
+        )
+        scope = (
+            LegalDocumentRevision.organization_id == organization_id,
+            LegalDocumentRevision.document_type == document_type,
+            status_filter,
+        )
+        total = (
+            await self.db.execute(
+                select(func.count(LegalDocumentRevision.id)).where(*scope)
+            )
+        ).scalar_one()
         result = await self.db.execute(
             select(LegalDocumentRevision)
-            .where(LegalDocumentRevision.organization_id == organization_id)
-            .order_by(LegalDocumentRevision.created_at.desc())
+            .where(*scope)
+            .order_by(
+                LegalDocumentRevision.created_at.desc(),
+                LegalDocumentRevision.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().all()), int(total)
+
+    async def get_published_revision(
+        self, organization_id: str, document_type: LegalDocumentType
+    ) -> Optional[LegalDocumentRevision]:
+        """The revision currently live for one document, if it came from here."""
+        result = await self.db.execute(
+            select(LegalDocumentRevision)
+            .where(
+                LegalDocumentRevision.organization_id == organization_id,
+                LegalDocumentRevision.document_type == document_type,
+                LegalDocumentRevision.status == LegalRevisionStatus.PUBLISHED,
+            )
+            .order_by(LegalDocumentRevision.published_at.desc())
+            .limit(1)
+        )
+        revision: Optional[LegalDocumentRevision] = result.scalar_one_or_none()
+        return revision
 
     async def get_user_names(self, user_ids: set[str]) -> dict[str, str]:
         """Map user id -> display name for revision attribution."""
@@ -153,12 +218,22 @@ class LegalDocumentService:
     async def create_draft(
         self,
         organization_id: str,
-        created_by: str,
+        created_by: Optional[str],
         document_type: LegalDocumentType,
         body: str,
         change_note: str,
         effective_date: Optional[str] = None,
     ) -> LegalDocumentRevision:
+        """Save a proposal as a draft, within the per-member open-draft cap.
+
+        ``created_by`` is ``None`` only for an internal caller with no member
+        behind it; the endpoint always passes the caller. Such a draft has no
+        member to count against, so the cap does not apply to it.
+        """
+        if created_by is not None:
+            await self._assert_under_draft_cap(
+                organization_id, created_by, document_type
+            )
         revision = LegalDocumentRevision(
             organization_id=organization_id,
             document_type=document_type,
@@ -171,6 +246,62 @@ class LegalDocumentService:
         self.db.add(revision)
         await self.db.flush()
         return revision
+
+    async def _assert_under_draft_cap(
+        self,
+        organization_id: str,
+        created_by: str,
+        document_type: LegalDocumentType,
+    ) -> None:
+        """Refuse a new draft once the member has the maximum open (DOC-8).
+
+        A count followed by an insert, so it needs both halves of pitfall #27.
+
+        The parent lock is the proposer's own ``users`` row: the narrowest
+        existing row that every request by this member for this document type
+        shares. The organization row would serialize them too, but publish and
+        revert already lock it, so it would queue every member's proposal
+        behind every other member's and behind publishing. The user row also
+        serializes one member's proposals across both document types, which
+        costs nothing — a member does not propose in parallel at volume. The
+        organization filter keeps the lookup tenant-scoped (pitfall #14).
+
+        The count is itself a locking read: under REPEATABLE READ a plain
+        SELECT answers from the snapshot taken at this transaction's first
+        read, which predates the lock, so a request that waited on the lock
+        would still count the tally from before the one ahead of it committed.
+        """
+        proposer = (
+            await self.db.execute(
+                select(User.id)
+                .where(
+                    User.id == created_by,
+                    User.organization_id == organization_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if proposer is None:
+            raise ValueError("Member not found")
+
+        open_drafts = (
+            await self.db.execute(
+                select(func.count(LegalDocumentRevision.id))
+                .where(
+                    LegalDocumentRevision.organization_id == organization_id,
+                    LegalDocumentRevision.document_type == document_type,
+                    LegalDocumentRevision.created_by == created_by,
+                    LegalDocumentRevision.status == LegalRevisionStatus.DRAFT,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+        if open_drafts >= MAX_OPEN_DRAFTS_PER_MEMBER:
+            raise ValueError(
+                f"You already have {MAX_OPEN_DRAFTS_PER_MEMBER} open proposals "
+                f"for {DOCUMENT_LABEL[document_type]}. Publish or withdraw one "
+                f"first."
+            )
 
     async def update_draft(
         self,

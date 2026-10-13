@@ -107,10 +107,10 @@ def test_the_editor_defaults_do_not_silently_revoke_a_seeded_manage_grant(permis
 # ---------------------------------------------------------------------------
 #
 # The wizard carries its own copy of the position list and never fetches one,
-# and `save_session_roles` *creates* a system position for any id it does not
-# already know. So a discipline template offered for an agency the backend
-# declined to seed is not a cosmetic slip: ticking it puts the row back, with
-# grants built from two checkboxes rather than from DEFAULT_POSITIONS.
+# and `save_session_roles` *creates* a position for any id it does not already
+# know (a system one when the registry defines the slug — ONB-7). So a
+# discipline template offered for an agency the backend declined to seed is not
+# a cosmetic slip: ticking it puts the row back.
 #
 # Parsed out of the source text, like the templates above. The rule lives in its
 # own small module, `config/agencyPositions.ts`, precisely so it can be read this

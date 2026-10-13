@@ -542,6 +542,14 @@ export const inventoryService = {
     return asArray(response.data);
   },
 
+  /** Records not yet completed, oldest first — what "Complete work" closes (INV-17). */
+  async getOpenMaintenanceRecords(itemId: string): Promise<MaintenanceRecord[]> {
+    const response = await api.get<MaintenanceRecord[]>(`/inventory/items/${itemId}/maintenance`, {
+      params: { open_only: true },
+    });
+    return asArray(response.data);
+  },
+
   async createMaintenanceRecord(data: MaintenanceRecordCreate): Promise<MaintenanceRecord> {
     const response = await api.post<MaintenanceRecord>('/inventory/maintenance', data);
     return response.data;
@@ -1257,7 +1265,8 @@ export const inventoryService = {
   async reviewReturnRequest(
     requestId: string,
     data: {
-      status: 'received' | 'denied';
+      // 'inspected' completes a notice a direct return already received (W39-5).
+      status: 'received' | 'denied' | 'inspected';
       review_notes?: string | undefined;
       observed_condition?: string | undefined;
       verified_identifier?: string | undefined;
