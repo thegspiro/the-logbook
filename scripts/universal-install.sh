@@ -166,6 +166,51 @@ reconcile_frontend_url() {
     fi
 }
 
+# The origin (scheme://host[:port]) of a URL: what CORS and the browser
+# compare, and what the backend derives its Host allowlist from.
+url_origin() {
+    local url="$1" scheme rest hostport
+    scheme="${url%%://*}"
+    rest="${url#*://}"
+    hostport="${rest%%/*}"
+    hostport="${hostport##*@}"
+    printf '%s://%s' "$scheme" "$hostport"
+}
+
+# In production the backend builds its Host allowlist from ALLOWED_ORIGINS'
+# hostnames (Settings.get_trusted_hosts), plus localhost for health checks.
+# Left at the localhost defaults, every request that arrives under the public
+# hostname is refused with 400, so a finished install answers nothing. A
+# preserved .env that already lists a public origin is the operator's and is
+# kept; one with no public origin gets the public site's origin appended, taken
+# from FRONTEND_URL, which reconcile_frontend_url has already settled. Existing
+# entries are kept: only an addition, never a rewrite.
+reconcile_allowed_origins() {
+    local env_file="$1" current frontend entry origin tmp
+    current=$(sed -n 's/^[[:space:]]*ALLOWED_ORIGINS=//p' "$env_file" | tail -n 1)
+    local IFS=','
+    for entry in $current; do
+        entry="${entry#"${entry%%[![:space:]]*}"}"
+        entry="${entry%"${entry##*[![:space:]]}"}"
+        if [[ -n "$entry" ]] && ! frontend_url_is_loopback "$entry"; then
+            return 0
+        fi
+    done
+    unset IFS
+    frontend=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' "$env_file" | tail -n 1)
+    if [[ -z "$frontend" ]] || frontend_url_is_loopback "$frontend"; then
+        log_error "Cannot set ALLOWED_ORIGINS: your .env has no public FRONTEND_URL."
+        return 1
+    fi
+    origin=$(url_origin "$frontend")
+    tmp=$(mktemp)
+    grep -vE '^[[:space:]]*ALLOWED_ORIGINS=' "$env_file" > "$tmp" || true
+    printf 'ALLOWED_ORIGINS=%s\n' "${current:+$current,}$origin" >> "$tmp"
+    cat "$tmp" > "$env_file"
+    rm -f "$tmp"
+    log_info "Added $origin to ALLOWED_ORIGINS in your .env"
+}
+
 print_banner() {
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════╗"
@@ -492,6 +537,7 @@ EOF
             log_warning "SECURITY_REQUIRE_TLS=false for the bundled plaintext services."
         fi
         reconcile_frontend_url "$INSTALL_DIR/.env"
+        reconcile_allowed_origins "$INSTALL_DIR/.env"
         return
     fi
 
@@ -592,7 +638,9 @@ REDIS_SSL=false
 # ============================================
 # NETWORK
 # ============================================
-ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+# The public site's origin. The backend accepts requests only for the hosts
+# listed here (plus localhost), so this must name the address members use.
+ALLOWED_ORIGINS=$(url_origin "$PUBLIC_URL")
 # Every link in outgoing email (password resets, ballots, reminders) is built
 # from this. Set it to the address members open the site at.
 FRONTEND_URL=${PUBLIC_URL}
@@ -758,7 +806,11 @@ wait_for_services() {
     local attempt=0
 
     while [[ $attempt -lt $max_attempts ]]; do
-        if docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend curl -s http://localhost:3001/health > /dev/null 2>&1; then
+        # The same probe as the backend image's own HEALTHCHECK
+        # (backend/Dockerfile): the image has no curl, so a curl here failed
+        # on every attempt and every install waited out the full timeout.
+        # Requests is a backend dependency, and a non-200 answer is not ready.
+        if docker compose "${COMPOSE_FILE_ARGS[@]}" exec -T backend python -c "import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code == 200 else 1)" > /dev/null 2>&1; then
             log_success "Backend is healthy"
             break
         fi

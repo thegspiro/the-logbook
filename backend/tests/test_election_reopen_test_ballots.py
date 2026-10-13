@@ -18,13 +18,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from sqlalchemy.engine import CursorResult
+
 from app.models.election import ElectionStatus
 from app.services import election_service as election_service_module
 from app.services.election_service import ElectionService
 
 
 def _result(scalar_one_or_none=None, scalar=None, rowcount=0, scalars_all=None):
-    result = MagicMock()
+    result = MagicMock(spec=CursorResult)
     result.scalar_one_or_none = MagicMock(return_value=scalar_one_or_none)
     result.scalar = MagicMock(return_value=scalar)
     result.rowcount = rowcount

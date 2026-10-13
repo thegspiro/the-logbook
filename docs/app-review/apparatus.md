@@ -52,16 +52,20 @@ columns (`vendor`, `cost`, `notes`, `performed_by`, `findings`, `work_performed`
 so an explicit null is what the schema wants.
 
 A second defect sits behind it: `apparatus_service.update_maintenance_record`
-applies updates with a raw `for field, value in update_data.items(): setattr(...)`
+applied updates with a raw `for field, value in update_data.items(): setattr(...)`
 loop rather than the shared `apply_updates`. The raw loop does write a null
 through, so a frontend-only fix would function — but it loses `apply_updates`'
-guarantees: a null against a NOT NULL column becomes an `IntegrityError` → 500
-instead of a clean 400, and a field the model does not have is set silently
-instead of reported. A fix should do both halves.
+guarantee for NOT NULL columns: a null against one becomes an `IntegrityError` →
+500 instead of a clean 400. (An earlier version of this paragraph also said an
+unknown field would be "set silently". That is not reachable: every key
+`ApparatusMaintenanceUpdate` can produce is a real model column.)
 
 Recorded as **FAC2-6** in `docs/app-review/facilities.md` with the full
-mechanism. Not fixed in the facilities PR that found it — different module,
-different iteration — so it is **open** and belongs to this module's next pass.
+mechanism. **Both halves are now closed** — the frontend by `f4e16fa0` on
+2026-10-09, the service by the change that wrote this sentence (2026-10-12) —
+and the entry above in `facilities.md` explains why an earlier version of it
+wrongly reported the frontend as still open on 2026-10-11.
+
 The lesson for this file is the one B4 pass 5 acted on: a pass that records
 `tsc --noEmit` as "no frontend change" has not reviewed the frontend, and should
 not describe its scope as having read a workflow "in full".

@@ -2,7 +2,7 @@
  * Training type definitions
  */
 
-import type { RequirementChangeScope } from '../constants/enums';
+import type { PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -827,23 +827,23 @@ export interface TrainingRequirementCreate {
   passing_score?: number | null | undefined;
   max_attempts?: number | null | undefined;
   frequency: RequirementFrequency;
-  year?: number | undefined;
+  year?: number | null | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   new_member_cutoff_date?: string | null | undefined;
   existing_member_deadline?: string | null | undefined;
-  start_date?: string | undefined;
-  due_date?: string | undefined;
+  start_date?: string | null | undefined;
+  due_date?: string | null | undefined;
   time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
-  period_end_month?: number | undefined;
-  period_end_day?: number | undefined;
+  period_end_month?: number | null | undefined;
+  period_end_day?: number | null | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
   recency_days?: number | null | undefined;
@@ -878,23 +878,23 @@ export interface TrainingRequirementUpdate {
   passing_score?: number | null | undefined;
   max_attempts?: number | null | undefined;
   frequency?: RequirementFrequency;
-  year?: number | undefined;
+  year?: number | null | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
   required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   new_member_cutoff_date?: string | null | undefined;
   existing_member_deadline?: string | null | undefined;
-  start_date?: string | undefined;
-  due_date?: string | undefined;
+  start_date?: string | null | undefined;
+  due_date?: string | null | undefined;
   time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
-  period_end_month?: number | undefined;
-  period_end_day?: number | undefined;
+  period_end_month?: number | null | undefined;
+  period_end_day?: number | null | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
   recency_days?: number | null | undefined;
@@ -1069,9 +1069,12 @@ export interface ProgramRequirement {
   // created for this program: editing it changes the department's copy, and
   // unlinking leaves that copy in place.
   owns_requirement?: boolean;
-  program_specific_description?: string;
-  custom_deadline_days?: number;
-  notification_message?: string;
+  /** Shown to members in place of the requirement's own description. */
+  program_specific_description?: string | null;
+  /** Due this many days after a member enrolls; null for no due date. */
+  custom_deadline_days?: number | null;
+  /** Emailed to the member once, when they complete the requirement. */
+  notification_message?: string | null;
   created_at: string;
   requirement?: TrainingRequirementEnhanced;
 }
@@ -1090,9 +1093,9 @@ export interface ProgramRequirementCreate {
   // means true, which is what adding a requirement always did.
   apply_to_current_enrollments?: boolean;
   sort_order?: number;
-  program_specific_description?: string;
-  custom_deadline_days?: number;
-  notification_message?: string;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 export interface ProgramRequirementUpdate {
@@ -1100,6 +1103,10 @@ export interface ProgramRequirementUpdate {
   is_prerequisite?: boolean;
   sort_order?: number;
   phase_id?: string | null;
+  // Omitted leaves the stored value alone; null clears it.
+  program_specific_description?: string | null;
+  custom_deadline_days?: number | null;
+  notification_message?: string | null;
 }
 
 export interface TrainingProgramUpdate {
@@ -1249,6 +1256,16 @@ export interface RequirementProgressRecord {
    * it). Sent by the enrollment progress read.
    */
   reads_compliance?: boolean;
+  /**
+   * The program's settings for this requirement, from the enrollment progress
+   * read. `due_date` is a calendar date ("YYYY-MM-DD") — the member's
+   * enrollment plus the program's due-after days, on the department's
+   * calendar — and `is_overdue` is the server's verdict against the
+   * department's today. Never re-derived here (CLAUDE.md pitfall #29).
+   */
+  program_specific_description?: string | null;
+  due_date?: string | null;
+  is_overdue?: boolean;
 }
 
 export interface RequirementProgressUpdate {
@@ -1381,6 +1398,9 @@ export interface ProgramBuildRequirementLink {
   requirement_id: string;
   is_required: boolean;
   sort_order: number;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 /** Defines a new program-specific requirement during program build. */
@@ -1402,6 +1422,9 @@ export interface ProgramBuildRequirementInput {
   allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;
+  program_specific_description?: string | undefined;
+  custom_deadline_days?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 export interface ProgramBuildMilestoneInput {
@@ -1858,6 +1881,24 @@ export interface ShiftCompletionReportCreate {
   save_as_draft?: boolean | undefined;
 }
 
+/**
+ * PUT /training/shift-reports/{id}. The backend dumps this with
+ * `exclude_unset`, so an omitted key leaves the stored value alone and only
+ * an explicit `null` clears one — hence `| null` on the clearable fields.
+ */
+export interface ShiftCompletionReportUpdate {
+  hours_on_shift?: number | undefined;
+  calls_responded?: number | undefined;
+  call_types?: string[] | undefined;
+  performance_rating?: number | null | undefined;
+  areas_of_strength?: string | null | undefined;
+  areas_for_improvement?: string | null | undefined;
+  officer_narrative?: string | null | undefined;
+  skills_observed?: SkillObservation[] | undefined;
+  tasks_performed?: TaskPerformed[] | undefined;
+  review_status?: string | undefined;
+}
+
 export interface ShiftCompletionReport {
   id: string;
   organization_id: string;
@@ -2014,6 +2055,9 @@ export interface TrainingModuleConfig {
   /** Department default for when a result becomes visible:
    *  'on_completion' | 'on_release' (an officer must release it first). */
   skills_result_release: string;
+  /** Which practical-skills system the department runs. The server reports
+   *  'skills_testing' for a department that never chose. */
+  practical_skills_method: PracticalSkillsMethod;
   allow_member_report_export: boolean;
   report_review_required: boolean;
   report_review_role: string;

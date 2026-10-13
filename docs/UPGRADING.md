@@ -418,7 +418,7 @@ earliest `created_at` (then the lowest `id`), review the applications linked to
 the others, and set those others to `inactive`. Do not delete them. Re-run the
 query until it returns nothing, then upgrade, and read the migration log
 afterwards for anything the reconciliation merged. The full procedure is in the
-[August 12–14 change audit](./CHANGE_AUDIT_2026-08-12_TO_14.md#alembic-route-upgrade-data-path).
+[August 12–14 change audit](./CHANGE_AUDIT_2026-08.md#alembic-route-upgrade-data-path-7).
 
 ### `RATE_LIMIT_ENABLED` is enforced (2026-08-01)
 
@@ -430,6 +430,52 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Program requirements with a due-after-enrollment setting start sending reminders (2026-10-12)
+
+A program requirement's **due after enrollment (days)** setting was stored —
+by cloning a program or importing one — but nothing read it. It now does, for
+every enrollment already running: the requirement is due that many days after
+the member enrolled, members are emailed on the program's reminder schedule,
+and a member whose date has **already passed** is sent **one** overdue notice
+on the first daily `program_requirement_deadlines` run after the upgrade (not a
+replay of every earlier reminder). Programs whose requirements never had the
+setting see no change.
+
+The same applies to a requirement's completion message: it is emailed from now
+on when a member completes the requirement. Completions from before the upgrade
+are marked as already announced by the migration, so nobody receives a message
+for training they finished earlier.
+
+To see which requirements are affected before upgrading, check the
+`program_requirements` rows with `custom_deadline_days` or
+`notification_message` set; an officer can clear either on the program's
+**Edit requirement** modal.
+
+### A department runs one practical-skills system (2026-10-12)
+
+Training had two ways to record practical skills: **Skills Testing** (station
+sheets, scored by an examiner and validated by an officer) and **shift-report
+sign-offs** (skills a shift officer ticks as demonstrated, which raise the
+member's competency). A department now runs one of them, chosen under
+**Training Administration → Settings & Data → Practical Skills**, and the
+other's screens are hidden from the hub, both navigation bars, My Training,
+the shift report form and the command palette.
+
+What the upgrade picks for each department:
+
+- **Sign-offs and no skills tests ever run** → shift-report sign-offs. Nothing
+  it uses disappears.
+- **Everyone else** → Skills Testing. This includes a department that used
+  both: its shift report form loses the skills list, and approving a shift
+  report no longer records sign-offs or raises competency.
+
+Nothing is deleted. Past sign-offs, competency levels and skills-test results
+stay on file, and switching the setting back shows them again. If a department
+used both, check its choice after the upgrade.
+
+Migration `bde76b481a16` adds `training_module_configs.practical_skills_method`.
+Downgrading drops the column and with it only the choice.
 
 ### Each document's file gets its own folder on disk (2026-10-11)
 
@@ -481,6 +527,23 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Folder access can be set by position and permission; some saves are refused (2026-10-12)
+
+Nothing here stops the stack from starting. The Documents folder dialogs, and
+`POST` / `PATCH /documents/folders`, now accept `required_permissions` on a
+custom folder. They refuse (400) a few saves that used to succeed silently:
+
+- a position that is not one of the department's;
+- positions together with leadership-only, or on a personal folder, where
+  they were stored but never applied;
+- a change to a built-in folder's module rights;
+- settings that would shut the person saving them out of the folder (a full
+  administrator is exempt).
+
+A folder already stored as leadership-only with positions keeps working as
+before. Its next access edit must clear the positions or choose
+Organization; the Manage folder dialog does that on its own.
 
 ### Stored files are encrypted; confirm the key is kept safe (2026-10-09)
 

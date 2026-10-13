@@ -85,7 +85,7 @@ class LocationService:
         return location
 
     async def get_location(
-        self, location_id: UUID, organization_id: str
+        self, location_id: UUID | str, organization_id: str
     ) -> Optional[Location]:
         """Get a location by ID"""
         result = await self.db.execute(
@@ -239,7 +239,7 @@ class LocationService:
 
     async def get_current_events_in_check_in_window(
         self,
-        location_id: UUID,
+        location_id: UUID | str,
         organization_id: str,
     ) -> List[Event]:
         """
@@ -312,11 +312,11 @@ class LocationService:
 
     async def check_overlapping_events(
         self,
-        location_id: UUID,
+        location_id: UUID | str,
         organization_id: str,
         start_datetime: datetime,
         end_datetime: datetime,
-        exclude_event_id: Optional[UUID] = None,
+        exclude_event_id: UUID | str | None = None,
         for_booking: bool = True,
     ) -> List[Event]:
         """

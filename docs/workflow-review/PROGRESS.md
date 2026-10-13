@@ -151,11 +151,6 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Inventory activities** — the Inventory Administration "Needs attention"
-  tile (backend summary: PPE replacement and below-par only) disagrees with
-  the list under it, which also carries clearances, requests and returns;
-  "Issued to members" counts pool issuances only, so permanently assigned
-  items read "0, held by 0 members" (W15).
 - **Reports and inventory activities** — three `DialogPanel` dialogs have no
   `role` on the panel or a wrapper: the report viewer, and
   InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The

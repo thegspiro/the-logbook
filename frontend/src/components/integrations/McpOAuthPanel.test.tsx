@@ -88,6 +88,26 @@ describe('McpOAuthPanel', () => {
     expect(screen.getByText('https://logbook.test/api/oauth')).toBeInTheDocument();
   });
 
+  it('re-reads the department switch after the settings are saved, keeping a shown secret', async () => {
+    const user = userEvent.setup();
+    mockStatus.mockResolvedValue({ ...status, department_enabled: false });
+    mockRegister.mockResolvedValue({
+      client: { ...client, id: 'c2', client_id: 'lbmcp_new' },
+      client_secret: 'lbmcs_secret',
+    });
+    const { rerender } = renderWithRouter(<McpOAuthPanel configVersion={0} />);
+    expect(await screen.findByTestId('mcp-oauth-department-off')).toBeInTheDocument();
+    await user.click(screen.getByTestId('mcp-oauth-register'));
+    await screen.findByTestId('mcp-oauth-created');
+
+    mockStatus.mockResolvedValue({ ...status, department_enabled: true });
+    rerender(<McpOAuthPanel configVersion={1} />);
+
+    await waitFor(() => expect(screen.queryByTestId('mcp-oauth-department-off')).not.toBeInTheDocument());
+    // A reload, not a remount: the one-time secret is still on screen.
+    expect(screen.getByTestId('mcp-oauth-created')).toHaveTextContent('lbmcs_secret');
+  });
+
   it('says so when the server has member sign-in off', async () => {
     mockStatus.mockResolvedValue({ ...status, server_enabled: false, issuer: null });
     renderWithRouter(<McpOAuthPanel />);

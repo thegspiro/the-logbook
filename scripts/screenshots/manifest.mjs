@@ -42,6 +42,8 @@
  * steps and are tracked in `docs/training/SCREENSHOT_STATUS.md`.
  */
 
+import { createHash, randomBytes } from "node:crypto";
+
 export const DEMO_CREDENTIALS = {
   username: process.env.SCREENSHOT_ADMIN_USERNAME || "chief",
   password: process.env.SCREENSHOT_ADMIN_PASSWORD,
@@ -2218,6 +2220,277 @@ async function disconnectMcp(page) {
 }
 
 /**
+ * Member sign-in (OAuth) for the Claude (MCP) integration — the path a
+ * claude.ai custom connector takes. These shots need the backend started with
+ * MCP_OAUTH_ENABLED=true and MCP_OAUTH_ISSUER_URL=http://localhost:3000 (the
+ * frontend origin, which proxies /api); without them the panel shows its
+ * "off on this server" notice and the consent screens cannot be reached.
+ *
+ * The integration is connected read-only with the department switch on, and a
+ * real `claude.ai` client is registered with claude.ai's callback, because the
+ * consent screen is only reachable through a genuine /api/oauth/authorize
+ * request. Cleanup revokes every client and disconnects, which also ends every
+ * member connection, so nothing outlives the shot. The one picture of a client
+ * secret is answered by a route mock with a visible placeholder, for the same
+ * reason as the service key: a real secret in a public image is a credential.
+ */
+const CLAUDE_AI_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
+const DEMO_OAUTH_CLIENT_ID = "lbmcp_DEMO-not-a-real-client-id";
+const DEMO_OAUTH_CLIENT_SECRET = "lbmcs_DEMO-not-a-real-credential-0000000000";
+
+let memberSignInAdminPage = null;
+
+async function apiCall(page, method, path, body) {
+  return page.evaluate(
+    async ({ method, path, body }) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const response = await fetch(`/api/v1/${path}`, {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
+      return { status: response.status, json };
+    },
+    { method, path, body },
+  );
+}
+
+async function connectMcpForMemberSignIn(page, { oauthEnabled = true } = {}) {
+  const listed = await apiCall(page, "GET", "integrations");
+  const rows = Array.isArray(listed.json)
+    ? listed.json
+    : (listed.json?.integrations ?? []);
+  const row = rows.find((r) => r.integration_type === "claude-mcp");
+  if (!row) throw new Error("no claude-mcp integration row to connect");
+  // A run interrupted before its cleanup leaves the integration connected,
+  // and connect refuses an integration that already is.
+  if (row.status === "connected") {
+    await postIntegration(page, `${row.id}/disconnect`);
+  }
+  await postIntegration(page, `${row.id}/connect`, {
+    config: {
+      access_mode: "read_only",
+      expose_finance: false,
+      expose_medical_screening: false,
+      expose_full_schedule: false,
+      oauth_enabled: oauthEnabled,
+    },
+  });
+  const status = await apiCall(
+    page,
+    "GET",
+    "integrations/claude-mcp/oauth/status",
+  );
+  if (!status.json?.server_enabled) {
+    throw new Error(
+      "member sign-in is off on this server: start the backend with " +
+        "MCP_OAUTH_ENABLED=true and MCP_OAUTH_ISSUER_URL=http://localhost:3000",
+    );
+  }
+}
+
+async function registerClaudeAiClient(page) {
+  const created = await apiCall(
+    page,
+    "POST",
+    "integrations/claude-mcp/oauth/clients",
+    {
+      name: "claude.ai",
+      redirect_uris: [CLAUDE_AI_CALLBACK],
+      confidential: true,
+    },
+  );
+  if (created.status !== 200 && created.status !== 201) {
+    throw new Error(`registering the demo client returned ${created.status}`);
+  }
+  return {
+    clientId: created.json.client.client_id,
+    clientSecret: created.json.client_secret,
+  };
+}
+
+async function tearDownMemberSignIn(page) {
+  await page.unroute("**/api/v1/integrations/claude-mcp/oauth/clients");
+  const listed = await apiCall(
+    page,
+    "GET",
+    "integrations/claude-mcp/oauth/clients",
+  );
+  for (const client of listed.json?.clients ?? []) {
+    if (!client.is_active) continue;
+    await apiCall(
+      page,
+      "DELETE",
+      `integrations/claude-mcp/oauth/clients/${encodeURIComponent(client.id)}`,
+    );
+  }
+  await postIntegration(page, `${await mcpIntegrationId(page)}/disconnect`);
+}
+
+async function tearDownMemberSignInFromMemberShot() {
+  if (!memberSignInAdminPage) return;
+  const admin = memberSignInAdminPage;
+  memberSignInAdminPage = null;
+  await tearDownMemberSignIn(admin);
+}
+
+async function openMemberSignInPanel(page) {
+  await connectMcpForMemberSignIn(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page
+    .getByRole("button", { name: /Service key/ })
+    .first()
+    .click();
+  await page
+    .getByTestId("mcp-oauth-panel")
+    .getByText("Register a client")
+    .waitFor({ timeout: 10_000 });
+}
+
+async function showRegisteredClientSecret(page) {
+  await openMemberSignInPanel(page);
+  await page.route(
+    "**/api/v1/integrations/claude-mcp/oauth/clients",
+    async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const now = new Date().toISOString();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          client: {
+            id: "demo-client",
+            client_id: DEMO_OAUTH_CLIENT_ID,
+            name: "claude.ai",
+            redirect_uris: [CLAUDE_AI_CALLBACK],
+            confidential: true,
+            is_active: true,
+            created_at: now,
+            revoked_at: null,
+          },
+          client_secret: DEMO_OAUTH_CLIENT_SECRET,
+        }),
+      });
+    },
+  );
+  await page.getByTestId("mcp-oauth-register").click();
+  await page.getByTestId("mcp-oauth-created").waitFor({ timeout: 10_000 });
+}
+
+async function openMcpSettings(page) {
+  await connectMcpForMemberSignIn(page, { oauthEnabled: false });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Claude (MCP) settings" }).click();
+  const modal = page
+    .locator('.modal-panel:has-text("Claude (MCP) settings")')
+    .first();
+  await modal.waitFor({ timeout: 10_000 });
+  await modal
+    .getByRole("checkbox", {
+      name: /Let members connect with their own account/,
+    })
+    .check();
+}
+
+function pkcePair() {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+/**
+ * Sets up a real client as the administrator, then sends the member's page
+ * through /api/oauth/authorize exactly as claude.ai would. `mcp:write` is
+ * requested alongside `mcp:read` so the screen shows both kinds of row: the
+ * department is read-only, so the write scope honestly reaches nothing.
+ */
+async function startClaudeAiAuthorization(page, { lookupPage }) {
+  const admin = await lookupPage();
+  await admin.goto(`${new URL(page.url()).origin}/integrations`, {
+    waitUntil: "domcontentloaded",
+  });
+  memberSignInAdminPage = admin;
+  await connectMcpForMemberSignIn(admin);
+  const client = await registerClaudeAiClient(admin);
+  const pkce = pkcePair();
+  const query = new URLSearchParams({
+    response_type: "code",
+    client_id: client.clientId,
+    redirect_uri: CLAUDE_AI_CALLBACK,
+    scope: "mcp:read mcp:write",
+    state: randomBytes(12).toString("base64url"),
+    code_challenge: pkce.challenge,
+    code_challenge_method: "S256",
+  });
+  const origin = new URL(page.url()).origin;
+  await page.goto(`${origin}/api/oauth/authorize?${query}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByText("It is asking to").waitFor({ timeout: 15_000 });
+  return { client, pkce, origin };
+}
+
+async function showClaudeConsent(page, helpers) {
+  await startClaudeAiAuthorization(page, helpers);
+}
+
+/**
+ * Approves on the consent screen and completes the token exchange the way
+ * claude.ai's server would, because a connection is only recorded when the
+ * code is redeemed. The browser's trip to claude.ai is answered locally, so
+ * nothing leaves the machine.
+ */
+async function showMemberConnection(page, helpers) {
+  const { client, pkce, origin } = await startClaudeAiAuthorization(
+    page,
+    helpers,
+  );
+  let returnedTo = null;
+  await page.route("https://claude.ai/**", async (route) => {
+    returnedTo = route.request().url();
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>returned</title>",
+    });
+  });
+  await page.getByTestId("claude-consent-approve").click();
+  await page.waitForURL(/claude\.ai/, { timeout: 15_000 });
+  await page.unroute("https://claude.ai/**");
+  const code = new URL(returnedTo ?? page.url()).searchParams.get("code");
+  if (!code) throw new Error("the consent screen returned no code");
+  const exchanged = await page.request.post(`${origin}/api/oauth/token`, {
+    form: {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: CLAUDE_AI_CALLBACK,
+      code_verifier: pkce.verifier,
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+    },
+  });
+  if (!exchanged.ok()) {
+    throw new Error(`token exchange returned ${exchanged.status()}`);
+  }
+  await page.goto(`${origin}/claude/connections`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByTestId("claude-connections").waitFor({ timeout: 10_000 });
+}
+
+/**
  * The Testing Checklist module is off in the demo department, as it is on a
  * fresh install, so `08-84` can picture it off and the sidebar captures carry
  * no Testing entry. The two testing captures switch it on for themselves and
@@ -2400,8 +2673,7 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     // `div.modal-panel`, the panel itself. Two nearby selectors are wrong
-    // here and both were tried: `div.drawer-panel` belongs to
-    // ApplicantDetailDrawer in prospective-members and matches nothing on
+    // here and both were tried: `div.drawer-panel` matches nothing on
     // this page, and `div[role='dialog']` resolves to the full-viewport
     // backdrop (1425x1200) rather than the 896px panel inside it.
     selector: "div.modal-panel",
@@ -2585,8 +2857,7 @@ export const SHOTS = [
       await banner.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
-    selector:
-      "div:has(> svg) >> text=/You're offline\\. Reports are saved/",
+    selector: "div:has(> svg) >> text=/You're offline\\. Reports are saved/",
   },
   {
     id: "02-90-crew-summary-table",
@@ -14395,11 +14666,11 @@ export const SHOTS = [
     doc: "16-integrations.md",
     line: 792,
     anchor: "Integrations → Claude (MCP): the connect form",
-    alt: "Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening and full duty schedule switches all off, as shipped",
+    alt: "Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule and member sign-in switches all off, as shipped",
     route: "/integrations",
     // Tall enough to hold the whole form, down to the Connect button that is
     // never pressed.
-    viewport: { width: 1440, height: 1300 },
+    viewport: { width: 1440, height: 1500 },
     selector: '.modal-panel:has-text("Connect Claude (MCP)")',
     expect: "Share the full duty schedule",
     // Opened and never saved: Connect is not pressed, so the integration stays
@@ -14431,6 +14702,106 @@ export const SHOTS = [
     // "No active key" is honest: the key is mocked, so the server has none on
     // record, and the shown-once block above it is the subject.
     allowEmptyState: true,
+  },
+  {
+    id: "16-10-mcp-member-signin-switch",
+    doc: "16-integrations.md",
+    line: 1231,
+    anchor: "The Let members connect with their own account switch",
+    alt: "The Claude (MCP) connect form's Let members connect with their own account switch, ticked, with its note that it needs the server's OAuth setting and a registered client",
+    route: "/integrations",
+    viewport: { width: 1440, height: 1300 },
+    selector: 'label:has-text("Let members connect with their own account")',
+    expect: "Let members connect with their own account",
+    // Opened and never saved, like 16-08: the box is ticked in the browser
+    // only, so nothing persists.
+    prepare: async (page) => {
+      const card = page
+        .locator("div")
+        .filter({ hasText: /^Claude \(MCP\)/ })
+        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
+        .last();
+      await card.getByRole("button", { name: /^Connect$/ }).click();
+      const modal = page
+        .locator('.modal-panel:has-text("Connect Claude (MCP)")')
+        .first();
+      await modal.waitFor({ timeout: 10_000 });
+      await modal
+        .getByRole("checkbox", {
+          name: /Let members connect with their own account/,
+        })
+        .check();
+    },
+  },
+  {
+    id: "16-15-mcp-settings",
+    doc: "16-integrations.md",
+    line: 1241,
+    anchor: "The Claude (MCP) settings form opened from a connected card",
+    alt: "The Claude (MCP) settings form opened from the connected card: the stored access mode and switches with Let members connect with their own account ticked, a note that saving keeps the service key and members' connections, and a Save settings button",
+    route: "/integrations",
+    viewport: { width: 1440, height: 1500 },
+    selector: '.modal-panel:has-text("Claude (MCP) settings")',
+    expect: "Save settings",
+    // Connected with the switch off, as a department that connected before
+    // member sign-in existed would be; the switch is ticked in the browser
+    // and Save is never pressed.
+    prepare: openMcpSettings,
+    cleanup: tearDownMemberSignIn,
+  },
+  {
+    id: "16-11-mcp-oauth-register-client",
+    doc: "16-integrations.md",
+    line: 1253,
+    anchor: "The Member sign-in (OAuth) panel with the Register a client form",
+    alt: "The Member sign-in (OAuth) panel: the authorization server address, no clients registered yet, and the Register a client form prefilled with the name claude.ai, Issue a client secret ticked and claude.ai's redirect URI",
+    route: "/integrations",
+    viewport: { width: 1440, height: 1600 },
+    prepare: openMemberSignInPanel,
+    cleanup: tearDownMemberSignIn,
+    selector: '[data-testid="mcp-oauth-panel"]',
+    expect: "Register a client",
+    // "No clients registered" and "No member is connected" are the true
+    // starting state this step describes.
+    allowEmptyState: true,
+  },
+  {
+    id: "16-12-mcp-oauth-client-secret",
+    doc: "16-integrations.md",
+    line: 1262,
+    anchor: "The client ID and client secret shown once after registering",
+    alt: "The client ID and client secret shown once after registering, each with a copy button — demo values standing in for real ones",
+    route: "/integrations",
+    viewport: { width: 1440, height: 1600 },
+    prepare: showRegisteredClientSecret,
+    cleanup: tearDownMemberSignIn,
+    selector: '[data-testid="mcp-oauth-created"]',
+    expect: "It is shown once and cannot be recovered",
+  },
+  {
+    id: "16-13-claude-consent",
+    doc: "16-integrations.md",
+    line: 1301,
+    anchor: "The Connect Claude to your account consent screen",
+    alt: "The Connect Claude to your account screen as an ordinary member sees it: claude.ai is asking to use The Logbook as you, the read scope always included with the number of tools it reaches, the write scope reaching nothing because the department is read-only, and Don't allow and Allow buttons",
+    route: "/claude/connections",
+    auth: "member",
+    prepare: showClaudeConsent,
+    cleanup: tearDownMemberSignInFromMemberShot,
+    selector: '.card:has-text("Connect Claude to your account")',
+    expect: "It is asking to",
+  },
+  {
+    id: "16-14-claude-connections",
+    doc: "16-integrations.md",
+    line: 1311,
+    anchor: "The member's Claude connections page",
+    alt: "The member's own Claude connections page listing the claude.ai connection with its scopes, when it was connected and a Disconnect button",
+    route: "/claude/connections",
+    auth: "member",
+    prepare: showMemberConnection,
+    cleanup: tearDownMemberSignInFromMemberShot,
+    expect: { selector: '[data-testid="claude-connections"]' },
   },
   {
     // A SIMULATED result, and captioned as one in the guide. A real success

@@ -37,6 +37,7 @@ import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { organizationService, userService } from '../../services/api';
+import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -47,6 +48,7 @@ import type {
   CrewMemberEvaluation,
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
+  ShiftCompletionReportUpdate,
   ShiftCrewMember,
   TrainingModuleConfig,
   TraineeShiftStats,
@@ -67,6 +69,7 @@ import { CallTypeChips } from '../../modules/scheduling/components/CallTypeChips
 import { labelCallTypeChoices, orgCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { blankToNull } from '../../utils/formValues';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
   enqueueShiftReport,
@@ -271,6 +274,11 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Rating display helpers using config
   const ratingLabel = config?.rating_label || 'Performance Rating';
+  // The skills list is what shift-report sign-offs are made of, so it is
+  // offered only to a department that runs them, and only while the form
+  // section is switched on. Read from the config this tab already loads.
+  const showSkillsObserved =
+    (config?.form_show_skills_observed ?? true) && offersShiftSignoffs(config?.practical_skills_method ?? null);
   const ratingScaleType = config?.rating_scale_type || 'stars';
   const ratingScaleLabels = config?.rating_scale_labels || DEFAULT_COMPETENCY_LABELS;
   const orgCallTypes = useOrgCallTypes();
@@ -843,14 +851,20 @@ export const ShiftReportsTab: React.FC = () => {
     if (!editingDraftId) return;
     setSavingDraft(true);
     try {
-      const payload: Record<string, unknown> = {
-        ...draftForm,
-        performance_rating: draftForm.performance_rating || undefined,
-        areas_of_strength: draftForm.areas_of_strength || undefined,
-        areas_for_improvement: draftForm.areas_for_improvement || undefined,
-        officer_narrative: draftForm.officer_narrative || undefined,
-        skills_observed: draftForm.skills_observed?.length ? draftForm.skills_observed : undefined,
-        tasks_performed: draftForm.tasks_performed?.filter((t) => t.task.trim()) || undefined,
+      // An update, not a create: the backend leaves an omitted key alone, so
+      // every field the form owns is sent, and an emptied one goes out as
+      // null (text, rating) or [] (lists) so the clear actually persists.
+      const payload: ShiftCompletionReportUpdate = {
+        hours_on_shift: draftForm.hours_on_shift,
+        calls_responded: draftForm.calls_responded,
+        call_types: draftForm.call_types ?? [],
+        // `||`, not numberOrNull: 0 is the unrated star value and is off the 1-5 scale.
+        performance_rating: draftForm.performance_rating || null,
+        areas_of_strength: blankToNull(draftForm.areas_of_strength),
+        areas_for_improvement: blankToNull(draftForm.areas_for_improvement),
+        officer_narrative: blankToNull(draftForm.officer_narrative),
+        skills_observed: draftForm.skills_observed ?? [],
+        tasks_performed: (draftForm.tasks_performed ?? []).filter((t) => t.task.trim()),
       };
       if (submit) {
         payload.review_status = config?.report_review_required ? 'pending_review' : 'approved';
@@ -1484,7 +1498,12 @@ export const ShiftReportsTab: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <StarRating
                       value={draftForm.performance_rating ?? 0}
-                      onChange={(val) => setDraftForm((p) => ({ ...p, performance_rating: val }))}
+                      onChange={(val) =>
+                        setDraftForm((p) => ({
+                          ...p,
+                          performance_rating: p.performance_rating === val ? undefined : val,
+                        }))
+                      }
                       label={ratingLabel}
                     />
                     {draftForm.performance_rating && ratingScaleType === 'competency' && (
@@ -1495,28 +1514,30 @@ export const ShiftReportsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Skills Observed</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {skillOptions.map((skill) => {
-                      const isSelected = (draftForm.skills_observed || []).some((s) => s.skill_name === skill);
-                      return (
-                        <button
-                          key={skill}
-                          type="button"
-                          onClick={() => toggleSkill(setDraftForm, skill)}
-                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                            isSelected
-                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
-                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                          }`}
-                        >
-                          {skill}
-                        </button>
-                      );
-                    })}
+                {showSkillsObserved && (
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Skills Observed</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {skillOptions.map((skill) => {
+                        const isSelected = (draftForm.skills_observed || []).some((s) => s.skill_name === skill);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => toggleSkill(setDraftForm, skill)}
+                            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              isSelected
+                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                            }`}
+                          >
+                            {skill}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Officer Narrative</label>
@@ -1531,10 +1552,14 @@ export const ShiftReportsTab: React.FC = () => {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                    <label
+                      htmlFor={`draft-strength-${report.id}`}
+                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                    >
                       Areas of Strength
                     </label>
                     <textarea
+                      id={`draft-strength-${report.id}`}
                       rows={2}
                       value={draftForm.areas_of_strength || ''}
                       onChange={(e) => setDraftForm((p) => ({ ...p, areas_of_strength: e.target.value }))}
@@ -1542,10 +1567,14 @@ export const ShiftReportsTab: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                    <label
+                      htmlFor={`draft-improvement-${report.id}`}
+                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                    >
                       Areas for Improvement
                     </label>
                     <textarea
+                      id={`draft-improvement-${report.id}`}
                       rows={2}
                       value={draftForm.areas_for_improvement || ''}
                       onChange={(e) => setDraftForm((p) => ({ ...p, areas_for_improvement: e.target.value }))}
@@ -2170,41 +2199,61 @@ export const ShiftReportsTab: React.FC = () => {
                               )}
 
                               {/* Skills Observed */}
-                              {(config?.form_show_skills_observed ?? true) && (
+                              {showSkillsObserved && (
                                 <div>
                                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                                     Skills Observed
                                   </label>
-                                  <div className="space-y-2">
+                                  {/* The chips wrap across the row; a picked skill's score
+                                      row sits in the list below rather than under its chip,
+                                      which is what kept the chips in a single column. */}
+                                  <div className="flex flex-wrap gap-1.5">
                                     {skillOptions.map((skill) => {
-                                      const skills = eval_?.skills_observed || [];
-                                      const selected = skills.find((s) => s.skill_name === skill);
+                                      const selected = (eval_?.skills_observed || []).some(
+                                        (s) => s.skill_name === skill
+                                      );
                                       return (
-                                        <div key={skill}>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const current = eval_?.skills_observed || [];
-                                              const exists = current.find((s) => s.skill_name === skill);
-                                              updateTraineeEval(
-                                                member.user_id,
-                                                'skills_observed',
-                                                exists
-                                                  ? current.filter((s) => s.skill_name !== skill)
-                                                  : [...current, { skill_name: skill, demonstrated: true }]
-                                              );
-                                            }}
-                                            className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                                        <button
+                                          key={skill}
+                                          type="button"
+                                          aria-pressed={selected}
+                                          onClick={() => {
+                                            const current = eval_?.skills_observed || [];
+                                            updateTraineeEval(
+                                              member.user_id,
+                                              'skills_observed',
                                               selected
-                                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
-                                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                                            }`}
-                                          >
-                                            {selected ? '\u2713 ' : ''}
-                                            {skill}
-                                          </button>
-                                          {selected && (
-                                            <div className="mt-1 ml-4 flex items-center gap-1.5">
+                                                ? current.filter((s) => s.skill_name !== skill)
+                                                : [...current, { skill_name: skill, demonstrated: true }]
+                                            );
+                                          }}
+                                          className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                                            selected
+                                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                                          }`}
+                                        >
+                                          {selected ? '\u2713 ' : ''}
+                                          {skill}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  {skillOptions.some((skill) =>
+                                    (eval_?.skills_observed || []).some((s) => s.skill_name === skill)
+                                  ) && (
+                                    <div className="mt-2 space-y-1.5">
+                                      {skillOptions.map((skill) => {
+                                        const selected = (eval_?.skills_observed || []).find(
+                                          (s) => s.skill_name === skill
+                                        );
+                                        if (!selected) return null;
+                                        return (
+                                          <div key={skill} className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-theme-text-secondary text-xs font-medium">
+                                              {skill}
+                                            </span>
+                                            <span className="flex items-center gap-1.5">
                                               <span className="text-theme-text-muted text-xs">Score:</span>
                                               {([1, 2, 3, 4, 5] as const).map((n) => {
                                                 const tip = ratingScaleLabels[String(n)] || `Level ${n}`;
@@ -2213,6 +2262,8 @@ export const ShiftReportsTab: React.FC = () => {
                                                     key={n}
                                                     type="button"
                                                     title={tip}
+                                                    aria-label={`${skill}: score ${n} (${tip})`}
+                                                    aria-pressed={selected.score === n}
                                                     onClick={() => {
                                                       const updated = (eval_?.skills_observed || []).map((s) =>
                                                         s.skill_name === skill
@@ -2237,12 +2288,12 @@ export const ShiftReportsTab: React.FC = () => {
                                                     `Level ${selected.score}`}
                                                 </span>
                                               )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

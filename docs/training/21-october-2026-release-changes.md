@@ -38,7 +38,7 @@
 # October 6–7, 2026 workflow updates
 
 Index for the second window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-06_TO_10-07.md`](../CHANGE_AUDIT_2026-10-06_TO_10-07.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-6--7-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entry _Every backend setting in
 `.env` now reaches the container (2026-10-06)_: settings that were silently ignored
 start working, and a bad value can stop boot. Screenshots to create or replace are
@@ -62,7 +62,7 @@ in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the Octob
 # October 7–8, 2026 workflow updates
 
 Index for the third window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-07_TO_10-08.md`](../CHANGE_AUDIT_2026-10-07_TO_10-08.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-7--8-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entries _Every member can raise
 their own finance requests (2026-10-07)_ and _Training provider imports credit
 members automatically (2026-10-08)_. Screenshots to create or replace are in
@@ -84,7 +84,7 @@ members automatically (2026-10-08)_. Screenshots to create or replace are in
 # October 8–11, 2026 workflow updates
 
 Index for the fourth window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-08_TO_10-11.md`](../CHANGE_AUDIT_2026-10-08_TO_10-11.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-8--11-2026).
 **Before upgrading,** read the `docs/UPGRADING.md` entries for this window
 (encryption at rest and the key-custody notice; budget-amendment confirmation).
 Screenshots to create or replace are in
@@ -110,7 +110,7 @@ Screenshots to create or replace are in
 # October 11–12, 2026 workflow updates
 
 Index for the fifth window. Audit:
-[`docs/CHANGE_AUDIT_2026-10-11_TO_10-12.md`](../CHANGE_AUDIT_2026-10-11_TO_10-12.md).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-11--12-2026).
 Screenshots to create or replace are in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
 

@@ -30,7 +30,11 @@ class DocumentFolderCreate(BaseModel):
         default="organization", pattern="^(organization|leadership|owner)$"
     )
     owner_user_id: Optional[UUID] = None
-    allowed_roles: Optional[List[str]] = None
+    #: Position slugs; only on a folder open to the organization.
+    allowed_roles: Optional[List[str]] = Field(None, max_length=100)
+    #: Permission names, any one of which admits (see
+    #: DocumentsService._folder_admits_user).
+    required_permissions: Optional[List[str]] = Field(None, max_length=50)
 
 
 class DocumentFolderUpdate(BaseModel):
@@ -43,7 +47,8 @@ class DocumentFolderUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     visibility: Optional[str] = Field(None, pattern="^(organization|leadership|owner)$")
     owner_user_id: Optional[UUID] = None
-    allowed_roles: Optional[List[str]] = None
+    allowed_roles: Optional[List[str]] = Field(None, max_length=100)
+    required_permissions: Optional[List[str]] = Field(None, max_length=50)
 
 
 class DocumentFolderResponse(UTCResponseBase):
@@ -62,6 +67,7 @@ class DocumentFolderResponse(UTCResponseBase):
     visibility: str = "organization"
     owner_user_id: Optional[UUID] = None
     allowed_roles: Optional[List[str]] = None
+    required_permissions: Optional[List[str]] = None
     document_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime

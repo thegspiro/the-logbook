@@ -2285,7 +2285,14 @@ class StorefrontService:
         reason: Optional[str] = None,
         notify_member: bool = True,
     ) -> StoreOrder:
-        order = await self.get_order(order_id, organization_id)
+        """Refund some or all of an order's recorded payment.
+
+        A read-modify-write on ``amount_paid``, so the order is locked first
+        (SF-9, pitfall 27) — without it, a settlement committing between this
+        read and this write is overwritten the instant this write's blocked
+        UPDATE finally lands, computed from a balance that predates it.
+        """
+        order = await self.get_order(order_id, organization_id, for_update=True)
         if not order:
             raise ValueError("Order not found")
         # SoD: a manager must not refund their own order.

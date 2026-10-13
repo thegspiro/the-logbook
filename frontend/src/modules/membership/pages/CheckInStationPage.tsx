@@ -465,7 +465,7 @@ const CheckInStationPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-3xl space-y-6 p-4">
         {header}
-        <div className="card">
+        <div className="card p-4 sm:p-6">
           <EmptyState
             icon={Nfc}
             title="NFC ID cards are turned off"
@@ -480,7 +480,7 @@ const CheckInStationPage: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6 p-4">
       {header}
 
-      <div className="card space-y-4">
+      <div className="card space-y-4 p-4 sm:p-6">
         <div>
           <span className="form-label" id="station-target-type">
             Check members into
@@ -569,7 +569,7 @@ const CheckInStationPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="card space-y-4 text-center">
+      <div className="card space-y-4 p-4 text-center sm:p-6">
         {!armed ? (
           <>
             <button
@@ -678,7 +678,7 @@ const CheckInStationPage: React.FC = () => {
       </div>
 
       {recent.length > 0 && (
-        <div className="card">
+        <div className="card p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">This session</h2>
           <ul className="divide-theme-surface-border divide-y">
             {recent.map((tap) => (

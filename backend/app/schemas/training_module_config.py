@@ -34,7 +34,13 @@ _BOOL_FIELD_DEFAULTS: Dict[str, bool] = {
 _ENUM_FIELD_DEFAULTS: Dict[str, str] = {
     "skills_result_disclosure": "full",
     "skills_result_release": "on_completion",
+    # NULL is "never chosen", not a broken row: the column is nullable by
+    # design and the migration only backfills departments already on
+    # sign-offs.
+    "practical_skills_method": "skills_testing",
 }
+
+PracticalSkillsMethod = Literal["skills_testing", "shift_signoffs"]
 
 
 class TrainingModuleConfigResponse(UTCResponseBase):
@@ -72,6 +78,9 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     # Skills-test result visibility defaults
     skills_result_disclosure: Literal["none", "scores", "full"] = "full"
     skills_result_release: Literal["on_completion", "on_release"] = "on_completion"
+
+    # Which practical-skills system the department runs
+    practical_skills_method: PracticalSkillsMethod = "skills_testing"
 
     # Shift report review workflow
     report_review_required: bool = False
@@ -165,6 +174,10 @@ class TrainingModuleConfigUpdate(BaseModel):
     # Skills-test result visibility defaults
     skills_result_disclosure: Optional[Literal["none", "scores", "full"]] = None
     skills_result_release: Optional[Literal["on_completion", "on_release"]] = None
+
+    # Not in MEMBER_DISCLOSURE_FIELDS: choosing the system is administering
+    # it, so it needs training.manage.
+    practical_skills_method: Optional[PracticalSkillsMethod] = None
 
     # Shift report review workflow
     report_review_required: Optional[bool] = None

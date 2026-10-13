@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import ForeignKey
 
 from app.core.database import Base
+from app.utils.sql_results import rows_affected
 
 # Referential actions MySQL carries out by itself when the user row goes away.
 # Anything else (RESTRICT, NO ACTION, or an unset ondelete, which MySQL reads
@@ -147,6 +148,6 @@ async def release_user_references(db: AsyncSession, user_id: str) -> int:
             .where(table.c[column_name] == user_id)
             .values({column_name: None})
         )
-        released += result.rowcount or 0
+        released += rows_affected(result) or 0
 
     return released

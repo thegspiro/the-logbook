@@ -565,12 +565,23 @@ async def authenticate_api_key(
 
     # Check if key is active
     if not api_key_obj.is_active:
+        # Unlike the "unknown key" 401 above, this key is already resolved —
+        # organization_id and config_id are in hand, so this half of PUB-8's
+        # gap needs no nullable-column migration, exactly as the 429 fix
+        # below needed none. A revoked key repeatedly presented is itself the
+        # anomaly detect_anomalies' 401 counter exists to catch.
+        await _log_refusal(
+            request, api_key_obj, status.HTTP_401_UNAUTHORIZED, "API key revoked", db
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has been revoked"
         )
 
     # Check if key is expired
     if api_key_obj.is_expired:
+        await _log_refusal(
+            request, api_key_obj, status.HTTP_401_UNAUTHORIZED, "API key expired", db
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has expired"
         )

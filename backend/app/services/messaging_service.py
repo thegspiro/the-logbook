@@ -25,6 +25,7 @@ from app.models.notification import (
 from app.models.user import Role, User, UserStatus
 from app.services.message_delivery_service import THROTTLED_REASON
 from app.utils.member_names import format_display_name
+from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
@@ -779,7 +780,7 @@ class MessagingService:
             )
             .values(read=True, read_at=now)
         )
-        return bool(result.rowcount)
+        return bool(rows_affected(result))
 
     async def _visible_message_or_none(
         self, message_id: str, user_id: str, organization_id: str
@@ -881,7 +882,7 @@ class MessagingService:
                     acknowledged_at=now,
                 )
             )
-            newly_acknowledged = bool(claimed.rowcount)
+            newly_acknowledged = bool(rows_affected(claimed))
             notification_changed = await self._mark_message_notification_read(
                 message_id, user_id, organization_id
             )

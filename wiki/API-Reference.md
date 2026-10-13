@@ -822,7 +822,7 @@ write: `scheduling.manage`. Hidden once a shift is finalized.
 > **This is the `detailed` call-tracking path.** A department on `count_only`
 > tracking does not use these endpoints — its volume lives in `org_calls` /
 > `org_call_responses` and is written through close-out. See
-> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms-2026-08-18--08-19).
+> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms).
 
 ```
 GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift
@@ -1172,7 +1172,7 @@ A member with no check-in asks to be marked present at an event that is over,
 and the event's organizer, its alternate or an `events.manage` holder decides.
 All five routes require authentication only; who may review is checked per
 event in the handler, because an organizer need not hold `events.manage`. See
-[Module-Events](Module-Events#attendance-requests-i-was-there-2026-09-30).
+[Module-Events](Module-Events#attendance-requests-i-was-there).
 
 ```
 POST   /api/v1/events/{event_id}/attendance-petitions                         # Ask (201)
@@ -1220,7 +1220,9 @@ after **two** withdrawals the pending request is final, `GET .../mine` reports
 declined request cannot be withdrawn (400), and with no request on file the
 answer is 404. The row lock
 it shares with approve and reject means a withdrawal and a decision arriving
-together resolve to one or the other.
+together resolve to one or the other. Every petition response carries
+`withdrawal_count` (0 for a request never withdrawn), so a reviewer notified
+more than once can see the request was resent.
 
 Approval writes the same RSVP override **Edit Times** writes
 (`override_check_in_at`, `override_check_out_at`, `override_duration_minutes`)

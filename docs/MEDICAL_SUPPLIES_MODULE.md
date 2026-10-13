@@ -198,6 +198,22 @@ catalog**, opening the existing match tool, whose fuzzy matching already spans
 medical stock. The template-level "_n_ of _m_ items linked" line remains the
 standing warning; linking is never required to save.
 
+**Cleaning up existing checklists** _(2026-10-12)_. **Catalog Links**
+(`/inventory/admin/checklists/catalog-links`, `inventory.check_manage`) lists
+every unlinked position in the department — active and draft templates — grouped
+by normalized name, so "4x4 gauze" on six rigs is one decision rather than six.
+Exact name matches are pre-selected; likely and possible matches wait for a
+person; any group can be linked to an item found through the same gear-and-
+medical search the builder uses. Names nothing in the catalog resembles sit in a
+collapsed "No catalog match" section: they are usually tasks rather than stock,
+but `function` is also the default type for a free-typed supply line, so the
+type cannot be used to hide them.
+
+Applying goes through `POST /equipment-checks/inventory-links`, all or nothing
+per request (2,000 positions), with a change-log entry on each affected
+template. A position somebody linked in the builder after the report loaded is
+left as they set it and counted as skipped.
+
 ---
 
 ## Lots and on-hand
@@ -430,4 +446,4 @@ The `_0005` upgrade is idempotent by skipping rows that already hold a grant.
 - [Role system](../ROLE_SYSTEM_README.md)
 - [Application pages](../APPLICATION_PAGES.md)
 - [Training guide 05 — Gear & supplies](./training/05-inventory.md)
-- [August 16–17 change audit](./CHANGE_AUDIT_2026-08-16_TO_17.md)
+- [August 16–17 change audit](./CHANGE_AUDIT_2026-08.md#change-audit-august-1617-2026)

@@ -10,13 +10,13 @@ relationship loading and is marked ``integration``.
 
 import uuid
 from datetime import datetime, timezone
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 
 from app.models.training import EnrollmentStatus, ProgramEnrollment, TrainingProgram
 from app.schemas.training_program import ProgramEnrollmentResponse
@@ -56,7 +56,7 @@ class TestWithdrawEnrollment:
     async def test_member_withdraws_own(self):
         user = uuid4()
         enr = _enrollment(user)
-        db = RecordingSession([_one(enr), SimpleNamespace(rowcount=1)])
+        db = RecordingSession([_one(enr), MagicMock(spec=CursorResult, rowcount=1)])
         svc = TrainingProgramService(db)
 
         result, error = await svc.withdraw_enrollment(
@@ -77,7 +77,7 @@ class TestWithdrawEnrollment:
     async def test_member_withdrawal_loses_race_to_finalization(self):
         user = uuid4()
         enr = _enrollment(user)
-        db = RecordingSession([_one(enr), SimpleNamespace(rowcount=0)])
+        db = RecordingSession([_one(enr), MagicMock(spec=CursorResult, rowcount=0)])
         svc = TrainingProgramService(db)
 
         result, error = await svc.withdraw_enrollment(

@@ -44,6 +44,9 @@ const CheckRequestFormPage = lazyWithRetry(() => import('./pages/CheckRequestFor
 // Approvals
 const ApprovalsPage = lazyWithRetry(() => import('./pages/ApprovalsPage'));
 
+// Reports
+const FinanceReportsPage = lazyWithRetry(() => import('./pages/FinanceReportsPage'));
+
 // Dues
 const DuesManagementPage = lazyWithRetry(() => import('./pages/DuesManagementPage'));
 
@@ -290,6 +293,16 @@ export const getFinanceRoutes = () => {
             moduleLabel="Finance"
           >
             <CheckRequestDetailPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Board reports — the gate the report endpoints enforce */}
+      <Route
+        path="/finance/reports"
+        element={
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
+            <FinanceReportsPage />
           </ProtectedRoute>
         }
       />

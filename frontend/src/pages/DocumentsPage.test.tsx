@@ -19,8 +19,11 @@ vi.mock('../services/api', () => ({
     uploadDocument: vi.fn(),
     deleteDocument: vi.fn(),
     createFolder: (...args: unknown[]) => mockCreateFolder(...args) as unknown,
-    // Read by the folder settings dialog when it opens.
-    getFolderRoleOptions: () => Promise.resolve([]),
+    // Read by the folder access fields when a folder dialog opens.
+    getFolderRoleOptions: () => Promise.resolve([{ slug: 'quartermaster', name: 'Quartermaster' }]),
+  },
+  roleService: {
+    getPermissionsByCategory: () => Promise.resolve([]),
   },
 }));
 
@@ -363,6 +366,34 @@ describe('DocumentsPage', () => {
     await user.click(screen.getByRole('button', { name: /all documents/i }));
     await user.click(screen.getByRole('button', { name: /new folder/i }));
     expect(screen.getByText(/folders created from all documents are placed at the root/i)).toBeInTheDocument();
+  });
+
+  it('sets access when creating a folder, so it is never open in between', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
+    await user.click(within(dialog).getByRole('radio', { name: 'Specific positions' }));
+    expect(within(dialog).getByRole('button', { name: /^create folder$/i })).toBeDisabled();
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Quartermaster' }));
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['quartermaster'] })
+    );
+  });
+
+  it('keeps the create dialog open with the server’s reason when it is refused', async () => {
+    const user = userEvent.setup();
+    mockCreateFolder.mockRejectedValueOnce(new Error('These settings would shut you out of this folder.'));
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('shut you out');
   });
 
   it('shows the current folder as the selected upload destination', async () => {

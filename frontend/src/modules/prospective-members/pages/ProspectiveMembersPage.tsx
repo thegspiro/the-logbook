@@ -37,7 +37,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import type { PipelineTab } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
 import { PipelineTable } from '../components/PipelineTable';
-import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
+import { ApplicantDetailDialog } from '../components/ApplicantDetailDialog';
 import { ConversionModal } from '../components/ConversionModal';
 import TargetRolePicker from '../components/TargetRolePicker';
 import { applicantService, eventLinkService } from '../services/api';
@@ -1688,7 +1688,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       )}
 
       {/* Detail Drawer */}
-      <ApplicantDetailDrawer
+      <ApplicantDetailDialog
         applicant={currentApplicant}
         isOpen={detailDrawerOpen}
         onClose={() => setDetailDrawerOpen(false)}

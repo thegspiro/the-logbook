@@ -1117,7 +1117,7 @@ Assistants_.
 > answers nothing until an IT administrator issues a service key.** Both steps
 > are deliberate and separate.
 
-![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening and full duty schedule switches all off, as shipped](./images/16-08-mcp-connect-form.png)
+![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule and member sign-in switches all off, as shipped](./images/16-08-mcp-connect-form.png)
 
 ![The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one](./images/16-09-mcp-service-key.png)
 
@@ -1185,20 +1185,151 @@ many tools each request would actually reach for them — and choose **Allow**
 or **Don't allow**. The connection can then do only what that member can do in
 The Logbook, within the switches above.
 
+> **OAuth here does not mean Google or Microsoft sign-in.** The Logbook runs its
+> own small authorization server. A member signs in on The Logbook's ordinary
+> login page with their **local username and password** (and MFA, if they use
+> it); Claude is handed a short-lived token for that member and never sees the
+> password. A department with no single sign-on configured needs nothing extra.
+
 It is **off** until three things are true: the server operator sets
 `MCP_OAUTH_ENABLED` and `MCP_OAUTH_ISSUER_URL`; an administrator ticks **Let
 members connect with their own account** on the integration; and an IT
 administrator registers the client (name, exact redirect URI, optional secret)
 in the **Member sign-in (OAuth)** panel on the card.
 
-- Members review and disconnect their own connections on the **Claude
-  connections** page (`/claude/connections`), linked from the
-  consent screen. It has no menu entry yet.
 - Changing or resetting a password ends every connection the member holds.
 - There is no self-service client registration; every client is registered by
   someone holding `integrations.mcp_keys`.
 
-Full setup, including the claude.ai redirect URI, is on the
+### Walkthrough: connecting the claude.ai connector
+
+The steps below are in the order they have to happen. Steps 1–3 are done once
+per department; steps 4–6 are done by each member who wants to connect.
+
+#### Before you start — the server (operator)
+
+Set both variables on the backend and restart it:
+
+```bash
+MCP_OAUTH_ENABLED=true
+MCP_OAUTH_ISSUER_URL=https://logbook.yourdept.org   # public origin, no path
+```
+
+- The issuer must be the `https://` address members and claude.ai use to reach
+  The Logbook, with no path and no trailing slash. If it is missing or invalid,
+  member sign-in stays off and the backend logs a warning at startup.
+- **claude.ai connects from the internet**, not from the member's browser. A
+  Logbook reachable only on the station LAN or a home network cannot be added
+  as a claude.ai connector, whatever the settings.
+
+The MCP endpoint a client is given is the same address with `/api/mcp` on the
+end — for example `https://logbook.yourdept.org/api/mcp`.
+
+#### Step 1 — Turn on member sign-in for the department (administrator)
+
+**Integrations → Claude (MCP) → Connect**, choose the access mode and data
+switches as usual, and tick **Let members connect with their own account**.
+
+![The Claude (MCP) connect form's Let members connect with their own account switch, ticked, with its note that it needs the server's OAuth setting and a registered client](./images/16-10-mcp-member-signin-switch.png)
+
+**Already connected?** Select **Settings** on the connected Claude (MCP) card,
+tick the switch and select **Save settings**. The form opens with what is
+already stored, so nothing else changes. The service key and every member
+connection are kept, and the change applies to the next request a client makes.
+Until the switch is on, the panel in step 2 shows a blue notice saying so, and a
+member who tries to connect is sent straight back to claude.ai with the sign-in
+refused.
+
+![The Claude (MCP) settings form opened from the connected card: the stored access mode and switches with Let members connect with their own account ticked, a note that saving keeps the service key and members' connections, and a Save settings button](./images/16-15-mcp-settings.png)
+
+#### Step 2 — Register claude.ai as a client (IT administrator)
+
+On the connected Claude (MCP) card, select **Service key**. The **Member
+sign-in (OAuth)** panel opens below the service key panel. It shows the
+authorization server address, which is your `MCP_OAUTH_ISSUER_URL` followed by
+`/api/oauth` (the picture below was taken on a demo server at
+`http://localhost:3000`). If it shows a yellow _Member sign-in is off on this
+server_ notice instead, the operator step above is not done.
+
+The **Register a client** form is prefilled for claude.ai: name `claude.ai`,
+**Issue a client secret** ticked, and the redirect URI
+`https://claude.ai/api/mcp/auth_callback`. Leave those as they are and select
+**Register client**. Requires `integrations.mcp_keys`.
+
+![The Member sign-in (OAuth) panel: the authorization server address, no clients registered yet, and the Register a client form prefilled with the name claude.ai, Issue a client secret ticked and claude.ai's redirect URI](./images/16-11-mcp-oauth-register-client.png)
+
+#### Step 3 — Copy the client ID and secret
+
+The panel shows the **client ID** and the **client secret**, each with a copy
+button. **The secret is shown once and cannot be recovered** — copy both now,
+and select **I have copied it** when done. Hand them to whoever will add the
+connector, by a channel you would trust with a password.
+
+![The client ID and client secret shown once after registering, each with a copy button — demo values standing in for real ones](./images/16-12-mcp-oauth-client-secret.png)
+
+Lost the secret? **Revoke** the client in the same panel and register a new
+one. Revoking a client disconnects every member who connected through it.
+
+#### Step 4 — Add the connector in claude.ai (each member)
+
+In claude.ai, open **Settings → Connectors** and add a **custom connector**:
+
+| Field                                   | Value                                 |
+| --------------------------------------- | ------------------------------------- |
+| Name                                    | anything, e.g. `The Logbook`          |
+| Remote MCP server URL                   | `https://<your-logbook-host>/api/mcp` |
+| Advanced settings → OAuth Client ID     | the client ID from step 3             |
+| Advanced settings → OAuth Client Secret | the client secret from step 3         |
+
+**Fill in Advanced settings before you select Add.** A connector saved without
+a client ID tries to register itself automatically, which The Logbook does not
+allow, and fails with _Couldn't register with The Logbook's sign-in service_.
+Remove that connector and add it again with both values filled in.
+
+claude.ai's own screens are not pictured here: they belong to Anthropic and
+change independently of The Logbook.
+
+#### Step 5 — Sign in and approve (each member)
+
+Select **Connect** on the new connector. The browser goes to The Logbook:
+
+1. If not already signed in, the member signs in on the normal login page with
+   their Logbook username and password.
+2. **Connect Claude to your account** names the client, lists what it is asking
+   to do, and says how many tools each would reach **for this member** right
+   now. Reading is always included. A row that says _Would not reach anything
+   for you_ is honest, not an error: the department does not share it (the
+   write row while the integration is read-only, for example) or the member's
+   own permissions do not reach it. Optional rows can be unticked.
+3. **Allow** returns the member to claude.ai, now connected. **Don't allow**
+   returns them without a connection.
+
+![The Connect Claude to your account screen as an ordinary member sees it: claude.ai is asking to use The Logbook as you, the read scope always included with the number of tools it reaches, the write scope reaching nothing because the department is read-only, and Don't allow and Allow buttons](./images/16-13-claude-consent.png)
+
+#### Step 6 — Review or end a connection
+
+Members review and disconnect their own connections on the **Claude
+connections** page (`/claude/connections`), linked from the consent screen. It
+has no menu entry yet, so bookmark it or use the link. Administrators see every
+member's connection in the Member sign-in (OAuth) panel and can end any of
+them.
+
+![The member's own Claude connections page listing the claude.ai connection with its scopes, when it was connected and a Disconnect button](./images/16-14-claude-connections.png)
+
+### Troubleshooting member sign-in
+
+| What you see                                                                                                                                                        | Where                        | What it means                                                                                                                   | Fix                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| _Couldn't register with The Logbook's sign-in service … add an OAuth Client ID in the connector settings_                                                           | claude.ai                    | The connector has no client ID, so claude.ai tried to register itself; The Logbook allows only administrator-registered clients | Remove the connector and add it again with the client ID and secret in **Advanced settings** (step 4) |
+| Yellow _Member sign-in is off on this server_                                                                                                                       | Member sign-in (OAuth) panel | `MCP_OAUTH_ENABLED` is not set, or `MCP_OAUTH_ISSUER_URL` is missing or not an `https://` origin                                | Operator: set both and restart; check the backend startup log for the warning                         |
+| Blue _Turn on Let members connect with their own account_                                                                                                           | Member sign-in (OAuth) panel | The department switch is off                                                                                                    | Step 1 — **Settings** on the connected card                                                           |
+| _Unknown client_                                                                                                                                                    | Logbook error page           | The client ID in claude.ai does not match a registered, unrevoked client                                                        | Re-copy the ID, or register a new client                                                              |
+| _The redirect URI is not registered for this client_                                                                                                                | Logbook error page           | The client was registered with a different redirect URI                                                                         | Register a client with exactly `https://claude.ai/api/mcp/auth_callback`                              |
+| The connection is refused before any Logbook sign-in page appears (`access_denied`, _Connecting Claude with a member account is not enabled for this organization_) | claude.ai                    | The department switch is off                                                                                                    | Step 1                                                                                                |
+| _Client authentication failed_ / `invalid_client`                                                                                                                   | claude.ai, after **Allow**   | The secret in claude.ai is wrong, or belongs to a revoked client                                                                | Revoke and re-register (step 3), then update the connector                                            |
+| The connector never reaches The Logbook's sign-in page                                                                                                              | claude.ai                    | claude.ai cannot reach the server from the internet, or the URL is wrong                                                        | Use the public `https://…/api/mcp` address; the server must be reachable from outside your network    |
+
+Full setup detail, including Claude Code and Claude Desktop clients, is on the
 `Integration-Claude-MCP` wiki page.
 
 ## Integration errors no longer leak internals _(2026-08-31)_

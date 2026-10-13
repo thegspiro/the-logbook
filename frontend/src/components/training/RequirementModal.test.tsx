@@ -240,6 +240,81 @@ describe('RequirementModal', () => {
       );
     });
 
+    it('sends a null year when the year box is emptied', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal requirement={existing({ year: 2025 })} categories={[]} onClose={vi.fn()} onSave={onSave} />
+      );
+
+      await user.clear(screen.getByLabelText('Year'));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ year: null }), true, 'req-1');
+    });
+
+    it('sends a null period end when it is set back to the end of the year', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ period_start_month: 3, period_end_month: 6, period_end_day: 30 })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.selectOptions(screen.getByLabelText(/Period End Month/), '');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ period_end_month: null, period_end_day: null }),
+        true,
+        'req-1'
+      );
+    });
+
+    it('sends a null due date when a fixed due date is cleared', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ due_date_type: 'fixed_date', due_date: '2026-12-31' })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.clear(screen.getByLabelText('Due Date'));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ due_date: null }), true, 'req-1');
+    });
+
+    it('sends a null start date when the start date is cleared', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ start_date: '2026-01-01' })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.clear(screen.getByLabelText('Start Date'));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ start_date: null }), true, 'req-1');
+    });
+
     it('keeps editing without saving when the prompt is dismissed', async () => {
       const user = userEvent.setup();
       render(<RequirementModal requirement={existing()} categories={[]} onClose={vi.fn()} onSave={onSave} />);
