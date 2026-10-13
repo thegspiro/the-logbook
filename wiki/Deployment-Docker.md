@@ -139,7 +139,9 @@ addressed to your public hostname are rejected until it is set. Then add the
 HTTPS reverse proxy as above.
 
 `./install.sh --traditional` installs MySQL, Redis, nginx and the backend
-directly on the host under systemd instead of Docker; see
+directly on the host under systemd instead of Docker. It needs Python 3.13 or
+newer (Debian 13, Ubuntu 25.04+, or installed beforehand) and stops before
+installing anything if it cannot find one; see
 [DEPLOYMENT.md → Traditional Server Deployment](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#option-2-traditional-server-deployment).
 
 ---
