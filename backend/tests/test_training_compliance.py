@@ -1215,8 +1215,20 @@ class TestEvaluateRequirementDetailFields:
             "cert_expired",
             "blocks_activity",
             "catch_up_deadline",
+            "next_window_opens",
         }
         assert set(result.keys()) == expected_fields
+
+    def test_early_credit_window_reports_when_the_next_one_opens(self):
+        """A Nov-Jan requirement taken last winter reads met until October."""
+        req = _make_requirement(period_start_month=11, period_end_month=1)
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["next_window_opens"] == "2026-11-01"
+
+    def test_no_next_window_without_a_year_crossing_window(self):
+        req = _make_requirement()
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["next_window_opens"] is None
 
     def test_days_until_due_calculated(self):
         req = _make_requirement(due_date=date(2026, 12, 31))
