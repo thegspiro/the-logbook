@@ -748,6 +748,26 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     expect(within(dialog).getByText('3/30/2028')).toBeInTheDocument();
   });
 
+  it('shows the officer each requirement’s due date and whether it is overdue', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [{ ...certProgress, due_date: '2026-03-03', is_overdue: true }],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    // A calendar date prints as written, whatever the viewer's zone.
+    expect(await within(dialog).findByText(/Overdue — was due 3\/3\/2026/)).toBeInTheDocument();
+  });
+
   it('configures a recertification cycle from the Edit modal', async () => {
     renderWithRouter(<PipelineDetailPage />);
 

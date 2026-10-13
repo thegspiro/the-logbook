@@ -389,3 +389,92 @@ describe('MyProgramProgressPage — locked requirements', () => {
     expect(screen.getAllByText(/Locked until/)).toHaveLength(1);
   });
 });
+
+describe('MyProgramProgressPage — due dates and the program’s own wording', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 30,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Recruit School' },
+      requirement_progress: [
+        {
+          id: 'rp-late',
+          requirement_id: 'req-late',
+          status: 'in_progress',
+          progress_percentage: 40,
+          due_date: '2026-03-03',
+          is_overdue: true,
+          program_specific_description: 'Book through the county class list.',
+          requirement: { id: 'req-late', name: 'CPR', description: 'The department-wide CPR standard.' },
+        },
+        {
+          id: 'rp-soon',
+          requirement_id: 'req-soon',
+          status: 'not_started',
+          progress_percentage: 0,
+          due_date: '2026-04-01',
+          is_overdue: false,
+          program_specific_description: null,
+          requirement: { id: 'req-soon', name: 'Ladder Drills', description: 'Raise and climb a 24-ft ladder.' },
+        },
+        {
+          id: 'rp-none',
+          requirement_id: 'req-none',
+          status: 'not_started',
+          progress_percentage: 0,
+          due_date: null,
+          is_overdue: false,
+          requirement: { id: 'req-none', name: 'Station Tour' },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 3,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+  });
+
+  it('shows the server’s due date and overdue verdict per requirement', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText(/Overdue — was due 2026-03-03/)).toBeInTheDocument();
+    expect(screen.getByText(/^Due 2026-04-01/)).toBeInTheDocument();
+    // A requirement with no due date says nothing about one.
+    expect(screen.getAllByText(/Due |was due/)).toHaveLength(2);
+  });
+
+  it('replaces the generic description with the program’s own when one is set', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Book through the county class list.')).toBeInTheDocument();
+    expect(screen.queryByText('The department-wide CPR standard.')).not.toBeInTheDocument();
+    expect(screen.getByText('Raise and climb a 24-ft ladder.')).toBeInTheDocument();
+  });
+
+  it('never calls a satisfied requirement overdue', async () => {
+    const progress = (await mockGetEnrollmentProgress()) as {
+      requirement_progress: Record<string, unknown>[];
+    };
+    const late = progress.requirement_progress[0] ?? {};
+    mockGetEnrollmentProgress.mockResolvedValue({
+      ...progress,
+      // Even if a stale flag arrived with it, a completed row is not late.
+      requirement_progress: [{ ...late, status: 'completed', progress_percentage: 100 }],
+    });
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText(/^Due 2026-03-03/)).toBeInTheDocument();
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+  });
+});
