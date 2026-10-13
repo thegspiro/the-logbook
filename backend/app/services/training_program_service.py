@@ -2140,12 +2140,19 @@ class TrainingProgramService:
         program_requirement_id: UUID,
         organization_id: UUID | str,
         updates: ProgramRequirementUpdate,
+        *,
+        program_id: UUID | str,
     ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
         """
         Update a program↔requirement link (is_required / is_prerequisite /
         sort_order). Toggling ``is_required`` changes which items count toward
         completion, so affected enrollments are recomputed (and re-checked for
         phase advancement).
+
+        The link is resolved through ``program_id`` as well as the org, so a
+        link that belongs to a different program is never loaded, let alone
+        written: checking the program after the commit would leave the edit
+        and the recompute in place behind an error response.
 
         Returns: (program_requirement, error_message)
         """
@@ -2157,6 +2164,7 @@ class TrainingProgramService:
             )
             .where(
                 ProgramRequirement.id == str(program_requirement_id),
+                ProgramRequirement.program_id == str(program_id),
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
