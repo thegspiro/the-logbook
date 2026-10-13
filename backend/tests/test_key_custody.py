@@ -220,6 +220,48 @@ class TestTheOnboardingStep:
         assert exc.value.status_code == 400
         confirm.assert_not_awaited()
 
+    async def test_the_step_loads_without_a_csrf_token(self):
+        # The setup screen sends X-CSRF-Token only with its writes. Validating
+        # this read with the default require_csrf=True refused the step's own
+        # first request with a 403, so no new installation could finish setup.
+        from app.api.v1.onboarding import get_session_key_custody
+
+        validate = AsyncMock()
+        with (
+            patch("app.api.v1.onboarding.validate_session", new=validate),
+            patch.object(
+                key_custody_service,
+                "confirmation_for_current_key",
+                AsyncMock(return_value=None),
+            ),
+        ):
+            status = await get_session_key_custody(_request(), MagicMock())
+
+        assert validate.await_args.kwargs == {"require_csrf": False}
+        assert status.confirmed is False
+
+    async def test_confirming_still_requires_the_csrf_token(self):
+        svc = self._service()
+        validate = AsyncMock(
+            return_value=SimpleNamespace(
+                data={"department": {"organization_id": "org-1"}}
+            )
+        )
+        with (
+            patch("app.api.v1.onboarding.validate_session", new=validate),
+            patch("app.api.v1.onboarding.OnboardingService", return_value=svc),
+            patch.object(key_custody_service, "confirm", AsyncMock()),
+        ):
+            from app.api.v1.onboarding import save_session_key_custody
+
+            await save_session_key_custody(
+                _request(),
+                KeyCustodyConfirm(key_fingerprint="0" * 16),
+                self._db(SimpleNamespace(id="owner-1")),
+            )
+
+        assert validate.await_args.kwargs.get("require_csrf", True) is True
+
     async def test_a_changed_key_does_not_mark_the_step(self):
         svc = self._service()
         confirm = AsyncMock(side_effect=ValueError("The key has changed"))
