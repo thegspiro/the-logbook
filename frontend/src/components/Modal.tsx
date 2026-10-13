@@ -5,7 +5,7 @@
  * `onSubmit` makes the panel a form so controls in the body and actions in the
  * footer retain native form validation without introducing a second scroller.
  */
-import React, { FormEventHandler, ReactNode } from 'react';
+import React, { FormEventHandler, ReactNode, useId } from 'react';
 import { X } from 'lucide-react';
 import { useDialog } from '../hooks/useDialog';
 import { DialogPortal } from './DialogPortal';
@@ -27,7 +27,12 @@ interface ModalProps {
    */
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
-  /** Stable IDs are supported for dialogs whose accessible relationships are tested or externally referenced. */
+  /**
+   * Stable IDs are supported for dialogs whose accessible relationships are
+   * tested or externally referenced. The default is generated per instance: a
+   * fixed `modal-title` gave a confirmation stacked over another dialog the
+   * same id as its parent, so both were labelled by whichever came first.
+   */
   titleId?: string;
   'aria-describedby'?: string;
   /** When supplied, the modal panel is rendered as the form element. */
@@ -44,11 +49,13 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   closeOnClickOutside = false,
   closeOnEscape = true,
-  titleId = 'modal-title',
+  titleId: titleIdProp,
   'aria-describedby': ariaDescribedBy,
   onSubmit,
   showCloseButton = true,
 }) => {
+  const generatedTitleId = useId();
+  const titleId = titleIdProp ?? generatedTitleId;
   const modalRef = useDialog<HTMLElement>({ isOpen, onClose, closeOnEscape });
   const sizeClasses = {
     sm: 'sm:max-w-md',
@@ -75,6 +82,7 @@ export const Modal: React.FC<ModalProps> = ({
             onClick={onClose}
             className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md focus:ring-2 focus:outline-hidden"
             aria-label="Close modal"
+            data-dialog-close
           >
             <X className="h-6 w-6" aria-hidden="true" />
           </button>
