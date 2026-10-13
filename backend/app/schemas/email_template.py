@@ -96,6 +96,44 @@ class EmailTemplateResponse(UTCResponseBase):
     model_config = {"from_attributes": True}
 
 
+def _known_colourway(value: Optional[str]) -> Optional[str]:
+    """Reject a hex nobody has checked the contrast of.
+
+    The accent carries white button text and tints the chip behind text of
+    its own colour. Both are the sort of thing that looks fine to whoever
+    picks it and fails WCAG for the member squinting at a phone in
+    daylight, so the choice is limited to the seven that are tested.
+    """
+    if value is None:
+        return None
+    from app.services.email_theme import CHIP_TINTS
+
+    normalised = value.strip().lower()
+    if normalised not in CHIP_TINTS:
+        raise ValueError(
+            f"{value!r} is not one of the available accents: "
+            + ", ".join(sorted(CHIP_TINTS))
+        )
+    return normalised
+
+
+def _renderable_layout(value: Optional[str]) -> Optional[str]:
+    """A layout with no matching content class renders unstyled.
+
+    The stylesheet carries one ``.content`` class per layout, so an
+    unrecognised value would put a class on the card that nothing
+    defines — and the inliner drops what it cannot match without a word.
+    """
+    if value is None:
+        return None
+    from app.services.email_theme import LAYOUTS
+
+    normalised = value.strip().lower()
+    if normalised not in LAYOUTS:
+        raise ValueError(f"{value!r} is not a layout: " + ", ".join(LAYOUTS))
+    return normalised
+
+
 class EmailTemplateUpdate(BaseModel):
     """Schema for updating an email template"""
 
@@ -133,42 +171,12 @@ class EmailTemplateUpdate(BaseModel):
     @field_validator("header_accent")
     @classmethod
     def _accent_must_be_a_known_colourway(cls, value: Optional[str]) -> Optional[str]:
-        """Reject a hex nobody has checked the contrast of.
-
-        The accent carries white button text and tints the chip behind text of
-        its own colour. Both are the sort of thing that looks fine to whoever
-        picks it and fails WCAG for the member squinting at a phone in
-        daylight, so the choice is limited to the seven that are tested.
-        """
-        if value is None:
-            return None
-        from app.services.email_theme import CHIP_TINTS
-
-        normalised = value.strip().lower()
-        if normalised not in CHIP_TINTS:
-            raise ValueError(
-                f"{value!r} is not one of the available accents: "
-                + ", ".join(sorted(CHIP_TINTS))
-            )
-        return normalised
+        return _known_colourway(value)
 
     @field_validator("layout")
     @classmethod
     def _layout_must_be_one_we_render(cls, value: Optional[str]) -> Optional[str]:
-        """A layout with no matching content class renders unstyled.
-
-        The stylesheet carries one ``.content`` class per layout, so an
-        unrecognised value would put a class on the card that nothing
-        defines — and the inliner drops what it cannot match without a word.
-        """
-        if value is None:
-            return None
-        from app.services.email_theme import LAYOUTS
-
-        normalised = value.strip().lower()
-        if normalised not in LAYOUTS:
-            raise ValueError(f"{value!r} is not a layout: " + ", ".join(LAYOUTS))
-        return normalised
+        return _renderable_layout(value)
 
 
 class EmailTemplatePreviewRequest(BaseModel):
@@ -220,12 +228,8 @@ class EmailTemplatePreviewRequest(BaseModel):
             return None
         return value
 
-    _check_accent = field_validator("header_accent")(
-        EmailTemplateUpdate._accent_must_be_a_known_colourway.__func__
-    )
-    _check_layout = field_validator("layout")(
-        EmailTemplateUpdate._layout_must_be_one_we_render.__func__
-    )
+    _check_accent = field_validator("header_accent")(_known_colourway)
+    _check_layout = field_validator("layout")(_renderable_layout)
     member_id: Optional[str] = Field(
         None, description="Optional member ID to populate preview with real member data"
     )

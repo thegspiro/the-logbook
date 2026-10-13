@@ -1137,7 +1137,7 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
         return
 
     # Skip CSRF for safe methods
-    if request.method in {"GET", "HEAD", "OPTIONS"}:
+    if request.scope["method"] in {"GET", "HEAD", "OPTIONS"}:
         return
 
     # Skip for onboarding endpoints — they implement their own session-based

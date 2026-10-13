@@ -8,11 +8,17 @@ Includes retry logic and connection timeouts for robust startup.
 import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+from typing import Optional
 from urllib.parse import quote
 
 from loguru import logger
 from sqlalchemy import DateTime, MetaData, event, inspect
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -90,8 +96,8 @@ class DatabaseManager:
     """
 
     def __init__(self):
-        self.engine = None
-        self.session_factory = None
+        self.engine: Optional[AsyncEngine] = None
+        self.session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
     @property
     def is_connected(self) -> bool:

@@ -197,7 +197,12 @@ class _SizeLimitedTransport(httpx.AsyncBaseTransport):
                 "size cap cannot be bypassed by a compressed body that expands "
                 "on decode"
             )
-        response.stream = _SizeLimitedAsyncStream(response.stream, self._max_bytes)
+        stream = response.stream
+        if not isinstance(stream, httpx.AsyncByteStream):
+            # aclose() refuses a sync stream, so release it with close().
+            response.close()
+            raise TypeError("an async transport must return an async response stream")
+        response.stream = _SizeLimitedAsyncStream(stream, self._max_bytes)
         return response
 
     async def aclose(self) -> None:
