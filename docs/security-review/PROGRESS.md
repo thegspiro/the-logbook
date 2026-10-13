@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)**: branch `claude/security-review-inventory`, Feature 11
+(Inventory), pass 8 (watchdog pickup). 0 code fixes needed, 0 new security
+findings — INV-8, INV-9, INV-16 and INV-17 (pass 7's full list of standing
+open/flagged items) all re-verified **already fixed**, by five owner-direct
+commits that landed between pass 7's merge and now (`21afaf34d`, `d84bcc8bb`,
+`da1b5a9fe`, `4e18814f0`, 2026-10-11/12), none reviewed by this rotation
+before now — the same "reviewed-after-the-fact" shape pass 8 of Documents &
+legal and Medical screening both hit this cycle. INV-22 re-confirmed still
+open and owner-accepted ("leave as is"), unchanged. Real delta since pass 7
+was substantial — 50 non-merge commits touching this feature's files (of 530
+landed repo-wide in the same window) — including an XC-1 sweep across three
+endpoints (`f60d0f252`), two new return-notice workflow features (W39-5),
+a temporary-assignment control, a low-stock lot-sum correctness fix, a new
+`AutoReorderService` wired from the equipment-check swap path (locked,
+org-scoped, server-derived ids throughout), and five mechanical mypy/typing
+commits — every one read in full and verified sound. Zero routes added or
+removed across all five of this feature's endpoint files (confirmed by
+diffing `@router.` decorator lines directly, not just an unchanged count).
+One doc-only fix: a 2026-10-11 feature commit reused the "INV-8" label for an
+unrelated storage-area-barcode feature, confusingly duplicating this
+rotation's own INV-8 finding id — corrected in `KNOWN_LIMITATIONS.md` with a
+disambiguating note. See the Log entry below and
+`docs/security-review/INV-11-inventory.md`'s **Pass 8** section for detail.
+Row 11 stays ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents &amp; legal, pass 8, PR #3160, merged), preserved for history</summary>
+
 **PR [#3160](https://github.com/thegspiro/the-logbook/pull/3160)**: branch
 `claude/security-review-documents-legal`, Feature 10
 (Documents & legal), pass 8 (watchdog pickup). 0 fixed, 0 new findings — DOC-8
@@ -40,6 +68,8 @@ from 20 at pass 7, both additions verified sound). See the Log entry below and
 `docs/security-review/DOC-10-documents-legal.md`'s **Pass 8** section for
 detail. Row 10 stays ✅ (pending this PR's merge); next is Feature 11
 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 8, PR #3151, merged), preserved for history</summary>
@@ -18858,6 +18888,108 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-13 — Feature 11 (Inventory, pass 8) — 0 code fixes, 0 new security findings; four standing findings re-verified already fixed by owner-direct work; one doc correction (watchdog pickup)
+
+**Closure.** PR #3160 (Feature 10, Documents & legal, pass 8) merged
+2026-10-13T11:31:55Z — docs-only (findings doc, `PROGRESS.md`,
+`KNOWN_LIMITATIONS.md`; no application code), so per this file's own rule it
+is not an independently recordable event. Open PR row cleared and rotation
+row 10 stays ✅ with no log edit of its own. Independently re-confirmed before
+starting (`search_pull_requests`, `is:open head:claude/security-review-`, 0
+results; `git fetch --prune` + `git branch -r`, 0 matches) that no
+security-review PR or branch was open — this iteration is itself a watchdog
+pickup, picking up Feature 11 (Inventory), the next `⬜`/next-pointer row per
+PR #3160's own body.
+
+**Prior art loaded first.** Read `docs/security-review/INV-11-inventory.md`
+in full (all six prior passes, 2314 lines) before touching any code. As of
+pass 7 (2026-10-06), the full standing list was INV-8/INV-9 (`.view`-gated
+cross-member reads, owner decision), INV-16 (unlocked reorder-edit PATCH,
+narrowed by an external MSUP-25 fix), INV-17 ("Complete work" never closing
+an existing open maintenance record) and INV-22 (unbounded fulfillment-
+options/requestable-categories reads, already owner-accepted as "leave as
+is" per `KNOWN_LIMITATIONS.md`, dated 2026-10-05).
+
+**Real delta since pass 7 (`b892afba`, PR #2966's merge, 2026-10-06T03:49:27Z)
+was substantial, not zero.** The local clone was shallow again — unshallowed
+before counting anything, per pass 7's own documented warning about this
+exact failure mode. 50 non-merge commits touched this feature's declared
+scope files (of 530 landed repo-wide in the same window); all 50 read via
+`git show`, not sampled. Four owner-direct commits
+(`21afaf34d`/`d84bcc8bb`/`da1b5a9fe`/`4e18814f0`, 2026-10-11–12) fixed every
+one of pass 7's standing findings — none reviewed by this rotation before
+now, the same "reviewed-after-the-fact" shape pass 8 of Documents & legal and
+Medical screening both hit this cycle. Each re-derived against current code
+rather than taken on its `KNOWN_LIMITATIONS.md` entry: INV-8/INV-9's
+`_require_self_or_quartermaster` guard (self-or-`inventory.manage`, matching
+the existing clearance-route gate) has no org-membership check of its own,
+but both downstream service reads filter `organization_id` in the same
+`WHERE` as the id, so a foreign-org id answers empty/default rather than
+leaking — no residual XC-3 gap. INV-16's fix is a locked, org-scoped read
+(`.with_for_update()` + `populate_existing=True`) plus a floor check refusing
+`quantity_requested` below `quantity_received`, closing the race without the
+`expected_version` contract change the original finding assumed was
+necessary. INV-17's two fixes (Complete work, Record inspection) share one
+helper so both grade a closed record identically, and the PATCH path now
+also carries the create path's failed-inspection quarantine it previously
+lacked. INV-22 unchanged — the two functions' only diff in this window is a
+mypy-driven `UUID → UUID | str` signature widening, confirmed by diffing
+exactly those signatures.
+
+**New real delta, all reviewed fresh and found sound:** an XC-1 sweep across
+three endpoints (`f60d0f252` — `category_id`/`user_id`/`role_id`, each now
+`assert_in_org`-checked before the write, 18 new integration tests); two
+W39-5 return-notice workflow features (a direct return now marks the
+member's open notice "received", lock-ordered notice-then-item to match the
+existing review path and avoid a Pitfall #22/#27 deadlock; a follow-on lets
+that notice be inspected afterward, sharing one follow-up helper with the
+receipt path so the two cannot disagree); a Permanent/Temporary assignment
+control; a low-stock lot-sum correctness fix (W47-6); a pool-issuance
+write-off exclusion (W41-6); a new `app/services/auto_reorder_service.py`
+wired from the equipment-check swap path (item lookup locked and org-scoped,
+the "already open" check itself a locked read per Pitfall #27, every id
+server-derived, email HTML-escaped and routed through the existing
+low-stock-audience resolver per Pitfall #18); an MCP OAuth-gating groundwork
+commit whose inventory slice declares permission tuples matching the
+equivalent endpoints exactly; and five mechanical mypy/typing commits whose
+only behavioral deltas are strict robustness improvements (`if error or obj
+is None` guards; a `ChargeStatus(...)` enum conversion; `Mapped`/
+`mapped_column` typing on `label_printer.py` with every nullability/`ondelete`
+argument preserved, confirmed by diffing them explicitly). Zero routes added
+or removed across all five of this feature's endpoint files (`inventory.py`,
+`labels.py`, `inventory_kiosk.py`, `inventory_last_seen.py`,
+`inventory_nfc.py`) since pass 7 — confirmed by diffing `@router.` decorator
+lines directly, not inferred from an unchanged AST route count (149/12/4/2/24
+respectively; the latter three counted explicitly for the first time this
+pass).
+
+**One doc correction, no code change.** The 2026-10-11 storage-area-barcode
+scan-lookup feature (`bbaff4888`) labeled itself "(INV-8)" in its own commit
+message and `KNOWN_LIMITATIONS.md` entry — the same calendar day the actual
+INV-8/INV-9 security-review finding was fixed under the same label. The two
+are unrelated (one a security-review finding tracked in this file, the other
+a feature docket that reused the short label); nothing was miscategorized in
+code or tests, but a future reader searching this file for "INV-8" would find
+two unrelated entries. Corrected with a disambiguating parenthetical rather
+than a renumbering.
+
+**Completion gate, full and green:** `flake8`/`black --check`/`isort
+--check-only` (repo-wide `app/ tests/ alembic/`) clean; `validate_migrations.py
+--strict` — single head, 585 revisions (one migration landed touching this
+feature, `9e8b0b6f3fe8` grant-quartermaster-locations-create, an exemplary
+Pitfall #23 addition-gated-on-evidence migration, reviewed and sound);
+`check_route_permissions.py --strict` — 268 routes, 0 errors/warnings;
+scoped backend suite (`-k "inventory or label or nfc or kiosk"`) — 1657
+passed, 1 pre-existing skip; the 10 new/touched guard-test files re-run
+individually (118 tests, all pass); frontend `typecheck`/`lint` clean;
+`npx vitest run src/modules/inventory` — 1652 passed (113 files).
+
+No application-code fix was needed — the four standing findings were already
+fixed by owner-direct work, and every item of new real delta was reviewed
+fresh and found sound. The one change is the `KNOWN_LIMITATIONS.md`
+disambiguation above plus this pass's own findings-doc section. Row 11 stays
+✅ (pending this PR's merge). Next: Feature 12 (Facilities).
 
 ### 2026-10-13 — Feature 10 (Documents & legal, pass 8) — 0 fixed, 0 new findings; one standing finding re-verified already fixed by owner-direct work (watchdog pickup)
 
