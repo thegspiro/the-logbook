@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)**: branch `claude/security-review-medical-screening`, Feature 09
+**PR [#3151](https://github.com/thegspiro/the-logbook/pull/3151)**: branch
+`claude/security-review-medical-screening`, Feature 09
 (Medical screening, PHI), pass 8 (watchdog pickup). 0 fixed, 1 new finding
 flagged (MS-15, LOW/scale) — a dating/attribution error in this feature's
 own findings doc found and corrected (the "Owner decisions" section
