@@ -432,6 +432,9 @@ export interface FundraisingCampaign {
   allowAnonymous: boolean;
   minimumDonation: number | null;
   suggestedAmounts: number[] | null;
+  /** A restricted fund: donors gave for `restrictionPurpose`, and finance payments can be charged to it. */
+  isRestricted?: boolean;
+  restrictionPurpose?: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

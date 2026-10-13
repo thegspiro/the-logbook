@@ -351,6 +351,7 @@ describe('ApprovalsPage requests decided on their own page', () => {
         submittedAt: '2026-10-01T15:00:00Z',
         awaitingSecondApproval: true,
         firstApprovedBy: 'u-chief',
+        fundShortfall: '75.50',
       },
       {
         entityType: 'purchase_request',
@@ -381,6 +382,13 @@ describe('ApprovalsPage requests decided on their own page', () => {
     expect(mockGetUnrouted).toHaveBeenCalled();
   });
 
+  it('marks one that would overspend its restricted fund', async () => {
+    renderPage();
+
+    const section = await screen.findByRole('region', { name: 'Waiting for a decision on their own page' });
+    expect(within(section).getByText('Over fund by $75.50')).toBeInTheDocument();
+  });
+
   it('is not shown to someone without finance.approve', async () => {
     mockCheckPermission.mockImplementation(() => false);
     renderPage();
@@ -388,6 +396,21 @@ describe('ApprovalsPage requests decided on their own page', () => {
     await screen.findByText('Nothing is waiting on you.');
     expect(screen.queryByRole('region', { name: 'Waiting for a decision on their own page' })).not.toBeInTheDocument();
     expect(mockGetUnrouted).not.toHaveBeenCalled();
+  });
+
+  it('marks a request that would overspend its restricted fund', async () => {
+    mockGetPending.mockResolvedValue([{ ...mileageClaim, fundShortfall: '20.00' }]);
+    renderPage();
+
+    expect(await screen.findByText('Over fund by $20.00')).toBeInTheDocument();
+  });
+
+  it('marks nothing when the charge fits its fund', async () => {
+    mockGetPending.mockResolvedValue([{ ...mileageClaim, fundShortfall: null }]);
+    renderPage();
+
+    await screen.findByRole('link', { name: mileageClaim.entityTitle });
+    expect(screen.queryByText(/Over fund by/)).not.toBeInTheDocument();
   });
 
   describe('an expense report with late lines', () => {

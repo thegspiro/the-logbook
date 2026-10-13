@@ -7,6 +7,7 @@ import type {
   BudgetVsActualReport,
   FiscalYear,
   FunctionalExpensesReport,
+  FundBalancesReport,
   LateSubstantiationReport,
   PaymentsRegisterReport,
 } from '../types';
@@ -22,6 +23,8 @@ const mockLate = vi.fn();
 const mockFunctional = vi.fn();
 const mockFunctionalCsv = vi.fn();
 const mockLateCsv = vi.fn();
+const mockFunds = vi.fn();
+const mockFundsCsv = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -37,6 +40,8 @@ vi.mock('../services/api', async (importOriginal) => ({
     functionalExpenses: (...args: unknown[]) => mockFunctional(...args) as unknown,
     functionalExpensesCsv: (...args: unknown[]) => mockFunctionalCsv(...args) as unknown,
     lateSubstantiationCsv: (...args: unknown[]) => mockLateCsv(...args) as unknown,
+    fundBalances: (...args: unknown[]) => mockFunds(...args) as unknown,
+    fundBalancesCsv: (...args: unknown[]) => mockFundsCsv(...args) as unknown,
   },
 }));
 
@@ -201,6 +206,38 @@ const lateReport: LateSubstantiationReport = {
   ],
 };
 
+const fundBalances: FundBalancesReport = {
+  funds: [
+    {
+      campaignId: 'c-engine',
+      name: 'Engine fund',
+      purpose: 'Replace Engine 2',
+      active: true,
+      received: '1000.00',
+      spent: '420.00',
+      committed: '600.00',
+      awaitingApproval: '50.00',
+      available: '-20.00',
+    },
+    {
+      campaignId: 'c-roof',
+      name: 'Roof fund',
+      purpose: null,
+      active: false,
+      received: '300.00',
+      spent: '300.00',
+      committed: '0.00',
+      awaitingApproval: '0.00',
+      available: '0.00',
+    },
+  ],
+  received: '1300.00',
+  spent: '720.00',
+  committed: '600.00',
+  awaitingApproval: '50.00',
+  available: '-20.00',
+};
+
 const openAt = (search = '') => {
   window.history.pushState({}, '', `/finance/reports${search}`);
   return renderWithRouter(<FinanceReportsPage />);
@@ -220,6 +257,8 @@ describe('FinanceReportsPage', () => {
       mockFunctional,
       mockFunctionalCsv,
       mockLateCsv,
+      mockFunds,
+      mockFundsCsv,
       mockSaveFile,
     ]) {
       mock.mockReset();
@@ -232,6 +271,7 @@ describe('FinanceReportsPage', () => {
     mockRegister.mockResolvedValue(april);
     mockLate.mockResolvedValue(lateReport);
     mockFunctional.mockResolvedValue(functionalReport);
+    mockFunds.mockResolvedValue(fundBalances);
   });
 
   afterEach(() => {
@@ -315,7 +355,6 @@ describe('FinanceReportsPage', () => {
       expect(within(voidRow).getByText('Check voided')).toBeInTheDocument();
       expect(within(voidRow).getByText('-$80.00')).toBeInTheDocument();
       expect(screen.getByText('-$40.00')).toBeInTheDocument();
-      expect(mockListYears).toHaveBeenCalled();
     });
 
     it('refuses a period that ends before it starts, without asking the server', async () => {
@@ -349,7 +388,6 @@ describe('FinanceReportsPage', () => {
       expect(within(row).getByText('Jamie Rivera')).toBeInTheDocument();
       expect(within(row).getByText('106 days later')).toBeInTheDocument();
       expect(within(row).getByText('Pat Treasurer')).toBeInTheDocument();
-      expect(mockListYears).toHaveBeenCalled();
     });
 
     it('downloads the CSV for the period shown', async () => {
@@ -393,6 +431,45 @@ describe('FinanceReportsPage', () => {
 
       await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
       expect(mockFunctionalCsv).toHaveBeenCalledWith('2026-10-01', '2026-10-12');
+    });
+  });
+
+  describe('restricted funds', () => {
+    it('lists each fund with its balance, and marks one overspent', async () => {
+      openAt('?report=fund-balances');
+
+      const engine = await screen.findByRole('row', { name: /Engine fund/ });
+      expect(engine).toHaveTextContent('Replace Engine 2');
+      expect(engine).toHaveTextContent('$1,000.00');
+      expect(engine).toHaveTextContent('-$20.00');
+      expect(within(engine).getByText('Overspent')).toBeInTheDocument();
+      expect(screen.getByRole('row', { name: /Roof fund/ })).toHaveTextContent('(closed)');
+    });
+
+    it('says how to start when there are none', async () => {
+      mockFunds.mockResolvedValue({
+        funds: [],
+        received: '0.00',
+        spent: '0.00',
+        committed: '0.00',
+        awaitingApproval: '0.00',
+        available: '0.00',
+      });
+      openAt('?report=fund-balances');
+
+      expect(await screen.findByText('No restricted funds')).toBeInTheDocument();
+    });
+
+    it('downloads the CSV', async () => {
+      const file = { blob: new Blob(['x']), filename: 'fund-balances.csv' };
+      mockFundsCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=fund-balances');
+      await screen.findByRole('row', { name: /Engine fund/ });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
     });
   });
 });

@@ -526,6 +526,25 @@ upgrade for longer than that gets "Your onboarding session reached its
 the saved answers, as after a 30-minute idle lapse. Signed-in members'
 sessions are not affected.
 
+### Fundraising campaigns can be restricted funds that payments spend (2026-10-13)
+
+Migration `3decd3ff6ce5` adds `is_restricted` and `restriction_purpose` to
+fundraising campaigns and a nullable `fund_campaign_id` to purchase requests,
+check requests and expense line items. Nothing is backfilled: every campaign
+starts unrestricted and no payment is charged to a fund, so no approval
+changes until a department marks a campaign restricted and charges it.
+
+- **The new setting `finance.fund_overspend_mode` defaults to `warn`**, not
+  `off`: a payment charged to a fund for more than it has left is flagged and
+  can still be approved. `block` refuses the approval with a 409; `off` checks
+  nothing. It only ever applies to payments someone has charged to a fund.
+- **The request forms read the new `GET /finance/funds`**,
+  open to `finance.request`. It lists the restricted funds' names, purposes
+  and what each has left — figures a department may already publish on a
+  campaign page.
+- **Downgrading** drops the columns: which campaigns were restricted and which
+  payments were charged to them are lost.
+
 ### Expenses can be classified as program, management & general or fundraising (2026-10-13)
 
 Migration `390fa30d0200` adds a nullable `functional_class` to budget

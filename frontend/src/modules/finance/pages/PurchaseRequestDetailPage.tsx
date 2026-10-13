@@ -26,6 +26,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { functionalClassService, purchaseRequestService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
+import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -476,6 +477,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               await fetchPurchaseRequest(pr.id);
             }}
           />
+          <FundNameItem name={pr.fundName} />
           {pr.qbExportedAt && (
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
@@ -507,6 +509,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <p className="text-theme-text-primary mt-1 text-sm">{pr.description}</p>
           </div>
         )}
+
+        <FundShortfallNotice shortfall={pr.fundShortfall} />
 
         {/* Denial reason */}
         {pr.denialReason && (

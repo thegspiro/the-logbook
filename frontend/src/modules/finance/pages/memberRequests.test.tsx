@@ -38,6 +38,16 @@ vi.mock('../services/api', () => ({
   fiscalYearService: { options: () => fiscalYearOptions() as unknown },
   budgetService: { options: (fy: string) => budgetOptions(fy) as unknown },
   purchaseRequestService: {},
+  fundService: { list: () => Promise.resolve([]) },
+  financeSettingsService: {
+    get: () =>
+      Promise.resolve({
+        dualApprovalThreshold: null,
+        substantiationMode: 'off',
+        substantiationDays: 60,
+        fundOverspendMode: 'warn',
+      }),
+  },
 }));
 
 import PurchaseRequestsPage from './PurchaseRequestsPage';
