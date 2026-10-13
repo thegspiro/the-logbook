@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
+import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
+import { countingWindowLabel } from '../utils/requirementMonths';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
@@ -828,6 +830,8 @@ const MyTrainingPage: React.FC = () => {
                           />
                         </div>
 
+                        <RequirementMonthlyHours requirement={req} />
+
                         {/* Expired certification / blocks activity warning */}
                         {req.blocks_activity && (
                           <div className="mb-2 rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-1.5">
@@ -885,6 +889,8 @@ const MyTrainingPage: React.FC = () => {
                               <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
                                 Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
                               </span>
+                            ) : req.monthly_hours && req.monthly_hours.length > 0 ? (
+                              <span>Counting {countingWindowLabel(req.monthly_hours)}</span>
                             ) : null}
                           </div>
                         </div>

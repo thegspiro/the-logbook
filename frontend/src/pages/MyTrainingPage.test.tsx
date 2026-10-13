@@ -25,9 +25,9 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
-vi.mock('../utils/dateFormatting', () => ({
+vi.mock('../utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/dateFormatting')>()),
   formatDate: (date: string) => date || 'N/A',
-  formatCalendarDate: (date: string) => date || 'N/A',
   getTodayLocalDate: () => '2026-05-24',
 }));
 
@@ -463,6 +463,36 @@ describe('MyTrainingPage', () => {
       });
       renderWithRouter(<MyTrainingPage />);
       expect(await screen.findByText('Next completion window opens')).toBeInTheDocument();
+    });
+
+    it('shows the counting window instead of a due date for a rolling hours requirement, with its months on request', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        requirements_detail: [
+          {
+            id: 'hours',
+            name: 'Annual Training Hours',
+            frequency: 'annual',
+            required_hours: 72,
+            completed_hours: 3,
+            progress_percentage: 4,
+            is_met: false,
+            due_date: null,
+            days_until_due: null,
+            window_months: 12,
+            monthly_hours: [
+              { month: '2025-11', hours: 2 },
+              { month: '2025-12', hours: 1 },
+            ],
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Counting Nov 2025 – Dec 2025')).toBeInTheDocument();
+      expect(screen.queryByText(/Due:/)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /show monthly hours/i }));
+      expect(screen.getByLabelText('Nov 2025: 2 hours')).toBeInTheDocument();
     });
 
     it('moves the full history to its own tab and shows only recent records on the landing view', async () => {
