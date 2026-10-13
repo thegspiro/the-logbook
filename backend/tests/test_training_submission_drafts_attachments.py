@@ -72,6 +72,8 @@ def _submission(**overrides):
         expiration_date=None,
         category_id=None,
         attachments=None,
+        recorded_by=None,
+        crew_batch_id=None,
         course_name="Pump Ops",
     )
     base.update(overrides)
