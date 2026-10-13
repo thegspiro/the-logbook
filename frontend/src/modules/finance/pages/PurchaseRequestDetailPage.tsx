@@ -24,7 +24,8 @@ import {
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
-import { purchaseRequestService } from '../services/api';
+import { functionalClassService, purchaseRequestService } from '../services/api';
+import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -466,6 +467,15 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
             </div>
           )}
+          <FunctionalClassControl
+            value={pr.functionalClass}
+            effective={pr.effectiveFunctionalClass}
+            subject={pr.requestNumber}
+            onChange={async (next) => {
+              await functionalClassService.setPurchaseRequest(pr.id, next);
+              await fetchPurchaseRequest(pr.id);
+            }}
+          />
           {pr.qbExportedAt && (
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>

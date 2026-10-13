@@ -27,7 +27,7 @@ Dates are the department's calendar days (``resolve_scheduling_timezone``):
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
@@ -46,10 +46,13 @@ from app.models.finance import (
     ExpenseReport,
     ExpenseReportStatus,
     FiscalYear,
+    FunctionalClass,
     PurchaseRequest,
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.services.expense_substantiation import incurred_day
+from app.services.functional_expenses import FunctionalClassifier
 from app.utils.member_names import format_display_name
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -577,6 +580,239 @@ class FinanceReportService:
             "end": end,
             "rows": rows,
             "total": sum((r["amount"] for r in rows), ZERO),
+        }
+
+    # ------------------------------------------------------------------
+    # Outside the accountable plan
+    # ------------------------------------------------------------------
+
+    async def late_substantiation(self, org_id: str, start: date, end: date) -> dict:
+        """Reimbursements paid in the period for lines submitted too late.
+
+        A line submitted after the department's substantiation deadline was
+        reimbursed outside the accountable plan, so the department may have to
+        treat it as wages. One row per such line on an expense report paid in
+        the period, for the treasurer to hand to whoever runs payroll.
+        """
+        if end < start:
+            raise ValueError("The period's end must be on or after its start.")
+        if (end - start).days + 1 > MAX_REGISTER_DAYS:
+            raise ValueError(
+                f"This report covers at most {MAX_REGISTER_DAYS} days; "
+                "choose a shorter period."
+            )
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        window = _Window(_day_start(start, tz), _day_start(end + timedelta(days=1), tz))
+        labels = await self._line_labels(org_id)
+
+        submitter = aliased(User)
+        acknowledger = aliased(User)
+        result = await self.db.execute(
+            select(
+                ExpenseReport,
+                ExpenseLineItem,
+                submitter.first_name,
+                submitter.last_name,
+                submitter.preferred_name,
+                submitter.username,
+                acknowledger.first_name,
+                acknowledger.last_name,
+                acknowledger.preferred_name,
+                acknowledger.username,
+            )
+            .join(
+                ExpenseLineItem,
+                and_(
+                    ExpenseLineItem.expense_report_id == ExpenseReport.id,
+                    ExpenseLineItem.substantiated_late.is_(True),
+                ),
+            )
+            .outerjoin(
+                submitter,
+                and_(
+                    submitter.id == ExpenseReport.submitted_by,
+                    submitter.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                acknowledger,
+                and_(
+                    acknowledger.id == ExpenseReport.late_acknowledged_by,
+                    acknowledger.organization_id == org_id,
+                ),
+            )
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.status == ExpenseReportStatus.PAID,
+                ExpenseReport.paid_at >= window.start,
+                ExpenseReport.paid_at < window.end,
+            )
+        )
+
+        rows: list[dict[str, Any]] = []
+        for er, item, *names in result.all():
+            if er.paid_at is None:  # excluded by the query; narrows the type
+                continue
+            incurred = incurred_day(item.date_incurred)
+            submitted = (
+                _aware(er.submitted_at).astimezone(tz).date()
+                if er.submitted_at is not None
+                else None
+            )
+            rows.append(
+                {
+                    "paid_on": _aware(er.paid_at).astimezone(tz).date(),
+                    "report_id": er.id,
+                    "report_number": er.report_number,
+                    "member_name": _name(*names[:4]),
+                    "description": item.description,
+                    "budget_line": (
+                        labels.get(item.budget_id) if item.budget_id else None
+                    ),
+                    "incurred_on": incurred,
+                    "submitted_on": submitted,
+                    "days_to_submit": (
+                        (submitted - incurred).days if submitted is not None else None
+                    ),
+                    "amount": _money(item.amount),
+                    "acknowledged_by_name": (
+                        _name(*names[4:]) if er.late_acknowledged_by else None
+                    ),
+                }
+            )
+        rows.sort(key=lambda r: (r["paid_on"], r["report_number"], r["incurred_on"]))
+        return {
+            "start": start,
+            "end": end,
+            "rows": rows,
+            "total": sum((r["amount"] for r in rows), ZERO),
+        }
+
+    # ------------------------------------------------------------------
+    # Functional expenses
+    # ------------------------------------------------------------------
+
+    async def functional_expenses(self, org_id: str, start: date, end: date) -> dict:
+        """Payments in the period by function, then by budget category.
+
+        The same payments as the payments register for the period — paid
+        purchase requests, issued checks less the checks voided in it, and
+        paid expense reports line by line — so the two total alike. Each is
+        classified by ``FunctionalClassifier``; one with no class is reported
+        as unclassified, and one with no budget line under no category.
+        """
+        if end < start:
+            raise ValueError("The period's end must be on or after its start.")
+        if (end - start).days + 1 > MAX_REGISTER_DAYS:
+            raise ValueError(
+                f"This report covers at most {MAX_REGISTER_DAYS} days; "
+                "choose a shorter period."
+            )
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        window = _Window(_day_start(start, tz), _day_start(end + timedelta(days=1), tz))
+        classifier = await FunctionalClassifier.load(self.db, org_id)
+
+        sums: dict[tuple[Optional[str], Optional[str]], Decimal] = {}
+
+        def add(override, budget_id: Optional[str], amount) -> None:
+            fc = classifier.resolve(override, budget_id)
+            key = (fc.value if fc else None, classifier.category_of(budget_id))
+            sums[key] = sums.get(key, ZERO) + _money(amount)
+
+        purchases = await self.db.execute(
+            select(
+                PurchaseRequest.functional_class,
+                PurchaseRequest.budget_id,
+                func.coalesce(
+                    PurchaseRequest.actual_amount, PurchaseRequest.estimated_amount
+                ),
+            ).where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.status == PurchaseRequestStatus.PAID,
+                PurchaseRequest.paid_at >= window.start,
+                PurchaseRequest.paid_at < window.end,
+            )
+        )
+        for override, budget_id, amount in purchases.all():
+            add(override, budget_id, amount)
+
+        checks = await self.db.execute(
+            select(CheckRequest).where(
+                CheckRequest.organization_id == org_id,
+                or_(
+                    and_(
+                        CheckRequest.status.in_(
+                            [CheckRequestStatus.ISSUED, CheckRequestStatus.VOIDED]
+                        ),
+                        CheckRequest.check_date >= window.start,
+                        CheckRequest.check_date < window.end,
+                    ),
+                    and_(
+                        CheckRequest.status == CheckRequestStatus.VOIDED,
+                        CheckRequest.voided_at >= window.start,
+                        CheckRequest.voided_at < window.end,
+                    ),
+                ),
+            )
+        )
+        for cr in checks.scalars():
+            if (
+                cr.check_date is not None
+                and window.start <= _aware(cr.check_date) < window.end
+            ):
+                add(cr.functional_class, cr.budget_id, cr.amount)
+            if (
+                cr.status == CheckRequestStatus.VOIDED
+                and cr.voided_at is not None
+                and window.start <= _aware(cr.voided_at) < window.end
+            ):
+                add(cr.functional_class, cr.budget_id, -_money(cr.amount))
+
+        lines = await self.db.execute(
+            select(
+                ExpenseLineItem.functional_class,
+                ExpenseLineItem.budget_id,
+                ExpenseLineItem.amount,
+            )
+            .join(ExpenseReport, ExpenseReport.id == ExpenseLineItem.expense_report_id)
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.status == ExpenseReportStatus.PAID,
+                ExpenseReport.paid_at >= window.start,
+                ExpenseReport.paid_at < window.end,
+            )
+        )
+        for override, budget_id, amount in lines.all():
+            add(override, budget_id, amount)
+
+        classes: list[dict[str, Any]] = []
+        for fc_value in [fc.value for fc in FunctionalClass] + [None]:
+            categories: list[dict[str, Any]] = [
+                {
+                    "category_id": category_id,
+                    "category_name": classifier.category_name(category_id),
+                    "amount": amount,
+                }
+                for (key, category_id), amount in sums.items()
+                if key == fc_value
+            ]
+            if not categories and fc_value is None:
+                continue
+            categories.sort(
+                key=lambda c: (c["category_name"] is None, c["category_name"] or "")
+            )
+            classes.append(
+                {
+                    "functional_class": fc_value,
+                    "categories": categories,
+                    "total": sum((c["amount"] for c in categories), ZERO),
+                }
+            )
+        return {
+            "start": start,
+            "end": end,
+            "classes": classes,
+            "total": sum((c["total"] for c in classes), ZERO),
         }
 
     async def _line_labels(self, org_id: str) -> dict[str, str]:

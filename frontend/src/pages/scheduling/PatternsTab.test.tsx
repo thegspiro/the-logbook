@@ -252,6 +252,19 @@ describe('PatternsTab', () => {
     });
   });
 
+  it('describes the start date by what it does for the chosen pattern', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+
+    await user.click(await screen.findByRole('button', { name: /Weekend Only/ }));
+    expect(screen.getByText('Automatic generation starts on or after this date')).toBeInTheDocument();
+    expect(screen.queryByText('The cycle begins counting from this date')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /24-Hour On \/ 48-Hour Off/ }));
+    expect(screen.getByText('The cycle begins counting from this date')).toBeInTheDocument();
+  });
+
   it('tells the officer about driver seats generation left unfilled', async () => {
     mockGenerate.mockResolvedValue({
       shifts_created: 11,

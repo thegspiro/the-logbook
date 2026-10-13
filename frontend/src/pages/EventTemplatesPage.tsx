@@ -296,11 +296,12 @@ export const EventTemplatesPage: React.FC = () => {
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto pt-8 pb-8"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="event-template-form-title"
         >
           <div className="modal-overlay" aria-hidden="true" />
           <DialogPanel onClose={handleFormCancel} className="relative mx-4 w-full max-w-3xl">
             <div className="border-theme-surface-border border-b px-6 py-4">
-              <h2 className="text-theme-text-primary text-lg font-semibold">
+              <h2 id="event-template-form-title" className="text-theme-text-primary text-lg font-semibold">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
             </div>

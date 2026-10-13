@@ -624,7 +624,13 @@ export const ReportsPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <DialogPanel onClose={closeModal} className="relative w-full max-w-5xl">
+              <DialogPanel
+                onClose={closeModal}
+                className="relative w-full max-w-5xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="report-results-title"
+              >
                 {/* Modal header */}
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -636,7 +642,9 @@ export const ReportsPage: React.FC = () => {
                         })}
                       </div>
                       <div>
-                        <h3 className="text-theme-text-primary text-lg font-medium">{activeCard.title}</h3>
+                        <h3 id="report-results-title" className="text-theme-text-primary text-lg font-medium">
+                          {activeCard.title}
+                        </h3>
                         {activeReportLabel ? (
                           <p className="text-theme-text-muted mt-0.5 text-xs">Saved report: {activeReportLabel}</p>
                         ) : (

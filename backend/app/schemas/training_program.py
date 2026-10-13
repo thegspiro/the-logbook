@@ -218,6 +218,12 @@ class TrainingProgramBase(BaseModel):
 class TrainingProgramCreate(TrainingProgramBase):
     """Schema for creating a training program"""
 
+    # Programs a member must have completed before enrolling in this one.
+    # Validated in-org, acyclic and not self-referencing by the service.
+    prerequisite_program_ids: Optional[List[UUID]] = None
+    # Matches the column default and the JSON import's default.
+    allows_concurrent_enrollment: bool = True
+
 
 class TrainingProgramUpdate(BaseModel):
     """Schema for updating a training program"""
@@ -237,6 +243,18 @@ class TrainingProgramUpdate(BaseModel):
     recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
     recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
     recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
+    # Omitted leaves the prerequisites alone; null or [] clears them.
+    prerequisite_program_ids: Optional[List[UUID]] = None
+    # Omitted leaves the setting alone; null is rejected by the service, since
+    # the column has no "unset" meaning the enrollment checks could honour.
+    allows_concurrent_enrollment: Optional[bool] = None
+
+
+class PrerequisiteProgramSummary(BaseModel):
+    """A prerequisite program's id and name, for display."""
+
+    id: str
+    name: str
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
@@ -252,8 +270,28 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
     # How many members are on this pipeline. Computed for the list view — the
     # programme cards report it, and without it they rendered a hardcoded zero.
     enrolled_count: int = 0
+    prerequisite_program_ids: List[str] = []
+    allows_concurrent_enrollment: bool = True
+    # Names for the ids above, resolved in one query by the service. Ids whose
+    # program no longer exists are left out rather than shown blank.
+    prerequisite_programs: List[PrerequisiteProgramSummary] = []
 
     model_config = _response_config
+
+    @field_validator("prerequisite_program_ids", mode="before")
+    @classmethod
+    def _prerequisites_as_strings(cls, value: Any) -> Any:
+        if value is None:
+            return []
+        return [str(item) for item in value]
+
+    @field_validator("allows_concurrent_enrollment", mode="before")
+    @classmethod
+    def _concurrency_as_enforced(cls, value: Any) -> Any:
+        # The enrollment checks read a NULL column as "not allowed"
+        # (``if not program.allows_concurrent_enrollment``), so report it the
+        # way it is enforced rather than as the column default.
+        return bool(value)
 
 
 # Program Phase Schemas

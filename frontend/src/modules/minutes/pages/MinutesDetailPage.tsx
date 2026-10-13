@@ -1365,6 +1365,7 @@ export const MinutesDetailPage: React.FC = () => {
                   Link to Meeting Event
                 </h3>
                 <button
+                  data-dialog-close
                   onClick={() => setShowLinkEventModal(false)}
                   className="text-theme-text-muted hover:text-theme-text-secondary"
                   aria-label="Close dialog"

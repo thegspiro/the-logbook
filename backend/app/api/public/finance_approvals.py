@@ -23,6 +23,7 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.finance import (
+    ApprovalEntityType,
     ApprovalStepRecord,
     ApprovalStepStatus,
     ApprovalStepType,
@@ -41,6 +42,9 @@ router = APIRouter(
 
 class ApprovalActionRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
+    # Approving an expense report with lines submitted after the department's
+    # substantiation deadline needs this set: the approver has reviewed them.
+    acknowledge_late_substantiation: bool = False
 
 
 class ApprovalDetailResponse(BaseModel):
@@ -49,6 +53,9 @@ class ApprovalDetailResponse(BaseModel):
     status: str
     actionable: bool
     expired: bool
+    # Expense reports: lines submitted after the substantiation deadline. A
+    # count only; the page shows no amounts or names.
+    late_line_count: int = 0
 
 
 class ApprovalActionResponse(BaseModel):
@@ -138,6 +145,11 @@ async def get_approval_detail(
         status=record.status.value,
         actionable=record.status == ApprovalStepStatus.PENDING and not expired,
         expired=expired,
+        late_line_count=(
+            await FinanceService(db).late_line_count(record.entity_id)
+            if record.entity_type == ApprovalEntityType.EXPENSE_REPORT
+            else 0
+        ),
     )
 
 
@@ -161,7 +173,11 @@ async def approve_via_token(
 
     service = FinanceService(db)
     try:
-        record = await service.approve_by_token(token, body.notes or None)
+        record = await service.approve_by_token(
+            token,
+            body.notes or None,
+            acknowledge_late=body.acknowledge_late_substantiation,
+        )
         await log_audit_event(
             db=db,
             event_type="finance.approval_step_approved",

@@ -1326,6 +1326,23 @@ class FinanceSettingsUpdate(BaseModel):
             "the rule off, which is also the default."
         ),
     )
+    substantiation_mode: Optional[Literal["off", "warn", "block"]] = Field(
+        None,
+        description=(
+            "The accountable-plan deadline for expense reports: off (the "
+            "default), warn (an approver must confirm reviewing late lines) or "
+            "block (a report with a late line cannot be submitted)."
+        ),
+    )
+    substantiation_days: Optional[int] = Field(
+        None,
+        ge=1,
+        le=60,
+        description=(
+            "Days after an expense is incurred within which it must be "
+            "submitted. At most 60, the IRS safe harbor; 60 when unset."
+        ),
+    )
 
     model_config = ConfigDict(extra="allow")
 

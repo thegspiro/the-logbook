@@ -48,13 +48,13 @@ the organization.
 
 | URL                                                 | Page                                       | Permission                                                                   |
 | --------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `/inventory/checklists/my`                          | My Checklists (`?shift=<id>`)              | see [Inventory](Module-Inventory#equipment-checklists-moved-here-2026-08-31) |
+| `/inventory/checklists/my`                          | My Checklists (`?shift=<id>`)              | see [Inventory](Module-Inventory#equipment-checklists) |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory                        | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist)    | any of `inventory.check_view`, `inventory.manage`                            |
 | `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder           | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template              | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports                    | `inventory.check_view`                                                       |
-| `/inventory/admin/checklists/settings`              | Checklist settings (incl. check-in timing) | see [Inventory](Module-Inventory#equipment-checklists-moved-here-2026-08-31) |
+| `/inventory/admin/checklists/settings`              | Checklist settings (incl. check-in timing) | see [Inventory](Module-Inventory#equipment-checklists) |
 
 ---
 
@@ -307,7 +307,7 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 ```
 
 The rest of the equipment-check API is documented in the
-[Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31).
+[Inventory module](Module-Inventory#equipment-checklists).
 
 ---
 

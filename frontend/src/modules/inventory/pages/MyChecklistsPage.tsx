@@ -804,6 +804,7 @@ export const MyChecklistsPage: React.FC = () => {
               <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
                 <h2 className="text-theme-text-primary text-base font-semibold">Pick a checklist</h2>
                 <button
+                  data-dialog-close
                   onClick={() => setShowTemplatePicker(false)}
                   className="text-theme-text-muted hover:bg-theme-surface-hover rounded-lg p-1 transition-colors"
                   aria-label="Close"

@@ -24,13 +24,14 @@ This page is the **structured reference**: data shapes, gates, invariants, edge
 cases. It is not the only inventory document, and it deliberately does not
 duplicate the others.
 
-| Document                                                        | What it is for                                                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| [wiki/Module-Inventory.md](../wiki/Module-Inventory.md)         | The fuller page: exhaustive endpoint paths, per-page walkthroughs, and the dated change narrative |
-| [wiki/Inventory-NFC-Tags.md](../wiki/Inventory-NFC-Tags.md)     | NFC tagging in depth                                                                              |
-| [docs/MEDICAL_SUPPLIES_MODULE.md](./MEDICAL_SUPPLIES_MODULE.md) | EMS consumables, which are a separate supply line with their own permissions                      |
-| [docs/DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                 | Generated, authoritative column-level schema                                                      |
-| [docs/app-review/inventory.md](./app-review/inventory.md)       | Review findings, verified claims, and each pass's explicit scope                                  |
+| Document                                                                    | What it is for                                                                  |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [wiki/Module-Inventory.md](../wiki/Module-Inventory.md)                     | The fuller page: what each part of the module does and how a department uses it |
+| [wiki/Module-Inventory-Developer.md](../wiki/Module-Inventory-Developer.md) | Exhaustive endpoint paths, page routes, data model and frontend architecture    |
+| [wiki/Inventory-NFC-Tags.md](../wiki/Inventory-NFC-Tags.md)                 | NFC tagging in depth                                                            |
+| [docs/MEDICAL_SUPPLIES_MODULE.md](./MEDICAL_SUPPLIES_MODULE.md)             | EMS consumables, which are a separate supply line with their own permissions    |
+| [docs/DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                             | Generated, authoritative column-level schema                                    |
+| [docs/app-review/inventory.md](./app-review/inventory.md)                   | Review findings, verified claims, and each pass's explicit scope                |
 
 ### Terminology
 
@@ -239,7 +240,7 @@ counted on 2026-10-08 from `inventory.router.routes`; re-derive rather than
 trust that figure if the module has moved on.
 
 **This section deliberately does not restate the exhaustive path list.**
-[wiki/Module-Inventory.md](../wiki/Module-Inventory.md#api-endpoints) already
+[wiki/Module-Inventory-Developer.md](../wiki/Module-Inventory-Developer.md#api-endpoints) already
 carries one, and a second copy would be a second thing to go stale — the
 failure this module's own review pass kept finding in prose counts. What
 follows is the shape the wiki page does not give: every route group with its

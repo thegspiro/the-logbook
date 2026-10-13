@@ -2168,6 +2168,23 @@ option {
   --tw-ring-offset-color: var(--ring-offset-bg);
 }
 
+/* The ring above is drawn outside the element, so a control inside anything
+   that clips — `overflow: hidden` on a rounded card, or a scrolling tab strip,
+   where `overflow-x: auto` forces `overflow-y` to clip too — lost it on every
+   side and showed no focus at all (WCAG 2.4.7). These draw it inside instead.
+   Unlayered, like the rule they adjust: a `focus-visible:ring-inset` utility
+   sits in a layer and so loses to it. */
+.focus-ring-inset:focus-visible,
+.tab-scroll > :focus-visible {
+  --tw-ring-inset: inset;
+  --tw-ring-offset-width: 0px;
+}
+
+.high-contrast .focus-ring-inset:focus-visible,
+.high-contrast .tab-scroll > :focus-visible {
+  outline-offset: -3px;
+}
+
 /* Skip to main content link for accessibility */
 .skip-to-main {
   @apply bg-theme-surface-modal text-theme-text-primary fixed -top-96 left-1/2 z-[100] flex -translate-x-1/2 items-center rounded-b-lg border border-t-0 border-white/40 px-5 py-3 font-semibold shadow-xl focus:top-0;

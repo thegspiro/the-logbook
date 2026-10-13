@@ -1178,6 +1178,24 @@ The paid amount is recorded against the associated budgets for each line item th
 
 > **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement. Reports submitted before receipts were required (2026-10-09) show _"No receipt"_ on their lines and are otherwise unaffected.
 
+### The Deadline for Claiming Expenses
+
+An accountable plan also expects expenses to be claimed promptly. The IRS treats **60 days** after the expense as a reasonable time; a reimbursement for an expense claimed later may have to be reported as taxable pay. Your department chooses what happens to a late line:
+
+| Setting   | What happens to a line older than the deadline when the report is submitted                                                                                     |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Off**   | Nothing. This is the default.                                                                                                                                   |
+| **Warn**  | The report is submitted. The line is marked **Submitted late**, and every approver has to confirm they have reviewed the late lines before approving the report |
+| **Block** | The report cannot be submitted. The message names the late lines.                                                                                               |
+
+**Setting it up.** A member with `settings.manage` opens **Finance > Settings > Approval Chains** and uses **Deadline for claiming expenses**: choose Off, Warn or Block, and the number of days (1 to 60 — a department can be stricter than the IRS, not looser). Finance officers see the setting but cannot change it, because it applies to them.
+
+**Filling in the form.** When the deadline is on, the expense form warns you as soon as you enter a date older than it, before you save. The warning is advice: what counts is the day you submit the report.
+
+**Approving.** On **Approvals**, a report with late lines shows **1 late line** (or however many). Approving it opens a second question — _"Approve late expenses?"_ — and **I've reviewed it, approve** records your confirmation. **Go back** approves nothing. An external approver approving from an emailed link ticks **I have reviewed the late expenses** instead. If a report's approval chain would finish without anyone confirming (for example, a chain of notification steps only), it waits under **Waiting for a decision on their own page** until an approver confirms and approves it.
+
+**Afterwards.** The report's page lists which lines were late and when an approver confirmed them. **Finance > Reports > Outside the accountable plan** lists every late expense paid in a period — the member, the dates incurred and submitted, who confirmed it and the amount — with a CSV download, for whoever handles payroll or your tax filings.
+
 ### Edge Cases
 
 | Scenario                                       | Behavior                                                                                                                             |
@@ -1186,7 +1204,10 @@ The paid amount is recorded against the associated budgets for each line item th
 | Line items spanning multiple budget categories | Each line item can reference a different budget. The total is the sum of all line items                                              |
 | Adding line items after submission             | Not permitted -- the report must be in Draft status to add line items                                                                |
 | Editing the report after submission            | Only permitted in Draft or Submitted status                                                                                          |
-| Receipt not attached to a line item            | The report can still be submitted, but approvers may request receipts before approving                                               |
+| Receipt not attached to a line item            | The report cannot be submitted; the message names the lines missing one (since 2026-10-09)                                           |
+| Line incurred longer ago than the deadline     | Depends on the department's setting: nothing (Off), marked and confirmed by approvers (Warn), or refused (Block)                     |
+| Deadline changed after a report was submitted  | The report keeps the grading it got when it was submitted                                                                            |
+| Report submitted before 2026-10-12             | Not graded: when it was submitted was never recorded                                                                                 |
 | Expense type mismatch with budget category     | No validation -- the expense type is informational classification. The budget is determined by the `budgetId` field on the line item |
 | Multiple line items against the same budget    | All amounts are summed and added to that budget's `amountSpent` when the report is paid                                              |
 
@@ -1501,7 +1522,7 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 ## Board Reports
 
 Navigate to **Finance > Reports** (or the **Reports** quick link on the
-dashboard). You need `finance.view`. Three reports sit on tabs across the top:
+dashboard). You need `finance.view`. Five reports sit on tabs across the top:
 
 - **Budget vs actual** -- every budget line for a fiscal year: its original
   amount, confirmed amendments, the amended budget, what has been spent, what
@@ -1511,6 +1532,12 @@ dashboard). You need `finance.view`. Three reports sit on tabs across the top:
   whether a second officer confirmed or rejected it.
 - **Payments register** -- every payment made in a period: date, type, request
   number, payee, description, budget line and amount, with a total.
+- **Functional expenses** -- a period's payments by what they were for:
+  program services, management & general, and fundraising, each by budget
+  category. See [Classifying Expenses](#classifying-expenses).
+- **Outside the accountable plan** -- every expense reimbursed in a period that
+  was claimed after the department's deadline, with who confirmed it. See
+  [The Deadline for Claiming Expenses](#the-deadline-for-claiming-expenses).
 
 Each report has **Download CSV**, which opens in Excel or Google Sheets with
 amounts as numbers, and **Print**, which prints just the report under a
@@ -1557,6 +1584,37 @@ budget lines.
 | Payment with no budget line                       | On the payments register, with no budget line shown; not on budget vs actual               |
 | An expense report charged to several budget lines | One register row for the whole report, naming every line it was charged to                 |
 | Register period longer than 366 days              | Refused with a message; run it in two parts                                                |
+
+### Classifying Expenses
+
+A nonprofit's annual return (IRS Form 990, Part IX) reports expenses by what
+they were **for**, in three classes:
+
+| Class                    | What belongs there                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| **Program services**     | Running the department: gear, apparatus, training, fuel, community outreach            |
+| **Management & general** | Running the organization: insurance, accounting, bank fees, the annual audit           |
+| **Fundraising**          | The cost of raising money: raffle tickets, a mailer, the hall for a fundraising dinner |
+
+Fundraising is what it **costs** to raise money, not what the money raised
+buys. Turnout gear bought with donations is still program services.
+
+**Setting it up.** On **Finance > Settings**, edit each budget category and
+choose its **Expense classification**. A subcategory left _Not set_ takes its
+parent category's class, so setting the top-level categories is usually
+enough.
+
+**One payment that differs.** On a purchase request or check request, or on a
+line of an expense report, someone with `finance.manage` can change the
+classification for that payment alone — the gloves bought as raffle prizes
+from the gear line, say. Choosing _Category's class_ puts it back. Finance
+viewers see the class; members filing requests do not.
+
+**The report.** **Functional expenses** lists a period's payments under each
+class, then by budget category, with subtotals and a CSV. It counts the same
+payments as the payments register, so the totals agree. Anything without a
+class is listed as **Unclassified**, with a reminder above the table, rather
+than guessed at.
 
 ---
 

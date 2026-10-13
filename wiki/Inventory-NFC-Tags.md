@@ -496,7 +496,7 @@ record**: the log tracks equipment, not where members were.
 
 ## Reference
 
-- Endpoints and data model: [Inventory → NFC Tags](Module-Inventory#nfc-tags-2026-09-24).
+- Endpoints and data model: [Inventory Developer Reference → NFC Tags](Module-Inventory-Developer#nfc-tags).
 - Tables: `inventory_nfc_tags` (including `check_compartment_id`),
   `inventory_nfc_scans`, `inventory_nfc_audits`, `inventory_nfc_audit_items`,
   `inventory_nfc_audit_digests`, and `storage_areas.audit_frequency`. See

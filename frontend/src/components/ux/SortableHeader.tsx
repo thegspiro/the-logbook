@@ -4,7 +4,7 @@
  * Click-to-sort column headers for table views.
  */
 
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -27,6 +27,18 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   className = '',
 }) => {
   const isActive = currentSort === field;
+  const sortState = isActive && currentDirection ? (currentDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // `aria-sort` is only valid on a column header; on the button it was flagged
+  // by axe and never announced. Set on the enclosing <th> so every caller gets
+  // it without restructuring its table.
+  useLayoutEffect(() => {
+    const header = buttonRef.current?.closest('th');
+    if (!header) return undefined;
+    header.setAttribute('aria-sort', sortState);
+    return () => header.removeAttribute('aria-sort');
+  }, [sortState]);
 
   const handleClick = () => {
     if (!isActive) {
@@ -40,14 +52,15 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
 
   return (
     <button
+      ref={buttonRef}
+      type="button"
       onClick={handleClick}
-      className={`hover:text-theme-text-primary group inline-flex items-center gap-1 text-xs font-medium tracking-wider uppercase transition-colors ${
+      className={`hover:text-theme-text-primary group inline-flex min-h-6 items-center gap-1 text-xs font-medium tracking-wider uppercase transition-colors ${
         isActive ? 'text-theme-text-primary' : 'text-theme-text-secondary'
       } ${className}`}
-      aria-sort={isActive ? (currentDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       {label}
-      <span className="shrink-0">
+      <span className="shrink-0" aria-hidden="true">
         {isActive && currentDirection === 'asc' ? (
           <ArrowUp className="h-3.5 w-3.5" />
         ) : isActive && currentDirection === 'desc' ? (
@@ -59,34 +72,3 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
     </button>
   );
 };
-
-/** Generic sort utility
- * @deprecated Prefer dedicated sort logic in components */
-// eslint-disable-next-line react-refresh/only-export-components
-export function sortItems<T>(
-  items: T[],
-  field: string | null,
-  direction: SortDirection,
-  accessor?: (item: T, field: string) => string | number | Date | null | undefined
-): T[] {
-  if (!field || !direction) return items;
-
-  return [...items].sort((a, b) => {
-    const getVal = accessor || ((item: T, f: string) => (item as Record<string, unknown>)[f]);
-    const aVal = getVal(a, field);
-    const bVal = getVal(b, field);
-
-    if (aVal == null && bVal == null) return 0;
-    if (aVal == null) return 1;
-    if (bVal == null) return -1;
-
-    let cmp: number;
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      cmp = aVal.localeCompare(bVal);
-    } else {
-      cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-    }
-
-    return direction === 'desc' ? -cmp : cmp;
-  });
-}
