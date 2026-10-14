@@ -37,7 +37,7 @@ Skills Testing lives within the Training module and integrates with Training Req
 > **Training Administration > Settings & Data > Practical Skills**. If your
 > department chose sign-offs, the Skills Testing screens in this guide are
 > hidden and record nothing new (nothing is deleted). See
-> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system-2026-10-12).
+> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system).
 
 Many fire departments and EMS agencies conduct psychomotor skills evaluations as part of certification, recertification, and internal proficiency checks. These evaluations follow standardized skill sheets (such as those published by the NREMT) where an examiner observes a candidate performing a procedure and scores each step.
 
@@ -1466,6 +1466,12 @@ Skills tests integrate with the broader training compliance system:
 - **Compliance Matrix:** Skills test completion status feeds into the department-wide compliance matrix view.
 
 ### Integration with Shift Completion Reports _(2026-04-07)_
+
+> **Only under Shift report sign-offs.** Everything in this section applies
+> only when your department has chosen **Shift report sign-offs**. Under
+> **Skills Testing** (the default), the shift report form shows no skills
+> list, and skills on a report record nothing. See
+> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system).
 
 Skills observed during shift completion reports now support **1-5 scoring** that connects to the formal skills tracking system:
 
