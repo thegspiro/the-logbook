@@ -474,6 +474,14 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class InventoryCategoryDeleteResult(BaseModel):
+    """What a permanent category delete did"""
+
+    category_name: str
+    items_moved: int
+    moved_to_name: Optional[str] = None
+
+
 # ============================================
 # Guided Setup Schemas
 # ============================================

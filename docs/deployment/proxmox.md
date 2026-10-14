@@ -84,6 +84,7 @@ cp .env.example .env
 # Generate security keys
 SECRET_KEY=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
+ENCRYPTION_SALT=$(openssl rand -hex 16)
 DB_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
 REDIS_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
 MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
@@ -91,6 +92,7 @@ MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
 # Update .env with generated values
 sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" .env
 sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=${ENCRYPTION_KEY}|" .env
+sed -i "s|^ENCRYPTION_SALT=.*|ENCRYPTION_SALT=${ENCRYPTION_SALT}|" .env
 sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
 sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|" .env
 sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" .env
@@ -105,6 +107,16 @@ sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${LXC_IP}:3000|" .env
 # startup log warns that members reading mail elsewhere cannot follow links.
 sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${LXC_IP}:3000|" .env
 
+# Production mode, with the production override pinned for every later command
+sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
+sed -i "s|^DEBUG=.*|DEBUG=false|" .env
+echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" >> .env
+
+# The bundled MySQL/Redis speak plaintext on the internal Docker network, so the
+# production backend refuses to boot unless that is accepted explicitly — the
+# installers write the same three lines
+printf '%s\n' SECURITY_REQUIRE_TLS=false DB_SSL=false REDIS_SSL=false >> .env
+
 # Start the application (production — see the note below)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
@@ -117,9 +129,13 @@ docker compose ps
 > docs enabled, no HTTPS enforcement) and skips the startup security gate. For
 > production, layer the production override as shown above (it forces
 > `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
-> enables DB/Redis TLS, and does not publish the backend port). Pin
-> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
-> later `docker compose ...` command stays hardened. In production the app
+> and does not publish the backend port). It leaves `DB_SSL`/`REDIS_SSL` off,
+> because the bundled MySQL and Redis do not terminate TLS, and defaults
+> `SECURITY_REQUIRE_TLS` to `true` — hence the explicit `false` above. If you move
+> MySQL/Redis to services with TLS, set `DB_SSL=true` + `DB_SSL_CA` and
+> `REDIS_SSL=true` + `REDIS_SSL_CA`, then `SECURITY_REQUIRE_TLS=true`. The
+> `COMPOSE_FILE` line keeps every later `docker compose ...` command hardened.
+> The override needs Docker Compose v2.24.4 or later. In production the app
 > **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
 > docs are enabled, if HTTPS isn't enforced, or if `FRONTEND_URL`
 > points at `localhost` with no address other than localhost in `ALLOWED_ORIGINS` to use instead — terminate TLS at the reverse

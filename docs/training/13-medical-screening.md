@@ -1,8 +1,27 @@
 # Medical Screening
 
-The Medical Screening module tracks occupational health requirements, screening records, and compliance for department members and prospective members. It centralizes physical exams, drug screenings, fitness assessments, psychological evaluations, and other medical clearances into a single compliance-aware system with expiration tracking and grace period support.
+Medical Screening is where your department tracks the health checks members
+and prospective members must pass. That covers physicals, drug screenings,
+fitness tests, psychological evaluations and other medical clearances. The
+Logbook records each result, tracks when it expires, and shows who is behind.
 
-Medical Screening is a standalone module accessible from the sidebar. It integrates with the Membership module for member and prospect lookups.
+## Lesson at a Glance
+
+|                     |                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Who this is for** | Health and safety officers and anyone else who handles screening results. Members only need one section |
+| **What you need**   | The Medical Screening module turned on, and a role that can view (or manage) member medical screenings  |
+| **Essential path**  | Members: 5 minutes. Officers: about 40 minutes                                                          |
+| **Full guide**      | About 1 hour                                                                                            |
+| **Last verified**   | 2026-10-14                                                                                              |
+| **Owner**           | Your department's health and safety officer                                                             |
+
+**Members:** read only
+[What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard).
+
+**Officers:** read the whole guide. Pay special attention to the
+[Grace Period](#grace-period) section: the setting is saved but does not yet
+change anyone's compliance.
 
 ---
 
@@ -19,130 +38,143 @@ Medical Screening is a standalone module accessible from the sidebar. It integra
 8. [Prospect Screening](#prospect-screening)
 9. [Realistic Example: Annual Physical Compliance](#realistic-example-annual-physical-compliance)
 10. [Troubleshooting](#troubleshooting)
+11. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Medical Screening Overview
 
-**Route:** `/medical-screening`
+**Where to find it:** **Administration → Members → Medical Screening**.
 
-**Availability:** Medical Screening must be enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`). When it is not enabled, the Medical Screening sidebar item is hidden from navigation.
+**Turning it on:** Medical Screening is an opt-in module. An administrator
+turns it on under **Organization Settings → Modules → Additional Modules**.
+While it is off, the menu item is hidden.
 
-The Medical Screening page uses a **three-tab layout**:
+The page has three tabs:
 
-| Tab              | Purpose                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| **Requirements** | Define what screenings your department requires, how often, and for which roles       |
-| **Records**      | Log individual screening results for members and prospects                            |
-| **Compliance**   | View department-wide compliance status, identify gaps, and track upcoming expirations |
+| Tab              | What it is for                                                       |
+| ---------------- | -------------------------------------------------------------------- |
+| **Requirements** | Set which screenings your department requires and how often          |
+| **Records**      | Log each screening result for a member or prospect                   |
+| **Compliance**   | See who meets every requirement, who does not, and what expires soon |
+
+When any screening expires in the next 30 days, an amber line above the tabs
+says how many, for example "2 screenings expiring in the next 30 days".
 
 ![Medical Screening landing page with its three-tab navigation](./images/13-01-medical-landing.png)
 
-**[SCREENSHOT — REPLACE `13-01-medical-landing.png`.** The page subtitle now reads "Set screening requirements, record screenings, and see which ones expire soon."**]**
-
 ### Permissions
 
-| Action                                              | Required Permission         |
-| --------------------------------------------------- | --------------------------- |
-| View requirements, records, and compliance data     | `medical_screening.view`    |
-| Create, update, or delete requirements              | `medical_screening.manage`  |
-| Create, update, or delete screening records         | `medical_screening.manage`  |
-| See your **own** compliance counts on the dashboard | None — any signed-in member |
+Two permissions control this module. Role Management lists them under
+Compliance as **View member medical screenings** and **Manage member medical
+screenings**.
 
-The last row is the only part of this module a member sees without holding a
-medical screening permission, and it is counts only. See
-[What members see on their own dashboard](#what-members-see-on-their-own-dashboard).
+| What you want to do                                | Who can do it                                       |
+| -------------------------------------------------- | --------------------------------------------------- |
+| See requirements, records and compliance           | Roles that can **view** member medical screenings   |
+| Add, edit or delete requirements                   | Roles that can **manage** member medical screenings |
+| Add, edit or delete screening records              | Roles that can **manage** member medical screenings |
+| See **your own** screening counts on the dashboard | Every signed-in member                              |
 
-> **HIPAA Note:** Medical screening records contain protected health information (PHI). Access to this module should be restricted to authorized personnel only. Assign the `medical_screening.view` and `medical_screening.manage` permissions exclusively to roles that have a legitimate need to access medical compliance data (e.g., Chief Officers, Health & Safety Officers, HR administrators).
->
-> **Audit trail — what is and is not recorded.** Creating, updating and deleting
-> requirements and records are written to the audit trail, and so is every
-> screen or request that shows somebody's screening data: the Records list, a
-> single record, a member's or prospect's compliance, and the expiring-soon
-> list. Each of those writes **one** entry per page load — naming the members
-> and prospects it showed, or the filter used — rather than one per row, so the
-> trail answers "who looked at this member's results, and when" without
-> filling up every time the Records tab opens. A member's own compliance counts
-> on their dashboard are not logged: they show nothing about anyone else.
+The last row is the only part of this module a member sees without either
+permission. It shows counts only. See
+[What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard).
+
+> **Important — this is protected health information.** Screening records are
+> private health information under HIPAA. Give the two permissions only to
+> roles that truly need them, such as chief officers, the health and safety
+> officer or HR administrators. The view permission shows every member's
+> results, notes and providers — there is no narrower level.
+
+> **What is recorded in the audit log?** Adding, editing and deleting
+> requirements and records is logged. So is every screen that shows someone's
+> screening data: the Records list, a single record, a member's or prospect's
+> compliance detail, the department compliance list and the expiring list.
+> Each page load writes **one** entry that names the people it showed. The log
+> can therefore answer "who looked at this member's results, and when?". A
+> member's own dashboard counts are not logged, because they show nothing
+> about anyone else.
 
 ### Screening Types
 
-The system supports six screening types, each representing a category of occupational health evaluation:
+There are six screening types:
 
-| Screening Type       | Display Name       | Typical Use                                                    |
-| -------------------- | ------------------ | -------------------------------------------------------------- |
-| `physical_exam`      | Physical Exam      | Annual NFPA 1582 physicals, DOT physicals                      |
-| `medical_clearance`  | Medical Clearance  | Return-to-duty clearance, SCBA clearance                       |
-| `drug_screening`     | Drug Screening     | Pre-employment, random, post-incident drug/alcohol tests       |
-| `vision_hearing`     | Vision & Hearing   | Audiometric exams, vision acuity tests                         |
-| `fitness_assessment` | Fitness Assessment | CPAT, department fitness evaluations, treadmill stress tests   |
-| `psychological`      | Psychological      | CISM evaluations, pre-employment psych exams, fitness-for-duty |
+| Screening type               | Typical use                                                    |
+| ---------------------------- | -------------------------------------------------------------- |
+| **Physical Exam**            | Annual NFPA 1582 physicals, DOT physicals                      |
+| **Medical Clearance**        | Return-to-duty clearance, SCBA clearance                       |
+| **Drug Screening**           | Pre-employment, random and post-incident drug or alcohol tests |
+| **Vision & Hearing**         | Hearing tests, vision tests                                    |
+| **Fitness Assessment**       | Candidate Physical Ability Test (CPAT), fitness evaluations    |
+| **Psychological Evaluation** | Pre-employment and fitness-for-duty evaluations                |
 
 ---
 
 ## Screening Requirements
 
-Requirements define **what** your department mandates and **how often**. Each requirement specifies a screening type, recurrence interval, applicable roles, and a grace period for compliance calculations.
-
-Navigate to **Medical Screening > Requirements** tab to view all requirements.
+A requirement says **what** your department requires and **how often**. Open
+the **Requirements** tab to see them. Each row shows the name, **Active** or
+**Inactive**, the screening type, how often it repeats ("Every 12 months" or
+"One-time"), any roles you listed, and the description.
 
 ![Medical screening requirements tab with frequency and grace period](./images/13-02-requirements-tab.png)
 
 ### Requirement Fields
 
-| Field                   | Type                    | Description                                                                     |
-| ----------------------- | ----------------------- | ------------------------------------------------------------------------------- |
-| **Name**                | String (required)       | Descriptive name for the requirement (e.g., "Annual NFPA 1582 Physical")        |
-| **Screening Type**      | Enum (required)         | One of the six screening types listed above                                     |
-| **Description**         | Text (optional)         | Detailed description, instructions, or notes about the requirement              |
-| **Frequency (Months)**  | Integer (optional)      | Recurrence interval in months. Leave blank for one-time requirements            |
-| **Applies to Roles**    | JSON array (optional)   | Specific roles this requirement applies to. Leave blank to apply to all members |
-| **Grace Period (Days)** | Integer (default: 30)   | Number of days after expiration during which a member remains compliant         |
-| **Is Active**           | Boolean (default: true) | Whether this requirement is currently enforced                                  |
+| Field                                    | What it means                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Name** (required)                      | A clear name, such as "Annual NFPA 1582 Physical"                                              |
+| **Screening Type**                       | One of the six types above                                                                     |
+| **Description**                          | Instructions or notes                                                                          |
+| **One-time requirement (not recurring)** | Tick for a screening needed only once. Leave unticked for a repeating one                      |
+| **Frequency (months)**                   | How often it repeats. Shown only for repeating requirements; must be at least 1                |
+| **Applies to Roles (comma-separated)**   | Saved and shown, but **not applied** — see [Role-Based Requirements](#role-based-requirements) |
+| **Grace Period (days past expiration)**  | Saved, but **not applied** — see [Grace Period](#grace-period)                                 |
+| **Active**                               | Only active requirements count toward compliance                                               |
 
 ### One-Time vs Recurring Requirements
 
-- **Recurring:** When `frequency_months` is set (e.g., 12), the system expects a new screening every N months. The expiration date on each record determines when the next screening is due.
-- **One-time:** When `frequency_months` is null, a single passing record satisfies the requirement indefinitely. There is no expiration cycle.
+- **Repeating:** with a frequency such as 12 months, members need a new
+  screening regularly. The **Expiration Date** you enter on each record decides
+  when it runs out. The Logbook does not work out the expiry from the
+  frequency, so always enter the expiration date.
+- **One-time:** a single qualifying record with no expiration date satisfies
+  it for good.
 
 ---
 
 ## Creating Requirements
 
-**Required Permission:** `medical_screening.manage`
+**Who can do this:** roles that can manage member medical screenings.
 
-1. Navigate to **Medical Screening > Requirements** tab.
-2. Click **Add Requirement**.
-3. Fill in the requirement fields:
+1. Open the **Requirements** tab.
+2. Select **Add Requirement**.
+3. Fill in the fields. For example:
 
-| Field                   | Example Value                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Name**                | Annual NFPA 1582 Physical                                                                            |
-| **Screening Type**      | Physical Exam                                                                                        |
-| **Description**         | Annual medical examination per NFPA 1582 standard. Includes cardiac stress test for members over 40. |
-| **Frequency (Months)**  | 12                                                                                                   |
-| **Applies to Roles**    | _(blank — applies to all members)_                                                                   |
-| **Grace Period (Days)** | 30                                                                                                   |
-| **Is Active**           | Yes                                                                                                  |
+| Field                  | Example                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Name**               | Annual NFPA 1582 Physical                                                                            |
+| **Screening Type**     | Physical Exam                                                                                        |
+| **Description**        | Annual medical examination per NFPA 1582 standard. Includes cardiac stress test for members over 40. |
+| **Frequency (months)** | 12                                                                                                   |
+| **Applies to Roles**   | _(blank)_                                                                                            |
+| **Active**             | Ticked                                                                                               |
 
-4. Click **Add Requirement** (editing an existing one saves with **Save Changes**).
+4. Select **Add Requirement**. When you edit an existing one, the button reads
+   **Save Changes**.
 
 ![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
 
-**[SCREENSHOT — REPLACE `13-05-add-requirement.png`.** The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here."**]**
-
 ### Editing and Deleting Requirements
 
-- Click the **Edit** button on any requirement row to modify its fields. Changes take effect immediately for future compliance calculations.
-- Click the **Delete** button to remove a requirement. The confirmation reads _"Delete “(name)”? Screening records filed under it are kept, but will no longer be linked to a requirement. You can't undo this."_ and its button is **Delete Requirement**. The records stay in each member's screening history; the requirement simply leaves compliance calculations.
-
-> **Corrected 2026-09-29.** Until this date that sentence was not true.
-> The requirement-to-record relationship was declared with an ORM delete
-> cascade, so deleting a requirement **deleted every screening record filed
-> under it** before the database's own `SET NULL` could apply — a member's
-> medical history, gone with a configuration change. Records are now kept and
-> unlinked. Records already lost to an earlier delete are not recoverable from
-> the application; restore them from a backup if they matter.
+- Select the pencil button on a requirement to edit it. Changes apply the next
+  time anyone opens a compliance view.
+- Select the bin button to delete it. The confirmation reads _"Delete
+  “(name)”? Screening records filed under it are kept, but will no longer be
+  linked to a requirement. You can't undo this."_ Its button is **Delete
+  Requirement**.
+- The records stay in each member's screening history. To stop a requirement
+  counting without losing it, untick **Active** instead.
 
 <!-- Screenshot needed:
 _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
@@ -150,586 +182,581 @@ _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Cli
 
 ### Role-Based Requirements
 
-> **Corrected 2026-10-04 — not enforced.** **Applies to Roles** is stored and
-> shown, but nothing reads it: every active member and prospect is evaluated
-> against every active requirement, whatever roles it lists. The requirement
-> dialog says so under the field — _"Not enforced yet — this requirement
-> applies to every active member and prospect, whatever roles you list
-> here."_ The table and edge cases below describe the intended design.
+> **Important — roles are not applied.** **Applies to Roles** is saved and
+> shown next to the requirement, but nothing uses it. Every active member and
+> prospect is graded against every active requirement, whatever roles you
+> list. The dialog says so under the field: _"Not enforced yet — this
+> requirement applies to every active member and prospect, whatever roles you
+> list here."_
 
-When **Applies to Roles** is populated, only members assigned to those roles are meant to be evaluated for compliance against that requirement. This is useful for role-specific mandates:
+What this means for you:
 
-| Requirement               | Applies to Roles                                    |
-| ------------------------- | --------------------------------------------------- |
-| CPAT Fitness Assessment   | Firefighter, Lieutenant, Captain                    |
-| DOT Physical              | Driver/Operator                                     |
-| Pre-Employment Psych Eval | _(one-time, all roles)_                             |
-| SCBA Medical Clearance    | Firefighter, Lieutenant, Captain, Hazmat Technician |
+- A requirement meant only for drivers, such as a DOT physical, counts against
+  every member. Members who do not need it show as **Not compliant**.
+- If that is a problem, record a **Waived** result for members who do not need
+  it, or keep the requirement inactive until roles are applied.
+- Members with no role, and prospects, are graded the same as everyone else.
 
-**Edge Cases:**
+### Grace Period
 
-| Scenario                                            | Behavior                                                                                                                                   |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Member has no role assigned                         | Not evaluated against role-specific requirements; evaluated against all-roles requirements only                                            |
-| Member's role changes after a screening is recorded | Compliance recalculates on next view — if the new role is not in the requirement's role list, the member is no longer evaluated against it |
-| Requirement's role list is updated                  | Compliance recalculates for all members on next view                                                                                       |
-| All roles are removed from a requirement            | Requirement applies to all members (same as null)                                                                                          |
+> **Important — the grace period is not applied.** **Grace Period (days past
+> expiration)** is saved with the requirement (30 days unless you change it),
+> but nothing reads it. A member becomes **Not compliant** the day after their
+> screening's expiration date, whatever grace period you set. The dialog says
+> so under the field: _"Not enforced yet — a screening is marked non-compliant
+> the day after its expiration date; this value is saved but does not extend
+> that deadline."_
+
+What this means for you:
+
+- Plan renewals before the expiration date, not after it. The
+  [Expiring Screenings](#expiring-screenings) list gives you 60 days' notice.
+- **What if I type 0?** The form saves 30 instead of 0. This makes no
+  difference today, because the value is not used.
 
 ---
 
 ## Screening Records
 
-Records capture the **result** of an individual screening event — who was screened, when, what type, what the outcome was, and who reviewed it.
+A record holds the **result** of one screening: who, when, what type, the
+outcome, and who reviewed it. Open the **Records** tab to see them.
 
-Navigate to **Medical Screening > Records** tab to view all records.
+Each row shows the screening type, the status, the person's name, the
+provider, the scheduled date and the expiration date.
 
 ![Medical screening records tab listing completed screenings](./images/13-03-records-tab.png)
 
-**[SCREENSHOT — CHECK `13-03-records-tab.png`.** A record with no member or prospect now reads **Not linked to a member or prospect** in the name column, where it read Unknown; replace if the frame shows one.**]**
-
 ### Record Statuses
 
-| Status             | Color  | Description                                             |
-| ------------------ | ------ | ------------------------------------------------------- |
-| **Scheduled**      | Blue   | Screening is scheduled but not yet completed            |
-| **Completed**      | Gray   | Screening was completed; result has not been reviewed   |
-| **Passed**         | Green  | Screening completed with a passing result               |
-| **Failed**         | Red    | Screening completed with a failing result               |
-| **Pending Review** | Yellow | Screening completed; awaiting officer review of results |
-| **Waived**         | Purple | Screening requirement waived (with documented reason)   |
-| **Expired**        | Orange | Screening result has passed its expiration date         |
+| Status             | Colour | Meaning                                        |
+| ------------------ | ------ | ---------------------------------------------- |
+| **Scheduled**      | Blue   | Booked but not done yet                        |
+| **Completed**      | Grey   | Done; the result has not been reviewed         |
+| **Passed**         | Green  | Done, with a passing result                    |
+| **Failed**         | Red    | Done, with a failing result                    |
+| **Pending Review** | Yellow | Done; waiting for an officer to review results |
+| **Waived**         | Purple | Not required for this person (note the reason) |
+| **Expired**        | Orange | Set by hand to mark a result as out of date    |
+
+> **Important — the status on a record does not change by itself.** A Passed
+> record stays **Passed** on the Records tab after its expiration date. The
+> Compliance tab is where expiry shows: it grades the person **Expired** or
+> **Not compliant**.
 
 ### Record Fields
 
-| Field               | Type                       | Description                                                                                              |
-| ------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Requirement**     | Foreign key (optional)     | Link to a screening requirement. Optional because ad-hoc screenings may not map to a defined requirement |
-| **Member**          | Foreign key (one required) | The member being screened. Provide either `user_id` or `prospect_id`, not both                           |
-| **Prospect**        | Foreign key (one required) | The prospective member being screened. See [Prospect Screening](#prospect-screening)                     |
-| **Screening Type**  | Enum (required)            | The type of screening performed                                                                          |
-| **Status**          | Enum (required)            | Current status of the record (see table above)                                                           |
-| **Scheduled Date**  | Date (optional)            | When the screening is/was scheduled                                                                      |
-| **Completed Date**  | Date (optional)            | When the screening was actually completed                                                                |
-| **Expiration Date** | Date (optional)            | When this screening result expires                                                                       |
-| **Provider Name**   | String (optional)          | Name of the medical provider, lab, or evaluator                                                          |
-| **Result Summary**  | Text (optional)            | Brief summary of the result (e.g., "Cleared for full duty")                                              |
-| **Result Data**     | JSON (optional)            | Structured result data (lab values, measurements, scores)                                                |
-| **Reviewed By**     | Foreign key (optional)     | Officer who reviewed the result                                                                          |
-| **Reviewed At**     | Datetime (optional)        | When the result was reviewed                                                                             |
-| **Self-recorded**   | Set by the system          | The record's status was last saved by the member it is about — see below                                 |
-| **Notes**           | Text (optional)            | Additional notes or comments                                                                             |
+| Field                             | What it means                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Record is for** (required)      | **Member** or **Prospect**, and the person. See [Prospect Screening](#prospect-screening) |
+| **Linked Requirement (optional)** | The requirement this result is for. Choosing one fills in the screening type              |
+| **Screening Type**                | The type of screening done                                                                |
+| **Status**                        | See the table above                                                                       |
+| **Scheduled Date**                | When it was booked                                                                        |
+| **Completed Date**                | When it was actually done                                                                 |
+| **Expiration Date**               | When this result runs out                                                                 |
+| **Provider / Facility**           | The doctor, clinic or lab                                                                 |
+| **Result Summary**                | A short result, such as "Cleared for full duty"                                           |
+| **Notes**                         | Anything else                                                                             |
 
-> **HIPAA Note:** The `result_summary`, `result_data`, and `notes` fields may contain PHI. The system does not cache API responses for medical screening endpoints (they are included in `UNCACHEABLE_PREFIXES`). Every view of screening records, compliance and the expiring list is logged in the audit trail, one entry per page load. Limit the specificity of data entered — record compliance outcomes (passed/failed/waived) rather than detailed medical findings when possible.
+The Logbook also records who reviewed the result and when, and whether the
+record is **Self-recorded** (see below).
+
+> **Tip — record outcomes, not medical detail.** Result Summary and Notes can
+> hold health information. Where you can, record the outcome (passed, failed,
+> waived) rather than detailed findings.
 
 ---
 
 ## Recording a Screening
 
-**Required Permission:** `medical_screening.manage`
+**Who can do this:** roles that can manage member medical screenings.
 
-1. Navigate to **Medical Screening > Records** tab.
-2. Click **Add Record**.
-3. Fill in the record fields:
+1. Open the **Records** tab.
+2. Select **Add Record**.
+3. Under **Record is for**, choose **Member** or **Prospect**, then pick the
+   person.
+4. Fill in the other fields. For example:
 
-| Field               | Example Value                                              |
-| ------------------- | ---------------------------------------------------------- |
-| **Requirement**     | Annual NFPA 1582 Physical                                  |
-| **Record is for**   | Member — FF Jake Thompson                                  |
-| **Screening Type**  | Physical Exam                                              |
-| **Status**          | Passed                                                     |
-| **Scheduled Date**  | 2026-05-15                                                 |
-| **Completed Date**  | 2026-05-15                                                 |
-| **Expiration Date** | 2027-05-15                                                 |
-| **Provider Name**   | Dr. Sarah Chen, Occupational Health Associates             |
-| **Result Summary**  | Cleared for full duty, no restrictions                     |
-| **Notes**           | Stress test normal. Follow-up recommended for elevated BP. |
+| Field                   | Example                                                    |
+| ----------------------- | ---------------------------------------------------------- |
+| **Record is for**       | Member — FF Jake Thompson                                  |
+| **Linked Requirement**  | Annual NFPA 1582 Physical                                  |
+| **Screening Type**      | Physical Exam                                              |
+| **Status**              | Passed                                                     |
+| **Scheduled Date**      | 2026-05-15                                                 |
+| **Completed Date**      | 2026-05-15                                                 |
+| **Expiration Date**     | 2027-05-15                                                 |
+| **Provider / Facility** | Dr. Sarah Chen, Occupational Health Associates             |
+| **Result Summary**      | Cleared for full duty, no restrictions                     |
+| **Notes**               | Stress test normal. Follow-up recommended for elevated BP. |
 
-4. Click **Add Record** (editing saves with **Save Changes**).
+5. Select **Add Record**. When you edit a record, the button reads **Save
+   Changes**.
 
-> **The Record is for picker** _(2026-10-05)_. Every record belongs to exactly
-> one member or one prospect. Choose **Member** or **Prospect**, then pick the
-> person from the list — current members (including those on leave or
-> suspended) or prospects still open in the pipeline. **Add Record** stays
-> disabled until someone is chosen, and the API refuses a record naming nobody
-> or both. Editing a record never changes who it belongs to.
->
-> Records entered before this change could not be attached to anyone. They
-> read **Not linked to a member or prospect** on the Records tab and count
-> toward nobody's compliance — re-enter them with the right person and delete
-> the unattached copy. See
-> [Medical Screening — No Per-Member Compliance Screen](../KNOWN_LIMITATIONS.md#medical-screening--no-per-member-compliance-screen-2026-08-08).
+Things to know about the form:
+
+- Every record belongs to exactly one member or one prospect. **Add Record**
+  stays greyed out until you choose someone.
+- The member list holds current members, including those on leave or
+  suspended. Former members are not listed.
+- The prospect list holds only prospects still open in the pipeline (Active or
+  On Hold).
+- **Linked Requirement** appears only when you add a record. Editing a record
+  never changes who it belongs to or which requirement it is linked to.
 
 ![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
 
-**[SCREENSHOT — REPLACE `13-07-add-record-linkage-notice.png`.** The frame still shows the retired amber "Not linked" notice. The dialog now opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected.**]**
-
 ### Self-Recorded Screenings
 
-A screening manager may record their own screening — in a small department the
-person who logs everyone's external results often needs their own entered too —
-and the result counts toward compliance like any other. It is not trusted
-silently, though: a record whose status was last saved by the member it is
-about carries an amber **Self-recorded** badge on the Records tab and in the
-expiring list on the Compliance tab, and the compliance summary for that member
-reports how many of their compliant items rest on a self-recorded result.
+A screening manager may record their own screening. In a small department, the
+person who logs everyone's results often needs their own entered too. The
+result counts toward compliance like any other.
+
+It is flagged, though. A record whose status was last saved by the member it
+is about carries an amber **Self-recorded** badge. The badge shows on the
+Records tab, in the expiring list and in the person's compliance detail.
 
 The badge follows whoever last saved the record's status:
 
-- Adding a record for yourself, or saving the status on your own record, marks it.
-- Another manager saving the record's status (the Edit dialog always saves it)
-  clears the mark — they have looked at the result and stood behind it, and they
-  become its **Reviewed By** when the status is Passed, Failed or Waived.
-- An edit that does not touch the status leaves the mark as it was.
+- Adding a record for yourself, or saving the status on your own record, adds
+  the badge.
+- Another manager saving the record removes it. The Edit dialog always saves
+  the status. That manager also becomes the reviewer when the status is
+  Passed, Failed or Waived.
 
-If your department wants every result independently confirmed, have a second
-manager open and save each self-recorded record.
+If your department wants every result confirmed by a second person, have
+another manager open and save each self-recorded record.
 
 ### Status Workflow
 
-Records typically progress through these status transitions:
+A record usually moves like this:
 
 ```
 Scheduled → Completed → Pending Review → Passed / Failed
-                                       → Waived (with documented reason)
-Passed → Expired (automatic, when expiration_date passes)
+                                       → Waived (note the reason)
 ```
 
-- **Scheduled to Completed:** Update the record after the screening occurs, adding the completed date and provider information.
-- **Completed to Pending Review:** When results require officer review before a pass/fail determination.
-- **Pending Review to Passed/Failed:** After the reviewing officer evaluates the results. The `reviewed_by` and `reviewed_at` fields are set automatically.
-- **Waived:** Set directly when a screening is waived. Document the reason in the notes field.
-- **Expired:** The system treats a record as expired when the current date exceeds the `expiration_date`. The status badge updates automatically.
+- **Scheduled to Completed:** after the screening, add the completed date and
+  the provider.
+- **Completed to Pending Review:** when results need an officer's review
+  before a pass or fail.
+- **Pending Review to Passed or Failed:** after review. The Logbook records
+  who saved it and when.
+- **Waived:** set directly. Put the reason in **Notes**.
 
 ### Editing and Deleting Records
 
-- Click the **Edit** button on any record row to update its fields (e.g., updating status from Scheduled to Passed after a screening is completed).
-- Click the **Delete** button to remove a record. The confirmation reads _"Delete this (type) record? You can't undo this."_ with a **Delete Record** button. Deletion is permanent and logged in the audit trail.
+- Select the pencil button on a record to edit it, for example to change
+  Scheduled to Passed.
+- Select the bin button to delete it. The confirmation reads _"Delete this
+  (type) record? You can't undo this."_ with a **Delete Record** button. The
+  deletion is logged.
 
-**Edge Cases:**
+**What if …?**
 
-| Scenario                                                | Behavior                                                                                       |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Record created without a requirement link               | Record is stored and displayed but does not affect compliance calculations for any requirement |
-| Record created with both `user_id` and `prospect_id`    | API rejects the request — provide exactly one                                                  |
-| Record created with neither `user_id` nor `prospect_id` | API rejects the request — at least one is required                                             |
-| Expiration date is in the past at creation time         | Record is saved; status badge shows Expired (orange) if status is Passed or Completed          |
-| Completed date is after expiration date                 | Record is saved; no automatic validation prevents this, but it indicates a data entry error    |
+| What happened                                      | What it means                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| A record has no linked requirement                 | It still counts. Compliance matches records to requirements by **screening type**, not by the link |
+| The expiration date is already past when you save  | The record saves. It does not count toward compliance                                              |
+| The completed date is after the expiration date    | The record saves. Nothing checks this, so look for a typing mistake                                |
+| A row reads **Not linked to a member or prospect** | It belongs to nobody and counts for nobody. Re-enter it for the right person, then delete it       |
 
 ---
 
 ## Compliance Dashboard
 
-The **Compliance** tab provides a department-wide view of who is compliant, who is not, and who has screenings expiring soon.
-
-Navigate to **Medical Screening > Compliance** tab.
+The **Compliance** tab shows who meets every requirement, who does not, and
+whose screenings expire soon.
 
 ![Medical screening compliance tab with summary cards and per-member status](./images/13-04-compliance-tab.png)
 
 ### Compliance Summary
 
-The top of the Compliance tab, under **Department compliance**, displays four
-summary metrics counted over every current member and open prospect:
+Under **Department compliance**, four counts cover every current member and
+open prospect:
 
-| Metric            | Description                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| **Requirements**  | Count of active screening requirements                                               |
-| **Compliant**     | Members and prospects who meet every requirement, none lapsing within 30 days        |
-| **Not compliant** | Members and prospects with any requirement unmet — expired or never recorded         |
-| **Expiring soon** | Members and prospects who meet every requirement but have one lapsing within 30 days |
+| Count             | What it counts                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| **Requirements**  | Active screening requirements                                          |
+| **Compliant**     | People who meet every requirement, with none expiring within 30 days   |
+| **Not compliant** | People with any requirement not met — expired or never recorded        |
+| **Expiring soon** | People who meet every requirement but have one expiring within 30 days |
 
-Below them is one row per member and open prospect — "_n_ of _m_ met", how many
-are not met or expiring, and the standing. The **Show** filter narrows the rows
-to **Not compliant (overdue or missing)**, **Expiring within 30 days** or
-**Compliant**; the four counts always describe everyone. **View** on a row opens
-that person's detail (below). With no active requirements the tab says nobody
-is graded rather than reporting the department compliant. Each load is recorded
-in the audit trail with the people it listed.
+Below the counts is one row per person. Each row shows "_n_ of _m_ met", how
+many are not met or expiring soon, and their standing. Prospects are marked
+**Prospect**.
+
+- The **Show** filter narrows the rows to **Everyone**, **Not compliant
+  (overdue or missing)**, **Expiring within 30 days** or **Compliant**. The
+  four counts always describe everyone.
+- **View** on a row opens that person's detail. See
+  [Per-Member Compliance](#per-member-compliance).
+- With no active requirements, the tab says _"No screening requirements are
+  active, so nobody is graded."_ It does not report the department compliant.
 
 ### What Members See on Their Own Dashboard
 
-A member does not need `medical_screening.view` to know whether they are behind
-on a screening — that permission reads _everybody's_ records. Instead, the
-dashboard's readiness line reads `GET /medical-screening/compliance/me`, which
-is scoped to the signed-in member by the session and takes no id, so there is
-nothing a caller can substitute to read someone else.
+A member does not need any medical screening permission to know whether they
+are behind. The readiness line on their dashboard includes their own
+screenings.
 
-It returns **counts only** — how many screenings are outstanding and how soon
-the next one lapses. It carries no requirement name, screening type, date or
-result. The dashboard is a shared surface: The Logbook is installed as a kiosk
-on tablets left at stations, so a line reading "Psychological evaluation
-expired" would be legible to whoever walks past. A member sees, for example:
+It shows **counts only**: how many screenings are overdue and how soon the next
+one runs out. It never shows a screening's name, type, date or result. The
+dashboard may be on a station tablet, where anyone walking past can read it.
+A member might see:
 
-> **Not clear to respond** — 1 screening overdue · _Certifications, screenings and seats_
+> **Not clear to respond** — 1 screening overdue
 
-To find out _which_ screening, the member asks whoever holds
-`medical_screening.view`. Departments that track no screening requirements see
-no mention of screenings on the dashboard at all, and if the read fails the
-line silently narrows to what it could confirm rather than implying screenings
-were checked and passed.
+or, when one runs out within 60 days:
+
+> **Clear, with conditions** — a screening expiring in 12 days
+
+- To find out _which_ screening, ask your health and safety officer or
+  whoever can view medical screenings.
+- If your department has no screening requirements, the dashboard does not
+  mention screenings at all.
+- If The Logbook cannot read your screenings, the line leaves them out. It
+  never suggests they were checked and passed.
 
 ### How Compliance Is Calculated
 
-For each active requirement, the system evaluates each applicable member (based on role filters):
+For each active requirement, The Logbook grades every current member and open
+prospect:
 
-1. **Find the most recent record** for the member with a matching screening type and a status of **Passed**, **Completed**, or **Waived**.
-2. **Check expiration:**
-   - If the record has an `expiration_date` and it is today or later: **Compliant**.
-   - If the record has no expiration date (one-time requirement): **Compliant** indefinitely.
-   - If the `expiration_date` has passed but is within the requirement's `grace_period_days`: **Compliant** (grace period active).
-   - If the `expiration_date` has passed and the grace period has also expired: **Non-Compliant**.
-3. **No qualifying record found:** **Non-Compliant**.
+1. **Find the latest qualifying record.** It looks at the person's records of
+   the same **screening type** with a status of **Passed**, **Completed** or
+   **Waived**. It takes the one with the latest **Completed Date**. Failed,
+   Scheduled, Pending Review and Expired records are ignored.
+2. **Check the expiration date** against today's date in your department's
+   time zone (set under **Organization Settings → Profile**):
+   - Expiration date is today or later: **met**.
+   - No expiration date: **met** for good.
+   - Expiration date has passed: **not met**.
+3. **No qualifying record:** **not met**.
 
-### Grace Period
+Roles and the grace period play no part. See
+[Role-Based Requirements](#role-based-requirements) and
+[Grace Period](#grace-period).
 
-The grace period provides a buffer after a screening expires. During the grace period, the member is still considered compliant, giving the department time to schedule and complete the next screening.
+**What if …?**
 
-**Example:** A requirement has a 30-day grace period. A member's physical exam expired on June 1. The member remains compliant until July 1 (June 1 + 30 days). After July 1, the member is non-compliant.
-
-**Edge Cases:**
-
-| Scenario                                                | Behavior                                                                                                                                                 |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grace period is 0                                       | Member becomes non-compliant the day after expiration                                                                                                    |
-| Member has multiple records for the same screening type | Only the most recent qualifying record (Passed/Completed/Waived) is considered                                                                           |
-| Member has a Passed record and a later Failed record    | The most recent qualifying record is used — if the Failed record is newer, the system looks for the most recent Passed/Completed/Waived record before it |
-| Requirement is deactivated (`is_active = false`)        | Requirement is excluded from compliance calculations entirely                                                                                            |
-| Member has a Waived record with no expiration           | Compliant indefinitely (waiver has no expiry)                                                                                                            |
-| Member has a Waived record with an expiration           | Compliant until the waiver expiration + grace period                                                                                                     |
+| What happened                                 | What it means                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| A person has several records of the same type | Only the qualifying one with the latest Completed Date counts          |
+| A Passed record, then a newer Failed one      | The Failed one is ignored. The Passed one counts until it expires      |
+| A qualifying record has no Completed Date     | It is treated as the oldest, so any dated record of the same type wins |
+| A requirement is not Active                   | It is left out of compliance completely                                |
+| A Waived record with no expiration date       | Met for good                                                           |
+| A Waived record with an expiration date       | Met until that date                                                    |
+| The screening expires today                   | Still met, and counted as expiring soon                                |
 
 ### Per-Member Compliance
 
-Click **View** on any row of the department roster to open that person's compliance detail, or use the API endpoint:
+Select **View** on any row of the department list. A panel opens for that
+person. It shows:
 
-```
-GET /api/v1/medical-screening/compliance/{user_id}
-```
+- "_n_ of _m_ requirements met", with how many are not met and how many expire
+  soon.
+- Each requirement, with the screening type, the status and date of the record
+  it is graded on, and its expiry.
+- A verdict for each: **Met**, **Expires in _n_ days**, **Expires today**,
+  **Expired** or **No qualifying record**. "Expires in" shows for anything due
+  within 30 days.
+- The **Self-recorded** badge on a record the person filed themselves.
 
-This returns a `ComplianceSummary` for the specified member:
-
-| Field                 | Type    | Description                                             |
-| --------------------- | ------- | ------------------------------------------------------- |
-| `total_requirements`  | Integer | Number of active requirements applicable to this member |
-| `compliant_count`     | Integer | Number of requirements the member currently satisfies   |
-| `non_compliant_count` | Integer | Number of requirements the member does not satisfy      |
-| `expiring_soon_count` | Integer | Number of compliant screenings expiring within 60 days  |
-
-> **The per-member view _(2026-10-11)_.** On the **Compliance** tab, click
-> **View** on a member's or prospect's row. The panel shows "_n_ of
-> _m_ requirements met", how many are not met and how many expire within 30
-> days, then each requirement with its screening type, the status and date of
-> the record it is graded on, its expiry, and **Met**, **Expires in _n_
-> days**, **Expired** or **No qualifying record**. A record the member filed
-> themself carries the **Self-recorded** mark. With no active requirements it
-> says so rather than reporting the person compliant. Each opening is recorded
-> in the audit trail, like every other compliance read.
+With no active requirements, the panel says so rather than reporting the person
+compliant. Each opening is recorded in the audit log.
 
 ---
 
 ## Expiring Screenings
 
-The Compliance tab includes an **expiring screenings** section that highlights screenings approaching their expiration date, giving officers advance notice to schedule renewals.
+The bottom of the Compliance tab lists **Screenings Expiring Within 60 Days**,
+so you can book renewals early.
 
 ### Viewing Expiring Screenings
 
-The expiring screenings section on the Compliance tab shows a **60-day lookahead window** by default. Each entry displays the member name, screening type, expiration date, and days remaining.
+Each entry shows the person, the screening type and linked requirement, the
+days left and the expiration date. The soonest is at the top.
 
-**Color-coded urgency:**
-
-| Urgency      | Color | Criteria                         |
-| ------------ | ----- | -------------------------------- |
-| **Critical** | Red   | 7 days or fewer until expiration |
-| **Warning**  | Amber | 8 to 30 days until expiration    |
-| **Upcoming** | Blue  | 31 to 60 days until expiration   |
+| Icon and colour | When            |
+| --------------- | --------------- |
+| Red             | 7 days or fewer |
+| Amber           | 8 to 30 days    |
+| Blue            | 31 to 60 days   |
 
 ![Compliance tab listing screenings approaching expiry with urgency badges](./images/13-06-expiring-screenings.png)
 
-### Expiring Screenings API
+When nothing is due, it reads _"No screenings expire in the next 60 days."_
 
-Retrieve expiring screenings programmatically:
+**What is not listed:**
 
-```
-GET /api/v1/medical-screening/expiring?days=N
-```
-
-| Parameter | Type    | Range | Default | Description                                          |
-| --------- | ------- | ----- | ------- | ---------------------------------------------------- |
-| `days`    | Integer | 1-365 | 30      | Number of days to look ahead for expiring screenings |
-
-The response includes all screening records with `expiration_date` within the specified window, sorted by expiration date ascending (most urgent first).
-
-**Edge Cases:**
-
-| Scenario                                           | Behavior                                                                                                          |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `days` parameter is 0 or negative                  | API returns 400 Bad Request                                                                                       |
-| `days` parameter exceeds 365                       | API returns 400 Bad Request                                                                                       |
-| `days` parameter omitted                           | Defaults to 30 days                                                                                               |
-| Screening already expired (expiration in the past) | Not included in the expiring endpoint — already expired screenings appear as non-compliant in the compliance view |
-| Screening has no expiration date                   | Not included — one-time screenings do not expire                                                                  |
+| Record                                   | Why                                                |
+| ---------------------------------------- | -------------------------------------------------- |
+| Already expired                          | It shows as not met in the compliance list instead |
+| No expiration date                       | One-time screenings never expire                   |
+| Status Waived                            | Only Passed and Completed records are listed       |
+| Status Scheduled, Pending Review, Failed | They do not count toward compliance either         |
 
 ---
 
 ## Prospect Screening
 
-Medical screenings can be recorded for **prospective members** (candidates in the membership pipeline) before they are converted to full members. This is essential for pre-employment physicals, drug screenings, and psychological evaluations that must be completed before onboarding.
+You can record screenings for **prospective members** before they join. This
+is useful for pre-employment physicals, drug screenings and psychological
+evaluations.
 
-> **Cross-reference:** See [Membership Management > Prospective Members Pipeline](./01-membership.md#prospective-members-pipeline) for details on managing the prospect pipeline.
+> **See also:** [Membership Management > Prospective Members Pipeline](./01-membership.md#prospective-members-pipeline)
+> for how the pipeline works.
 
 ### Recording a Prospect Screening
 
-The process is identical to recording a member screening, except you select a **Prospect** instead of a **Member** in the record form:
+It works like a member screening:
 
-1. Navigate to **Medical Screening > Records** tab.
-2. Click **Add Record**.
-3. Under **Record is for**, choose **Prospect**, then select the prospective member from the list.
-4. Complete the remaining fields as usual.
-5. Click **Add Record**.
+1. Open the **Records** tab.
+2. Select **Add Record**.
+3. Under **Record is for**, choose **Prospect**, then pick the person.
+4. Fill in the other fields.
+5. Select **Add Record**.
 
-Only prospects still open in the pipeline (Active or On Hold) are listed. Once
-a prospect becomes a member, record new screenings against the member.
+Only prospects still open in the pipeline (Active or On Hold) are listed.
+
+If the prospect is waiting at a **Medical Screening** stage that is set to
+advance automatically, a **Passed** or **Completed** result can move them on.
+The stage still waits until every screening it requires has cleared.
 
 ### Prospect Compliance
 
-View a prospect's compliance status using the dedicated endpoint:
-
-```
-GET /api/v1/medical-screening/compliance/prospect/{prospect_id}
-```
-
-This returns the same `ComplianceSummary` structure as member compliance, evaluated against all active requirements (role-based filtering does not apply to prospects since they do not yet have assigned roles).
+Prospects appear in the department list on the **Compliance** tab, marked
+**Prospect**. Select **View** to see their detail. They are graded against
+every active requirement, the same as members.
 
 ### Prospect-to-Member Transition
 
-When a prospect is converted to a full member through the membership pipeline, their screening records remain linked to their new member account. The `prospect_id` on existing records is retained for historical reference, and the records continue to count toward the member's compliance.
+> **Important — screenings stay with the prospect record.** When a prospect
+> becomes a member, their screening records are not moved to the new member
+> account. They do not count toward the member's compliance. Record the
+> screenings the member still needs against the member.
 
-**Edge Cases:**
+**What if …?**
 
-| Scenario                                      | Behavior                                                                                                                      |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Prospect has no screening records             | Compliance shows 0 compliant out of total requirements                                                                        |
-| Prospect is deleted from the pipeline         | Screening records are retained (orphaned) for audit purposes                                                                  |
-| Prospect is converted to a member             | Existing screening records remain valid and count toward member compliance                                                    |
-| Department requires pre-employment screenings | Create one-time requirements (null frequency) for pre-employment screening types; track prospect compliance before onboarding |
+| What happened                                     | What it means                                                                                |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| A prospect has no screening records               | Their detail shows 0 met out of every active requirement                                     |
+| A prospect is deleted or purged from the pipeline | Their screening records are deleted with them                                                |
+| A prospect becomes a member                       | Their records stay on the prospect and do not count for the member. Re-record what is needed |
+| You need pre-employment screenings                | Create one-time requirements for them and check each prospect's detail before they join      |
 
-> **HIPAA Note:** Prospect screening records are subject to the same PHI protections as member records. Access is controlled by the same `medical_screening.view` and `medical_screening.manage` permissions. Ensure that personnel involved in the hiring process who need to view prospect screening compliance have the appropriate permissions assigned.
+> **Important.** Prospect screening records have the same health-information
+> protections as member records, under the same two permissions. Make sure
+> anyone in the hiring process who needs to see them has the right permission.
 
 ---
 
 ## Realistic Example: Annual Physical Compliance
 
-This walkthrough demonstrates a complete medical screening workflow — from creating a requirement through tracking compliance and handling expirations — using a realistic department scenario.
+This walkthrough follows one department from creating a requirement to
+handling expirations.
 
 ### Background
 
-**Falls Church Volunteer Fire Department** has 45 active members across three stations. The department's Health & Safety Officer, **Captain Diane Alvarez**, needs to implement annual physical exam tracking per NFPA 1582 and ensure all members maintain current physicals. The department also requires pre-employment drug screening for all new members.
+**Falls Church Volunteer Fire Department** has 45 active members across three
+stations. The Health and Safety Officer, **Captain Diane Alvarez**, needs to
+track annual NFPA 1582 physicals. The department also requires a
+pre-employment drug screening for every new member.
 
 ---
 
 ### Part 1: Setting Up Requirements
 
-Captain Alvarez navigates to **Medical Screening > Requirements** and creates two requirements.
+Captain Alvarez opens the **Requirements** tab and adds two requirements.
 
 **Requirement 1: Annual Physical**
 
-| Field                   | Value                                                                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**                | Annual NFPA 1582 Physical Examination                                                                                                                                 |
-| **Screening Type**      | Physical Exam                                                                                                                                                         |
-| **Description**         | Annual medical examination per NFPA 1582. Includes cardiac stress test for members aged 40+. Must be performed by a department-approved occupational health provider. |
-| **Frequency (Months)**  | 12                                                                                                                                                                    |
-| **Applies to Roles**    | _(blank — all members)_                                                                                                                                               |
-| **Grace Period (Days)** | 30                                                                                                                                                                    |
-| **Is Active**           | Yes                                                                                                                                                                   |
+| Field                  | Value                                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**               | Annual NFPA 1582 Physical Examination                                                                                                                                 |
+| **Screening Type**     | Physical Exam                                                                                                                                                         |
+| **Description**        | Annual medical examination per NFPA 1582. Includes cardiac stress test for members aged 40+. Must be performed by a department-approved occupational health provider. |
+| **Frequency (months)** | 12                                                                                                                                                                    |
+| **Applies to Roles**   | _(blank)_                                                                                                                                                             |
+| **Active**             | Ticked                                                                                                                                                                |
 
 **Requirement 2: Pre-Employment Drug Screening**
 
-| Field                   | Value                                                                                  |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| **Name**                | Pre-Employment Drug Screening                                                          |
-| **Screening Type**      | Drug Screening                                                                         |
-| **Description**         | 10-panel drug screening required before membership is finalized. One-time requirement. |
-| **Frequency (Months)**  | _(blank — one-time)_                                                                   |
-| **Applies to Roles**    | _(blank — all members)_                                                                |
-| **Grace Period (Days)** | 0                                                                                      |
-| **Is Active**           | Yes                                                                                    |
+| Field                                    | Value                                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Name**                                 | Pre-Employment Drug Screening                                                          |
+| **Screening Type**                       | Drug Screening                                                                         |
+| **Description**                          | 10-panel drug screening required before membership is finalized. One-time requirement. |
+| **One-time requirement (not recurring)** | Ticked                                                                                 |
+| **Applies to Roles**                     | _(blank)_                                                                              |
+| **Active**                               | Ticked                                                                                 |
 
-The Compliance tab now shows both requirements. Since no screening records have been entered yet, all 45 members show as non-compliant for the annual physical, and all members who have not previously completed a drug screening show as non-compliant for that requirement.
+No records exist yet, so the Compliance tab shows all 45 members as **Not
+compliant**.
 
 ---
 
-### Part 2: Bulk-Recording Existing Physicals
+### Part 2: Recording Existing Physicals
 
-Captain Alvarez has a spreadsheet from the department's occupational health provider showing that 38 of 45 members completed their annual physicals within the past year. She enters records for each member.
+The department's occupational health provider sent a spreadsheet. It shows 38
+of 45 members had their physical in the past year. Captain Alvarez enters a
+record for each.
 
 **Example record for FF Maria Torres:**
 
-| Field               | Value                                           |
-| ------------------- | ----------------------------------------------- |
-| **Requirement**     | Annual NFPA 1582 Physical Examination           |
-| **Member**          | FF Maria Torres                                 |
-| **Screening Type**  | Physical Exam                                   |
-| **Status**          | Passed                                          |
-| **Scheduled Date**  | 2026-03-10                                      |
-| **Completed Date**  | 2026-03-10                                      |
-| **Expiration Date** | 2027-03-10                                      |
-| **Provider Name**   | Occupational Health Associates — Dr. Sarah Chen |
-| **Result Summary**  | Cleared for full duty, no restrictions          |
+| Field                   | Value                                           |
+| ----------------------- | ----------------------------------------------- |
+| **Record is for**       | Member — FF Maria Torres                        |
+| **Linked Requirement**  | Annual NFPA 1582 Physical Examination           |
+| **Screening Type**      | Physical Exam                                   |
+| **Status**              | Passed                                          |
+| **Scheduled Date**      | 2026-03-10                                      |
+| **Completed Date**      | 2026-03-10                                      |
+| **Expiration Date**     | 2027-03-10                                      |
+| **Provider / Facility** | Occupational Health Associates — Dr. Sarah Chen |
+| **Result Summary**      | Cleared for full duty, no restrictions          |
 
-After entering all 38 records, the Compliance tab updates:
-
-| Metric                       | Value                                         |
-| ---------------------------- | --------------------------------------------- |
-| **Total Requirements**       | 2                                             |
-| **Compliant (Physical)**     | 38 of 45 members                              |
-| **Non-Compliant (Physical)** | 7 members                                     |
-| **Expiring Soon (Physical)** | 4 members (physicals expiring within 60 days) |
+Everyone still needs the drug screening too, so nobody is fully compliant yet.
+The department list now shows "1 of 2 met" for 38 members and "0 of 2 met" for
+the other 7. Four of the 38 have a physical expiring within 30 days, so their
+rows also say "1 expiring soon".
 
 ---
 
-### Part 3: Handling the 7 Non-Compliant Members
+### Part 3: Handling the 7 Members Without a Current Physical
 
-Captain Alvarez clicks on the non-compliant count to see which members are overdue. The list shows:
+Captain Alvarez sets **Show** to **Not compliant (overdue or missing)** and
+selects **View** on each row. Seven members have no current physical:
 
-1. **FF James Kowalski** — Physical expired 2026-04-15 (73 days ago, past 30-day grace period)
-2. **FF/EMT Priya Patel** — Physical expired 2026-05-28 (30 days ago, last day of grace period)
-3. **Lt. Mike Chen** — No physical on record
-4. **FF Rosa Martinez** — Physical expired 2026-06-01 (26 days ago, still within 30-day grace period)
-5. **FF David Kim** — No physical on record (new member, joined 2026-06-01)
-6. **FF/Paramedic Amy Larson** — On leave of absence, physical expired 2026-02-01
-7. **Probie Chris Washington** — Probationary member, no physical on record
+1. **FF James Kowalski** — physical expired 2026-04-15.
+2. **FF/EMT Priya Patel** — physical expired 2026-05-28.
+3. **Lt. Mike Chen** — no physical on record.
+4. **FF Rosa Martinez** — physical expired 2026-06-01, 26 days ago.
+5. **FF David Kim** — no physical on record (joined 2026-06-01).
+6. **FF/Paramedic Amy Larson** — on leave; physical expired 2026-02-01.
+7. **Probie Chris Washington** — probationary; no physical on record.
 
-Captain Alvarez takes action:
+What she does:
 
-- **Kowalski and Patel:** Schedules physicals for next week. Creates records with status **Scheduled** and upcoming dates.
-- **Lt. Chen:** Contacts him directly — discovers his physical was done at a different provider. Enters the record with **Passed** status.
-- **Martinez:** Still within grace period (26 days < 30 days). Captain Alvarez notes she is technically compliant but schedules her physical for the following week.
-- **Kim and Washington:** New members who need their first department physical. Schedules both.
-- **Larson:** On leave — Captain Alvarez notes the record but the physical will be required upon return to duty.
-
-> **How Captain Alvarez gets this list _(2026-10-11)_.** On the Compliance
-> tab she sets **Show** to **Not compliant (overdue or missing)** and clicks
-> **View** on each row for the detail. The grace period described above is not
-> yet applied by the compliance calculation, so Martinez reads **Expired** on
-> her row even inside it.
+- **Kowalski and Patel:** books physicals for next week, with **Scheduled**
+  records.
+- **Lt. Chen:** his physical was done by a different provider. She enters it
+  as **Passed**.
+- **Martinez:** the requirement's grace period is 30 days, but grace periods
+  are not applied. Martinez reads **Expired**. Captain Alvarez books her
+  physical for the following week.
+- **Kim and Washington:** books their first department physicals.
+- **Larson:** on leave. The physical will be needed when she returns to duty.
 
 ---
 
 ### Part 4: Tracking a Prospect
 
-A new candidate, **Alex Rivera**, is moving through the membership pipeline. Captain Alvarez needs to record his pre-employment drug screening before the membership committee votes.
+A candidate, **Alex Rivera**, is in the membership pipeline. Captain Alvarez
+records his pre-employment drug screening before the committee votes.
 
-1. Navigates to **Medical Screening > Records** tab.
-2. Clicks **Add Record**.
+1. Opens the **Records** tab.
+2. Selects **Add Record**.
 3. Under **Record is for**, chooses **Prospect** and selects **Alex Rivera**.
-4. Sets Screening Type to **Drug Screening**.
-5. Sets Status to **Pending Review** (lab results expected in 3 days).
-6. Enters Scheduled Date: 2026-06-25, Provider: "QuickScreen Labs".
-7. Saves the record.
+4. Chooses **Pre-Employment Drug Screening** as the linked requirement, which
+   sets the type to **Drug Screening**.
+5. Sets **Status** to **Pending Review** (lab results expected in 3 days).
+6. Enters **Scheduled Date** 2026-06-25 and **Provider / Facility**
+   "QuickScreen Labs".
+7. Selects **Add Record**.
 
-Three days later, results arrive. Captain Alvarez edits the record:
+Three days later the results arrive. She edits the record:
 
-- Updates Status to **Passed**.
-- Sets Completed Date to 2026-06-25.
-- Adds Result Summary: "10-panel negative, all clear".
-- Expiration Date left blank (one-time screening).
+- **Status:** Passed.
+- **Completed Date:** 2026-06-25.
+- **Result Summary:** "10-panel negative, all clear".
+- **Expiration Date:** left blank (one-time screening).
 
-Alex Rivera's prospect compliance now shows 1/2 requirements met (drug screening passed, annual physical still needed). The membership committee can see that the pre-employment screening is complete.
+On the Compliance tab, Alex's detail shows "1 of 2 requirements met". The
+committee can see the pre-employment screening is done.
+
+When Alex becomes a member, Captain Alvarez re-records the drug screening
+against his member account, because prospect records do not carry over.
 
 ---
 
 ### Part 5: Monitoring Expirations Over Time
 
-Two months later (August 2026), Captain Alvarez checks the Compliance tab. The expiring screenings section shows:
+Two months later (August 2026), Captain Alvarez checks the Compliance tab. The
+expiring list shows:
 
-| Member          | Screening       | Expiration | Days Left | Urgency |
-| --------------- | --------------- | ---------- | --------- | ------- |
-| FF Sarah Odom   | Annual Physical | 2026-08-30 | 3         | Red     |
-| EMT Tom Bradley | Annual Physical | 2026-09-05 | 9         | Amber   |
-| FF Carlos Reyes | Annual Physical | 2026-09-18 | 22        | Amber   |
-| Lt. Lisa Park   | Annual Physical | 2026-10-15 | 49        | Blue    |
+| Member          | Screening     | Expires    | Days left | Colour |
+| --------------- | ------------- | ---------- | --------- | ------ |
+| FF Sarah Odom   | Physical Exam | 2026-08-30 | 3         | Red    |
+| EMT Tom Bradley | Physical Exam | 2026-09-05 | 9         | Amber  |
+| FF Carlos Reyes | Physical Exam | 2026-09-18 | 22        | Amber  |
+| Lt. Lisa Park   | Physical Exam | 2026-10-15 | 49        | Blue   |
 
-Captain Alvarez immediately contacts FF Odom (3 days remaining) and schedules her physical. She sends a department-wide reminder for members expiring in September.
+She calls FF Odom at once and books her physical. She sends a reminder to
+everyone expiring in September.
 
 ---
 
 ### Key Takeaways from This Example
 
-1. **Requirements drive compliance** — Define what is needed once; the system tracks every member automatically.
-2. **Grace periods prevent false alarms** — The 30-day grace period for physicals means members are not immediately flagged as non-compliant the day after expiration.
-3. **One-time requirements simplify pre-employment** — Drug screenings with null frequency are satisfied indefinitely after a single passing record.
-4. **Prospect screening integrates with the pipeline** — Pre-employment screenings can be tracked before a candidate becomes a member.
-5. **Expiration tracking is proactive** — The 60-day lookahead with color-coded urgency gives officers time to schedule renewals before members become non-compliant.
-
----
-
-## API Reference
-
-### Requirements Endpoints
-
-| Method   | Endpoint                                      | Description                     |
-| -------- | --------------------------------------------- | ------------------------------- |
-| `GET`    | `/api/v1/medical-screening/requirements`      | List all screening requirements |
-| `POST`   | `/api/v1/medical-screening/requirements`      | Create a new requirement        |
-| `GET`    | `/api/v1/medical-screening/requirements/{id}` | Get a specific requirement      |
-| `PUT`    | `/api/v1/medical-screening/requirements/{id}` | Update a requirement            |
-| `DELETE` | `/api/v1/medical-screening/requirements/{id}` | Delete a requirement            |
-
-### Records Endpoints
-
-| Method   | Endpoint                                 | Description                |
-| -------- | ---------------------------------------- | -------------------------- |
-| `GET`    | `/api/v1/medical-screening/records`      | List all screening records |
-| `POST`   | `/api/v1/medical-screening/records`      | Create a new record        |
-| `GET`    | `/api/v1/medical-screening/records/{id}` | Get a specific record      |
-| `PUT`    | `/api/v1/medical-screening/records/{id}` | Update a record            |
-| `DELETE` | `/api/v1/medical-screening/records/{id}` | Delete a record            |
-
-### Compliance Endpoints
-
-| Method | Endpoint                                                      | Description                                                |
-| ------ | ------------------------------------------------------------- | ---------------------------------------------------------- |
-| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | Get compliance summary for a member                        |
-| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | Get compliance summary for a prospect                      |
-| `GET`  | `/api/v1/medical-screening/expiring?days=N`                   | List screenings expiring within N days (1-365, default 30) |
+1. **Requirements drive compliance.** Set them once; The Logbook grades
+   everyone.
+2. **Renew before the expiration date.** There is no grace period in effect,
+   so a member is not compliant from the day after expiry.
+3. **One-time requirements suit pre-employment checks.** One qualifying record
+   with no expiration date satisfies them.
+4. **Prospects can be screened before they join** — but re-record what is
+   needed once they become members.
+5. **Use the 60-day list.** Colour-coded warnings give you time to book
+   renewals before anyone falls behind.
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                     | Solution                                                                                                                                                                                                                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medical Screening does not appear in the sidebar          | Verify that Medical Screening is enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`).                                                                                                                            |
-| "Permission denied" when viewing records                  | Your role needs the `medical_screening.view` permission. Contact your administrator to assign it.                                                                                                                                                       |
-| "Permission denied" when creating records or requirements | Your role needs the `medical_screening.manage` permission. Contact your administrator to assign it.                                                                                                                                                     |
-| Member shows non-compliant but they have a passing record | Check the record's `expiration_date` — it may have passed, and the grace period may also have elapsed. Also verify the record's status is one of Passed, Completed, or Waived (Scheduled and Pending Review do not count toward compliance).            |
-| Member shows compliant but their screening expired        | The member is likely within the grace period. Check the requirement's `grace_period_days` setting. The member will become non-compliant when the grace period ends.                                                                                     |
-| Compliance count does not match manual count              | Verify that the requirement's **Applies to Roles** filter matches your expectations. Members without a matching role are excluded from compliance calculations for role-specific requirements. Also check that the requirement is marked **Is Active**. |
-| Expiring screenings section is empty                      | No screenings are expiring within the 60-day default window. All members either have screenings expiring further out or have one-time screenings that do not expire.                                                                                    |
-| Record shows Expired status but I set it to Passed        | The record's `expiration_date` has passed. The status badge updates automatically based on the current date. Update the record with a new screening result and expiration date.                                                                         |
-| Cannot link a record to a requirement                     | The requirement dropdown only shows active requirements. Verify the requirement exists and `is_active` is true.                                                                                                                                         |
-| Prospect screening not appearing in compliance            | Use the prospect-specific compliance endpoint: `GET /medical-screening/compliance/prospect/{prospect_id}`. Prospect compliance is separate from member compliance.                                                                                      |
-| Drug screening shows as compliant indefinitely            | This is expected for one-time requirements (null frequency). The record has no expiration date, so it remains valid indefinitely. To require periodic re-screening, set a frequency on the requirement.                                                 |
-| API returns 422 when creating a record                    | Check the request payload. Common causes: missing required fields (`screening_type`, `status`), providing both `user_id` and `prospect_id`, providing neither `user_id` nor `prospect_id`, or invalid enum values for `screening_type` or `status`.     |
-| Compliance data seems stale                               | Compliance is calculated on each request — there is no cached state. If data appears stale, verify the underlying records are correct. Refresh the page to re-fetch.                                                                                    |
-| Grace period not working as expected                      | The grace period starts from the `expiration_date` on the record, not from the completed date. Verify the expiration date is set correctly. A grace period of 0 means the member becomes non-compliant immediately after expiration.                    |
+| Problem                                                  | What to do                                                                                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medical Screening is not in the menu                     | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Your role also needs to view member medical screenings       |
+| You get a permission message when viewing records        | Your role needs **View member medical screenings**. Ask your administrator                                                                                    |
+| You get a permission message when adding or editing      | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                  |
+| A member shows not compliant but has a passing record    | Check the record's expiration date — it may have passed. Check the status is Passed, Completed or Waived, and that its screening type matches the requirement |
+| A member shows not compliant inside the grace period     | Expected. The grace period is saved but not applied. See [Grace Period](#grace-period)                                                                        |
+| A member is graded on a requirement for a role they lack | Expected. **Applies to Roles** is not applied. See [Role-Based Requirements](#role-based-requirements)                                                        |
+| The counts do not match your own count                   | Check which requirements are **Active**. Remember every current member and open prospect is graded against every active requirement                           |
+| The expiring list is empty                               | Nothing Passed or Completed expires in the next 60 days                                                                                                       |
+| A record still says Passed after it expired              | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                      |
+| A drug screening counts as compliant for ever            | Expected for a one-time requirement with no expiration date. To require re-testing, set a frequency and enter expiration dates                                |
+| A new member's prospect screenings do not count          | Expected. Prospect records do not move to the member. Record them again against the member                                                                    |
+| The Add Record button stays grey                         | Choose **Member** or **Prospect** and pick a person first                                                                                                     |
+| A row reads **Not linked to a member or prospect**       | Re-enter the record for the right person, then delete the unlinked one                                                                                        |
+| The data looks out of date                               | Compliance is worked out each time you open it. Refresh the page                                                                                              |
 
 ---
 
-## Changes September 24 – October 4, 2026
+## If You Learned an Older Version
 
-- **Expiry is judged on the department's date** _(2026-09-26)_. The
-  compliance and expiring-screenings views used the server's date, which is
-  UTC and already tomorrow every evening for a US department, so a screening
-  could read as expired a few hours early. They now use the timezone under
-  **Settings → Organization → Profile → Timezone** (America/New_York when none
-  is set).
-- **Deleting a requirement keeps its screening records** _(2026-09-29)_ — see
-  [Editing and Deleting Requirements](#editing-and-deleting-requirements).
-- **Wording** _(2026-09-29)_. The dialogs' buttons read **Add Requirement** /
-  **Add Record** / **Save Changes** (they read Create and Update), the delete
-  confirmations name what is deleted (**Delete Requirement**, **Delete
-  Record**), and the expiring list's empty state reads _"No screenings expire
-  in the next 60 days."_
+If you are following older notes or an SOP, these things work differently.
+
+- **Deleting a requirement keeps its records.** In older versions, deleting a
+  requirement also deleted every screening record filed under it. Records lost
+  that way cannot be recovered from The Logbook; restore them from a backup if
+  they matter.
+- **Every record names a person.** Records entered before the **Record is
+  for** choice existed may belong to nobody. They read **Not linked to a member
+  or prospect** and count for nobody. Re-enter them for the right person and
+  delete the unlinked copy.
+- **The grace period was described as working.** Older versions of this guide
+  said a member stays compliant during the grace period. They do not; see
+  [Grace Period](#grace-period).
+- **Applies to Roles was described as working.** It is not applied; see
+  [Role-Based Requirements](#role-based-requirements).
+- **Button names:** **Add Requirement**, **Add Record** and **Save Changes**
+  (not Create and Update); the delete buttons read **Delete Requirement** and
+  **Delete Record**.
+- **Expiry follows your department's date.** A screening no longer reads as
+  expired a few hours early in the evening.
 
 ---
 

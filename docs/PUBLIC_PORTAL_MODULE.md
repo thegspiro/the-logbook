@@ -6,12 +6,13 @@ The Public Portal module enables fire departments to expose selected data to a p
 
 ## Use Cases
 
-- Display volunteer hours contributed
-- Show upcoming public events (community events, open houses)
-- Display department statistics (calls responded to, stations, apparatus)
-- Show department history, mission statement, and contact information
-- Display current personnel roster (with privacy controls)
-- Show training certifications available
+- Show upcoming public education events
+- Display department statistics (member and apparatus counts)
+- Show the department's description, logo and contact information
+
+A personnel roster, training certifications and volunteer-hour figures are not
+served: there are no endpoints for them, and the stats response returns
+`total_volunteer_hours`, `total_calls_ytd` and `stations` as `null`.
 
 ## Architecture
 
@@ -68,10 +69,17 @@ Tables:
 
 ### 2. Rate Limiting
 
-- **Global Limit**: 1000 requests/hour per API key (configurable)
-- **Per-Endpoint Limit**: Stricter limits on expensive queries
-- **IP-based Limit**: Secondary limit per IP address (100 req/min)
-- **Exponential Backoff**: Temporary blocks for repeated violations
+- **Per-key limit**: one hourly limit per API key — the key's
+  `rate_limit_override`, or else the portal's `default_rate_limit` (default
+  **1000** requests/hour). It covers every endpoint the key calls; there are no
+  per-endpoint limits. A refusal is a 429 with `X-RateLimit-Limit`,
+  `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and is written to the access
+  log.
+- **Per-IP limit**: 100 requests/minute per client IP, checked before the key
+  is looked up, so a flood of invalid keys cannot spend bcrypt time.
+- Counters are shared through Redis when it is available and fall back to
+  per-process memory otherwise. There is no exponential backoff or temporary
+  block beyond the windows above.
 
 ### 3. Data Access Control
 
@@ -89,15 +97,18 @@ Tables:
   - Endpoint accessed
   - Response status
   - Response time
-- **Anomaly Detection**: Flag suspicious patterns:
-  - Rapid requests from single IP
-  - Failed authentication attempts
-  - Unusual access patterns
-- **Alerting**: Notify admins of suspicious activity
+- **Anomaly Detection**: `detect_anomalies` sets `flagged_suspicious` on the
+  access-log row for:
+  - more than 60 requests from one IP in a minute
+  - more than 5 failed authentications from one IP in 5 minutes
+  - more than 10 distinct endpoints from one IP in a minute
+- **Alerting**: no message is sent. Flagged requests surface on the admin
+  screen's **Statistics** tab, whose **Attention Required** banner reads the
+  error rate, suspicious requests and rate-limit hits
 
 ### 5. Network Security
 
-- **CORS**: Strict CORS policy (only allowed origins)
+- **CORS**: the server-wide `ALLOWED_ORIGINS` setting; there is no per-portal origin list
 - **HTTPS Only**: Enforce TLS 1.2+ for all connections
 - **Request Validation**: Strict input validation
 - **SQL Injection Prevention**: Use parameterized queries only
@@ -105,10 +116,8 @@ Tables:
 
 ### 6. Caching Strategy
 
-- **Aggressive Caching**: Cache responses for 5-60 minutes
-- **CDN-Friendly**: Support Cache-Control headers
-- **Cache Invalidation**: Manual cache clearing when data changes
-- **Reduces Load**: Prevents database hammering
+_Planned, not built._ The public API does not cache responses, and the
+config's `cache_ttl_seconds` is not read.
 
 ### 7. Monitoring & Auditing
 
@@ -119,70 +128,62 @@ Tables:
 
 ## API Endpoints
 
-All endpoints under `/api/public/v1/`
-
 ### Public Endpoints (Read-Only)
+
+Served from `backend/app/api/public/portal.py` under `/api/public/v1/`. Each
+requires an `X-API-Key` header, the portal switched on (`config.enabled`) and
+the Public Information module enabled, and returns only whitelisted fields.
+All three share the key's single hourly limit (see
+[Rate Limiting](#2-rate-limiting)).
 
 ```
 GET /api/public/v1/organization/info
-- Returns basic org info (name, type, logo, description, public contact)
-- Rate limit: 100/hour per key
+- Name, organization type, logo, description, phone, email, website,
+  mailing and physical address — each subject to the whitelist
 
 GET /api/public/v1/organization/stats
-- Returns public statistics (volunteer hours, calls, etc.)
-- Rate limit: 100/hour per key
+- total_members and apparatus counts; total_volunteer_hours,
+  total_calls_ytd and stations are always null
 
 GET /api/public/v1/events/public
-- Returns public events only (community events, open houses)
-- Rate limit: 200/hour per key
-- Pagination required
-
-GET /api/public/v1/personnel/public-roster
-- Returns public personnel list (if enabled)
-- Only shows: name, rank, years of service
-- PII excluded: contact info, DOB, address, etc.
-- Rate limit: 50/hour per key
-
-GET /api/public/v1/training/certifications
-- Returns available training certifications
-- Rate limit: 100/hour per key
-
-GET /api/public/v1/stats/volunteer-hours
-- Returns aggregate volunteer hours
-- Grouped by month/year
-- Rate limit: 100/hour per key
+- Upcoming, non-cancelled public education events
+- limit (1–100, default 10) and offset
 ```
+
+The same router also serves `GET /api/public/v1/application-status/{token}`,
+`POST /api/public/v1/application-status/{token}/withdraw` (the prospective
+member's status page, authenticated by the emailed token and limited per IP,
+not by API key) and `GET /api/public/v1/health`.
 
 ### Admin Endpoints (Internal Only)
 
-**All of them require `settings.manage`** _(2026-09-29)_. Until then every
-handler in `public_portal_admin.py` took only `get_current_user`, and the router
-sits behind `module_gate`, which checks that the module is on and nothing else —
-so any signed-in member of an organization with the Public Information module
-enabled could list, create and revoke public API keys, change the portal
-configuration, and edit the whitelist that decides which member fields the
-public API publishes. The admin screen was already gated on `settings.manage`;
-the API behind it was not. Queries were already org-scoped.
+Served from `backend/app/api/v1/public_portal_admin.py`. **All of them require
+`settings.manage`**, and the router sits behind `module_gate`, which checks that
+the Public Information module is on. Queries are org-scoped.
 `tests/test_public_portal_admin_permissions.py` pins all 13 handlers.
 
 ```
-POST /api/v1/public-portal/enable
-- Enable public portal
+GET   /api/v1/public-portal/config
+POST  /api/v1/public-portal/config
+PATCH /api/v1/public-portal/config
+- Read, create and update the portal configuration. The portal is switched
+  on and off by setting `enabled` here; there is no separate enable/disable
+  endpoint
 
-POST /api/v1/public-portal/disable
-- Disable public portal
-
-POST /api/v1/public-portal/api-keys
-- Generate new API key
-
+GET    /api/v1/public-portal/api-keys
+POST   /api/v1/public-portal/api-keys
+PATCH  /api/v1/public-portal/api-keys/{key_id}
 DELETE /api/v1/public-portal/api-keys/{key_id}
-- Revoke API key
+- List, generate, update and revoke API keys
+
+GET   /api/v1/public-portal/whitelist
+POST  /api/v1/public-portal/whitelist
+PATCH /api/v1/public-portal/whitelist/{whitelist_id}
+POST  /api/v1/public-portal/whitelist/bulk-update
+- Choose which fields the public API may return
 
 GET /api/v1/public-portal/access-logs
 - View access logs (with filtering)
-
-PATCH /api/v1/public-portal/config
-- Update portal configuration
 
 GET /api/v1/public-portal/usage-stats
 - View API usage statistics
@@ -197,7 +198,7 @@ GET /api/v1/public-portal/usage-stats
 - organization_id: UUID (FK)
 - enabled: BOOLEAN
 - allowed_origins: JSON (stored; not read — see above)
-- default_rate_limit: INTEGER (requests per hour)
+- default_rate_limit: INTEGER (requests per hour per key; default 1000)
 - cache_ttl_seconds: INTEGER (stored; not read — see above)
 - settings: JSON (additional settings)
 - created_at: TIMESTAMP
@@ -316,46 +317,33 @@ This is the only time it is shown; you can't view it again."_), and revoking
 asks with **Keep Key** as the cancel button. The access log's timing column is
 **Response Time**.
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Backend Foundation
+**Built:**
 
-1. Create database models
-2. Create API key generation and management
-3. Implement authentication middleware
-4. Create basic public API endpoints
-5. Add request logging
+- Database models for the config, API keys, access log and whitelist
+- API key generation, bcrypt-hashed storage, expiry and revocation
+- API-key authentication on the public endpoints (`authenticate_api_key`)
+- The per-key hourly limit and the per-IP limit, with refusals logged
+- Access logging and anomaly flagging
+- The field whitelist and its PII catalogue
+- The admin screen (`frontend/src/modules/public-portal/`): Configuration,
+  API Keys, Access Logs, Statistics and Data Control tabs
 
-### Phase 2: Security Layer
+**Not built:**
 
-1. Implement rate limiting
-2. Add IP-based limits
-3. Create anomaly detection
-4. Add alerting system
-5. Implement CORS controls
-
-### Phase 3: Frontend Admin UI
-
-1. Create module configuration page
-2. Build API key management interface
-3. Create access log viewer
-4. Add usage statistics dashboard
-5. Build data whitelist configurator
-
-### Phase 4: Testing & Documentation
-
-1. Security testing (penetration testing)
-2. Load testing (rate limit validation)
-3. Create public API documentation
-4. Create integration examples
-5. Admin user guide
+- The roster, training-certification and volunteer-hour endpoints
+- Per-portal CORS (`allowed_origins` is stored, not read)
+- Response caching (`cache_ttl_seconds` is stored, not read)
+- Alerting on suspicious activity
+- Exponential backoff or temporary IP blocks
 
 ## Security Considerations
 
 ### Threat Model
 
-1. **DDoS Attacks**: Mitigated by rate limiting and IP blocking
-2. **Data Scraping**: Mitigated by aggressive rate limits
+1. **DDoS Attacks**: Mitigated by the per-IP and per-key rate limits
+2. **Data Scraping**: Mitigated by the per-key hourly limit and the whitelist
 3. **API Key Theft**: Keys can be revoked instantly
 4. **SQL Injection**: Prevented by parameterized queries
 5. **XSS**: Not applicable (API-only, no HTML)
@@ -424,28 +412,3 @@ async function fetchPublicEvents() {
 - Successful rate limit enforcement
 - No PII leaks
 - Positive user feedback
-
----
-
-**Status**: Partially Implemented
-**Author**: Claude AI Assistant
-**Date**: 2026-02-15
-**Version**: 1.1
-
-### Implementation Progress (as of 2026-02-15)
-
-#### Completed
-
-- **`/api/public/v1/organization/stats`**: Returns real database-backed statistics (active member count, apparatus count) queried from `User` and `Apparatus` models
-- **`/api/public/v1/events/public`**: Returns future public education events from the `Event` model, filtered by `PUBLIC_EDUCATION` type, future start date, and non-cancelled status
-- **Backend route registration**: Public portal routes registered in the FastAPI application
-
-#### Remaining
-
-- API key authentication middleware
-- Rate limiting per API key
-- Access logging and audit trail
-- Data whitelist configuration
-- Admin UI (API keys, logs, stats, whitelist tabs)
-- CORS configuration per portal
-- Cache layer implementation

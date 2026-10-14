@@ -121,7 +121,7 @@ class TrainingSessionService:
 
     async def _validate_linkage_ids(
         self,
-        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate",
+        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate | TrainingSessionAttach",
         organization_id: UUID | str,
     ) -> Optional[str]:
         """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
@@ -1993,7 +1993,7 @@ class TrainingSessionService:
             "id": approval.id,
             "training_session_id": approval.training_session_id,
             "event_id": approval.event_id,
-            "status": approval.status.value,
+            "status": approval.status.value if approval.status else None,
             "approval_deadline": approval.approval_deadline,
             "event_title": event.title,
             "event_start_datetime": event.start_datetime,
@@ -2155,7 +2155,7 @@ class TrainingSessionService:
         approval.attendee_data = [
             {
                 **roster[str(a.user_id)],
-                **a.model_dump(mode="json", include=_APPROVER_EDITABLE_FIELDS),
+                **a.model_dump(mode="json", include=set(_APPROVER_EDITABLE_FIELDS)),
             }
             for a in attendees
         ]
