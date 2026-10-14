@@ -1144,7 +1144,7 @@ class InventoryService:
             .group_by(ReorderRequest.vendor_id)
         )
         for vendor_id, count in reorder_rows.all():
-            entry = stats.get(vendor_id)
+            entry = stats.get(vendor_id) if vendor_id else None
             if entry is None:
                 continue
             entry["open_reorder_count"] = count or 0
@@ -1855,14 +1855,14 @@ class InventoryService:
             # then station). Grouping on `location_id` alone would file an item
             # tagged "Shelf B-3" under Unassigned while the cell beside it
             # plainly reads "Shelf B-3".
-            expr = func.coalesce(
+            location_expr = func.coalesce(
                 InventoryItem.storage_location,
                 Location.name,
                 InventoryItem.station,
             )
             return (
-                expr,
-                expr,
+                location_expr,
+                location_expr,
                 [(Location, InventoryItem.location_id == Location.id)],
             )
         if group_by == "vendor":
@@ -2205,7 +2205,7 @@ class InventoryService:
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         items = await self._run_items_page(
             query,
@@ -3098,7 +3098,7 @@ class InventoryService:
             self.db.add(assignment)
 
             # Update item
-            item.assigned_to_user_id = user_id
+            item.assigned_to_user_id = str(user_id)
             item.assigned_date = datetime.now(timezone.utc)
             item.status = ItemStatus.ASSIGNED
 
@@ -3617,10 +3617,12 @@ class InventoryService:
                 str(organization_id), [str(item.id)]
             )
             lot_stocked = str(item.id) in lot_totals
-            if not lot_stocked and item.quantity < quantity:
+            # A NULL quantity is no stock on hand, not an error.
+            on_hand = item.quantity or 0
+            if not lot_stocked and on_hand < quantity:
                 return (
                     None,
-                    f"Insufficient stock: {item.quantity} available, {quantity} requested",
+                    f"Insufficient stock: {on_hand} available, {quantity} requested",
                 )
 
             if not override_allowance:
@@ -3639,7 +3641,7 @@ class InventoryService:
                 if lot_err:
                     return None, lot_err
             else:
-                item.quantity -= quantity
+                item.quantity = on_hand - quantity
             item.quantity_issued = (item.quantity_issued or 0) + quantity
 
             # Snapshot the replacement cost at issuance time for cost recovery
@@ -4706,7 +4708,7 @@ class InventoryService:
             .where(*item_filters)
             .group_by(InventoryItem.status)
         )
-        items_by_status = {row.status.value: row.count for row in status_result.all()}
+        items_by_status = {status.value: count for status, count in status_result.all()}
 
         # Items by condition
         condition_result = await self.db.execute(
@@ -4898,7 +4900,7 @@ class InventoryService:
             .where(InventoryItem.active.is_(True))
             .group_by(InventoryItem.status)
         )
-        items_by_status = {row.status.value: row.count for row in status_result.all()}
+        items_by_status = {status.value: count for status, count in status_result.all()}
 
         # Items by condition
         condition_result = await self.db.execute(
@@ -5643,16 +5645,16 @@ class InventoryService:
             .order_by(CheckOutRecord.checked_out_at.desc())
             .limit(1)
         )
-        row = checkout_result.first()
-        if row:
-            holding, holder = row
+        checkout_row = checkout_result.first()
+        if checkout_row:
+            checkout, checkout_holder = checkout_row
             return {
-                "holder_id": holding.user_id,
-                "holder_name": holder.display_name,
+                "holder_id": checkout.user_id,
+                "holder_name": checkout_holder.display_name,
                 "holding_type": "checkout",
-                "record_id": holding.id,
-                "held_since": holding.checked_out_at,
-                "expected_return_date": holding.expected_return_at,
+                "record_id": checkout.id,
+                "held_since": checkout.checked_out_at,
+                "expected_return_date": checkout.expected_return_at,
             }
         return None
 
@@ -5681,6 +5683,10 @@ class InventoryService:
                 return None, "New holder must be different from current holder"
 
             now = datetime.now(timezone.utc)
+            # The two custody ledgers have different columns, so each branch
+            # below narrows these to its own record type.
+            old: ItemAssignment | CheckOutRecord | None
+            new: ItemAssignment | CheckOutRecord
             if holding_type == "assignment":
                 result = await self.db.execute(
                     select(ItemAssignment)
@@ -5713,7 +5719,7 @@ class InventoryService:
                 )
                 item.status = ItemStatus.ASSIGNED
             else:
-                result = await self.db.execute(
+                checkout_lookup = await self.db.execute(
                     select(CheckOutRecord)
                     .where(
                         CheckOutRecord.id == str(current_record_id),
@@ -5724,7 +5730,7 @@ class InventoryService:
                     )
                     .with_for_update()
                 )
-                old = result.scalar_one_or_none()
+                old = checkout_lookup.scalar_one_or_none()
                 if not old:
                     return None, "Holding changed; rescan the item"
                 old.is_returned = True
@@ -6446,7 +6452,12 @@ class InventoryService:
             .scalars()
             .all()
         )
-        holders = [r.user for r in [*assignments, *checkouts, *issuances] if r.user]
+        holding_records: list[ItemAssignment | CheckOutRecord | ItemIssuance] = [
+            *assignments,
+            *checkouts,
+            *issuances,
+        ]
+        holders = [r.user for r in holding_records if r.user]
         if item.assigned_to_user_id and not holders:
             holder = (
                 await self.db.execute(
@@ -6515,7 +6526,8 @@ class InventoryService:
                 f"Clearance {wo.clearance_id}" if wo.clearance_id else None
             ),
             "linked_charge_record": (
-                f"Issuance {charged.id} ({charged.charge_status.value})"
+                f"Issuance {charged.id} "
+                f"({getattr(charged.charge_status, 'value', charged.charge_status)})"
                 if charged
                 else None
             ),
@@ -7531,7 +7543,7 @@ class InventoryService:
 
         # Only a member who still physically holds this specific record may
         # notify the quartermaster.  Do not trust an item id by itself.
-        holding = None
+        holding: ItemAssignment | ItemIssuance | CheckOutRecord | None = None
         if return_type == "assignment" and assignment_id:
             holding = (
                 await self.db.execute(
@@ -7554,7 +7566,10 @@ class InventoryService:
                     )
                 )
             ).scalar_one_or_none()
-            if holding and quantity_returning > holding.quantity_issued:
+            if (
+                isinstance(holding, ItemIssuance)
+                and quantity_returning > holding.quantity_issued
+            ):
                 return (
                     None,
                     f"Cannot return {quantity_returning}; only {holding.quantity_issued} remain issued",
@@ -8972,13 +8987,14 @@ class InventoryService:
 
         items_due = []
         for rec in records:
+            retirement_date = rec.expected_retirement_date
+            if retirement_date is None:
+                continue
             item_result = await self.db.execute(
                 select(InventoryItem).where(InventoryItem.id == rec.item_id)
             )
             item = item_result.scalar_one_or_none()
-            # The query selects only records with a retirement date.
-            retirement_date = rec.expected_retirement_date
-            if item and item.active and retirement_date is not None:
+            if item and item.active:
                 days_until = (retirement_date - today).days
                 items_due.append(
                     {
@@ -9234,6 +9250,8 @@ class InventoryService:
             if data.get("purchase_order_number"):
                 row.purchase_order_number = data["purchase_order_number"].strip()
             org = await self.db.get(Organization, str(organization_id))
+            if org is None:
+                return None, "Organization not found"
             if org.reorder_vendor_required and not (
                 row.vendor_id or (row.vendor and row.vendor.strip())
             ):
@@ -9675,7 +9693,7 @@ class InventoryService:
         user_id: UUID,
         organization_id: UUID | str,
         issued_by: UUID,
-    ) -> Tuple[Optional[List[ItemIssuance]], Optional[str]]:
+    ) -> Tuple[Optional[List[ItemIssuance | ItemAssignment]], Optional[str]]:
         """Issue all items in a kit to a member."""
         try:
             kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
@@ -9688,7 +9706,7 @@ class InventoryService:
             if not await is_in_org(self.db, User, user_id, organization_id):
                 return None, "Member not found"
 
-            issuances = []
+            issuances: List[ItemIssuance | ItemAssignment] = []
             for kit_item in kit.line_items:
                 if kit_item.item_id:
                     item = await self.get_item_by_id(
@@ -9702,6 +9720,7 @@ class InventoryService:
                             )
                         continue
 
+                    result: ItemIssuance | ItemAssignment | None
                     if item.tracking_type == TrackingType.POOL:
                         result, err = await self.issue_from_pool(
                             item_id=UUID(item.id),
@@ -11217,7 +11236,8 @@ class InventoryService:
         org_wide = next((a for a in allowances if not a.role_id), None)
 
         def _pick(uid):
-            role_allowance = role_allowances.get(primary_positions.get(uid))
+            position_id = primary_positions.get(uid)
+            role_allowance = role_allowances.get(position_id) if position_id else None
             if role_allowance is not None:
                 return role_allowance
             return org_wide
@@ -11433,9 +11453,7 @@ class InventoryService:
                     "membership_number": u.membership_number,
                     "rank": u.rank,
                     "station": u.station,
-                    "status": (
-                        u.status.value if hasattr(u.status, "value") else u.status
-                    ),
+                    "status": getattr(u.status, "value", u.status),
                     "membership_type": u.membership_type,
                     "email": u.email if show_email else None,
                     "phone": (

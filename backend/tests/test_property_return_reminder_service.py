@@ -273,3 +273,21 @@ class TestOverdueReturns:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+@pytest.mark.unit
+async def test_send_reminder_requires_a_drop_date():
+    svc = PropertyReturnReminderService(_db([]))
+    member = SimpleNamespace(id="member-1", status_changed_at=None)
+
+    with pytest.raises(ValueError, match="no status_changed_at"):
+        await svc._send_reminder(
+            member=member,
+            org=None,
+            org_name="Org",
+            org_tz="UTC",
+            organization_id="org-1",
+            threshold={"label": "30-day", "type": "30_day"},
+            days_since_drop=30,
+            items_info={},
+        )

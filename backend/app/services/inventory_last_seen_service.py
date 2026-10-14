@@ -20,11 +20,11 @@ useful, and an organization that has never tagged anything still gets a list.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from app.models.inventory import (
     CheckOutRecord,
@@ -48,6 +48,15 @@ SOURCE_ISSUANCE_RETURN = "issuance_return"
 
 MAX_ROWS = 5000
 DEFAULT_DAYS = 180
+
+# Every model that records an event against an item, each carrying the item and
+# organization columns the grouped query below reads.
+_EventModel = Union[
+    type[InventoryNfcScan],
+    type[ItemAssignment],
+    type[CheckOutRecord],
+    type[ItemIssuance],
+]
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -130,7 +139,11 @@ class InventoryLastSeenService:
                     "asset_tag": item.asset_tag,
                     "category_name": item.category.name if item.category else None,
                     "status": item.status,
-                    "storage_area_name": areas.get(item.storage_area_id),
+                    "storage_area_name": (
+                        areas.get(item.storage_area_id)
+                        if item.storage_area_id
+                        else None
+                    ),
                     "last_seen_at": seen_at,
                     "last_seen_source": source,
                     "days_since_seen": (
@@ -150,7 +163,7 @@ class InventoryLastSeenService:
         aggregate over an org-scoped table, and picking the winner in Python
         is what lets the report say *which* event it was.
         """
-        sources = [
+        sources: list[tuple[str, _EventModel, QueryableAttribute[Any]]] = [
             (SOURCE_NFC_TAP, InventoryNfcScan, InventoryNfcScan.scanned_at),
             (SOURCE_ASSIGNMENT, ItemAssignment, ItemAssignment.assigned_date),
             (SOURCE_RETURN, ItemAssignment, ItemAssignment.returned_date),
