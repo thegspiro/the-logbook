@@ -451,9 +451,11 @@ class EquipmentCheckService:
         ):
             raise ValueError("Invalid apparatus")
 
-        for key, value in data.items():
-            if key not in self.PROTECTED_FIELDS and hasattr(template, key):
-                setattr(template, key, value)
+        # apply_updates, not a setattr loop: the schema types every field
+        # Optional, so an explicit null for a NOT NULL column (name,
+        # check_timing, is_active ...) has to surface as the ValueError the
+        # handler turns into a 400, not a flush-time IntegrityError (500).
+        apply_updates(template, data, skip=self.PROTECTED_FIELDS)
 
         await self.db.commit()
         return await self.get_template(template_id, organization_id)
@@ -632,9 +634,7 @@ class EquipmentCheckService:
                 compartment, parent_id, organization_id
             )
 
-        for key, value in data.items():
-            if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
-                setattr(compartment, key, value)
+        apply_updates(compartment, data, skip=self.PROTECTED_FIELDS)
 
         await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()

@@ -1507,7 +1507,7 @@ Headline Metrics**.
 
 Only training officers can open the page, and only while the Training module
 is turned on. See
-[Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23)
+[Administration Hubs](./08-admin-reports.md#administration-hubs)
 in the administration guide, which covers choosing the figures and who can see
 the list.
 

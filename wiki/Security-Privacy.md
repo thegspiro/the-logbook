@@ -1,7 +1,5 @@
 # Privacy & Data Subject Rights
 
-_(Added 2026-07-31)_
-
 The Logbook holds personal data and, where the Medical Screening module is
 enabled, protected health information. Confidentiality is covered by
 [Encryption](Security-Encryption) and [Authentication](Security-Authentication);
@@ -99,7 +97,8 @@ dropped/archived status). Deactivate or archive first.
 
 ## Consent
 
-**Settings → Security → Privacy Choices** (`GET/PUT /api/v1/users/me/consents`)
+**Settings → Security → Privacy Choices** (`GET /api/v1/users/me/consents`;
+one choice at a time with `PUT /api/v1/users/me/consents/{consent_type}`)
 
 Consent gates _optional_ processing only — the things a department may do with
 permission, as distinct from the processing membership itself requires.
@@ -120,13 +119,10 @@ How it is recorded:
   like one who refused. The UI shows "(not answered)" so an unanswered choice
   is distinguishable from a deliberate no, but consumers must call
   `ConsentService.has_consent()` and get `False` either way.
-- **The column itself defaults to a refusal** _(2026-09-24, migration
-  `b4014469fd76`)_. `user_consents.granted` was `NOT NULL` with no default, so a
-  row inserted without a value failed outright. It now defaults to `false` in
-  the model and the database: the only safe value to record for a consent
-  nobody gave is "no" — and for SMS a default grant would breach the TCPA
-  express-consent requirement. Existing rows all held explicit values, so no
-  stored consent changed.
+- **The column itself defaults to a refusal.** `user_consents.granted`
+  defaults to `false` in the model and the database: the only safe value to
+  record for a consent nobody gave is "no" — and for SMS a default grant would
+  breach the TCPA express-consent requirement.
 
 ---
 
@@ -137,7 +133,7 @@ substantive fire-service defaults covering data categories (including PHI and
 emergency contacts), role-based access, retention, member rights, and
 essential-cookies-only.
 
-**Department control is stated on both pages** _(2026-08-17)_. Each opens with
+**Department control is stated on both pages.** Each opens with
 a callout saying the department holds full control of the application and of
 the records in it, and that **access is a function of the reader's status
 within the department** — granted, narrowed, suspended, or ended by the
@@ -165,7 +161,7 @@ default text changes; a department publishing its own wording supplies its own
 date via `legal.last_updated`, and no date is shown if it does not — the
 built-in date describes the built-in text and would misdate custom wording.
 
-### Editing the wording: Governance -> Legal Documents _(2026-08-18)_
+### Editing the wording: Governance -> Legal Documents
 
 `/governance/legal` is where a department changes what those pages say, instead
 of hand-editing a JSON settings column. It shows the live text for each
@@ -219,16 +215,29 @@ another's visitors.
 Statutory retention for fire-service records varies by state, so schedules are
 **configured per department** rather than hardcoded (ISO 15489).
 
-`GET/PUT /api/v1/organizations/retention-policy` (`settings.manage`, audited as
-`retention_policy_updated`), enforced daily by the `retention_enforcement`
-task.
+`GET /api/v1/organization/retention-policy` lists every record class with its
+default, floor and effective setting; `PUT
+/api/v1/organization/retention-policy/{record_class}?days=<n>` sets one class
+(omit `days` to keep forever). Both require `settings.manage` or
+`organization.update_settings`; a change is audited as
+`retention_policy_updated`. The `retention_enforcement` task applies the
+schedule daily.
 
 | Record class                              | Default                                      | Floor   |
 | ----------------------------------------- | -------------------------------------------- | ------- |
 | `message_history`                         | 90 days                                      | 30 days |
 | `notification_logs`                       | Keep forever                                 | 30 days |
+| `error_logs`                              | 180 days                                     | 30 days |
 | `form_submissions`                        | Keep forever                                 | 90 days |
+| `guest_check_ins`                         | Keep forever                                 | 90 days |
+| `practice_skill_tests`                    | 365 days                                     | 30 days |
 | Blocked-access telemetry (platform-level) | 365 days (`RETENTION_BLOCKED_ATTEMPTS_DAYS`) | 30 days |
+
+`guest_check_ins` covers external (non-member) event attendees — guest
+check-in and public outreach sign-in rows; a prospective-member record opened
+from one lives in the recruitment pipeline and is never swept.
+`practice_skill_tests` sweeps only practice attempts; official skills-test
+results share the table and are never deleted by retention.
 
 - **Floors** exist so a typo cannot wipe recent records, and are re-applied at
   enforcement time — settings edited outside the API cannot bypass them.
@@ -242,148 +251,113 @@ task.
   (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
   daily by the `self_report_attachment_retention` task. It deletes the files
   only; the submission and training record rows stay. They can also be
-  **malware-scanned on upload** with ClamAV (`CLAMAV_ENABLED`, off by default)
-  — an infected file is never stored, and the audit event carries the
+  **malware-scanned on upload** with ClamAV (`CLAMAV_ENABLED`, on by default,
+  and failing closed: while clamd is unreachable the upload is refused) — an
+  infected file is never stored, and the audit event carries the
   signature name and a hash, never the file or its name. See
   [Security Configuration → Malware scanning](Configuration-Security#malware-scanning-of-uploads).
 - **Public-portal access logs** (each request to the public API, including
   refused authentications, with the requester's IP address) are kept **90
   days**, a fixed platform-wide period, and deleted daily by the
-  `prune_public_portal_access_log` task _(2026-10-12)_. It is not configurable
+  `prune_public_portal_access_log` task. It is not configurable
   per department.
 - **Audit records** follow their own 7-year rule — see
   [Audit Logging → Retention Policy](Security-Audit-Logging#retention-policy).
 
 ---
 
-## Need-to-Know Enforcement _(updated 2026-08-02)_
+## Need-to-Know Enforcement
 
-Endpoints that returned more than the caller was entitled to. All are fixed;
-they are worth knowing about because they shaped what "visibility settings"
-actually meant.
+What each endpoint returns is limited to what the caller is entitled to see,
+and the rules below are what "visibility settings" actually mean.
 
-**The contact-visibility setting was bypassable.** `GET /users` filtered
-contact details against the organization's setting, but the two
-`with-roles` endpoints returned every column on the member record. All require
-only `users.view`, so a member refused an email address on one screen could
-read it on another, along with home address and personal email, which the
-roster never exposes at any setting.
+**Contact visibility is enforced on every member-record endpoint.** `GET
+/users`, the `with-roles` endpoints and the individual profile all redact
+through the same shared code, so a field withheld on the roster is not one
+request away on another screen. Home address and personal email are never on
+the roster at any setting. The redaction fails closed: if the settings row
+cannot be read, contact details are hidden rather than shown. Members always
+see their own record in full — the settings page loads a member's own profile
+through that endpoint and writes the fields back, so redacting for self would
+blank a member's own address on their next save.
 
-Fixed in two passes, and the second is the instructive one: the roster
-endpoint was corrected first, leaving the **individual profile** endpoint
-still unredacted _(closed 2026-08-02)_. A partial fix here is barely a fix —
-anything withheld on the roster remained one request away. All member-record
-endpoints now redact through the same shared code so the two cannot drift
-apart again, and the redaction fails closed: if the settings row cannot be
-read, contact details are hidden rather than shown. Members always see their
-own record in full, which matters because the settings page loads a member's
-own profile through that endpoint and writes the fields back — redacting for
-self would have blanked a member's own address on their next save.
+**Date of birth and emergency contacts are leadership-only.** They are
+restricted to `members.manage` holders and the member themselves, with **no
+setting that can publish them** — `contact_info_visibility` deliberately has
+no flag for either. Emergency contacts are not solely the member's data: they
+name a spouse, parent or neighbor who is not in the department, never
+consented to appear in its systems, and holds no account with which to remove
+themselves. Date of birth is restricted because, paired with a name, it is the
+field most useful for impersonation. Disclosure is recorded on the
+`user_viewed` audit event, so the trail distinguishes _who saw the restricted
+fields_ from who merely opened a profile.
 
-**Date of birth and emergency contacts are leadership-only** _(2026-08-02)_.
-Restricted to `members.manage` holders and the member themselves, with **no
-setting that can publish them** — `contact_info_visibility` deliberately has no
-flag for either.
-
-Emergency contacts are treated this way because they are not solely the
-member's data: they name a spouse, parent or neighbor who is not in the
-department, never consented to appear in its systems, and holds no account
-with which to remove themselves. Date of birth is restricted because, paired
-with a name, it is the field most useful for impersonation.
-
-Disclosure is recorded on the `user_viewed` audit event, so the trail
-distinguishes _who saw the restricted fields_ from who merely opened a
-profile.
-
-**Directory profiles no longer disclose account-security metadata**
-_(2026-08-16)_. `members.view` lets a member find and open a colleague's
-directory entry; it does not entitle them to the colleague's account state.
-A caller relying only on `members.view` now receives the profile with
-`email_verified`, `mfa_enabled`, `last_login_at`, `created_at`,
-`updated_at`, and notification preferences cleared, and with the permission
-lists stripped from the colleague's roles (role _names_ remain, because the
-profile displays them). The redaction matters because MFA status plus last
+**Directory profiles do not disclose account-security metadata.**
+`members.view` lets a member find and open a colleague's directory entry; it
+does not entitle them to the colleague's account state. A caller relying only
+on `members.view` receives the profile with `email_verified`, `mfa_enabled`,
+`last_login_at`, `created_at`, `updated_at`, and notification preferences
+cleared, and with the permission lists stripped from the colleague's roles
+(role _names_ remain, because the profile displays them). MFA status plus last
 login is a target-selection map — it tells an attacker which accounts are
 soft. `users.view` holders, members-managers, and the member themselves see
 the full record.
 
-**Profile edits cannot move a member's hire date** _(2026-08-16)_.
-`hire_date` joined rank, station, platoon, and membership number in the
-restricted-field set on profile updates: it drives automatic membership-tier
-advancement, so changing it with only `users.edit` amounted to
-self-service seniority. It now requires leadership, the secretary, or the
-membership coordinator.
+**Editing a colleague's profile needs `members.manage`.** `PATCH
+/users/{id}/profile` and `/contact-info` accept only the member themselves and
+`members.manage` holders, and every profile route passes its response through
+one `_redact_profile_for_viewer`, so a write never returns more than a read
+would. The profile page does not offer edit forms on a redacted record: the
+forms are seeded from what is on screen and an update sends blanks as `null`,
+so a save would erase every field the editor was never shown.
 
-**Shared-device logout purges every draft namespace** _(2026-08-16, red-team
-RT-08)_. The logout purge on shared/station computers removed shift-report
-drafts and the offline queues, but equipment-check drafts
-(`equipment-check-draft-*` in `localStorage`) survived, leaving the previous
-member's apparatus results and narrative notes readable by the next person
-at the browser. The purge now sweeps both draft namespaces, including
-orphaned keys, and leaves unrelated browser preferences intact. See
-[`docs/security/RED_TEAM_REVIEW_2026-08-16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/security/RED_TEAM_REVIEW_2026-08-16.md).
+**Profile edits cannot move a member's hire date.** `hire_date` sits with
+rank, station, platoon, and membership number in the restricted-field set on
+profile updates: it drives automatic membership-tier advancement, so it
+requires leadership, the secretary, or the membership coordinator rather than
+`users.edit` alone.
 
-**Organization settings leaked infrastructure.** `GET /organization/settings`
-is open to every authenticated member — the page needs branding, module
-enablement and visibility flags. It redacted credentials, but not the
-identifiers those credentials authenticate _to_: mail server hostname and
-username, S3 bucket, region and endpoint, SharePoint site URL, the SSO issuer
-URL, and every OAuth tenant and client ID. Together those map a department's
-infrastructure for anyone who can log in — including a member who left last
-week, or a compromised volunteer account. Callers without `settings.manage`
-now get those fields blanked; the response keeps its shape, so the settings
-page renders "not configured" rather than breaking.
+**Shared-device logout purges every draft namespace.** The logout purge on
+shared/station computers removes shift-report drafts, the offline queues and
+equipment-check drafts (`equipment-check-draft-*` in `localStorage`),
+including orphaned keys, and leaves unrelated browser preferences intact. See
+[`docs/security/RED_TEAM_REVIEW_2026-08-16.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/security/RED_TEAM_REVIEW_2026-08-16.md)
+(RT-08).
 
-That strip initially missed the **IT team block** _(closed 2026-08-02)_ — the
-names, direct email and phone of whoever administers the deployment, plus
-`backup_access`, a free-text field holding whatever an admin wrote about
-break-glass procedures. It is now emptied for callers without
-`settings.manage` alongside the rest.
+**Organization settings do not leak infrastructure.** `GET
+/organization/settings` is open to every authenticated member — the page needs
+branding, module enablement and visibility flags. Callers without
+`settings.manage` get credentials **and** the identifiers they authenticate
+_to_ blanked: mail server hostname and username, S3 bucket, region and
+endpoint, SharePoint site URL, the SSO issuer URL, every OAuth tenant and
+client ID, and the IT team block (names, direct email and phone of whoever
+administers the deployment, plus the free-text `backup_access` field). The
+response keeps its shape, so the settings page renders "not configured" rather
+than breaking.
 
-**Profile writes return what a read returns** _(2026-09-30)_. A `users.edit`
-holder without `members.manage` could save a colleague's profile and read back
-the date of birth, emergency contacts and home address that `GET
-/users/{id}/with-roles` withholds from them — the two write routes returned the
-unredacted row. All three routes now pass through one
-`_redact_profile_for_viewer`. The profile page also stopped offering that
-viewer edit forms on a redacted record: the forms are seeded from what is on
-screen and an update sends blanks as `null`, so a save would have erased every
-field the editor was never shown. Which viewer got the full record is read from
-the payload (the server keeps `profile_visibility` only for those it does not
-redact), not re-derived from local permissions.
+**A colleague's ID card is not directory information.** The ID Card page,
+with its scannable QR code and barcode, opens for your own card, or anyone's
+with `members.manage` or `members.manage_id_cards`. The underlying profile
+data is still served to `members.view`; what is withheld is the assembled
+credential. See [Member ID Cards](Member-ID-Cards#viewing-a-members-id-card-2026-09-30).
 
-**Editing a colleague's profile needs `members.manage`** _(2026-10-13)_. Hiding
-the forms left the two write routes open to a `users.edit` holder calling the
-API directly. `PATCH /users/{id}/profile` and `/contact-info` now accept only
-the member themselves and `members.manage` holders, so the write responses
-need no redaction of their own.
+**An applicant's status token stays out of staff hands.** The token is the
+applicant's only credential for the public status page, which can also
+**withdraw** the application. Applicant labels and badges carry a short id,
+never the token. Badges printed by earlier versions still encode the token and
+should be destroyed.
 
-**A colleague's ID card is not directory information** _(2026-09-30)_. The ID
-Card page assembled a scannable badge — QR code and barcode — for any member
-holding `members.view`, which is every member. It now opens for your own card,
-or anyone's with `members.manage` or `members.manage_id_cards`. The underlying
-profile data is still served to `members.view`; what is withheld is the
-assembled credential. See [Member ID Cards](Member-ID-Cards#viewing-a-members-id-card-2026-09-30).
+**Applicant data minimization.** **Purge Selected** on the Inactive
+Applications tab deletes the selected inactive applications and their uploaded
+files from disk, audited by count and id. A pipeline with **Auto-Purge**
+enabled has the same deletion run daily by the `membership_auto_purge` task —
+see `docs/KNOWN_LIMITATIONS.md` ("Prospective Members — Purge Scope and
+Auto-Purge") for its rules.
 
-**An applicant's status token stays out of staff hands** _(2026-09-28, W17-3)_.
-The token is the applicant's only credential for the public status page, which
-since 2026-09-24 can also **withdraw** the application. The label preview
-returned every applicant's token to anyone with `prospective_members.view`, and
-every printed applicant badge encoded it. Labels now carry a short id. Badges
-printed earlier still carry the token and should be destroyed.
-
-**Applicant data minimization is manual** _(2026-09-30)_. **Purge Selected** on
-the Inactive Applications tab now deletes the selected inactive applications
-and their uploaded files from disk, audited by count and id; until then it
-deleted nothing while reporting success. The pipeline's **Auto-Purge** setting
-is stored but no task reads it, so nothing is purged on a timer — a department
-relying on it for data minimization must purge by hand. Tracked in
-`docs/KNOWN_LIMITATIONS.md`.
-
-**Former members in the directory** _(open, 2026-09-28, W15-4)_. Archived
-members still appear to every member under the directory's default "All
-Statuses" filter. Whether former members should be visible to members, and how
-much of them, is an open policy decision.
+**Former members in the directory.** A member without `members.manage` is
+served the directory from `GET /users/directory`, which leaves archived
+(departed) members out. Coordinators keep the whole roster from `GET /users`,
+so archived members still appear in member pickers that read it.
 
 ---
 
@@ -395,9 +369,9 @@ The software implements controls; it cannot adopt policy on your behalf:
 - Deciding when a departed member's record is anonymized, and recording that
   decision
 - Setting retention values that match your state's records schedule
-- Deciding whether to run ClamAV for uploaded certificates — it costs a
-  container and 1.5-3 GB of RAM, and while it is enabled and down, members
-  cannot upload certificates
+- Whether to keep ClamAV scanning on — it costs a container and 1.5-3 GB of
+  RAM, and while it is enabled and down, members cannot upload files; turning
+  it off accepts uploads unscanned
 - Breach notification, which has **statutory deadlines** under HIPAA (60 days)
   — see [Security Overview → Incident Response](Security-Overview#incident-response)
 

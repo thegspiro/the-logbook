@@ -16,7 +16,7 @@ repository cannot read `.claude/skills/`. Keep it that way: new rules go in
 
 ## The two that hurt most
 
-1. **A table you are altering may not exist yet.** 40 of 254 tables are built
+1. **A table you are altering may not exist yet.** 65 of 306 tables are built
    only by `create_all()` at app startup, and CI runs `alembic upgrade head`
    against an empty database before anything starts the app. Reflecting or
    altering such a table raises `NoSuchTableError` and kills the whole upgrade,

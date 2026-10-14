@@ -100,6 +100,8 @@ passing, validated, non-practice test counts, the newest pass per skill is the o
 department withholds from the member (see [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08)) is not
 listed. Taking and passing the skill again moves the expiry. Changing the period applies to tests already passed.
 
+![Valid for (months) field on the skill sheet template form, with its help text](./images/09-03-template-valid-for.png)
+
 ![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 
 ### Step 2: Define Sections and Criteria
