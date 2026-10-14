@@ -610,7 +610,7 @@ class EventService:
             .label("occupied_seats")
         )
 
-        columns = [
+        columns: list[Any] = [
             Event,
             rsvp_count_sq,
             going_count_sq,
@@ -1842,12 +1842,10 @@ class EventService:
             else 0
         )
 
-        old_status = None
+        old_status: Any = None
         if existing_rsvp:
             # Capture old status before updating
-            old_status = existing_rsvp.status
-            if isinstance(old_status, RSVPStatus):
-                old_status = old_status.value
+            old_status = getattr(existing_rsvp.status, "value", existing_rsvp.status)
             # Update existing RSVP. exclude_unset=True, not a full dump: an
             # omitted key means "leave this alone" (Pitfall #1's update
             # mirror). This matters most for dietary_restrictions/
@@ -1971,9 +1969,7 @@ class EventService:
         await self.db.flush()
 
         # Record RSVP history if status changed or this is a new RSVP
-        new_status = rsvp.status
-        if isinstance(new_status, RSVPStatus):
-            new_status = new_status.value
+        new_status: Any = getattr(rsvp.status, "value", rsvp.status)
         if old_status != new_status:
             history_entry = RSVPHistory(
                 rsvp_id=rsvp.id,
@@ -4456,7 +4452,7 @@ class EventService:
         if event.organization_id != organization_id:
             return None, "Event not found in your organization"
 
-        creator_row = row[1]
+        creator_row = row[1] if row else None
         created_by_name = None
         if creator_row:
             created_by_name = creator_row.display_name or creator_row.username

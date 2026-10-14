@@ -141,7 +141,10 @@ HTTPS reverse proxy as above.
 `./install.sh --traditional` installs MySQL, Redis, nginx and the backend
 directly on the host under systemd instead of Docker. It needs Python 3.13 or
 newer (Debian 13, Ubuntu 25.04+, or installed beforehand) and stops before
-installing anything if it cannot find one; see
+installing anything if it cannot find one. It also builds the frontend, which
+needs Node.js 22+ and npm 11+; the script installs the distribution's `nodejs`
+and `npm` without checking their versions, so install a current Node.js first.
+See
 [DEPLOYMENT.md → Traditional Server Deployment](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#option-2-traditional-server-deployment).
 
 ---

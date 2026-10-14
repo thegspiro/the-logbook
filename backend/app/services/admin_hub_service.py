@@ -1675,8 +1675,10 @@ async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
         Shift.shift_date >= month_start,
         Shift.shift_date < next_month,
     )
-    minutes = float(minutes or 0) + float(prep_rows[0].minutes if prep_rows else 0)
-    hours = minutes / 60.0
+    total_minutes = float(minutes or 0) + float(
+        prep_rows[0].minutes if prep_rows else 0
+    )
+    hours = total_minutes / 60.0
     return _fmt_hours(hours), f"since {month_start.strftime('%B')} 1"
 
 

@@ -923,8 +923,9 @@ class GrantService:
         # that changes budget_item_id takes the same FK-check shared lock an
         # INSERT does, ahead of the exclusive FOR UPDATE lock the recompute
         # takes below.
-        for bid in {old_budget_item_id, new_budget_item_id} - {None}:
-            await self._lock_budget_item(bid)
+        for bid in {old_budget_item_id, new_budget_item_id}:
+            if bid is not None:
+                await self._lock_budget_item(bid)
         apply_updates(expenditure, data, skip={"application_id", "id"})
         await self.db.flush()
 
@@ -1020,7 +1021,7 @@ class GrantService:
             .where(GrantExpenditure.budget_item_id == budget_item_id)
             .with_for_update()
         )
-        total_spent = result.scalar()
+        total_spent = result.scalar() or Decimal(0)
         item.amount_spent = total_spent
         item.amount_remaining = item.amount_budgeted - total_spent
 
@@ -1311,7 +1312,7 @@ class GrantService:
             {
                 "status": row[0].value if hasattr(row[0], "value") else row[0],
                 "count": row[1],
-                "total_requested": float(row[2]),
+                "total_requested": float(row[2] or 0),
             }
             for row in pipeline_result.all()
         ]

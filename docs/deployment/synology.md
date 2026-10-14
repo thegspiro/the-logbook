@@ -99,6 +99,14 @@ sudo sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=http://${NAS_IP}:3000|" .env
 # Set production mode
 sudo sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sudo sed -i "s|^DEBUG=.*|DEBUG=false|" .env
+
+# Pin the production override for every later `docker compose` command
+echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" | sudo tee -a .env
+
+# The bundled MySQL/Redis speak plaintext on the internal Docker network, so the
+# production backend refuses to boot unless that is accepted explicitly — the
+# installers write the same three lines
+printf '%s\n' SECURITY_REQUIRE_TLS=false DB_SSL=false REDIS_SSL=false | sudo tee -a .env
 ```
 
 ### Step 5: Start The Logbook
@@ -107,7 +115,9 @@ sudo sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 # Standard deployment (4+ GB RAM) — production override layered on the base file
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# For NAS with limited RAM (2-4 GB), add the minimal profile as well
+# For NAS with limited RAM (2-4 GB), add the minimal profile as well — and set
+# COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.minimal.yml
+# in .env so later bare `docker compose` commands keep it
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.minimal.yml up -d
 
 # Verify all containers are running
@@ -119,9 +129,12 @@ sudo docker compose ps
 > configuration (uvicorn `--reload`, backend port published, API docs enabled, no
 > HTTPS enforcement) and skips the startup security gate. The override forces
 > `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
-> enables DB/Redis TLS, and does not publish the backend port. Pin
-> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
-> later `docker compose ...` command stays hardened. In production the app
+> and does not publish the backend port. It leaves `DB_SSL`/`REDIS_SSL` off,
+> because the bundled MySQL and Redis do not terminate TLS, and defaults
+> `SECURITY_REQUIRE_TLS` to `true` — hence the explicit `false` in Step 4. The
+> `COMPOSE_FILE` line from Step 4 keeps every later `docker compose ...` command
+> hardened. The override uses Compose's `!override`/`!reset` tags, so check that
+> `docker compose version` reports v2.24.4 or later. In production the app
 > **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
 > docs are enabled, if HTTPS isn't enforced, or if `FRONTEND_URL`
 > points at `localhost` with no address other than localhost in `ALLOWED_ORIGINS` to use instead — terminate TLS at the DSM reverse
@@ -137,21 +150,45 @@ Complete the onboarding wizard to set up your organization.
 
 ## Method 2: Container Manager UI (DSM 7.2+)
 
-Use the Synology Container Manager GUI to deploy via Docker Compose.
+Use the Synology Container Manager GUI to manage the stack as a Compose project.
+
+> **Use Method 1 for production unless you need the GUI.** A Container Manager
+> project runs a single compose file; it does not layer
+> `docker-compose.prod.yml` on top of `docker-compose.yml`. Pointing a project
+> at the bare `docker-compose.yml` deploys the **development** stack (uvicorn
+> `--reload`, the source tree bind-mounted, backend port 3001 published). The
+> steps below flatten the production stack into one file first, so the project
+> runs the same configuration as Method 1.
 
 ### Step 1: Prepare Files
 
 1. Enable SSH and connect (see Method 1, Steps 1-2)
-2. Create the project directory and clone:
+2. Clone, then configure `.env` exactly as in Method 1, Step 4 — including
+   `ENVIRONMENT=production` and the `SECURITY_REQUIRE_TLS=false` opt-out:
 
 ```bash
 sudo mkdir -p /volume1/docker/the-logbook
 cd /volume1/docker/the-logbook
 sudo git clone https://github.com/thegspiro/the-logbook.git .
 sudo cp .env.example .env
+# ...then the key generation and sed/tee lines from Method 1, Step 4
 ```
 
-3. Edit `.env` with secure values (see Method 1, Step 4 for automated setup, or manually edit with `sudo nano .env`)
+3. Flatten the production stack into a single compose file in its own project
+   directory (add `-f docker-compose.minimal.yml` for a NAS with 2-4 GB of RAM).
+   This needs `docker compose version` v2.24.4 or later:
+
+```bash
+sudo mkdir -p /volume1/docker/the-logbook-project
+sudo sh -c 'docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /volume1/docker/the-logbook-project/docker-compose.yml'
+sudo chmod 600 /volume1/docker/the-logbook-project/docker-compose.yml
+```
+
+`docker compose config` writes absolute paths for build contexts and mounts, so
+the file works from the separate directory. It also writes every value from
+`.env` into the file — the secrets and the encryption key among them — which is
+why it is readable by its owner only. Regenerate it after every update or
+`.env` change, or the project keeps running the old configuration.
 
 ### Step 2: Create the Project in Container Manager
 
@@ -160,23 +197,14 @@ sudo cp .env.example .env
 3. Click **Create**
 4. Configure:
 
-| Setting          | Value                             |
-| ---------------- | --------------------------------- |
-| **Project name** | `the-logbook`                     |
-| **Path**         | `/volume1/docker/the-logbook`     |
-| **Source**       | Use existing `docker-compose.yml` |
+| Setting          | Value                                 |
+| ---------------- | ------------------------------------- |
+| **Project name** | `the-logbook`                         |
+| **Path**         | `/volume1/docker/the-logbook-project` |
+| **Source**       | Use existing `docker-compose.yml`     |
 
-5. Container Manager will detect the `docker-compose.yml` automatically
+5. Container Manager detects the flattened `docker-compose.yml` in that path
 6. Click **Next**, review the settings, and click **Done**
-
-> **For minimal profile**: Before creating the project, combine compose files:
->
-> ```bash
-> # Create a merged compose for Container Manager
-> sudo docker compose -f docker-compose.yml -f docker-compose.minimal.yml config > docker-compose.synology.yml
-> ```
->
-> Then point Container Manager to `docker-compose.synology.yml` instead.
 
 ### Step 3: Start the Project
 
@@ -392,7 +420,9 @@ sudo docker compose up -d
 sudo docker compose exec backend alembic upgrade head
 ```
 
-Or via Container Manager: **Project** > `the-logbook` > **Action** > **Build and Start**.
+With Method 2, stop the project, `git pull` in `/volume1/docker/the-logbook`,
+regenerate the flattened file (Method 2, Step 1.3), then in Container Manager use
+**Project** > `the-logbook` > **Action** > **Build and Start**.
 
 ---
 

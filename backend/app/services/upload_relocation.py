@@ -414,12 +414,12 @@ def _rewrite_json(value: Any, mapping: dict[str, str]) -> tuple[Any, bool]:
     return updated, changed
 
 
-_JSON_TABLES = {
+_JSON_TABLES: dict[str, tuple[type[Any], str]] = {
     "training_submissions": (TrainingSubmission, "attachments"),
     "training_records": (TrainingRecord, "attachments"),
     "events": (Event, "attachments"),
 }
-_SCALAR_TABLES = {
+_SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "documents": (Document, "file_path"),
     "prospect_documents": (ProspectDocument, "file_path"),
     "suggestion_attachments": (SuggestionAttachment, "file_path"),
