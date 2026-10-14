@@ -42,7 +42,6 @@ export const BackButton: React.FC<BackButtonProps> = ({ to, className = '', labe
     <button
       onClick={handleClick}
       className={`btn-md text-theme-text-secondary hover:text-theme-text-primary border-theme-input-border hover:border-theme-surface-border inline-flex items-center border bg-transparent font-medium transition-all duration-300 ${className}`}
-      aria-label={`Go back to previous step`}
     >
       <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
       {label}
