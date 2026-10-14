@@ -22,9 +22,8 @@ export path does not consume all of them.
 """
 
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
-from app.core.database import Base
 from app.models.admin_hours import AdminHoursCategory, EventHourMapping
 from app.models.apparatus import (
     ApparatusCustomField,
@@ -134,7 +133,7 @@ class TableSpec:
         json_id_paths: JSON locations embedding foreign row IDs to remap.
     """
 
-    model: type[Base]
+    model: type[Any]
     module: str
     parent_fk: Optional[str] = None
     null_columns: tuple[str, ...] = ()

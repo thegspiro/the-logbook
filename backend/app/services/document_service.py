@@ -93,7 +93,7 @@ class DocumentService:
                 folder = DocumentFolder(
                     organization_id=str(organization_id),
                     created_by=str(created_by),
-                    **system_folder_fields(folder_def["slug"]),
+                    **system_folder_fields(str(folder_def["slug"])),
                 )
                 self.db.add(folder)
             await self.db.commit()

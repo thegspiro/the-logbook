@@ -1376,7 +1376,7 @@ class AnnualComplianceReportService:
         )
         task_counts: Dict[str, int] = {}
         for row in tasks_result:
-            status_val = row[0].value if hasattr(row[0], "value") else str(row[0])
+            status_val = str(getattr(row[0], "value", row[0]))
             task_counts[status_val] = row[1]
 
         return {
