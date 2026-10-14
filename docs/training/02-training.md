@@ -989,7 +989,7 @@ category such as _EMS_ or _Medical_ is not narrow enough.
    If the course isn't in the library yet, add it first.
 4. If the course comes from a training provider, map the provider's course to
    that library course on the integration's **Courses** tab (see
-   [Training Integrations](./16-integrations.md#course-mappings-2026-10-07)), or
+   [Training Integrations](./16-integrations.md#course-mappings)), or
    completions of it will not count.
 5. Open the compliance view for a few members and confirm the requirement is
    now met by the right course — and unmet for anyone who never took it.
