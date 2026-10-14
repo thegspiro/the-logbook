@@ -1,7 +1,133 @@
 # Application Review — Equipment Check / Shift Completion (Tier B)
 
 **Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-14 (pass 5)
+
+---
+
+## Pass 5 (2026-10-14) — template and compartment edits answered a null NOT NULL column with a 500; the builder could send one (3 fixed, 1 dead schema removed)
+
+Lens for this pass: the update-payload discipline CLAUDE.md #1 describes
+(`exclude_unset`, `apply_updates`, an explicit `null` on a NOT NULL column),
+driven through the **real handlers**, and then followed up the wire into the
+builder that sends the payloads. Same lens as the B4/B5/B6 passes of this
+rotation; none of them had looked at this module for it.
+
+### EC2-6 — LOW/MED — `PUT /templates/{id}` and `PUT /compartments/{id}` returned 500 for a null NOT NULL column — ✅ FIXED
+
+`EquipmentCheckTemplateUpdate` and `CheckTemplateCompartmentUpdate` type every
+field `Optional`, the handlers dump with `exclude_unset`, and both service methods
+(`update_template`, `update_compartment`) applied the dict with a bare
+`for key, value in data.items(): setattr(...)`. A `null` for a NOT NULL column
+(`name`, `check_timing`, `template_type`, `is_active`, `sort_order` on templates;
+`name`, `sort_order`, `is_header`, `container_type`, `is_sealed` on compartments)
+was written onto the row and rejected by the database at commit: an
+`IntegrityError`, which no handler caught. The handlers already turn a
+`ValueError` into a 400; the service just never raised one. The item update
+(`update_item`) had been moved to `apply_updates` earlier, so it already behaved.
+
+**Reproduced before fixing:** a new integration test drives the three update
+endpoints over HTTP against the real schema and sends `null` for every NOT NULL
+field the schema can name (derived from the schema and the model: 16 fields, plus
+the item's `compartment_id` as its own case). On the unmodified service **10 of 21 failed, all
+500s — 5 template and 5 compartment fields**; the 6 item fields and the 3
+nullable controls already passed. Both loops now call `apply_updates`, so a
+cleared NOT NULL column is a 400 naming the field. Nullable columns
+(`description` on all three) still clear — the control half is in the same file,
+so a guard that rejected every null would fail it.
+
+The existing service unit test `test_mutation_advances_revision` broke on the
+change: its compartment stand-in had no `name`, and the old loop had been silently
+skipping the unknown attribute (`hasattr`), so that case never exercised a write.
+`apply_updates` reports an unknown field instead of dropping it, so the stand-in
+now has the `name` it is updated with.
+
+### EC2-7 — LOW — the builder's Save could send `null` for two NOT NULL columns — ✅ FIXED
+
+This is why EC2-6 was reachable and not only a direct-API-client problem.
+`EquipmentCheckTemplateBuilder.handleSave` sent
+
+- `container_type: comp.containerType || null` — a compartment whose storage type
+  was set to **Custom…** with the label left blank, and
+- `expiration_warning_days: numberOrNull(item.expirationWarningDays)` — an item
+  whose warning-days box had been emptied by hand.
+
+Both columns are NOT NULL with no cleared state. The component's own auto-save
+path already said so in a comment (`name` and `expiration_warning_days` "stay
+`|| undefined`") while the batch Save, whose comment claims to use "the same
+coercions", did not. Result before this pass: the compartment PUT was a 500 and
+the whole Save reported failure; after EC2-6 alone it would have been a 400 with
+a message about a field the user never saw. Both now omit the key when blank (the
+stored value stays), and the two update types in `types/equipmentCheck.ts` drop
+`| null` for them so the compiler enforces it. A frontend test covers both and was
+mutation-checked **per field** (reverting each line alone fails the test).
+
+### EC2-8 — INFO — `LastSealRecord` (backend schema) had no caller — ✅ REMOVED
+
+An AST scan of 260 definitions across the check service, readiness service,
+shift-completion service, the endpoint file and its schema module found one
+unreferenced name in `app/`: `schemas/equipment_check.LastSealRecord`. The
+`/templates/{id}/last-seals` endpoint returns a bare dict it camel-cases by hand
+(its own comment says there is no response schema), and
+`tests/test_last_seals_response_shape.py` pins that real wire shape. The class was
+referenced only by a test that exercised the class itself. Removed with that test.
+My first removal failed collection because the scan covered `app/` and `scripts/`
+but not `tests/`; the collection error is what found the importer, and it is why
+the finding above says "no caller in `app/`" and not "no references".
+
+### Stale record corrected — EC-7 and EC-11 are closed, not open
+
+Passes 3 and 4 above list **EC-11** (compliance metrics hardcoded to 0) and
+**EC-7 residual** (submit endpoints on bare `get_current_user`) as "still flagged".
+Both were resolved on 2026-10-11 by the owner's decision, recorded in
+`docs/KNOWN_LIMITATIONS.md` (the "Equipment-check: read endpoints bypass…" row,
+✅ Resolved). Verified against the code: all 52 routes carry a permission
+dependency except `/my-checklists`, `/my-checklists/history`, `/log`,
+`/csv-sample` and the changelog; the first two are self-scoped, `/log` scopes by
+permission in the handler (a caller without `inventory.check_view` sees only their
+own checks), the changelog carries a route-level `inventory.check_manage`
+dependency (my route parser read only the function signature and listed it as bare
+until I read the decorator), and the CSV sample is a static file. The submit
+routes gate on `inventory.check_submit`.
+
+### Verified good ✅ (this pass)
+
+- All three update handlers dump with `exclude_unset`; none uses `exclude_none`.
+  `update_item` was already on `apply_updates`; `update_deployed_lot` documents and
+  implements "omitted leaves alone, null clears" for the two clearable fields.
+- Every route in `endpoints/equipment_check.py` carries a permission dependency or
+  the self-scoping described above; no route was added or removed since pass 4, so
+  no route registry changed.
+- The module builds its frontend axios instance with the shared client; no
+  `window.confirm` / `alert` / `prompt` in `modules/inventory`.
+
+### Not read (scope, stated plainly)
+
+The module is 2,141 lines of endpoints, 6,008 of service, 1,381 of schemas and
+17,255 lines of `EquipmentCheck*.tsx` pages and their tests in the frontend. This pass read the
+route inventory, every update path in the service, the builder's save and
+auto-save payloads, and the submit/seal paths only by their permission gates and
+by what the existing tests pin. It did **not** read check submission or
+auto-fail logic, the readiness/compliance service, the check form
+(`EquipmentCheckForm.tsx`), photo upload, the supply and lot-swap flows, or the
+PDF/CSV exports. A clean result says nothing about those.
+
+### Completion gate (pass 5)
+
+| Check                                                                                    | Result                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/`                                                                     | ✅ exit 0, no output                                                                                                                                                                                                                                    |
+| `black --check app/ tests/`                                                              | ✅ 1698 files unchanged                                                                                                                                                                                                                                 |
+| `isort --check-only` (changed files)                                                     | ✅ clean                                                                                                                                                                                                                                                |
+| `npm run typecheck`                                                                      | ✅ exit 0 (after narrowing the two update types)                                                                                                                                                                                                        |
+| `eslint` (3 changed frontend files)                                                      | ✅ no output                                                                                                                                                                                                                                            |
+| new backend file, mutation-checked                                                       | ✅ 21 pass with the fix; **10 fail with the service unmodified** (5 template + 5 compartment, all 500)                                                                                                                                                  |
+| marker routing                                                                           | ✅ `-m "not integration and not slow and not docker"` selects 0 of 21; `-m integration` selects 21                                                                                                                                                      |
+| new frontend test, mutation-checked                                                      | ✅ passes; fails with the compartment line reverted, and (separately) with the item line reverted                                                                                                                                                       |
+| backend tests (equipment, shift completion, readiness, NFC, print documents, last-seals) | ✅ **1034 passed, 1 skipped** (optional `pywebpush`). A first run showed 12 finance errors (`Unknown column 'charge_access'`): my local schema predated `main`'s newest migration; rebuilt with `alembic upgrade head` + `repair_schema.py`, then clean |
+| frontend `src/modules/inventory`                                                         | ✅ 113 files, **1661 passed**                                                                                                                                                                                                                           |
+| `check_route_permissions.py --strict`                                                    | ✅ 0 errors, 0 warnings (no route added or removed)                                                                                                                                                                                                     |
 
 ---
 

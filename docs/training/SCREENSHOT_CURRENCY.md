@@ -18,6 +18,35 @@ unchanged. The notes it carried are kept here, unchanged in substance.
 | `04-38-rolling-recurrence.png` | **REPLACE** | The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block |
 | `04-39-delete-event-series.png` | **REPLACE** | The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected |
 
+## Moved out of 08-admin-reports.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, visible `Screenshot needed`
+placeholders, image file names and alt text are unchanged. "Solid-tab shell"
+below means the current email design: accent tab naming the category, title on
+a tinted card, white message card, centred footer.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `08-02-organization-settings.png` | **CHECK** | A logo can be removed (**Remove logo**, shown only while one is set), and on a phone the settings body runs to the 16px page gutter. Replace if the frame shows the logo row or was taken at phone width |
+| `08-06-reports.png` | **REPLACE** | Subtitle reads "Run department reports and export them to CSV or PDF", the info panel is **How Reports Work**, every card description is rewritten, and on a tablet the grid sizes to its own width (two columns at 1024px with the sidebar open). Capture at laptop width with **All Reports** |
+| `08-08-public-portal.png` | **REPLACE** | Configuration tab shows only **Rate Limiting** and the **Security Best Practices** notice (AAA contrast, themed in dark mode); Allowed Origins and Caching are gone. Disabled banner: "The portal is disabled. External websites can't read any of your data until you enable it, create an API key, and turn on the fields to share under Data Control." The caption should not promise a domain or branding setting |
+| `08-69-compliance-requirements-config.png` | **REPLACE** | The capture shows the non-compliance notification panel's old "not yet active" label; the panel is live ("Sent by email once a day…"), and **Grace Period (days)** carries a "Not in effect yet" note |
+| `08-56-template-discard.png` | **REPLACE** | Preview shows the retired centred-masthead shell; must show the solid-tab shell. The editor has no **CSS Styles** box. Same state: unsaved edits, **Discard** beside **Save** |
+| `08-57-template-reset-dialog.png` | **REPLACE** | Dialog reads "Restores the subject, HTML body, plain-text body, styles and footer choice to the defaults. Your CC/BCC settings are kept. You cannot undo this." Preview behind it must be the solid-tab shell. Never confirm |
+| `08-58-template-send-test.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: **Send Test to Me** under the preview |
+| `08-36-template-search.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: list filtered to "welcome" |
+| `08-34-email-templates.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell, categories with **Templates** active. The blue banner reads "Every email uses the current design, including templates your department had edited — there is nothing to adopt" and points to **Previous version**; the frame shows the old "press Reset … to adopt it" text |
+| `08-64-email-footers-tab.png` | **REPLACE** | Tab opens with the **Department contact details** card, and each footer has separate **Phone**, **Email** and **Website** switches showing the value each would print. Re-take with the contact card and the first footer's switches in frame; never save |
+| `08-65-template-footer-selector.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: **Closes with** set to Public |
+| `08-66-template-variable-palette.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: the palette expanded |
+| `08-67-email-preview-design.png` | **REPLACE** | Shows the retired centred-masthead shell. Must show the solid-tab shell: the **Shift Assignment** preview's accent tab and right-hand note, the title on the tinted card, the message card. Once re-taken, alt text and caption should name those instead of "centred masthead and fact panel" |
+| `08-37-email-officers.png` | **CHECK** | The Officers tab lists a **Compliance Officer** office. The 2026-09-25 re-capture came back byte-identical; confirm the row is visible, and re-take if not |
+| Members, Training, Inventory and Events admin page headers | **REPLACE** | All four captures show a layout that no longer exists (header, headline metrics, Needs attention, section cards) |
+| Every settings capture, and every capture of a received Logbook email | **REPLACE** | Settings screens share one shell (section list / phone tab strip); every email uses the solid-tab shell |
+| Any capture of a right-aligned table | **REPLACE** | Table headings now sit over their own columns (scheduling reports, compliance officer dashboard, finance, grants and inventory tables were worst affected) |
+| Every administration capture at tablet width, or showing a blue selected toggle, a card grid or a hover-revealed action | **CHECK** | Selected toggles are primary red, card grids size to their own width, hover-revealed actions show on touch tablets, small buttons keep their icon beside the label. Laptop-width captures without these are unaffected |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of

@@ -899,6 +899,67 @@ describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
   });
 });
 
+describe('EquipmentCheckTemplateBuilder saving a NOT NULL column left blank', () => {
+  // container_type and expiration_warning_days are NOT NULL columns with no
+  // cleared state. A blank in either (a "Custom..." storage type nobody typed
+  // a label into; a warning-days box emptied by hand) used to travel as an
+  // explicit null, which the backend can only refuse -- so Save failed for that
+  // row. Omitting the key leaves the stored value alone, which is what the
+  // auto-save path in this component already does for the same two fields.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const blanked = structuredClone(template);
+    const cab = blanked.compartments[0];
+    const radio = cab?.items[0];
+    if (!cab || !radio) throw new Error('fixture changed: cab/radio missing');
+    cab.containerType = '';
+    (radio as { expirationWarningDays: number | string }).expirationWarningDays = '';
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(blanked);
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    createEquipmentCheckTemplate.mockReset();
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    reorderItems.mockReset();
+    reorderItems.mockResolvedValue(undefined);
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+
+  const payloadFor = (mock: typeof updateCompartment, id: string): Record<string, unknown> => {
+    const call = mock.mock.calls.find((args: unknown[]) => args[0] === id);
+    if (!call) throw new Error(`no update call for ${id}`);
+    return call[1] as Record<string, unknown>;
+  };
+
+  it('leaves container_type and expiration_warning_days out of the payload', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() => expect(updateCompartment).toHaveBeenCalled());
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalled());
+    // Compared on the wire form: `{ a: undefined }` still HAS key 'a' in JS, and
+    // it is JSON.stringify that drops it.
+    expect(JSON.stringify(payloadFor(updateCompartment, 'cab'))).not.toContain('container_type');
+    expect(JSON.stringify(payloadFor(updateCheckItem, 'radio'))).not.toContain('expiration_warning_days');
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();

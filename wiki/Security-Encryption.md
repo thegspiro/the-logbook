@@ -10,7 +10,7 @@ The Logbook uses multi-layer encryption to protect data at rest, in transit, and
 | ----------------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
 | **Passwords**           | Argon2id                     | Password hashing (irreversible)                                                             |
 | **Data at rest**        | AES-256-GCM                  | Authenticated encryption of sensitive database fields (legacy Fernet values still readable) |
-| **Data in transit**     | TLS 1.3                      | HTTPS for all client-server communication                                                   |
+| **Data in transit**     | TLS 1.2 / 1.3                | HTTPS for all client-server communication                                                   |
 | **Audit log integrity** | HMAC-SHA256 keyed hash chain | Tamper-evident audit trail                                                                  |
 
 ---
@@ -50,15 +50,27 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 
 ### What Is Encrypted
 
-- Sensitive personal information (SSN, medical data when applicable)
-- **Medical-screening PHI** _(2026-08-09)_ — see below
-- API keys and integration credentials (including Cloudflare API tokens, Google/Microsoft OAuth secrets, SMTP passwords)
-- MFA secrets
-- Backup encryption keys
+Field-level encryption covers the columns and settings below. Everything else
+in the database — names, contact details, addresses, dates of birth — is
+stored in plain columns and protected by access control, not by field
+encryption; encrypt the database volume or disk if you need those covered at
+rest. The application stores no Social Security numbers.
 
-> **Medical-screening PHI at rest** _(2026-08-09, app-review MS-1)_. Four columns
-> on `screening_records` now use the transparent `EncryptedText` /
-> `EncryptedJSON` column types rather than plain text:
+| Where                              | What                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `screening_records`                | Medical-screening PHI: `provider_name`, `result_summary`, `result_data`, `notes` (see below)                                                                                                                                                                                                                                                       |
+| `shift_completion_reports`         | Officer evaluation narrative: `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes`                                                                                                                                                                                                                                  |
+| `prospective_members.status_token` | The applicant's status-page credential                                                                                                                                                                                                                                                                                                             |
+| `users`                            | MFA (TOTP) secret and MFA recovery codes                                                                                                                                                                                                                                                                                                           |
+| `external_training_providers`      | `api_key`, `api_secret`, `client_secret`                                                                                                                                                                                                                                                                                                           |
+| Integrations                       | Each integration's secrets (`encrypted_config`)                                                                                                                                                                                                                                                                                                    |
+| Organization settings JSON         | Email secrets (`smtp_password`, `google_app_password`, `microsoft_app_password`, `microsoft_client_secret`, `cloudflare_api_token`), file-storage secrets (`google_drive_client_secret`, `onedrive_client_secret`, `s3_secret_access_key`) and OAuth client secrets (`google_client_secret`, `microsoft_client_secret`, `authentik_client_secret`) |
+| Onboarding sessions                | Email and file-storage configuration entered during setup                                                                                                                                                                                                                                                                                          |
+| Short-lived replay cache           | A shown-once secret (such as new recovery codes) kept briefly so a retried request can receive it                                                                                                                                                                                                                                                  |
+| Uploaded files                     | Every file written under the uploads root, each with its own AES-256-GCM key wrapped by a key derived from `ENCRYPTION_KEY`; files stored before file encryption existed stay readable until `scripts/encrypt_uploads.py` encrypts them                                                                                                            |
+
+> **Medical-screening PHI at rest.** Four columns on `screening_records` use
+> the transparent `EncryptedText` / `EncryptedJSON` column types:
 >
 > | Column           | Type            | Holds                                               |
 > | ---------------- | --------------- | --------------------------------------------------- |
@@ -68,18 +80,18 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 > | `notes`          | `EncryptedText` | Free-text notes                                     |
 >
 > The column types decrypt on read and encrypt on write, so service and endpoint
-> code is unchanged. **Legacy plaintext values remain readable** — a value that
+> code needs no changes. **Legacy plaintext values remain readable** — a value that
 > does not carry the ciphertext marker is returned as-is — so no backfill is
 > required for correctness; `backend/scripts/reencrypt_to_aesgcm.py` covers
 > re-encrypting them as a background task.
 >
 > **Decryption failures fail closed.** A value that cannot be decrypted raises
 > rather than being returned as ciphertext or silently as empty — the same rule
-> applied to external-training credentials on the same day.
+> external-training credentials follow.
 
 > **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_app_password`, `microsoft_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
-### Key Rotation _(2026-07-31)_
+### Key Rotation
 
 Rotation uses a **legacy-key ring**: decryption tries the current
 `ENCRYPTION_KEY` first, then each key listed in `ENCRYPTION_KEYS_LEGACY`
@@ -114,9 +126,14 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 
 ---
 
-## TLS 1.3 (Data in Transit)
+## TLS (Data in Transit)
 
-All data between clients and the server should be encrypted via HTTPS in production.
+All data between clients and the server should be encrypted via HTTPS in
+production. The nginx configuration shipped in `infrastructure/nginx/`
+(`nginx.conf` and `docker.conf`) accepts **TLS 1.2 and TLS 1.3**
+(`ssl_protocols TLSv1.2 TLSv1.3`); TLS 1.0 and 1.1 are refused. To require
+TLS 1.3 only, change that line to `ssl_protocols TLSv1.3;` — clients that
+cannot negotiate TLS 1.3 will then fail to connect.
 
 ### Setting Up HTTPS
 
@@ -129,7 +146,7 @@ server {
 
     ssl_certificate /etc/ssl/certs/your-cert.pem;
     ssl_certificate_key /etc/ssl/private/your-key.pem;
-    ssl_protocols TLSv1.3;
+    ssl_protocols TLSv1.2 TLSv1.3;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -158,7 +175,7 @@ The audit logging system uses a blockchain-inspired **keyed HMAC-SHA256** hash c
 
 1. Each audit log entry includes the hash of the previous entry
 2. Any modification to a past entry breaks the chain
-3. Periodic checkpoints verify chain integrity
+3. Weekly checkpoints anchor verified ranges of the chain
 4. 7-year retention (2555 days), exceeds HIPAA 6-year minimum
 
 ### Verifying Integrity

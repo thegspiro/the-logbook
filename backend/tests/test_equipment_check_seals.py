@@ -7,8 +7,6 @@ that decide what reaches the record: which seals are accepted, and what the
 submit schemas carry.
 """
 
-from datetime import datetime, timezone
-
 import pytest
 from pydantic import ValidationError
 
@@ -16,7 +14,6 @@ from app.schemas.equipment_check import (
     CheckSealSubmit,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
-    LastSealRecord,
     ShiftEquipmentCheckCreate,
     StandaloneEquipmentCheckCreate,
 )
@@ -109,16 +106,3 @@ class TestSealSubmission:
             ],
         )
         assert payload.seals[0].cleared_item_count == 4
-
-
-class TestLastSealRecord:
-    def test_the_previous_seal_serialises_camelCase_for_the_form(self):
-        record = LastSealRecord(
-            seal_number="M2-40817",
-            intact=True,
-            checked_at=datetime(2026, 8, 9, tzinfo=timezone.utc),
-        )
-        dumped = record.model_dump(by_alias=True)
-        assert dumped["sealNumber"] == "M2-40817"
-        assert dumped["intact"] is True
-        assert "checkedAt" in dumped

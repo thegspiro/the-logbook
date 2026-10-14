@@ -45,7 +45,7 @@ from its open list.
 | B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ✅     |
-| B7  | equipment-check            | EC2    | ⬜     |
+| B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ⬜     |
 | B9  | membership pipeline        | MP2    | ⬜     |
 | B10 | messaging & communications | MSG2   | ✅     |
@@ -3089,3 +3089,33 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   `tsc` 0 · new file 17 pass, 4 fail without the fix, 0 under the unit job's marker
   expression · related backend suites **1607 passed, 1 skipped**. See
   meetings-minutes.md → Pass 5. Next: B7 equipment-check.
+- **B7 equipment-check ✅ (pass 5) — template and compartment edits answered a
+  null NOT NULL column with a 500, and the builder could send one (EC2-6/EC2-7).**
+  Drove the three update endpoints over HTTP against the real schema, sending
+  `null` for every NOT NULL field the schema can name. `update_template` and
+  `update_compartment` still applied their payload with a bare `setattr` loop, so
+  10 of 21 cases (5 template + 5 compartment fields) were 500s on the unmodified
+  service; `update_item` was already on `apply_updates` and the 3 nullable
+  controls already cleared. **Fixed** by moving both loops onto `apply_updates`.
+  **Reachable from the UI (EC2-7):** the builder's batch Save sent
+  `container_type: null` for a "Custom…" storage type left blank and
+  `expiration_warning_days: null` for an emptied warning-days box — both NOT NULL —
+  while its own auto-save path already omitted them. Both now omit the key; the two
+  update types lose `| null` so the compiler enforces it; the frontend test was
+  mutation-checked per field. **Dead code (EC2-8):** `LastSealRecord` in
+  `schemas/equipment_check.py` had no caller in `app/` (the endpoint camel-cases a
+  bare dict; `test_last_seals_response_shape.py` pins the real shape); removed with
+  the test that only exercised the class. My scan had skipped `tests/`, so the
+  first removal failed collection on an importer — the scan's scope is now stated
+  in the finding. **Stale record corrected:** the app-review doc still listed EC-7
+  and EC-11 as open; both were resolved on 2026-10-11 (KNOWN_LIMITATIONS) and the
+  routes verified. One existing service test had been passing without exercising a
+  write (its compartment stand-in lacked `name`, and the old loop skipped unknown
+  attributes), fixed with a one-line stand-in change. Nothing needs an owner
+  decision. **Not read:** check submission and auto-fail logic, the readiness /
+  compliance service, `EquipmentCheckForm`, photo upload, supply and lot-swap, and
+  the PDF/CSV exports (module: 2,141 + 6,008 + 1,381 backend lines, 17,255 frontend
+  lines incl. tests). Gate: flake8 / black / isort / tsc / eslint clean · backend
+  related suites **1034 passed, 1 skipped** · frontend inventory **1661 passed** ·
+  new backend file 21 pass, 10 fail without the fix, 0 under the unit job's marker
+  expression. See equipment-check.md → Pass 5. Next: B8 documents.

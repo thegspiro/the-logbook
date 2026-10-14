@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3225](https://github.com/thegspiro/the-logbook/pull/3225)**:
+branch `claude/security-review-finance-approvals-p9`, Feature 05 (Finance &
+approvals), pass 9. PR #3223 (Feature 04, pass 9) had merged touching only
+review docs, so it is not a recordable event; rows 03 and 04 are set ✅ here
+because `main`'s table still showed them ⬜ after both PRs merged. 0 fixed,
+0 new findings: the real delta since pass 8 (PR #3137) — 13 commits adding
+cash advances, restricted funds, budget charge restrictions, functional
+expense classes and a QuickBooks dues export, 16 new routes (108 → 124) —
+was read route by route and found sound. FIN8-05-1 (MED) and FIN-30 (LOW)
+re-confirmed open, unchanged. See `FIN-05-finance-approvals.md`'s **Pass 9**
+section. Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections
+& ballots).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 9, PR #3223, merged 2026-10-14, docs-only), preserved for history</summary>
+
 **PR [#3223](https://github.com/thegspiro/the-logbook/pull/3223)**: branch
 `claude/security-review-storefront-payments`, Feature 04 (Storefront &
 payments), pass 9 (watchdog pickup): delta re-verify since pass 8 (PR
@@ -23,6 +39,8 @@ payments), pass 9 (watchdog pickup): delta re-verify since pass 8 (PR
 unchanged. See `SF-04-storefront-payments.md`'s **Pass 9** section and the
 Log entry above. Row 04 → ✅ (pending this PR's merge); next is Feature 05
 (Finance & approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
@@ -19064,9 +19082,9 @@ here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -19103,6 +19121,42 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — Feature 05 (Finance & approvals, pass 9) — 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+
+**Step 0.** No `claude/security-review-*` PR was open on GitHub. PR #3223
+(Feature 04, pass 9) had merged touching only `PROGRESS.md` and
+`SF-04-storefront-payments.md`, so its merge is not recorded as an event.
+`main`'s rotation table still showed rows 03 and 04 as ⬜ although PRs #3215
+and #3223 had merged; both are set ✅ here. Row 05 was the next `⬜`. The
+branch is `claude/security-review-finance-approvals-p9`, not
+`claude/security-review-finance`, because PR #3137 already used that name
+(CLAUDE.md pitfall #24).
+
+**Delta.** Baseline `8dc5260b9` (PR #3137). 13 non-merge commits: cash
+advances under the accountable plan, restricted funds backed by fundraising
+campaigns, budget sub-line charge restrictions, functional expense classes,
+an accountable-plan substantiation deadline, a QuickBooks dues export, FIN-4's
+own-dues refusal, and mypy typing. 16 new routes, each read with its gate;
+table in the findings file.
+
+**Verified good.** The two session-only charge-access routes confine reads
+and writes to categories the caller owns (or `finance.manage`), validate
+positions in-org and audit the write. Advances are scoped to the member for
+callers without view/manage. Returns and expense reports against an advance
+lock it and read its balance with locking reads, and the member owing the
+money cannot record its return. Every fund and budget line a request names
+is validated in-org (`assert_chargeable`, `_validate_finance_fks`) and
+checked against the charge rule (`assert_may_charge`) on every create and
+update path.
+
+**Standing.** FIN8-05-1 (MED, `decide_request` has no separation-of-duties
+guard) and FIN-30 (LOW, `list_dues_payments` unpaginated) are unchanged and
+remain flagged.
+
+**Gate.** flake8, black, isort (app/tests/alembic), `validate_migrations.py
+--strict`, the finance pytest selection (1,116 passed after bringing the
+local database to head), frontend typecheck and lint — all clean.
 
 ### 2026-10-14 — PR #3215 merge recorded (docs-only); Feature 04 (Storefront & payments, pass 9, watchdog pickup) — 0 fixed, 0 new findings
 

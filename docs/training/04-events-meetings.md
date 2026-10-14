@@ -1397,7 +1397,7 @@ headline numbers and a **Needs attention** list. The built-in numbers are
 **Upcoming**, **RSVPs this week** and **Check-ins logged**; the fourth is
 always the count the **Needs attention** list is about. Choosing the numbers,
 and who may see the list, is covered in
-[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
+[Administration & Reports → Administration Hubs](./08-admin-reports.md#administration-hubs).
 
 **The Event settings sections:**
 
