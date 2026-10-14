@@ -1,5 +1,15 @@
 # Screenshot currency
 
+## Moved out of 17-privacy-data-rights.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `17-04-profile-as-member.png` | **REPLACE** | The **ID Card** button at the top right is gone (an ordinary member does not get a colleague's ID card), and the Contact Information panel reads "No contact details shared. This member has not added any, or your department keeps them private." Re-shoot the same profile as the same ordinary member |
+
 ## Moved out of 12-grants-fundraising.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Image file names
