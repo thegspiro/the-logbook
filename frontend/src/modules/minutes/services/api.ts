@@ -25,6 +25,14 @@ import type {
   MinutesVerification,
   MyActionItem,
   OpenActionItem,
+  AdoptionDetails,
+  ClosedSession,
+  ClosedSessionInput,
+  MinutesSuggestion,
+  MinutesTemplate,
+  TemplateCreate,
+  TemplateListItem,
+  TemplateUpdate,
 } from '../types/minutes';
 import { asArray } from '../../../utils/asArray';
 
@@ -69,8 +77,15 @@ export const minutesService = {
     return response.data;
   },
 
-  async approve(minutesId: string): Promise<MeetingMinutes> {
-    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/approve`);
+  /** Adopt circulated minutes ("approve" on the wire), recording how the body adopted them. */
+  async approve(minutesId: string, adoption?: AdoptionDetails): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/approve`, adoption ?? null);
+    return response.data;
+  },
+
+  /** Take circulated minutes back to draft so suggestions can be worked in. */
+  async recall(minutesId: string): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/recall`);
     return response.data;
   },
 
@@ -126,8 +141,12 @@ export const minutesService = {
 
   // ── Cross-module Bridge ──
 
-  async createFromMeeting(meetingId: string): Promise<MeetingMinutes> {
-    const response = await api.post<MeetingMinutes>(`/minutes-records/from-meeting/${meetingId}`);
+  async createFromMeeting(meetingId: string, templateId?: string): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(
+      `/minutes-records/from-meeting/${meetingId}`,
+      null,
+      templateId ? { params: { template_id: templateId } } : {}
+    );
     return response.data;
   },
 
@@ -256,5 +275,90 @@ export const minutesService = {
       params: { include_closed: includeClosed },
     });
     return asArray(response.data);
+  },
+
+  // ── Outlines (the "templates" of the API) ──
+
+  async getOutlines(meetingType?: string): Promise<TemplateListItem[]> {
+    const response = await api.get<TemplateListItem[]>('/minutes-records/templates', {
+      params: meetingType ? { meeting_type: meetingType } : {},
+    });
+    return asArray(response.data);
+  },
+
+  async getOutline(outlineId: string): Promise<MinutesTemplate> {
+    const response = await api.get<MinutesTemplate>(`/minutes-records/templates/${outlineId}`);
+    return response.data;
+  },
+
+  async createOutline(data: TemplateCreate): Promise<MinutesTemplate> {
+    const response = await api.post<MinutesTemplate>('/minutes-records/templates', data);
+    return response.data;
+  },
+
+  async updateOutline(outlineId: string, data: TemplateUpdate): Promise<MinutesTemplate> {
+    const response = await api.put<MinutesTemplate>(`/minutes-records/templates/${outlineId}`, data);
+    return response.data;
+  },
+
+  async deleteOutline(outlineId: string): Promise<void> {
+    await api.delete(`/minutes-records/templates/${outlineId}`);
+  },
+
+  /** Lay an outline over draft minutes, keeping everything already written. */
+  async applyOutline(minutesId: string, outlineId: string): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/apply-outline`, {
+      template_id: outlineId,
+    });
+    return response.data;
+  },
+
+  // ── Closed sessions ──
+
+  async getClosedSessions(minutesId: string): Promise<ClosedSession[]> {
+    const response = await api.get<ClosedSession[]>(`/minutes-records/${minutesId}/closed-sessions`);
+    return asArray(response.data);
+  },
+
+  async addClosedSession(minutesId: string, data: ClosedSessionInput): Promise<ClosedSession> {
+    const response = await api.post<ClosedSession>(`/minutes-records/${minutesId}/closed-sessions`, data);
+    return response.data;
+  },
+
+  async updateClosedSession(minutesId: string, sessionId: string, data: ClosedSessionInput): Promise<ClosedSession> {
+    const response = await api.put<ClosedSession>(`/minutes-records/${minutesId}/closed-sessions/${sessionId}`, data);
+    return response.data;
+  },
+
+  async deleteClosedSession(minutesId: string, sessionId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/closed-sessions/${sessionId}`);
+  },
+
+  // ── Member suggestions during review ──
+
+  async getSuggestions(minutesId: string): Promise<MinutesSuggestion[]> {
+    const response = await api.get<MinutesSuggestion[]>(`/minutes-records/${minutesId}/suggestions`);
+    return asArray(response.data);
+  },
+
+  async addSuggestion(
+    minutesId: string,
+    data: { section_key?: string | undefined; comment: string; proposed_text?: string | undefined }
+  ): Promise<MinutesSuggestion> {
+    const response = await api.post<MinutesSuggestion>(`/minutes-records/${minutesId}/suggestions`, data);
+    return response.data;
+  },
+
+  async resolveSuggestion(
+    minutesId: string,
+    suggestionId: string,
+    status: 'accepted' | 'declined',
+    note?: string
+  ): Promise<MinutesSuggestion> {
+    const response = await api.put<MinutesSuggestion>(`/minutes-records/${minutesId}/suggestions/${suggestionId}`, {
+      status,
+      note: note || null,
+    });
+    return response.data;
   },
 };

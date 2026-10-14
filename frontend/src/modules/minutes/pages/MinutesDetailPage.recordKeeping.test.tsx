@@ -97,7 +97,8 @@ describe('MinutesDetailPage record keeping', () => {
     expect(screen.queryByRole('button', { name: 'Edit attendance' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Carry forward open items' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'File signed copy' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'File an election result' })).not.toBeInTheDocument();
+    // An election can close after adoption; its result is still filed, as an addendum.
+    expect(screen.getByRole('button', { name: 'File an election result' })).toBeInTheDocument();
   });
 
   it('gives a plain member no controls over any of it', async () => {

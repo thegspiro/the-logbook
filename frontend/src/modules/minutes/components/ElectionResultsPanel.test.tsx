@@ -68,7 +68,7 @@ describe('ElectionResultsPanel', () => {
   });
 
   it('shows the filed tally with turnout, quorum and the winner', async () => {
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit={false} />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
 
     expect(await screen.findByRole('heading', { name: 'Officer election' })).toBeInTheDocument();
     expect(screen.getByText(/12 eligible · 9 ballots cast · 75% turnout · Quorum met/)).toBeInTheDocument();
@@ -82,21 +82,25 @@ describe('ElectionResultsPanel', () => {
 
   it('renders nothing for a reader when no result is filed', async () => {
     mockList.mockResolvedValue([]);
-    const { container } = renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit={false} />);
+    const { container } = renderWithRouter(
+      <ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />
+    );
     await waitFor(() => expect(mockList).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing when the results cannot be loaded and the user cannot edit', async () => {
     mockList.mockRejectedValue(new Error('404'));
-    const { container } = renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit={false} />);
+    const { container } = renderWithRouter(
+      <ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />
+    );
     await waitFor(() => expect(mockList).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
   });
 
   it('invites a manager to file one when none is filed', async () => {
     mockList.mockResolvedValue([]);
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
     expect(await screen.findByText(/No election results filed/)).toBeInTheDocument();
   });
 
@@ -114,7 +118,7 @@ describe('ElectionResultsPanel', () => {
     ]);
     mockFile.mockResolvedValue(filed);
     const user = userEvent.setup();
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
 
     await user.click(await screen.findByRole('button', { name: 'File an election result' }));
     const dialog = await screen.findByRole('dialog');
@@ -129,7 +133,7 @@ describe('ElectionResultsPanel', () => {
   it('says so when there is no closed election', async () => {
     mockList.mockResolvedValue([]);
     const user = userEvent.setup();
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
 
     await user.click(await screen.findByRole('button', { name: 'File an election result' }));
     expect(await screen.findByText('There are no closed elections to file.')).toBeInTheDocument();
@@ -140,7 +144,7 @@ describe('ElectionResultsPanel', () => {
     mockImportable.mockResolvedValue([{ id: 'e1', title: 'Officer election', already_imported: false }]);
     mockFile.mockRejectedValue(new Error('Only a closed election has a result to file with the minutes'));
     const user = userEvent.setup();
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
 
     await user.click(await screen.findByRole('button', { name: 'File an election result' }));
     await user.click(await screen.findByRole('button', { name: 'File result' }));
@@ -152,7 +156,7 @@ describe('ElectionResultsPanel', () => {
   it('removes a filed result only after confirmation', async () => {
     mockRemove.mockResolvedValue(undefined);
     const user = userEvent.setup();
-    renderWithRouter(<ElectionResultsPanel minutesId="m1" canEdit />);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
 
     await user.click(await screen.findByRole('button', { name: 'Remove' }));
     await user.click(await screen.findByRole('button', { name: 'Keep it' }));
@@ -161,5 +165,51 @@ describe('ElectionResultsPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Remove' }));
     await user.click(await screen.findByRole('button', { name: 'Remove result' }));
     await waitFor(() => expect(mockRemove).toHaveBeenCalledWith('m1', 'r1'));
+  });
+  describe('after the minutes were circulated', () => {
+    const addendum = { ...filed, id: 'r2', is_addendum: true };
+
+    beforeEach(() => {
+      mockList.mockReset();
+      mockList.mockResolvedValue([filed, addendum]);
+    });
+
+    it('labels an addendum and offers no way to remove it', async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted={false} />);
+
+      expect(await screen.findByText('Addendum')).toBeInTheDocument();
+      expect(screen.getByText(/not part of the text that was adopted/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    });
+
+    it('keeps Remove on a drafted result but not on the addendum beside it', async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
+
+      await screen.findByText('Addendum');
+      expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1);
+    });
+
+    it('says the result will be filed as a permanent addendum and flags the election held here', async () => {
+      mockImportable.mockResolvedValue([
+        { id: 'e2', title: 'Run-off', already_imported: false, linked_to_meeting: true },
+        { id: 'e3', title: 'Other vote', already_imported: false, linked_to_meeting: false },
+      ]);
+      const user = userEvent.setup();
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted={false} />);
+
+      await user.click(await screen.findByRole('button', { name: 'File an election result' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(/filed as a permanent, dated addendum/)).toBeInTheDocument();
+      expect(await within(dialog).findAllByText('Held at this meeting')).toHaveLength(1);
+    });
+
+    it('does not mention an addendum while the minutes are still a draft', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile canRemoveDrafted />);
+
+      await user.click(await screen.findByRole('button', { name: 'File an election result' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).queryByText(/permanent, dated addendum/)).not.toBeInTheDocument();
+    });
   });
 });

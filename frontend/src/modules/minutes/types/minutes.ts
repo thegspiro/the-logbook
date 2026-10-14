@@ -15,6 +15,8 @@ export interface SectionEntry {
   key: string;
   title: string;
   content: string;
+  /** From the outline: a required section needs text before minutes circulate. */
+  required?: boolean;
 }
 
 export interface TemplateSectionEntry {
@@ -30,7 +32,7 @@ export interface TemplateSectionEntry {
 export interface HeaderConfig {
   org_name?: string;
   logo_url?: string;
-  subtitle?: string;
+  subtitle?: string | null | undefined;
   show_date?: boolean;
   show_meeting_type?: boolean;
 }
@@ -40,7 +42,7 @@ export interface FooterConfig {
   center_text?: string;
   right_text?: string;
   show_page_numbers?: boolean;
-  confidentiality_notice?: string;
+  confidentiality_notice?: string | null | undefined;
 }
 
 // ── Template Types ──
@@ -71,7 +73,7 @@ export interface TemplateListItem {
 
 export interface TemplateCreate {
   name: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type: MeetingType;
   is_default?: boolean;
   sections: TemplateSectionEntry[];
@@ -81,7 +83,7 @@ export interface TemplateCreate {
 
 export interface TemplateUpdate {
   name?: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type?: MeetingType;
   is_default?: boolean;
   sections?: TemplateSectionEntry[];
@@ -119,6 +121,10 @@ export interface Motion {
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
+  /** The ballot that decided the motion, when it went to a ballot. */
+  election_id?: string | null;
+  ballot_item_id?: string | null;
+  election_title?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -182,6 +188,11 @@ export interface MeetingMinutes {
   rejected_at?: string;
   rejected_by?: string;
   rejection_reason?: string;
+  /** When the body voted to adopt, as presented or as amended, and where. */
+  adopted_on?: string | null;
+  adopted_as_amended?: boolean | null;
+  adopting_minutes_id?: string | null;
+  adopting_minutes_title?: string | null;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -243,6 +254,8 @@ export interface MotionCreate {
   votes_against?: number | undefined;
   votes_abstain?: number | undefined;
   order?: number | undefined;
+  election_id?: string | undefined;
+  ballot_item_id?: string | undefined;
 }
 
 export interface MotionUpdate {
@@ -255,6 +268,8 @@ export interface MotionUpdate {
   votes_against?: number;
   votes_abstain?: number;
   order?: number;
+  election_id?: string | null;
+  ballot_item_id?: string | null;
 }
 
 /** A member an action item may be assigned to (W52-6). */
@@ -308,6 +323,11 @@ export interface AttendanceSuggestions {
 
 // ── Election results ──
 
+export interface BallotItemRef {
+  id: string;
+  title: string;
+}
+
 export interface ImportableElection {
   id: string;
   title: string;
@@ -315,6 +335,9 @@ export interface ImportableElection {
   closed_at?: string | null;
   positions?: string[] | null;
   already_imported: boolean;
+  /** Held at this meeting's event or recorded against its meeting record. */
+  linked_to_meeting?: boolean;
+  ballot_items?: BallotItemRef[];
 }
 
 export interface FiledCandidateResult {
@@ -351,6 +374,8 @@ export interface MinutesElectionResult {
   election_title: string;
   election_closed_at?: string | null;
   snapshot: ElectionResultSnapshot;
+  /** Filed after the minutes were circulated: permanent, outside the adopted text. */
+  is_addendum?: boolean;
   captured_by?: string | null;
   captured_by_name?: string | null;
   created_at: string;
@@ -400,4 +425,62 @@ export interface MinutesVerification {
   current_hash?: string | null;
   changed: string[];
   detail: string;
+}
+
+// ── Closed sessions ──
+
+export interface ClosedSessionParticipant {
+  user_id?: string | null;
+  name: string;
+  joined_at?: string | null;
+  left_at?: string | null;
+}
+
+export interface ClosedSession {
+  id: string;
+  minutes_id: string;
+  motion_id?: string | null;
+  reason: string;
+  legal_basis?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  participants: ClosedSessionParticipant[];
+  summary?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClosedSessionInput {
+  reason: string;
+  legal_basis: string | null;
+  started_at: string;
+  ended_at: string | null;
+  motion_id: string | null;
+  participants: ClosedSessionParticipant[];
+  summary: string | null;
+}
+
+// ── Review ──
+
+export type SuggestionStatus = 'open' | 'accepted' | 'declined';
+
+export interface MinutesSuggestion {
+  id: string;
+  minutes_id: string;
+  section_key?: string | null;
+  comment: string;
+  proposed_text?: string | null;
+  status: SuggestionStatus;
+  resolution_note?: string | null;
+  resolved_by_name?: string | null;
+  resolved_at?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+}
+
+export interface AdoptionDetails {
+  adopted_on?: string | undefined;
+  adopting_minutes_id?: string | undefined;
+  as_amended?: boolean | undefined;
 }

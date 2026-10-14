@@ -796,11 +796,12 @@ made these choices where nothing had been decided. Each is easy to reverse.
   rather file the signed copy as a Document and leave the minutes wholly
   untouched, remove the `signed_copy` branch in `MinutesRecordService.store_minutes_attachment`.
 - **Election results are filed by hand.** A manager imports a closed election's
-  result into draft minutes; nothing files it when the election is certified.
-  The copy is taken at that moment: a result revised afterwards (a voided ballot
-  after certification, W50) is not reflected until the manager removes the
-  filed result and files it again, which is only possible while the minutes are
-  a draft.
+  result into the minutes; nothing files it when the election is certified.
+  The copy is taken at that moment. In a draft it can be removed and filed again
+  if the election is revised (a voided ballot after certification, W50); once the
+  minutes are circulated or adopted it is filed as a permanent addendum and
+  cannot be removed, so a later correction is a second addendum, not a
+  replacement.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.
@@ -815,9 +816,22 @@ made these choices where nothing had been decided. Each is easy to reverse.
   re-announced. The due-date reminders in `run_action_item_reminders` still go
   only to the in-app bell, not to email — at odds with the email-first rule
   (CLAUDE.md pitfall #18), and unchanged by this work.
-- **Not built:** a structured executive-session record (who entered and left a
-  closed session, and when — `note` on a roll-call line is the only place today),
-  and a link from a motion to the ballot item or election that decided it.
+- **Confirmed by the owner (2026-10-14).** Minutes are circulated for review
+  and adopted (the API statuses are unchanged); any member who can view minutes
+  may suggest changes; an election that runs past the meeting is attached to the
+  meeting's minutes afterwards as an addendum; a closed session is a structured
+  record with participants and times; a motion can name the ballot that decided
+  it; and the departments' standard order of business is an editable outline.
+  This is a new install, so no earlier minutes needed converting.
+- **Circulating minutes does not email members.** They are visible in the
+  Minutes screen, and the secretary announces them as the department usually
+  does. Emailing on circulation would be a new `EmailKind`; say if it is wanted.
+- **A suggestion changes nothing by itself.** Accepting one marks it and makes
+  the adoption default to "as amended"; the secretary recalls the minutes to
+  draft to work the change in and circulates again.
+- **Outline changes do not reach minutes already written.** Deleting or editing
+  an outline affects only minutes started from it afterwards, or an outline
+  applied to a draft.
 
 ## File Storage — The Onboarding Platform Choice Has No Reader (2026-10-08)
 
