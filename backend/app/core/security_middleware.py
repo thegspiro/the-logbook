@@ -1695,6 +1695,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/csv",
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
+        "/api/v1/finance/export/advance-accounts",
         "/api/v1/finance/export/dues-accounts",
         "/api/v1/finance/export/logs",
         "/api/v1/finance/export/mappings",

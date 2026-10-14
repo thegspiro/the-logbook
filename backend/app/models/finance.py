@@ -1131,6 +1131,19 @@ class ExpenseReport(Base):
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The cash advance (a check request marked ``is_advance``) this report
+    # accounts for, and how much of the report the advance covers, fixed when
+    # the report is submitted (app/services/cash_advances.py). The rest is
+    # reimbursed to the member as usual.
+    advance_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    advance_applied: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     # When the member submitted the report. Null on reports submitted before
     # this was recorded (2026-10-12).
     submitted_at: Mapped[Optional[datetime]] = mapped_column(
@@ -1311,6 +1324,12 @@ class CheckRequest(Base):
         nullable=True,
         index=True,
     )
+    # Cash advanced to the requesting member ahead of an expense, under the
+    # accountable plan (app/services/cash_advances.py). An advance charges no
+    # budget line or fund: the expense report that accounts for it does.
+    is_advance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
     payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -1412,6 +1431,56 @@ class CheckRequest(Base):
             "organization_id",
             "status",
         ),
+    )
+
+
+class AdvanceReturn(Base):
+    """Unspent cash a member handed back against a cash advance.
+
+    Append-only once exported; one recorded by mistake may be deleted until a
+    QuickBooks export has carried it.
+    """
+
+    __tablename__ = "advance_returns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    advance_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    returned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recorded_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_advance_returns_advance", "advance_id"),
+        Index("ix_advance_returns_org_returned", "organization_id", "returned_at"),
     )
 
 

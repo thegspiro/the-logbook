@@ -465,6 +465,18 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance: cash advances (2026-10-14)
+
+Migration `a39a1999776f` adds `check_requests.is_advance`,
+`expense_reports.advance_id` / `advance_applied` and a new `advance_returns`
+table. Nothing existing changes: no check is an advance until a member asks for
+one, and an export needs the new **Cash advances** accounts on **Finance ›
+QuickBooks Export** only once an advance, a report accounting for one or
+returned cash falls in its period — it is refused, naming them, until then.
+Downgrading drops the table and the columns: every advance reads as an ordinary
+check with no budget line, and the reports and returns recorded against it are
+lost.
+
 ### QuickBooks: dues payments are exported (2026-10-14)
 
 Migration `0d32069fea4d` adds QuickBooks accounts to dues schedules and an
