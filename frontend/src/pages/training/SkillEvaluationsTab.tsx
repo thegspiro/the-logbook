@@ -347,16 +347,28 @@ const SkillEvaluationsTab: React.FC = () => {
                 </div>
               </dl>
               <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                <button type="button" className="btn-secondary" onClick={() => openEdit(skill)}>
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2"
+                  onClick={() => openEdit(skill)}
+                >
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                   Edit
                 </button>
-                <button type="button" className="btn-secondary" onClick={() => void toggleActive(skill)}>
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2"
+                  onClick={() => void toggleActive(skill)}
+                >
                   <Power className="h-4 w-4" aria-hidden="true" />
                   {skill.active ? 'Deactivate' : 'Reactivate'}
                 </button>
                 {skill.checkoff_count === 0 && (
-                  <button type="button" className="btn-secondary" onClick={() => void remove(skill)}>
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-2"
+                    onClick={() => void remove(skill)}
+                  >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                     Delete
                   </button>
@@ -378,7 +390,7 @@ const SkillEvaluationsTab: React.FC = () => {
             <button type="button" className="btn-secondary" onClick={close} disabled={saving}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={saving}>
+            <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               Save
             </button>

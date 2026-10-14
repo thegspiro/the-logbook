@@ -319,7 +319,12 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
                 }[saveState]
               }
             </span>
-            <button type="button" className="btn-primary" disabled={submitting} onClick={() => void submit()}>
+            <button
+              type="button"
+              className="btn-primary inline-flex items-center gap-2"
+              disabled={submitting}
+              onClick={() => void submit()}
+            >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               Submit answers
             </button>

@@ -230,7 +230,11 @@ const DuesManagementPage: React.FC = () => {
         <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
       </div>
       {canManage && (
-        <button type="button" onClick={() => setDialog({ kind: 'schedule' })} className="btn-primary">
+        <button
+          type="button"
+          onClick={() => setDialog({ kind: 'schedule' })}
+          className="btn-primary inline-flex items-center gap-2"
+        >
           <Plus className="h-4 w-4" />
           New schedule
         </button>
@@ -312,7 +316,7 @@ const DuesManagementPage: React.FC = () => {
                   onClick={() => void handleGenerate(selectedSchedule)}
                   disabled={busy || !selectedSchedule.isActive}
                   title={selectedSchedule.isActive ? undefined : 'Reactivate the schedule to generate dues from it'}
-                  className="btn-primary"
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Generate dues
@@ -320,7 +324,7 @@ const DuesManagementPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDialog({ kind: 'schedule', schedule: selectedSchedule })}
-                  className="btn-secondary"
+                  className="btn-secondary inline-flex items-center gap-2"
                 >
                   <Pencil className="h-4 w-4" />
                   Edit schedule
@@ -448,7 +452,7 @@ const DuesManagementPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setDialog({ kind: 'payment', dues: md })}
-                              className="btn-secondary"
+                              className="btn-secondary inline-flex items-center gap-2"
                               aria-label={`Record a payment for ${label}`}
                             >
                               <Receipt className="h-4 w-4" />
