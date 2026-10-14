@@ -181,14 +181,14 @@ docker exec logbook-backend alembic upgrade head
 ### Manual Backup
 
 ```bash
-# Full backup
+# Full backup: database, uploads (from the running backend container) and config
 ./scripts/backup.sh   # host-side script, run from the install directory
 
 # Database only
 docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
 
-# Uploads only
-tar -czf uploads-backup.tar.gz /path/to/uploads/
+# Uploads only (logbook-backend on Unraid, intranet-backend otherwise)
+docker exec logbook-backend tar -czf - -C /app uploads > uploads-backup.tar.gz
 ```
 
 ### Restore
@@ -197,8 +197,8 @@ tar -czf uploads-backup.tar.gz /path/to/uploads/
 # Database restore
 docker exec -i logbook-db mysql -u logbook_user -p the_logbook < backup.sql
 
-# Uploads restore
-tar -xzf uploads-backup.tar.gz -C /path/to/uploads/
+# Uploads restore (the archive holds a top-level uploads/ directory)
+docker exec -i logbook-backend tar -xzf - --no-overwrite-dir -C /app < uploads-backup.tar.gz
 ```
 
 ---

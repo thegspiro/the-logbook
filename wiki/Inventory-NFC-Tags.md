@@ -40,7 +40,7 @@ Integrations. The two share a hashing scheme and nothing else.
 > need `apparatus.manage_nfc_tags` (leadership and the Apparatus Officer), and
 > **room door** tags, which check a member into the event open in that room,
 > need `locations.manage_nfc_tags` (leadership and the Facilities Manager). See
-> [Apparatus → NFC Tags on the Fleet](Module-Apparatus#nfc-tags-on-the-fleet-2026-08-18).
+> [Apparatus → NFC Tags on the Fleet](Module-Apparatus#nfc-tags-on-the-fleet).
 > On the event and admin-hours QR pages, a member now sees one line — "Have an
 > NFC tag here? Tap it with your phone to check in" ("clock in or out" for
 > admin hours) — and the tag writer sits

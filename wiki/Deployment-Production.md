@@ -266,7 +266,10 @@ docker volume inspect the-logbook_backups -f '{{ .Mountpoint }}'
 ./scripts/backup.sh --restore backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
 ```
 
-It reaches MySQL through the running database container. Restore into a
+It reaches MySQL through the running database container and archives the
+uploaded files from `/app/uploads` in the running backend container, so run it
+while the stack is up — with the backend stopped it warns that uploads were not
+backed up. Restore into a
 running stack with the same `.env` secrets, then verify by logging in, opening
 an encrypted record and an uploaded file.
 

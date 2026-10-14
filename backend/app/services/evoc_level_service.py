@@ -79,7 +79,7 @@ class EvocLevelService:
                 EvocLevel.organization_id == organization_id,
             )
         )
-        if result.scalar() > 0:
+        if (result.scalar() or 0) > 0:
             return []
 
         levels = []
@@ -335,6 +335,27 @@ class EvocLevelService:
             return no_requirement
 
         required_level = apparatus.required_evoc_level
+        if required_level is None:
+            # delete_level refuses a level an apparatus requires, so this is a
+            # dangling reference. Fail closed: an unknown requirement cannot be
+            # shown to be met, and passing the member would silently disable
+            # the gate (compare the missing-apparatus case above, AP2-4).
+            logger.error(
+                "EVOC eligibility: apparatus {} requires level {} which no "
+                "longer exists; refusing user {}",
+                apparatus_id,
+                apparatus.required_evoc_level_id,
+                user_id,
+            )
+            return {
+                "eligible": False,
+                "warning": (
+                    "This apparatus requires an EVOC level that no longer "
+                    "exists. Ask an administrator to correct the apparatus."
+                ),
+                "required_level": None,
+                "user_level": None,
+            }
 
         # A driver only qualifies on a certification current *on the day they
         # would drive*: active, certified, and not past its expiration as of
