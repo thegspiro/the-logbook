@@ -3783,7 +3783,7 @@ class TrainingProgramService:
             units=float(units),
             applied_by=str(applied_by) if applied_by else None,
             previous_status=(
-                progress.status.value
+                str(getattr(progress.status, "value", progress.status))
                 if mark_completed and progress.status is not None
                 else None
             ),
