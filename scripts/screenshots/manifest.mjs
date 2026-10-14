@@ -7219,6 +7219,7 @@ export const SHOTS = [
     // help text beneath it are the whole point, and a full-page capture of the
     // long builder form renders them too small to read.
     selector: "div:has(> label[for='template-valid-for-months'])",
+    expect: "Valid for (months)",
     prepare: async (page) => {
       const field = page.locator("#template-valid-for-months");
       await field.waitFor({ state: "visible", timeout: 10_000 });
