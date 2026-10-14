@@ -759,16 +759,33 @@ adds one table, `encryption_key_custody`. Three things to do:
    anyone holding a backup can read them.
 2. **Encrypt the files already on disk.** They keep working as they are, and
    administrators see a "not yet encrypted" notice until this is done:
+
    ```bash
    docker exec -it intranet-backend python scripts/encrypt_uploads.py            # dry run
    docker exec -it intranet-backend python scripts/encrypt_uploads.py --apply    # encrypt; originals kept
-   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
-       --finalize /app/uploads/.encryption/encryption-<stamp>.json              # delete the originals
    ```
-   `--rollback <manifest>` undoes an `--apply` until it is finalized. The
-   originals sit beside each file as `.<name>.plaintext` until finalize, and
-   the backup sidecar archives them, so finalize once you have checked a few
-   downloads.
+
+   `--apply` ends by printing the exact `--finalize` and `--rollback`
+   commands for its run, with the manifest's real path filled in, for
+   example:
+
+   ```bash
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
+       --finalize /app/uploads/.encryption/encryption-20261013T224204Z.json     # delete the originals
+   ```
+
+   Paste the printed path rather than typing a placeholder: a name written as
+   `encryption-<stamp>.json` is read by the shell as a redirect and fails
+   with `stamp: No such file or directory` before the script starts.
+   `--rollback` with the same path undoes an `--apply` until it is finalized.
+   The originals sit beside each file as `.<name>.plaintext` until finalize,
+   and the backup sidecar archives them, so finalize once you have checked a
+   few downloads. The notice clears as soon as a finalize leaves nothing
+   unencrypted.
+
+   On Unraid the backend container is `logbook-backend`, not
+   `intranet-backend`; substitute it in every command above.
+
 3. **Treat older `uploads.tar.gz` archives as plaintext.** They were made
    before encryption.
 
@@ -1046,12 +1063,15 @@ Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
   docker exec -it intranet-backend python scripts/relocate_uploads.py --apply
   # check the app, then delete the old copies:
   docker exec -it intranet-backend python scripts/relocate_uploads.py \
-      --finalize /app/uploads/.relocation/relocation-<stamp>.json
+      --finalize /app/uploads/.relocation/relocation-20261013T224204Z.json
   ```
 
-  `--apply` copies and checksum-verifies every file and keeps the originals;
-  `--rollback <manifest>` undoes it until you finalize. Disk use doubles for
-  the moved files until `--finalize`.
+  Use the path the `--apply` run printed under `"manifest"`; the name above
+  is an example. Do not type a `<stamp>` placeholder, which the shell reads as
+  a redirect. `--apply` copies and checksum-verifies every file and keeps the
+  originals; `--rollback` with the same path undoes it until you finalize.
+  Disk use doubles for the moved files until `--finalize`. On Unraid the
+  container is `logbook-backend`.
 
 - **Downloads have descriptive names**, built from the record:
   `2026-10-08_Smith-John_EMT-Recertification.pdf` for a training certificate
