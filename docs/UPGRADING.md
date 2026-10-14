@@ -465,6 +465,17 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### QuickBooks: subcategories export through their parent's accounts (2026-10-14)
+
+A budget subcategory with no QuickBooks account or mapping of its own used to
+refuse the export ("'Diesel' has no account"). It now posts to its nearest
+ancestor's accounts, and **Finance › QuickBooks Export** shows **From …** beside
+them. Check the Budget categories table after upgrading: a subcategory that
+should post somewhere other than its parent needs its own account or mapping.
+Nothing in the database changes. The export can now be run from that page, and
+its download is named `quickbooks-journal_<first day>_<last day>.csv` instead
+of `finance_export.csv`.
+
 ### The maintenance commands now run in production images (2026-10-12)
 
 Commands this guide and `docs/KEY_ROTATION.md` tell you to run —

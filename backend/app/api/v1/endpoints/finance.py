@@ -3998,19 +3998,29 @@ async def generate_export(
     one is still running is 409.
     """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
         csv_stream = await service.generate_export(
-            str(current_user.organization_id),
+            org_id,
             str(current_user.id),
             data.date_range_start,
             data.date_range_end,
             data.file_format,
             include_exported=data.include_exported,
         )
+        # Named for the department's calendar days it covers, so a month's
+        # file does not overwrite the last one in the treasurer's downloads.
+        tz = await resolve_scheduling_timezone(db, org_id)
+        filename = download_names.descriptive_filename(
+            "quickbooks-journal",
+            data.date_range_start.astimezone(tz).date(),
+            data.date_range_end.astimezone(tz).date(),
+            extension=".csv",
+        )
         return StreamingResponse(
             content=csv_stream,
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except (BudgetLimitExceededError, ExportInProgressError) as e:
         raise HTTPException(status_code=409, detail=str(e))

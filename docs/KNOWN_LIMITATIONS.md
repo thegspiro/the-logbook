@@ -1618,20 +1618,15 @@ purpose:
 The transactions export is now a valid QuickBooks Online journal-entry import
 (see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
 **Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
-category's export readiness, and in the budget category dialog. Five gaps
+category's export readiness, and in the budget category dialog. Running the
+export and subcategory inheritance were closed on 2026-10-14. These gaps
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
-- **Running the export has no screen.** `POST /finance/export/transactions`
-  is still API only. Its history is not: **Export history** on the same screen
-  lists every run with its period, transaction count, outcome and who ran it
-  _(2026-10-11, the "Export logs" row above)_.
 - **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
   budget category, so the export has nothing to resolve an income account or a
   deposit account from. Adding them needs a decision about where those two
   accounts are configured.
-- **A subcategory does not inherit its parent's account.** Each category with
-  spending against it needs its own account or mapping.
 - **There is no live QuickBooks connection.** Posting entries and reading back
   the chart of accounts, budgets and actuals needs the QuickBooks Online
   Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted

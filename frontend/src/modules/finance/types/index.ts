@@ -1176,10 +1176,21 @@ export interface ExportReadinessCategory {
   isActive: boolean;
   status: ExportReadinessStatus;
   accountName?: string | null;
-  /** `category` when the category names its own account, else `mapping`. */
-  accountSource?: 'category' | 'mapping' | null;
+  /** `category` when the category names its own account, `mapping` from its mapping, `parent` inherited. */
+  accountSource?: 'category' | 'mapping' | 'parent' | null;
   offsetAccountName?: string | null;
+  /** The ancestor category each account came from, when this one has none of its own. */
+  accountInheritedFrom?: string | null;
+  offsetInheritedFrom?: string | null;
   mappingIds: string[];
+}
+
+/** `POST /finance/export/transactions`. */
+export interface ExportRunPayload {
+  dateRangeStart: string;
+  dateRangeEnd: string;
+  /** Send again payments an earlier export already carried. */
+  includeExported: boolean;
 }
 
 export interface ExportReadiness {

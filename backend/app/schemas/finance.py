@@ -1870,9 +1870,13 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     # ready, no_account, no_offset, duplicate_mappings or payable_receivable
     status: str
     account_name: Optional[str] = None
-    # category (its own qb_account_name) or mapping
+    # category (its own qb_account_name), mapping, or parent (inherited)
     account_source: Optional[str] = None
     offset_account_name: Optional[str] = None
+    # The ancestor category each account came from, when this one has none of
+    # its own.
+    account_inherited_from: Optional[str] = None
+    offset_inherited_from: Optional[str] = None
     mapping_ids: list[str]
 
 
