@@ -1785,7 +1785,7 @@ async def update_test(
     # officer's override and fall back to a broader template/org policy. Check
     # field presence before processing or writing any values.
     _guard_official_test_policy_fields(
-        set(update_data), is_practice=test.is_practice, user=current_user
+        set(update_data), is_practice=bool(test.is_practice), user=current_user
     )
 
     # Optimistic concurrency. Refuse rather than silently overwrite when the

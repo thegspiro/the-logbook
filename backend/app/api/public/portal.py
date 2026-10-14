@@ -264,10 +264,10 @@ async def get_organization_info(
         await check_portal_enabled(config, db)
 
         # Get organization
-        result = await db.execute(
+        org_result = await db.execute(
             select(Organization).where(Organization.id == str(api_key.organization_id))
         )
-        org = result.scalar_one_or_none()
+        org = org_result.scalar_one_or_none()
 
         if not org:
             raise HTTPException(

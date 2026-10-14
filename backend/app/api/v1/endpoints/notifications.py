@@ -166,7 +166,7 @@ async def toggle_rule(
 # ============================================
 
 
-def _resolve_log_scope(scope: NotificationLogScope, current_user: User) -> UUID | None:
+def _resolve_log_scope(scope: NotificationLogScope, current_user: User) -> str | None:
     """Translate a requested log ``scope`` into a recipient filter.
 
     Returns the recipient id to filter on for ``mine``, or ``None`` for the

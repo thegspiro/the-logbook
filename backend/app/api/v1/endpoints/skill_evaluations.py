@@ -161,8 +161,8 @@ async def _responses(
     member_ids = {
         str(uid)
         for s in skills
-        if (s.allowed_evaluators or {}).get("type") == "specific_users"
-        for uid in (s.allowed_evaluators.get("user_ids") or [])
+        if (evaluators := s.allowed_evaluators or {}).get("type") == "specific_users"
+        for uid in (evaluators.get("user_ids") or [])
     }
     names: dict[str, str] = {}
     if member_ids:
