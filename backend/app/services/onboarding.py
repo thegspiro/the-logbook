@@ -576,7 +576,7 @@ class OnboardingService:
         physical_city: Optional[str] = None,
         physical_state: Optional[str] = None,
         physical_zip: Optional[str] = None,
-        physical_country: str = "USA",
+        physical_country: Optional[str] = "USA",
         # Department identifiers
         identifier_type: str = "department_id",
         fdid: Optional[str] = None,

@@ -421,6 +421,7 @@ class PropertyReturnService:
         Prefers the physical address when it differs from the mailing
         address; otherwise falls back to the mailing address.
         """
+        line1: Optional[str]
         if (
             not getattr(org, "physical_address_same", True)
             and org.physical_address_line1

@@ -2760,6 +2760,16 @@ class CheckTemplateItem(Base):
         lazy="selectin",
     )
 
+    if TYPE_CHECKING:
+        # Not columns. EquipmentCheckService stamps these on rows it has loaded
+        # so the response schemas can read them (_attach_unit_labels,
+        # _deployed_lot_payload, and the joined compartment label kept for
+        # canonicalisation). Declared only for the type checker: an annotation
+        # SQLAlchemy sees would have to be mapped.
+        lots_aboard: Any
+        unit_of_measure: Optional[str]
+        _check_compartment_name: Optional[str]
+
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),
         Index("idx_check_item_equipment", "equipment_id"),

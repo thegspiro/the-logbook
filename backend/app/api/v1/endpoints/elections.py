@@ -1410,7 +1410,9 @@ async def update_election(
         for item in election.ballot_items or []:
             item_positions.update(ballot_item_candidate_positions(item))
         orphaned = sorted(
-            p for p in nominated if p not in new_positions and p not in item_positions
+            p
+            for p in nominated
+            if p is not None and p not in new_positions and p not in item_positions
         )
         if orphaned:
             raise HTTPException(

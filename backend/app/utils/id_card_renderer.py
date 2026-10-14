@@ -116,7 +116,7 @@ def _decode_image(data_uri: Optional[str], crop_aspect: Optional[float] = None):
 
     try:
         raw = base64.b64decode(data_uri.split(",", 1)[1], validate=False)
-        image = Image.open(BytesIO(raw))
+        image: Image.Image = Image.open(BytesIO(raw))
         if image.width * image.height > _MAX_IMAGE_PIXELS:
             logger.warning("ID card image skipped: %sx%s", image.width, image.height)
             return None

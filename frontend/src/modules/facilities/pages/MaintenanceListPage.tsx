@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { inputCls, labelCls } from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
+import MaintenanceDueLabel from '../components/MaintenanceDueLabel';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
@@ -186,6 +187,7 @@ export default function MaintenanceListPage() {
                 </div>
                 <div className="text-theme-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <span>{getFacilityName(record.facilityId)}</span>
+                  <MaintenanceDueLabel record={record} />
                   {record.scheduledDate && (
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
@@ -303,10 +305,12 @@ export default function MaintenanceListPage() {
               {maintenanceTypes.length > 0 && (
                 <div>
                   <label htmlFor="maintenance-list-maintenance-type-id" className={labelCls}>
-                    Maintenance Type
+                    Maintenance Type *
                   </label>
                   <select
                     id="maintenance-list-maintenance-type-id"
+                    required
+                    aria-required="true"
                     value={formData.maintenance_type_id}
                     onChange={(e) => setFormData((p) => ({ ...p, maintenance_type_id: e.target.value }))}
                     className={inputCls}

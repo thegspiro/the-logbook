@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { groupByFiscalYear } from '../utils/myBudgets';
+import { ChargeAccessSection } from '../components/ChargeAccessSection';
 import type { MyBudget } from '../types';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -170,6 +171,8 @@ const MyBudgetsPage: React.FC = () => {
           <p>{error}</p>
         </div>
       )}
+
+      <ChargeAccessSection />
 
       {!error && groups.length === 0 && (
         <EmptyState

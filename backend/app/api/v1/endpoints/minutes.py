@@ -21,6 +21,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.document import DocumentType
 from app.models.minute import MinutesStatus
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
@@ -792,7 +793,8 @@ async def publish_minutes(
         folder_id=doc.folder_id,
         title=doc.name,
         description=doc.description,
-        document_type=dt if isinstance(dt, str) else dt.value,
+        # The column is nullable; a row without one reads as the column's default.
+        document_type=dt if isinstance(dt, str) else DocumentType.UPLOADED.value,
         content_html=doc.content_html,
         mime_type=doc.file_type,
         source_type=doc.source_type,
@@ -858,10 +860,13 @@ async def update_template(
 ):
     """Update a minutes template"""
     service = TemplateService(db)
-    tpl = ensure_found(
-        await service.update_template(template_id, current_user.organization_id, data),
-        "Template",
-    )
+    # The service raises ValueError when the payload clears a NOT NULL column
+    # (apply_updates); without this wrapper that escaped as a 500.
+    async with handle_service_errors("Failed to update template"):
+        updated = await service.update_template(
+            template_id, current_user.organization_id, data
+        )
+    tpl = ensure_found(updated, "Template")
     await log_audit_event(
         db=db,
         event_type="template_updated",

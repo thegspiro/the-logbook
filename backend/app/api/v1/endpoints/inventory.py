@@ -54,6 +54,7 @@ from app.models.inventory import (
     ItemType,
     NFPAExposureRecord,
     NFPAItemCompliance,
+    RequestStatus,
     ReturnRequestStatus,
     StorageArea,
 )
@@ -4008,7 +4009,11 @@ async def create_equipment_request(
                     )
                 )
                 user_sort = rank_result.scalar_one_or_none()
-                if user_sort is not None and user_sort <= min_rank:
+                if (
+                    min_rank is not None
+                    and user_sort is not None
+                    and user_sort <= min_rank
+                ):
                     passes_rank = True
             elif not has_rank_restriction:
                 passes_rank = True
@@ -4023,7 +4028,7 @@ async def create_equipment_request(
                     .join(user_positions, Position.id == user_positions.c.position_id)
                     .where(
                         user_positions.c.user_id == str(current_user.id),
-                        Position.slug.in_(restricted_positions),
+                        Position.slug.in_(restricted_positions or []),
                     )
                 )
                 if pos_result.first() is not None:
@@ -4306,7 +4311,7 @@ async def review_equipment_request(
             status_code=400, detail="Status must be 'approved' or 'denied'"
         )
 
-    req.status = review_data.status
+    req.status = RequestStatus(review_data.status)
     req.reviewed_by = str(current_user.id)
     req.reviewed_at = datetime.now(timezone.utc)
     req.review_notes = review_data.review_notes

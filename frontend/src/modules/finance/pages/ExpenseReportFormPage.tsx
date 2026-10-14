@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { ExpenseType, EXPENSE_TYPE_LABELS, SubstantiationMode, type FinanceSettings } from '../types';
 import { financeSettingsService } from '../services/api';
+import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { useTimezone } from '@/hooks/useTimezone';
@@ -40,6 +41,7 @@ const expenseReportSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
+  advanceId: z.string().optional(),
 });
 
 type ExpenseReportFormData = z.infer<typeof expenseReportSchema>;
@@ -142,6 +144,9 @@ const ExpenseReportFormPage: React.FC = () => {
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
   const lateWarning = useLateLineWarning();
   const { funds, mode: fundMode } = useFundOptions();
+  // The member's own advances with something left to account for; only they
+  // can be chosen (the server checks the same).
+  const advances = useMyOpenAdvances();
 
   const {
     register,
@@ -261,6 +266,7 @@ const ExpenseReportFormPage: React.FC = () => {
       };
       const desc = data.description?.trim();
       if (desc) payload.description = desc;
+      if (data.advanceId) payload.advanceId = data.advanceId;
 
       const created = await createExpenseReport(payload);
       toast.success('Expense report created');
@@ -348,6 +354,32 @@ const ExpenseReportFormPage: React.FC = () => {
               </select>
               {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
             </div>
+
+            {advances.length > 0 && (
+              <div className="sm:col-span-2">
+                <label htmlFor="advanceId" className={labelClass}>
+                  Accounts for a cash advance
+                </label>
+                <select
+                  id="advanceId"
+                  className={selectClass}
+                  aria-describedby="advanceId-hint"
+                  {...register('advanceId')}
+                >
+                  <option value="">No, reimburse me for these expenses</option>
+                  {advances.map((advance) => (
+                    <option key={advance.id} value={advance.id}>
+                      {advance.requestNumber}: {formatCurrency(advance.outstanding)} outstanding
+                      {advance.purpose ? ` (${advance.purpose})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p id="advanceId-hint" className="text-theme-text-secondary mt-1 text-xs">
+                  These expenses are taken off what you owe on the advance. Anything above it is reimbursed to you as
+                  usual; anything below, return to the Treasurer.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-end">
               <div className="rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800">

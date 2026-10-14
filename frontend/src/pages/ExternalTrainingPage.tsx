@@ -1112,7 +1112,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     >
       <div ref={dialogRef3} className="modal-panel flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="border-theme-surface-border border-b p-6">
-          <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">
+          <h2 id="mappings-modal-title" className="text-theme-text-primary text-2xl font-bold">
             Mappings - {providerName}
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">

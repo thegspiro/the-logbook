@@ -29,12 +29,14 @@ Applications template, and the guides below.
   onboarding wizard. Requires Docker Compose — install the **Docker Compose
   Manager** plugin from Community Applications first.
 
-- **Community Applications (pending).** The template
-  ([the-logbook.xml](./the-logbook.xml)) and its installation guide
-  ([UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md)) are ready, but The
-  Logbook has not yet been published to the Community Applications catalog —
-  searching "The Logbook" in the Apps tab will not find it. Use the Docker
-  Compose path until the listing is live.
+- **Community Applications (not available yet).** The template
+  ([the-logbook.xml](./the-logbook.xml)) is a draft: the image it names is not
+  built or published, and the project has no single combined image for it to
+  run (see "Unraid Community Apps Template — Not Installable Yet" in
+  [KNOWN_LIMITATIONS.md](../docs/KNOWN_LIMITATIONS.md)). Its installation guide
+  ([UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md)) describes the intended
+  path. Searching "The Logbook" in the Apps tab will not find it; use the
+  Docker Compose path.
 
 ## Security posture
 

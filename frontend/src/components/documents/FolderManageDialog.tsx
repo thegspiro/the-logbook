@@ -19,8 +19,10 @@ import { blankToNull } from '../../utils/formValues';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { FolderAccessFields } from './FolderAccessFields';
 import {
+  ADMIN_ONLY_CONFIRMATION,
   EMPTY_FOLDER_ACCESS,
   folderAccessIncomplete,
+  isAdminOnlyRefusal,
   folderAccessOf,
   folderAccessPayload,
   type FolderAccessValue,
@@ -100,14 +102,21 @@ export const FolderManageDialog: React.FC<FolderManageDialogProps> = ({ folder, 
     }
     setSaving(true);
     setError(null);
+    const payload = {
+      // Every field the dialog owns is sent, so clearing one persists.
+      ...(folder.is_system ? {} : { name: name.trim() }),
+      description: blankToNull(description),
+      ...(ownerFolder ? {} : folderAccessPayload(access, { isSystem: Boolean(folder.is_system) })),
+      ...(destination !== undefined ? { parent_id: destination?.id ?? null } : {}),
+    };
     try {
-      await documentsService.updateFolder(folder.id, {
-        // Every field the dialog owns is sent, so clearing one persists.
-        ...(folder.is_system ? {} : { name: name.trim() }),
-        description: blankToNull(description),
-        ...(ownerFolder ? {} : folderAccessPayload(access, { isSystem: Boolean(folder.is_system) })),
-        ...(destination !== undefined ? { parent_id: destination?.id ?? null } : {}),
-      });
+      try {
+        await documentsService.updateFolder(folder.id, payload);
+      } catch (err: unknown) {
+        if (!isAdminOnlyRefusal(err)) throw err;
+        if (!(await confirm(ADMIN_ONLY_CONFIRMATION))) return;
+        await documentsService.updateFolder(folder.id, { ...payload, confirm_admin_only: true });
+      }
       onChanged('saved');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to save the folder.'));

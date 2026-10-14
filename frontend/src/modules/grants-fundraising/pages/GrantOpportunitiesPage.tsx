@@ -198,7 +198,11 @@ export const GrantOpportunitiesPage: React.FC = () => {
         </div>
         {/* The create route and POST /grants both need fundraising.manage. */}
         {canManage && (
-          <button type="button" onClick={() => void navigate('/grants/opportunities/new')} className="btn-primary">
+          <button
+            type="button"
+            onClick={() => void navigate('/grants/opportunities/new')}
+            className="btn-primary inline-flex items-center gap-2"
+          >
             <Plus className="h-4 w-4" />
             Add Opportunity
           </button>

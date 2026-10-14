@@ -68,6 +68,14 @@ GET    /events/{id}/stats                        # Event stats (manage)
 GET    /events/{id}/folder                       # Event document folder (events.view)
 ```
 
+`GET /events/missed-mandatory` takes `since_days` (default 30, 1–365) and
+returns recent mandatory events the caller was expected at and has no
+check-in for. It is narrower than `GET /events?mandatory_only=true`: events
+held before the member joined, during an approved leave of absence, or
+mandatory only for a membership type the member does not hold are excluded
+on the server. It is per member, so it is never served from the client API
+cache.
+
 ### Recurring series
 
 ```
@@ -94,6 +102,19 @@ POST   /events/{id}/send-reminders               # Non-respondent reminders (man
 POST   /events/{id}/notify                       # Targeted notification (manage)
 ```
 
+**Training-phase gate.** `POST /events/{id}/rsvp`,
+`POST /events/{id}/rsvp-series` and `POST /events/{id}/self-check-in` take
+`?override=<bool>`. When the member is enrolled in a training program and the
+session's phase is ahead of their current phase, they answer `409` with
+`{ "detail": { "warning_type": "phase_gate", "message": "…" } }`
+(`rsvp-series` adds an `occurrences` list and writes nothing). Repeat with
+`override=true` to proceed.
+
+**`credited_check_in_at`** on `GET /events/{id}/rsvps` is the check-in the
+credit is computed from — the officer's override if one is set, otherwise
+the tap clamped forward to the scheduled start. Other RSVP responses leave it
+null.
+
 ### Check-in and attendance
 
 ```
@@ -118,6 +139,50 @@ GET    /events/{id}/attendance-petitions                     # All requests (org
 POST   /events/{id}/attendance-petitions/{pid}/approve
 POST   /events/{id}/attendance-petitions/{pid}/reject
 ```
+
+All seven routes require authentication only; who may review is checked per
+event in the handler (the organizer, the alternate or an `events.manage`
+holder), because an organizer need not hold `events.manage`.
+`GET .../pending` lists pending requests with `event_title`,
+`event_start_datetime`, `event_end_datetime`, `event_actual_start_time`,
+`event_actual_end_time` and `attendance_finalized`, oldest first; `scope=mine`
+(default) is events the caller organizes or is alternate for, `scope=all` is
+the whole department and needs `events.manage`. The caller's own requests are
+never listed.
+
+| Route         | Body                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` (ask)  | `reason` (1–1000 chars, required); `requested_check_in_at`, `requested_check_out_at` (optional, not in the future, departure after arrival) |
+| `.../approve` | `check_in_at`, `check_out_at` (both required, check-out after check-in and not in the future); `review_note` (optional, ≤1000)              |
+| `.../reject`  | `review_note` (1–1000 chars, required — it is the only thing the member is told)                                                            |
+
+`GET .../mine` returns `{ petition, can_request, unavailable_reason,
+can_withdraw }`; the screen offers **I was there** exactly when
+`can_request` is true. A request is accepted only when the event is neither a
+draft nor cancelled, its check-in window has closed, it ended
+(`actual_end_time`, else `end_datetime`) no more than **30 days** ago, the
+caller is not already present (`checked_in` or an `override_check_in_at`),
+and the caller has no request on file (one per member per event, unique
+index). Withdrawing (`DELETE .../mine`, `204`) keeps the row as `withdrawn`
+so asking again reuses it and its `withdrawal_count`; after **two**
+withdrawals the pending request is final (`can_withdraw: false`, further
+withdrawal `400`). Every petition response carries `withdrawal_count`.
+Approval writes the same override as **Edit Times**
+(`override_check_in_at`, `override_check_out_at`,
+`override_duration_minutes`) and sets `checked_in`; finalize credits it.
+Nobody decides their own request. Audit events:
+`event_attendance_petition_submitted` / `_withdrawn` / `_approved` /
+`_rejected`.
+
+| Status | When                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| `400`  | Not eligible (the sentence says why), invalid times, or the request is already decided (including on withdraw) |
+| `403`  | Not the organizer, alternate or an `events.manage` holder, or deciding one's own request                       |
+| `404`  | Event or request not in the caller's organization, the event is a draft, or no request to withdraw             |
+| `409`  | Approve while attendance is finalized — reopen attendance first                                                |
+
+Responses carry member names and free-text reasons, so the frontend never
+caches them (`/attendance-petitions` in `UNCACHEABLE_SUBSTRINGS`).
 
 ### External attendees (guests)
 
@@ -156,6 +221,40 @@ POST   /api/public/v1/display/{code}/badge-tap                             # Kio
 GET    /api/public/v1/display/{code}/events/{event_id}/guest               # Guest sign-in info
 POST   /api/public/v1/display/{code}/events/{event_id}/guest-check-in      # Guest sign-in
 ```
+
+**Guest check-in.** Both guest routes work only when the event has
+`allow_guest_check_in` set **and** is held in the room the display code
+belongs to (`404` otherwise). The department is resolved from the display
+code, never from the body, so an anonymous caller cannot name the
+organization it writes to.
+
+`GuestCheckInRequest`: `first_name`, `last_name` (required, 1–100 chars, must
+contain a non-whitespace character, trimmed), `email` (needed for a prospect
+to be created), `phone` (≤ 50), `organization_name` (≤ 255),
+`interest_reason` (≤ 2000, stored as the attendance row's `notes`),
+`hp_website` (honeypot). Response: `status` (`checked_in` |
+`already_checked_in`), `attendee_id`, `event_name`, `checked_in_at`,
+`message` — no prospect flag; the "someone will follow up" notice comes from
+the event's `collects_prospect_details`. The GET (`GuestCheckInEventInfo`)
+returns name, type, start/end, room, department name, `is_open` +
+`closed_reason`, `collects_prospect_details` and the department `timezone`;
+the description is withheld.
+
+| Condition                                         | Result                                                               |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| Per-IP rate limit exceeded                        | `429`                                                                |
+| Honeypot populated                                | `201` with a plausible success body, nothing written                 |
+| Outside the check-in window, or attendance closed | `400` with the reason                                                |
+| Per-event daily cap exceeded                      | `429` — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0` disables it |
+
+The cap is spent only by a sign-in that passed every other gate. Guests get
+no early-arrival grace. Every sign-in writes an `event_external_attendees`
+row with `source = 'kiosk_qr'`; with `guest_check_in_creates_prospect` and an
+email it also opens or reuses a prospect, links it through
+`prospect_event_links` and stores `prospect_id` on the row — a pipeline
+failure is logged and swallowed. A repeat sign-in matches on email, else on
+name, and returns `already_checked_in`; a guest pre-registered by staff keeps
+the staff-entered details and the kiosk only fills blanks.
 
 ### Event requests (outreach pipeline)
 
@@ -232,6 +331,15 @@ serialized with an explicit UTC offset.
 `checked_out_at`, `attendance_duration_minutes`, `early_check_in_minutes`,
 `override_check_in_at`, `override_check_out_at`, `override_duration_minutes`,
 `overridden_by`, `overridden_at`.
+
+`early_check_in_minutes` records how many minutes before the scheduled
+start a _self_ check-in landed (null when it did not precede the start, and
+never set for a manager-recorded check-in). The tap time stays the arrival
+record, but credited attendance starts at the scheduled start: a
+self-recorded early check-in is clamped forward, while a late one is left
+alone. A manager's `override_check_in_at` is honoured verbatim. Check-In
+Monitoring (`GET /events/{id}/check-in-monitoring`) lists taps at least 10
+minutes early that have no override as `early_check_ins`.
 
 ### `event_external_attendees`
 

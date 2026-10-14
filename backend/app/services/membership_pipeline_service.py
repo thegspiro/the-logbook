@@ -6600,6 +6600,9 @@ class MembershipPipelineService:
                 )
             ).all()
             for prospect_id, first, last, inactive_since in rows:
+                # The query excludes NULL inactive_since.
+                if inactive_since is None:
+                    continue
                 if inactive_since.tzinfo is None:
                     inactive_since = inactive_since.replace(tzinfo=timezone.utc)
                 due.append(

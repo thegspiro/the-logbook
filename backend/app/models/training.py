@@ -5587,6 +5587,12 @@ class ShiftEquipmentCheck(Base):
         cascade="all, delete-orphan",
     )
 
+    if TYPE_CHECKING:
+        # Not a column. EquipmentCheckService stamps the signer's display name
+        # on a loaded check for the response. Declared only for the type
+        # checker: an annotation SQLAlchemy sees would have to be mapped.
+        checked_by_name: Optional[str]
+
     __table_args__ = (
         UniqueConstraint(
             "shift_id",

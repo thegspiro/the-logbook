@@ -208,21 +208,17 @@ SMTP_PASSWORD=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 ```
 
-### Malware Scanning (Optional)
+### Malware Scanning
 
-Uploaded self-report training certificates can be scanned with ClamAV. The
-Unraid compose file includes a `clamav` service under the `with-clamav`
-profile; it is not started otherwise.
+Every uploaded file is scanned with ClamAV before it is stored. The Unraid
+compose file starts a `clamav` service with the rest of the stack — there is
+no profile to turn on — and `CLAMAV_ENABLED` defaults to `true`, so a plain
+`docker compose up -d` is all it takes.
 
-```bash
-docker compose --profile with-clamav up -d
-```
-
-and in `.env`:
-
-```bash
-CLAMAV_ENABLED=true
-```
+Turning scanning off (`CLAMAV_ENABLED=false` in `.env`) makes the app accept
+files unscanned and shows administrators a standing warning; read
+[Security Configuration → Malware scanning](../../wiki/Configuration-Security.md#malware-scanning-of-uploads)
+before doing that.
 
 Budget 1.5–3 GB of RAM for clamd. Its signatures live in a Docker-managed
 `clamav_data` volume rather than under `appdata`, because the image's own

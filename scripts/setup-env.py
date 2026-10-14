@@ -12,6 +12,7 @@ Options:
     --help      Show this help message
 """
 
+import re
 import secrets
 import sys
 from pathlib import Path
@@ -54,6 +55,20 @@ def get_user_input(prompt, default=None, required=True):
             return ""
         else:
             print("This field is required. Please enter a value.")
+
+
+# The backup sidecar passes this straight to `date -d "today $BACKUP_TIME"`
+# (scripts/backup-sidecar.sh); anything else makes every scheduled run fail.
+BACKUP_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def get_backup_time():
+    """Ask for the daily backup time until it is a valid UTC HH:MM."""
+    while True:
+        value = get_user_input("Daily backup time, UTC (HH:MM)", default="02:00")
+        if BACKUP_TIME_RE.match(value):
+            return value
+        print("Enter a 24-hour time such as 02:00 or 23:30.")
 
 
 def main():
@@ -201,14 +216,7 @@ def main():
 
     # Backup configuration
     print("💾 Backup Settings:")
-    config["BACKUP_ENABLED"] = get_user_input(
-        "Enable automatic backups? (true/false)",
-        default="true"
-    )
-    config["BACKUP_SCHEDULE"] = get_user_input(
-        "Backup schedule (cron format)",
-        default="0 2 * * *"
-    )
+    config["BACKUP_TIME"] = get_backup_time()
     config["BACKUP_RETENTION_DAYS"] = get_user_input(
         "Backup retention days",
         default="30"

@@ -133,7 +133,7 @@ const MedicalCategoriesPage: React.FC = () => {
             <RefreshCw className="h-4 w-4" />
           </button>
           {canManage && (
-            <button type="button" onClick={openCreate} className="btn-primary">
+            <button type="button" onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
               <Plus className="h-4 w-4" />
               New category
             </button>
