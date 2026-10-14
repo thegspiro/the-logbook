@@ -2610,14 +2610,16 @@ class TrainingProgramService:
             )
         )
         prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
-        completed_result = await self.db.execute(
-            select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
-                ProgramEnrollment.user_id.in_(user_id_strs),
-                ProgramEnrollment.program_id.in_(list(prereq_names)),
-                ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+        completed_pairs: set[tuple[str, str]] = set()
+        if prereq_names:
+            completed_result = await self.db.execute(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.program_id.in_(list(prereq_names)),
+                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+                )
             )
-        )
-        completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
+            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
 
         missing: Dict[str, List[str]] = {}
         for uid in user_id_strs:
