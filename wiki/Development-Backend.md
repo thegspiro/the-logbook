@@ -1,9 +1,8 @@
 # Python Backend Documentation
 
-> **Published copy — not the canonical source.** The maintained original is
-> [`docs/backend/python-backend.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/backend/python-backend.md),
-> and this page may lag behind it. Make content changes there first, then
-> mirror them here.
+> **Canonical source.** This page is the maintained backend development guide.
+> [`docs/backend/python-backend.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/backend/python-backend.md)
+> is a pointer to it, so there is one copy to keep current.
 
 ## Overview
 
@@ -23,128 +22,99 @@ The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance fram
 | **Server**          | Uvicorn (ASGI)                      |
 | **Database**        | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache**           | Redis 7+                            |
-| **Package Manager** | pip / pip-tools                     |
+| **Package Manager** | pip                                 |
 
 ---
 
 ## Directory Structure
 
+The top two levels, plus the files you will reach for most often:
+
 ```
 backend/
-├── app/                                # Application code
-│   ├── __init__.py
-│   ├── main.py                         # FastAPI application entry point
-│   │
-│   ├── core/                           # Core functionality
-│   │   ├── __init__.py
-│   │   ├── config.py                   # Pydantic Settings configuration
-│   │   ├── database.py                 # SQLAlchemy setup
-│   │   ├── cache.py                    # Redis client
-│   │   ├── security.py                 # Security utilities
-│   │   ├── encryption.py               # Encryption functions
-│   │   ├── audit.py                    # Tamper-proof audit logging
-│   │   └── middleware.py               # Custom middleware
-│   │
-│   ├── models/                         # SQLAlchemy models
-│   │   ├── __init__.py
-│   │   ├── user.py                     # User, Organization, Role
-│   │   ├── session.py                  # Session model
-│   │   ├── audit.py                    # Audit log models
-│   │   └── module_config.py            # Module configuration
-│   │
-│   ├── schemas/                        # Pydantic schemas (API contracts)
-│   │   ├── __init__.py
-│   │   ├── user.py                     # User schemas
-│   │   ├── auth.py                     # Auth schemas
-│   │   ├── role.py                     # Role schemas
-│   │   └── common.py                   # Shared schemas
-│   │
-│   ├── api/                            # API routes
-│   │   ├── __init__.py
-│   │   ├── router.py                   # Main API router
-│   │   ├── deps.py                     # Dependencies (get_db, get_current_user)
-│   │   │
-│   │   ├── v1/                         # API version 1
-│   │   │   ├── __init__.py
-│   │   │   ├── api.py                  # Router aggregator
-│   │   │   └── endpoints/              # Endpoint modules
-│   │   │       ├── auth.py
-│   │   │       ├── users.py
-│   │   │       ├── onboarding.py
-│   │   │       └── ...
-│   │   │
-│   │   └── modules/                    # Module-specific routes
-│   │       ├── training/
-│   │       ├── scheduling/
-│   │       └── ...
-│   │
-│   ├── services/                       # Business logic layer
-│   │   ├── __init__.py
-│   │   ├── user_service.py
-│   │   ├── auth_service.py
-│   │   └── ...
-│   │
-│   └── utils/                          # Utility functions
-│       ├── __init__.py
-│       └── ...
-│
-├── alembic/                            # Database migrations
-│   ├── versions/
-│   └── env.py
-│
-├── tests/                              # Test suite
-│   ├── __init__.py
-│   ├── conftest.py
-│   └── ...
-│
-├── scripts/                            # Utility scripts
-│   └── seed_data.py
-│
-├── requirements.txt                    # Python dependencies
-├── requirements-dev.txt                # Development dependencies
-├── Dockerfile                          # Production Docker build
-├── alembic.ini                         # Alembic configuration
-└── pytest.ini                          # Pytest configuration
+├── main.py                     # FastAPI app: startup migrations, middleware, /health
+├── app/
+│   ├── api/
+│   │   ├── dependencies.py     # get_current_user, require_permission, ...
+│   │   ├── public/             # Unauthenticated endpoints (portal, webhooks, ...)
+│   │   └── v1/
+│   │       ├── api.py          # APIRouter combining all endpoints
+│   │       └── endpoints/      # One file per resource
+│   ├── core/
+│   │   ├── config.py           # Pydantic Settings configuration
+│   │   ├── database.py         # Base, engine, get_db dependency
+│   │   ├── audit.py            # Tamper-evident audit log (log_event, log_audit_event)
+│   │   ├── security.py         # Passwords, tokens
+│   │   ├── security_middleware.py
+│   │   ├── permissions.py      # Permission registry
+│   │   ├── cache.py            # Redis client
+│   │   └── utils.py            # generate_uuid, safe_error_detail
+│   ├── models/                 # SQLAlchemy ORM models, one file per domain
+│   ├── schemas/                # Pydantic request/response schemas
+│   ├── services/               # Business logic ({feature}_service.py)
+│   ├── utils/                  # Shared helpers (csv_export, sql_search, ...)
+│   ├── mcp/                    # Optional MCP server, mounted at /api/mcp
+│   ├── data/                   # Static registries and libraries
+│   └── preflight.py            # `python -m app.preflight` config check
+├── alembic/
+│   ├── env.py
+│   └── versions/               # Migration revisions
+├── tests/
+│   └── conftest.py             # db_session and sample-data fixtures
+├── scripts/                    # Operator and maintenance scripts (see scripts/README.md)
+├── requirements.txt            # Runtime, test and lint dependencies
+├── Dockerfile                  # Multi-stage build (development / production)
+├── alembic.ini
+├── pytest.ini
+├── mypy.ini
+└── pyproject.toml
 ```
 
 ---
 
 ## Key Features
 
-### Tamper-Proof Audit Logging
+### Tamper-Evident Audit Logging
 
-Blockchain-inspired hash chain for immutable audit logs:
+Each audit entry is chained to the previous one with a keyed HMAC-SHA256 hash,
+so an edited or deleted row breaks verification:
 
 ```python
 from app.core.audit import log_event
 
 # Log an event
 await log_event(
-    db=db,
-    event_type="user_login",
-    event_data={"username": "john"},
+    db,
+    "user_login",
+    {"username": "john"},
     event_category="auth",
     severity="info",
     user_id=user.id,
-    organization_id=org.id
+    organization_id=org.id,
 )
 
 # Verify integrity
-from app.core.audit import verify_audit_chain
-is_valid = await verify_audit_chain(db)
+from app.core.audit import verify_audit_log_integrity
+result = await verify_audit_log_integrity(db)
+is_valid = result["verified"]
 ```
 
 ### Async Database Operations
 
-SQLAlchemy 2.1 with async/await:
+SQLAlchemy 2.1 with async/await. Primary keys are string UUIDs, and every by-id
+query is scoped to the caller's organization:
 
 ```python
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 
-async def get_user(db: AsyncSession, user_id: int):
+async def get_user(db: AsyncSession, user_id: str, organization_id: str):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.organization_id == organization_id,
+        )
     )
     return result.scalar_one_or_none()
 ```
@@ -154,21 +124,21 @@ async def get_user(db: AsyncSession, user_id: int):
 Type-safe API contracts:
 
 ```python
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     email: EmailStr
-    password: constr(min_length=8)
+    password: str = Field(min_length=8)
     first_name: str
     last_name: str
-
-    class Config:
-        from_attributes = True
 ```
 
 ### Automatic API Documentation
 
-FastAPI generates OpenAPI docs automatically:
+FastAPI generates OpenAPI docs automatically when `ENABLE_DOCS=true` (disable
+it in production):
 
 - **Swagger UI**: `http://localhost:3001/docs`
 - **ReDoc**: `http://localhost:3001/redoc`
@@ -202,16 +172,21 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 ### 3. Install Dependencies
 
+`requirements.txt` is the only requirements file; it includes the test and
+lint tools (pytest, black, flake8, isort, mypy).
+
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r requirements-dev.txt  # For development
 ```
 
 ### 4. Configure Environment
 
+The settings loader reads `.env` from the directory the server starts in. Copy
+the repository's example into `backend/`:
+
 ```bash
-cp .env.example .env
+cp ../.env.example .env
 nano .env  # Edit configuration
 ```
 
@@ -221,8 +196,8 @@ Required variables:
 # Database
 DB_HOST=localhost
 DB_PORT=3306
-DB_NAME=the_logbook
-DB_USER=root
+DB_NAME=intranet_db
+DB_USER=intranet_user
 DB_PASSWORD=password
 
 # Redis
@@ -234,25 +209,30 @@ SECRET_KEY=your-secret-key-here
 ENCRYPTION_KEY=your-encryption-key-here
 ENCRYPTION_SALT=your-encryption-salt-here
 
-# CORS
-ALLOWED_ORIGINS=["http://localhost:5173"]
+# CORS (comma-separated)
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
 ### 5. Run Migrations
 
 ```bash
-# Create initial migration
-alembic revision --autogenerate -m "Initial migration"
-
-# Apply migrations
 alembic upgrade head
 ```
 
+The server also brings the schema up to date when it starts (`run_migrations()`
+in `main.py`), including tables that only `create_all()` builds, so a fresh
+database does not need this step before the first start.
+
 ### 6. Start Development Server
 
+`main.py` lives at the top of `backend/`, so the app is `main:app`, started
+from `backend/`:
+
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+uvicorn main:app --reload --host 0.0.0.0 --port 3001
 ```
+
+From the repo root, `npm run dev:backend` runs the same command.
 
 ---
 
@@ -311,13 +291,10 @@ pytest
 pytest --cov=app --cov-report=html
 
 # Specific test file
-pytest tests/test_users.py
+pytest tests/test_users_delete_endpoint.py
 
 # Specific test
-pytest tests/test_users.py::test_create_user
-
-# Watch mode
-pytest-watch
+pytest tests/test_users_delete_endpoint.py::TestDeleteUserHard::test_rejects_self_deletion
 
 # API contract tests (schemathesis). Opt-in: the module starts a real server
 # at import time and pytest imports every test module during collection, so
@@ -348,59 +325,49 @@ passing job.
 
 ### Test Structure
 
-```python
-import pytest
-from httpx import AsyncClient
-from app.main import app
+Endpoint tests mount the router under test on a bare `FastAPI()` and override
+its dependencies, rather than booting the whole application:
 
-@pytest.mark.asyncio
-async def test_create_user():
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/api/v1/users",
-            json={"email": "test@example.com", "password": "password123"}
-        )
-        assert response.status_code == 201
+```python
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.api.dependencies import get_current_user
+from app.api.v1.endpoints import suggestions
+from app.core.database import get_db
+
+
+async def test_lists_boxes(db_session, member):
+    app = FastAPI()
+    app.include_router(suggestions.router, prefix="/suggestions")
+    app.dependency_overrides[get_current_user] = lambda: member
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/suggestions/boxes")
+        assert response.status_code == 200
 ```
+
+`asyncio_mode = auto` in `pytest.ini`, so async tests need no
+`@pytest.mark.asyncio`.
 
 ---
 
-## Python 3.13 Features
+## Typing Conventions
 
-### Performance Improvements
-
-- **JIT Compiler**: 10-60% faster execution
-- **Improved asyncio**: Better async performance
-- **Optimized GC**: Reduced memory overhead
-
-### Language Features
-
-- **Better Error Messages**: More detailed tracebacks
-- **Type System**: Enhanced type checking
-- **Experimental GIL Removal**: Better multi-threading (experimental)
-
-### Modern Typing (2026-03-02)
-
-The entire backend uses Python 3.13+ typing conventions (`pyupgrade --py313-plus`):
+The backend uses Python 3.13+ typing conventions (`pyupgrade --py313-plus`):
 
 ```python
 # Modern style (used throughout)
 def get_items(ids: list[str], filter: str | None = None) -> dict[str, int]:
     ...
 
-# Legacy style (no longer used)
+# Legacy style (not used)
 from typing import List, Optional, Dict
 def get_items(ids: List[str], filter: Optional[str] = None) -> Dict[str, int]:
     ...
 ```
-
-### Benefits for The Logbook
-
-- Faster API response times
-- Lower memory usage
-- Better type safety
-- Modern typing conventions throughout
-- Long-term support until October 2029
 
 ---
 
@@ -408,22 +375,37 @@ def get_items(ids: List[str], filter: Optional[str] = None) -> Dict[str, int]:
 
 ### Docker Build
 
+`backend/Dockerfile` is multi-stage (`base` → `dependencies` → `development` /
+`production`). The production stage, abridged:
+
 ```dockerfile
-FROM python:3.13-slim
+FROM python:3.14-slim as base
+# ... system packages, appuser, WORKDIR /app
 
-WORKDIR /app
-
-# Install dependencies
+FROM base as dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-# Copy application
-COPY . .
+FROM dependencies as production
+COPY main.py .
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+COPY scripts/ ./scripts/
+RUN rm -f scripts/seed_test_users.py
 
-# Run migrations and start server
-CMD alembic upgrade head && \
-    uvicorn app.main:app --host 0.0.0.0 --port 3001
+USER appuser
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
+    CMD python -c "import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code == 200 else 1)"
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--workers", "4"]
 ```
+
+There is no separate migration command: the server runs migrations itself on
+startup, which is why the health check allows a 300-second start period.
 
 ### Environment Variables
 
@@ -431,39 +413,41 @@ Production `.env` should include:
 
 ```env
 # Database
-DB_HOST=db
+DB_HOST=mysql
 DB_PORT=3306
-DB_NAME=the_logbook
-DB_USER=logbook_user
+DB_NAME=intranet_db
+DB_USER=intranet_user
 DB_PASSWORD=<strong-password>
 
 # Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
+REDIS_PASSWORD=<strong-password>
 
-# Security (generate with: openssl rand -hex 32)
+# Security (see CLAUDE.md "Generate secrets")
 SECRET_KEY=<generated-secret-key>
 ENCRYPTION_KEY=<generated-encryption-key>
+ENCRYPTION_SALT=<generated-encryption-salt>
 
-# CORS
-ALLOWED_ORIGINS=["https://yourdomain.com"]
+# CORS (comma-separated)
+ALLOWED_ORIGINS=https://yourdomain.com
 
 # Environment
-ENV=production
+ENVIRONMENT=production
 DEBUG=false
+ENABLE_DOCS=false
 ```
+
+`.env.example.full` lists every option.
 
 ### Health Checks
 
 ```bash
-# Basic health
+# Basic health (used by Docker and load balancers)
 curl http://localhost:3001/health
 
-# Database health
-curl http://localhost:3001/health/db
-
-# Redis health
-curl http://localhost:3001/health/redis
+# Detailed diagnostics (returns an error object when ENVIRONMENT=production)
+curl http://localhost:3001/health/detailed
 ```
 
 ---
@@ -487,15 +471,21 @@ class TaskCreate(BaseModel):
 
 ```python
 # app/models/task.py
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 class Task(Base):
     __tablename__ = "tasks"
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String(255), nullable=False)
-    description = Column(String(1000))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 ```
 
 3. **Create endpoint** in `app/api/v1/endpoints/`:
@@ -504,18 +494,22 @@ class Task(Base):
 # app/api/v1/endpoints/tasks.py
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_db
-from app.schemas.task import TaskCreate
+
+from app.api.dependencies import require_permission
+from app.core.database import get_db
 from app.models.task import Task
+from app.models.user import User
+from app.schemas.task import TaskCreate
 
 router = APIRouter()
 
-@router.post("/tasks")
+@router.post("")
 async def create_task(
     task: TaskCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("tasks.manage")),
 ):
-    db_task = Task(**task.dict())
+    db_task = Task(**task.model_dump(), organization_id=current_user.organization_id)
     db.add(db_task)
     await db.commit()
     await db.refresh(db_task)
@@ -583,20 +577,3 @@ redis-cli info server
 - [Pydantic Documentation](https://docs.pydantic.dev/)
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [Python 3.13 Release Notes](https://docs.python.org/3.13/whatsnew/3.13.html)
-
----
-
-## Migration History
-
-### Node.js to Python (2025-2026)
-
-- **From:** Node.js/Express.js with Knex.js
-- **To:** Python/FastAPI with SQLAlchemy
-- **Reason:** Better performance, type safety, and automatic API docs
-
-### Version Updates
-
-- **Python:** 3.11 → 3.13 (January 2026)
-- **FastAPI:** Latest stable
-- **SQLAlchemy:** 2.0+ (async support)
-- **Support:** Python 3.13 supported until October 2029

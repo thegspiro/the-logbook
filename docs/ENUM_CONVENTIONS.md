@@ -123,7 +123,7 @@ class OrganizationType(str, enum.Enum):
     FIRE_EMS_COMBINED = "fire_ems_combined"
 ```
 
-**TypeScript Constants** (defined in `frontend/src/constants/enums.ts`):
+**TypeScript Constants** (the convention for new enums, in `frontend/src/constants/enums.ts`):
 
 ```typescript
 export const OrganizationType = {
@@ -368,15 +368,24 @@ def downgrade() -> None:
 
 ### Step 4: Define TypeScript Type (Frontend)
 
-**File**: `frontend/src/types/models.ts` (or appropriate location)
+**File**: `frontend/src/constants/enums.ts`
+
+Frontend enums are `as const` objects with an extracted type of the same name:
 
 ```typescript
 /**
- * My new enum type
+ * My new enum
  * IMPORTANT: Values must match backend exactly
  */
-export type MyNewEnum = "option_one" | "option_two" | "option_three";
+export const MyNewEnum = {
+  OPTION_ONE: "option_one",
+  OPTION_TWO: "option_two",
+  OPTION_THREE: "option_three",
+} as const;
+export type MyNewEnum = (typeof MyNewEnum)[keyof typeof MyNewEnum];
 ```
+
+Use the constants (`MyNewEnum.OPTION_ONE`) rather than string literals.
 
 ---
 
@@ -404,6 +413,12 @@ const MY_NEW_ENUM_OPTIONS = [
 ### Step 6: Add to Validation Tests
 
 **File**: `backend/tests/test_enum_consistency.py`
+
+The `frontend_enums` fixture only reads string-union `type` declarations under
+`frontend/src/modules/onboarding/` (which is where `OrganizationType` and
+`IdentifierType` live). An `as const` object in `constants/enums.ts` is not
+picked up, so extend the fixture before relying on the frontend half of the
+assertion below.
 
 Add a new test method:
 

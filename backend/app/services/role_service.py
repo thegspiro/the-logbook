@@ -560,7 +560,7 @@ class RoleManagementService:
             permissions=source.permissions or [],
             created_by=created_by,
             description=new_description or f"Clone of {source.name}",
-            priority=source.priority,
+            priority=source.priority or 0,
             is_system=False,  # Cloned roles are never system roles
         )
 
