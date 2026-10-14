@@ -17,7 +17,7 @@ The downgrade drops the columns; which payments were sent, and the schedules'
 accounts, are lost with them.
 
 Revision ID: 0d32069fea4d
-Revises: 70070d86ff27
+Revises: a17a47c5a871
 Create Date: 2026-10-14 00:52:00.000000
 
 """
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0d32069fea4d"
-down_revision: Union[str, None] = "70070d86ff27"
+down_revision: Union[str, None] = "a17a47c5a871"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
