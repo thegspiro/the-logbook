@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3215](https://github.com/thegspiro/the-logbook/pull/3215)**: branch
+`claude/security-review-public-webhooks`, Feature 03 (Public surface &
+webhooks), pass 9 (watchdog pickup). PR #3212 (Feature 02, Permissions &
+roles, pass 9) merged 2026-10-14 — a docs-only merge, nothing else to
+record; this PR carries that row-clear alongside its own review. 0 fixed,
+0 flagged — delta re-verify of the 4 files changed since pass 8 (PR #3105),
+all confirmed benign (PUB-8's unknown-key 401 half landing as already
+described, plus unrelated finance/typing changes traced and confirmed
+org-scoped). See `PUB-03-public-surface-webhooks.md`'s **Pass 9** section.
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
 **None, as of this commit.** PR #3212 (Feature 02, Permissions & roles,
 pass 9) merged 2026-10-14 — docs-only (`PERM-02-permissions-roles.md` +
 `PROGRESS.md` only, confirmed via `git show --stat`), already fully
@@ -24,6 +39,8 @@ Rotation row 02 stays ✅. This watchdog iteration (no other
 `claude/security-review-*` PR open, confirmed via `list_pull_requests`)
 picks up Feature 03 (Public surface & webhooks), the state PR #3212
 opened from.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 9, PR #3212, before it merged), preserved for history</summary>
