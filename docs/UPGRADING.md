@@ -705,6 +705,20 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### A folder only administrators could open is confirmed first (2026-10-14)
+
+Nothing here stops the stack from starting. Some folder saves now ask first:
+
+- creating a folder;
+- changing who can open it;
+- moving it.
+
+The save is refused with `LB-DOC-001` (400) when no active member except a
+full administrator could open the folder afterwards. The Documents dialogs ask
+for confirmation and save again with `confirm_admin_only: true`. A script
+calling `POST` / `PATCH /documents/folders` must send that flag to create such
+a folder on purpose. There is no migration.
+
 ### Folders name positions by id; deleting a position can be refused (2026-10-13)
 
 Nothing here stops the stack from starting. Migration `5b2e9c7d4a18` rewrites

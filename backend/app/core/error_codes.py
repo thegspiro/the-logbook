@@ -93,6 +93,9 @@ class ErrorCode(str, Enum):
     SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
     SCHED_UNKNOWN_SEAT = "LB-SCHED-003"
 
+    # --- Documents -------------------------------------------------------
+    DOC_FOLDER_ADMIN_ONLY = "LB-DOC-001"
+
 
 @dataclass(frozen=True)
 class ErrorCodeInfo:
@@ -562,6 +565,21 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "For a deliberate one-off, a duty officer can approve the request "
             "with the qualification override; the override is recorded on the "
             "request and in the audit log.",
+        ),
+    ),
+    ErrorCode.DOC_FOLDER_ADMIN_ONLY: ErrorCodeInfo(
+        title="Folder would open to full administrators only",
+        description=(
+            "The folder's access settings, together with those of the folders "
+            "above it, admit no active member except full administrators: "
+            "nobody holds the permission it requires, or the positions it "
+            "names are vacant. Nothing was saved."
+        ),
+        resolution=(
+            "Choose a permission or position that members actually hold, or "
+            "loosen a restriction on a folder above it.",
+            "If the folder is meant for full administrators only, confirm "
+            "when the Documents screen asks, and it is saved as it is.",
         ),
     ),
     ErrorCode.SCHED_UNKNOWN_SEAT: ErrorCodeInfo(
