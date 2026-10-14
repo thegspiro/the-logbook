@@ -8,6 +8,7 @@
  */
 
 import type { MyTrainingSummary, RequirementDetail } from '../types/training';
+import { countingWindowLabel } from './requirementMonths';
 
 /** How far ahead the list looks, in days. */
 export const UPCOMING_WINDOW_DAYS = 183;
@@ -15,7 +16,7 @@ export const UPCOMING_WINDOW_DAYS = 183;
 /** Inside this many days an item reads as due soon rather than merely upcoming. */
 export const DUE_SOON_DAYS = 90;
 
-export type UpcomingKind = 'requirement' | 'certification' | 'window';
+export type UpcomingKind = 'requirement' | 'certification' | 'window' | 'shortfall';
 export type UpcomingUrgency = 'overdue' | 'soon' | 'later';
 
 export interface UpcomingItem {
@@ -23,9 +24,14 @@ export interface UpcomingItem {
   kind: UpcomingKind;
   title: string;
   detail: string;
-  /** The date the item turns on: a deadline, an expiry or a window opening. */
-  date: string;
-  days: number;
+  /**
+   * The date the item turns on: a deadline, an expiry or a window opening.
+   * Null for a shortfall, which has no date: it is short on every day.
+   */
+  date: string | null;
+  days: number | null;
+  /** Hours still to earn, for a shortfall. */
+  hoursShort?: number;
   urgency: UpcomingUrgency;
 }
 
@@ -66,7 +72,24 @@ const requirementItems = (details: RequirementDetail[], today: string): Upcoming
       ];
     }
     const date = req.catch_up_deadline ?? req.due_date;
-    if (!date) return [];
+    if (!date) {
+      // An hours requirement counted over a rolling window has no deadline: it
+      // is met or short on any day. Left out, an unmet 72-hour requirement
+      // would be the one obligation on the page the list never mentioned.
+      if (!req.monthly_hours?.length) return [];
+      return [
+        {
+          key: `short-${req.id}`,
+          kind: 'shortfall',
+          title: req.name,
+          detail: `${req.completed_hours}/${req.required_hours} hrs · counting ${countingWindowLabel(req.monthly_hours)}`,
+          date: null,
+          days: null,
+          hoursShort: Math.max(req.required_hours - req.completed_hours, 0),
+          urgency: 'soon',
+        },
+      ];
+    }
     const days = req.catch_up_deadline ? daysBetween(today, req.catch_up_deadline) : (req.days_until_due ?? 0);
     if (days > UPCOMING_WINDOW_DAYS) return [];
     return [
@@ -113,7 +136,7 @@ const certificationItems = (certs: NonNullable<MyTrainingSummary['certifications
 };
 
 /**
- * Overdue first, then soonest. Requirement rows are left out when the
+ * Overdue first, then soonest, then anything short with no date. Requirement rows are left out when the
  * department hides requirement details, and certification rows when it hides
  * certification status — the server omits the underlying lists in that case.
  */
@@ -125,5 +148,10 @@ export const buildUpcomingItems = (data: MyTrainingSummary, today: string): Upco
   const requirements = requirementItems(data.requirements_detail ?? [], today).filter(
     (r) => r.kind !== 'requirement' || !certTitles.has(r.title.trim().toLowerCase())
   );
-  return [...requirements, ...certs].sort((a, b) => a.days - b.days);
+  return [...requirements, ...certs].sort((a, b) => {
+    // Dated items by how soon, then the ones with no date, which are short
+    // every day and so have no "soonest".
+    if (a.days === null || b.days === null) return Number(a.days === null) - Number(b.days === null);
+    return a.days - b.days;
+  });
 };

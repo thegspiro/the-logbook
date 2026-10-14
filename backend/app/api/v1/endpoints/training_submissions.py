@@ -910,7 +910,9 @@ async def download_submission_attachment(
 
     attachment = attachments[index]
     real_path = _confined_path(attachment, submission.organization_id)
-    if not real_path:
+    # A legacy bare-string attachment has no path to confine, so `real_path` is
+    # already None for it; the isinstance narrows the type for what follows.
+    if not real_path or not isinstance(attachment, dict):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     if not await asyncio.to_thread(os.path.isfile, real_path):

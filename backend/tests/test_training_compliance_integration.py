@@ -79,8 +79,13 @@ async def _insert_hours_requirement(
     period_start_day: int = 1,
     due_date: date | None = None,
     rolling_period_months: int | None = None,
+    requirement_type: str = "hours",
 ) -> str:
-    """Insert an HOURS-type training requirement and return its id."""
+    """Insert a training requirement (HOURS unless told otherwise); return its id.
+
+    A rolling HOURS requirement has no due date (it is a continuous count), so
+    the tests of how a rolling due date is anchored ask for another type.
+    """
     req_id = _uid()
     await db_session.execute(
         text(
@@ -97,7 +102,7 @@ async def _insert_hours_requirement(
             "id": req_id,
             "org_id": org_id,
             "name": name,
-            "req_type": "hours",
+            "req_type": requirement_type,
             "source": source,
             "hours": required_hours,
             "freq": frequency,
@@ -354,6 +359,7 @@ class TestHoursRequirementCompliance:
             org_id,
             required_hours=24.0,
             due_date_type="rolling",
+            requirement_type="calls",
             rolling_period_months=24,
         )
         completion = date.today() - timedelta(days=365)
@@ -418,6 +424,7 @@ class TestHoursRequirementCompliance:
             org_id,
             required_hours=24.0,
             due_date_type="rolling",
+            requirement_type="calls",
             rolling_period_months=24,
             due_date=stale_due,
         )
@@ -751,7 +758,7 @@ class TestCertificationCompliance:
                 "(id, organization_id, name, requirement_type, source, "
                 "required_hours, frequency, due_date_type, rolling_period_months, "
                 "required_courses, applies_to_all, active, created_at, updated_at) "
-                "VALUES (:id, :org_id, :name, 'hours', 'department', "
+                "VALUES (:id, :org_id, :name, 'courses', 'department', "
                 ":hours, 'annual', 'rolling', :rpm, "
                 ":courses, 1, 1, :now, :now)"
             ),
@@ -946,6 +953,7 @@ class TestMultipleRequirements:
             org_id,
             required_hours=8.0,
             due_date_type="rolling",
+            requirement_type="calls",
             rolling_period_months=24,
         )
         old_completion = date.today() - timedelta(days=800)  # ~26 months

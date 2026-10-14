@@ -170,6 +170,12 @@ class EmailTemplate(Base):
     organization: Mapped["Organization"] = relationship(
         "Organization", backref="email_templates"
     )
+    # Declared here rather than as a `backref` on EmailAttachment so the
+    # attribute exists where a type checker can see it. Same default loading and
+    # cascade behaviour the backref had.
+    attachments: Mapped[list["EmailAttachment"]] = relationship(
+        "EmailAttachment", back_populates="template"
+    )
 
     __table_args__ = (
         Index("idx_email_template_org_type", "organization_id", "template_type"),
@@ -266,7 +272,7 @@ class EmailAttachment(Base):
 
     # Relationships
     template: Mapped["EmailTemplate"] = relationship(
-        "EmailTemplate", backref="attachments"
+        "EmailTemplate", back_populates="attachments"
     )
 
     def __repr__(self):

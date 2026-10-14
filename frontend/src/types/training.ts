@@ -2179,8 +2179,9 @@ export interface RequirementDetail {
   completed_hours: number;
   progress_percentage: number;
   is_met: boolean;
-  due_date?: string;
-  days_until_due?: number;
+  /** Null when the requirement has no deadline, as a rolling hours requirement has not. */
+  due_date?: string | null;
+  days_until_due?: number | null;
   waived_months?: number;
   active_months?: number;
   cert_expired?: boolean;
@@ -2197,6 +2198,19 @@ export interface RequirementDetail {
    * last window still counts, so the requirement reads as met.
    */
   next_window_opens?: string | null;
+  /** The completion window the requirement was graded over, as dates. */
+  window_start?: string | null;
+  window_end?: string | null;
+  /** Calendar months the whole window spans: the pace denominator. */
+  window_months?: number | null;
+  /**
+   * Hours per calendar month over the window, zeros included, for an hours
+   * requirement. These are the records the server counted, so they sum to
+   * `completed_hours`. `waived` marks a month covered by leave, the same
+   * months the requirement's target was prorated by. Null for every other
+   * requirement type.
+   */
+  monthly_hours?: Array<{ month: string; hours: number; waived?: boolean }> | null;
 }
 
 /** One training record on the History tab, from `/my-training/records`. */

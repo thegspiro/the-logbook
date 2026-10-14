@@ -514,3 +514,67 @@ class TestApparatusReportConfigIdLists:
             mine.id,
         )
         assert updated.include_apparatus_ids == [own.id]
+
+
+class TestApparatusReportConfigRequiredFieldClear:
+    """``update_report_config`` used a raw ``setattr`` loop with no NOT NULL
+    guard: an explicit null for ``name``/``report_type``/``is_scheduled``
+    reached ``db.commit()`` as an IntegrityError (a 500) instead of the 400
+    every other sub-resource update path raises via ``apply_updates``
+    (CLAUDE.md Pitfall #1)."""
+
+    async def test_null_name_raises_value_error_not_integrity_error(self, db_session):
+        mine = await _org(db_session, "Mine")
+        service = ApparatusService(db_session)
+        config = await service.create_report_config(
+            ApparatusReportConfigCreate(name="Fleet", report_type="fleet_status"),
+            mine.id,
+        )
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_report_config(
+                config.id,
+                ApparatusReportConfigUpdate(name=None),
+                mine.id,
+            )
+
+        await db_session.refresh(config)
+        assert config.name == "Fleet"
+
+    async def test_null_report_type_and_is_scheduled_also_refused(self, db_session):
+        mine = await _org(db_session, "Mine")
+        service = ApparatusService(db_session)
+        config = await service.create_report_config(
+            ApparatusReportConfigCreate(name="Fleet", report_type="fleet_status"),
+            mine.id,
+        )
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_report_config(
+                config.id,
+                ApparatusReportConfigUpdate(report_type=None),
+                mine.id,
+            )
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_report_config(
+                config.id,
+                ApparatusReportConfigUpdate(is_scheduled=None),
+                mine.id,
+            )
+
+    async def test_clearing_a_nullable_field_still_works(self, db_session):
+        mine = await _org(db_session, "Mine")
+        service = ApparatusService(db_session)
+        config = await service.create_report_config(
+            ApparatusReportConfigCreate(
+                name="Fleet", report_type="fleet_status", description="old"
+            ),
+            mine.id,
+        )
+
+        updated = await service.update_report_config(
+            config.id,
+            ApparatusReportConfigUpdate(description=None),
+            mine.id,
+        )
+        assert updated.description is None
