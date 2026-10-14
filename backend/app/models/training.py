@@ -2455,6 +2455,14 @@ class ShiftCompletionReport(Base):
         "User", foreign_keys=[reviewed_by], lazy="joined"
     )
 
+    if TYPE_CHECKING:
+        # Not columns. ShiftCompletionService stamps the shift's apparatus label
+        # and start time on loaded reports for the response. Declared only for
+        # the type checker: an annotation SQLAlchemy sees would have to be
+        # mapped.
+        shift_label: Optional[str]
+        shift_start_time: Optional[datetime]
+
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
         Index("idx_shift_report_officer", "officer_id"),
@@ -5189,6 +5197,14 @@ class InstructorQualification(Base):
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    if TYPE_CHECKING:
+        # Not columns. TrainingEnhancementService stamps the instructor's and
+        # course's display names on loaded rows for the list response. Declared
+        # only for the type checker: an annotation SQLAlchemy sees would have
+        # to be mapped.
+        user_name: Optional[str]
+        course_name: Optional[str]
 
     __table_args__ = (
         Index("idx_instructor_qual_user", "user_id", "active"),

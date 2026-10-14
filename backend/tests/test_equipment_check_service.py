@@ -640,7 +640,9 @@ class TestTemplateContentRevision:
     async def test_mutation_advances_revision(
         self, service, mock_db, method, args, getter, entity
     ):
-        compartment = SimpleNamespace(id="comp-1", template_id="tmpl-1", items=[])
+        compartment = SimpleNamespace(
+            id="comp-1", template_id="tmpl-1", name="Old", items=[]
+        )
         item = SimpleNamespace(
             id="item-1",
             name="Old",
