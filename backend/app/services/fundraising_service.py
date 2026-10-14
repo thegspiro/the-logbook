@@ -407,9 +407,11 @@ class FundraisingService:
         await self.db.flush()
 
         # Recalculate aggregates for both the old and new campaign/donor.
-        for cid in {old_campaign_id, donation.campaign_id} - {None}:
+        for cid in {
+            c for c in (old_campaign_id, donation.campaign_id) if c is not None
+        }:
             await self._update_campaign_total(cid, organization_id)
-        for did in {old_donor_id, donation.donor_id} - {None}:
+        for did in {d for d in (old_donor_id, donation.donor_id) if d is not None}:
             await self._update_donor_stats(did, organization_id)
 
         return donation

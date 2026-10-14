@@ -337,7 +337,7 @@ class RoleManagementService:
                 db, organization_id, name, exclude_role_id=role_id
             )
 
-        changes = {}
+        changes: Dict[str, Dict[str, Any]] = {}
 
         # System roles: only the member position's display label is customizable.
         # Its stable slug remains the identifier used for baseline assignment and

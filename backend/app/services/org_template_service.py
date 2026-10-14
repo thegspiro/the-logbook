@@ -134,6 +134,8 @@ def null_columns_for(spec: TableSpec) -> set[str]:
 
 def _parent_table(spec: TableSpec) -> str:
     """Resolve the parent table a parent-scoped spec hangs off, via its FK."""
+    if spec.parent_fk is None:
+        raise ValueError(f"{spec.tablename} is org-scoped and has no parent table")
     col = spec.model.__table__.c[spec.parent_fk]
     fk = next(iter(col.foreign_keys))
     name: str = fk.column.table.name
