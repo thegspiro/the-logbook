@@ -200,21 +200,59 @@ def test_an_unwritable_state_directory_does_not_break_the_check(root, monkeypatc
     assert upload_encryption.plaintext_remains() is False
 
 
-def test_the_cli_dry_run_exits_cleanly(root, monkeypatch, capsys):
+def _cli():
     import importlib.util
-    import sys
 
-    _plain(root, "org", "documents", "a.pdf")
     spec = importlib.util.spec_from_file_location(
         "encrypt_uploads",
         os.path.join(os.path.dirname(__file__), "..", "scripts", "encrypt_uploads.py"),
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def test_the_cli_dry_run_exits_cleanly(root, monkeypatch, capsys):
+    import sys
+
+    _plain(root, "org", "documents", "a.pdf")
+    module = _cli()
     monkeypatch.setattr(sys, "argv", ["encrypt_uploads.py"])
 
     assert module.main() == 0
     out = capsys.readouterr().out
     assert '"plain_files": 1' in out
     assert "Dry run" in out
+    # Nothing was written, so there is no run to finalize or roll back.
+    assert "--finalize" not in out
+    assert "--rollback" not in out
     assert not file_encryption.is_encrypted(str(root / "org" / "documents" / "a.pdf"))
+
+
+def test_the_cli_apply_prints_the_commands_for_its_own_manifest(
+    root, monkeypatch, capsys
+):
+    """The docs can only show a placeholder for the manifest's name, and the
+    obvious one (``<stamp>``) is a shell redirect, so the run prints the
+    real commands. The printed finalize line must work as pasted."""
+    import shlex
+    import sys
+
+    path = _plain(root, "org", "documents", "a.pdf")
+    module = _cli()
+    monkeypatch.setattr(sys, "argv", ["encrypt_uploads.py", "--apply"])
+
+    assert module.main() == 0
+    out = capsys.readouterr().out
+    manifest = json.loads(out[: out.index("}") + 1])["manifest"]
+    finalize = next(line for line in out.splitlines() if "--finalize" in line)
+    rollback = next(line for line in out.splitlines() if "--rollback" in line)
+    assert shlex.split(finalize)[-2:] == ["--finalize", manifest]
+    assert shlex.split(rollback)[-2:] == ["--rollback", manifest]
+    assert "<" not in finalize
+    assert "<" not in rollback
+
+    monkeypatch.setattr(sys, "argv", ["encrypt_uploads.py", *shlex.split(finalize)[2:]])
+    assert module.main() == 0
+    assert file_encryption.is_encrypted(path)
+    assert upload_encryption.plaintext_remains() is False

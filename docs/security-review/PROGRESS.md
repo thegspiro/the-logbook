@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3195](https://github.com/thegspiro/the-logbook/pull/3195)**:
+branch `claude/security-review-equipment-check`, Feature 14 (Equipment check
+& shifts), pass 8. PR #3185 (Feature 13, Apparatus & NFC, pass 15) merged
+2026-10-13 23:41 UTC with application code, recorded in the Log below. 1 fixed
+(EC8-14-1, LOW — concurrent photo uploads to one check item lost photos and
+overran the three-photo cap; the merge now re-reads the item `FOR UPDATE`
+after the scan), 0 flagged. Real delta since pass 7 (PR #2970): 14 non-merge
+commits, all read — Catalog Links (2 new `check_manage` routes, org-scoped,
+XC-1-validated, capped), W46-13 server-side notes, automatic restock reports
+and reorder requests, compliance-report and unit-attribution changes, the
+photo-upload permission and malware-scan hardening, an XC-1 guard on shift
+reports, and mypy typing. Route count: `equipment_check.py` 52 (+2),
+`shift_completion.py` 21. See `EC-14-equipment-check-shifts.md`'s **Pass 8**
+section. Row 14 stays ✅ (pending this PR's merge); next is Feature 15
+(Scheduling).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 15, PR #3185, merged 2026-10-13), preserved for history</summary>
+
 **PR [#3185](https://github.com/thegspiro/the-logbook/pull/3185)**: branch `claude/security-review-apparatus-nfc`, Feature 13
 (Apparatus & NFC), pass 15 (watchdog pickup). PR #3169 (Facilities, pass 8)
 had already merged by the time this iteration checked GitHub directly for an
@@ -49,6 +68,8 @@ upload/download pair); `nfc_tags.py` unchanged at 5. See the Log entry below
 and `docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 15** section for
 detail. Row 13 stays ✅ (pending this PR's merge); next is Feature 14
 (Equipment check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 8, PR #3169, merged), preserved for history</summary>
@@ -18964,6 +18985,36 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — Feature 14 (Equipment check & shifts, pass 8) — 1 fixed (EC8-14-1, LOW), 0 flagged
+
+**Step 0.** No `claude/security-review-*` PR was open on GitHub. PR #3185
+(Feature 13, Apparatus & NFC, pass 15) had merged 2026-10-13 23:41 UTC,
+touching `apparatus_service.py` and a test as well as the review docs, so its
+merge is recorded here; row 13 stays ✅. Row 14 was the next-pointer row.
+
+**Delta.** Baseline `66b2f57f6` (PR #2970). The clone was shallow and was
+unshallowed before the commit count was trusted. 14 non-merge commits touched
+the module's primary files; each was read (table in the findings file).
+
+**Fixed.** EC8-14-1 (LOW): `upload_check_item_photos` read `photo_urls`
+unlocked, ran the malware scan and re-encode, then wrote `existing + new`, so
+two concurrent uploads to one item lost the earlier one's photos and could pass
+the three-photo cap. The merge now re-reads the item `FOR UPDATE` (org-scoped)
+after the slow work. `tests/test_equipment_check_photo_upload_lock.py` fails
+without the fix.
+
+**Verified good.** The new Catalog Links routes (`check_manage`, org-scoped
+joins, inventory ids validated in-org before any write, `FOR UPDATE`, 2,000-link
+cap); the automatic reorder (org-scoped item lock plus locking open-request
+read, own session after the swap commits, email-only to the low-stock
+audiences, escaped body, header-sanitized subject); every new compliance-report
+query org-filtered; shift-report tasks citing another org's check refused
+(`assert_all_in_org`).
+
+**Gate.** flake8, black, isort (app/tests/alembic), `validate_migrations.py
+--strict`, the module's pytest selection (634 passed), frontend typecheck and
+lint — all clean.
 
 ### 2026-10-13 — Feature 13 (Apparatus & NFC, pass 15) — 1 fixed (AP-19, LOW), 0 new findings; a shallow-clone truncation caught before trusting the commit delta (watchdog pickup)
 

@@ -2,13 +2,13 @@
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
-(pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
+(pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
-(pass 7, 0 fixed, 0 new findings)
+(pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged)
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (50 routes),
+**Backend:** `api/v1/endpoints/equipment_check.py` (52 routes as of pass 8; 50 before),
 `api/v1/endpoints/shift_completion.py` (21 routes),
 `services/equipment_check_service.py` (5,368 L),
 `services/shift_completion_service.py` (1,930 L)
@@ -16,6 +16,65 @@ fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull
 **Migrations:** none this iteration (no schema change)
 
 ---
+
+## Pass 8 (2026-10-14) — real delta (14 non-merge commits touching the primary files), 1 fixed (EC8-14-1, LOW), 0 flagged
+
+**Pickup.** No `claude/security-review-*` PR was open (Step 0, read from
+GitHub). PR #3185 (Feature 13, Apparatus & NFC, pass 15) had merged
+2026-10-13 23:41 UTC with application code (`apparatus_service.py`), so it was
+recorded in `PROGRESS.md`. Rotation row 14 was the next-pointer row.
+
+**Baseline.** Pass 7 merged as `66b2f57f6` (PR #2970). The clone was shallow
+(`git rev-parse --is-shallow-repository` → `true`); unshallowed before
+counting commits. `git diff --stat 66b2f57f6 HEAD` over the four primary files
+plus the module's schema and model: `equipment_check.py` +82/−1,
+`schemas/equipment_check.py` +90/−0, `equipment_check_service.py` +595/−67,
+`shift_completion_service.py` +79/−29; the models were unchanged. Fourteen non-merge commits, each read:
+
+| Commit                                | What it changed                                                                                                   | Security reading                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `14d2231a5`, `7b9a15598`              | Catalog Links: `GET /inventory-link-report`, `POST /inventory-links`                                              | Both gated on `inventory.check_manage`. The report reads templates and catalog by `organization_id`. The write resolves every template item through an org-scoped template join `FOR UPDATE`, rejects any inventory item id not in the org (XC-1) before writing, never overwrites a position linked since the report loaded, and is capped at 2,000 links per request. Clean. |
+| `029bf5fac`                           | W46-13: a Fail or Out of service needs a note on all three submit paths                                           | Validation only, before any write. Clean.                                                                                                                                                                                                                                                                                                                                      |
+| `9bdd4d734`                           | Count shortfalls raise restock reports; a lot swap files an automatic reorder                                     | `AutoReorderService.raise_if_low` locks the org-scoped item and takes a locking read for the open-request check (pitfall #27), runs after the swap commits in its own session, and emails only the low-stock audiences, email-only (pitfall #18). The HTML body escapes the item name; the subject is CR/LF-stripped by `_sanitize_header`. Clean.                             |
+| `fa82cdc77`, `3084b248b`, `618192637` | Compliance report counts expected/missed checks; attributes checks through the shift's unit; settles report races | Every new query filters `organization_id` (`_check_unit_keys`, the readiness helpers, the failure log). CSV columns added through the existing `SafeCsvWriter`. Clean.                                                                                                                                                                                                         |
+| `ce50c5c6b`, `7835d0bb5`              | Photo uploads: malware scan, and only the member who did the check (or `check_manage`) may add photos             | Gate moved from `get_current_user` to `check_submit`/`check_manage` plus an ownership check; scan runs before re-encode. Clean, but see EC8-14-1.                                                                                                                                                                                                                              |
+| `970adc6b5`                           | XC-1: a shift report task citing another org's equipment check is refused                                         | `assert_all_in_org` before any row is added, on create and update. Clean.                                                                                                                                                                                                                                                                                                      |
+| `25cf1b8cb`                           | Shift-report skills recorded only when the department runs shift sign-offs                                        | Behavioural gate, no auth surface. Clean.                                                                                                                                                                                                                                                                                                                                      |
+| `0d4d7c5a0`, `17e289411`, `99a573420` | mypy typing                                                                                                       | Read hunk by hunk: annotations and `UUID \| str` widenings only; `User.is_active.is_(True)` → `User.is_active` is the same predicate.                                                                                                                                                                                                                                          |
+
+**Route inventory:** `equipment_check.py` 52 (+2, the Catalog Links pair),
+`shift_completion.py` 21 (unchanged). Each new route's dependency was read,
+not inferred.
+
+### EC8-14-1 — LOW — FIXED — Concurrent photo uploads to one check item lose photos and overrun the cap
+
+`api/v1/endpoints/equipment_check.py` `upload_check_item_photos`: the item's
+`photo_urls` was read with a plain SELECT, the malware scan and image
+re-encode ran, and then `existing + new` was written back. Two uploads to the
+same item (a crew member retrying on a slow connection, or two tabs) both
+read the same list, so the later commit replaced the earlier one's photos, and
+the three-photo cap was checked against a count that was no longer true.
+Evidence on a signed check could be lost without any error.
+
+**Fix:** after the slow work and just before the merge, the endpoint re-reads
+the item `FOR UPDATE` (org-scoped through its check, `populate_existing`),
+drops any photo already present, and checks the cap against that locked list.
+The lock is not held across the scan. Test:
+`tests/test_equipment_check_photo_upload_lock.py` (fails without the fix:
+the merge keeps a photo committed meanwhile; the cap uses the locked count;
+the re-read is `FOR UPDATE`).
+
+### Completion gate (pass 8)
+
+| Check                                                                                     | Result                |
+| ----------------------------------------------------------------------------------------- | --------------------- |
+| `flake8 app/ tests/ alembic/`                                                             | clean                 |
+| `black --check app/ tests/ alembic/`                                                      | clean                 |
+| `isort --check-only app/ tests/ alembic/`                                                 | clean                 |
+| `scripts/validate_migrations.py --strict`                                                 | passed, one head      |
+| `pytest -k "equipment_check or shift_completion or file_access_hardening or org_scoping"` | 634 passed, 1 skipped |
+| `frontend: npm run typecheck`                                                             | clean                 |
+| `frontend: npm run lint`                                                                  | clean                 |
 
 ## Pass 7 (2026-10-06) — real delta (92 commits in scope, 20 touching the primary files), 0 fixes, 0 new findings; two XC-1/XC-2 gaps found and fixed by other work during the window
 

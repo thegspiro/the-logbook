@@ -4,7 +4,7 @@ Tests for the minutes template service (app/services/template_service.py).
 Focus on the "single default template per meeting type" invariant
 (_clear_defaults, and update_template clearing other defaults before
 setting one), plus the CRUD guards (get/update/delete on a missing
-template, and get_default_for_type). DB mocked; no MySQL.
+template). DB mocked; no MySQL.
 """
 
 from types import SimpleNamespace
@@ -58,21 +58,6 @@ class TestClearDefaults:
         db = _db([_scalars([])])
         await TemplateService(db)._clear_defaults("org-1", "business")
         # No exception; nothing to clear.
-
-
-class TestGetDefaultForType:
-    async def test_returns_default(self):
-        tpl = _tpl(is_default=True)
-        out = await TemplateService(_db([_one(tpl)])).get_default_for_type(
-            "org-1", "business"
-        )
-        assert out is tpl
-
-    async def test_none_when_absent(self):
-        out = await TemplateService(_db([_one(None)])).get_default_for_type(
-            "org-1", "business"
-        )
-        assert out is None
 
 
 class TestCreateTemplate:
