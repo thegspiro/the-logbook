@@ -1,5 +1,46 @@
 # Screenshot currency
 
+## Moved out of 07-documents-forms.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, `_[Screenshot needed: …]_` lines, image file names and alt text
+are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `07-01-documents.png` | **REPLACE** | The page subtitle reads "SOPs, policies, forms, and other department files in one place" and the fourth total is **Added This Month** (was "This Month"). Re-take Documents & Files as an administrator with the four totals, the folder cards and the search bar in frame. The alt text still says "folder tree, file list" — the page shows folder cards |
+| `07-03-upload-documents.png` | **REPLACE** | The file box reads **Choose the file to upload** (not "Drag and drop your file here / or click to browse"), the name field's placeholder is "Optional — uses the file name if left blank", and the folder list starts with **General Documents (default)**. Re-take the Upload Document dialog, empty |
+| `07-04-forms-list.png` | **REPLACE** | The first tab reads **Forms** (was "My Forms"), status and category badges are capitalised, and the subtitle reads "Build forms, share them publicly, and send responses to other modules". Re-take with at least one published public form and one draft in frame |
+| `07-05-form-sharing.png` | **REPLACE** | The dialog is titled **Share Form** (was "Public Sharing Settings"), carries the **Allow submissions without signing in** checkbox under **Public Access**, and its footer reads "Anyone can submit this form without signing in." or "Only signed-in members can submit this form." followed by the globe-icon sentence. Re-take for a published public form with the box ticked |
+| `07-10-create-rule-modal.png` | **REPLACE** | The trigger list also offers **Equipment Request Update**, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." Re-take with **Event Reminder** chosen; never save. The alt text says "trigger and channel fields" — there is no channel field |
+| `07-11-new-message-form.png` | **REPLACE** | The **Persistent** checkbox reads **Keep in inbox after it is read**. Re-take New message with the audience and scheduling fields and the four checkboxes in frame; never post |
+| `07-15-suggestion-submit-anonymous.png` | **REPLACE** | A hint sits under **Screenshots (optional, up to 5)**: "PNG, JPEG, WebP or GIF, up to 10 MB each. Larger images are scaled down to 2560 pixels on the longest side, and animated GIFs keep only their first frame." Same state as before, with that hint in frame |
+| `07-24-suggestion-notification-rule.png` | **REPLACE** | Shot before the rule note's second sentence was reworded to "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." Same state: **Suggestion Submitted** chosen, never saved |
+
+## Moved out of 14-elections.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `14-01-elections-list.png` | **REPLACE** | The subtitle under **Elections** reads "Create elections, send ballots and publish results" for an elections manager ("See elections and their results" for a member); it read "Manage elections and view results". Re-shoot the same list as an administrator |
+| `19-25-ballot-template-settings-before.png`, `19-26-ballot-template-settings-after.png` | **REPLACE** | The details card's **Voting Method** reads "One choice per voter" (before) and "Ranked choice" (after) instead of "Simple Majority" / "Ranked Choice", and a **Winner** row shows the victory condition — in this example "Supermajority (67% of votes)" on both frames. Re-shoot the same draft before and after applying the template; the `19-25` alt text still says "Simple Majority" |
+| `14-16-election-settings.png` | **REPLACE** | The **Defaults** section (default voting method, victory condition, anonymity, write-ins) is gone; the sections are **Proxy Voting**, **Features**, **Test Ballot** and **Security**. Re-shoot so the section list no longer shows Defaults, and update the alt text, which still says "default rule toggles" |
+
+## Moved out of 13-medical-screening.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `13-01-medical-landing.png` | **REPLACE** | The page subtitle reads "Set screening requirements, record screenings, and see which ones expire soon." |
+| `13-02-requirements-tab.png` | **CHECK** | Alt text says "with frequency and grace period"; the requirement rows show type, frequency, roles and description, never the grace period |
+| `13-03-records-tab.png` | **CHECK** | A record with no member or prospect reads **Not linked to a member or prospect** in the name line, where it read Unknown; replace if the frame shows one |
+| `13-05-add-requirement.png` | **REPLACE** | The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here." The Grace Period field carries its own "Not enforced yet" note |
+| `13-07-add-record-linkage-notice.png` | **REPLACE** | The frame still shows the retired amber "Not linked" notice. The dialog opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected |
+
 ## Moved out of 08-admin-reports.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
