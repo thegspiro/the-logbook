@@ -188,6 +188,9 @@ class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
     def send(
         self, request: requests.PreparedRequest, **kwargs: Any
     ) -> requests.Response:
+        # A request that reached an adapter has been prepared, so it has a URL.
+        if request.url is None:
+            raise ValueError("Push request has no URL")
         parsed = urlsplit(request.url)
         address = f"[{self.address}]" if ":" in self.address else self.address
         request.url = urlunsplit(("https", address, parsed.path, parsed.query, ""))

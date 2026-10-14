@@ -1824,7 +1824,12 @@ class SuggestionService:
             )
         ).all()
         # Ordered by sequence, so the last write per suggestion is the newest.
-        return {suggestion_id: response for suggestion_id, response in rows}
+        # The query excludes NULL responses; the filter only narrows the type.
+        return {
+            suggestion_id: response
+            for suggestion_id, response in rows
+            if response is not None
+        }
 
     # ------------------------------------------------------------------
     # Attachments and threads

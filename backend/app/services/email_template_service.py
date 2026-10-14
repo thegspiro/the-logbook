@@ -3394,7 +3394,8 @@ class EmailTemplateService:
             )
             .group_by(MessageHistory.template_type)
         )
-        return {row[0]: row[1] for row in result.all()}
+        # The query excludes NULL template types; the filter only narrows the type.
+        return {row[0]: row[1] for row in result.all() if row[0] is not None}
 
     async def create_template(
         self,

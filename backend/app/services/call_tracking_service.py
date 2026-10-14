@@ -274,7 +274,8 @@ class CallTrackingService:
         if for_update:
             query = query.with_for_update()
         rows = (await self.db.execute(query)).all()
-        return {slug: int(n) for slug, n in rows}
+        # The query excludes NULL call types; the filter only narrows the type.
+        return {slug: int(n) for slug, n in rows if slug is not None}
 
     # ------------------------------------------------------------------
     # Recording
