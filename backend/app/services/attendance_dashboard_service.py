@@ -244,6 +244,7 @@ class AttendanceDashboardService:
             )
         )
         attendee = result.scalar_one_or_none()
+        granted_at = datetime.now(timezone.utc)
 
         if not attendee:
             # Create a record with waiver
@@ -255,14 +256,14 @@ class AttendanceDashboardService:
                 excused=True,
                 waiver_reason=reason,
                 waiver_granted_by=granted_by,
-                waiver_granted_at=datetime.now(timezone.utc),
+                waiver_granted_at=granted_at,
             )
             self.db.add(attendee)
         else:
             attendee.excused = True
             attendee.waiver_reason = reason
             attendee.waiver_granted_by = granted_by
-            attendee.waiver_granted_at = datetime.now(timezone.utc)
+            attendee.waiver_granted_at = granted_at
 
         await self.db.commit()
 
@@ -272,7 +273,7 @@ class AttendanceDashboardService:
             "user_id": user_id,
             "waiver_reason": reason,
             "waiver_granted_by": granted_by,
-            "waiver_granted_at": attendee.waiver_granted_at.isoformat(),
+            "waiver_granted_at": granted_at.isoformat(),
         }
 
     async def list_waivers(

@@ -288,7 +288,11 @@ class CertAlertService:
         expiring = await self.get_expiring_certifications(organization_id, today=today)
 
         for record in expiring:
-            days_until = (record.expiration_date - today).days
+            # get_expiring_certifications selects only dated records.
+            expiration_date = record.expiration_date
+            if expiration_date is None:
+                continue
+            days_until = (expiration_date - today).days
 
             # Tiers whose threshold this cert has already crossed. Fire only
             # the MOST urgent (smallest days_before) so a cert added late jumps
@@ -313,7 +317,7 @@ class CertAlertService:
                 subject = _expiry_subject(days_until, record.course_name)
                 message = (
                     f"Your {record.course_name} certification expires on "
-                    f"{record.expiration_date.strftime('%B %d, %Y')} "
+                    f"{expiration_date.strftime('%B %d, %Y')} "
                     f"({_expires_when(days_until)}). "
                     f"Please renew before it expires."
                 )
@@ -391,7 +395,7 @@ class CertAlertService:
                             + ("Warning" if days_until <= 30 else "Notice"),
                             f"""<p>Hello {e_first},</p>
         <p>Your <strong>{e_course}</strong> certification expires on
-        <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
+        <strong>{expiration_date.strftime('%B %d, %Y')}</strong>
         ({_expires_when(days_until)}).</p>
         {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
         {f'<p><strong>Issuing Agency:</strong> {e_agency}</p>' if record.issuing_agency else ''}
@@ -407,7 +411,7 @@ class CertAlertService:
                             f"Certification Expiration Notice\n\n"
                             f"Hello {member.preferred_name or member.first_name},\n\n"
                             f"Your {record.course_name} certification expires on "
-                            f"{record.expiration_date.strftime('%B %d, %Y')} "
+                            f"{expiration_date.strftime('%B %d, %Y')} "
                             f"({_expires_when(days_until)}).\n\n"
                             f"Please renew before it expires."
                         )
@@ -448,16 +452,18 @@ class CertAlertService:
                 select(User).where(User.id == record.user_id)
             )
             member = member_result.scalar_one_or_none()
-            if not member:
+            # get_expired_certifications selects only dated records.
+            expiration_date = record.expiration_date
+            if not member or expiration_date is None:
                 continue
 
-            days_expired = (today - record.expiration_date).days
+            days_expired = (today - expiration_date).days
             subject = (
                 f"EXPIRED Certification: {record.course_name} - {member.display_name}"
             )
             message = (
                 f"{member.display_name}'s {record.course_name} certification "
-                f"expired on {record.expiration_date.strftime('%B %d, %Y')} "
+                f"expired on {expiration_date.strftime('%B %d, %Y')} "
                 f"({days_expired} days ago). No renewal has been logged."
             )
 
@@ -516,9 +522,7 @@ class CertAlertService:
                 ):
                     if member.email:
                         to_emails.append(member.email)
-                    if include_personal_email and getattr(
-                        member, "personal_email", None
-                    ):
+                    if include_personal_email and member.personal_email:
                         to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:
@@ -534,7 +538,7 @@ class CertAlertService:
                         org,
                         "Certification Expired",
                         f"""<p><strong>{e_full_name}</strong>'s <strong>{e_course}</strong> certification
-        expired on <strong>{record.expiration_date.strftime('%B %d, %Y')}</strong>
+        expired on <strong>{expiration_date.strftime('%B %d, %Y')}</strong>
         ({days_expired} day{'s' if days_expired != 1 else ''} ago).</p>
         {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
         <p>No renewal has been logged. This member may need to be taken out of service for activities requiring this certification.</p>""",
@@ -544,7 +548,7 @@ class CertAlertService:
                     text_body = (
                         f"EXPIRED Certification: {record.course_name}\n\n"
                         f"{member.display_name}'s certification expired on "
-                        f"{record.expiration_date.strftime('%B %d, %Y')} ({days_expired} days ago).\n\n"
+                        f"{expiration_date.strftime('%B %d, %Y')} ({days_expired} days ago).\n\n"
                         f"No renewal has been logged."
                     )
 

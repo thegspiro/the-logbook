@@ -776,6 +776,9 @@ class ShiftEligibilityService:
 
         by_user: Dict[str, List[str]] = {}
         for user_id, program_name, target_position in result.all():
+            # The query excludes NULL target positions; this only narrows.
+            if target_position is None:
+                continue
             mapped = TRAINING_POSITION_MAP.get(target_position, target_position)
             if mapped == position:
                 by_user.setdefault(str(user_id), []).append(program_name)
@@ -1009,6 +1012,9 @@ class ShiftEligibilityService:
         )
         positions = []
         for (target_pos,) in result.all():
+            # The query excludes NULL target positions; this only narrows.
+            if target_pos is None:
+                continue
             mapped = TRAINING_POSITION_MAP.get(target_pos, target_pos)
             if mapped:
                 positions.append(mapped)

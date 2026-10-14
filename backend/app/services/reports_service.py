@@ -1919,7 +1919,7 @@ class ReportsService:
         entries_result = await self.db.execute(entries_query)
         entries_rows = entries_result.all()
 
-        entries = []
+        entries: List[Dict[str, Any]] = []
         unique_members = set()
         for entry, first_name, last_name, category_name in entries_rows:
             unique_members.add(entry.user_id)

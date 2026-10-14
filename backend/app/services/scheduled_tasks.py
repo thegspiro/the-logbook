@@ -1170,7 +1170,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         )
     )
     for item in minutes_items.scalars().all():
-        if item.assignee_id:
+        if item.assignee_id and item.due_date is not None:
             due_d = (
                 item.due_date.date()
                 if hasattr(item.due_date, "date")
@@ -1873,8 +1873,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftCompletionReport.trainee_id,
                     ).where(ShiftCompletionReport.shift_id.in_(shift_ids))
                 )
-                for sid, oid, tid in rres.all():
-                    report_map.setdefault((str(sid), str(oid)), set()).add(str(tid))
+                for report_sid, officer_id, trainee_id in rres.all():
+                    report_map.setdefault(
+                        (str(report_sid), str(officer_id)), set()
+                    ).add(str(trainee_id))
 
                 cres = await db.execute(
                     select(
@@ -1882,8 +1884,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftEquipmentCheck.template_id,
                     ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
                 )
-                for sid, tid in cres.all():
-                    checks_done_map.setdefault(str(sid), set()).add(tid)
+                # An ad-hoc check has no template, so it cannot satisfy one.
+                for check_sid, tid in cres.all():
+                    if tid is not None:
+                        checks_done_map.setdefault(str(check_sid), set()).add(tid)
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
@@ -2685,8 +2689,10 @@ async def run_end_of_shift_checklist_reminders(
                     ShiftEquipmentCheck.template_id,
                 ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
             )
+            # An ad-hoc check has no template, so it cannot satisfy one.
             for sid, tid in cres.all():
-                checks_done_map.setdefault(str(sid), set()).add(tid)
+                if tid is not None:
+                    checks_done_map.setdefault(str(sid), set()).add(tid)
             asres = await db_session.execute(
                 select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
                 .join(User, User.id == ShiftAssignment.user_id)
@@ -5682,7 +5688,11 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             for event in events:
                 custom = event.custom_fields or {}
-                if custom.get("series_end_reminder_sent"):
+                # The query selects only series with an end date.
+                if (
+                    custom.get("series_end_reminder_sent")
+                    or event.recurrence_end_date is None
+                ):
                     continue
 
                 # The organizer and alternate run the series now; whoever
@@ -6555,6 +6565,11 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 if event_request is None:
                     continue
                 event_date = event_request.event_date
+                # Re-read under the lock: the date may have been cleared since
+                # the candidate query, and an undated request has nothing to
+                # count down to.
+                if event_date is None:
+                    continue
                 if event_date.tzinfo is None:
                     event_date = event_date.replace(tzinfo=dt_timezone.utc)
 

@@ -6,6 +6,8 @@ schema level, so a future model change that would leak secrets/PII or lose a
 scrub is caught in CI rather than in production.
 """
 
+import pytest
+
 from app.services.org_template_registry import (
     INCLUDE_SPECS,
     INCLUDED_TABLES,
@@ -84,3 +86,9 @@ def test_module_filter_is_a_subset():
         subset = specs_for_modules({module})
         assert subset, f"module {module} has no specs"
         assert all(s.module == module for s in subset)
+
+
+def test_an_org_scoped_spec_has_no_parent_table():
+    spec = next(s for s in INCLUDE_SPECS if s.parent_fk is None)
+    with pytest.raises(ValueError, match="no parent table"):
+        _parent_table(spec)

@@ -110,7 +110,7 @@ beforeEach(() => {
   for (const mock of [startFrom, updateYear, setPlanningStage, activate, adopt, beginClose, openItems, lock]) {
     mock.mockReset();
   }
-  startFrom.mockResolvedValue({ created: 2, skipped: 1 });
+  startFrom.mockResolvedValue({ created: 2, skipped: 1, retired: 0 });
   updateYear.mockResolvedValue(draft());
   setPlanningStage.mockResolvedValue(draft());
   activate.mockResolvedValue(draft());
@@ -165,7 +165,7 @@ describe('Start from last year', () => {
 
   it('copies from another year when one is chosen', async () => {
     const user = userEvent.setup();
-    startFrom.mockResolvedValue({ created: 1, skipped: 0 });
+    startFrom.mockResolvedValue({ created: 1, skipped: 0, retired: 0 });
     renderPage(years());
 
     await user.selectOptions(screen.getByLabelText('Start from last year'), 'fy-closed');
@@ -174,6 +174,21 @@ describe('Start from last year', () => {
 
     await waitFor(() => expect(startFrom).toHaveBeenCalledWith('fy-draft', 'fy-closed'));
     expect(toastSuccess).toHaveBeenCalledWith('1 line copied, 0 already there');
+  });
+
+  it('says how many lines were left out because their category is retired', async () => {
+    const user = userEvent.setup();
+    startFrom.mockResolvedValue({ created: 3, skipped: 0, retired: 2 });
+    renderPage(years());
+
+    await user.click(screen.getByRole('button', { name: 'Copy lines' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/lines in retired categories are not copied/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Copy lines' }));
+
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith('3 lines copied, 0 already there, 2 in retired categories left out')
+    );
   });
 
   it('does nothing when the Treasurer backs out', async () => {

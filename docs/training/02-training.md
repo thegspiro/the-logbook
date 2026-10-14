@@ -168,7 +168,9 @@ first. Amber means due within 90 days; red means overdue or expired.
 | **Opens _date_ · N days**       | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13)). |
 | **_N_ hrs to go**, with no date | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any day. It is listed last, with the counting window beneath.               |
 
-Skills tests are not in the list. When nothing is due, it says so.
+| **Expires _date_ · N days** (skills test) | A passing official skills test whose skill has a validity period. Set by an officer in the skill sheet's **Valid for (months)** field; see [Skills Testing](./09-skills-testing.md). |
+
+When nothing is due, it says so.
 
 ### The History Tab _(2026-10-13)_
 
@@ -433,7 +435,7 @@ If each meeting covers a different subject, you want a cohort.
 | Two classes land on the same day                         | Weekend and holiday skipping moves each class independently, so two can end up on the same date. The preview shows it — adjust a day number before generating.                                                                                                                                                                                                                    |
 | A blackout date is skipped even with weekend-moving off  | Correct. "Keep the computed date" only governs weekends; a blackout date always applies.                                                                                                                                                                                                                                                                                          |
 | You run a second cohort of the same course               | It reuses the pipeline the first one built. A member who was already enrolled keeps their existing progress — right for someone repeating the course, surprising if you expected a fresh start. Use **Start new cycle** on their enrollment to reset.                                                                                                                             |
-| A member can't be enrolled (missing a prerequisite)      | They're still added to the roster and you'll see the reason. You know your department better than the rules do.                                                                                                                                                                                                                                                                   |
+| A member can't be enrolled (missing a prerequisite)      | They're still added to the roster and you'll see the reason, but they aren't enrolled in the pipeline until they finish the prerequisite. You know your department better than the rules do.                                                                                                                                                                                      |
 | You add a member half-way through                        | They're added to the classes still to come, not the ones that already ran. Each class they missed waits on you to credit it or schedule a make-up — see **A member who joins late** above.                                                                                                                                                                                        |
 | You remove a member                                      | Their records and any class they already attended are kept. Upcoming classes come off their calendar.                                                                                                                                                                                                                                                                             |
 | **Shift remaining** doesn't move everything              | It only moves classes that haven't started, and never moves cancelled ones.                                                                                                                                                                                                                                                                                                       |
@@ -3046,6 +3048,11 @@ demonstrated, which raises their competency) both record practical skills. A
 department now picks one, so officers always know which one counts.
 
 **Where:** **Training Administration > Settings & Data > Practical Skills**.
+
+The **Evaluations** card on the Training Administration home now describes only
+what the area holds under the chosen method _(2026-10-14)_: a Skills Testing
+department no longer reads "Skill sign-offs and knowledge tests". An unknown
+method shows the general wording that names both systems.
 **Needs:** `training.manage`.
 
 | Choice                     | What stays                                                                                       | What is hidden                                                                                                                                  |

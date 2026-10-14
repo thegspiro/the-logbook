@@ -302,6 +302,16 @@ export const FUNCTIONAL_CLASS_LABELS: Record<FunctionalClass, string> = {
   [FunctionalClass.FUNDRAISING]: 'Fundraising',
 };
 
+/** Who may charge a category's lines on a request. `null` on a category inherits its parent's. */
+export const ChargeAccess = {
+  OPEN: 'open',
+  RESTRICTED: 'restricted',
+} as const;
+export type ChargeAccess = (typeof ChargeAccess)[keyof typeof ChargeAccess];
+
+export const isChargeAccess = (value: string | null | undefined): value is ChargeAccess =>
+  (Object.values(ChargeAccess) as string[]).includes(value ?? '');
+
 export interface BudgetCategory {
   id: string;
   organizationId: string;
@@ -316,6 +326,16 @@ export interface BudgetCategory {
   ownerPositionName?: string | null;
   /** Default for payments against its lines; null inherits the parent category's. */
   functionalClass?: FunctionalClass | null;
+  /** The category's own charge setting; null inherits its parent's. */
+  chargeAccess?: ChargeAccess | null;
+  /** The rule its lines are actually under, as the backend resolved it. */
+  effectiveChargeAccess?: ChargeAccess;
+  /** The ancestor the rule comes from when it is inherited; null otherwise. */
+  chargeAccessInheritedFrom?: string | null;
+  /** Positions this category names as able to charge it while restricted. */
+  chargePositionIds?: string[];
+  /** Category names from the top-level category down to this one. */
+  path?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -501,6 +521,20 @@ export interface BudgetCategoryUpdatePayload {
   qbAccountName?: string | null;
   ownerPositionId?: string | null;
   functionalClass?: FunctionalClass | null;
+  chargeAccess?: ChargeAccess | null;
+  chargePositionIds?: string[];
+}
+
+/** `PUT /finance/budget-categories/:id/charge-access` — the whole setting at once. */
+export interface ChargeAccessPayload {
+  chargeAccess: ChargeAccess | null;
+  chargePositionIds: string[];
+}
+
+/** `GET /finance/charge-access`: the categories the caller may set, and the positions. */
+export interface ChargeAccessSettings {
+  categories: BudgetCategory[];
+  positions: FinanceNamedOption[];
 }
 
 /** `POST /finance/budgets`. Blank optional fields are omitted. */
@@ -559,10 +593,14 @@ export interface FiscalYearUpdatePayload {
   requestDeadline?: string | null;
 }
 
-/** What "Start from last year" did: lines copied, and lines the draft already had. */
+/**
+ * What "Start from last year" did: lines copied, lines the draft already had,
+ * and lines left behind because their category is retired.
+ */
 export interface StartFromLastYearResult {
   created: number;
   skipped: number;
+  retired: number;
 }
 
 // =============================================================================
@@ -975,6 +1013,10 @@ export interface ExpenseReport {
   notes?: string;
   /** When the member submitted it; null before submission was recorded. */
   submittedAt?: string | null;
+  /** The member's cash advance this report accounts for. */
+  advanceId?: string | null;
+  /** How much of the report the advance covers, fixed on submission; the rest is reimbursed. */
+  advanceApplied?: MonetaryAmount | null;
   /** Lines submitted after the department's substantiation deadline. */
   lateLineCount?: number;
   /** The first approver who confirmed reviewing the late lines (null for an emailed approval). */
@@ -997,6 +1039,8 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   requestedBy: string;
   fiscalYearId: string;
   budgetId?: string;
+  /** Cash advanced to the requester ahead of an expense; charges no budget line or fund. */
+  isAdvance?: boolean;
   payeeName: string;
   payeeAddress?: string;
   amount: MonetaryAmount;
@@ -1040,6 +1084,9 @@ export interface DuesSchedule {
   appliesToMembershipTypes?: string[];
   isActive: boolean;
   notes?: string;
+  /** QuickBooks accounts for its payments; null takes the department's default. */
+  qbIncomeAccount?: string | null;
+  qbDepositAccount?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1076,6 +1123,8 @@ export interface DuesScheduleCreatePayload {
   /** UTC instant of the due date. */
   dueDate: string;
   notes?: string | undefined;
+  qbIncomeAccount?: string | undefined;
+  qbDepositAccount?: string | undefined;
 }
 
 /** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
@@ -1086,6 +1135,8 @@ export interface DuesScheduleUpdatePayload {
   dueDate?: string;
   isActive?: boolean;
   notes?: string | null;
+  qbIncomeAccount?: string | null;
+  qbDepositAccount?: string | null;
 }
 
 /** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
@@ -1176,16 +1227,157 @@ export interface ExportReadinessCategory {
   isActive: boolean;
   status: ExportReadinessStatus;
   accountName?: string | null;
-  /** `category` when the category names its own account, else `mapping`. */
-  accountSource?: 'category' | 'mapping' | null;
+  /** `category` when the category names its own account, `mapping` from its mapping, `parent` inherited. */
+  accountSource?: 'category' | 'mapping' | 'parent' | null;
   offsetAccountName?: string | null;
+  /** The ancestor category each account came from, when this one has none of its own. */
+  accountInheritedFrom?: string | null;
+  offsetInheritedFrom?: string | null;
   mappingIds: string[];
+}
+
+/** `POST /finance/export/transactions`. */
+export interface ExportRunPayload {
+  dateRangeStart: string;
+  dateRangeEnd: string;
+  /** Send again payments an earlier export already carried. */
+  includeExported: boolean;
 }
 
 export interface ExportReadiness {
   categories: ExportReadinessCategory[];
   /** Mappings whose category name matches no budget category: the export never uses them. */
   unmatchedMappingIds: string[];
+  dues?: DuesExportReadiness;
+  advances?: AdvanceExportReadiness;
+}
+
+export const AdvanceExportStatus = {
+  READY: 'ready',
+  NO_ADVANCES_ACCOUNT: 'no_advances_account',
+  NO_CASH_ACCOUNT: 'no_cash_account',
+  PAYABLE_RECEIVABLE: 'payable_receivable',
+} as const;
+export type AdvanceExportStatus = (typeof AdvanceExportStatus)[keyof typeof AdvanceExportStatus];
+
+/** Where cash advances post in QuickBooks. */
+export interface AdvanceExportReadiness {
+  status: AdvanceExportStatus;
+  /** The asset account an advance is owed on until it is accounted for. */
+  advancesAccount?: string | null;
+  /** The bank account advances are paid from and returned to. */
+  cashAccount?: string | null;
+}
+
+/** `PUT /finance/export/advance-accounts`; null clears one. */
+export interface AdvanceAccountsPayload {
+  advancesAccount: string | null;
+  cashAccount: string | null;
+}
+
+export const DuesExportStatus = {
+  READY: 'ready',
+  NO_INCOME: 'no_income',
+  NO_DEPOSIT: 'no_deposit',
+  PAYABLE_RECEIVABLE: 'payable_receivable',
+} as const;
+export type DuesExportStatus = (typeof DuesExportStatus)[keyof typeof DuesExportStatus];
+
+/** What an export would post one dues schedule's payments to. */
+export interface DuesScheduleExport {
+  scheduleId: string;
+  name: string;
+  isActive: boolean;
+  status: DuesExportStatus;
+  incomeAccount?: string | null;
+  /** `schedule` (its own) or `default` (the department's). */
+  incomeSource?: 'schedule' | 'default' | null;
+  depositAccount?: string | null;
+  depositSource?: 'schedule' | 'default' | null;
+}
+
+export interface DuesExportReadiness {
+  /** False until the department names a dues account anywhere; until then dues stay out of the export. */
+  enabled?: boolean;
+  defaultIncomeAccount?: string | null;
+  defaultDepositAccount?: string | null;
+  schedules: DuesScheduleExport[];
+}
+
+/** `PUT /finance/export/dues-accounts`; null clears one. */
+export interface DuesDefaultAccountsPayload {
+  incomeAccount: string | null;
+  depositAccount: string | null;
+}
+
+// =============================================================================
+// Cash advances
+// =============================================================================
+
+/** Days after its check by which an advance must be accounted for (the IRS safe harbor). */
+export const ADVANCE_RETURN_DAYS = 120;
+
+/** An issued cash advance and what is left of it. */
+export interface AdvanceSummary {
+  id: string;
+  requestNumber: string;
+  memberId: string;
+  memberName: string;
+  amount: MonetaryAmount;
+  purpose?: string | null;
+  checkNumber?: string | null;
+  issuedAt?: string | null;
+  /** 120 days after the check. */
+  dueAt?: string | null;
+  /** Covered by the member's submitted expense reports. */
+  accounted: MonetaryAmount;
+  returned: MonetaryAmount;
+  outstanding: MonetaryAmount;
+  overdue: boolean;
+}
+
+/** `GET /finance/reports/advances`: every advance not yet fully accounted for. */
+export interface AdvancesReport {
+  advances: AdvanceSummary[];
+  outstanding: MonetaryAmount;
+  overdueOutstanding: MonetaryAmount;
+}
+
+export interface AdvanceReportLink {
+  id: string;
+  reportNumber: string;
+  title: string;
+  status: ExpenseReportStatus;
+  totalAmount: MonetaryAmount;
+  /** How much of the report the advance covers; null until submitted. */
+  advanceApplied?: MonetaryAmount | null;
+  submittedAt?: string | null;
+}
+
+export interface AdvanceReturn {
+  id: string;
+  amount: MonetaryAmount;
+  returnedAt: string;
+  paymentMethod?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  recordedBy?: string | null;
+  qbExportedAt?: string | null;
+  createdAt: string;
+}
+
+export interface AdvanceDetail extends AdvanceSummary {
+  reports: AdvanceReportLink[];
+  returns: AdvanceReturn[];
+}
+
+/** `POST /finance/advances/{id}/returns`. */
+export interface AdvanceReturnPayload {
+  amount: string;
+  returnedAt?: string | undefined;
+  paymentMethod?: string | undefined;
+  reference?: string | undefined;
+  notes?: string | undefined;
 }
 
 export interface ExportLog {
@@ -1290,6 +1482,8 @@ export const PaymentKind = {
   CHECK_REQUEST: 'check_request',
   CHECK_VOID: 'check_void',
   EXPENSE_REPORT: 'expense_report',
+  CASH_ADVANCE: 'cash_advance',
+  ADVANCE_RETURN: 'advance_return',
 } as const;
 export type PaymentKind = (typeof PaymentKind)[keyof typeof PaymentKind];
 
@@ -1303,7 +1497,10 @@ export interface PaymentsRegisterRow {
   description: string;
   budgetLine?: string | null;
   checkNumber?: string | null;
-  /** A void is negative: it puts back what the check took out. */
+  /**
+   * A void, and cash returned against an advance, are negative. A report
+   * accounting for an advance shows only what was paid beyond it.
+   */
   amount: MonetaryAmount;
 }
 

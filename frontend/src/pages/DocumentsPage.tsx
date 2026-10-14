@@ -34,10 +34,13 @@ import { FolderManageDialog } from '../components/documents/FolderManageDialog';
 import { DocumentCorrectionNotice } from '../components/documents/DocumentCorrectionNotice';
 import { FolderAccessFields } from '../components/documents/FolderAccessFields';
 import {
+  ADMIN_ONLY_CONFIRMATION,
   EMPTY_FOLDER_ACCESS,
   folderAccessCreatePayload,
   folderAccessIncomplete,
+  isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorHandling';
 
 type ViewMode = 'grid' | 'list';
@@ -65,6 +68,7 @@ const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
 };
 
 const DocumentsPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
   const tz = useTimezone();
@@ -242,13 +246,20 @@ const DocumentsPage: React.FC = () => {
     if (!folderForm.name.trim() || folderAccessIncomplete(folderAccess)) return;
     setActionLoading(true);
     setCreateFolderError(null);
+    const payload = {
+      name: folderForm.name.trim(),
+      ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
+      ...(currentFolder ? { parent_id: currentFolder.id } : {}),
+      ...folderAccessCreatePayload(folderAccess),
+    };
     try {
-      await documentsService.createFolder({
-        name: folderForm.name.trim(),
-        ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
-        ...(currentFolder ? { parent_id: currentFolder.id } : {}),
-        ...folderAccessCreatePayload(folderAccess),
-      });
+      try {
+        await documentsService.createFolder(payload);
+      } catch (err: unknown) {
+        if (!isAdminOnlyRefusal(err)) throw err;
+        if (!(await confirm(ADMIN_ONLY_CONFIRMATION))) return;
+        await documentsService.createFolder({ ...payload, confirm_admin_only: true });
+      }
       setShowCreateFolder(false);
       setFolderForm({ name: '', description: '' });
       setFolderAccess(EMPTY_FOLDER_ACCESS);
@@ -261,7 +272,7 @@ const DocumentsPage: React.FC = () => {
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary]);
+  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary, confirm]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) return;

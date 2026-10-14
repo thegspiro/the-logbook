@@ -1,8 +1,77 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** #1807 (pass 1)
 
 ---
+
+## Pass 9 (2026-10-14) — watchdog pickup: delta re-verify, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
+
+**Scope.** Diffed pass 8's own merge (`44a66e34`, PR #3128) against current
+`HEAD` across the same declared file set passes 3–8 established
+(`storefront.py`, `storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, the `frontend/src/modules/storefront/` tree, and any
+migration touching storefront/embroidery/personalization tables).
+
+**Caught and corrected a shallow-clone truncation before trusting the delta**
+— the same risk the Apparatus & NFC pass 14 note warned a later pass about
+(CLAUDE.md-adjacent; `git rev-parse --is-shallow-repository` returned `true`).
+A pathspec-filtered `git log` run before unshallowing returned a false
+positive: `793d3209` (`fix(members): hold the Organization lock for the whole
+tier-advance scan`, USR-10a — an unrelated member-tier fix) appeared to touch
+`storefront.py`/`storefront_service.py` only because, at the shallow
+boundary, git had no parent to diff against and reported the whole file as
+newly added, matching the pathspec by accident. `git fetch --unshallow`
+resolved it; the corrected, real delta is 3 non-merge commits, none of them
+`793d3209`.
+
+**3 non-merge commits since pass 8, all read in full:**
+
+1. **`e3f236d8` — `perf(exports): stream the admin-hours, storefront and
+training CSV exports (AH-16)`.** `export_orders_csv` is now a thin
+   `collect_csv` join over a new `stream_orders_csv`/`_order_csv_chunks`
+   generator; the response at `GET /storefront/orders/export` is now a
+   `StreamingResponse` over those chunks instead of one buffered string.
+   Still written through `SafeCsvWriter` (now via `SafeCsvChunks`, a drained
+   `SafeCsvWriter` — Pitfall #15 intact), still pages through the full result
+   set rather than stopping at the first page, and the `organization_id`
+   filter and `holds_unpaid`/`window_id`/`status` scoping are unchanged —
+   confirmed by direct read, not inferred from the commit message (which
+   undersells it as exports-only; it is, no auth/tenancy change). This also
+   resolves the "order-export unbounded pagination" item carried in pass 8's
+   own notes above — already reflected as **Resolved 2026-10-11** in
+   `KNOWN_LIMITATIONS.md`'s AH-16 row, so no further doc change needed here.
+2. **`7770b180` / `fb70c06a` — accessibility-only.** Cart/product quantity
+   steppers gained `aria-live`/`sr-only` announcements and swapped `md:`
+   sizing for the `touch:` variant (Pitfall's shared-utility convention);
+   `StorefrontPage` no longer flashes "The store is closed" before its first
+   load answers (a `firstLoadDone` state gate, not a data-fetching change).
+   No route, permission, or org-scoping touched in either commit.
+
+**No migrations** touching storefront/embroidery/personalization tables
+landed in this window (confirmed via `--diff-filter=A` on the versions
+directory).
+
+**Re-verified unchanged, by direct read:** `update_order_status`'s
+settlement branch still reads via a plain `get_order()` (no `for_update`) at
+`storefront_service.py:1866`, writing `amount_paid`/`payment_status` from
+that unlocked read at `:1907`–`:1912` — **SF8-04-2 stays OPEN (flagged)**,
+exactly as pass 8 described it, mirrored in `KNOWN_LIMITATIONS.md`.
+`waive_order_payment` still has no `_is_settled()` guard and still reads
+unlocked at `:2095` — **SF8-04-3 stays OPEN (flagged)**, likewise unchanged.
+Neither this pass's own scope (a docs-only delta re-verify) nor the three
+commits above touch either method, so nothing here changes the "why flagged,
+not fixed" rationale pass 8 already recorded: both are still an owner
+decision, not a low-risk mechanical fix. The five self-settlement
+separation-of-duties guards (`record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`, `update_order_status`'s
+`settles_payment` branch) all still call `assert_different_person` before any
+mutation, confirmed by direct read of each. PayPal webhook signature
+verification and replay guard untouched (file not in this window's delta).
+All 48 routes' permission gates unchanged (no backend route file in this
+window's delta touched a `Depends`).
+
+**0 fixed, 0 new findings.**
 
 ## Pass 8 (2026-10-12) — watchdog pickup: SF-9 and SF-11 closed by other work, one new lock gap fixed, two more flagged
 

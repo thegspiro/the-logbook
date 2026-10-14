@@ -230,11 +230,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor/assigned officer if configured on the enrollment
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"New Trainee Enrolled: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has been enrolled in {program.name}. You are assigned as their mentor.",
@@ -271,11 +274,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"Trainee Advanced: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has advanced to {new_phase_name} in {program.name}.",
@@ -311,11 +317,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"Trainee Completed: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has completed {program.name}!",
@@ -356,7 +365,7 @@ class TrainingProgramService:
         notif_service = NotificationsService(self.db)
         for milestone in milestones:
             message = milestone.notification_message or (
-                f"You've reached {round(milestone.completion_percentage_threshold)}% "
+                f"You've reached {round(milestone.completion_percentage_threshold or 0)}% "
                 f"of this training program. Keep going!"
             )
             await notif_service.log_notification(
@@ -475,11 +484,14 @@ class TrainingProgramService:
             },
         )
 
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": (
                         f"Recert cycle started: {user.display_name} - {program.name}"
@@ -1580,7 +1592,7 @@ class TrainingProgramService:
             RequirementType.SHIFTS: getattr(requirement, "required_shifts", None),
             RequirementType.CALLS: getattr(requirement, "required_calls", None),
             RequirementType.COURSES: (
-                len(requirement.required_courses)
+                len(requirement.required_courses or [])
                 if getattr(requirement, "required_courses", None)
                 else None
             ),
@@ -2487,6 +2499,18 @@ class TrainingProgramService:
         if not user:
             return None, "User not found"
 
+        # Every enrollment path ends here, so the prerequisite gate lives here
+        # too: the single-member endpoint used to skip it, while the picker,
+        # bulk enrollment and cohort roster sync applied it on their own.
+        missing = await self.missing_prerequisites(
+            getattr(program, "prerequisite_program_ids", None),
+            [enrollment_data.user_id],
+            organization_id,
+        )
+        if missing:
+            names = ", ".join(next(iter(missing.values())))
+            return None, f"Must first complete: {names}"
+
         # Check for existing active enrollment. A read-then-insert: two
         # concurrent enrollments of one member both passed a plain SELECT and
         # left two ACTIVE rows. The department's enrollment lock serializes
@@ -2581,6 +2605,57 @@ class TrainingProgramService:
 
         return enrollment, None
 
+    async def missing_prerequisites(
+        self,
+        prerequisite_program_ids: Optional[Sequence[str]],
+        user_ids: Sequence[UUID | str],
+        organization_id: UUID | str,
+    ) -> Dict[str, List[str]]:
+        """Which members have not completed a program's prerequisites.
+
+        Returns ``{user_id: [names of the prerequisite programs not yet
+        completed]}``, with members who have finished all of them left out. A
+        prerequisite counts only once its enrollment is COMPLETED. An id that
+        names no program in this department (a stale clone or import) can never
+        be completed and is reported as "a prerequisite program".
+
+        The one definition behind the enroll picker, bulk enrollment and cohort
+        roster sync, so the three cannot disagree about who is eligible.
+        """
+        prereq_ids = [str(p) for p in (prerequisite_program_ids or [])]
+        user_id_strs = [str(u) for u in user_ids]
+        if not prereq_ids or not user_id_strs:
+            return {}
+
+        name_rows = await self.db.execute(
+            select(TrainingProgram.id, TrainingProgram.name).where(
+                TrainingProgram.id.in_(prereq_ids),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
+        completed_pairs: set[tuple[str, str]] = set()
+        if prereq_names:
+            completed_result = await self.db.execute(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.program_id.in_(list(prereq_names)),
+                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+                )
+            )
+            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
+
+        missing: Dict[str, List[str]] = {}
+        for uid in user_id_strs:
+            names = [
+                prereq_names.get(pid, "a prerequisite program")
+                for pid in prereq_ids
+                if (uid, pid) not in completed_pairs
+            ]
+            if names:
+                missing[uid] = names
+        return missing
+
     async def get_enrollment_eligibility(
         self,
         program_id: UUID,
@@ -2624,32 +2699,9 @@ class TrainingProgramService:
         enrolled_ids = {str(row[0]) for row in enrolled_result.all()}
 
         # Missing prerequisites — per user, the specific programs not yet done.
-        missing_prereqs: dict[str, List[str]] = {}
-        if program.prerequisite_program_ids and user_id_strs:
-            prereq_ids = [str(p) for p in program.prerequisite_program_ids]
-            name_rows = await self.db.execute(
-                select(TrainingProgram.id, TrainingProgram.name).where(
-                    TrainingProgram.id.in_(prereq_ids),
-                    TrainingProgram.organization_id == str(organization_id),
-                )
-            )
-            prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
-            completed_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
-                    ProgramEnrollment.user_id.in_(user_id_strs),
-                    ProgramEnrollment.program_id.in_(prereq_ids),
-                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
-                )
-            )
-            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
-            for uid in user_id_strs:
-                missing = [
-                    prereq_names.get(pid, "a prerequisite program")
-                    for pid in prereq_ids
-                    if (uid, pid) not in completed_pairs
-                ]
-                if missing:
-                    missing_prereqs[uid] = missing
+        missing_prereqs = await self.missing_prerequisites(
+            program.prerequisite_program_ids, user_id_strs, organization_id
+        )
 
         # Active in another program — a soft advisory, NOT a block. A member can
         # be in several programs at once (e.g. onboarding courses); we only note
@@ -3507,9 +3559,8 @@ class TrainingProgramService:
 
             # Auto-complete if reached 100%
             if (
-                progress.progress_percentage >= 100.0
-                and progress.status != RequirementProgressStatus.COMPLETED
-            ):
+                progress.progress_percentage or 0.0
+            ) >= 100.0 and progress.status != RequirementProgressStatus.COMPLETED:
                 progress.status = RequirementProgressStatus.COMPLETED
                 progress.completed_at = datetime.now(timezone.utc)
 
@@ -3744,9 +3795,9 @@ class TrainingProgramService:
             units=float(units),
             applied_by=str(applied_by) if applied_by else None,
             previous_status=(
-                progress.status.value
-                if mark_completed and hasattr(progress.status, "value")
-                else (str(progress.status) if mark_completed else None)
+                str(getattr(progress.status, "value", progress.status))
+                if mark_completed and progress.status is not None
+                else None
             ),
             phase_before_id=str(phase_before_id) if phase_before_id else None,
         )
@@ -5305,7 +5356,9 @@ class TrainingProgramService:
 
         # Calculate new version
         new_version = (
-            source_program.version + 1 if increment_version else source_program.version
+            (source_program.version or 1) + 1
+            if increment_version
+            else source_program.version
         )
 
         # Create new program
@@ -5488,7 +5541,7 @@ class TrainingProgramService:
         by_id = {str(p.id): p for p in program.phases}
         for phase in sorted(program.phases, key=lambda p: p.phase_number):
             phase_reqs = []
-            for pr in sorted(phase.requirements, key=lambda r: r.sort_order):
+            for pr in sorted(phase.requirements, key=lambda r: r.sort_order or 0):
                 req = pr.requirement
                 phase_reqs.append(
                     {
@@ -6052,32 +6105,15 @@ class TrainingProgramService:
 
         # Check for prerequisite programs (batch query instead of O(U*P) queries)
         prerequisite_errors = []
-        if program.prerequisite_program_ids:
-            prereq_uuids = [UUID(pid) for pid in program.prerequisite_program_ids]
-            # Single query: fetch all completed prerequisite enrollments for these users
-            completed_prereqs_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, TrainingProgram.id)
-                .join(TrainingProgram)
-                .where(
-                    ProgramEnrollment.user_id.in_(user_id_strs),
-                    TrainingProgram.id.in_([str(p) for p in prereq_uuids]),
-                    TrainingProgram.organization_id == str(organization_id),
-                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+        missing_prereqs = await self.missing_prerequisites(
+            program.prerequisite_program_ids, user_id_strs, organization_id
+        )
+        for uid in user_ids:
+            if str(uid) in missing_prereqs:
+                prerequisite_errors.append(
+                    f"{_user_name(uid)} has not completed prerequisite program"
                 )
-            )
-            # Build a set of (user_id, program_id) pairs that are completed
-            completed_pairs = {
-                (str(row[0]), str(row[1])) for row in completed_prereqs_result.all()
-            }
-
-            for uid in user_ids:
-                for prereq_id in program.prerequisite_program_ids:
-                    if (str(uid), prereq_id) not in completed_pairs:
-                        prerequisite_errors.append(
-                            f"{_user_name(uid)} has not completed prerequisite program"
-                        )
-                        blocked_user_ids.add(str(uid))
-                        break  # One missing prereq is enough
+                blocked_user_ids.add(str(uid))
 
         # Concurrent enrollment is a soft advisory, not a block — a member can be
         # in several programs at once (onboarding courses, etc.). The picker

@@ -492,11 +492,19 @@ class InventoryNfcService:
                 "action": scan.action,
                 "tag_uid_preview": preview,
                 "storage_area_id": scan.storage_area_id,
-                "storage_area_name": areas.get(scan.storage_area_id),
+                "storage_area_name": (
+                    areas.get(scan.storage_area_id) if scan.storage_area_id else None
+                ),
                 "from_storage_area_id": scan.from_storage_area_id,
-                "from_storage_area_name": areas.get(scan.from_storage_area_id),
+                "from_storage_area_name": (
+                    areas.get(scan.from_storage_area_id)
+                    if scan.from_storage_area_id
+                    else None
+                ),
                 "scanned_by": scan.scanned_by,
-                "scanned_by_name": names.get(scan.scanned_by),
+                "scanned_by_name": (
+                    names.get(scan.scanned_by) if scan.scanned_by else None
+                ),
                 "scanned_at": scan.scanned_at,
             }
             for scan, preview in rows
@@ -603,7 +611,11 @@ class InventoryNfcService:
                     item_name=item.name,
                     result=InventoryNfcAuditResult.UNEXPECTED,
                     recorded_storage_area_id=item.storage_area_id,
-                    recorded_storage_area_name=area_names.get(item.storage_area_id),
+                    recorded_storage_area_name=(
+                        area_names.get(item.storage_area_id)
+                        if item.storage_area_id
+                        else None
+                    ),
                 )
             )
         audit.items = lines
@@ -1093,7 +1105,9 @@ class InventoryNfcService:
                 "serial_number": item.serial_number,
                 "asset_tag": item.asset_tag,
                 "category_name": item.category.name if item.category else None,
-                "storage_area_name": areas.get(item.storage_area_id),
+                "storage_area_name": (
+                    areas.get(item.storage_area_id) if item.storage_area_id else None
+                ),
             }
             for item in items
         ]
@@ -1336,7 +1350,7 @@ class InventoryNfcService:
             name = result.scalar_one_or_none()
             place = f'"{name}"' if name else "another item"
         elif existing.check_compartment_id is not None:
-            result = await self.db.execute(
+            compartment_result = await self.db.execute(
                 select(CheckTemplateCompartment.name, EquipmentCheckTemplate.name)
                 .join(
                     EquipmentCheckTemplate,
@@ -1347,7 +1361,7 @@ class InventoryNfcService:
                     EquipmentCheckTemplate.organization_id == existing.organization_id,
                 )
             )
-            row = result.first()
+            row = compartment_result.first()
             place = f'"{row[0]}" on "{row[1]}"' if row else "another compartment"
         else:
             result = await self.db.execute(

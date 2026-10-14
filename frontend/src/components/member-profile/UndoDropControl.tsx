@@ -119,7 +119,12 @@ export const UndoDropControl: React.FC<UndoDropControlProps> = ({ userId, member
             disabled={working}
           />
         </div>
-        <button type="button" className="btn-primary" onClick={() => void handleUndo()} disabled={working}>
+        <button
+          type="button"
+          className="btn-primary inline-flex items-center gap-2"
+          onClick={() => void handleUndo()}
+          disabled={working}
+        >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
           Undo drop
         </button>

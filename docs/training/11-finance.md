@@ -15,11 +15,12 @@ The Finance module manages budgets, purchase requests, expense reports, check re
 7. [Purchase Requests](#purchase-requests)
 8. [Expense Reports](#expense-reports)
 9. [Check Requests](#check-requests)
-10. [Dues & Assessments](#dues--assessments)
-11. [Board Reports](#board-reports)
-12. [QuickBooks Export](#quickbooks-export)
-13. [Realistic Example: Annual Budget Cycle](#realistic-example-annual-budget-cycle)
-14. [Troubleshooting](#troubleshooting)
+10. [Cash Advances](#cash-advances)
+11. [Dues & Assessments](#dues--assessments)
+12. [Board Reports](#board-reports)
+13. [QuickBooks Export](#quickbooks-export)
+14. [Realistic Example: Annual Budget Cycle](#realistic-example-annual-budget-cycle)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -289,7 +290,7 @@ To change a category's name, description or owner position later, click the penc
 
 ### Category Hierarchy
 
-Categories can be nested one level deep. A parent category serves as a logical grouping for its child categories. For example:
+Categories nest under a parent _(2026-10-14: the settings dialog has a **Parent category** picker, and a sub-line can have sub-lines of its own)_. A parent category serves as a logical grouping for its child categories. For example:
 
 ```
 Operations (parent)
@@ -303,6 +304,29 @@ Training (parent)
 ```
 
 > **Hint:** Keep your category structure aligned with your chart of accounts in QuickBooks or your accounting system. This simplifies the export mapping later and ensures your financial reports match across systems.
+
+### Who Can Charge a Category's Lines _(2026-10-14)_
+
+A category can say who may pick its budget lines on a purchase request, check request or expense report. A Quartermaster category might hold an open **Boot reimbursement** line that everyone can use and an **Officer brass** line kept for the Quartermaster and the positions they choose.
+
+In the category's settings, **Who can charge these lines** has three choices:
+
+| Choice                                            | What it means                                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same as the parent category                       | The parent's rule, positions included. A top-level category left this way is open, which is how every line behaved before the setting existed. |
+| **Anyone who submits requests**                   | Every member who can raise a request may pick the line.                                                                                        |
+| **Only the owner and the positions chosen below** | The line's owner, the owner of its category (or of any category above it) and the positions ticked under **Also allow these positions**.       |
+
+Everyone else does not see a restricted line in the request form's picker, and the server refuses it if a request names it anyway. Lines in the picker are labelled with their category path (for example **Quartermaster › Officer brass**).
+
+- **Treasurers** (`finance.manage`) are not held to the rule and can charge any line.
+- **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
+- **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
+- **The category settings gained a parent picker** (**None (a top-level category)** or any category; a choice that would make a category its own ancestor is refused), a tree list, and the charge setting. The **Budgets** page groups sub-lines under their top-level category with a subtotal.
+
+_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+
+_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
 
 ### Deactivating a Category
 
@@ -521,6 +545,12 @@ only once you own at least one line; you do not need `finance.view`.
 
 Only lines you own open for you; any other line's address answers "Budget not
 found".
+
+If your position owns a **category**, a **Who can charge your lines** card sits
+below your lines _(2026-10-14)_. It lets you open a line to everyone who submits
+requests or keep it for you and the positions you choose; see
+[Who Can Charge a Category's Lines](#who-can-charge-a-categorys-lines-2026-10-14).
+It does not appear if you own no category.
 
 ### Viewing Budget Details
 
@@ -1311,6 +1341,53 @@ The check status changes to **Voided**. The amount is subtracted from the budget
 
 ---
 
+## Cash Advances
+
+_(2026-10-14)_ A cash advance is money the department gives a member **before** an expense — travel to a conference, a supply run — instead of reimbursing them afterwards. The IRS lets the department do this tax-free only if the member accounts for the money: receipts within 60 days of each expense, and anything not spent handed back within **120 days of the advance**. What is left after that may have to be reported as the member's wages.
+
+### Asking for an Advance (members)
+
+1. Go to **Finance › Check Requests** and click **New Check Request**.
+2. Tick **This is a cash advance to me**. The payee is filled with your name, and the budget and fund disappear: an advance is not charged to a budget until you report what you spent.
+3. Enter the amount, the fiscal year and the purpose, then **Create Check Request** and **Submit for Approval**.
+
+It is approved and issued like any check. The Treasurer cannot issue a check to themselves; another officer does.
+
+> **Hint:** You cannot submit a new advance while one of yours is **more than 120 days old and not fully accounted for**. The form warns you, naming it. Reimbursements and other requests are not affected.
+
+### Accounting for an Advance (members)
+
+When you have spent the money, create an expense report as usual and choose the advance under **Accounts for a cash advance** (it appears only when you have one open). Attach every receipt and submit.
+
+- The report is taken off what you owe on the advance. If you spent **more** than the advance, the rest is reimbursed to you as usual.
+- If you spent **less**, hand the rest back to the Treasurer, who records it.
+- You can split an advance over several reports. Once it is fully accounted for, a further report against it is refused; submit it as an ordinary reimbursement.
+
+The advance's own page (open the check request) shows **Accounting for this advance**: what was advanced, what your reports cover, what you returned, what is outstanding and the date it is due by.
+
+### Recording Returned Cash (Treasurer)
+
+1. Open the advance (its check request).
+2. Click **Record returned cash**. The amount is filled with what is outstanding; change it if they returned less.
+3. Choose the day, the method and any reference, then **Record return**.
+
+The member who owes the advance cannot record their own return. A return entered by mistake can be removed with the bin icon until a QuickBooks export has included it.
+
+**Finance › Reports › Cash advances** lists every advance not yet fully accounted for, who has it, when it is due and which are overdue, with a CSV.
+
+### Edge Cases
+
+| Scenario                                                     | Behavior                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| An expense report against an advance is denied               | It stops counting; that part of the advance is owed again                             |
+| A report waiting for approval                                | It already counts: submitting it is what accounts for the money                       |
+| Returning more than is outstanding                           | Refused                                                                               |
+| Voiding an advance a report or return already counts against | Refused. Void only an advance nothing has been recorded against                       |
+| Changing which advance a report accounts for                 | Only while the report is a draft                                                      |
+| An advance and the budget                                    | The budget is charged when the expense report is paid, not when the advance is issued |
+
+---
+
 ## Dues & Assessments
 
 **Required Permission:** `finance.view` (to view), `finance.manage` (to create schedules and manage payments)
@@ -1692,7 +1769,29 @@ Click **Add mapping** (or **Edit mapping**) on a category and enter:
 
 A category's own **QuickBooks account** (set in its dialog on Finance Settings) takes precedence over its mapping's.
 
+**Subcategories use their parent's accounts** _(2026-10-14)_. A subcategory with no account or mapping of its own posts where its parent does — map **Operations** once and **Turnout gear** under it exports too. The table shows where each account came from (**From Operations**). A subcategory can still name its own expense account; it then keeps its parent's paid-from account unless its own mapping gives one.
+
 > **Accounts Payable and Accounts Receivable can't be used** _(2026-10-09)_. QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and a mapping saved before that shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
+
+### Dues Payments
+
+Dues payments go to QuickBooks too _(2026-10-14)_: each one is an entry that puts the money in the account it was deposited to and credits an income account.
+
+- Dues are **not exported until you set them up** — until then the export leaves them out, as it always did. Set the department's **Default income account** and **Default deposited to** under **Dues** on **Finance › QuickBooks Export**.
+- A schedule that should post elsewhere — a **Fines** schedule credited to its own income account, say — names its own in the **QuickBooks** part of its dialog on **Finance › Dues**. Whatever it leaves blank uses the default.
+- The **Dues** table shows each schedule's accounts, whether they are its own or the default, and **Ready** when its payments can be exported. An export with payments from a schedule that is not ready is refused, naming the schedule.
+
+In the file, a dues entry's Journal No starts with `DUES-`, its memo names the schedule, and its description names the member and how they paid.
+
+### Cash Advances
+
+_(2026-10-14)_ A cash advance is money the member owes the department until they account for it, so QuickBooks keeps it on an asset account. Under **Cash advances** on **Finance › QuickBooks Export**, set the **Advances account** (create one in QuickBooks first, an _Other Current Asset_ such as **Employee Advances**) and **Paid from and returned to** (your bank account).
+
+- The advance's check moves money from the bank to the advances account.
+- The expense report that accounts for it charges its expense accounts as usual, but takes the money **from the advances account** up to the advance, and from the bank for anything reimbursed beyond it.
+- Returned cash moves money from the advances account back to the bank (Journal No starting `ADVR-`).
+
+The balance of the advances account in QuickBooks is then what members still owe, and should match the total on **Finance › Reports › Cash advances**. An export with an advance in it is refused until both accounts are set; a department that never uses advances does not need them.
 
 ### The File
 
@@ -1710,12 +1809,20 @@ An expense report is one entry with a debit and credit pair for each of its line
 
 An export is **refused** — with a message naming what to fix, and no file — when any transaction in the period has no budget line, when a category it uses is not **Ready**, or when the file would reach **1,000 rows**, QuickBooks Online's import limit. Each transaction is two rows, so that is about 499 transactions; export a shorter period, then the rest.
 
-Running an export (`POST /finance/export/transactions`) has no screen yet; see [Finance — QuickBooks Export Gaps](../KNOWN_LIMITATIONS.md#finance--quickbooks-export-gaps-2026-10-08).
+### Running an Export
+
+On **Finance › QuickBooks Export**, under **Run an export** _(2026-10-14)_:
+
+1. Choose the **First day** and **Last day**. Last month is filled in for you. The days are your department's calendar days.
+2. Click **Download QuickBooks file**. The file is named for the period, for example `quickbooks-journal_2026-09-01_2026-09-30.csv`.
+3. If something blocks the export — a category with no account, a payment with no budget line — the reason appears under the button and no file is made. Fix it on the same page and run it again.
+
+The run then appears under **Export history**.
 
 **Each payment is sent once** _(2026-10-11)_. QuickBooks does not stop you importing the same entry twice, so the export keeps track instead:
 
 - A payment a complete export has already carried is **left out** of later exports. Exporting September and then the whole quarter sends September's payments only once. The purchase request, expense report or check request page shows **Sent to QuickBooks** with the date.
-- To send a period again — for example after deleting its entries in QuickBooks — ask for **already-sent payments to be included** (`includeExported`). Do not import the file over entries that are still in QuickBooks, or they will be doubled.
+- To send a period again — for example after deleting its entries in QuickBooks — tick **Include payments already sent to QuickBooks**; you are asked to confirm. Do not import the file over entries that are still in QuickBooks, or they will be doubled.
 - If an export is interrupted before the whole file is produced, nothing is marked as sent; the next export carries those payments.
 - Only one export runs at a time. A second one started while the first is still being prepared is refused; wait for it to finish.
 

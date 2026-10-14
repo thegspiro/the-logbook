@@ -71,11 +71,11 @@
 **Fix:** `20261013_2044_7a6684f8b975`, an empty merge of the two heads.
 Published revisions are frozen, so neither was edited. Committed and pushed
 on its own (`51e8aff3b`) ahead of the rest of this run.
-**Later the same day:** `main` joined the same pair independently with
-`70070d86ff27`. Merging it brought back two heads, so `7a6684f8b975` now
-follows `70070d86ff27` and adds nothing. It is kept, not deleted, because
-databases were already stamped with it.
-**Re-checked:**
+**Later:** `main` joined the same pair independently with `70070d86ff27` and
+then built further migrations on it, so `7a6684f8b975` became a second head
+after every merge. It was removed from the branch (it never reached `main`).
+The local databases that had applied it were re-stamped to `70070d86ff27`
+with `alembic stamp`.
 
 - `alembic heads` lists one;
 - the review and test databases upgraded;

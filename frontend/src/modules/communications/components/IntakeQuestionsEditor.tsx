@@ -206,7 +206,7 @@ const IntakeQuestionsEditor: React.FC<IntakeQuestionsEditorProps> = ({
   };
 
   return (
-    <section aria-labelledby="box-questions-heading" className="border-theme-surface-border space-y-4 border-t pt-4">
+    <section aria-labelledby="box-questions-heading" className="border-theme-surface-border space-y-4 border-y py-4">
       <div>
         <h3 id="box-questions-heading" className="text-theme-text-primary text-sm font-semibold">
           Questions

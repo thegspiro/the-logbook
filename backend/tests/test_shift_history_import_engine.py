@@ -654,3 +654,22 @@ class TestConfidence:
         t = datetime(2025, 1, 1, 12, tzinfo=timezone.utc)
         later = t + timedelta(hours=2)
         assert engine.match_confidence(t, t, later, later) == 0
+
+    def test_the_article_follows_how_the_percentage_is_read(self):
+        assert engine.percent_phrase(85) == "an 85%"
+        assert engine.percent_phrase(80) == "an 80%"
+        assert engine.percent_phrase(70) == "a 70%"
+        assert engine.percent_phrase(60) == "a 60%"
+        assert engine.percent_phrase(11) == "an 11%"
+        assert engine.percent_phrase(18) == "an 18%"
+        assert engine.percent_phrase(100) == "a 100%"
+
+    def test_a_probable_match_message_reads_an_85_percent(self):
+        analysis = _analyze(
+            [
+                _row(2, membership_number="101", start_time="07:00", end_time="07:00"),
+                _row(3, membership_number="102", start_time="07:30", end_time="07:00"),
+            ]
+        )
+        message = next(i.message for i in analysis.issues if i.code == "probable_match")
+        assert message.startswith("Line 3 is an 85% match for the shift starting")

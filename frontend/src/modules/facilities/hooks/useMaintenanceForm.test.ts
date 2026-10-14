@@ -51,10 +51,11 @@ const existing: MaintenanceRecord = {
   notes: 'Bring the spare filter',
 } as MaintenanceRecord;
 
-/** Blank every optional box, as a user clearing the fields would. */
+/** Blank every optional box, as a user clearing the fields would. The type is
+ *  required, so it stays chosen. */
 const cleared = {
   facility_id: 'fac-1',
-  maintenance_type_id: '',
+  maintenance_type_id: 'type-1',
   description: 'Quarterly generator service',
   scheduled_date: '',
   due_date: '',
@@ -103,22 +104,25 @@ describe('useMaintenanceForm payload contract', () => {
     });
   });
 
-  it('omits a blank maintenance_type_id rather than nulling a NOT NULL column', async () => {
+  // The column is NOT NULL, so a blank type is refused before anything is
+  // sent: nulling it would be rejected by the server, and omitting it on
+  // create was refused there with a message the form never showed.
+  it.each(['create', 'edit'] as const)('sends nothing on %s while the maintenance type is blank', async (mode) => {
     const { result } = renderHook(() => useMaintenanceForm({ facilityId: 'fac-1' }));
 
     await act(async () => {
-      result.current.openEdit(existing);
+      if (mode === 'create') result.current.openCreate('fac-1');
+      else result.current.openEdit(existing);
     });
     await act(async () => {
-      result.current.setFormData(cleared);
+      result.current.setFormData({ ...cleared, maintenance_type_id: '' });
     });
     await act(async () => {
       await result.current.handleSave();
     });
 
-    const payload = updateMaintenanceRecord.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(payload.maintenance_type_id).toBeUndefined();
-    expect(payload.maintenance_type_id).not.toBeNull();
+    expect(createMaintenanceRecord).not.toHaveBeenCalled();
+    expect(updateMaintenanceRecord).not.toHaveBeenCalled();
   });
 
   it.each([

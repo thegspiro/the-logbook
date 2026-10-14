@@ -144,6 +144,8 @@ export interface SkillTemplate {
   score_pass_fail_criteria?: boolean;
   /** Training-pipeline requirement this template's tests satisfy (optional) */
   requirement_id?: string;
+  /** Months a passing official test stays valid; null/absent never lapses. */
+  valid_for_months?: number | null;
   /** Disclosure overrides for this template; null inherits the org default. */
   result_disclosure?: ResultDisclosure;
   result_release?: ResultRelease;
@@ -167,6 +169,7 @@ export interface SkillTemplateCreate {
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
   requirement_id?: string | null | undefined;
+  valid_for_months?: number | null | undefined;
   /** null is meaningful here, not just absent: it says "inherit the department
    *  default" explicitly, which is how an existing override gets cleared. The
    *  backend's exclude_unset would drop an undefined and leave the old value. */
@@ -211,6 +214,7 @@ export interface SkillTemplateUpdate {
   score_pass_fail_criteria?: boolean | undefined;
   tags?: string[] | undefined;
   requirement_id?: string | null | undefined;
+  valid_for_months?: number | null | undefined;
   result_disclosure?: ResultDisclosure | null | undefined;
   result_release?: ResultRelease | null | undefined;
   result_viewer_positions?: string[] | null | undefined;

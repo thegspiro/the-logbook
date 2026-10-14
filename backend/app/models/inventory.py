@@ -752,6 +752,16 @@ class InventoryItem(Base):
         "InventoryLot", back_populates="item", cascade="all, delete-orphan"
     )
 
+    if TYPE_CHECKING:
+        # Not columns. InventoryService stamps these on rows it has loaded so
+        # InventoryItemResponse can read them (_attach_lot_stock,
+        # _attach_pin_positions, _attach_group_keys). Declared only for the type
+        # checker: an annotation SQLAlchemy sees would have to be mapped.
+        is_lot_stocked: bool
+        lot_stock: Optional[int]
+        pin_position: Optional[int]
+        group_key: Optional[str]
+
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),
         Index("idx_inventory_items_org_status", "organization_id", "status"),

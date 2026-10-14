@@ -27,6 +27,13 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// positionLabel() reads the department's custom seats from here; the built-in
+// seats these drafts use need nothing from it.
+vi.mock('../../../../modules/scheduling/services/shiftSettingsApi', () => ({
+  ensureShiftSettingsLoaded: () => Promise.resolve({}),
+  getCachedShiftSettings: () => ({ customPositions: [] }),
+}));
+
 import ShiftHistoryImportReviewPage from './ShiftHistoryImportReviewPage';
 
 const attendance = (overrides: Partial<HistoryImportAttendance> = {}): HistoryImportAttendance => ({
@@ -303,5 +310,84 @@ describe('ShiftHistoryImportReviewPage', () => {
 
     expect(screen.getByText('Remembered')).toBeInTheDocument();
     expect(screen.getByText('Recorded as Alice Ng')).toBeInTheDocument();
+  });
+  it('names seats the way the department does, not by their stored code', async () => {
+    mockGet.mockResolvedValue(
+      draft({
+        shifts: [
+          {
+            key: 'r2',
+            apparatus_id: 'app-1',
+            shift_date: '2025-03-01',
+            start: '2025-03-01T12:00:00Z',
+            end: '2025-03-02T12:00:00Z',
+            existing_status: 'none',
+            attendances: [attendance({ seat: 'ems' })],
+          },
+        ],
+        positions: [{ key: 'emt', source: 'EMT', status: 'matched', seat: 'ems', row_count: 1, remembered: false }],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+    expect(screen.getByText(/· EMT ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/· ems ·/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /Positions/ }));
+    expect(screen.getByText(/seat: EMT/)).toBeInTheDocument();
+  });
+
+  it('dates the end of a shift that runs past midnight', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    // 07:00 on March 1 to 07:00 on March 2 in New York: the end needs its date,
+    // or a 24-hour shift reads as one that ended as it began.
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(/Mar 1.*–\s*Mar 2/);
+  });
+
+  it('counts one shift and one outside-agency entry in the singular', async () => {
+    mockGet.mockResolvedValue(
+      draft({
+        external: [
+          attendance({ key: 'r9', row_ids: ['r9'], line_numbers: [9], unit_kind: 'external', unit_ref: 'ext-1' }),
+        ],
+        options: {
+          members: [{ id: 'u-alice', name: 'Alice Ng', membership_number: '101', status: 'active' }],
+          units: [
+            { kind: 'own', id: 'app-1', name: 'A106E' },
+            { kind: 'external', id: 'ext-1', name: 'A106', agency_name: 'County EMS' },
+          ],
+          seats: ['firefighter'],
+        },
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    expect(screen.getByText(/^1 shift on this department's units/)).toBeInTheDocument();
+    expect(screen.getByText(/^1 entry on other agencies' units/)).toBeInTheDocument();
+  });
+
+  it('counts one former member to be created in the singular', async () => {
+    const [dana] = draft().analysis?.members ?? [];
+    mockGet.mockResolvedValue(
+      draft({
+        can_commit: true,
+        blocking_issue_count: 0,
+        issues: [],
+        members: dana ? [{ ...dana, status: 'create' }] : [],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Commit import' }));
+
+    expect(
+      within(await screen.findByRole('dialog')).getByText(/creating 1 archived former-member record\./)
+    ).toBeInTheDocument();
   });
 });

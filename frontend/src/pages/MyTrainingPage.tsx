@@ -618,7 +618,7 @@ const MyTrainingPage: React.FC = () => {
         : activeTab;
   const recentRecords = (data?.training_records ?? []).slice(0, RECENT_RECORDS_SHOWN);
   const today = getTodayLocalDate(tz);
-  const upcoming = data ? buildUpcomingItems(data, today) : [];
+  const upcoming = data ? buildUpcomingItems(data, today, offersSkillsTesting(practicalSkillsMethod)) : [];
 
   if (loading) {
     return (

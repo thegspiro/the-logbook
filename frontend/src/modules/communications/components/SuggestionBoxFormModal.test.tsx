@@ -87,4 +87,18 @@ describe('SuggestionBoxFormModal', () => {
       'submit'
     );
   });
+
+  it('puts the questions right after the name and description', () => {
+    renderWithRouter(<SuggestionBoxFormModal box={existing} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const description = screen.getByLabelText(/Description/);
+    const questions = screen.getByRole('heading', { name: 'Questions' });
+    const anonymity = screen.getByLabelText('Anonymity');
+    expect(description.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(questions.compareDocumentPosition(anonymity) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
 });

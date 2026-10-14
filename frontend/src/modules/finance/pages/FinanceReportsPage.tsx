@@ -23,8 +23,10 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { saveFile, type DownloadedFile } from '@/utils/fileDownload';
 import { financeReportService, fiscalYearService } from '../services/api';
 import {
+  ADVANCE_RETURN_DAYS,
   FiscalYearStatus,
   PaymentKind,
+  type AdvancesReport,
   type AmendmentLogReport,
   type BudgetVsActualReport,
   type FiscalYear,
@@ -42,6 +44,7 @@ const REPORTS = {
   'payments-register': 'Payments register',
   'functional-expenses': 'Functional expenses',
   'fund-balances': 'Restricted funds',
+  advances: 'Cash advances',
   'late-substantiation': 'Outside the accountable plan',
 } as const;
 type ReportKey = keyof typeof REPORTS;
@@ -54,6 +57,8 @@ const KIND_LABELS: Record<PaymentKind, string> = {
   [PaymentKind.CHECK_REQUEST]: 'Check',
   [PaymentKind.CHECK_VOID]: 'Check voided',
   [PaymentKind.EXPENSE_REPORT]: 'Reimbursement',
+  [PaymentKind.CASH_ADVANCE]: 'Cash advance',
+  [PaymentKind.ADVANCE_RETURN]: 'Advance returned',
 };
 
 const AMENDMENT_STATUS_LABELS: Record<string, string> = {
@@ -777,6 +782,108 @@ const FundBalances: React.FC = () => {
 };
 
 // =============================================================================
+// Cash advances
+// =============================================================================
+
+const loadAdvances = () => financeReportService.advances();
+
+const Advances: React.FC = () => {
+  const tz = useTimezone();
+  const { data, error, loading } = useReport<AdvancesReport>(loadAdvances);
+
+  return (
+    <ReportFrame
+      title="Cash advances"
+      subtitle="Advances not yet fully accounted for with expense reports or returned cash."
+      loading={loading}
+      error={error}
+      canDownload={Boolean(data)}
+      onDownload={() => financeReportService.advancesCsv()}
+    >
+      {data &&
+        (data.advances.length === 0 ? (
+          <EmptyState
+            title="Nothing outstanding"
+            description="Every cash advance has been accounted for with expense reports or returned."
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="rwd-table w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Advance</th>
+                    <th className={thClass}>Member</th>
+                    <th className={thClass}>Issued</th>
+                    <th className={thClass}>Due</th>
+                    <th className={`${thClass} text-right`}>Amount</th>
+                    <th className={`${thClass} text-right`}>Accounted for</th>
+                    <th className={`${thClass} text-right`}>Returned</th>
+                    <th className={`${thClass} text-right`}>Outstanding</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-theme-surface-border divide-y">
+                  {data.advances.map((advance) => (
+                    <tr key={advance.id}>
+                      <td data-label="Advance" className={tdClass}>
+                        <span className="font-medium">{advance.requestNumber}</span>
+                        {advance.purpose && <p className="text-theme-text-secondary text-xs">{advance.purpose}</p>}
+                      </td>
+                      <td data-label="Member" className={tdClass}>
+                        {advance.memberName}
+                      </td>
+                      <td data-label="Issued" className={tdClass}>
+                        {advance.issuedAt ? formatDate(advance.issuedAt, tz) : '-'}
+                      </td>
+                      <td data-label="Due" className={tdClass}>
+                        {advance.dueAt ? formatDate(advance.dueAt, tz) : '-'}
+                        {advance.overdue && (
+                          <span className="block text-xs font-semibold text-red-700 dark:text-red-400">Overdue</span>
+                        )}
+                      </td>
+                      <td data-label="Amount" className={numClass}>
+                        {formatCurrency(advance.amount)}
+                      </td>
+                      <td data-label="Accounted for" className={numClass}>
+                        {formatCurrency(advance.accounted)}
+                      </td>
+                      <td data-label="Returned" className={numClass}>
+                        {formatCurrency(advance.returned)}
+                      </td>
+                      <td data-label="Outstanding" className={`${numClass} font-semibold`}>
+                        {formatCurrency(advance.outstanding)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass} colSpan={7}>
+                      Outstanding
+                    </td>
+                    <td className={numClass}>{formatCurrency(data.outstanding)}</td>
+                  </tr>
+                  <tr>
+                    <td className={tdClass} colSpan={7}>
+                      Of which overdue
+                    </td>
+                    <td className={numClass}>{formatCurrency(data.overdueOutstanding)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-theme-text-secondary mt-3 text-xs">
+              An advance is accounted for by the expense reports the member submits against it and by cash returned. One
+              still outstanding {ADVANCE_RETURN_DAYS} days after its check is overdue: the IRS treats what is left as
+              the member&apos;s wages, and the member cannot request another advance until it is settled.
+            </p>
+          </>
+        ))}
+    </ReportFrame>
+  );
+};
+
+// =============================================================================
 // Outside the accountable plan
 // =============================================================================
 
@@ -917,7 +1024,8 @@ const FinanceReportsPage: React.FC = () => {
     active !== 'payments-register' &&
     active !== 'late-substantiation' &&
     active !== 'functional-expenses' &&
-    active !== 'fund-balances';
+    active !== 'fund-balances' &&
+    active !== 'advances';
 
   return (
     <div className="space-y-4">
@@ -952,6 +1060,8 @@ const FinanceReportsPage: React.FC = () => {
         <FunctionalExpenses />
       ) : active === 'fund-balances' ? (
         <FundBalances />
+      ) : active === 'advances' ? (
+        <Advances />
       ) : active === 'late-substantiation' ? (
         <LateSubstantiation />
       ) : yearsError ? (

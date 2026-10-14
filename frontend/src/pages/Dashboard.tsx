@@ -2311,7 +2311,6 @@ const Dashboard: React.FC = () => {
                             key={enrollment.id}
                             onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
                             className="w-full text-left"
-                            aria-label={`${enrollment.program?.name || 'Program'}: ${pct}% complete`}
                           >
                             <div className="mb-2 flex items-baseline justify-between gap-2">
                               <span className="text-theme-text-primary min-w-0 truncate text-sm font-bold">
@@ -2321,13 +2320,14 @@ const Dashboard: React.FC = () => {
                                 {pct}%
                               </span>
                             </div>
+                            {/* Decorative: the percentage is already the visible text
+                                beside the name, and the button takes its accessible name
+                                from its content. A labelled progressbar here would splice
+                                its label into the middle of that name and break WCAG 2.5.3
+                                (label in name). */}
                             <div
                               className="bg-theme-surface-hover mb-2 h-2.5 w-full overflow-hidden rounded-full"
-                              role="progressbar"
-                              aria-valuenow={pct}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-label={`${enrollment.program?.name ?? 'Program'} progress`}
+                              aria-hidden="true"
                             >
                               <div
                                 className={`h-2.5 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
