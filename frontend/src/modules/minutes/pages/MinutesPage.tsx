@@ -26,6 +26,7 @@ import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
+import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
@@ -347,6 +348,8 @@ const MinutesPage: React.FC = () => {
             <p className="mt-1 text-2xl font-bold text-orange-700">{minutesStats?.pending_approval ?? 0}</p>
           </div>
         </div>
+
+        <MyActionItemsPanel />
 
         {/* Search & Filter */}
         <div className="card mb-6 p-4">

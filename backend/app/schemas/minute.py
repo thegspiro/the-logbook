@@ -5,12 +5,19 @@ Request and response schemas for meeting minutes, templates, and related endpoin
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from app.models.minute import MinutesMeetingType
+from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCResponseBase
+from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -283,10 +290,38 @@ class ActionItemResponse(ActionItemBase):
     status: str
     completed_at: Optional[datetime] = None
     completion_notes: Optional[str] = None
+    carried_from_id: Optional[str] = None
+    carried_forward_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = _response_config
+
+
+class OpenActionItem(ActionItemResponse):
+    """An open item from an earlier meeting, offered for carry-forward"""
+
+    minutes_title: str
+    meeting_date: datetime
+
+
+class MyActionItem(ActionItemResponse):
+    """An item assigned to the caller, with where it came from"""
+
+    minutes_title: str
+    meeting_date: datetime
+    minutes_status: str
+
+
+class CarryForwardRequest(BaseModel):
+    """Open items to copy into a set of minutes"""
+
+    item_ids: List[str] = Field(..., min_length=1, max_length=100)
+
+    @field_validator("item_ids")
+    @classmethod
+    def _unique(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(value))
 
 
 # ============================================
@@ -294,13 +329,49 @@ class ActionItemResponse(ActionItemBase):
 # ============================================
 
 
+AttendanceStatus = Literal[
+    "present", "late", "left_early", "excused", "absent", "guest"
+]
+
+
 class AttendeeEntry(BaseModel):
-    """Individual attendee record"""
+    """Individual attendee record
+
+    ``status`` is the record and ``present`` is derived from it (see
+    ``app.utils.minutes_attendance``). A client that sends only ``present``
+    gets the matching status; one that sends both gets its ``status``, with
+    ``present`` corrected to agree, so the two can never disagree in storage.
+    """
 
     user_id: Optional[str] = None
     name: str = Field(..., min_length=1, max_length=200)
     role: Optional[str] = Field(None, max_length=100)
+    status: Optional[AttendanceStatus] = None
     present: bool = True
+    note: Optional[str] = Field(None, max_length=300)
+
+    @model_validator(mode="after")
+    def _settle_status(self) -> "AttendeeEntry":
+        if self.status is None:
+            self.status = derive_status({"present": self.present})  # type: ignore[assignment]
+        self.present = self.status in COUNTS_TOWARD_QUORUM
+        return self
+
+
+def _reject_duplicate_attendees(
+    value: Optional[List[AttendeeEntry]],
+) -> Optional[List[AttendeeEntry]]:
+    """One roll-call line per member: a member listed twice would count twice
+    toward quorum."""
+    if not value:
+        return value
+    seen: set[str] = set()
+    for entry in value:
+        if entry.user_id:
+            if entry.user_id in seen:
+                raise ValueError("A member can be listed only once in attendance")
+            seen.add(entry.user_id)
+    return value
 
 
 class MinutesBase(BaseModel):
@@ -357,6 +428,7 @@ class MinutesCreate(MinutesBase):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_attendees = field_validator("attendees")(_reject_duplicate_attendees)
 
 
 class MinutesUpdate(BaseModel):
@@ -391,6 +463,7 @@ class MinutesUpdate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_attendees = field_validator("attendees")(_reject_duplicate_attendees)
 
 
 class MinutesResponse(UTCResponseBase):
@@ -484,3 +557,138 @@ class MinutesSearchResult(UTCResponseBase):
     match_field: str = Field(..., description="Which field matched")
 
     model_config = _response_config
+
+
+# ============================================
+# Attendance Suggestions
+# ============================================
+
+
+class AttendanceSuggestions(BaseModel):
+    """A starting roll for the minutes, for the secretary to correct.
+
+    Nothing is saved: the entries come back so the roll call can be reviewed
+    and then written with the ordinary minutes update.
+    """
+
+    source: Literal["event", "roster"]
+    event_title: Optional[str] = None
+    entries: List[AttendeeEntry]
+
+
+# ============================================
+# Election Results
+# ============================================
+
+
+class ImportableElection(UTCResponseBase):
+    """A closed election whose result can be filed with the minutes"""
+
+    id: str
+    title: str
+    election_type: Optional[str] = None
+    closed_at: Optional[datetime] = None
+    positions: Optional[List[str]] = None
+    already_imported: bool = False
+
+    model_config = _response_config
+
+
+class ElectionResultCapture(BaseModel):
+    """Which election's result to freeze into the minutes"""
+
+    election_id: str = Field(..., min_length=1, max_length=36)
+
+
+class MinutesElectionResultResponse(UTCResponseBase):
+    """An election result as it was filed with the minutes"""
+
+    id: str
+    minutes_id: str
+    election_id: Optional[str] = None
+    election_title: str
+    election_closed_at: Optional[datetime] = None
+    snapshot: Dict[str, Any]
+    captured_by: Optional[str] = None
+    captured_by_name: Optional[str] = None
+    captured_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Attachments
+# ============================================
+
+_ATTACHMENT_CATEGORIES = {c.value for c in MinutesAttachmentCategory}
+
+
+def validate_attachment_category(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in _ATTACHMENT_CATEGORIES:
+        raise ValueError(
+            f"Invalid category '{value}'. Must be one of: "
+            f"{', '.join(sorted(_ATTACHMENT_CATEGORIES))}"
+        )
+    return normalized
+
+
+class MinutesAttachmentResponse(UTCResponseBase):
+    """A file kept with the minutes"""
+
+    id: str
+    minutes_id: str
+    title: str
+    category: str
+    description: Optional[str] = None
+    original_name: str
+    mime_type: str
+    file_size: int
+    sha256: str
+    uploaded_by: Optional[str] = None
+    uploaded_by_name: Optional[str] = None
+    uploaded_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Revisions
+# ============================================
+
+
+class MinutesRevisionResponse(UTCResponseBase):
+    """One approved version of the minutes"""
+
+    id: str
+    minutes_id: str
+    version: int
+    content_hash: str
+    submitted_by: Optional[str] = None
+    submitted_by_name: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approved_at: datetime
+    superseded_at: Optional[datetime] = None
+    superseded_by: Optional[str] = None
+    superseded_by_name: Optional[str] = None
+    superseded_reason: Optional[str] = None
+
+    model_config = _response_config
+
+
+class MinutesRevisionDetail(MinutesRevisionResponse):
+    """An approved version with the content it recorded"""
+
+    snapshot: Dict[str, Any]
+
+
+class MinutesVerification(BaseModel):
+    """Whether the minutes still match the version that was approved"""
+
+    verified: bool
+    version: Optional[int] = None
+    content_hash: Optional[str] = None
+    current_hash: Optional[str] = None
+    changed: List[str] = []
+    detail: str

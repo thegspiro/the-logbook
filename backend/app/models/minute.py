@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -70,6 +70,17 @@ class ActionItemPriority(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+
+
+class MinutesAttachmentCategory(str, Enum):
+    """What a file attached to a set of minutes is"""
+
+    SIGNED_COPY = "signed_copy"
+    REPORT = "report"
+    AGENDA = "agenda"
+    HANDOUT = "handout"
+    CORRESPONDENCE = "correspondence"
+    OTHER = "other"
 
 
 # ── Default template sections for a standard business meeting ──
@@ -844,6 +855,20 @@ class ActionItem(Base):
     )
     completion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Carry-forward: an item still open when its meeting is over is copied into
+    # the next meeting's minutes. The copy points back at what it continues;
+    # the original is stamped so it stops counting as open (and stops being
+    # reminded) while keeping its place in the record of the meeting that
+    # assigned it.
+    carried_from_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("minutes_action_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    carried_forward_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -865,4 +890,151 @@ class ActionItem(Base):
         Index("ix_minutes_action_items_assignee_id", "assignee_id"),
         Index("ix_minutes_action_items_status", "status"),
         Index("ix_minutes_action_items_due_date", "due_date"),
+        Index("ix_minutes_action_items_carried_from_id", "carried_from_id"),
+    )
+
+
+class MinutesAttachment(Base):
+    """A file kept with a set of minutes: reports, handouts, the signed copy.
+
+    The bytes live in ``FileStorageService``'s ``minutes-attachments`` area and
+    are served only through the minutes endpoints, so a file attached to
+    executive-session minutes is as restricted as the minutes themselves. They
+    are deliberately *not* filed as shared Documents, whose folder rights
+    reach every ``documents.view`` holder.
+    """
+
+    __tablename__ = "minutes_attachments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default=MinutesAttachmentCategory.OTHER.value,
+        server_default=MinutesAttachmentCategory.OTHER.value,
+    )
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_minutes_attachments_minutes_id", "minutes_id"),
+        Index("ix_minutes_attachments_organization_id", "organization_id"),
+    )
+
+
+class MinutesElectionResult(Base):
+    """An election's certified result, frozen into a set of minutes.
+
+    The minutes are the permanent record; the election row is not (it can be
+    rolled back, annotated, or deleted with its department's data). So the
+    result the meeting heard is copied here, whole, at the moment a minutes
+    manager imports it, and later changes to the election do not rewrite it.
+    """
+
+    __tablename__ = "minutes_election_results"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    election_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("elections.id", ondelete="SET NULL"), nullable=True
+    )
+
+    election_title: Mapped[str] = mapped_column(String(300), nullable=False)
+    election_closed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # ElectionResults.model_dump(mode="json") as it stood at capture.
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    captured_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "minutes_id", "election_id", name="uq_minutes_election_results_pair"
+        ),
+        Index("ix_minutes_election_results_minutes_id", "minutes_id"),
+        Index("ix_minutes_election_results_organization_id", "organization_id"),
+    )
+
+
+class MinutesRevision(Base):
+    """An approved version of a set of minutes, immutable once written.
+
+    One row per approval. Reopening a record for a correction supersedes its
+    latest revision rather than deleting it, so the version the body approved
+    first is still on file, with its hash, after the corrected version is
+    approved as the next one.
+    """
+
+    __tablename__ = "minutes_revisions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # See app.utils.minutes_snapshot for what is and is not in here.
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    submitted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    superseded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    superseded_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("minutes_id", "version", name="uq_minutes_revisions_version"),
+        Index("ix_minutes_revisions_minutes_id", "minutes_id"),
+        Index("ix_minutes_revisions_organization_id", "organization_id"),
     )

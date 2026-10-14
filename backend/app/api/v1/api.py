@@ -63,6 +63,7 @@ from app.api.v1.endpoints import (
     message_history,
     messages,
     minutes,
+    minutes_records,
     nfc_tags,
     notifications,
     officers,
@@ -353,6 +354,12 @@ api_router.include_router(
 )
 api_router.include_router(
     minutes.router,
+    prefix="/minutes-records",
+    tags=["minutes"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
+api_router.include_router(
+    minutes_records.router,
     prefix="/minutes-records",
     tags=["minutes"],
     dependencies=module_gate("minutes", "Meeting Minutes"),

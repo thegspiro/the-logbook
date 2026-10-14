@@ -1163,6 +1163,8 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                 ]
             ),
             MinutesActionItem.due_date.isnot(None),
+            # An item carried into later minutes is reminded about there.
+            MinutesActionItem.carried_forward_at.is_(None),
             MinutesActionItem.due_date
             <= datetime.combine(
                 three_days, datetime.min.time(), tzinfo=_tz_reminders.utc

@@ -16,6 +16,15 @@ import type {
   MinutesStats,
   MinutesSearchResult,
   MinutesListItem,
+  AttendanceSuggestions,
+  AttachmentCategory,
+  ImportableElection,
+  MinutesAttachment,
+  MinutesElectionResult,
+  MinutesRevision,
+  MinutesVerification,
+  MyActionItem,
+  OpenActionItem,
 } from '../types/minutes';
 import { asArray } from '../../../utils/asArray';
 
@@ -131,6 +140,121 @@ export const minutesService = {
 
   async search(query: string, limit = 20): Promise<MinutesSearchResult[]> {
     const response = await api.get<MinutesSearchResult[]>('/minutes-records/search', { params: { q: query, limit } });
+    return asArray(response.data);
+  },
+
+  // ── Roll call ──
+
+  /** A starting roll from event check-ins, else the roster. Nothing is saved. */
+  async getAttendanceSuggestions(minutesId: string): Promise<AttendanceSuggestions> {
+    const response = await api.get<AttendanceSuggestions>(`/minutes-records/${minutesId}/attendance-suggestions`);
+    return response.data;
+  },
+
+  /** Recompute quorum from the saved roll call. */
+  async recalculateQuorum(minutesId: string): Promise<void> {
+    await api.get(`/minutes-records/${minutesId}/quorum`);
+  },
+
+  // ── Election results ──
+
+  async getImportableElections(minutesId: string): Promise<ImportableElection[]> {
+    const response = await api.get<ImportableElection[]>(`/minutes-records/${minutesId}/importable-elections`);
+    return asArray(response.data);
+  },
+
+  async getElectionResults(minutesId: string): Promise<MinutesElectionResult[]> {
+    const response = await api.get<MinutesElectionResult[]>(`/minutes-records/${minutesId}/election-results`);
+    return asArray(response.data);
+  },
+
+  async fileElectionResult(minutesId: string, electionId: string): Promise<MinutesElectionResult> {
+    const response = await api.post<MinutesElectionResult>(`/minutes-records/${minutesId}/election-results`, {
+      election_id: electionId,
+    });
+    return response.data;
+  },
+
+  async removeElectionResult(minutesId: string, resultId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/election-results/${resultId}`);
+  },
+
+  // ── Attachments ──
+
+  async getAttachments(minutesId: string): Promise<MinutesAttachment[]> {
+    const response = await api.get<MinutesAttachment[]>(`/minutes-records/${minutesId}/attachments`);
+    return asArray(response.data);
+  },
+
+  async uploadAttachment(
+    minutesId: string,
+    file: File,
+    details: { title: string; category: AttachmentCategory; description?: string | undefined }
+  ): Promise<MinutesAttachment> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', details.title);
+    form.append('category', details.category);
+    if (details.description) form.append('description', details.description);
+    const response = await api.post<MinutesAttachment>(`/minutes-records/${minutesId}/attachments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async downloadAttachment(minutesId: string, attachmentId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/minutes-records/${minutesId}/attachments/${attachmentId}/file`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(minutesId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/attachments/${attachmentId}`);
+  },
+
+  // ── Approved versions ──
+
+  async getRevisions(minutesId: string): Promise<MinutesRevision[]> {
+    const response = await api.get<MinutesRevision[]>(`/minutes-records/${minutesId}/revisions`);
+    return asArray(response.data);
+  },
+
+  async verify(minutesId: string): Promise<MinutesVerification> {
+    const response = await api.get<MinutesVerification>(`/minutes-records/${minutesId}/verify`);
+    return response.data;
+  },
+
+  // ── Printable copy ──
+
+  async downloadPdf(minutesId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/minutes-records/${minutesId}/pdf`, { responseType: 'blob' });
+    return response.data;
+  },
+
+  // ── Carrying action items between meetings ──
+
+  async getOpenActionItems(minutesId: string, includeOtherTypes = false): Promise<OpenActionItem[]> {
+    const response = await api.get<OpenActionItem[]>(`/minutes-records/${minutesId}/open-action-items`, {
+      params: { include_other_types: includeOtherTypes },
+    });
+    return asArray(response.data);
+  },
+
+  async carryForward(minutesId: string, itemIds: string[], includeOtherTypes = false): Promise<ActionItem[]> {
+    const response = await api.post<ActionItem[]>(
+      `/minutes-records/${minutesId}/carry-forward`,
+      { item_ids: itemIds },
+      { params: { include_other_types: includeOtherTypes } }
+    );
+    return asArray(response.data);
+  },
+
+  /** Items assigned to the caller in approved minutes, across all meetings. */
+  async getMyActionItems(includeClosed = false): Promise<MyActionItem[]> {
+    const response = await api.get<MyActionItem[]>('/minutes-records/action-items/mine', {
+      params: { include_closed: includeClosed },
+    });
     return asArray(response.data);
   },
 };

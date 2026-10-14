@@ -91,11 +91,20 @@ export interface TemplateUpdate {
 
 // ── Existing types (unchanged) ──
 
+export type AttendanceStatus = 'present' | 'late' | 'left_early' | 'excused' | 'absent' | 'guest';
+
+/**
+ * One line of the roll call. `status` is the record; `present` is derived from
+ * it by the server and means "counted toward quorum" (present, late, left
+ * early). Rows saved before statuses existed have no `status`.
+ */
 export interface AttendeeEntry {
-  user_id?: string;
+  user_id?: string | null;
   name: string;
-  role?: string;
+  role?: string | null;
+  status?: AttendanceStatus;
   present: boolean;
+  note?: string | null;
 }
 
 export interface Motion {
@@ -125,8 +134,25 @@ export interface ActionItem {
   status: ActionItemStatus;
   completed_at?: string;
   completion_notes?: string;
+  /** The earlier item this one continues, when it was carried forward. */
+  carried_from_id?: string | null;
+  /** Set on the original once it has been carried into later minutes. */
+  carried_forward_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An open item from an earlier meeting, offered for carry-forward. */
+export interface OpenActionItem extends ActionItem {
+  minutes_title: string;
+  meeting_date: string;
+}
+
+/** An item assigned to the caller, with the minutes it came from. */
+export interface MyActionItem extends ActionItem {
+  minutes_title: string;
+  meeting_date: string;
+  minutes_status: MinutesStatus;
 }
 
 export interface MeetingMinutes {
@@ -270,4 +296,108 @@ export interface MinutesSearchResult {
   status: MinutesStatus;
   snippet: string;
   match_field: string;
+}
+
+// ── Roll call suggestions ──
+
+export interface AttendanceSuggestions {
+  source: 'event' | 'roster';
+  event_title?: string | null;
+  entries: AttendeeEntry[];
+}
+
+// ── Election results ──
+
+export interface ImportableElection {
+  id: string;
+  title: string;
+  election_type?: string | null;
+  closed_at?: string | null;
+  positions?: string[] | null;
+  already_imported: boolean;
+}
+
+export interface FiledCandidateResult {
+  candidate_name: string;
+  vote_count: number;
+  percentage: number;
+  is_winner: boolean;
+  is_tied?: boolean;
+}
+
+export interface FiledPositionResult {
+  position: string;
+  label?: string | null;
+  total_votes: number;
+  candidates: FiledCandidateResult[];
+}
+
+/** The ElectionResults dump frozen into the minutes. */
+export interface ElectionResultSnapshot {
+  election_title?: string;
+  total_votes?: number;
+  total_eligible_voters?: number;
+  voter_turnout_percentage?: number;
+  quorum_met?: boolean | null;
+  quorum_detail?: string | null;
+  results_by_position?: FiledPositionResult[];
+  overall_results?: FiledCandidateResult[];
+}
+
+export interface MinutesElectionResult {
+  id: string;
+  minutes_id: string;
+  election_id?: string | null;
+  election_title: string;
+  election_closed_at?: string | null;
+  snapshot: ElectionResultSnapshot;
+  captured_by?: string | null;
+  captured_by_name?: string | null;
+  captured_at: string;
+}
+
+// ── Attachments ──
+
+export type AttachmentCategory = 'signed_copy' | 'report' | 'agenda' | 'handout' | 'correspondence' | 'other';
+
+export interface MinutesAttachment {
+  id: string;
+  minutes_id: string;
+  title: string;
+  category: AttachmentCategory;
+  description?: string | null;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  uploaded_by?: string | null;
+  uploaded_by_name?: string | null;
+  uploaded_at: string;
+}
+
+// ── Approved versions ──
+
+export interface MinutesRevision {
+  id: string;
+  minutes_id: string;
+  version: number;
+  content_hash: string;
+  submitted_by?: string | null;
+  submitted_by_name?: string | null;
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at: string;
+  superseded_at?: string | null;
+  superseded_by?: string | null;
+  superseded_by_name?: string | null;
+  superseded_reason?: string | null;
+}
+
+export interface MinutesVerification {
+  verified: boolean;
+  version?: number | null;
+  content_hash?: string | null;
+  current_hash?: string | null;
+  changed: string[];
+  detail: string;
 }

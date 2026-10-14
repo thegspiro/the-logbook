@@ -15,6 +15,12 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 - **Publish Workflow**: Approved minutes are published as styled HTML to the Documents module
 - **Event Linking**: Minutes can be linked to events for context
 - **Full-Text Search**: Search across minutes titles and section content
+- **Roll Call**: Six attendance statuses with notes, a suggested roll from event check-ins or the member list, and a quorum derived from it _(2026-10-14)_
+- **Election Results**: A closed election's certified tally frozen into the minutes _(2026-10-14)_
+- **Attachments**: Reports, handouts and the signed copy, scanned and stored encrypted _(2026-10-14)_
+- **Approved Versions**: An immutable, SHA-256-hashed snapshot per approval, with verification _(2026-10-14)_
+- **Action-Item Follow-Through**: Carry-forward between meetings, a "assigned to me" list, and an email to each assignee on approval _(2026-10-14)_
+- **Printable PDF**: With signature lines and, once approved, the version and hash _(2026-10-14)_
 
 ---
 
@@ -22,12 +28,17 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 
 ### Database Models
 
-| Model             | Description                                                                                                |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `MeetingMinutes`  | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference        |
-| `MinutesTemplate` | Template definition with name, meeting type, default sections, header/footer config, and `is_default` flag |
-| `DocumentFolder`  | Folder hierarchy for organizing documents with system/custom distinction                                   |
-| `Document`        | Document record with file metadata, content HTML, source tracking, and folder assignment                   |
+| Model                   | Description                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `MeetingMinutes`        | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference                            |
+| `MinutesTemplate`       | Template definition with name, meeting type, default sections, header/footer config, and `is_default` flag                     |
+| `Motion`                | A motion with mover, seconder, result and vote counts                                                                          |
+| `ActionItem`            | `minutes_action_items`; `carried_from_id` / `carried_forward_at` link an item to the one it continues                          |
+| `MinutesElectionResult` | `minutes_election_results`; a frozen `ElectionResults` dump, one per (minutes, election)                                       |
+| `MinutesAttachment`     | `minutes_attachments`; file metadata, category and SHA-256 (bytes live under `minutes-attachments/`)                           |
+| `MinutesRevision`       | `minutes_revisions`; one row per approval: snapshot, content hash, who approved, and — once replaced — who reopened it and why |
+| `DocumentFolder`        | Folder hierarchy for organizing documents with system/custom distinction                                                       |
+| `Document`              | Document record with file metadata, content HTML, source tracking, and folder assignment                                       |
 
 ### Enums
 
@@ -47,6 +58,12 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                                             |
 | `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                                             |
 | `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                                               |
+| `backend/app/services/minutes_record_service.py`           | Roll-call suggestions, election results, attachments, revisions, carry-forward, "assigned to me"       |
+| `backend/app/services/minutes_notifications.py`            | Assignment email, decided by `EmailKind.MINUTES_ACTION_ITEMS`                                          |
+| `backend/app/api/v1/endpoints/minutes_records.py`          | Record-keeping endpoints, mounted beside `minutes.py` at the same prefix                               |
+| `backend/app/utils/minutes_attendance.py`                  | The one canonical attendee shape and what counts toward quorum                                         |
+| `backend/app/utils/minutes_snapshot.py`                    | What an approval covers, and its hash                                                                  |
+| `backend/app/utils/minutes_pdf.py`                         | The printable minutes                                                                                  |
 | `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                                               |
 | `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target                                     |
 | `backend/app/api/v1/endpoints/minutes.py`                  | Minutes and template API endpoints                                                                     |
@@ -400,13 +417,148 @@ All write operations are logged to the tamper-proof audit trail:
 
 ---
 
+## Record keeping _(2026-10-14)_
+
+### Roll call
+
+`meeting_minutes.attendees` stays a JSON list; its entries now have one stored
+shape (`app/utils/minutes_attendance.py`):
+
+```json
+{
+  "user_id": "…|null",
+  "name": "…",
+  "role": "…|null",
+  "status": "present|late|left_early|excused|absent|guest",
+  "present": true,
+  "note": "…|null"
+}
+```
+
+`status` is the record; `present` is derived from it and means "counted toward
+quorum". **Present, late and left early count; excused, absent and guests do
+not.** A client that sends only `present` (the old contract) gets the matching
+status, so existing callers keep working. A member can be listed once. A
+migration rewrote every stored entry; a legacy entry that was present stays
+`present`, so a quorum already recorded does not change.
+
+`GET /{id}/attendance-suggestions` builds a starting roll without saving it:
+the active members, with those who checked in to the linked event marked
+present and checked-in outside guests added as guests; with no event, everyone
+starts absent. Whatever the minutes already record for a member wins.
+
+### Election results
+
+`GET /{id}/importable-elections` lists the department's closed elections;
+`POST /{id}/election-results {"election_id"}` copies that election's results
+into `minutes_election_results`. Only a **closed** election in the caller's own
+department can be filed (a foreign id and a missing one answer identically),
+and each election once per set of minutes. The copy is the record: renaming or
+annotating the election later does not change what the minutes say. Filing and
+removing are draft/rejected only.
+
+### Attachments
+
+`POST /{id}/attachments` (multipart: `file`, `title`, `category`) stores a
+file through `FileStorageService` — 25 MB cap, content-type detection, malware
+scan, encrypted at rest — under `<org>/minutes-attachments/<minutes id>/` on
+the uploads volume, so it is covered by the same backup as every other upload.
+Allowed: PDF, Word, Excel, text, JPEG/PNG/GIF/WebP. They are **not** filed as
+shared Documents: that folder's rights reach every `documents.view` holder and
+would expose an executive session's files. Instead they are served only through
+`GET /{id}/attachments/{attachment_id}/file`, with the minutes' own visibility —
+a member sees them once the minutes are approved, and never for executive
+minutes. Categories: `signed_copy`, `report`, `agenda`, `handout`,
+`correspondence`, `other`.
+
+### Locking and approved versions
+
+Everything above follows the MM-17 lock: roll call, election results and
+attachments change only while the minutes are a draft or rejected. **One
+deliberate exception:** a `signed_copy` attachment can be filed on approved
+minutes (it is the scanned signature page and cannot exist before approval) and
+can never be deleted from them. Anything else attached before approval is part
+of what was approved.
+
+Every approval writes a `minutes_revisions` row: a snapshot of the minutes
+(heading, roll, quorum, sections, motions, action items _as assigned_, filed
+election results, and a manifest of attachments by hash) and its SHA-256.
+Action-item progress and the signed copy are outside the snapshot on purpose —
+assignees update progress on approved minutes by design. `GET /{id}/verify`
+rebuilds the snapshot from the live record and compares; a mismatch names the
+parts that differ. Reopening supersedes the current revision (who, when, why)
+and keeps it; the corrected minutes are approved as the next version.
+`GET /{id}/revisions` lists them and `GET /{id}/revisions/{revision_id}` returns
+one with its snapshot. Minutes approved before this change have no revision;
+`verify` says so, and reopening and re-approving establishes one.
+
+### Action items between meetings
+
+`GET /{id}/open-action-items` offers the open items of earlier **approved**
+minutes of the same meeting type (`?include_other_types=true` widens it;
+executive-session items are never offered to another kind of meeting).
+`POST /{id}/carry-forward {"item_ids": [...]}` copies them into draft minutes
+and stamps the originals `carried_forward_at`, so an item is open in exactly one
+place — in the stats, the list counts and the due-date reminders. It is all or
+nothing, and the same item cannot be carried twice.
+
+`GET /action-items/mine` lists the caller's own items from approved minutes
+(`?include_closed=true` for finished ones); it needs no permission beyond being
+signed in, and shows no one else's.
+
+When minutes are approved each assignee is emailed their items, once. This is
+`EmailKind.MINUTES_ACTION_ITEMS` in `email_policy.py`: on by default, a member
+can turn it off, and a department can make it required. An item added to
+already-approved minutes is emailed when it is added. A failed send is logged
+and never fails the approval.
+
+### Printable minutes
+
+`GET /{id}/pdf` renders the minutes with attendance by status, quorum, sections,
+motions, action items, filed election results, the attachment list, signature
+lines for the recording secretary and presiding officer, and — for approved
+minutes — the approver, version and SHA-256 in the footer. It follows the same
+visibility as the minutes.
+
+### Record-keeping endpoints
+
+| Method   | Path                                               | Permission       | Description                                                      |
+| -------- | -------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| `GET`    | `/{id}/attendance-suggestions`                     | `minutes.manage` | Starting roll from event check-ins or the roster (not saved)     |
+| `GET`    | `/{id}/importable-elections`                       | `minutes.manage` | Closed elections that can be filed                               |
+| `GET`    | `/{id}/election-results`                           | `minutes.view`   | Results filed with the minutes                                   |
+| `POST`   | `/{id}/election-results`                           | `minutes.manage` | File a closed election's result (draft/rejected)                 |
+| `DELETE` | `/{id}/election-results/{result_id}`               | `minutes.manage` | Remove a filed result (draft/rejected)                           |
+| `GET`    | `/{id}/attachments`                                | `minutes.view`   | List files                                                       |
+| `POST`   | `/{id}/attachments`                                | `minutes.manage` | Attach a file (draft/rejected; `signed_copy` only once approved) |
+| `GET`    | `/{id}/attachments/{attachment_id}/file`           | `minutes.view`   | Download                                                         |
+| `DELETE` | `/{id}/attachments/{attachment_id}`                | `minutes.manage` | Delete (draft/rejected)                                          |
+| `GET`    | `/{id}/revisions`, `/{id}/revisions/{revision_id}` | `minutes.view`   | Approved versions                                                |
+| `GET`    | `/{id}/verify`                                     | `minutes.view`   | Does the record still match the version in force                 |
+| `GET`    | `/{id}/open-action-items`                          | `minutes.manage` | Open items from earlier approved minutes                         |
+| `POST`   | `/{id}/carry-forward`                              | `minutes.manage` | Carry items into draft minutes                                   |
+| `GET`    | `/action-items/mine`                               | signed in        | The caller's own items                                           |
+| `GET`    | `/{id}/pdf`                                        | `minutes.view`   | Printable minutes                                                |
+
+Every `{id}` route resolves the minutes in the caller's own department first;
+without `minutes.manage`, drafts and executive-session minutes answer 404.
+
+### Not built
+
+Recorded in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-record-keeping-does-not-do-2026-10-14):
+automatic filing of results at certification, a structured executive-session
+record, and a link from a motion to the ballot item that decided it.
+
+---
+
 ## Database Migrations
 
-| Migration                                                     | Revision              | Description                                                         |
-| ------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- |
-| `20260212_1200_add_meeting_minutes_tables.py`                 | `add_meeting_minutes` | Creates `meeting_minutes` table                                     |
-| `20260213_0800_add_templates_documents_dynamic_sections.py`   | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py` | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`      |
+| Migration                                                     | Revision              | Description                                                                                                                           |
+| ------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                 | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                       |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`   | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                   |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py` | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                        |
+| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`      | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 
 ### Migration Chain
 

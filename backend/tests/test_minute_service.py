@@ -73,6 +73,28 @@ def service(mock_db):
     return MinuteService(mock_db)
 
 
+@pytest.fixture(autouse=True)
+def records(monkeypatch):
+    """Stand in for the record-keeping service and the assignee email.
+
+    Approval and reopening now also write a revision and mail the assignees.
+    Both have their own tests against a real database; these tests are about
+    MinuteService's own state transitions, so they get recording doubles.
+    """
+    fake = MagicMock()
+    fake.lock_minutes = AsyncMock(return_value=object())
+    fake.record_approval = AsyncMock()
+    fake.supersede_on_reopen = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.minutes_record_service.MinutesRecordService", lambda db: fake
+    )
+    monkeypatch.setattr(
+        "app.services.minutes_notifications.notify_action_item_assignees",
+        AsyncMock(return_value=0),
+    )
+    return fake
+
+
 @pytest.fixture
 def org_id():
     return uuid4()
@@ -656,7 +678,9 @@ class TestSubmitForApproval:
 class TestApproveMinutes:
 
     @pytest.mark.unit
-    async def test_approve_submitted_minutes(self, service, mock_db, org_id, user_id):
+    async def test_approve_submitted_minutes(
+        self, service, mock_db, org_id, user_id, records
+    ):
         """approve_minutes succeeds for submitted minutes."""
         minutes = _make_minutes(status=MinutesStatus.SUBMITTED.value)
         service.get_minutes = AsyncMock(return_value=minutes)
@@ -668,6 +692,9 @@ class TestApproveMinutes:
         assert minutes.approved_by == str(user_id)
         assert minutes.approved_at is not None
         mock_db.commit.assert_awaited()
+        records.record_approval.assert_awaited_once_with(
+            minutes, user_id, minutes.approved_at
+        )
 
     @pytest.mark.unit
     async def test_approve_draft_minutes_raises(
@@ -776,7 +803,7 @@ class TestReopenMinutes:
 
     @pytest.mark.unit
     async def test_reopen_returns_approved_minutes_to_draft(
-        self, service, mock_db, org_id
+        self, service, mock_db, org_id, records
     ):
         approver, submitter = str(uuid4()), str(uuid4())
         approved_at = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
@@ -804,6 +831,7 @@ class TestReopenMinutes:
             "previous_submitted_by": submitter,
         }
         mock_db.commit.assert_awaited()
+        records.supersede_on_reopen.assert_awaited_once()
 
     @pytest.mark.unit
     @pytest.mark.parametrize(

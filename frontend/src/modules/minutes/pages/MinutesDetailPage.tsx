@@ -11,7 +11,7 @@ import { PromptDialog } from '../../../components/ux/PromptDialog';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown } from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
@@ -32,6 +32,12 @@ import type {
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { saveBlob } from '../../../utils/saveBlob';
+import { AttachmentsPanel } from '../components/AttachmentsPanel';
+import { AttendancePanel } from '../components/AttendancePanel';
+import { CarryForwardDialog } from '../components/CarryForwardDialog';
+import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
+import { RevisionsPanel } from '../components/RevisionsPanel';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -100,6 +106,10 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Publishing
   const [publishing, setPublishing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // Carrying open action items forward from earlier meetings
+  const [showCarryForward, setShowCarryForward] = useState(false);
 
   // Motion form
   const [showMotionForm, setShowMotionForm] = useState(false);
@@ -167,6 +177,14 @@ export const MinutesDetailPage: React.FC = () => {
     if (minutesId) void fetchMinutes();
   }, [minutesId, fetchMinutes]);
 
+  // Reload without the full-page spinner, for panels that change the record
+  // (a saved roll call moves the quorum; carried items join the list) and must
+  // stay mounted, with their own state, while it refreshes.
+  const refreshMinutes = useCallback(async () => {
+    if (!minutesId) return;
+    setMinutes(await minutesService.getMinutes(minutesId));
+  }, [minutesId]);
+
   // Fetch linked event details when minutes load
   useEffect(() => {
     if (minutes?.event_id) {
@@ -199,6 +217,18 @@ export const MinutesDetailPage: React.FC = () => {
   }, [linkedEventId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
+
+  const handleDownloadPdf = async () => {
+    if (!minutesId || !minutes) return;
+    setDownloadingPdf(true);
+    try {
+      saveBlob(await minutesService.downloadPdf(minutesId), `${minutes.title}.pdf`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to download the PDF'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   // ── Section CRUD ──
 
@@ -571,9 +601,22 @@ export const MinutesDetailPage: React.FC = () => {
                 {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
               </p>
             </div>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
-              {STATUS_LABELS[minutes.status] ?? minutes.status}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
+                {STATUS_LABELS[minutes.status] ?? minutes.status}
+              </span>
+              <button
+                type="button"
+                disabled={downloadingPdf}
+                onClick={() => {
+                  void handleDownloadPdf();
+                }}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
+              >
+                <FileDown className="h-4 w-4" aria-hidden="true" />
+                {downloadingPdf ? 'Preparing…' : 'Download PDF'}
+              </button>
+            </div>
           </div>
 
           {/* Rejection notice */}
@@ -792,25 +835,12 @@ export const MinutesDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Attendees */}
-          {minutes.attendees && minutes.attendees.length > 0 && (
-            <div className="border-theme-surface-border mt-4 border-t pt-4">
-              <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">
-                Attendees ({minutes.attendees.length})
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {minutes.attendees.map((a, i) => (
-                  <span
-                    key={i}
-                    className={`rounded-sm px-2 py-1 text-xs ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 line-through dark:bg-red-500/20 dark:text-red-400'}`}
-                  >
-                    {a.name}
-                    {a.role ? ` (${a.role})` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <AttendancePanel
+            minutesId={minutes.id}
+            attendees={minutes.attendees ?? []}
+            canEdit={Boolean(canManage && isEditable)}
+            onSaved={refreshMinutes}
+          />
         </div>
 
         {/* Dynamic Content Sections */}
@@ -1186,6 +1216,8 @@ export const MinutesDetailPage: React.FC = () => {
           )}
         </div>
 
+        <ElectionResultsPanel minutesId={minutes.id} canEdit={Boolean(canManage && isEditable)} />
+
         {/* Action Items */}
         <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
           <div className="mb-4 flex items-center justify-between">
@@ -1193,12 +1225,21 @@ export const MinutesDetailPage: React.FC = () => {
               Action Items ({minutes.action_items.length})
             </h3>
             {canManage && isEditable && (
-              <button
-                onClick={() => setShowActionForm(!showActionForm)}
-                className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
-              >
-                {showActionForm ? 'Cancel' : 'Add Action Item'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCarryForward(true)}
+                  className="btn-secondary touch:min-h-11 text-sm"
+                >
+                  Carry forward open items
+                </button>
+                <button
+                  onClick={() => setShowActionForm(!showActionForm)}
+                  className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
+                >
+                  {showActionForm ? 'Cancel' : 'Add Action Item'}
+                </button>
+              </div>
             )}
           </div>
 
@@ -1347,6 +1388,17 @@ export const MinutesDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} />
+
+        <RevisionsPanel minutesId={minutes.id} status={minutes.status} version={minutes.updated_at} />
+
+        <CarryForwardDialog
+          isOpen={showCarryForward}
+          minutesId={minutes.id}
+          onClose={() => setShowCarryForward(false)}
+          onCarried={refreshMinutes}
+        />
 
         {/* Link Event Modal */}
         {showLinkEventModal && (

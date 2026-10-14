@@ -112,6 +112,7 @@ async def list_minutes(
                 for a in (m.action_items or [])
                 if (a.status if isinstance(a.status, str) else a.status.value)
                 in ("pending", "in_progress", "overdue")
+                and a.carried_forward_at is None
             ),
             created_at=m.created_at,
         )
@@ -491,7 +492,12 @@ async def reopen_minutes(
     service = MinuteService(db)
 
     async with handle_service_errors("Failed to reopen minutes"):
-        outcome = await service.reopen_minutes(minutes_id, current_user.organization_id)
+        outcome = await service.reopen_minutes(
+            minutes_id,
+            current_user.organization_id,
+            reopened_by=current_user.id,
+            reason=data.reason,
+        )
 
     minutes, prior = ensure_found(outcome, "Meeting minutes")
 
@@ -1042,6 +1048,8 @@ def _build_action_item_response(item) -> ActionItemResponse:
         status=item.status if isinstance(item.status, str) else item.status.value,
         completed_at=item.completed_at,
         completion_notes=item.completion_notes,
+        carried_from_id=item.carried_from_id,
+        carried_forward_at=item.carried_forward_at,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )

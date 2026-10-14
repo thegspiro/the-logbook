@@ -8,6 +8,7 @@ from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -42,6 +43,7 @@ from app.schemas.minute import (
     MotionUpdate,
 )
 from app.services.separation_of_duties import assert_different_person
+from app.utils.minutes_attendance import normalize_attendee
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -545,7 +547,14 @@ class MinuteService:
     async def approve_minutes(
         self, minutes_id: str, organization_id: UUID | str, approved_by: UUID | str
     ) -> Optional[MeetingMinutes]:
-        """Approve submitted minutes"""
+        """Approve submitted minutes and record the approved version"""
+        from app.services.minutes_record_service import MinutesRecordService
+
+        # Locked before the status is read: two approvers acting at once would
+        # otherwise both see SUBMITTED and each write a revision.
+        records = MinutesRecordService(self.db)
+        if await records.lock_minutes(minutes_id, organization_id) is None:
+            return None
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -565,12 +574,35 @@ class MinuteService:
             record="meeting minutes",
         )
 
+        approved_at = datetime.now(timezone.utc)
         minutes.status = MinutesStatus.APPROVED
-        minutes.approved_at = datetime.now(timezone.utc)
+        minutes.approved_at = approved_at
         minutes.approved_by = str(approved_by)
 
+        await records.record_approval(minutes, approved_by, approved_at)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+
+        approved = await self.get_minutes(minutes_id, organization_id)
+        if approved is not None:
+            await self._notify_assignees(approved, approved.action_items or [])
+        return approved
+
+    async def _notify_assignees(self, minutes: MeetingMinutes, items) -> None:
+        """Email assignees about items in approved minutes; never raises.
+
+        The approval has already committed, so a mail problem must not turn a
+        successful approval into an error the secretary retries.
+        """
+        from app.services.minutes_notifications import notify_action_item_assignees
+
+        try:
+            await notify_action_item_assignees(self.db, minutes, items)
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning(
+                "Action item notification for minutes {} failed: {}", minutes.id, exc
+            )
 
     async def reject_minutes(
         self,
@@ -596,7 +628,11 @@ class MinuteService:
         return await self.get_minutes(minutes_id, organization_id)
 
     async def reopen_minutes(
-        self, minutes_id: str, organization_id: UUID | str
+        self,
+        minutes_id: str,
+        organization_id: UUID | str,
+        reopened_by: Optional[UUID | str] = None,
+        reason: Optional[str] = None,
     ) -> Optional[Tuple[MeetingMinutes, dict]]:
         """Return approved minutes to draft so a correction can be made.
 
@@ -609,6 +645,11 @@ class MinuteService:
         it did to the first). The prior approval is returned so the caller can
         write it into the audit trail, which is the only place it survives.
         """
+        from app.services.minutes_record_service import MinutesRecordService
+
+        records = MinutesRecordService(self.db)
+        if await records.lock_minutes(minutes_id, organization_id) is None:
+            return None
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -623,6 +664,12 @@ class MinuteService:
             ),
             "previous_submitted_by": minutes.submitted_by,
         }
+
+        # The approved version is kept on file, marked as replaced, so the
+        # text the body first approved survives the correction.
+        await records.supersede_on_reopen(
+            minutes, reopened_by, reason, datetime.now(timezone.utc)
+        )
 
         minutes.status = MinutesStatus.DRAFT
         minutes.approved_at = None
@@ -784,6 +831,10 @@ class MinuteService:
         self.db.add(item)
         await self.db.commit()
         await self.db.refresh(item)
+        # Items added to draft minutes are announced when the minutes are
+        # approved; one added to approved minutes is already a commitment.
+        if minutes.status == MinutesStatus.APPROVED.value:
+            await self._notify_assignees(minutes, [item])
         return item
 
     async def update_action_item(
@@ -945,6 +996,8 @@ class MinuteService:
                     ]
                 )
             )
+            # An item carried into later minutes is open there, not here.
+            .where(ActionItem.carried_forward_at.is_(None))
         )
         if restricted:
             open_items_query = open_items_query.where(
@@ -1117,17 +1170,21 @@ class MinuteService:
                 )
                 user = user_result.scalar_one_or_none()
                 attendees_json.append(
-                    {
-                        "user_id": att.user_id,
-                        # The name the member goes by, as colleagues know
-                        # them. Snapshotted, so minutes already drafted keep
-                        # the name they were drafted with.
-                        "name": (
-                            (user.display_name or user.username) if user else "Unknown"
-                        ),
-                        "present": att.present,
-                        "excused": att.excused,
-                    }
+                    normalize_attendee(
+                        {
+                            "user_id": att.user_id,
+                            # The name the member goes by, as colleagues know
+                            # them. Snapshotted, so minutes already drafted
+                            # keep the name they were drafted with.
+                            "name": (
+                                (user.display_name or user.username)
+                                if user
+                                else "Unknown"
+                            ),
+                            "present": att.present,
+                            "excused": att.excused,
+                        }
+                    )
                 )
 
         # Build default sections based on meeting type

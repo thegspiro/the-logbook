@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**306 tables · 5060 columns · 1026 foreign keys**
+**309 tables · 5097 columns · 1039 foreign keys**
 
 ---
 
@@ -431,7 +431,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 40 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 13 | Motion model |
-| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 12 | Action Item model |
+| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 14 | Action Item model |
+| [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
+| [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 9 | An election's certified result, frozen into a set of minutes. |
+| [`minutes_revisions`](#minutes_revisions) | `MinutesRevision` | 13 | An approved version of a set of minutes, immutable once written. |
 | [`minutes_templates`](#minutes_templates) | `MinutesTemplate` | 12 | Meeting Minutes Template |
 
 ### Meetings
@@ -6588,15 +6591,103 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | ENUM(`pending`, `in_progress`, `completed`, `cancelled`, `overdue`) | no | IDX | `pending` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
+| `carried_from_id` | VARCHAR(36) | yes | FK, IDX |  | → `minutes_action_items.id` ON DELETE SET NULL |
+| `carried_forward_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 
 - `ix_minutes_action_items_assignee_id` (`assignee_id`)
+- `ix_minutes_action_items_carried_from_id` (`carried_from_id`)
 - `ix_minutes_action_items_due_date` (`due_date`)
 - `ix_minutes_action_items_minutes_id` (`minutes_id`)
 - `ix_minutes_action_items_status` (`status`)
+
+### `minutes_attachments`
+
+**MinutesAttachment** · `app/models/minute.py`
+
+> A file kept with a set of minutes: reports, handouts, the signed copy. The bytes live in ``FileStorageService``'s ``minutes-attachments`` area and are served only through the minutes endpoints, so a file attached to executive-session minutes is as restricted as the minutes themselves. They are deliberately *not* filed as shared Documents, whose folder rights reach every ``documents.view`` holder.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `minutes_id` | VARCHAR(36) | no | FK, IDX |  | → `meeting_minutes.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `category` | VARCHAR(30) | no |  | `other` |  |
+| `description` | TEXT | yes |  |  |  |
+| `original_name` | VARCHAR(255) | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `mime_type` | VARCHAR(100) | no |  |  |  |
+| `file_size` | INTEGER | no |  |  |  |
+| `sha256` | VARCHAR(64) | no |  |  |  |
+| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `uploaded_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_minutes_attachments_minutes_id` (`minutes_id`)
+- `ix_minutes_attachments_organization_id` (`organization_id`)
+
+### `minutes_election_results`
+
+**MinutesElectionResult** · `app/models/minute.py`
+
+> An election's certified result, frozen into a set of minutes. The minutes are the permanent record; the election row is not (it can be rolled back, annotated, or deleted with its department's data). So the result the meeting heard is copied here, whole, at the moment a minutes manager imports it, and later changes to the election do not rewrite it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `minutes_id` | VARCHAR(36) | no | FK, IDX |  | → `meeting_minutes.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE SET NULL |
+| `election_title` | VARCHAR(300) | no |  |  |  |
+| `election_closed_at` | DATETIME | yes |  |  |  |
+| `snapshot` | JSON | no |  |  |  |
+| `captured_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `captured_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_minutes_election_results_minutes_id` (`minutes_id`)
+- `ix_minutes_election_results_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_minutes_election_results_pair` (`minutes_id`, `election_id`)
+
+### `minutes_revisions`
+
+**MinutesRevision** · `app/models/minute.py`
+
+> An approved version of a set of minutes, immutable once written. One row per approval. Reopening a record for a correction supersedes its latest revision rather than deleting it, so the version the body approved first is still on file, with its hash, after the corrected version is approved as the next one.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `minutes_id` | VARCHAR(36) | no | FK, IDX |  | → `meeting_minutes.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `version` | INTEGER | no |  |  |  |
+| `snapshot` | JSON | no |  |  |  |
+| `content_hash` | VARCHAR(64) | no |  |  |  |
+| `submitted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `approved_at` | DATETIME | no |  |  |  |
+| `superseded_at` | DATETIME | yes |  |  |  |
+| `superseded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `superseded_reason` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_minutes_revisions_minutes_id` (`minutes_id`)
+- `ix_minutes_revisions_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_minutes_revisions_version` (`minutes_id`, `version`)
 
 ### `minutes_templates`
 
@@ -10667,7 +10758,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (376 references)
+### → `users` (381 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10908,6 +10999,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `membership_pipelines` | `created_by` | RESTRICT | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
 | `minutes_action_items` | `assignee_id` | RESTRICT | yes |
+| `minutes_attachments` | `uploaded_by` | SET NULL | yes |
+| `minutes_election_results` | `captured_by` | SET NULL | yes |
+| `minutes_revisions` | `approved_by` | SET NULL | yes |
+| `minutes_revisions` | `submitted_by` | SET NULL | yes |
+| `minutes_revisions` | `superseded_by` | SET NULL | yes |
 | `minutes_templates` | `created_by` | RESTRICT | yes |
 | `multi_agency_trainings` | `created_by` | SET NULL | yes |
 | `nfc_tags` | `issued_by` | SET NULL | yes |
@@ -11048,7 +11144,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (249 references)
+### → `organizations` (252 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11207,6 +11303,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_size_preferences` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
+| `minutes_attachments` | `organization_id` | CASCADE | no |
+| `minutes_election_results` | `organization_id` | CASCADE | no |
+| `minutes_revisions` | `organization_id` | CASCADE | no |
 | `minutes_templates` | `organization_id` | CASCADE | no |
 | `multi_agency_trainings` | `organization_id` | CASCADE | no |
 | `nfc_tags` | `organization_id` | CASCADE | no |
@@ -11528,6 +11627,18 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_submissions` | `training_record_id` | SET NULL | yes |
 | `xapi_statements` | `training_record_id` | SET NULL | yes |
 
+### → `elections` (7 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `candidates` | `election_id` | CASCADE | no |
+| `elections` | `parent_election_id` | RESTRICT | yes |
+| `manual_ballot_batches` | `election_id` | CASCADE | no |
+| `minutes_election_results` | `election_id` | SET NULL | yes |
+| `prospect_election_packages` | `election_id` | SET NULL | yes |
+| `votes` | `election_id` | CASCADE | no |
+| `voting_tokens` | `election_id` | CASCADE | no |
+
 ### → `external_training_providers` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -11586,17 +11697,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
 | `inventory_nfc_tags` | `check_compartment_id` | CASCADE | yes |
 | `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
-
-### → `elections` (6 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `candidates` | `election_id` | CASCADE | no |
-| `elections` | `parent_election_id` | RESTRICT | yes |
-| `manual_ballot_batches` | `election_id` | CASCADE | no |
-| `prospect_election_packages` | `election_id` | SET NULL | yes |
-| `votes` | `election_id` | CASCADE | no |
-| `voting_tokens` | `election_id` | CASCADE | no |
 
 ### → `finance_export_logs` (6 references)
 
@@ -11660,6 +11760,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `email_template_backups` | `template_id` | SET NULL | yes |
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
+
+### → `meeting_minutes` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `meeting_motions` | `minutes_id` | CASCADE | no |
+| `minutes_action_items` | `minutes_id` | CASCADE | no |
+| `minutes_attachments` | `minutes_id` | CASCADE | no |
+| `minutes_election_results` | `minutes_id` | CASCADE | no |
+| `minutes_revisions` | `minutes_id` | CASCADE | no |
 
 ### → `membership_pipeline_steps` (5 references)
 
@@ -11954,13 +12064,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `mcp_oauth_authorizations` | `client_pk` | CASCADE | no |
 | `mcp_oauth_grants` | `client_pk` | CASCADE | no |
 
-### → `meeting_minutes` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `meeting_motions` | `minutes_id` | CASCADE | no |
-| `minutes_action_items` | `minutes_id` | CASCADE | no |
-
 ### → `org_chart_nodes` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -12204,6 +12307,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `dues_payments` | `member_dues_id` | CASCADE | no |
 
+### → `minutes_action_items` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `minutes_action_items` | `carried_from_id` | SET NULL | yes |
+
 ### → `minutes_templates` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -12322,7 +12431,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |
 | `meeting_motions` | `meeting_minutes` |
 | `membership_pipeline_steps` | `email_templates`, `membership_pipelines` |
-| `minutes_action_items` | `meeting_minutes`, `users` |
+| `minutes_action_items` | `meeting_minutes`, `minutes_action_items`, `users` |
 | `onboarding_sessions` | — _(root table)_ |
 | `onboarding_status` | — _(root table)_ |
 | `org_chart_node_holders` | `org_chart_nodes`, `users` |
