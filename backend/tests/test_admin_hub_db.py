@@ -1185,7 +1185,11 @@ class TestOtherQueuesFindTheirRows:
                 completion_date=TODAY - timedelta(days=9),
                 hours_completed=4.0,
                 status=SubmissionStatus.PENDING_REVIEW,
-                submitted_at=datetime.now(timezone.utc) - timedelta(days=9),
+                # From the pinned TODAY, not the clock: a run crossing UTC
+                # midnight would otherwise age it a day short.
+                submitted_at=datetime.combine(
+                    TODAY - timedelta(days=9), time(12), timezone.utc
+                ),
             )
         )
         await db_session.flush()
@@ -1215,7 +1219,11 @@ class TestOtherQueuesFindTheirRows:
                 completion_date=TODAY - timedelta(days=9),
                 hours_completed=4.0,
                 status=SubmissionStatus.APPROVED,
-                submitted_at=datetime.now(timezone.utc) - timedelta(days=9),
+                # From the pinned TODAY, not the clock: a run crossing UTC
+                # midnight would otherwise age it a day short.
+                submitted_at=datetime.combine(
+                    TODAY - timedelta(days=9), time(12), timezone.utc
+                ),
             )
         )
         await db_session.flush()
