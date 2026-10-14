@@ -373,7 +373,7 @@ Skills assessment framework.
 
 ### Shift Models
 
-The shift models are shared with the Scheduling module. For full documentation of all shift-related models (Shift, ShiftAssignment, ShiftTemplate, ShiftPattern, SwapRequest, TimeOffRequest, BasicApparatus), see **[docs/SCHEDULING_MODULE.md](../../../docs/SCHEDULING_MODULE.md)**.
+The shift models are shared with the Scheduling module. For full documentation of all shift-related models (Shift, ShiftAssignment, ShiftTemplate, ShiftPattern, SwapRequest, TimeOffRequest, BasicApparatus), see **[Scheduling Module — Developer Reference](../../../wiki/Module-Scheduling-Developer.md#data-model)**.
 
 **Key models used by Training:**
 

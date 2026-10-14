@@ -1926,7 +1926,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 
 #### Platoon Rotations (Person-Level): No Platoon Fields or Generated Shifts
 
-See [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19)
+See [Scheduling Module → Platoon Rotations](../wiki/Module-Scheduling.md#platoon-rotations)
 for the full feature reference.
 
 **Symptoms**: Platoon badges, the hold-over roster, or platoon-based generation
