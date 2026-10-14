@@ -2665,6 +2665,17 @@ Each item states its count, for example "2 of 2 Box aboard". An item under par
 has an orange **Short** badge and an orange count, for example "18 of 24 Box
 aboard". Other badges are **EXPIRED**, **Expiring** and **Needs restock**.
 
+**On a phone** _(2026-10-14)_ each item stacks under 640 pixels wide: its name
+and badges, then its details on one wrapped line, then the buttons. Each
+location heading stays pinned under the app header as you scroll. The three
+header counts (**expired**, **need restock**, **expiring**) are filter chips in
+a sideways-scrolling row; tap one to see only those items, and a location with
+nothing matching drops out. There is **no Save button**: every tap already
+saves on its own, and a line under the list reads **Saving…**, then **All
+changes saved**, or **Last change didn't save** if it failed (tap again).
+
+_[Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`.]_
+
 The lot number shown is **the lot the date belongs to** — the one expiring
 soonest — not the last one put aboard.
 
@@ -4365,6 +4376,14 @@ beneath whatever you decide on that draft. A discarded draft teaches nothing.
 Imported shifts are written already finalized: they count toward hours and shift
 compliance, but send no notifications and skip the equipment-check gate and
 completion-report drafts.
+
+**Review-screen wording** _(2026-10-14)_. Issue messages now read "an 85% match"
+(the article follows how the number is spoken). Seats show your department's
+label (**EMT**) rather than the stored token (`ems`) on the **Shifts** and
+**Positions** tabs and in the seat dropdown. A shift that ends on a later day
+dates its end in the card heading, so a 25.5-hour attendance no longer reads as
+"6:00 AM - 7:30 AM". Counts read "1 shift", "1 entry" and "1 archived
+former-member record".
 
 > **Screenshot needed:** the Shift History Import list (upload form with the time
 > zone picker, drafts and committed imports) and a draft's **Members** tab.

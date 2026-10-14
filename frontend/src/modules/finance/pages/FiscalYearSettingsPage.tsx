@@ -480,7 +480,7 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
     if (!source) return;
     const confirmed = await confirm({
       title: 'Start from last year',
-      message: `Copy every budget line from ${source.name} into ${fy.name}? Each copy starts at that line's current budget, with nothing spent, and you can change it afterwards. Lines ${fy.name} already has are left as they are.`,
+      message: `Copy every budget line from ${source.name} into ${fy.name}? Each copy starts at that line's current budget, with nothing spent, and you can change it afterwards. Lines ${fy.name} already has are left as they are, and lines in retired categories are not copied.`,
       confirmLabel: 'Copy lines',
       cancelLabel: 'Not now',
       variant: 'info',
@@ -489,8 +489,9 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
     setCopying(true);
     try {
       const result = await fiscalYearService.startFrom(fy.id, source.id);
+      const retiredNote = result.retired > 0 ? `, ${result.retired} in retired categories left out` : '';
       toast.success(
-        `${result.created} ${result.created === 1 ? 'line' : 'lines'} copied, ${result.skipped} already there`
+        `${result.created} ${result.created === 1 ? 'line' : 'lines'} copied, ${result.skipped} already there${retiredNote}`
       );
       onChanged();
     } catch (err: unknown) {
@@ -552,7 +553,8 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
           </div>
         )}
         <p id={`${sourceSelectId}-hint`} className="text-theme-text-secondary mt-1 text-xs">
-          Copies each line's category, station, owner and notes, starting at its current budget.
+          Copies each line's category, station, owner and notes, starting at its current budget. Retired categories are
+          left out.
         </p>
       </div>
       <div>

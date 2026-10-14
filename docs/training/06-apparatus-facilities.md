@@ -579,6 +579,17 @@ The **Inspections** tab tracks scheduled and completed facility inspections:
 5. Upload inspection reports or photos.
 6. Click **Create Inspection** (**Save Changes** when editing one).
 
+**Dialogs and due dates** _(2026-10-14)_. **New Record** (maintenance) and
+**New Inspection** on a facility's page now open centred over the whole screen
+with their title and buttons in view; before, they opened inside the section's
+card and the title could sit above the top of the screen. **Maintenance Type**
+is marked required: saving without one is stopped on the form, and a refused
+save shows the server's reason instead of "Failed to save record". Each
+maintenance row now says when it is due: **Overdue · due 10/1/2026**, **Due
+10/1/2026** or **Completed 10/1/2026**, in words as well as the red icon.
+
+_[Screenshot needed: the New Record dialog on a facility page with Maintenance Type marked required; and the maintenance list with Overdue · due and Completed rows. REPLACE the maintenance shots in this section.]_
+
 > **Corrected 2026-10-04.** These steps named **Add Maintenance** and **Add
 > Inspection**; the buttons are **New Record** and **New Inspection**. Since the
 > 2026-09-29 plain-language pass every facility dialog's save button names what

@@ -3048,6 +3048,11 @@ demonstrated, which raises their competency) both record practical skills. A
 department now picks one, so officers always know which one counts.
 
 **Where:** **Training Administration > Settings & Data > Practical Skills**.
+
+The **Evaluations** card on the Training Administration home now describes only
+what the area holds under the chosen method _(2026-10-14)_: a Skills Testing
+department no longer reads "Skill sign-offs and knowledge tests". An unknown
+method shows the general wording that names both systems.
 **Needs:** `training.manage`.
 
 | Choice                     | What stays                                                                                       | What is hidden                                                                                                                                  |

@@ -230,11 +230,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor/assigned officer if configured on the enrollment
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"New Trainee Enrolled: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has been enrolled in {program.name}. You are assigned as their mentor.",
@@ -271,11 +274,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"Trainee Advanced: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has advanced to {new_phase_name} in {program.name}.",
@@ -311,11 +317,14 @@ class TrainingProgramService:
         )
 
         # Notify mentor
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": f"Trainee Completed: {user.display_name} - {program.name}",
                     "message": f"{user.display_name} has completed {program.name}!",
@@ -356,7 +365,7 @@ class TrainingProgramService:
         notif_service = NotificationsService(self.db)
         for milestone in milestones:
             message = milestone.notification_message or (
-                f"You've reached {round(milestone.completion_percentage_threshold)}% "
+                f"You've reached {round(milestone.completion_percentage_threshold or 0)}% "
                 f"of this training program. Keep going!"
             )
             await notif_service.log_notification(
@@ -475,11 +484,14 @@ class TrainingProgramService:
             },
         )
 
-        if getattr(enrollment, "mentor_id", None):
+        # ProgramEnrollment has no mentor column today, so this reads None and
+        # sends nothing; kept as getattr so it starts working if one is added.
+        mentor_id = getattr(enrollment, "mentor_id", None)
+        if mentor_id:
             await notif_service.log_notification(
                 organization_id=organization_id,
                 log_data={
-                    "recipient_id": str(enrollment.mentor_id),
+                    "recipient_id": str(mentor_id),
                     "channel": NotificationChannel.IN_APP,
                     "subject": (
                         f"Recert cycle started: {user.display_name} - {program.name}"
@@ -1580,7 +1592,7 @@ class TrainingProgramService:
             RequirementType.SHIFTS: getattr(requirement, "required_shifts", None),
             RequirementType.CALLS: getattr(requirement, "required_calls", None),
             RequirementType.COURSES: (
-                len(requirement.required_courses)
+                len(requirement.required_courses or [])
                 if getattr(requirement, "required_courses", None)
                 else None
             ),
@@ -3535,9 +3547,8 @@ class TrainingProgramService:
 
             # Auto-complete if reached 100%
             if (
-                progress.progress_percentage >= 100.0
-                and progress.status != RequirementProgressStatus.COMPLETED
-            ):
+                progress.progress_percentage or 0.0
+            ) >= 100.0 and progress.status != RequirementProgressStatus.COMPLETED:
                 progress.status = RequirementProgressStatus.COMPLETED
                 progress.completed_at = datetime.now(timezone.utc)
 
@@ -3772,9 +3783,9 @@ class TrainingProgramService:
             units=float(units),
             applied_by=str(applied_by) if applied_by else None,
             previous_status=(
-                progress.status.value
-                if mark_completed and hasattr(progress.status, "value")
-                else (str(progress.status) if mark_completed else None)
+                str(getattr(progress.status, "value", progress.status))
+                if mark_completed and progress.status is not None
+                else None
             ),
             phase_before_id=str(phase_before_id) if phase_before_id else None,
         )
@@ -5333,7 +5344,9 @@ class TrainingProgramService:
 
         # Calculate new version
         new_version = (
-            source_program.version + 1 if increment_version else source_program.version
+            (source_program.version or 1) + 1
+            if increment_version
+            else source_program.version
         )
 
         # Create new program
@@ -5516,7 +5529,7 @@ class TrainingProgramService:
         by_id = {str(p.id): p for p in program.phases}
         for phase in sorted(program.phases, key=lambda p: p.phase_number):
             phase_reqs = []
-            for pr in sorted(phase.requirements, key=lambda r: r.sort_order):
+            for pr in sorted(phase.requirements, key=lambda r: r.sort_order or 0):
                 req = pr.requirement
                 phase_reqs.append(
                     {

@@ -8,14 +8,18 @@ average reaches 100%. Uses a recording fake session so the issued UPDATE
 statements can be counted. DB mocked; no MySQL.
 """
 
-from datetime import date
+from datetime import date, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
-from app.models.training import EnrollmentStatus, RequirementType
+from app.models.training import (
+    EnrollmentStatus,
+    RequirementProgressStatus,
+    RequirementType,
+)
 from app.services.training_program_service import (
     RequirementProgressUpdate,
     TrainingProgramService,
@@ -755,3 +759,58 @@ class TestEnrollmentQueriesLoadTheNestedProgramme:
 
         asyncio.run(service._ensure_program_loaded(SimpleNamespace(id="x")))
         db.refresh.assert_not_awaited()
+
+
+class TestNullProgressPercentage:
+    """A row whose percentage was never written must not crash a value update."""
+
+    async def test_value_update_of_a_row_with_no_percentage(self, monkeypatch):
+        progress = SimpleNamespace(
+            id="p1",
+            enrollment_id="enr-1",
+            requirement_id="req-1",
+            enrollment=SimpleNamespace(
+                user_id="owner",
+                program_id="prog-1",
+                program=SimpleNamespace(organization_id="org-1"),
+                enrolled_at=None,
+                target_completion_date=None,
+            ),
+            requirement=SimpleNamespace(
+                id="req-1", requirement_type=RequirementType.CERTIFICATION
+            ),
+            status=RequirementProgressStatus.IN_PROGRESS,
+            progress_percentage=None,
+            progress_value=0,
+            progress_notes=None,
+            completed_at=None,
+            updated_at=None,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=progress))
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = TrainingProgramService(db)
+        monkeypatch.setattr(svc, "_is_linked_row", AsyncMock(return_value=False))
+        monkeypatch.setattr(svc, "_recalculate_enrollment_progress", AsyncMock())
+        monkeypatch.setattr(
+            "app.services.training_program_service.fetch_user_waivers",
+            AsyncMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            "app.services.training_program_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=timezone.utc),
+        )
+
+        out, err = await svc.update_requirement_progress(
+            progress_id="p1",
+            organization_id="org-1",
+            updates=RequirementProgressUpdate(progress_value=1),
+            can_manage=True,
+        )
+
+        assert err is None
+        assert out is progress
+        assert progress.status == RequirementProgressStatus.IN_PROGRESS

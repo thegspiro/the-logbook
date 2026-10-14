@@ -1210,7 +1210,6 @@ const OrganizationSetup: React.FC = () => {
                           fileInputRef.current?.click();
                         }
                       }}
-                      aria-label="Upload organization logo"
                     >
                       <input
                         ref={fileInputRef}

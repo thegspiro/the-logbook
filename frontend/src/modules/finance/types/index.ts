@@ -593,10 +593,14 @@ export interface FiscalYearUpdatePayload {
   requestDeadline?: string | null;
 }
 
-/** What "Start from last year" did: lines copied, and lines the draft already had. */
+/**
+ * What "Start from last year" did: lines copied, lines the draft already had,
+ * and lines left behind because their category is retired.
+ */
 export interface StartFromLastYearResult {
   created: number;
   skipped: number;
+  retired: number;
 }
 
 // =============================================================================

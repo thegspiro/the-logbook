@@ -142,8 +142,12 @@ describe('next-year planning calls', () => {
   });
 
   it('starts a draft year from another', async () => {
-    mockPost.mockResolvedValue({ data: { created: 3, skipped: 1 } });
-    await expect(fiscalYearService.startFrom('fy-27', 'fy-26')).resolves.toEqual({ created: 3, skipped: 1 });
+    mockPost.mockResolvedValue({ data: { created: 3, skipped: 1, retired: 0 } });
+    await expect(fiscalYearService.startFrom('fy-27', 'fy-26')).resolves.toEqual({
+      created: 3,
+      skipped: 1,
+      retired: 0,
+    });
     expect(mockPost).toHaveBeenCalledWith('/finance/fiscal-years/fy-27/start-from/fy-26');
   });
 

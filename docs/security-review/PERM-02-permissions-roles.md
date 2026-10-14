@@ -1,9 +1,166 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7 — the header's own "TBD" placeholder was never filled in after merge; corrected here), pass 8 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), pass 9 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 9 (2026-10-14, watchdog pickup) — 0 fixed in source, 1 doc correction, 0 new findings
+
+Watchdog pickup: Step 0 confirmed via `list_pull_requests` (not trusted from
+`PROGRESS.md`'s own row) that no `claude/security-review-*` PR was open
+anywhere on the repo. The last security-review merge was PR #3210 (Feature
+01, Auth & session lifecycle, pass 9) — docs-only, nothing further to record
+from it beyond clearing the **Open PR** row. Rotation row 02 was the next `⬜`.
+
+**Baseline:** `d9a3357c` (PR #3097's merge, pass 8). **Head:** current `main`
+(`d5711ecc`). 370 commits between them. Of the twelve files this feature
+tracks (`dependencies.py`, `core/permissions.py`, `roles.py` +
+`role_service.py`, `operational_ranks.py` + `operational_rank_service.py`,
+`officers.py` + `officer_service.py`, `org_chart.py` +
+`org_chart_service.py`, `admin_continuity_service.py`, and the
+rank/role-assignment handlers in `users.py`), only two carry a real diff —
+`core/permissions.py` (+5) and `role_service.py` (+14/-2) — confirmed by
+`git diff --stat` against every tracked file, not assumed from a commit log
+skim.
+
+### The two changed files, reviewed
+
+- **`core/permissions.py` — one new seeded grant, `locations.create` added to
+  the `quartermaster` position** (not `ems_supply_officer`, which sits
+  immediately after it in the file and could be misread as the target from
+  the diff context alone — confirmed by reading the surrounding block
+  directly, `core/permissions.py:2186-2225`). **Pitfall #23 compliant**:
+  backed by `20261011_2305_9e8b0b6f3fe8_grant_quartermaster_locations_create.py`,
+  which the registry's own comment names. Read the migration in full: guarded
+  on the `positions` table existing (Pitfall #26, though the table is never
+  absent — `positions` predates the migration chain), scoped to
+  `slug = "quartermaster" AND is_system = True`, gated on evidence
+  (`inventory.manage` present, `locations.create`/`locations.manage`/
+  `locations.*`/`*` all absent) rather than a whole-row snapshot comparison,
+  idempotent, and its downgrade only removes a grant it can prove it added
+  (same logic, mirrored). Registry and migration target the same slug and the
+  same permission string — no drift. This is the owner's W38-1 decision
+  (quartermaster can create rooms for the inventory setup wizard, not edit or
+  delete them), already fully reasoned through in the migration's own
+  docstring; nothing to add here beyond confirming the two sides agree.
+  `locations.create` remains seeded only to officer/chief-tier positions
+  (grep-confirmed across all 35 `DEFAULT_POSITIONS` entries) — never to
+  `member` or any rank-and-file position, so this is not a department-wide
+  widening.
+- **`role_service.py` — two independent, unrelated changes, both benign:**
+  - `delete_role` now calls `documents_service.release_position_from_folders`
+    before deleting, refusing the delete (`ValueError` → 400 via
+    `handle_service_errors`) if the position is the _sole_ opener of an
+    organization-visibility document folder, naming the folders. Read
+    `release_position_from_folders` in full
+    (`documents_service.py:212-259`): org-scoped query, `.with_for_update()`
+    locks the candidate folders before the check (Pitfall #27 shape — closes
+    a race between a concurrent folder edit and this delete), and the
+    surviving folders' `allowed_roles` lists are rebuilt as new lists rather
+    than mutated in place before reassignment (Pitfall #12 compliant). This
+    function lives in Feature 10's (Documents & legal) file, not this
+    feature's — reviewed here only because this feature's `role_service.py`
+    is the caller, and the call site passes nothing unscoped (organization id
+    and position id both come from the already-org-resolved `role`/
+    `current_user`).
+  - The `remove_role_from_user` assignment-count check replaced a raw
+    `result.rowcount == 0` with `rows_affected(result) == 0`
+    (`app/utils/sql_results.py`) — the same AUTH-21-pattern hardening Feature
+    01's pass 9 found in `auth_service.py`: it raises on an unexpected result
+    type instead of silently reading it as `0`, narrowing a privilege-removal
+    audit path's failure mode in the safer direction. Same comparison, same
+    control flow otherwise.
+
+### Re-verified, not re-derived
+
+- **PERM-1, PERM-2 (fixed) and PERM-5 (closed by other work, pass 8)** all
+  confirmed still in place: `operational_ranks.py:170` (`/validate` requires
+  `require_permission("settings.manage", "members.manage")`,
+  `operational_rank_service.py`'s savepoint-scoped `seed_defaults` rollback
+  (`async with self.db.begin_nested()`), and
+  `admin_continuity_service.py`'s "LAST WILDCARD HOLDER" guard — all
+  byte-identical to pass 8 (zero commits to `admin_continuity_service.py`
+  since `d9a3357c`, confirmed by `git log`).
+- **Route inventory re-enumerated directly against the four endpoint files**
+  (not trusted from this doc's own, now-corrected, legacy "Route inventory"
+  section below): 28 routes, same four routers, same gates as pass 7/8 —
+  `roles.py` (13), `operational_ranks.py` (7, OR-gate confirmed per-route by
+  direct read: `create_rank`/`update_rank`/`delete_rank`/`validate_ranks` all
+  `require_permission("settings.manage", "members.manage")`;
+  `reorder_ranks` additionally gated by its own `_refuse_ordering` check,
+  independent of `require_permission`, to `settings.manage` alone), 3
+  `officers.py` (`require_permission("settings.manage",
+"organization.update_settings")`), 5 `org_chart.py` (`GET ""` auth-only by
+  design; the four mutations `require_permission("orgchart.manage",
+"settings.manage")`).
+- **OR-gate alternatives checked individually, per the checklist's dimension
+  2 item** ("one broadly-seeded grant opens the endpoint to the whole
+  department"): `members.manage` (the widened alternative on
+  `operational_ranks.py`'s CRUD/validate routes) is seeded only to
+  `president`, `vice_president`, `secretary`, `membership_coordinator`,
+  `assistant_membership_coordinator`, and `assistant_secretary` — all
+  officer-tier, never `member` or `firefighter` (grep-confirmed across all 35
+  `DEFAULT_POSITIONS` entries, not assumed from the code comment's "roster
+  officer" framing). `organization.update_settings` (officers.py's
+  alternative) and `settings.manage`/`orgchart.manage` (org_chart.py's) were
+  already confirmed not seeded to `member`/`firefighter` in prior passes;
+  re-confirmed unchanged here, since none of the three files carry any diff.
+- **Found and fixed one documentation-only drift, not a code finding — see
+  PERM-9 below.**
+
+### PERM-9 — INFO — this file's own legacy "Route inventory" section had been stale since pass 6 — ✅ FIXED (doc only)
+
+**What:** the "Route inventory" section further down this file (the static
+section, not the per-pass write-ups above it) stated `operational_ranks.py`'s
+four mutating routes "all require `settings.manage`". That was accurate
+through pass 5; pass 6 widened `create_rank`/`update_rank`/`delete_rank`/
+`validate_ranks` to `require_permission("settings.manage", "members.manage")`
+while keeping `sort_order` changes and `/reorder` gated to `settings.manage`
+alone. Passes 6 and 7's own per-pass write-ups recorded the widening
+correctly; the static section below was never updated to match, so a reader
+who skipped straight to "Route inventory" (as this doc's own structure
+invites, newest-pass-first notwithstanding) would see a stale, narrower gate
+than the code actually enforces.
+
+**Where:** `docs/security-review/PERM-02-permissions-roles.md` (the "Route
+inventory" section, pre-fix).
+
+**Impact:** INFO — no code defect; the live code has required
+`settings.manage` OR `members.manage` since pass 6, correctly. A reviewer
+reading only the static section could underestimate who may reach these
+routes (believing it narrower than reality is not a security risk, but
+believing it wider than a OR-gate actually reads — the opposite error — is
+the one this checklist item exists to catch, and the stale text could cut
+either way for a reader who trusts it).
+
+**Fix:** corrected the section's `operational_ranks.py` paragraph to state
+the actual current gates (OR-gate on the four mutating routes, independent
+`settings.manage`-only gate on `sort_order`/`/reorder` via
+`_refuse_ordering`), with a note that it was corrected at pass 9.
+
+**Guard test:** none — this is a markdown correction, not a code path. The
+existing route-gate guard tests (`test_permission_gate_composition.py`,
+`test_read_permission_gates.py`) already assert the real gates in code; this
+finding is about this findings file's own text, not about a missing check.
+
+### Completion gate (pass 9)
+
+| Check                                                                            | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                  | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                          | ✅ 2288 files unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                      | ✅ clean                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `a39a1999776f`, 593 revisions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 269 routes, 0 errors, 0 warnings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| standing guard suite (12 files)                                                  | ✅ 224 passed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart"`) | ✅ 1362 passed, 1 skipped (environment-only: `py_vapid`/`pywebpush` not installed) — 1 unrelated failure (`test_finance_receipts.py`, Feature 05's territory, matched only via the `officer` keyword) on the first run, caused by the sandbox's test database being behind `main` by two migrations (`0d32069fea4d`, `a39a1999776f` — the latter landing same-day via PR #3208); fixed by `alembic upgrade head` against the test database (an environment-setup gap, not an application defect — same shape pass 7 recorded), then re-run clean |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `cd frontend && npm run lint`                                                    | ✅ 0 errors, 0 warnings (no frontend files touched this pass)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+No source file needed a fix this pass. Rotation row 02 moves to `✅`.
 
 ---
 
@@ -1593,10 +1750,18 @@ weight against all seven checklist dimensions.
 | POST   | `/nodes/{id}/move` | `require_permission` | same                                   | yes        | cycle + depth-cap guarded       |
 | DELETE | `/nodes/{id}`      | `require_permission` | same                                   | yes        | reparents children, renumbers   |
 
-**operational_ranks.py** (7 routes): `GET /`, `GET /validate`, `GET /{id}` are
-auth-only (config-labels, low sensitivity by design — except `/validate`, see
-PERM-1); `POST /`, `PATCH /{id}`, `DELETE /{id}`, `POST /reorder` all require
-`settings.manage`.
+**operational_ranks.py** (7 routes): `GET /`, `GET /{id}` are auth-only
+(config-labels, low sensitivity by design); `GET /validate` requires
+`settings.manage` or `members.manage` (see PERM-1). `POST /`, `PATCH /{id}`,
+`DELETE /{id}` require `settings.manage` **or** `members.manage` — widened at
+pass 6 so a roster officer can maintain the ladder's contents without a
+`settings.manage` grant — but `PATCH /{id}`'s `sort_order` field and
+`POST /reorder` stay gated to `settings.manage` alone via the route's own
+`_refuse_ordering` check, independent of `require_permission`, because
+`sort_order` decides which restricted inventory a rank's holders may see (see
+Pass 6/7 below and `operational_ranks.py:52-69`). **Corrected at pass 9** —
+this paragraph previously read `settings.manage` only for all four mutating
+routes, stale since the pass 6 widening.
 
 ## Verified good ✅
 

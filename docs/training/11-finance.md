@@ -290,7 +290,7 @@ To change a category's name, description or owner position later, click the penc
 
 ### Category Hierarchy
 
-Categories can be nested one level deep. A parent category serves as a logical grouping for its child categories. For example:
+Categories nest under a parent _(2026-10-14: the settings dialog has a **Parent category** picker, and a sub-line can have sub-lines of its own)_. A parent category serves as a logical grouping for its child categories. For example:
 
 ```
 Operations (parent)
@@ -304,6 +304,29 @@ Training (parent)
 ```
 
 > **Hint:** Keep your category structure aligned with your chart of accounts in QuickBooks or your accounting system. This simplifies the export mapping later and ensures your financial reports match across systems.
+
+### Who Can Charge a Category's Lines _(2026-10-14)_
+
+A category can say who may pick its budget lines on a purchase request, check request or expense report. A Quartermaster category might hold an open **Boot reimbursement** line that everyone can use and an **Officer brass** line kept for the Quartermaster and the positions they choose.
+
+In the category's settings, **Who can charge these lines** has three choices:
+
+| Choice                                            | What it means                                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same as the parent category                       | The parent's rule, positions included. A top-level category left this way is open, which is how every line behaved before the setting existed. |
+| **Anyone who submits requests**                   | Every member who can raise a request may pick the line.                                                                                        |
+| **Only the owner and the positions chosen below** | The line's owner, the owner of its category (or of any category above it) and the positions ticked under **Also allow these positions**.       |
+
+Everyone else does not see a restricted line in the request form's picker, and the server refuses it if a request names it anyway. Lines in the picker are labelled with their category path (for example **Quartermaster › Officer brass**).
+
+- **Treasurers** (`finance.manage`) are not held to the rule and can charge any line.
+- **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
+- **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
+- **The category settings gained a parent picker** (**None (a top-level category)** or any category; a choice that would make a category its own ancestor is refused), a tree list, and the charge setting. The **Budgets** page groups sub-lines under their top-level category with a subtotal.
+
+_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+
+_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
 
 ### Deactivating a Category
 
@@ -522,6 +545,12 @@ only once you own at least one line; you do not need `finance.view`.
 
 Only lines you own open for you; any other line's address answers "Budget not
 found".
+
+If your position owns a **category**, a **Who can charge your lines** card sits
+below your lines _(2026-10-14)_. It lets you open a line to everyone who submits
+requests or keep it for you and the positions you choose; see
+[Who Can Charge a Category's Lines](#who-can-charge-a-categorys-lines-2026-10-14).
+It does not appear if you own no category.
 
 ### Viewing Budget Details
 

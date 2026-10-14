@@ -665,7 +665,9 @@ class ElectionService:
             required = self.PAPER_ATTESTATIONS_DEFAULT
         return max(0, min(required, self.PAPER_ATTESTATIONS_MAX))
 
-    async def _exclude_unattested(self, election_id: UUID | str, votes: List) -> List:
+    async def _exclude_unattested(
+        self, election_id: UUID | str, votes: Sequence
+    ) -> List:
         """Drop manual votes whose batch is still awaiting attestations.
 
         Pending batches are recorded and chained but unconfirmed claims —
@@ -967,6 +969,7 @@ class ElectionService:
         live positional credential, and an overridden member's override
         didn't reach their positional votes (Codex round 6, ELEC-30/31).
         """
+        org: Optional[Organization]
         if organization:
             org = organization
         else:
@@ -1005,6 +1008,7 @@ class ElectionService:
             return []
 
         # Use pre-loaded org if provided, otherwise query
+        org: Optional[Organization]
         if organization:
             org = organization
         else:
@@ -1104,6 +1108,7 @@ class ElectionService:
             return None
 
         # Use pre-loaded org if provided, otherwise query
+        org: Optional[Organization]
         if organization:
             org = organization
         else:
@@ -1870,17 +1875,13 @@ class ElectionService:
         )
 
         # Sign the vote for tampering detection
-        self._apply_vote_signature(vote)
+        signature = self._apply_vote_signature(vote)
 
         # Sequential chain hash — links this vote to the previous one
-        vote.chain_hash = self._compute_chain_hash(
-            election.last_chain_hash, vote.vote_signature
-        )
+        vote.chain_hash = self._compute_chain_hash(election.last_chain_hash, signature)
 
         # Voter receipt — returned so the voter can verify their vote was recorded
-        vote.receipt_hash = self._compute_receipt_hash(
-            str(vote.id), vote.vote_signature
-        )
+        vote.receipt_hash = self._compute_receipt_hash(str(vote.id), signature)
 
         self.db.add(vote)
 
@@ -2075,7 +2076,7 @@ class ElectionService:
         if for_update:
             query = query.with_for_update()
         result = await self.db.execute(query)
-        items: List[Vote] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     def _voter_identity_filter(self, election: Election, user_id: UUID | str):
@@ -2264,11 +2265,17 @@ class ElectionService:
             return None
         return secret
 
-    def _apply_vote_signature(self, vote: Vote) -> None:
-        """Sign ``vote`` and record which key signed it."""
+    def _apply_vote_signature(self, vote: Vote) -> str:
+        """Sign ``vote``, record which key signed it, and return the signature.
+
+        The signature is returned so the chain and receipt hashes are fed the
+        value just computed rather than re-reading a nullable column.
+        """
         signing_key = self._get_vote_signing_key()
-        vote.vote_signature = self._sign_vote(vote, signing_key)
+        signature = self._sign_vote(vote, signing_key)
+        vote.vote_signature = signature
         vote.signing_key_id = vote_signing_key_id(signing_key)
+        return signature
 
     async def _vote_key_cutover(self, current_key_id: str) -> Optional[datetime]:
         """When the first vote recording the dedicated key was cast.
@@ -2451,7 +2458,7 @@ class ElectionService:
         chain_broken = False
         chain_break_at = None
         remaining = {str(v.id): v for v in all_votes if v.chain_hash}
-        prev_chain = "GENESIS"
+        prev_chain: str = "GENESIS"
         while remaining:
             next_vote = next(
                 (
@@ -2472,7 +2479,7 @@ class ElectionService:
                     ).id
                 )
                 break
-            prev_chain = next_vote.chain_hash
+            prev_chain = next_vote.chain_hash or ""
             del remaining[str(next_vote.id)]
 
         integrity_status = "PASS"
@@ -3050,7 +3057,9 @@ class ElectionService:
             .where(ManualBallotBatch.election_id == str(election_id))
             .where(ManualBallotBatch.ballots_cast.is_not(None))
         )
-        return {batch_id: count for batch_id, count in result.all()}
+        return {
+            batch_id: count for batch_id, count in result.all() if count is not None
+        }
 
     async def _count_eligible_voters(
         self, election: Election, organization_id: UUID | str
@@ -4002,9 +4011,9 @@ class ElectionService:
         expired_count = 0
         expire_ids: List[str] = []
         for uid in sent_user_ids:
-            voter_hash = hash_by_user.get(uid)
-            if voter_hash is not None:
-                expire_ids.extend(prior_token_ids_by_hash.get(voter_hash, []))
+            sent_hash = hash_by_user.get(uid)
+            if sent_hash is not None:
+                expire_ids.extend(prior_token_ids_by_hash.get(sent_hash, []))
         if expire_ids:
             from sqlalchemy import update as sa_update
 
@@ -5011,13 +5020,11 @@ class ElectionService:
                     manual_batch_id=batch_id,
                     vote_dedup_hash=None,
                 )
-                self._apply_vote_signature(vote)
+                signature = self._apply_vote_signature(vote)
                 vote.chain_hash = self._compute_chain_hash(
-                    election.last_chain_hash, vote.vote_signature
+                    election.last_chain_hash, signature
                 )
-                vote.receipt_hash = self._compute_receipt_hash(
-                    str(vote.id), vote.vote_signature
-                )
+                vote.receipt_hash = self._compute_receipt_hash(str(vote.id), signature)
                 self.db.add(vote)
                 election.last_chain_hash = vote.chain_hash
                 recorded += 1
@@ -5222,6 +5229,8 @@ class ElectionService:
         )
         totals_by_batch: Dict[str, List[Dict]] = {}
         for b_id, cand_id, cand_name, position, count in totals_result.all():
+            if b_id is None:
+                continue
             totals_by_batch.setdefault(b_id, []).append(
                 {
                     "candidate_id": cand_id,
@@ -6969,7 +6978,7 @@ class ElectionService:
             return None, 0, f"Cannot rollback election with status {from_status}"
 
         # Create rollback record
-        rollback_record = {
+        rollback_record: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "performed_by": str(performed_by),
             "from_status": from_status,
@@ -7864,13 +7873,9 @@ class ElectionService:
                 ),
             ),
         )
-        self._apply_vote_signature(vote)
-        vote.chain_hash = self._compute_chain_hash(
-            election.last_chain_hash, vote.vote_signature
-        )
-        vote.receipt_hash = self._compute_receipt_hash(
-            str(vote.id), vote.vote_signature
-        )
+        signature = self._apply_vote_signature(vote)
+        vote.chain_hash = self._compute_chain_hash(election.last_chain_hash, signature)
+        vote.receipt_hash = self._compute_receipt_hash(str(vote.id), signature)
         self.db.add(vote)
         election.last_chain_hash = vote.chain_hash
 
@@ -9423,7 +9428,7 @@ class ElectionService:
         printed, so the heading can never disagree with the names under it.
         """
         recipient_ids = election.email_recipients or []
-        users = []
+        users: Sequence[User] = []
         if recipient_ids:
             # The report passes a UUID; bound as-is it matches no row, and
             # every report then read "no ballot emails were sent" (W50-33).
@@ -9928,15 +9933,11 @@ class ElectionService:
         )
 
         # Sign the vote for tampering detection
-        self._apply_vote_signature(vote)
+        signature = self._apply_vote_signature(vote)
 
         # Sequential chain hash and voter receipt
-        vote.chain_hash = self._compute_chain_hash(
-            election.last_chain_hash, vote.vote_signature
-        )
-        vote.receipt_hash = self._compute_receipt_hash(
-            str(vote.id), vote.vote_signature
-        )
+        vote.chain_hash = self._compute_chain_hash(election.last_chain_hash, signature)
+        vote.receipt_hash = self._compute_receipt_hash(str(vote.id), signature)
 
         self.db.add(vote)
 
@@ -10177,12 +10178,12 @@ class ElectionService:
                     discriminator=discriminator,
                 ),
             )
-            self._apply_vote_signature(new_vote)
+            signature = self._apply_vote_signature(new_vote)
             new_vote.chain_hash = self._compute_chain_hash(
-                election.last_chain_hash, new_vote.vote_signature
+                election.last_chain_hash, signature
             )
             new_vote.receipt_hash = self._compute_receipt_hash(
-                str(new_vote.id), new_vote.vote_signature
+                str(new_vote.id), signature
             )
             election.last_chain_hash = new_vote.chain_hash
             self.db.add(new_vote)
@@ -10471,7 +10472,7 @@ class ElectionService:
                         None,
                         f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}",
                     )
-                candidate_id = UUID(choice)
+                candidate_id = str(UUID(choice))
 
             # The write-in name is stored verbatim (stripped above), never
             # HTML-escaped: escaping at the write expanded a schema-legal
@@ -10509,13 +10510,16 @@ class ElectionService:
         voting_token.used = True
         voting_token.used_at = datetime.now(timezone.utc)
         voting_token.access_count += 1
-        voting_token.positions_voted = [
-            v.get("ballot_item_id")
-            for v in votes
-            if v.get("choice") not in (None, "abstain")
-            or v.get("candidate_ids")
-            or v.get("rankings")
-        ]
+        positions_voted: List[str] = []
+        for v in votes:
+            voted_item_id = v.get("ballot_item_id")
+            if voted_item_id is not None and (
+                v.get("choice") not in (None, "abstain")
+                or v.get("candidate_ids")
+                or v.get("rankings")
+            ):
+                positions_voted.append(voted_item_id)
+        voting_token.positions_voted = positions_voted
 
         # Snapshot before the commit: rollback expires ``election`` and a
         # lazy load in the except branch raises MissingGreenlet (W50-6).
@@ -10626,7 +10630,7 @@ class ElectionService:
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
-        enabled = bool(org) and self._is_proxy_voting_enabled(org)
+        enabled = org is not None and self._is_proxy_voting_enabled(org)
         held = [
             a
             for a in (election.proxy_authorizations or [])
@@ -11014,7 +11018,7 @@ class ElectionService:
             )
             for row in vote_result.all():
                 matched_hash = row[0]
-                uid = hash_to_user.get(matched_hash)
+                uid = hash_to_user.get(matched_hash) if matched_hash else None
                 if uid:
                     voted_user_ids.add(uid)
         if not election.anonymous_voting:

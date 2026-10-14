@@ -222,8 +222,9 @@ class FinanceBudgetRequestService:
         edits. Spent and encumbered start at zero; amendments stay with the
         source line. A category and station that already have a line in the
         draft are skipped, so running it twice creates nothing the second
-        time. Raises ``FinanceEntityNotFoundError`` for a year that is not the
-        org's.
+        time. A line whose own category has been retired (``is_active`` off)
+        is not carried into the new year, and is counted as ``retired``.
+        Raises ``FinanceEntityNotFoundError`` for a year that is not the org's.
         """
         # The draft year's row lock serializes two runs, so both cannot read
         # "no line yet" for the same category and station.
@@ -248,15 +249,29 @@ class FinanceBudgetRequestService:
         taken = {(row.category_id, row.station_id) for row in existing.all()}
 
         source_lines = await self.db.execute(
-            select(Budget)
+            select(Budget, BudgetCategory.is_active)
+            .join(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
             .where(
                 Budget.organization_id == org_id,
                 Budget.fiscal_year_id == source.id,
             )
             .order_by(Budget.created_at, Budget.id)
         )
-        created = skipped = 0
-        for line in source_lines.scalars().all():
+        created = skipped = retired = 0
+        for line, category_active in source_lines.all():
+            # A retired category is one the department stopped budgeting for;
+            # copying its line would bring it back into the new year. Only the
+            # line's own category is consulted: a sub-category can stay in use
+            # under a parent that is no longer budgeted for directly.
+            if not category_active:
+                retired += 1
+                continue
             key = (line.category_id, line.station_id)
             if key in taken:
                 skipped += 1
@@ -279,9 +294,11 @@ class FinanceBudgetRequestService:
             created += 1
         await self.db.flush()
         logger.info(
-            "Copied {} budget lines ({} skipped) from {} into {} for org {}",
+            "Copied {} budget lines ({} skipped, {} retired) from {} into {} "
+            "for org {}",
             created,
             skipped,
+            retired,
             source.id,
             draft.id,
             org_id,
@@ -289,6 +306,7 @@ class FinanceBudgetRequestService:
         return {
             "created": created,
             "skipped": skipped,
+            "retired": retired,
             "draft_name": draft.name,
             "source_name": source.name,
         }
