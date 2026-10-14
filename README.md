@@ -14,7 +14,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 - **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
 - **Multi-Tenancy Ready** — Host multiple organizations on a single installation
 - **Integration Framework** — Connect with Microsoft 365, Google Workspace, and more
-- **Role-Based Access Control** — Granular permissions with 16 system roles
+- **Role-Based Access Control** — Granular permissions with 31 default positions
 - **Mobile Responsive** — Progressive Web App (PWA) support
 - **Public Kiosk Displays** — Tablet-friendly pages for room QR code check-in, no login required
 - **Unified Location System** — Single source of truth for all rooms, buildings, and venues across every module
@@ -379,11 +379,11 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Public API](docs/PUBLIC_API_DOCUMENTATION.md) — Public forms and kiosk display endpoints
 - [Drop Notifications](docs/DROP_NOTIFICATIONS.md) — Configurable notifications, CC recipients, email templates
 - [Application Pages](APPLICATION_PAGES.md) — Complete page inventory and route map
-- [Role System](ROLE_SYSTEM_README.md) — Role-based access control (16 system roles)
+- [Role System](ROLE_SYSTEM_README.md) — Role-based access control (31 default positions)
 
 ### Development
 
-- [Python Backend Guide](docs/backend/python-backend.md) — Backend development
+- [Python Backend Guide](wiki/Development-Backend.md) — Backend development
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
 - [Testing Guide](TESTING.md) — Test suites for onboarding and event components
 

@@ -3341,7 +3341,7 @@ Its built-in three metrics are **Items tracked**, **Issued to members** and
 **Out for repair**; the fourth slot is always the count the queue is about, so
 it cannot be configured away. Access is `inventory.manage` plus the Inventory
 module enabled. Choosing the metrics, and who may see the queue, are covered in
-[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
+[Administration & Reports → Administration Hubs](./08-admin-reports.md#administration-hubs).
 
 ---
 

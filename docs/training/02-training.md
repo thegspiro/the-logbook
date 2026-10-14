@@ -3740,7 +3740,7 @@ number its own queue is measuring. Training's built-in three are **Compliance**,
 nothing keeps them.
 
 Access is `training.manage` plus the Training module enabled. See
-[Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23)
+[Administration Hubs](./08-admin-reports.md#administration-hubs)
 in the administration guide, which covers choosing the metrics and who can see
 the queue.
 
