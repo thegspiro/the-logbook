@@ -287,7 +287,7 @@ Settings).
   page that forwards to the event open in that room. One rule
   (`parseNfcTagPath` with the `TAG_TARGETS` spec) governs both what the button
   offers and what a scan will accept. See
-  [Training 06 — Room door tags](https://github.com/thegspiro/the-logbook/blob/main/docs/training/06-apparatus-facilities.md#room-door-tags-2026-10-02).
+  [Training 06 — Room door tags](https://github.com/thegspiro/the-logbook/blob/main/docs/training/06-apparatus-facilities.md#room-door-tags).
 - **A failed write raises a toast, not a silent no-op.** A silent failure looks
   exactly like a tag that was written — the member finds out by tapping a dead
   sticker.
