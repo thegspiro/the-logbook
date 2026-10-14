@@ -135,8 +135,6 @@ def _validate_outline_sections(
     """
     if value is None:
         return value
-    if not value:
-        raise ValueError("An outline needs at least one section")
     keys: set[str] = set()
     for section in value:
         if not _SECTION_KEY_PATTERN.match(section.key):

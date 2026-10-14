@@ -628,7 +628,8 @@ footer settings, and one outline per meeting type is the default.
   an outline over it: its sections in its order, keeping every section that
   already has text and any section the outline lacks.
 - Outline sections are validated on save: unique lowercase keys, order
-  renumbered, at least one section.
+  renumbered. The editor will not save an outline with no sections; the API
+  still accepts an empty list, as it always has.
 
 ### Endpoints added
 

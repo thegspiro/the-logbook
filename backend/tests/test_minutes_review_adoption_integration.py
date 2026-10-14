@@ -1060,7 +1060,6 @@ class TestOutlines:
     @pytest.mark.parametrize(
         "sections",
         [
-            [],
             [
                 {"order": 0, "key": "a", "title": "A"},
                 {"order": 1, "key": "a", "title": "A again"},
@@ -1068,7 +1067,7 @@ class TestOutlines:
             [{"order": 0, "key": "Bad Key", "title": "A"}],
         ],
     )
-    async def test_an_outline_must_have_sections_with_unique_safe_keys(
+    async def test_an_outline_must_have_unique_safe_section_keys(
         self, world: _World, sections: list
     ):
         async with _client(world.db, world.secretary) as c:
