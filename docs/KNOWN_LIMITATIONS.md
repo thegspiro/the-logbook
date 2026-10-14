@@ -821,9 +821,12 @@ module folder on that module's rights.
 
 - **Resolved 2026-10-12: custom folder rights now have a screen.** The Create
   Folder and Manage folder dialogs set positions and required permissions
-  (decision 27). One narrower gap remains:
-  - A folder restricted to a permission that nobody holds can still be made by
-    a full administrator. Only the editor's own access is checked.
+  (decision 27).
+- **Resolved 2026-10-14: a folder nobody but full administrators can open is
+  confirmed, not made by accident** (decision 29). The check runs when the
+  folder is saved. A member who later loses the permission, or leaves the
+  position, is not re-checked, so a folder can still become
+  administrators-only over time without anyone being asked.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.

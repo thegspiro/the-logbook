@@ -263,6 +263,47 @@ describe('FolderManageDialog', () => {
     expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
   });
 
+  describe('a folder only full administrators could open', () => {
+    const adminOnly = {
+      response: { status: 400, data: { detail: 'No active member could open this folder', code: 'LB-DOC-001' } },
+    };
+
+    beforeEach(() => {
+      mockUpdateFolder.mockReset();
+      mockUpdateFolder.mockRejectedValueOnce(adminOnly).mockResolvedValue({});
+    });
+
+    it('asks, and saves again confirmed when told to', async () => {
+      const user = userEvent.setup();
+      renderDialog(folder());
+
+      await user.click(screen.getByRole('radio', { name: 'Leadership' }));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      const ask = await screen.findByRole('dialog', { name: 'Only full administrators could open this folder' });
+      await user.click(within(ask).getByRole('button', { name: 'Save for administrators only' }));
+
+      await waitFor(() => expect(mockUpdateFolder).toHaveBeenCalledTimes(2));
+      expect(mockUpdateFolder).toHaveBeenLastCalledWith(
+        'f-1',
+        expect.objectContaining({ visibility: 'leadership', confirm_admin_only: true })
+      );
+      expect(onChanged).toHaveBeenCalledWith('saved');
+    });
+
+    it('saves nothing when sent back to change it', async () => {
+      const user = userEvent.setup();
+      renderDialog(folder());
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.click(await screen.findByRole('button', { name: 'Go back and change it' }));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+      expect(mockUpdateFolder).toHaveBeenCalledTimes(1);
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the server’s reason when a save is refused', async () => {
     const user = userEvent.setup();
     mockUpdateFolder.mockRejectedValue(new Error('These settings would shut you out of this folder.'));
