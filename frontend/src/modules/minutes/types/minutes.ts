@@ -51,7 +51,7 @@ export interface MinutesTemplate {
   id: string;
   organization_id: string;
   name: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type: MeetingType;
   is_default: boolean;
   sections: TemplateSectionEntry[];
