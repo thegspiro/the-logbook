@@ -1,8 +1,56 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 9 (2026-10-14) — real delta (cash advances, restricted funds, budget charge restrictions, functional expense classes, QuickBooks dues export), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+
+**Scope.** Pass 8 merged as `8dc5260b9` (PR #3137). `git diff --numstat
+8dc5260b9 HEAD` over this feature's files: `endpoints/finance.py` +828/−22,
+`finance_service.py` +1,504/−128, `schemas/finance.py` +446/−4,
+`models/finance.py` +230/−0, `utils/finance_settings.py` +106/−1,
+`finance_budget_request_service.py` +24/−6, `public/finance_approvals.py`
++17/−1. Thirteen non-merge commits, each read. Routes: `finance.py` 108 → 124;
+`public/finance_approvals.py` 3, unchanged. Every new or changed route was
+enumerated with its dependency rather than inferred.
+
+| Route                                                                                                            | Gate                                            | Reading                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /charge-access`                                                                                             | session only                                    | Returns only categories the caller owns or that sit beneath one they own (`list_charge_access_categories` → `CategoryTree.manageable_by` on the caller's held positions); position names only when that list is non-empty. Clean.                                         |
+| `PUT /budget-categories/{cat_id}/charge-access`                                                                  | session only                                    | `set_category_charge_access`: `finance.manage` (`_requester_scope` → None) or an owner position on the category or an ancestor; anyone else gets 404. Charge positions validated in-org (`_validate_charge_positions`). Audited. Clean.                                   |
+| `GET /reports/late-substantiation`, `/functional-expenses`, `/fund-balances`, `/advances`                        | `finance.view`                                  | Org-scoped report queries. Clean.                                                                                                                                                                                                                                         |
+| `GET /funds`                                                                                                     | request/view/approve/manage                     | Lists the org's active restricted funds for the request forms. Clean.                                                                                                                                                                                                     |
+| `PUT /purchase-requests/{id}/functional-class`, `/check-requests/{id}/…`, `/expense-reports/{er}/items/{item}/…` | `finance.manage`                                | Target fetched org-scoped `FOR UPDATE`; a line item is resolved through its org-scoped report. Clean.                                                                                                                                                                     |
+| `GET /settings` (gate widened)                                                                                   | request/view/approve/manage/configure_approvals | Returns policy values the expense form needs (dual-approval threshold, substantiation mode/days, fund overspend mode); nothing member-specific. Clean.                                                                                                                    |
+| `GET /advances`, `GET /advances/{id}`                                                                            | request/view/manage                             | A caller without view/manage is confined to their own advances (`_read_scope` → `advance_balances(member_id=…)` filters `CheckRequest.requested_by`); another member's advance is a 404. Clean.                                                                           |
+| `POST /advances/{id}/returns`, `DELETE …/returns/{return_id}`                                                    | `finance.manage`                                | `lock_advance` (org-scoped) then a locking balance read before the return is checked against what is outstanding (pitfall #27); the member who owes the money cannot record it came back (`assert_different_person`, FIN-4); an exported return cannot be removed. Clean. |
+| `PUT /export/dues-accounts`, `/export/advance-accounts`                                                          | `finance.manage`                                | Org settings writes. Clean.                                                                                                                                                                                                                                               |
+
+**Writes reached through existing routes:**
+
+- **Expense report against an advance.** `assert_settleable` admits only the filer's own issued advance in this org (pitfall #14c), and `_apply_advance` locks the advance and reads its balance with locking reads, so two reports cannot both claim its last dollars.
+- **Restricted funds.** Every create/update path for purchase requests, check requests, expense reports and expense lines runs `_validate_finance_fks`, which calls `assert_chargeable` (fund must be this org's active restricted campaign). A cash advance refuses a budget line or fund outright.
+- **Budget charge restrictions.** `assert_may_charge` runs on every create and every budget-changing update of the three request types and on each expense line; `finance.manage` is exempt by design.
+
+**Standing items re-verified:**
+
+- **FIN8-05-1 (MED) — still OPEN (flagged).** `finance_budget_request_service.py` `decide_request` (line 653) still has no `assert_different_person` check, unlike `review_request`; mirrored in `KNOWN_LIMITATIONS.md` as before.
+- **FIN-30 (LOW) — still FLAGGED.** `list_dues_payments` (`finance_service.py:5714`) still takes no limit/offset.
+
+### Completion gate (pass 9)
+
+No application code changed in this pass.
+
+| Check                                                                      | Result                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                              | clean                                                                                                                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                       | clean                                                                                                                                                                                                                              |
+| `isort --check-only app/ tests/ alembic/`                                  | clean                                                                                                                                                                                                                              |
+| `scripts/validate_migrations.py --strict`                                  | passed, one head                                                                                                                                                                                                                   |
+| `pytest -k "finance or cash_advance or restricted_fund or budget or dues"` | 1,116 passed, 1 skipped. A first run against a local database still at an older revision gave 29 failures and 481 errors; after `alembic upgrade head` the same selection was clean, so those were the stale schema, not the code. |
+| `frontend: npm run typecheck`                                              | clean                                                                                                                                                                                                                              |
+| `frontend: npm run lint`                                                   | clean                                                                                                                                                                                                                              |
 
 ## Pass 8 (2026-10-12) — real delta (budget amendments, fiscal-year planning, budget requests, receipts), 1 new finding flagged, three standing items re-verified (two already closed by other work)
 
