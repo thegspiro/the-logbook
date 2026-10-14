@@ -18,6 +18,7 @@ from app.core.database import Base
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
+    from app.models.election import Election
     from app.models.event import Event
     from app.models.meeting import Meeting
 
@@ -662,6 +663,21 @@ class MeetingMinutes(Base):
     )
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Adoption. The body adopts minutes at a later meeting, usually after
+    # members have read them and suggested corrections. ``approved_at`` is when
+    # the secretary recorded the adoption; these say what the body did and where:
+    # the day of the vote, the minutes of the meeting that adopted these, and
+    # whether they were adopted as presented or as amended.
+    adopted_on: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    adopted_as_amended: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    adopting_minutes_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("meeting_minutes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Link to event (optional — minutes can be linked to a business_meeting event)
     event_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
@@ -691,6 +707,14 @@ class MeetingMinutes(Base):
         "MinutesTemplate", foreign_keys=[template_id]
     )
     event: Mapped[Optional["Event"]] = relationship("Event", foreign_keys=[event_id])
+    # Loaded only where asked for (``get_minutes``), to name the meeting that
+    # adopted these minutes; a list never pays for it.
+    adopting_minutes: Mapped[Optional["MeetingMinutes"]] = relationship(
+        "MeetingMinutes",
+        remote_side="MeetingMinutes.id",
+        foreign_keys=[adopting_minutes_id],
+        lazy="raise",
+    )
     meeting: Mapped[Optional["Meeting"]] = relationship(
         "Meeting", foreign_keys=[meeting_id]
     )
@@ -780,6 +804,14 @@ class Motion(Base):
     seconded_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     discussion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # The ballot that decided this motion, when it went to a ballot rather
+    # than a voice or hand vote. ``ballot_item_id`` is the item's id inside
+    # that election's ``ballot_items``.
+    election_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("elections.id", ondelete="SET NULL"), nullable=True
+    )
+    ballot_item_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     # Vote result
     status: Mapped[MotionStatus] = mapped_column(
         SQLEnum(MotionStatus, values_callable=lambda x: [e.value for e in x]),
@@ -805,6 +837,12 @@ class Motion(Base):
     # Relationships
     minutes: Mapped["MeetingMinutes"] = relationship(
         "MeetingMinutes", back_populates="motions"
+    )
+    # Loaded with the motion so a response can name the ballot. The id is
+    # checked against the caller's organization when it is written, so this
+    # join cannot reach another department's election.
+    election: Mapped[Optional["Election"]] = relationship(
+        "Election", foreign_keys=[election_id], lazy="selectin"
     )
 
     __table_args__ = (Index("ix_meeting_motions_minutes_id", "minutes_id"),)
@@ -971,6 +1009,14 @@ class MinutesElectionResult(Base):
     # ElectionResults.model_dump(mode="json") as it stood at capture.
     snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
+    # An election can close after the meeting's minutes were written, or even
+    # adopted. The result is still filed with the meeting it belonged to; one
+    # filed once the minutes were submitted is an addendum: dated, permanent,
+    # and outside what the adopted version covers (like a signed copy).
+    is_addendum: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     captured_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -1037,4 +1083,128 @@ class MinutesRevision(Base):
         UniqueConstraint("minutes_id", "version", name="uq_minutes_revisions_version"),
         Index("ix_minutes_revisions_minutes_id", "minutes_id"),
         Index("ix_minutes_revisions_organization_id", "organization_id"),
+    )
+
+
+class MinutesClosedSession(Base):
+    """A closed (executive) session held during a meeting.
+
+    What the public record needs about it: why the body went into closed
+    session, on what authority, when, who was in the room and for how long, and
+    a summary safe to publish ("no action taken"). What was said stays in the
+    minutes' own executive-session section, which is as restricted as the
+    minutes themselves; the entry and exit times and the roster of who stayed
+    are what let a reader see the closed session was properly held.
+    """
+
+    __tablename__ = "minutes_closed_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The motion that moved the body into closed session, when one was recorded.
+    motion_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("meeting_motions.id", ondelete="SET NULL"), nullable=True
+    )
+
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    legal_basis: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # [{user_id, name, joined_at, left_at}], one shape settled by the schema.
+    participants: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_minutes_closed_sessions_minutes_id", "minutes_id"),
+        Index("ix_minutes_closed_sessions_organization_id", "organization_id"),
+    )
+
+
+class MinutesSuggestionStatus(str, Enum):
+    """Where a member's suggested change stands"""
+
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+
+class MinutesSuggestion(Base):
+    """A change a member proposes while the minutes are circulated for review.
+
+    Minutes are locked once submitted, so a suggestion never edits them: it is
+    a proposal the secretary reads, accepts or declines. Accepting one means
+    "I will make this change" — the secretary recalls the minutes to draft,
+    edits, and circulates again — and an accepted suggestion is what makes the
+    adoption "as amended".
+    """
+
+    __tablename__ = "minutes_suggestions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The section it is about, or NULL for the minutes as a whole.
+    section_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    proposed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=MinutesSuggestionStatus.OPEN.value,
+        server_default=MinutesSuggestionStatus.OPEN.value,
+    )
+    resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_minutes_suggestions_minutes_id", "minutes_id"),
+        Index("ix_minutes_suggestions_organization_id", "organization_id"),
+        Index("ix_minutes_suggestions_created_by", "created_by"),
     )

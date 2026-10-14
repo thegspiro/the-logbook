@@ -4,6 +4,7 @@ Meeting Minutes Pydantic Schemas
 Request and response schemas for meeting minutes, templates, and related endpoints.
 """
 
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
@@ -56,6 +57,11 @@ class SectionEntry(BaseModel):
     )
     title: str = Field(..., min_length=1, max_length=200, description="Display title")
     content: str = Field(default="", description="Section content (minutes only)")
+    required: bool = Field(
+        default=False,
+        description="Copied from the outline; a required section needs content "
+        "before the minutes can be circulated",
+    )
 
 
 class TemplateSectionEntry(BaseModel):
@@ -114,6 +120,37 @@ class FooterConfig(BaseModel):
 # ============================================
 
 
+_SECTION_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_]*$")
+
+
+def _validate_outline_sections(
+    value: Optional[List["TemplateSectionEntry"]],
+) -> Optional[List["TemplateSectionEntry"]]:
+    """An outline is an ordered list of sections with unique keys.
+
+    The order given is the order kept: ``order`` is renumbered 0..n so two
+    sections can never tie and a gap never leaves the list ambiguous. A key is
+    what a section is known by from outline to minutes, so it must be unique and
+    URL-safe.
+    """
+    if value is None:
+        return value
+    if not value:
+        raise ValueError("An outline needs at least one section")
+    keys: set[str] = set()
+    for section in value:
+        if not _SECTION_KEY_PATTERN.match(section.key):
+            raise ValueError(
+                f"Section key '{section.key}' must be lowercase letters, "
+                "digits and underscores"
+            )
+        if section.key in keys:
+            raise ValueError(f"Section key '{section.key}' is used twice")
+        keys.add(section.key)
+    ordered = sorted(value, key=lambda s: s.order)
+    return [s.model_copy(update={"order": index}) for index, s in enumerate(ordered)]
+
+
 class TemplateCreate(BaseModel):
     """Schema for creating a minutes template"""
 
@@ -128,6 +165,7 @@ class TemplateCreate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_sections = field_validator("sections")(_validate_outline_sections)
 
 
 class TemplateUpdate(BaseModel):
@@ -144,6 +182,7 @@ class TemplateUpdate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_sections = field_validator("sections")(_validate_outline_sections)
 
 
 class TemplateResponse(UTCResponseBase):
@@ -202,6 +241,18 @@ class MotionBase(BaseModel):
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    election_id: Optional[str] = Field(
+        None, max_length=36, description="The ballot that decided this motion"
+    )
+    ballot_item_id: Optional[str] = Field(
+        None, max_length=100, description="The item on that ballot"
+    )
+
+    @model_validator(mode="after")
+    def _item_needs_election(self):
+        if self.ballot_item_id and not self.election_id:
+            raise ValueError("A ballot item needs the election it belongs to")
+        return self
 
 
 class MotionCreate(MotionBase):
@@ -222,6 +273,8 @@ class MotionUpdate(BaseModel):
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
     order: Optional[int] = Field(None, ge=0)
+    election_id: Optional[str] = Field(None, max_length=36)
+    ballot_item_id: Optional[str] = Field(None, max_length=100)
 
 
 class MotionResponse(MotionBase):
@@ -230,6 +283,7 @@ class MotionResponse(MotionBase):
     id: str
     minutes_id: str
     order: int
+    election_title: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -495,6 +549,10 @@ class MinutesResponse(UTCResponseBase):
     rejected_at: Optional[datetime] = None
     rejected_by: Optional[str] = None
     rejection_reason: Optional[str] = None
+    adopted_on: Optional[datetime] = None
+    adopted_as_amended: Optional[bool] = None
+    adopting_minutes_id: Optional[str] = None
+    adopting_minutes_title: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -524,6 +582,30 @@ class MinutesListItem(UTCResponseBase):
     created_at: datetime
 
     model_config = _response_config
+
+
+class MinutesAdopt(BaseModel):
+    """What the body did when it adopted the minutes"""
+
+    adopted_on: Optional[datetime] = Field(
+        None, description="When the body voted; defaults to now"
+    )
+    adopting_minutes_id: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="The minutes of the meeting at which these were adopted",
+    )
+    as_amended: Optional[bool] = Field(
+        None,
+        description="Adopted as amended; defaults to whether any suggestion "
+        "was accepted",
+    )
+
+
+class ApplyOutline(BaseModel):
+    """Which outline to lay over draft minutes"""
+
+    template_id: str = Field(..., min_length=1, max_length=36)
 
 
 class MinutesReject(BaseModel):
@@ -581,6 +663,13 @@ class AttendanceSuggestions(BaseModel):
 # ============================================
 
 
+class BallotItemRef(BaseModel):
+    """A ballot item a motion can be tied to"""
+
+    id: str
+    title: str
+
+
 class ImportableElection(UTCResponseBase):
     """A closed election whose result can be filed with the minutes"""
 
@@ -590,6 +679,9 @@ class ImportableElection(UTCResponseBase):
     closed_at: Optional[datetime] = None
     positions: Optional[List[str]] = None
     already_imported: bool = False
+    # Held at this meeting's event or recorded against its meeting record.
+    linked_to_meeting: bool = False
+    ballot_items: List[BallotItemRef] = []
 
     model_config = _response_config
 
@@ -609,6 +701,7 @@ class MinutesElectionResultResponse(UTCResponseBase):
     election_title: str
     election_closed_at: Optional[datetime] = None
     snapshot: Dict[str, Any]
+    is_addendum: bool = False
     captured_by: Optional[str] = None
     captured_by_name: Optional[str] = None
     created_at: datetime
@@ -692,3 +785,148 @@ class MinutesVerification(BaseModel):
     current_hash: Optional[str] = None
     changed: List[str] = []
     detail: str
+
+
+# ============================================
+# Closed Sessions
+# ============================================
+
+
+class ClosedSessionParticipant(BaseModel):
+    """One person in the room for a closed session"""
+
+    user_id: Optional[str] = Field(None, max_length=36)
+    name: str = Field(..., min_length=1, max_length=200)
+    joined_at: Optional[datetime] = None
+    left_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _left_after_joined(self):
+        if self.joined_at and self.left_at and self.left_at < self.joined_at:
+            raise ValueError(f"{self.name} left before they joined")
+        return self
+
+
+def _validate_participants(
+    value: Optional[List[ClosedSessionParticipant]],
+) -> Optional[List[ClosedSessionParticipant]]:
+    if not value:
+        return value
+    seen: set[str] = set()
+    for person in value:
+        if person.user_id:
+            if person.user_id in seen:
+                raise ValueError("A member can be listed only once in a closed session")
+            seen.add(person.user_id)
+    return value
+
+
+class ClosedSessionBase(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=300)
+    legal_basis: Optional[str] = Field(None, max_length=300)
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    motion_id: Optional[str] = Field(
+        None, max_length=36, description="The motion that moved into closed session"
+    )
+    participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
+    summary: Optional[str] = Field(
+        None,
+        max_length=4000,
+        description="What may be said publicly, e.g. 'no action was taken'",
+    )
+
+    _check_participants = field_validator("participants")(_validate_participants)
+
+    @model_validator(mode="after")
+    def _ends_after_start(self):
+        if self.ended_at and self.ended_at < self.started_at:
+            raise ValueError("A closed session cannot end before it starts")
+        return self
+
+
+class ClosedSessionCreate(ClosedSessionBase):
+    """Schema for recording a closed session"""
+
+
+class ClosedSessionUpdate(BaseModel):
+    """Schema for changing a closed session"""
+
+    reason: Optional[str] = Field(None, min_length=1, max_length=300)
+    legal_basis: Optional[str] = Field(None, max_length=300)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    motion_id: Optional[str] = Field(None, max_length=36)
+    participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
+    summary: Optional[str] = Field(None, max_length=4000)
+
+    _check_participants = field_validator("participants")(_validate_participants)
+
+
+class ClosedSessionResponse(UTCResponseBase):
+    """A closed session as recorded"""
+
+    id: str
+    minutes_id: str
+    motion_id: Optional[str] = None
+    reason: str
+    legal_basis: Optional[str] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    participants: List[ClosedSessionParticipant] = []
+    summary: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Member Suggestions
+# ============================================
+
+
+class SuggestionCreate(BaseModel):
+    """A change a member proposes while the minutes are circulated"""
+
+    section_key: Optional[str] = Field(
+        None, max_length=100, description="The section it is about; none = overall"
+    )
+    comment: str = Field(..., min_length=3, max_length=2000)
+    proposed_text: Optional[str] = Field(
+        None, max_length=10000, description="Replacement wording, if offered"
+    )
+
+    @field_validator("comment")
+    @classmethod
+    def _comment_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Say what should change")
+        return value.strip()
+
+
+class SuggestionResolve(BaseModel):
+    """The secretary's answer to a suggestion"""
+
+    status: Literal["accepted", "declined"]
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class SuggestionResponse(UTCResponseBase):
+    """A suggestion with its author and answer"""
+
+    id: str
+    minutes_id: str
+    section_key: Optional[str] = None
+    comment: str
+    proposed_text: Optional[str] = None
+    status: str
+    resolution_note: Optional[str] = None
+    resolved_by: Optional[str] = None
+    resolved_by_name: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = _response_config

@@ -85,12 +85,19 @@ def records(monkeypatch):
     fake.lock_minutes = AsyncMock(return_value=object())
     fake.record_approval = AsyncMock()
     fake.supersede_on_reopen = AsyncMock()
+    fake.has_accepted_suggestions = AsyncMock(return_value=False)
     monkeypatch.setattr(
         "app.services.minutes_record_service.MinutesRecordService", lambda db: fake
     )
     monkeypatch.setattr(
         "app.services.minutes_notifications.notify_action_item_assignees",
         AsyncMock(return_value=0),
+    )
+    # No outline of the department's own: the built-in order of business.
+    outlines = MagicMock()
+    outlines.resolve_outline = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        "app.services.minute_service.TemplateService", lambda db: outlines
     )
     return fake
 

@@ -241,6 +241,67 @@ class TestSnapshotAndHash:
         )
 
 
+class TestSnapshotReviewAdditions:
+    def _session(self, **over):
+        base = dict(
+            id="c1",
+            reason="Personnel matter",
+            legal_basis=None,
+            started_at=datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc),
+            ended_at=None,
+            motion_id=None,
+            participants=[{"name": "A"}],
+            summary=None,
+        )
+        base.update(over)
+        return SimpleNamespace(**base)
+
+    def test_a_closed_session_is_part_of_the_record(self):
+        minutes = _minutes()
+        before = content_hash(build_snapshot(minutes, [], []))
+        with_session = content_hash(build_snapshot(minutes, [], [], [self._session()]))
+        other = content_hash(
+            build_snapshot(minutes, [], [], [self._session(reason="Legal advice")])
+        )
+        assert with_session != before
+        assert other != with_session
+
+    def test_an_addendum_is_outside_the_hash_but_a_drafted_result_is_inside(self):
+        minutes = _minutes()
+        before = content_hash(build_snapshot(minutes, [], []))
+        addendum = SimpleNamespace(
+            id="r2",
+            election_id="e2",
+            election_title="Late",
+            snapshot={},
+            is_addendum=True,
+        )
+        assert content_hash(build_snapshot(minutes, [addendum], [])) == before
+        drafted = SimpleNamespace(
+            id="r3",
+            election_id="e3",
+            election_title="On time",
+            snapshot={},
+            is_addendum=False,
+        )
+        assert content_hash(build_snapshot(minutes, [drafted], [])) != before
+
+    def test_the_ballot_a_motion_went_to_is_part_of_the_record(self):
+        minutes = _minutes()
+        before = content_hash(build_snapshot(minutes, [], []))
+        minutes.motions[0].election_id = "e1"
+        assert content_hash(build_snapshot(minutes, [], [])) != before
+
+    def test_how_the_body_adopted_the_minutes_is_part_of_the_record(self):
+        minutes = _minutes()
+        minutes.adopted_on = datetime(2026, 11, 5, 1, 30, tzinfo=timezone.utc)
+        minutes.adopted_as_amended = False
+        minutes.adopting_minutes_id = None
+        before = content_hash(build_snapshot(minutes, [], []))
+        minutes.adopted_as_amended = True
+        assert content_hash(build_snapshot(minutes, [], [])) != before
+
+
 class TestPdf:
     def _data(self, **extra):
         data = {

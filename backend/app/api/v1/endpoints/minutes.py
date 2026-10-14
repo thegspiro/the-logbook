@@ -6,10 +6,12 @@ motions, action items, and full-text search.
 """
 
 import math
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -30,6 +32,7 @@ from app.schemas.minute import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    MinutesAdopt,
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
@@ -399,11 +402,16 @@ async def submit_minutes(
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
 async def approve_minutes(
     minutes_id: str,
+    data: Optional[MinutesAdopt] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
-    Approve submitted meeting minutes
+    Adopt submitted meeting minutes (the 'approved' status)
+
+    The optional body records what the body did: the day of the vote, the
+    minutes of the meeting that adopted these, and whether they were adopted as
+    presented or as amended. Left out, the vote is dated now.
 
     **Authentication required**
     **Requires permission: minutes.manage**
@@ -412,7 +420,7 @@ async def approve_minutes(
 
     async with handle_service_errors("Failed to approve minutes"):
         minutes = await service.approve_minutes(
-            minutes_id, current_user.organization_id, current_user.id
+            minutes_id, current_user.organization_id, current_user.id, data
         )
 
     minutes = ensure_found(minutes, "Meeting minutes")
@@ -423,7 +431,12 @@ async def approve_minutes(
         event_type="minutes_approved",
         event_category="meetings",
         severity="info",
-        event_data={"minutes_id": minutes_id, "title": minutes.title},
+        event_data={
+            "minutes_id": minutes_id,
+            "title": minutes.title,
+            "adopted_as_amended": minutes.adopted_as_amended,
+            "adopting_minutes_id": minutes.adopting_minutes_id,
+        },
         user_id=str(current_user.id),
     )
 
@@ -959,6 +972,7 @@ def _build_response(minutes) -> MinutesResponse:
             key=s.get("key", ""),
             title=s.get("title", ""),
             content=s.get("content", ""),
+            required=bool(s.get("required", False)),
         )
         for s in raw_sections
     ]
@@ -1004,6 +1018,10 @@ def _build_response(minutes) -> MinutesResponse:
         rejected_at=minutes.rejected_at,
         rejected_by=minutes.rejected_by,
         rejection_reason=minutes.rejection_reason,
+        adopted_on=minutes.adopted_on,
+        adopted_as_amended=minutes.adopted_as_amended,
+        adopting_minutes_id=minutes.adopting_minutes_id,
+        adopting_minutes_title=_adopting_title(minutes),
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
@@ -1012,6 +1030,35 @@ def _build_response(minutes) -> MinutesResponse:
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
     )
+
+
+def _loaded(obj, relationship: str, attribute: str):
+    """``obj.relationship.attribute`` when that relationship was loaded.
+
+    The adopting meeting and a motion's ballot are loaded where a screen shows
+    them; elsewhere they are left unloaded rather than fetched one row at a
+    time, and read as missing.
+    """
+    if relationship in sa_inspect(obj).unloaded:
+        return None
+    related = getattr(obj, relationship)
+    return getattr(related, attribute) if related is not None else None
+
+
+def _adopting_title(minutes) -> Optional[str]:
+    """The adopting meeting's title, unless it was a closed session: its title
+    can name the matter, and these minutes may be read by every member."""
+    if "adopting_minutes" in sa_inspect(minutes).unloaded:
+        return None
+    adopting = minutes.adopting_minutes
+    if adopting is None:
+        return None
+    kind = (
+        adopting.meeting_type
+        if isinstance(adopting.meeting_type, str)
+        else adopting.meeting_type.value
+    )
+    return None if kind == "executive" else adopting.title
 
 
 def _build_motion_response(motion) -> MotionResponse:
@@ -1028,6 +1075,9 @@ def _build_motion_response(motion) -> MotionResponse:
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
+        election_id=motion.election_id,
+        ballot_item_id=motion.ballot_item_id,
+        election_title=_loaded(motion, "election", "title"),
         created_at=motion.created_at,
         updated_at=motion.updated_at,
     )
@@ -1202,6 +1252,9 @@ async def set_meeting_quorum_config(
 @router.post("/from-meeting/{meeting_id}", status_code=201)
 async def create_minutes_from_meeting(
     meeting_id: UUID,
+    template_id: Optional[str] = Query(
+        None, description="The outline to start from; default: the department's"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.manage")),
 ):
@@ -1213,14 +1266,14 @@ async def create_minutes_from_meeting(
     **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
-    minutes = ensure_found(
-        await service.create_from_meeting(
+    async with handle_service_errors("Failed to create minutes from the meeting"):
+        created = await service.create_from_meeting(
             meeting_id=meeting_id,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
-        ),
-        "Meeting",
-    )
+            template_id=template_id,
+        )
+    minutes = ensure_found(created, "Meeting")
 
     await log_audit_event(
         db=db,

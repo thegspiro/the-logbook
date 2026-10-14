@@ -7,14 +7,16 @@ reopened-and-corrected record keeps the version it replaced.
 What the snapshot covers is a decision, and the line is "what the body voted
 to approve":
 
-* In: the heading, attendance, quorum, content sections, motions, the action
-  items *as assigned*, the election results frozen into the minutes, and a
-  manifest of the attachments (by hash, not by bytes).
+* In: the heading, attendance, quorum, content sections, motions (with the
+  ballot that decided them), closed sessions, the action items *as assigned*,
+  the election results frozen into the minutes, a manifest of the attachments
+  (by hash, not by bytes), and how the body adopted them.
 * Out: an action item's progress (status, completion notes) — assignees update
   those on approved minutes by design, so including them would make every
-  completed task "tamper" with the record. And a ``signed_copy`` attachment,
-  which is scanned and filed *after* approval; it is evidence of the approval,
-  not part of what was approved.
+  completed task "tamper" with the record. A ``signed_copy`` attachment, which
+  is scanned and filed *after* approval. And an election result filed once the
+  minutes were submitted (an addendum): the election closed after the minutes
+  were written, so it cannot be part of what they said.
 
 Building and verifying must use the same function, or the hash proves nothing.
 """
@@ -47,12 +49,14 @@ def build_snapshot(
     minutes: Any,
     election_results: Iterable[Any],
     attachments: Iterable[Any],
+    closed_sessions: Iterable[Any] = (),
 ) -> dict[str, Any]:
     """The snapshot dict for *minutes*.
 
     ``minutes`` must have ``motions`` and ``action_items`` loaded.
-    ``election_results`` are ``MinutesElectionResult`` rows and ``attachments``
-    ``MinutesAttachment`` rows; a ``signed_copy`` among the latter is skipped.
+    ``election_results`` are ``MinutesElectionResult`` rows (addenda skipped),
+    ``attachments`` ``MinutesAttachment`` rows (a ``signed_copy`` skipped) and
+    ``closed_sessions`` ``MinutesClosedSession`` rows.
     """
     sections = sorted(
         minutes.get_sections(), key=lambda s: (s.get("order", 0), s.get("key", ""))
@@ -66,6 +70,11 @@ def build_snapshot(
         "called_to_order_at": _iso(minutes.called_to_order_at),
         "adjourned_at": _iso(minutes.adjourned_at),
         "attendees": minutes.attendees or [],
+        "adoption": {
+            "adopted_on": _iso(getattr(minutes, "adopted_on", None)),
+            "as_amended": getattr(minutes, "adopted_as_amended", None),
+            "adopting_minutes_id": getattr(minutes, "adopting_minutes_id", None),
+        },
         "quorum_met": minutes.quorum_met,
         "quorum_count": minutes.quorum_count,
         "quorum_type": minutes.quorum_type,
@@ -96,6 +105,8 @@ def build_snapshot(
                 "votes_for": m.votes_for,
                 "votes_against": m.votes_against,
                 "votes_abstain": m.votes_abstain,
+                "election_id": getattr(m, "election_id", None),
+                "ballot_item_id": getattr(m, "ballot_item_id", None),
             }
             for m in sorted(minutes.motions or [], key=lambda m: (m.order, m.id))
         ],
@@ -116,6 +127,19 @@ def build_snapshot(
                 "snapshot": r.snapshot,
             }
             for r in sorted(election_results, key=lambda r: r.id)
+            if not getattr(r, "is_addendum", False)
+        ],
+        "closed_sessions": [
+            {
+                "reason": c.reason,
+                "legal_basis": c.legal_basis,
+                "started_at": _iso(c.started_at),
+                "ended_at": _iso(c.ended_at),
+                "motion_id": c.motion_id,
+                "participants": c.participants or [],
+                "summary": c.summary,
+            }
+            for c in sorted(closed_sessions, key=lambda c: (c.started_at, c.id))
         ],
         "attachments": [
             {

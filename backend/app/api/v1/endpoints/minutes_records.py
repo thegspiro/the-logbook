@@ -33,7 +33,11 @@ from app.api.dependencies import (
     get_current_active_user,
     require_permission,
 )
-from app.api.v1.endpoints.minutes import _build_action_item_response
+from app.api.v1.endpoints.minutes import (
+    _adopting_title,
+    _build_action_item_response,
+    _build_response,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
@@ -41,17 +45,25 @@ from app.models.minute import MinutesStatus
 from app.models.user import Organization, User
 from app.schemas.minute import (
     ActionItemResponse,
+    ApplyOutline,
     AttendanceSuggestions,
     CarryForwardRequest,
+    ClosedSessionCreate,
+    ClosedSessionResponse,
+    ClosedSessionUpdate,
     ElectionResultCapture,
     ImportableElection,
     MinutesAttachmentResponse,
     MinutesElectionResultResponse,
+    MinutesResponse,
     MinutesRevisionDetail,
     MinutesRevisionResponse,
     MinutesVerification,
     MyActionItem,
     OpenActionItem,
+    SuggestionCreate,
+    SuggestionResolve,
+    SuggestionResponse,
     validate_attachment_category,
 )
 from app.services.minute_service import MinuteService
@@ -629,8 +641,324 @@ async def carry_forward_action_items(
 
 
 # ============================================
+# Closed sessions
+# ============================================
+
+
+@router.get("/{minutes_id}/closed-sessions", response_model=list[ClosedSessionResponse])
+async def list_closed_sessions(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Closed sessions held during the meeting: why, when, and who stayed
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    rows = await MinutesRecordService(db).list_closed_sessions(
+        minutes_id, current_user.organization_id, restricted=_restricted(current_user)
+    )
+    return ensure_found(rows, "Meeting minutes")
+
+
+@router.post(
+    "/{minutes_id}/closed-sessions",
+    response_model=ClosedSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_closed_session(
+    minutes_id: str,
+    data: ClosedSessionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Record a closed session (draft or rejected minutes only)
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to record the closed session"):
+        session = await MinutesRecordService(db).add_closed_session(
+            minutes_id, current_user.organization_id, data, current_user.id
+        )
+    session = ensure_found(session, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_closed_session_recorded",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "session_id": session.id},
+        user_id=str(current_user.id),
+    )
+    return ClosedSessionResponse.model_validate(session)
+
+
+@router.put(
+    "/{minutes_id}/closed-sessions/{session_id}",
+    response_model=ClosedSessionResponse,
+)
+async def update_closed_session(
+    minutes_id: str,
+    session_id: str,
+    data: ClosedSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Change a closed session (draft or rejected minutes only)
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to update the closed session"):
+        session = await MinutesRecordService(db).update_closed_session(
+            minutes_id, session_id, current_user.organization_id, data
+        )
+    session = ensure_found(session, "Closed session")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_closed_session_updated",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "session_id": session_id},
+        user_id=str(current_user.id),
+    )
+    return ClosedSessionResponse.model_validate(session)
+
+
+@router.delete(
+    "/{minutes_id}/closed-sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_closed_session(
+    minutes_id: str,
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Remove a closed session (draft or rejected minutes only)
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to remove the closed session"):
+        removed = await MinutesRecordService(db).delete_closed_session(
+            minutes_id, session_id, current_user.organization_id
+        )
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Closed session not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="minutes_closed_session_removed",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id, "session_id": session_id},
+        user_id=str(current_user.id),
+    )
+
+
+# ============================================
+# Review: suggestions, recall, outlines
+# ============================================
+
+
+def _suggestion_response(row, names: dict) -> SuggestionResponse:
+    response = SuggestionResponse.model_validate(row)
+    response.created_by_name = names.get(row.created_by)
+    response.resolved_by_name = names.get(row.resolved_by)
+    return response
+
+
+@router.get("/{minutes_id}/suggestions", response_model=list[SuggestionResponse])
+async def list_suggestions(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Suggested changes: all of them for a manager, only your own otherwise
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    service = MinutesRecordService(db)
+    can_manage = not _restricted(current_user)
+    rows = ensure_found(
+        await service.list_suggestions(
+            minutes_id, current_user, current_user.organization_id, can_manage
+        ),
+        "Meeting minutes",
+    )
+    names = await service.member_names(
+        [p for r in rows for p in (r.created_by, r.resolved_by)],
+        current_user.organization_id,
+    )
+    return [_suggestion_response(r, names) for r in rows]
+
+
+@router.post(
+    "/{minutes_id}/suggestions",
+    response_model=SuggestionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_suggestion(
+    minutes_id: str,
+    data: SuggestionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Suggest a change while the minutes are circulated for review
+
+    Any member who can read the minutes can suggest. The minutes themselves are
+    not edited; the secretary accepts or declines each suggestion.
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    service = MinutesRecordService(db)
+    async with handle_service_errors("Failed to record the suggestion"):
+        suggestion = await service.add_suggestion(
+            minutes_id, current_user, data, not _restricted(current_user)
+        )
+    suggestion = ensure_found(suggestion, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_suggestion_made",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "suggestion_id": suggestion.id,
+            "section_key": suggestion.section_key,
+        },
+        user_id=str(current_user.id),
+    )
+    return _suggestion_response(
+        suggestion,
+        await service.member_names(
+            [suggestion.created_by], current_user.organization_id
+        ),
+    )
+
+
+@router.put(
+    "/{minutes_id}/suggestions/{suggestion_id}", response_model=SuggestionResponse
+)
+async def resolve_suggestion(
+    minutes_id: str,
+    suggestion_id: str,
+    data: SuggestionResolve,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Accept or decline a suggestion
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    service = MinutesRecordService(db)
+    async with handle_service_errors("Failed to answer the suggestion"):
+        suggestion = await service.resolve_suggestion(
+            minutes_id,
+            suggestion_id,
+            current_user.organization_id,
+            current_user.id,
+            data,
+        )
+    suggestion = ensure_found(suggestion, "Suggestion")
+    await log_audit_event(
+        db=db,
+        event_type=f"minutes_suggestion_{data.status}",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "suggestion_id": suggestion_id},
+        user_id=str(current_user.id),
+    )
+    return _suggestion_response(
+        suggestion,
+        await service.member_names(
+            [suggestion.created_by, suggestion.resolved_by],
+            current_user.organization_id,
+        ),
+    )
+
+
+@router.post("/{minutes_id}/recall", response_model=MinutesResponse)
+async def recall_minutes(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Take circulated minutes back to draft to work in suggestions
+
+    The minutes leave members' view until they are circulated again.
+    Suggestions already made are kept.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to recall the minutes"):
+        minutes = await MinuteService(db).recall_minutes(
+            minutes_id, current_user.organization_id
+        )
+    minutes = ensure_found(minutes, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_recalled",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "title": minutes.title},
+        user_id=str(current_user.id),
+    )
+    return _build_response(minutes)
+
+
+@router.post("/{minutes_id}/apply-outline", response_model=MinutesResponse)
+async def apply_outline(
+    minutes_id: str,
+    data: ApplyOutline,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Lay an outline over draft minutes, keeping everything already written
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to apply the outline"):
+        minutes = await MinuteService(db).apply_outline(
+            minutes_id, current_user.organization_id, data.template_id
+        )
+    minutes = ensure_found(minutes, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_outline_applied",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "template_id": data.template_id},
+        user_id=str(current_user.id),
+    )
+    return _build_response(minutes)
+
+
+# ============================================
 # PDF
 # ============================================
+
+
+def _parse(value: Optional[str]) -> Optional[datetime]:
+    """A closed-session participant's time, stored as ISO text in JSON."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00")) if value else None
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:
@@ -663,6 +991,9 @@ async def download_minutes_pdf(
     )
     records = MinutesRecordService(db)
     elections = await records.list_election_results(
+        minutes.id, organization_id, restricted=_restricted(current_user)
+    )
+    closed_sessions = await records.list_closed_sessions(
         minutes.id, organization_id, restricted=_restricted(current_user)
     )
     attachments = await records.list_attachments(
@@ -704,6 +1035,9 @@ async def download_minutes_pdf(
             "approved_at_display": local(
                 minutes.approved_at, "%B %d, %Y at %I:%M %p %Z"
             ),
+            "adopted_on_display": local(minutes.adopted_on, "%B %d, %Y"),
+            "as_amended": minutes.adopted_as_amended,
+            "adopting_title": _adopting_title(minutes),
             "version": current_revision.version if current_revision else None,
             "content_hash": current_revision.content_hash if current_revision else None,
         }
@@ -747,6 +1081,11 @@ async def download_minutes_pdf(
                 "moved_by": m.moved_by,
                 "seconded_by": m.seconded_by,
                 "notes": m.discussion_notes,
+                "ballot": (
+                    getattr(getattr(m, "election", None), "title", None)
+                    if m.election_id
+                    else None
+                ),
                 "vote_display": (
                     f"Vote {m.votes_for}-{m.votes_against or 0}"
                     + (f" ({m.votes_abstain} abstain)" if m.votes_abstain else "")
@@ -768,11 +1107,31 @@ async def download_minutes_pdf(
             }
             for a in (minutes.action_items or [])
         ],
+        "closed_sessions": [
+            {
+                "reason": c.reason,
+                "legal_basis": c.legal_basis,
+                "started": local(c.started_at, "%I:%M %p"),
+                "ended": local(c.ended_at, "%I:%M %p"),
+                "participants": [
+                    {
+                        "name": p.get("name"),
+                        "joined": local(_parse(p.get("joined_at")), "%I:%M %p"),
+                        "left": local(_parse(p.get("left_at")), "%I:%M %p"),
+                    }
+                    for p in (c.participants or [])
+                ],
+                "summary": c.summary,
+            }
+            for c in (closed_sessions or [])
+        ],
         "election_results": [
             {
                 "title": r.election_title,
                 "closed_display": local(r.election_closed_at, "%B %d, %Y %I:%M %p %Z"),
                 "snapshot": r.snapshot,
+                "addendum": r.is_addendum,
+                "filed_display": local(r.created_at, "%B %d, %Y"),
             }
             for r in (elections or [])
         ],

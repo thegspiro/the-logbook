@@ -32,12 +32,22 @@ from app.models.minute import (
     MinutesActionItemStatus,
     MinutesAttachment,
     MinutesAttachmentCategory,
+    MinutesClosedSession,
     MinutesElectionResult,
     MinutesMeetingType,
     MinutesRevision,
     MinutesStatus,
+    MinutesSuggestion,
+    MinutesSuggestionStatus,
+    Motion,
 )
 from app.models.user import User
+from app.schemas.minute import (
+    ClosedSessionCreate,
+    ClosedSessionUpdate,
+    SuggestionCreate,
+    SuggestionResolve,
+)
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import (
     FileRules,
@@ -52,7 +62,8 @@ from app.utils.minutes_snapshot import (
     build_snapshot,
     content_hash,
 )
-from app.utils.org_scoping import assert_in_org
+from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 EDITABLE_STATUSES = (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value)
 
@@ -86,6 +97,11 @@ ATTACHMENT_FILE_RULES = FileRules(
 
 # Most items a single carry-forward request lists for review.
 CARRY_FORWARD_LIST_LIMIT = 200
+
+
+def _aware(value: datetime) -> datetime:
+    """A stored datetime read back naive is UTC; compare like with like."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _status_value(minutes: MeetingMinutes) -> str:
@@ -295,7 +311,15 @@ class MinutesRecordService:
             .order_by(Election.closed_at.desc(), Election.id.desc())
             .limit(50)
         )
-        return [
+
+        def linked(election: Election) -> bool:
+            """Held at this meeting: its event, or its meeting record."""
+            return bool(
+                (minutes.event_id and election.event_id == minutes.event_id)
+                or (minutes.meeting_id and election.meeting_id == minutes.meeting_id)
+            )
+
+        offered = [
             {
                 "id": e.id,
                 "title": e.title,
@@ -303,9 +327,20 @@ class MinutesRecordService:
                 "closed_at": e.closed_at,
                 "positions": e.positions,
                 "already_imported": e.id in filed,
+                "linked_to_meeting": linked(e),
+                "ballot_items": [
+                    {
+                        "id": str(item["id"]),
+                        "title": str(item.get("title") or item["id"]),
+                    }
+                    for item in (e.ballot_items or [])
+                    if isinstance(item, dict) and item.get("id")
+                ],
             }
             for e in rows.scalars().all()
         ]
+        # The ones held at this meeting first, newest first within each group.
+        return sorted(offered, key=lambda e: not e["linked_to_meeting"])
 
     async def _election_rows(self, minutes_id: str) -> List[MinutesElectionResult]:
         result = await self.db.execute(
@@ -338,7 +373,12 @@ class MinutesRecordService:
         minutes = await self.lock_minutes(minutes_id, organization_id)
         if minutes is None:
             return None
-        self._require_editable(minutes, "Election results")
+        # An election can close after the meeting's minutes were written, or
+        # after they were adopted; the result still belongs to that meeting. On
+        # a draft it is part of the minutes. Once the minutes have been
+        # circulated or adopted it is an addendum: filed, dated, permanent, and
+        # not part of what was adopted.
+        is_addendum = _status_value(minutes) not in EDITABLE_STATUSES
 
         # XC-1: the id is the client's. A foreign or unknown election and a
         # still-open one read the same way so this is no existence oracle.
@@ -366,8 +406,12 @@ class MinutesRecordService:
         )
         if existing.first() is not None:
             raise ValueError(
-                "This election's result is already filed with these minutes. "
-                "Remove it first to file the current result instead."
+                "This election's result is already filed with these minutes."
+                + (
+                    ""
+                    if is_addendum
+                    else " Remove it first to file the current result instead."
+                )
             )
 
         results = await ElectionService(self.db).get_election_results(
@@ -383,6 +427,7 @@ class MinutesRecordService:
             election_title=election.title,
             election_closed_at=election.closed_at,
             snapshot=results.model_dump(mode="json"),
+            is_addendum=is_addendum,
             captured_by=str(captured_by),
         )
         self.db.add(row)
@@ -396,7 +441,6 @@ class MinutesRecordService:
         minutes = await self.lock_minutes(minutes_id, organization_id)
         if minutes is None:
             return False
-        self._require_editable(minutes, "Election results")
         row = (
             await self.db.execute(
                 select(MinutesElectionResult).where(
@@ -408,6 +452,12 @@ class MinutesRecordService:
         ).scalar_one_or_none()
         if row is None:
             return False
+        if row.is_addendum:
+            raise ValueError(
+                "A result filed after the minutes were circulated is a permanent "
+                "addendum and cannot be removed"
+            )
+        self._require_editable(minutes, "Election results")
         await self.db.delete(row)
         await self.db.commit()
         return True
@@ -583,6 +633,7 @@ class MinutesRecordService:
             minutes,
             await self._election_rows(minutes.id),
             await self._attachment_rows(minutes.id),
+            await self._closed_session_rows(minutes.id),
         )
         latest = (
             await self.db.execute(
@@ -713,6 +764,7 @@ class MinutesRecordService:
             minutes,
             await self._election_rows(minutes.id),
             await self._attachment_rows(minutes.id),
+            await self._closed_session_rows(minutes.id),
         )
         current = content_hash(live)
         matches = current == revision.content_hash
@@ -737,6 +789,270 @@ class MinutesRecordService:
                 else f"Differs from version {revision.version} as approved."
             ),
         }
+
+    # ============================================
+    # Closed sessions
+    # ============================================
+
+    async def _closed_session_rows(self, minutes_id: str) -> List[MinutesClosedSession]:
+        result = await self.db.execute(
+            select(MinutesClosedSession)
+            .where(MinutesClosedSession.minutes_id == str(minutes_id))
+            .order_by(MinutesClosedSession.started_at, MinutesClosedSession.id)
+        )
+        return list(result.scalars().all())
+
+    async def list_closed_sessions(
+        self, minutes_id: str, organization_id: UUID | str, restricted: bool = False
+    ) -> Optional[List[MinutesClosedSession]]:
+        minutes = await MinuteService(self.db).get_minutes(
+            minutes_id, organization_id, restricted=restricted, load_children=False
+        )
+        if minutes is None:
+            return None
+        return await self._closed_session_rows(minutes.id)
+
+    async def _check_closed_session_links(
+        self,
+        minutes: MeetingMinutes,
+        motion_id: Optional[str],
+        participants: Optional[Sequence[dict]],
+        organization_id: UUID | str,
+    ) -> None:
+        """The motion must be one of these minutes' own, and every named
+        participant a member of this department (XC-1)."""
+        if motion_id:
+            found = await self.db.execute(
+                select(Motion.id).where(
+                    Motion.id == str(motion_id), Motion.minutes_id == minutes.id
+                )
+            )
+            if found.first() is None:
+                raise ValueError("That motion is not one of these minutes' motions")
+        await assert_all_in_org(
+            self.db,
+            User,
+            [p["user_id"] for p in (participants or []) if p.get("user_id")],
+            organization_id,
+            label="participant",
+        )
+
+    async def add_closed_session(
+        self,
+        minutes_id: str,
+        organization_id: UUID | str,
+        data: ClosedSessionCreate,
+        created_by: UUID | str,
+    ) -> Optional[MinutesClosedSession]:
+        minutes = await self.lock_minutes(minutes_id, organization_id)
+        if minutes is None:
+            return None
+        self._require_editable(minutes, "A closed session")
+        participants = [p.model_dump(mode="json") for p in data.participants or []]
+        await self._check_closed_session_links(
+            minutes, data.motion_id, participants, organization_id
+        )
+        session = MinutesClosedSession(
+            minutes_id=minutes.id,
+            organization_id=str(organization_id),
+            motion_id=data.motion_id,
+            reason=data.reason.strip(),
+            legal_basis=(data.legal_basis or "").strip() or None,
+            started_at=data.started_at,
+            ended_at=data.ended_at,
+            participants=participants,
+            summary=(data.summary or "").strip() or None,
+            created_by=str(created_by),
+        )
+        self.db.add(session)
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def update_closed_session(
+        self,
+        minutes_id: str,
+        session_id: str,
+        organization_id: UUID | str,
+        data: ClosedSessionUpdate,
+    ) -> Optional[MinutesClosedSession]:
+        minutes = await self.lock_minutes(minutes_id, organization_id)
+        if minutes is None:
+            return None
+        self._require_editable(minutes, "A closed session")
+        session = (
+            await self.db.execute(
+                select(MinutesClosedSession).where(
+                    MinutesClosedSession.id == str(session_id),
+                    MinutesClosedSession.minutes_id == minutes.id,
+                    MinutesClosedSession.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if session is None:
+            return None
+
+        changes = data.model_dump(exclude_unset=True, mode="json")
+        await self._check_closed_session_links(
+            minutes,
+            changes.get("motion_id"),
+            changes.get("participants"),
+            organization_id,
+        )
+        # The span is validated whole: a start moved past the stored end, or an
+        # end moved before the stored start, is as wrong as a bad pair in one
+        # request.
+        start = data.started_at or session.started_at
+        end = data.ended_at if "ended_at" in changes else session.ended_at
+        if start and end and _aware(end) < _aware(start):
+            raise ValueError("A closed session cannot end before it starts")
+        # model_dump(mode="json") renders datetimes as text; the columns want
+        # the datetimes themselves.
+        for key in ("started_at", "ended_at"):
+            if key in changes:
+                changes[key] = getattr(data, key)
+        apply_updates(
+            session, changes, skip={"id", "minutes_id", "organization_id", "created_by"}
+        )
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def delete_closed_session(
+        self, minutes_id: str, session_id: str, organization_id: UUID | str
+    ) -> bool:
+        minutes = await self.lock_minutes(minutes_id, organization_id)
+        if minutes is None:
+            return False
+        self._require_editable(minutes, "A closed session")
+        session = (
+            await self.db.execute(
+                select(MinutesClosedSession).where(
+                    MinutesClosedSession.id == str(session_id),
+                    MinutesClosedSession.minutes_id == minutes.id,
+                    MinutesClosedSession.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if session is None:
+            return False
+        await self.db.delete(session)
+        await self.db.commit()
+        return True
+
+    # ============================================
+    # Member suggestions
+    # ============================================
+
+    async def has_accepted_suggestions(self, minutes_id: str) -> bool:
+        """Whether any suggestion on these minutes was accepted, which is what
+        makes an adoption "as amended" unless the adopter says otherwise."""
+        count = await self.db.execute(
+            select(func.count(MinutesSuggestion.id)).where(
+                MinutesSuggestion.minutes_id == str(minutes_id),
+                MinutesSuggestion.status == MinutesSuggestionStatus.ACCEPTED.value,
+            )
+        )
+        return (count.scalar() or 0) > 0
+
+    async def list_suggestions(
+        self,
+        minutes_id: str,
+        user: User,
+        organization_id: UUID | str,
+        can_manage: bool,
+    ) -> Optional[List[MinutesSuggestion]]:
+        """Every suggestion for a manager; a member sees only their own."""
+        minutes = await MinuteService(self.db).get_minutes(
+            minutes_id,
+            organization_id,
+            restricted=not can_manage,
+            load_children=False,
+        )
+        if minutes is None:
+            return None
+        query = select(MinutesSuggestion).where(
+            MinutesSuggestion.minutes_id == minutes.id,
+            MinutesSuggestion.organization_id == str(organization_id),
+        )
+        if not can_manage:
+            query = query.where(MinutesSuggestion.created_by == str(user.id))
+        result = await self.db.execute(
+            query.order_by(MinutesSuggestion.created_at, MinutesSuggestion.id)
+        )
+        return list(result.scalars().all())
+
+    async def add_suggestion(
+        self,
+        minutes_id: str,
+        user: User,
+        data: SuggestionCreate,
+        can_manage: bool,
+    ) -> Optional[MinutesSuggestion]:
+        """A member proposes a change while the minutes are circulated."""
+        organization_id = str(user.organization_id)
+        minutes = await MinuteService(self.db).get_minutes(
+            minutes_id, organization_id, restricted=not can_manage, load_children=False
+        )
+        if minutes is None:
+            return None
+        if _status_value(minutes) != MinutesStatus.SUBMITTED.value:
+            raise ValueError(
+                "Changes can be suggested only while the minutes are circulated "
+                "for review"
+            )
+        if data.section_key and data.section_key not in {
+            s.get("key") for s in minutes.get_sections()
+        }:
+            raise ValueError("That section is not in these minutes")
+        suggestion = MinutesSuggestion(
+            minutes_id=minutes.id,
+            organization_id=organization_id,
+            section_key=data.section_key or None,
+            comment=data.comment,
+            proposed_text=(data.proposed_text or "").strip() or None,
+            created_by=str(user.id),
+        )
+        self.db.add(suggestion)
+        await self.db.commit()
+        await self.db.refresh(suggestion)
+        return suggestion
+
+    async def resolve_suggestion(
+        self,
+        minutes_id: str,
+        suggestion_id: str,
+        organization_id: UUID | str,
+        resolved_by: UUID | str,
+        data: SuggestionResolve,
+    ) -> Optional[MinutesSuggestion]:
+        """Accept or decline a suggestion. Accepting does not edit the minutes:
+        it records that the secretary will, and counts toward "as amended"."""
+        minutes = await self.lock_minutes(minutes_id, organization_id)
+        if minutes is None:
+            return None
+        if _status_value(minutes) == MinutesStatus.APPROVED.value:
+            raise ValueError("Adopted minutes can no longer take suggestions")
+        suggestion = (
+            await self.db.execute(
+                select(MinutesSuggestion)
+                .where(
+                    MinutesSuggestion.id == str(suggestion_id),
+                    MinutesSuggestion.minutes_id == minutes.id,
+                    MinutesSuggestion.organization_id == str(organization_id),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if suggestion is None:
+            return None
+        suggestion.status = data.status
+        suggestion.resolution_note = (data.note or "").strip() or None
+        suggestion.resolved_by = str(resolved_by)
+        suggestion.resolved_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(suggestion)
+        return suggestion
 
     # ============================================
     # Action items across meetings

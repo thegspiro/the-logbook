@@ -81,6 +81,17 @@ def _election_block(
     out: List[Any] = [
         Paragraph(f"Election result — {_esc(election.get('title'))}", section_style)
     ]
+    if election.get("addendum"):
+        out.append(
+            Paragraph(
+                "<i>Addendum: filed "
+                f"{_esc(election.get('filed_display') or '')} after these minutes "
+                "were circulated. It records the final result of an election held "
+                "at this meeting that closed later; it is not part of the text "
+                "that was adopted.</i>",
+                styles["Normal"],
+            )
+        )
     closed = election.get("closed_display")
     facts = [
         f"Eligible voters: {snapshot.get('total_eligible_voters', '—')}",
@@ -269,6 +280,10 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                 lines.append(
                     f'<font size="8" color="#6b7280">{_esc(detail_text)}</font>'
                 )
+            if motion.get("ballot"):
+                lines.append(
+                    f'<font size="9">Decided by ballot: {_esc(motion["ballot"])}</font>'
+                )
             if motion.get("notes"):
                 lines.append(
                     f'<font size="9">Discussion: {_text(motion["notes"])}</font>'
@@ -276,6 +291,33 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
             story.append(
                 KeepTogether([Paragraph("<br/>".join(lines), body_style), Spacer(1, 6)])
             )
+
+    # ── Closed sessions ──────────────────────────────────────────────
+    for number, closed in enumerate(data.get("closed_sessions") or [], 1):
+        story.append(Paragraph(f"Closed session {number}", section_style))
+        span = f"{closed.get('started') or ''}"
+        if closed.get("ended"):
+            span += f" to {closed['ended']}"
+        facts = [f"Reason: {closed.get('reason')}", f"Time: {span}"]
+        if closed.get("legal_basis"):
+            facts.append(f"Authority: {closed['legal_basis']}")
+        story.append(Paragraph("<br/>".join(_esc(f) for f in facts), body_style))
+        people = closed.get("participants") or []
+        if people:
+            rows = [["In the room", "Joined", "Left"]]
+            for person in people:
+                rows.append(
+                    [
+                        Paragraph(_esc(person.get("name")), styles["Normal"]),
+                        person.get("joined") or "—",
+                        person.get("left") or "—",
+                    ]
+                )
+            story.append(Spacer(1, 4))
+            story.append(_styled_table(rows, [3.8 * inch, 1.5 * inch, 1.5 * inch]))
+        if closed.get("summary"):
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(_text(closed["summary"]), body_style))
 
     # ── Action items ─────────────────────────────────────────────────
     items = data.get("action_items") or []
@@ -332,6 +374,24 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                 body_style,
             )
         )
+        if approval.get("adopted_on_display"):
+            how = (
+                " as amended"
+                if approval.get("as_amended")
+                else " as presented" if approval.get("as_amended") is False else ""
+            )
+            where = (
+                f", at the meeting recorded in {approval['adopting_title']}"
+                if approval.get("adopting_title")
+                else ""
+            )
+            sign.append(
+                Paragraph(
+                    f"Adopted by the body on {_esc(approval['adopted_on_display'])}"
+                    f"{_esc(how)}{_esc(where)}.",
+                    body_style,
+                )
+            )
     else:
         sign.append(
             Paragraph(
