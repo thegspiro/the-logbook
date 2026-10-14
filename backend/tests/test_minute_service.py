@@ -708,6 +708,29 @@ class TestApproveMinutes:
         )
 
     @pytest.mark.unit
+    async def test_adoption_times_are_whole_seconds(
+        self, service, mock_db, org_id, user_id
+    ):
+        """MySQL rounds a stored fraction and the snapshot truncates it."""
+        from app.schemas.minute import MinutesAdopt
+
+        fractional = datetime(2026, 11, 5, 1, 0, 0, 700000, tzinfo=timezone.utc)
+        minutes = _make_minutes(status=MinutesStatus.SUBMITTED.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        await service.approve_minutes(
+            minutes.id, org_id, user_id, MinutesAdopt(adopted_on=fractional)
+        )
+
+        assert minutes.approved_at.microsecond == 0
+        assert minutes.adopted_on == fractional.replace(microsecond=0)
+
+        minutes = _make_minutes(status=MinutesStatus.SUBMITTED.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+        await service.approve_minutes(minutes.id, org_id, user_id)
+        assert minutes.adopted_on == minutes.approved_at
+
+    @pytest.mark.unit
     async def test_approve_draft_minutes_raises(
         self, service, mock_db, org_id, user_id
     ):

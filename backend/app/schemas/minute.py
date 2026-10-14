@@ -805,6 +805,16 @@ class ClosedSessionParticipant(BaseModel):
         return self
 
 
+def _whole_seconds(value: Optional[datetime]) -> Optional[datetime]:
+    """Drop the fraction of a second before it reaches a DATETIME column.
+
+    MySQL rounds a stored fraction while MariaDB truncates it, and the approved
+    version's snapshot truncates. A value kept with its fraction would be
+    stored a second later than it was hashed on MySQL.
+    """
+    return value.replace(microsecond=0) if value is not None else None
+
+
 def _validate_participants(
     value: Optional[List[ClosedSessionParticipant]],
 ) -> Optional[List[ClosedSessionParticipant]]:
@@ -835,6 +845,7 @@ class ClosedSessionBase(BaseModel):
     )
 
     _check_participants = field_validator("participants")(_validate_participants)
+    _whole_times = field_validator("started_at", "ended_at")(_whole_seconds)
 
     @model_validator(mode="after")
     def _ends_after_start(self):
@@ -859,6 +870,7 @@ class ClosedSessionUpdate(BaseModel):
     summary: Optional[str] = Field(None, max_length=4000)
 
     _check_participants = field_validator("participants")(_validate_participants)
+    _whole_times = field_validator("started_at", "ended_at")(_whole_seconds)
 
 
 class ClosedSessionResponse(UTCResponseBase):

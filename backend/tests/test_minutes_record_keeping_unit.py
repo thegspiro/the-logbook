@@ -430,3 +430,21 @@ class TestMigrationParity:
         ]
         for case in cases:
             assert module._normalize(case) == normalize_attendee(case), case
+
+
+@pytest.mark.unit
+def test_closed_session_times_are_stored_as_whole_seconds():
+    """MySQL rounds a stored fraction; the snapshot truncates it."""
+    from app.schemas.minute import ClosedSessionCreate, ClosedSessionUpdate
+
+    created = ClosedSessionCreate(
+        reason="Personnel",
+        started_at="2026-10-01T19:00:00.700Z",
+        ended_at="2026-10-01T20:00:00.900Z",
+    )
+    assert created.started_at.microsecond == 0
+    assert created.ended_at.microsecond == 0
+    assert (
+        ClosedSessionUpdate(started_at="2026-10-01T19:00:00.700Z").started_at
+        == created.started_at
+    )

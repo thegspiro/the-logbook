@@ -797,11 +797,19 @@ class MinuteService:
         if as_amended is None:
             as_amended = await records.has_accepted_suggestions(minutes.id)
 
-        approved_at = datetime.now(timezone.utc)
+        # Whole seconds: MySQL rounds a fractional second when it stores one,
+        # MariaDB truncates, and the snapshot truncates. A value with a
+        # fraction would be stored a second later than it was hashed, and
+        # verify would report the adoption as changed on MySQL only.
+        approved_at = datetime.now(timezone.utc).replace(microsecond=0)
         minutes.status = MinutesStatus.APPROVED
         minutes.approved_at = approved_at
         minutes.approved_by = str(approved_by)
-        minutes.adopted_on = adoption.adopted_on or approved_at
+        minutes.adopted_on = (
+            adoption.adopted_on.replace(microsecond=0)
+            if adoption.adopted_on
+            else approved_at
+        )
         minutes.adopted_as_amended = as_amended
         minutes.adopting_minutes_id = (
             str(adoption.adopting_minutes_id) if adoption.adopting_minutes_id else None
