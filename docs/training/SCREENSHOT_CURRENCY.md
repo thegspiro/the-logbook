@@ -1,5 +1,19 @@
 # Screenshot currency
 
+## Moved out of 12-grants-fundraising.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Image file names
+and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `12-03-opportunities.png` | **REPLACE** | Each opportunity's button reads **Start Application** (was Apply), and the subtitle reads "Browse grant programs and start an application" |
+| `12-04-create-application.png` | **REPLACE** | The subtitle reads "Only the program name and agency are required. You can add the rest later.", the opportunity field is labelled **Grant Opportunity**, the budget-summary placeholder reads "How the grant money will be spent..." and the contacts placeholder "Names, roles, and phone or email..." |
+| `12-06-application-budget-tab.png` | **CHECK** | If the frame shows the add button, it reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount** |
+| `12-10-donors.png` | **REPLACE** | The subtitle reads "Look up donors and what each has given" |
+| `12-14-fundraising-reports.png` | **REPLACE** | The tabs read **Grants** / **Fundraising**, the subtitle "Grant results and fundraising totals for the dates you choose", and the first figure **Total Raised** (was Total Donations) |
+| `12-02-grants-dashboard.png`, `12-09-campaign-detail.png`, `12-10-donors.png`, application detail captures | **REPLACE** | The add and edit buttons appear only for accounts that can manage fundraising. Caption which permissions the capturing account holds |
+
 ## Moved out of 15-prospective-members.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
