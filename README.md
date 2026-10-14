@@ -383,7 +383,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 
 ### Development
 
-- [Python Backend Guide](docs/backend/python-backend.md) — Backend development
+- [Python Backend Guide](wiki/Development-Backend.md) — Backend development
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
 - [Testing Guide](TESTING.md) — Test suites for onboarding and event components
 

@@ -72,7 +72,7 @@ The marks live in `testing_checklist_entries`, behind
 testers' results, starting a run, and clearing the department's run all require
 `settings.manage`.
 
-The registry behind the page is `frontend/src/pages/testing/testingRegistry.ts`,
+The registry behind the page is `frontend/src/modules/testing/testingRegistry.ts`,
 and `testingRegistry.test.ts` fails the build if a route is added, removed or
 re-gated without it following — so the page cannot quietly fall behind the
 router.
