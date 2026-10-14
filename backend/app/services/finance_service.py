@@ -6,6 +6,7 @@ expense reports, check requests, dues, approval chains,
 and QuickBooks export.
 """
 
+import copy
 import html
 import io
 import secrets
@@ -68,7 +69,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
 )
-from app.models.user import Position, User
+from app.models.user import Organization, Position, User
 from app.services.expense_substantiation import describe_late, late_items
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
@@ -97,9 +98,13 @@ from app.services.separation_of_duties import (
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import (
+    FINANCE_SETTINGS_KEY,
     FUND_OVERSPEND_BLOCK,
+    QB_DUES_DEPOSIT_KEY,
+    QB_DUES_INCOME_KEY,
     SUBSTANTIATION_BLOCK,
     SUBSTANTIATION_OFF,
+    dues_default_accounts,
     load_finance_settings,
 )
 from app.utils.member_names import format_display_name
@@ -5014,6 +5019,9 @@ class FinanceService:
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(schedule)
         await self.db.flush()
@@ -5027,6 +5035,9 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         apply_updates(schedule, kwargs)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
@@ -5456,10 +5467,14 @@ class FinanceService:
             if key not in category_keys
             for mapping in group
         ]
-        return {"categories": rows, "unmatched_mapping_ids": unmatched}
+        return {
+            "categories": rows,
+            "unmatched_mapping_ids": unmatched,
+            "dues": await self._dues_accounts(org_id),
+        }
 
     async def _resolve_export_accounts(
-        self, org_id: str, sources: list
+        self, org_id: str, sources: list, extra_issues: Optional[list[str]] = None
     ) -> dict[str, tuple[str, str]]:
         """Map each exported budget line to its (account, offset) QuickBooks pair.
 
@@ -5473,7 +5488,10 @@ class FinanceService:
         rows: list = []
         for statement in sources:
             rows.extend((await self.db.execute(statement)).all())
-        if not rows:
+        # Problems found elsewhere (dues schedules) refuse the export in the
+        # same message, so the treasurer sees everything to fix at once.
+        extra_issues = list(extra_issues or [])
+        if not rows and not extra_issues:
             return {}
 
         budget_ids = {budget_id for _, budget_id in rows if budget_id is not None}
@@ -5526,7 +5544,7 @@ class FinanceService:
             else:
                 resolved[budget_id] = (account, offset)
 
-        issues = [problems[name] for name in sorted(problems)]
+        issues = [problems[name] for name in sorted(problems)] + extra_issues
         if unbudgeted:
             shown = ", ".join(unbudgeted[:3]) + (", ..." if len(unbudgeted) > 3 else "")
             issues.insert(
@@ -5543,8 +5561,9 @@ class FinanceService:
             if len(message) > 300:
                 message = (
                     f"Set QuickBooks accounts before exporting: {len(problems)} "
-                    f"budget categories and {len(unbudgeted)} transactions "
-                    "without a budget line need accounts"
+                    f"budget categories, {len(extra_issues)} dues schedules and "
+                    f"{len(unbudgeted)} transactions without a budget line need "
+                    "accounts"
                 )
             raise ValueError(message)
         return resolved
@@ -5590,6 +5609,13 @@ class FinanceService:
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
         ]
+        # Dues received in the period: money in, debited to the deposit
+        # account and credited to the schedule's income account.
+        dues_filters = [
+            DuesPayment.organization_id == org_id,
+            DuesPayment.received_at >= date_start,
+            DuesPayment.received_at <= date_end,
+        ]
         # Reversals of checks voided after QuickBooks received them. A check
         # voided before it was ever exported needs nothing: it is in neither
         # file, so the books never saw it.
@@ -5622,6 +5648,7 @@ class FinanceService:
             )
             er_filters.append(ExpenseReport.qb_exported_at.is_(None))
             void_filters.append(CheckRequest.qb_void_exported_at.is_(None))
+            dues_filters.append(DuesPayment.qb_exported_at.is_(None))
 
         pr_count = await self.db.scalar(
             select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
@@ -5638,11 +5665,20 @@ class FinanceService:
         void_count = await self.db.scalar(
             select(func.count()).select_from(CheckRequest).where(*void_filters)
         )
+        dues_setup = await self._dues_accounts(org_id)
+        dues_count = (
+            await self.db.scalar(
+                select(func.count()).select_from(DuesPayment).where(*dues_filters)
+            )
+            if dues_setup["enabled"]
+            else 0
+        )
         total = (
             int(pr_count or 0)
             + int(cr_count or 0)
             + int(line_count or 0)
             + int(void_count or 0)
+            + int(dues_count or 0)
         )
         # Two rows per transaction (or expense line) plus the header. A file
         # QuickBooks will not import is no use, and splitting one would let an
@@ -5657,6 +5693,36 @@ class FinanceService:
         # Resolved before the log row so a refusal leaves no pending export.
         # A check that carries the accounts it was exported to is posted (or
         # reversed) against those, and needs no resolving.
+        dues_accounts: dict[str, tuple[str, str]] = {}
+        dues_issues: list[str] = []
+        if dues_count:
+            exported_schedules = set(
+                (
+                    await self.db.execute(
+                        select(MemberDues.dues_schedule_id)
+                        .join(DuesPayment, DuesPayment.member_dues_id == MemberDues.id)
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .distinct()
+                    )
+                ).scalars()
+            )
+            for row in dues_setup["schedules"]:
+                if row["schedule_id"] not in exported_schedules:
+                    continue
+                label = _short_label(row["name"])
+                if row["status"] == "ready":
+                    dues_accounts[row["schedule_id"]] = (
+                        row["deposit_account"],
+                        row["income_account"],
+                    )
+                elif row["status"] == "no_income":
+                    dues_issues.append(f"dues '{label}' has no income account")
+                elif row["status"] == "no_deposit":
+                    dues_issues.append(f"dues '{label}' has no deposit account")
+                else:
+                    dues_issues.append(
+                        f"dues '{label}' posts to Accounts Payable or Receivable"
+                    )
         accounts = await self._resolve_export_accounts(
             org_id,
             [
@@ -5674,6 +5740,7 @@ class FinanceService:
                     *void_filters, CheckRequest.qb_export_account.is_(None)
                 ),
             ],
+            extra_issues=dues_issues,
         )
 
         log = await self._begin_export(
@@ -5723,6 +5790,7 @@ class FinanceService:
         sent_reports: set[str] = set()
         sent_checks: dict[tuple[str, str], list[str]] = {}
         sent_voids: list[str] = []
+        sent_dues: list[str] = []
 
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
@@ -5847,6 +5915,77 @@ class FinanceService:
                     delivered += len(records)
                     yield csv_chunk(lines)
 
+                for offset in range(0, int(dues_count or 0), batch_size):
+                    dues_result = await self.db.execute(
+                        select(
+                            DuesPayment,
+                            MemberDues.dues_schedule_id,
+                            DuesSchedule.name,
+                            User.first_name,
+                            User.last_name,
+                            User.preferred_name,
+                            User.username,
+                        )
+                        .join(MemberDues, MemberDues.id == DuesPayment.member_dues_id)
+                        .join(
+                            DuesSchedule,
+                            DuesSchedule.id == MemberDues.dues_schedule_id,
+                        )
+                        .outerjoin(
+                            User,
+                            and_(
+                                User.id == MemberDues.user_id,
+                                User.organization_id == org_id,
+                            ),
+                        )
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .order_by(DuesPayment.received_at, DuesPayment.id)
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    dues_records = list(dues_result.all())
+                    if not dues_records:
+                        break
+                    lines = []
+                    for (
+                        payment,
+                        schedule_id,
+                        schedule_name,
+                        first,
+                        last,
+                        preferred,
+                        username,
+                    ) in dues_records:
+                        deposit, income = dues_accounts[schedule_id]
+                        member = (
+                            format_display_name(first, last, preferred)
+                            or username
+                            or "Member"
+                        )
+                        how = ", ".join(
+                            part
+                            for part in (
+                                payment.payment_method,
+                                payment.transaction_reference,
+                            )
+                            if part
+                        )
+                        # A dues payment has no request number; its own id
+                        # keeps the Journal No unique, and the prefix keeps it
+                        # from ever matching a PR-, CR- or ER- number.
+                        lines += journal_lines(
+                            f"DUES-{payment.id[:8]}",
+                            local_day(payment.received_at),
+                            f"Dues: {schedule_name}",
+                            deposit,
+                            income,
+                            payment.amount,
+                            f"{member} ({how})" if how else member,
+                        )
+                        sent_dues.append(payment.id)
+                    delivered += len(dues_records)
+                    yield csv_chunk(lines)
+
                 # Last, so a check exported and voided within one period is
                 # posted before it is reversed.
                 async for voids in batches(
@@ -5882,6 +6021,7 @@ class FinanceService:
                     reports=sent_reports,
                     checks=sent_checks,
                     voids=sent_voids,
+                    dues=sent_dues,
                 )
                 log.status = "successful"
                 log.record_count = delivered
@@ -5943,6 +6083,103 @@ class FinanceService:
         await self.db.commit()  # Persist pending before any bytes reach the client.
         return log
 
+    async def set_dues_default_accounts(
+        self, org_id: str, income: Optional[str], deposit: Optional[str]
+    ) -> tuple[str, str]:
+        """Set the QuickBooks accounts a dues payment posts to when its
+        schedule names none. Blank or None clears one."""
+        income = (income or "").strip()
+        deposit = (deposit or "").strip()
+        _refuse_name_required(income, deposit)
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        org = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+        # A deep copy: the finance section is a nested dict, and mutating it in
+        # place on a shallow copy is never written (CLAUDE.md pitfall #12).
+        settings = copy.deepcopy(org.settings or {})
+        section = settings.get(FINANCE_SETTINGS_KEY)
+        if not isinstance(section, dict):
+            section = {}
+        for key, value in (
+            (QB_DUES_INCOME_KEY, income),
+            (QB_DUES_DEPOSIT_KEY, deposit),
+        ):
+            if value:
+                section[key] = value
+            else:
+                section.pop(key, None)
+        settings[FINANCE_SETTINGS_KEY] = section
+        org.settings = settings
+        await self.db.flush()
+        return income, deposit
+
+    async def _dues_accounts(self, org_id: str) -> dict:
+        """Every dues schedule's QuickBooks accounts, its own or the
+        department's default, and whether its payments can be exported."""
+        org_settings = (
+            await self.db.execute(
+                select(Organization.settings).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        default_income, default_deposit = dues_default_accounts(org_settings)
+        rows = await self.db.execute(
+            select(DuesSchedule)
+            .where(DuesSchedule.organization_id == org_id)
+            .order_by(DuesSchedule.name, DuesSchedule.id)
+        )
+        schedules = []
+        for schedule in rows.scalars():
+            own_income = (schedule.qb_income_account or "").strip()
+            own_deposit = (schedule.qb_deposit_account or "").strip()
+            income = own_income or default_income
+            deposit = own_deposit or default_deposit
+            if not income:
+                status = "no_income"
+            elif not deposit:
+                status = "no_deposit"
+            elif _needs_qb_name(income) or _needs_qb_name(deposit):
+                status = "payable_receivable"
+            else:
+                status = "ready"
+            schedules.append(
+                {
+                    "schedule_id": schedule.id,
+                    "name": schedule.name,
+                    "is_active": schedule.is_active,
+                    "status": status,
+                    "income_account": income or None,
+                    "income_source": (
+                        "schedule" if own_income else "default" if income else None
+                    ),
+                    "deposit_account": deposit or None,
+                    "deposit_source": (
+                        "schedule" if own_deposit else "default" if deposit else None
+                    ),
+                }
+            )
+        # Dues go to QuickBooks once the department names an account for
+        # them anywhere. Until then they stay out of the export, as they did
+        # before dues could be exported, rather than refusing every export of
+        # a department that keeps its dues in QuickBooks by other means.
+        enabled = bool(
+            default_income
+            or default_deposit
+            or any(
+                row["income_source"] == "schedule"
+                or row["deposit_source"] == "schedule"
+                for row in schedules
+            )
+        )
+        return {
+            "enabled": enabled,
+            "default_income_account": default_income or None,
+            "default_deposit_account": default_deposit or None,
+            "schedules": schedules,
+        }
+
     async def _stamp_exported(
         self,
         org_id: str,
@@ -5953,6 +6190,7 @@ class FinanceService:
         reports: set[str],
         checks: dict[tuple[str, str], list[str]],
         voids: list[str],
+        dues: Optional[list[str]] = None,
     ) -> None:
         """Mark what a completed export carried, and the accounts it used."""
         stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
@@ -5992,6 +6230,15 @@ class FinanceService:
                     CheckRequest.id.in_(voids),
                 )
                 .values(qb_void_exported_at=stamped_at, qb_void_export_log_id=log_id)
+            )
+        if dues:
+            await self.db.execute(
+                update(DuesPayment)
+                .where(
+                    DuesPayment.organization_id == org_id,
+                    DuesPayment.id.in_(dues),
+                )
+                .values(**stamp)
             )
 
     async def list_export_logs(

@@ -66,6 +66,8 @@ from app.schemas.finance import (
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
+    DuesDefaultAccountsUpdate,
+    DuesExportReadinessResponse,
     DuesPaymentResponse,
     DuesScheduleCreate,
     DuesScheduleResponse,
@@ -3979,6 +3981,47 @@ async def get_export_readiness(
 ):
     service = FinanceService(db)
     return await service.get_export_readiness(str(current_user.organization_id))
+
+
+@router.put("/export/dues-accounts", response_model=DuesExportReadinessResponse)
+async def set_dues_default_accounts(
+    data: DuesDefaultAccountsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Set the QuickBooks accounts a dues payment posts to when its schedule
+    names none.
+
+    **Requires permission: finance.manage**
+
+    ``incomeAccount`` is credited and ``depositAccount`` (the bank account) is
+    debited; null or blank clears one. Accounts Payable and Receivable are
+    refused (400), as everywhere in the export. Answers with every schedule's
+    resolved accounts.
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        income, deposit = await service.set_dues_default_accounts(
+            org_id, data.income_account, data.deposit_account
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.dues_export_accounts_set",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "income_account": income or None,
+                "deposit_account": deposit or None,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return (await service.get_export_readiness(org_id))["dues"]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.post("/export/transactions")

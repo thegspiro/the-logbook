@@ -78,6 +78,8 @@ import type {
   FundBalancesReport,
   FundOption,
   ExportRunPayload,
+  DuesDefaultAccountsPayload,
+  DuesExportReadiness,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -928,6 +930,12 @@ export const exportMappingService = {
   async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
     const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
     return asArray(response.data);
+  },
+
+  /** Set the department's default QuickBooks accounts for dues payments. */
+  async setDuesDefaults(data: DuesDefaultAccountsPayload): Promise<DuesExportReadiness> {
+    const response = await api.put<DuesExportReadiness>('/finance/export/dues-accounts', data);
+    return response.data;
   },
 
   /** Run the QuickBooks export for a period, as the file the server names. */

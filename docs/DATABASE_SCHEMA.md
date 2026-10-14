@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**304 tables · 5035 columns · 1017 foreign keys**
+**304 tables · 5039 columns · 1018 foreign keys**
 
 ---
 
@@ -259,8 +259,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
 | [`check_requests`](#check_requests) | `CheckRequest` | 31 | Request to cut a check for payment |
-| [`dues_payments`](#dues_payments) | `DuesPayment` | 11 | A single payment received against a member's dues (FIN-6). |
-| [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
+| [`dues_payments`](#dues_payments) | `DuesPayment` | 13 | A single payment received against a member's dues (FIN-6). |
+| [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 24 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
@@ -3944,6 +3944,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `received_at` | DATETIME | no |  |  |  |
 | `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `qb_exported_at` | DATETIME | yes |  |  |  |
+| `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3974,6 +3976,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `late_fee_amount` | NUMERIC(12, 2) | yes |  |  |  |
 | `fiscal_year_id` | VARCHAR(36) | yes | FK |  | → `fiscal_years.id` ON DELETE SET NULL |
 | `applies_to_membership_types` | JSON | yes |  |  |  |
+| `qb_income_account` | VARCHAR(200) | yes |  |  |  |
+| `qb_deposit_account` | VARCHAR(200) | yes |  |  |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
@@ -11576,6 +11580,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
 
+### → `finance_export_logs` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_requests` | `qb_export_log_id` | SET NULL | yes |
+| `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
+| `dues_payments` | `qb_export_log_id` | SET NULL | yes |
+| `expense_reports` | `qb_export_log_id` | SET NULL | yes |
+| `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
+
 ### → `membership_pipeline_steps` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -11641,15 +11655,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `template_id` | SET NULL | yes |
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
-
-### → `finance_export_logs` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_requests` | `qb_export_log_id` | SET NULL | yes |
-| `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
-| `expense_reports` | `qb_export_log_id` | SET NULL | yes |
-| `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
 
 ### → `grant_applications` (4 references)
 

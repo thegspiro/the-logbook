@@ -1453,6 +1453,13 @@ class DuesSchedule(Base):
     applies_to_membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )
+    # The QuickBooks accounts this schedule's payments post to: the income
+    # account credited and the bank account debited. Null takes the
+    # department's default (organization settings, finance.qb_dues_*).
+    qb_income_account: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    qb_deposit_account: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(
@@ -1616,6 +1623,16 @@ class DuesPayment(Base):
     recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # When a complete QuickBooks export last carried this payment, and which;
+    # the next export leaves it out.
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

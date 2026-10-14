@@ -41,6 +41,13 @@ of these defaults.
     someone chooses one, so no existing request changes, and a restricted gift
     spent past what was given is a breach of the donor's terms a department
     should hear about without first finding the setting.
+
+``qb_dues_income_account`` and ``qb_dues_deposit_account``
+    The QuickBooks accounts a dues payment posts to when its schedule names
+    none: the income account credited and the bank account debited. Unlike the
+    rules above these are bookkeeping, not a control, so the finance office
+    sets them (``PUT /finance/export/dues-accounts``, ``finance.manage``) beside
+    the rest of the QuickBooks accounts. Absent or blank is no default.
 """
 
 from dataclasses import dataclass
@@ -66,6 +73,9 @@ FUND_OVERSPEND_OFF = "off"
 FUND_OVERSPEND_WARN = "warn"
 FUND_OVERSPEND_BLOCK = "block"
 FUND_OVERSPEND_MODES = (FUND_OVERSPEND_OFF, FUND_OVERSPEND_WARN, FUND_OVERSPEND_BLOCK)
+
+QB_DUES_INCOME_KEY = "qb_dues_income_account"
+QB_DUES_DEPOSIT_KEY = "qb_dues_deposit_account"
 
 # The IRS safe harbor for substantiating an expense "within a reasonable time"
 # under an accountable plan (Treas. Reg. 1.62-2(g)(2)).
@@ -128,3 +138,17 @@ async def load_finance_settings(
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return finance_settings_in(result.scalar_one_or_none())
+
+
+def dues_default_accounts(settings: Any) -> tuple[str, str]:
+    """The department's default ``(income, deposit)`` QuickBooks accounts for
+    dues, blank where unset."""
+    section = settings.get(FINANCE_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        return "", ""
+
+    def read(key: str) -> str:
+        value = section.get(key)
+        return value.strip() if isinstance(value, str) else ""
+
+    return read(QB_DUES_INCOME_KEY), read(QB_DUES_DEPOSIT_KEY)

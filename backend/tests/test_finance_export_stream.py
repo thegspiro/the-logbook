@@ -61,6 +61,9 @@ class _OrgResult:
 
 
 def _db(counts, results, tz="America/New_York"):
+    """``counts`` answer the export's count queries in order: purchases,
+    checks, expense lines, voids. Dues are off (``_service`` stubs them), so
+    there is no dues count."""
     db = Mock()
     db.scalar = AsyncMock(side_effect=counts)
     db.execute = AsyncMock(side_effect=[_OrgResult(tz)] + [_Result(r) for r in results])
@@ -82,6 +85,7 @@ def _service(db, accounts=None):
     stream alone. ``service.log`` is the export's log row.
     """
     service = FinanceService(db)
+    service._dues_accounts = AsyncMock(return_value={"enabled": False, "schedules": []})
     service._resolve_export_accounts = AsyncMock(
         return_value={"b": ("Supplies", "Checking")} if accounts is None else accounts
     )
@@ -195,8 +199,10 @@ async def test_row_limit_is_checked_before_log_or_stream_creation():
     # 500 transactions are 1,000 rows and the header: one too many for
     # QuickBooks Online's importer.
     db = _db([500, 0, 0, 0], [])
+    service = FinanceService(db)
+    service._dues_accounts = AsyncMock(return_value={"enabled": False, "schedules": []})
     with pytest.raises(ValueError, match="fewer than 1,000 rows"):
-        await FinanceService(db).generate_export("org", "user", now, now)
+        await service.generate_export("org", "user", now, now)
     db.add.assert_not_called()
 
 
@@ -239,6 +245,7 @@ async def test_unresolved_accounts_refuse_before_log_or_stream_creation():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     db = _db([1, 0, 0, 0], [])
     service = FinanceService(db)
+    service._dues_accounts = AsyncMock(return_value={"enabled": False, "schedules": []})
     service._resolve_export_accounts = AsyncMock(
         side_effect=ValueError("Set QuickBooks accounts before exporting")
     )

@@ -1040,6 +1040,9 @@ export interface DuesSchedule {
   appliesToMembershipTypes?: string[];
   isActive: boolean;
   notes?: string;
+  /** QuickBooks accounts for its payments; null takes the department's default. */
+  qbIncomeAccount?: string | null;
+  qbDepositAccount?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1076,6 +1079,8 @@ export interface DuesScheduleCreatePayload {
   /** UTC instant of the due date. */
   dueDate: string;
   notes?: string | undefined;
+  qbIncomeAccount?: string | undefined;
+  qbDepositAccount?: string | undefined;
 }
 
 /** `PUT /finance/dues-schedules/:id`. Omitted leaves a field alone; `null` clears it. */
@@ -1086,6 +1091,8 @@ export interface DuesScheduleUpdatePayload {
   dueDate?: string;
   isActive?: boolean;
   notes?: string | null;
+  qbIncomeAccount?: string | null;
+  qbDepositAccount?: string | null;
 }
 
 /** `PUT /finance/dues/:id` — appends one payment to the member's ledger. */
@@ -1197,6 +1204,42 @@ export interface ExportReadiness {
   categories: ExportReadinessCategory[];
   /** Mappings whose category name matches no budget category: the export never uses them. */
   unmatchedMappingIds: string[];
+  dues?: DuesExportReadiness;
+}
+
+export const DuesExportStatus = {
+  READY: 'ready',
+  NO_INCOME: 'no_income',
+  NO_DEPOSIT: 'no_deposit',
+  PAYABLE_RECEIVABLE: 'payable_receivable',
+} as const;
+export type DuesExportStatus = (typeof DuesExportStatus)[keyof typeof DuesExportStatus];
+
+/** What an export would post one dues schedule's payments to. */
+export interface DuesScheduleExport {
+  scheduleId: string;
+  name: string;
+  isActive: boolean;
+  status: DuesExportStatus;
+  incomeAccount?: string | null;
+  /** `schedule` (its own) or `default` (the department's). */
+  incomeSource?: 'schedule' | 'default' | null;
+  depositAccount?: string | null;
+  depositSource?: 'schedule' | 'default' | null;
+}
+
+export interface DuesExportReadiness {
+  /** False until the department names a dues account anywhere; until then dues stay out of the export. */
+  enabled?: boolean;
+  defaultIncomeAccount?: string | null;
+  defaultDepositAccount?: string | null;
+  schedules: DuesScheduleExport[];
+}
+
+/** `PUT /finance/export/dues-accounts`; null clears one. */
+export interface DuesDefaultAccountsPayload {
+  incomeAccount: string | null;
+  depositAccount: string | null;
 }
 
 export interface ExportLog {

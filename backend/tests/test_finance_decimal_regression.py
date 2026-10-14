@@ -133,6 +133,9 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     service._resolve_export_accounts = AsyncMock(
         return_value={"b": ("Supplies", "Checking")}
     )
+    # Dues are off until the department names a dues account; the dues
+    # export has its own database tests.
+    service._dues_accounts = AsyncMock(return_value={"enabled": False, "schedules": []})
     # The in-progress guard and the stamping have their own database tests.
     log = ExportLog(id="log", status="pending", record_count=0)
     service._begin_export = AsyncMock(return_value=log)

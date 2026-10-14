@@ -1671,6 +1671,14 @@ class DuesScheduleCreate(BaseModel):
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
+    # QuickBooks accounts for this schedule's payments; blank takes the
+    # department's default.
+    qb_income_account: Optional[str] = Field(None, max_length=200)
+    qb_deposit_account: Optional[str] = Field(None, max_length=200)
+
+    _blank_accounts = field_validator(
+        "qb_income_account", "qb_deposit_account", mode="before"
+    )(_strip_or_none)
 
 
 class DuesScheduleUpdate(BaseModel):
@@ -1692,6 +1700,14 @@ class DuesScheduleUpdate(BaseModel):
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    # QuickBooks accounts for this schedule's payments; blank takes the
+    # department's default.
+    qb_income_account: Optional[str] = Field(None, max_length=200)
+    qb_deposit_account: Optional[str] = Field(None, max_length=200)
+
+    _blank_accounts = field_validator(
+        "qb_income_account", "qb_deposit_account", mode="before"
+    )(_strip_or_none)
 
 
 class DuesScheduleResponse(UTCResponseBase):
@@ -1711,6 +1727,8 @@ class DuesScheduleResponse(UTCResponseBase):
     applies_to_membership_types: Optional[list[str]] = None
     is_active: bool
     notes: Optional[str] = None
+    qb_income_account: Optional[str] = None
+    qb_deposit_account: Optional[str] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -1755,6 +1773,8 @@ class DuesPaymentResponse(UTCResponseBase):
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
+    # When a complete QuickBooks export carried this payment.
+    qb_exported_at: Optional[datetime] = None
     received_at: datetime
     recorded_by: Optional[str] = None
     created_at: datetime
@@ -1880,6 +1900,34 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     mapping_ids: list[str]
 
 
+class DuesScheduleExportResponse(UTCResponseBase):
+    """What an export would post one dues schedule's payments to."""
+
+    model_config = _RESPONSE_CONFIG
+
+    schedule_id: str
+    name: str
+    is_active: bool
+    # ready, no_income, no_deposit or payable_receivable
+    status: str
+    income_account: Optional[str] = None
+    # schedule (its own) or default (the department's)
+    income_source: Optional[str] = None
+    deposit_account: Optional[str] = None
+    deposit_source: Optional[str] = None
+
+
+class DuesExportReadinessResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    # False until the department names a dues account anywhere; until then
+    # dues payments are left out of the export.
+    enabled: bool = False
+    default_income_account: Optional[str] = None
+    default_deposit_account: Optional[str] = None
+    schedules: list[DuesScheduleExportResponse] = []
+
+
 class ExportReadinessResponse(UTCResponseBase):
     """Export readiness for every budget category in the organization."""
 
@@ -1887,6 +1935,17 @@ class ExportReadinessResponse(UTCResponseBase):
 
     categories: list[ExportReadinessCategoryResponse]
     unmatched_mapping_ids: list[str]
+    dues: DuesExportReadinessResponse = DuesExportReadinessResponse()
+
+
+class DuesDefaultAccountsUpdate(BaseModel):
+    """The department's default QuickBooks accounts for dues payments; null or
+    blank clears one."""
+
+    model_config = _REQUEST_CONFIG
+
+    income_account: Optional[str] = Field(..., max_length=200)
+    deposit_account: Optional[str] = Field(..., max_length=200)
 
 
 MAX_SYNCHRONOUS_EXPORT_DAYS = 366
