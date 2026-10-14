@@ -666,7 +666,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Async SQLAlchemy issues                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md), [backend/](./backend/)                                                                                       |
 | Security questions                            | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md)                                                                                                |
 | Multi-factor authentication (MFA / TOTP)      | [MFA.md](./MFA.md)                                                                                                                                       |
-| Shift scheduling / platoon rotations          | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md)                                                                                                           |
+| Shift scheduling / platoon rotations          | [Module-Scheduling-Developer](../wiki/Module-Scheduling-Developer.md), [PLATOON_SETUP.md](./PLATOON_SETUP.md)                                            |
 | Barcode label printing / network printers     | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md)                                                                                                   |
 | Printer faults / status read-back             | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md#status-flag-tables)                                                                                |
 | Shift roster / apparatus check sheet printing | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md#what-prints)                                                                                       |

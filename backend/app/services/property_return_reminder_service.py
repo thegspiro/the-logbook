@@ -222,7 +222,7 @@ class PropertyReturnReminderService:
                     "user_id": str(member.id),
                     "member_name": member.display_name,
                     "email": member.email,
-                    "status": member.status.value,
+                    "status": member.status.value if member.status else None,
                     "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
                     "days_since_drop": days_since_drop,
                     "items_outstanding": items_info["count"],

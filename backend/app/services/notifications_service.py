@@ -248,7 +248,7 @@ class NotificationsService:
         # describes the whole filtered list, not the tail after the cursor.
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # `is not None`, not truthiness: `?cursor=` arrives as an empty string,
         # which the codec classifies as invalid. Falling through to the offset
@@ -312,7 +312,7 @@ class NotificationsService:
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # `is not None`, not truthiness: `?cursor=` arrives as an empty string,
         # which the codec classifies as invalid. Falling through to the offset

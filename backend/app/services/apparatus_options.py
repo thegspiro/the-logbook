@@ -62,22 +62,22 @@ async def department_apparatus_options(
     if options:
         return options, "apparatus"
 
-    result = await db.execute(
+    basic_result = await db.execute(
         select(BasicApparatus)
         .where(BasicApparatus.organization_id == org_id)
         .where(BasicApparatus.is_active.is_(True))
         .order_by(BasicApparatus.unit_number)
     )
-    for basic in result.scalars().all():
+    for basic_row in basic_result.scalars().all():
         options.append(
             ApparatusOption(
-                id=basic.id,
-                name=basic.name,
-                unit_number=basic.unit_number,
-                apparatus_type=basic.apparatus_type or "other",
+                id=basic_row.id,
+                name=basic_row.name,
+                unit_number=basic_row.unit_number,
+                apparatus_type=basic_row.apparatus_type or "other",
                 source="basic",
-                positions=normalize_stored_positions(basic.positions),
-                min_staffing=basic.min_staffing,
+                positions=normalize_stored_positions(basic_row.positions),
+                min_staffing=basic_row.min_staffing,
             )
         )
     return options, ("basic" if options else "none")

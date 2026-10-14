@@ -100,7 +100,9 @@ class SelfReportAttachmentRetention:
                 ).where(SelfReportConfig.attachment_retention_days.isnot(None))
             )
         ).all()
-        policies = [(str(org_id), int(days)) for org_id, days in configs]
+        policies = [
+            (str(org_id), int(days)) for org_id, days in configs if days is not None
+        ]
 
         for org_id, days in policies:
             try:

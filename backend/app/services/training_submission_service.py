@@ -845,7 +845,7 @@ class TrainingSubmissionService:
             if override_credit_hours is not None:
                 submission.credit_hours = override_credit_hours
             if override_training_type:
-                submission.training_type = override_training_type
+                submission.training_type = TrainingType(override_training_type)
 
             submission.status = SubmissionStatus.APPROVED
             submission.reviewed_by = reviewer_id
