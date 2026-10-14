@@ -243,6 +243,12 @@ DELETE /api/v1/inventory/items/{id}/pin                  # Unpin
 
 Pin endpoints take `inventory.view`: pins are per member.
 
+`POST /items/bulk` returns `{created, skipped[], item_ids[]}` — names
+already in the catalog are skipped and reported rather than rejected.
+`POST /lots/bulk` returns the created lots. Both are all-or-nothing on a
+validation failure: a partly applied delivery cannot be told apart from a
+complete one, and re-entering it would double-count whatever landed.
+
 ### Stock Lots
 
 ```
@@ -273,6 +279,10 @@ GET    /api/v1/inventory/users/{id}/assignments          # User's assignments (s
 GET    /api/v1/inventory/users/{id}/issuances            # User's issuances (self or inventory.manage)
 GET    /api/v1/inventory/users/{id}/issuance-history     # User's issuance history (self or inventory.manage)
 ```
+
+`GET /items/{id}/issuances` is paginated with `skip` and `limit` (default
+50, max 200). Issuing a pool item enforces the member's per-category
+allowance unless the request sets `override_allowance: true`.
 
 ### Checkout / Check-in (temporary loans)
 
@@ -313,6 +323,14 @@ PUT    /api/v1/inventory/return-requests/{id}/review     # Review a return notic
 `GET /return-requests` types `status` as `ReturnRequestStatus`; an unknown
 value is a 422 naming the valid values. A return notice's received count
 starts empty and must match what the member reported.
+
+`GET /allowances/check/{user_id}/{category_id}` returns
+`{ max_quantity, issued_this_period, remaining, period_type }`. Creating an
+allowance is audited as `issuance_allowance_created`. Member-specific
+inventory reads — including `/inventory/my/`, `/inventory/members/`,
+`/inventory/users/`, `/inventory/checkout/`, `/inventory/charges`,
+`/inventory/members-summary` and `/inventory/allowances/check/` — are in
+`UNCACHEABLE_PREFIXES` (`utils/apiCache.ts`).
 
 ### NFC Tags
 
@@ -747,7 +765,66 @@ GET    /api/v1/equipment-checks/supply/expiring-items             # Expiring on 
 GET    /api/v1/equipment-checks/supply/item-deployments/{inventory_item_id}  # Where an item is carried (check_view or inventory.view)
 GET    /api/v1/equipment-checks/apparatus/{apparatus_id}/inventory  # Standing view of one truck
 POST   /api/v1/equipment-checks/items/{template_item_id}/swap     # Swap a lot aboard (expired lots refused)
+POST   /api/v1/equipment-checks/templates/{id}/compartments/replace  # Replace a checklist's compartments (inventory.check_manage)
+PUT    /api/v1/equipment-checks/items/{id}                        # Edit a checklist row (inventory.check_manage)
+DELETE /api/v1/equipment-checks/items/{id}                        # Delete a checklist row (inventory.check_manage)
+GET    /api/v1/equipment-checks/shifts/{shift_id}/checks          # Filed checks for a shift (check_view or check_submit)
+GET    /api/v1/equipment-checks/checks/{id}                       # One filed check (check_view or check_submit)
+GET    /api/v1/equipment-checks/items/{id}/history                # A row's result history, limit ≤ 100 (check_view or check_submit)
+GET    /api/v1/equipment-checks/templates/{id}/last-results       # Last completed results, ?apparatus_id= (check_view or check_submit)
+GET    /api/v1/equipment-checks/templates/{id}/last-seals         # Last recorded seal per sealed compartment (check_view or check_submit)
+POST   /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos  # Up to 3 photos per item, 5 MB each (check_submit or check_manage)
+GET    /api/v1/equipment-checks/csv-sample                        # Sample CSV for checklist import (any member)
+GET    /api/v1/equipment-checks/inventory-link-report             # Unlinked positions across checklists (inventory.check_manage)
+POST   /api/v1/equipment-checks/inventory-links                   # Apply links across checklists, all or nothing (inventory.check_manage)
 ```
+
+Checklist reads (`GET /templates`, `GET /templates/{id}`) accept
+`inventory.check_view`, `inventory.check_submit` or
+`inventory.check_manage`. Photos are resized, EXIF-stripped and stored as
+WebP; only the member who performed the check may add them, unless the
+caller holds `inventory.check_manage`. The same rule applies to
+`PUT /checks/{id}/complete`.
+
+**Idempotent submission.** A shift check is unique per
+`(shift_id, template_id)` (`uq_shift_equipment_check_shift_template`). The
+client mints a `client_submission_id` before sending; a retry — an offline
+queue replaying on reconnect, a double tap, a dropped connection — resolves
+to the row the first attempt created, via
+`uq_shift_equipment_check_client_submission` on
+`(organization_id, client_submission_id)`. A conflicting submission is a
+`409`. Bulk row creation and bulk deletion take an `idempotency_key` (8–200
+characters), recorded per `(organization_id, compartment_id,
+idempotency_key)` with a `payload_hash`: the same key with the same payload
+replays the original `item_ids`, and the same key with a different payload
+is refused. Check timing comes from the checklist, not the request, and a
+compartment's proposed parent is checked so it cannot form a cycle.
+
+**Check types.** `check_template_items.check_type` stores four answer
+shapes — `level` (a reading against a threshold), `function` (pass/fail),
+`count` (a par quantity) and `expiry` (a date) — plus the layout rows
+`header` and `text`. Request schemas also accept the legacy names
+(`pass_fail`, `present`, `functional` → `function`; `reading` → `level`;
+`quantity` → `count`; `date_lot` → `expiry`) and normalize them before
+storing; an unknown value is refused at the request boundary.
+
+**Sealed containers.** A compartment marked `is_sealed` carries a numbered
+tamper seal. A check submits `seals[]` (`template_compartment_id`,
+`seal_number`, `intact`, `cleared_item_count`, `notes`); seals sent for a
+compartment the checklist does not mark as sealed are ignored.
+`GET /templates/{id}/last-seals` returns, keyed by compartment id,
+`{ sealNumber, intact, checkedAt }` from the last completed check. When the
+number read matches the last recorded one (compared trimmed and
+case-insensitive) and that seal was intact, the form lets the seal clear
+the compartment's `function` and `count` rows in one step:
+
+- `level` readings and any row with an expiration date are never cleared by
+  a seal — they change while the bag stays shut.
+- A seal proves unchanged, not full: confirming carries the previous counts
+  forward and does not write quantities up to par, so a bag short at its
+  last count still files as a failure.
+- Without a prior intact seal whose number matches, the seal is still
+  recorded but the contents must be counted.
 
 ---
 
