@@ -25,7 +25,7 @@ Applications template, and the guides below.
   The script clones the repository to `/mnt/user/appdata/the-logbook`,
   generates secure credentials, sets Unraid permissions, and builds and starts
   all containers (frontend, backend, MySQL 8.0, Redis 7, nightly backup
-  sidecar). Access the app at `http://YOUR-UNRAID-IP:7880` and complete the
+  sidecar, ClamAV malware scanner). Access the app at `http://YOUR-UNRAID-IP:7880` and complete the
   onboarding wizard. Requires Docker Compose — install the **Docker Compose
   Manager** plugin from Community Applications first.
 
@@ -62,15 +62,15 @@ and [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening).
 
 ## Files in this directory
 
-| File                                                                           | Purpose                                                                                      |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| [unraid-setup.sh](./unraid-setup.sh)                                           | Automated install/update/clean-install script (the one-liner above)                          |
-| [update.sh](./update.sh)                                                       | Preferred update path: verified database dump, build-context repair, rebuild, rollback notes |
-| [validate-deployment.sh](./validate-deployment.sh)                             | Post-install validation and frontend build diagnosis                                         |
-| [docker-compose-unraid.yml](./docker-compose-unraid.yml)                       | Unraid-tuned compose file (pre-built images)                                                 |
-| [docker-compose-build-from-source.yml](./docker-compose-build-from-source.yml) | Compose file that builds images locally                                                      |
-| [the-logbook.xml](./the-logbook.xml)                                           | Community Applications template                                                              |
-| [.env.example](./.env.example)                                                 | Environment template the setup script starts from                                            |
+| File                                                                           | Purpose                                                                              |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| [unraid-setup.sh](./unraid-setup.sh)                                           | Automated install/update/clean-install script (the one-liner above)                  |
+| [update.sh](./update.sh)                                                       | Updater for the build-from-source layout only (refuses an `unraid-setup.sh` install) |
+| [validate-deployment.sh](./validate-deployment.sh)                             | Post-install validation and frontend build diagnosis                                 |
+| [docker-compose-unraid.yml](./docker-compose-unraid.yml)                       | Unraid-tuned compose file the setup script installs (builds images locally)          |
+| [docker-compose-build-from-source.yml](./docker-compose-build-from-source.yml) | Compose file that builds images locally                                              |
+| [the-logbook.xml](./the-logbook.xml)                                           | Community Applications template                                                      |
+| [.env.example](./.env.example)                                                 | Environment template the setup script starts from                                    |
 
 ## System requirements
 

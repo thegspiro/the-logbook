@@ -52,7 +52,9 @@ This guide provides step-by-step instructions for deploying The Logbook platform
 
 4. **Access Your Application**
    - Frontend: http://your-server-ip:3000
-   - Backend API: http://your-server-ip:3001
+   - Backend API: http://your-server-ip:3000/api/v1 — the frontend's nginx
+     proxies `/api` to the backend; the production override does not publish
+     port 3001 on the host
    - First-time setup wizard will guide you through initial configuration
 
 **That's it!** You're up and running! 🎉
@@ -80,7 +82,8 @@ This guide provides step-by-step instructions for deploying The Logbook platform
 All software will be automatically installed by the installation script:
 
 - Docker 20.10+
-- Docker Compose 2.0+
+- Docker Compose v2.24.4+ (`docker-compose.prod.yml` uses the `!override` and
+  `!reset` tags, which older Compose rejects)
 - Git
 - OpenSSL
 
@@ -160,6 +163,13 @@ it. On an older release, install `python3.13` and `python3.13-venv` first (on
 Ubuntu, for example, from the deadsnakes PPA). The script checks before it
 installs anything and stops with this explanation if no suitable Python is
 found; it does not add package sources itself.
+
+**Also needs Node.js 22 or newer with npm 11 or newer** — the script builds the
+frontend with `npm run build`, and `frontend/package.json` declares those
+engines. The script installs the distribution's `nodejs` and `npm` packages
+without checking their versions, and most distributions ship an older pair, so
+install a current Node.js first (for example from NodeSource or with `nvm`) and
+confirm with `node --version` and `npm --version`.
 
 **Steps:**
 
