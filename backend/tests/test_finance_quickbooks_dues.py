@@ -195,9 +195,23 @@ class TestTheEntries:
 
 
 class TestRefused:
+    async def test_left_out_until_the_department_names_a_dues_account(
+        self, db_session, books
+    ):
+        # Before any dues account is set, dues stay out of the export as they
+        # did before dues could be exported, and the export still runs.
+        rows = await _export(db_session, books)
+
+        assert _dues_rows(rows) == []
+        assert any(r[0] == "PR-2026-0001" for r in rows)
+        await db_session.refresh(books["check_payment"])
+        assert books["check_payment"].qb_exported_at is None
+
     async def test_a_schedule_with_no_income_account_refuses_the_export(
         self, db_session, books
     ):
+        await _defaults(db_session, books["org_id"], income=None)
+
         with pytest.raises(
             ValueError, match="dues 'Annual dues' has no income account"
         ):
@@ -257,6 +271,7 @@ class TestReadinessAndSettings:
             "dues"
         ]
 
+        assert dues["enabled"] is True
         assert dues["default_income_account"] == "Dues Income"
         assert dues["default_deposit_account"] == "Operating Checking"
         [annual] = dues["schedules"]

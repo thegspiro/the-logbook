@@ -5665,8 +5665,13 @@ class FinanceService:
         void_count = await self.db.scalar(
             select(func.count()).select_from(CheckRequest).where(*void_filters)
         )
-        dues_count = await self.db.scalar(
-            select(func.count()).select_from(DuesPayment).where(*dues_filters)
+        dues_setup = await self._dues_accounts(org_id)
+        dues_count = (
+            await self.db.scalar(
+                select(func.count()).select_from(DuesPayment).where(*dues_filters)
+            )
+            if dues_setup["enabled"]
+            else 0
         )
         total = (
             int(pr_count or 0)
@@ -5701,7 +5706,7 @@ class FinanceService:
                     )
                 ).scalars()
             )
-            for row in (await self._dues_accounts(org_id))["schedules"]:
+            for row in dues_setup["schedules"]:
                 if row["schedule_id"] not in exported_schedules:
                     continue
                 label = _short_label(row["name"])
@@ -6155,7 +6160,21 @@ class FinanceService:
                     ),
                 }
             )
+        # Dues go to QuickBooks once the department names an account for
+        # them anywhere. Until then they stay out of the export, as they did
+        # before dues could be exported, rather than refusing every export of
+        # a department that keeps its dues in QuickBooks by other means.
+        enabled = bool(
+            default_income
+            or default_deposit
+            or any(
+                row["income_source"] == "schedule"
+                or row["deposit_source"] == "schedule"
+                for row in schedules
+            )
+        )
         return {
+            "enabled": enabled,
             "default_income_account": default_income or None,
             "default_deposit_account": default_deposit or None,
             "schedules": schedules,

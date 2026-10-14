@@ -1920,6 +1920,9 @@ class DuesScheduleExportResponse(UTCResponseBase):
 class DuesExportReadinessResponse(UTCResponseBase):
     model_config = _RESPONSE_CONFIG
 
+    # False until the department names a dues account anywhere; until then
+    # dues payments are left out of the export.
+    enabled: bool = False
     default_income_account: Optional[str] = None
     default_deposit_account: Optional[str] = None
     schedules: list[DuesScheduleExportResponse] = []

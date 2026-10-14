@@ -1696,6 +1696,16 @@ A category's own **QuickBooks account** (set in its dialog on Finance Settings) 
 
 > **Accounts Payable and Accounts Receivable can't be used** _(2026-10-09)_. QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and a mapping saved before that shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
 
+### Dues Payments
+
+Dues payments go to QuickBooks too _(2026-10-14)_: each one is an entry that puts the money in the account it was deposited to and credits an income account.
+
+- Dues are **not exported until you set them up** — until then the export leaves them out, as it always did. Set the department's **Default income account** and **Default deposited to** under **Dues** on **Finance › QuickBooks Export**.
+- A schedule that should post elsewhere — a **Fines** schedule credited to its own income account, say — names its own in the **QuickBooks** part of its dialog on **Finance › Dues**. Whatever it leaves blank uses the default.
+- The **Dues** table shows each schedule's accounts, whether they are its own or the default, and **Ready** when its payments can be exported. An export with payments from a schedule that is not ready is refused, naming the schedule.
+
+In the file, a dues entry's Journal No starts with `DUES-`, its memo names the schedule, and its description names the member and how they paid.
+
 ### The File
 
 | Column           | Contents                                                                                     |
