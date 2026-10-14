@@ -16,13 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Opening now.** Feature 04 (Storefront & payments), pass 9 (watchdog
-pickup): delta re-verify since pass 8 (PR #3128), 0 fixed, 0 new findings —
-SF8-04-2/SF8-04-3 re-confirmed open, unchanged. See
-`SF-04-storefront-payments.md`'s **Pass 9** section and the Log entry above.
-Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
-approvals). The PR number lands in a follow-up commit on this same branch
-once it exists (per this file's own "never as a PR of its own" rule).
+**PR [#3223](https://github.com/thegspiro/the-logbook/pull/3223)**: branch
+`claude/security-review-storefront-payments`, Feature 04 (Storefront &
+payments), pass 9 (watchdog pickup): delta re-verify since pass 8 (PR
+#3128), 0 fixed, 0 new findings — SF8-04-2/SF8-04-3 re-confirmed open,
+unchanged. See `SF-04-storefront-payments.md`'s **Pass 9** section and the
+Log entry above. Row 04 → ✅ (pending this PR's merge); next is Feature 05
+(Finance & approvals).
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
