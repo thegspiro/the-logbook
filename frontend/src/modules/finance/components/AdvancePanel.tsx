@@ -152,7 +152,7 @@ export const AdvancePanel: React.FC<AdvancePanelProps> = ({ advanceId, canManage
             <li key={report.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
               <span>
                 <Link
-                  to={`/finance/expense-reports/${report.id}`}
+                  to={`/finance/expenses/${report.id}`}
                   className="font-medium text-red-700 hover:underline dark:text-red-400"
                 >
                   {report.reportNumber}
