@@ -750,6 +750,7 @@ class TestRosterOnGeneration:
                     [MagicMock(id=str(user_a)), MagicMock(id=str(user_b))]
                 ),  # valid users
                 _scalars([]),  # existing roster
+                _one(None),  # pipeline's prerequisite programs: none
                 _scalars([MagicMock(id=str(uuid4()))]),  # existing enrolment (user a)
                 _scalars([MagicMock(id=str(uuid4()))]),  # existing enrolment (user b)
                 _scalars([_cohort_class(_cohort(course.id), 1)]),  # classes to invite

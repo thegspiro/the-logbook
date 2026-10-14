@@ -16,11 +16,11 @@ from app.schemas.base import UTCResponseBase
 # Meeting.meeting_type/status and MeetingActionItem.status are strict MySQL ENUMs;
 # SQLAlchemy doesn't validate the string on bind (validate_strings=False), so a
 # value outside the set reaches MySQL and 500s (or stores '' under non-strict
-# mode). The update paths (`MeetingsService.update_meeting`/`update_action_item`)
-# apply these via a blind `setattr`, so — unlike the MinuteService paths that
-# coerce through the enum constructor — nothing rejects a bad value before the
-# bind. Validate them at the request schema so a bad value is a clean 422
-# instead (MM2-2/MM2-3, the B1 latent-500 class).
+# mode). `MeetingsService.update_meeting`/`update_action_item` hand the value to
+# `apply_updates`, which checks nullability but not enum membership, so — unlike
+# the MinuteService paths that coerce through the enum constructor — nothing
+# rejects a bad value before the bind. Validate them at the request schema so a
+# bad value is a clean 422 instead (MM2-2/MM2-3, the B1 latent-500 class).
 _MEETING_TYPES = {e.value for e in MeetingType}
 _MEETING_STATUSES = {e.value for e in MeetingStatus}
 _ACTION_ITEM_STATUSES = {e.value for e in ActionItemStatus}

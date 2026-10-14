@@ -46,6 +46,7 @@ from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
+from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     get_org_include_current_month,
@@ -495,6 +496,13 @@ async def get_my_training_summary(
             }
             for c in certs
         ]
+
+    # A passing official skills test lapses only when its template carries a
+    # validity period; the service applies the same result-disclosure gate the
+    # test screen does, so a withheld result never reveals its pass date here.
+    result["skill_test_expirations"] = await member_skill_expirations(
+        db, org_id, user_id, is_officer=is_officer, today=today
+    )
 
     # --- Pipeline Progress ---
     if is_officer or visibility.get("show_pipeline_progress", True):

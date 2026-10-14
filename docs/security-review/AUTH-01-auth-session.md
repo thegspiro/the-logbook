@@ -1,9 +1,140 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), pass 8 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), pass 9 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 9 (2026-10-14, watchdog pickup) — 0 fixed, 0 new findings; delta re-verify only
+
+Watchdog pickup: the `/security-review` loop appeared stalled (no activity for
+over an hour). Verified directly against GitHub, not against this file's own
+Open PR row, that no `claude/security-review-*` PR was open (listed open PRs
+and searched `head:claude/security-review-`, both empty). PR #3204 (Feature
+00, Cross-cutting baseline, pass 9) had merged 2026-10-14T08:39:59Z with no
+follow-up iteration since; that PR's own commit had already reset the
+rotation table to `⬜` and left an Open PR row describing itself (stale now
+that it merged — cleared as part of this pass's own PR, per Step 0/Step 8,
+riding along without its own commit). Rotation row 01 was the next `⬜`.
+
+**Numbering correction:** the task that queued this review called it "pass
+8". It is pass 9 — `## Pass 8 (2026-10-12, watchdog pickup)` immediately
+below already exists in this file and closed out PR #3096 before this
+iteration started. Corrected here the same way pass 7 corrected pass 6's
+unfilled header placeholder.
+
+**Baseline:** `89ea4d6a` (PR #3096's merge, pass 8). **Head:** current `main`
+(`7837b780`, confirmed an ancestor of the baseline via `git merge-base
+--is-ancestor`). 357 commits between them, 198 non-merge — not a zero-delta
+pass, but a shallow one: of the twelve files this feature tracks (nine
+backend, three frontend), `git diff 89ea4d6a..HEAD` is non-empty in exactly
+three — `auth.py` (+5/-2), `auth_service.py` (+4/-3), `apiClient.ts`
+(+19/-2). The other nine (`mfa_service.py`, `oauth_service.py`,
+`dependencies.py`, `security.py`, `schemas/auth.py`, `consent_service.py`,
+`suspicious_ip.py`, `authStore.ts`, `authService.ts`) are byte-identical to
+pass 8.
+
+### The three changed files, reviewed
+
+- **`auth.py` / `auth_service.py` — two unrelated mypy-driven commits, each
+  with one real (and benign) fix, neither a security regression.**
+  - `51c77a9c` ("Fix mypy errors in the API layer") widens
+    `_set_auth_cookies`'s `response` parameter from `JSONResponse` to
+    `Response` — type-only; the same five callers (login, MFA login,
+    register, OAuth, refresh) still route through this one choke point for
+    cookie issuance, matching `docs/app-review/auth-session.md`'s
+    "Duplication" note that this is the single place `Secure`-flag logic
+    lives. It also adds `if not locked_user.mfa_secret: return False` to
+    `_verify_and_consume_totp` (`auth.py:1068`, inside the `.with_for_update()`
+    locked read documented at `auth.py:1040-1057`). Before this, a locked row
+    with no enrolled secret would have called
+    `mfa_service.verify_totp_get_timestep(None, ...)`; the guard now fails
+    closed on that case explicitly rather than depending on the callee to
+    cope with `None`. No existing caller could reach this with
+    `mfa_enabled=True`, so this hardens a theoretical gap rather than closing
+    a live one — not raised as its own finding, since the fix already
+    landed via the unrelated mypy pass.
+  - `0d4d7c5a` ("fix(types): settle the three cross-cutting mypy error
+    classes") replaces `auth_service.py`'s raw `.rowcount` reads with
+    `app.utils.sql_results.rows_affected()` at AUTH-21's rotation guard
+    (`auth_service.py:530`) and `revoke_all_user_sessions` (`:582`), and
+    widens `register_user`'s `organization_id` parameter to `UUID | str`
+    (annotation only — the body already received and used str ids).
+    `rows_affected()` (`app/utils/sql_results.py`, read directly) raises
+    `TypeError` when the result is not a `CursorResult`, rather than reading
+    a wrong type as `0` — i.e. it narrows the AUTH-21 compare-and-swap's
+    failure mode from "silently treat as lost the race" to "raise", the
+    safer direction for a security-relevant concurrency guard. Same `== 0`
+    comparison and same rotation/revocation logic pass 8 already reviewed;
+    not a behavior change for the success path.
+- **`apiClient.ts` — `c82fc99d`, "Stop silently retrying a deliberate 503 so
+  its message reaches the user".** Narrows the existing 503-retry-with-
+  backoff logic (reviewed clean at pass 4, unchanged in shape since) to fire
+  only for `LB-SYS-002`, the generic `LB-API-503` fallback, or a response
+  with no parseable `code` at all — a 503 the backend sends on purpose (e.g.
+  `LB-UPLD-005`, malware scanner down, which carries `Retry-After: 60`) now
+  surfaces immediately instead of being silently retried for roughly 4.75
+  minutes. A UX/availability fix, not auth-adjacent: it touches no cookie,
+  token, or refresh logic, and `performSharedRefresh` — the function this
+  feature actually cares about in this file — is textually unchanged; the
+  new code sits entirely between it and the interceptor's existing
+  401-refresh branch.
+
+### Route inventory — re-enumerated
+
+28 routes, unchanged from pass 8. Public/private split still 16/12; every
+`@router.` decorator and its `Depends(...)` (or `dependencies=[...]`) read
+fresh against current `auth.py`, matching pass 8's table line for line — no
+route gained, lost, or changed a gate or permission string.
+`tests/test_endpoint_auth_coverage.py`'s `ALLOWLISTED_PUBLIC` still lists
+exactly these 16 `auth.py` entries (confirmed by reading the list, not
+assumed): `get_login_branding`, `get_oauth_config`, `get_captcha_config`,
+`oauth_google_initiate`, `oauth_google_callback`, `oauth_microsoft_initiate`,
+`oauth_microsoft_callback`, `oauth_authentik_initiate`,
+`oauth_authentik_callback`, `register`, `login`, `mfa_login`,
+`refresh_token`, `forgot_password`, `reset_password`,
+`validate_reset_token`.
+
+### Standing items — reconfirmed unchanged from pass 8
+
+AUTH-15, AUTH-17 and AUTH-21 were all closed at pass 8 (owner decisions D8
+and D4, PR #2918; and the `RefreshTokenSuperseded` 409 fix, respectively).
+None of the files those fixes live in (`password_expiry.py`,
+`scheduled_tasks.py`, the `refresh_access_token` rotation in
+`auth_service.py`) show any further change in this delta beyond the
+`rows_affected()` swap already covered above. No `KNOWN_LIMITATIONS.md`
+entry exists for any of the three (re-confirmed by grep); none needed
+re-adding. The app-review track's separate open item (`AUTH-2`/consent
+enforcement for `PHOTO_USE` and `PUBLIC_ROSTER_LISTING`) is unchanged and
+already correctly recorded as open in `docs/KNOWN_LIMITATIONS.md`'s
+"Consent enforcement" row — not re-derived here.
+
+### Considered and deliberately not raised
+
+- `mfa_login`'s failed-attempt increment path for a contentless request
+  (neither `code` nor `recovery_code`) — unchanged since pass 7/8's
+  reasoning: it guesses nothing, so racing it buys an attacker zero
+  information. Not raised.
+
+### Completion gate (pass 9)
+
+| Check                                                                                                                                                                                                                                                                  | Result                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (7.3.0, CI's current pin)                                                                                                                                                                                                  | ✅ 0 violations                                                            |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                                                                                                                                                                  | ✅ 2281 files unchanged                                                    |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                                                                                              | ✅ clean                                                                   |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                   | ✅ single head `a17a47c5a871`, 591 revisions                               |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                               | ✅ 269 routes, 0 errors/0 warnings                                         |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik"`)                                                                                                                                              | ✅ 997 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards run directly (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`, `auth_refresh_rotation`, `password_expiry_gate`, `sign_in_audit`) | ✅ 118 passed                                                              |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                     | ✅ 0 errors                                                                |
+| `cd frontend && npm run lint` (ESLint, `--max-warnings 10`)                                                                                                                                                                                                            | ✅ 0 errors, 0 warnings                                                    |
+
+No source file was changed by this pass — every check above verifies a tree
+this pass read but did not modify, not a regression check against a new fix.
+Rotation row 01 moves to `✅`.
 
 ---
 

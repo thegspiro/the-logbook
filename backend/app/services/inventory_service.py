@@ -175,19 +175,6 @@ _UNSAFE_RETURN_CONDITIONS = {
 }
 
 
-def _first_iso(*moments: Optional[date]) -> str:
-    """ISO text of the first moment that is set, or "" when none is.
-
-    A timeline entry falls back from the event's own time to the row's
-    ``created_at``, which the database sets on insert. The empty string keeps an
-    entry that somehow has neither sortable instead of raising.
-    """
-    for moment in moments:
-        if moment:
-            return moment.isoformat()
-    return ""
-
-
 def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[str]:
     """Join a note onto whatever the row already carries.
 
@@ -199,6 +186,19 @@ def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[s
     """
     parts = [part.strip() for part in (existing, addition) if part and part.strip()]
     return "\n".join(parts) or None
+
+
+def _first_iso(*values: Optional[date]) -> str:
+    """ISO form of the first value that is set, for an item-history row.
+
+    The last candidate is always the row's ``created_at``, which the database
+    fills by default; a row with none of them set is corrupt, and the
+    timeline cannot place it.
+    """
+    for value in values:
+        if value is not None:
+            return value.isoformat()
+    raise ValueError("Item history row has no timestamp")
 
 
 def _enum_member(value):

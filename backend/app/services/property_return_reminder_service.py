@@ -44,6 +44,21 @@ def latest_due_threshold(days_since_drop: int) -> Optional[Dict[str, Any]]:
     return max(due, key=lambda t: t["days"]) if due else None
 
 
+def dropped_at(member: User) -> datetime:
+    """When ``member`` was dropped, as an aware UTC datetime.
+
+    Both queries that feed this select only members whose
+    ``status_changed_at`` is set, so a None here means the query changed, not
+    that the data is odd -- fail loudly rather than date a drop to some default.
+    """
+    changed_at = member.status_changed_at
+    if changed_at is None:
+        raise ValueError(f"Dropped member {member.id} has no status_changed_at")
+    if changed_at.tzinfo is None:
+        changed_at = changed_at.replace(tzinfo=timezone.utc)
+    return changed_at
+
+
 class PropertyReturnReminderService:
     """Finds dropped members with overdue property and sends reminders."""
 
@@ -99,13 +114,7 @@ class PropertyReturnReminderService:
         org_tz = org.timezone if org and org.timezone else "America/New_York"
 
         for member in dropped_members:
-            status_changed_utc = member.status_changed_at
-            # The query above keeps only members with a drop date.
-            if status_changed_utc is None:
-                continue
-            if status_changed_utc.tzinfo is None:
-                status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
-            days_since_drop = (now - status_changed_utc).days
+            days_since_drop = (now - dropped_at(member)).days
 
             # Only the latest threshold the member has passed is considered. A
             # threshold the member has already gone past is superseded, never
@@ -196,12 +205,7 @@ class PropertyReturnReminderService:
             if items_info["count"] == 0:
                 continue
 
-            status_changed_utc = member.status_changed_at
-            if status_changed_utc is None:
-                continue
-            if status_changed_utc.tzinfo is None:
-                status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
-            days_since_drop = (now - status_changed_utc).days
+            days_since_drop = (now - dropped_at(member)).days
 
             # Check which reminders have been sent
             reminder_result = await self.db.execute(
@@ -212,13 +216,13 @@ class PropertyReturnReminderService:
             )
             sent_reminders = [r.reminder_type for r in reminder_result.scalars().all()]
 
-            local_drop_date = self._to_local(status_changed_utc, org_tz)
+            local_drop_date = self._to_local(dropped_at(member), org_tz)
             overdue_list.append(
                 {
                     "user_id": str(member.id),
                     "member_name": member.display_name,
                     "email": member.email,
-                    "status": member.status.value if member.status else None,
+                    "status": member.status.value,
                     "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
                     "days_since_drop": days_since_drop,
                     "items_outstanding": items_info["count"],
@@ -320,9 +324,7 @@ class PropertyReturnReminderService:
         reminder_label = threshold["label"]
         reminder_type = threshold["type"]
 
-        if member.status_changed_at is None:
-            raise ValueError("A property-return reminder needs the member's drop date")
-        local_drop_date = self._to_local(member.status_changed_at, org_tz)
+        local_drop_date = self._to_local(dropped_at(member), org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
         drop_type_display = (
             member.status.value.replace("_", " ").title()

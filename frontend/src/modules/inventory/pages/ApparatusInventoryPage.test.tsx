@@ -194,31 +194,74 @@ describe('ApparatusInventoryPage', () => {
     expect(screen.queryByRole('option', { name: /Ladder 1/ })).not.toBeInTheDocument();
   });
 
-  it('shows the page navigation actions and confirms the auto-saved inventory', async () => {
+  it('shows the back action and says each change saved, with no Save button to press', async () => {
     const user = userEvent.setup();
+    mockGetApparatusInventory.mockResolvedValue(inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 4 })]));
     renderWithRouter(<ApparatusInventoryPage />);
 
     expect(screen.getByRole('button', { name: 'Back to Scheduling' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save inventory' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save inventory' })).not.toBeInTheDocument();
     await selectApparatus(user);
-    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+    expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
 
-    await waitFor(() => {
-      expect(mockGetApparatusInventory).toHaveBeenCalledTimes(2);
-      expect(mockToastSuccess).toHaveBeenCalledWith('Inventory changes are saved');
-    });
+    let finishUse: (value: unknown) => void = () => undefined;
+    mockReportItemUsed.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishUse = resolve;
+        })
+    );
+    await user.click(screen.getByRole('button', { name: 'Record one 4x4 Gauze used' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Saving…');
+    finishUse({ templateItemId: 'ti-1', restockNeeded: true });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('All changes saved'));
   });
 
-  it('does not claim changes were saved when the inventory refresh fails', async () => {
+  it('does not claim changes were saved when the last one failed', async () => {
     const user = userEvent.setup();
+    mockGetApparatusInventory.mockResolvedValue(inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 4 })]));
     renderWithRouter(<ApparatusInventoryPage />);
     await selectApparatus(user);
-    mockGetApparatusInventory.mockRejectedValueOnce(new Error('refresh failed'));
+    mockReportItemUsed.mockRejectedValueOnce(new Error('offline'));
 
-    await user.click(screen.getByRole('button', { name: 'Save inventory' }));
+    await user.click(screen.getByRole('button', { name: 'Record one 4x4 Gauze used' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('refresh failed'));
-    expect(mockToastSuccess).not.toHaveBeenCalledWith('Inventory changes are saved');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent("Last change didn't save"));
+    expect(mockToastError).toHaveBeenCalledWith('offline');
+  });
+
+  it('filters the list to the items a summary chip counts, and back', async () => {
+    const user = userEvent.setup();
+    mockGetApparatusInventory.mockResolvedValue({
+      apparatusId: 'app-1',
+      compartments: [
+        {
+          compartmentId: 'c-1',
+          compartmentName: 'Front Bumper',
+          items: [makeItem(), makeItem({ templateItemId: 'ti-2', itemName: 'Epinephrine', isExpired: true })],
+        },
+        {
+          compartmentId: 'c-2',
+          compartmentName: 'Jump bag',
+          items: [makeItem({ templateItemId: 'ti-3', itemName: 'BVM' })],
+        },
+      ],
+    });
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    const expiredChip = screen.getByRole('button', { name: /1 expired/ });
+    await user.click(expiredChip);
+    expect(expiredChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Epinephrine')).toBeInTheDocument();
+    expect(screen.queryByText('4x4 Gauze')).not.toBeInTheDocument();
+    // A location with nothing matching drops out rather than showing an empty card.
+    expect(screen.queryByText('Jump bag')).not.toBeInTheDocument();
+
+    await user.click(expiredChip);
+    expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
+    expect(screen.getByText('Jump bag')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /3 tracked/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('loads the selected apparatus and groups items by compartment', async () => {

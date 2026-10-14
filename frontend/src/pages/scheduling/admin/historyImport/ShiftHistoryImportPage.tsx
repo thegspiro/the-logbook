@@ -121,8 +121,12 @@ const ShiftHistoryImportPage: React.FC = () => {
                   split a larger history by year.
                 </p>
               </div>
-              <button type="button" className="btn-secondary shrink-0" onClick={() => void handleTemplate()}>
-                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              <button
+                type="button"
+                className="btn-secondary inline-flex shrink-0 items-center gap-2"
+                onClick={() => void handleTemplate()}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
                 Download template
               </button>
             </div>
@@ -155,11 +159,11 @@ const ShiftHistoryImportPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-primary inline-flex items-center gap-2"
                 disabled={!file || uploading}
                 onClick={() => void handleUpload()}
               >
-                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Upload className="h-4 w-4" aria-hidden="true" />
                 {uploading ? 'Reading file…' : 'Upload and review'}
               </button>
             </div>

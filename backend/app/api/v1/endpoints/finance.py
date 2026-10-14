@@ -6,7 +6,7 @@ check requests, dues, approval chains, and QuickBooks export.
 """
 
 import io
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -32,6 +32,13 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.schemas.finance import (
+    AdvanceAccountsUpdate,
+    AdvanceDetailResponse,
+    AdvanceExportReadinessResponse,
+    AdvanceReturnCreate,
+    AdvanceReturnResponse,
+    AdvancesReportResponse,
+    AdvanceSummaryResponse,
     AmendmentLogReportResponse,
     ApprovalActionRequest,
     ApprovalChainCreate,
@@ -66,6 +73,8 @@ from app.schemas.finance import (
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
+    DuesDefaultAccountsUpdate,
+    DuesExportReadinessResponse,
     DuesPaymentResponse,
     DuesScheduleCreate,
     DuesScheduleResponse,
@@ -2070,6 +2079,8 @@ _REGISTER_KINDS = {
     "check_request": "Check",
     "check_void": "Check voided",
     "expense_report": "Expense report",
+    "cash_advance": "Cash advance",
+    "advance_return": "Advance returned",
 }
 
 
@@ -2318,6 +2329,81 @@ async def fund_balances_report(
     )
 
 
+@router.get("/reports/advances", response_model=AdvancesReportResponse)
+async def advances_report(
+    format: str = _REPORT_FORMAT,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """Every cash advance not yet fully accounted for, oldest first.
+
+    **Requires permission: finance.view**
+
+    Outstanding is the advance less what the member's submitted expense
+    reports cover and what they returned. One still outstanding 120 days after
+    its check is overdue: past the IRS safe harbor, so the department may have
+    to report it as the member's wages. ``format=csv`` downloads the same rows.
+    """
+    org_id = str(current_user.organization_id)
+    try:
+        advances = await FinanceService(db).list_advances(org_id, outstanding_only=True)
+    except Exception as e:
+        raise _report_error(e)
+    zero = Decimal("0.00")
+    report = {
+        "advances": advances,
+        "outstanding": sum((a["outstanding"] for a in advances), zero),
+        "overdue_outstanding": sum(
+            (a["outstanding"] for a in advances if a["overdue"]), zero
+        ),
+    }
+    if format != "csv":
+        return report
+    tz = await resolve_scheduling_timezone(db, org_id)
+
+    def day(value: Optional[datetime]) -> str:
+        if value is None:
+            return ""
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return aware.astimezone(tz).date().isoformat()
+
+    rows: list[list[Any]] = [
+        [
+            "Advance",
+            "Member",
+            "Purpose",
+            "Issued",
+            "Due",
+            "Amount",
+            "Accounted for",
+            "Returned",
+            "Outstanding",
+            "Overdue",
+        ]
+    ]
+    for advance in advances:
+        rows.append(
+            [
+                advance["request_number"],
+                advance["member_name"],
+                advance["purpose"] or "",
+                day(advance["issued_at"]),
+                day(advance["due_at"]),
+                _amount_cell(advance["amount"]),
+                _amount_cell(advance["accounted"]),
+                _amount_cell(advance["returned"]),
+                _amount_cell(advance["outstanding"]),
+                "yes" if advance["overdue"] else "no",
+            ]
+        )
+    return _csv_download(
+        rows,
+        download_names.descriptive_filename(
+            "cash-advances", await resolve_org_today(db, org_id), extension=".csv"
+        ),
+    )
+
+
 @router.get("/funds", response_model=list[FundOptionResponse])
 async def list_restricted_funds(
     db: AsyncSession = Depends(get_db),
@@ -2413,6 +2499,14 @@ async def set_check_request_functional_class(
     )
     if cr is None:
         raise HTTPException(status_code=404, detail="Check request not found")
+    if cr.is_advance:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A cash advance is classified by the expense report that "
+                "accounts for it"
+            ),
+        )
     await _set_functional_class(
         db, cr, data.functional_class, current_user, "check_request"
     )
@@ -3631,6 +3725,154 @@ async def void_check(
 
 
 # ============================================
+# Cash Advances
+# ============================================
+
+
+@router.get("/advances", response_model=list[AdvanceSummaryResponse])
+async def list_advances(
+    mine: bool = Query(False),
+    outstanding_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """Issued cash advances with what each has left to account for, oldest
+    first.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    A caller without the view or manage grant sees only their own; ``mine``
+    narrows anyone to their own, as the expense report form does.
+    ``outstanding_only`` leaves out the advances fully accounted for.
+    """
+    scope = str(current_user.id) if mine else _read_scope(current_user)
+    return await FinanceService(db).list_advances(
+        str(current_user.organization_id),
+        restrict_to_user=scope,
+        outstanding_only=outstanding_only,
+    )
+
+
+@router.get("/advances/{advance_id}", response_model=AdvanceDetailResponse)
+async def get_advance(
+    advance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """An issued cash advance, the reports accounting for it and the cash
+    returned against it.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Another member's advance is a 404 to a caller without the view or manage
+    grant.
+    """
+    try:
+        return await FinanceService(db).get_advance(
+            str(current_user.organization_id),
+            advance_id,
+            restrict_to_user=_read_scope(current_user),
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/advances/{advance_id}/returns",
+    response_model=AdvanceReturnResponse,
+    status_code=201,
+)
+async def record_advance_return(
+    advance_id: str,
+    data: AdvanceReturnCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Record unspent cash a member handed back against an advance.
+
+    **Requires permission: finance.manage**
+
+    Refused (400) for more than the advance has outstanding, a date in the
+    future or before the advance, and for the member who owes it.
+    """
+    service = FinanceService(db)
+    try:
+        entry = await service.record_advance_return(
+            str(current_user.organization_id),
+            advance_id,
+            str(current_user.id),
+            data.amount,
+            returned_at=data.returned_at,
+            payment_method=data.payment_method,
+            reference=data.reference,
+            notes=data.notes,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.advance_return_recorded",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "advance_id": advance_id,
+                "return_id": entry.id,
+                "amount": str(entry.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return entry
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/advances/{advance_id}/returns/{return_id}", status_code=204)
+async def delete_advance_return(
+    advance_id: str,
+    return_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Remove a return recorded by mistake.
+
+    **Requires permission: finance.manage**
+
+    Refused (400) once a QuickBooks export has carried it.
+    """
+    service = FinanceService(db)
+    try:
+        entry = await service.delete_advance_return(
+            str(current_user.organization_id), advance_id, return_id
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.advance_return_deleted",
+            event_category="finance",
+            severity="warning",
+            event_data={
+                "advance_id": advance_id,
+                "return_id": return_id,
+                "amount": str(entry.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# ============================================
 # Dues
 # ============================================
 
@@ -3981,6 +4223,87 @@ async def get_export_readiness(
     return await service.get_export_readiness(str(current_user.organization_id))
 
 
+@router.put("/export/dues-accounts", response_model=DuesExportReadinessResponse)
+async def set_dues_default_accounts(
+    data: DuesDefaultAccountsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Set the QuickBooks accounts a dues payment posts to when its schedule
+    names none.
+
+    **Requires permission: finance.manage**
+
+    ``incomeAccount`` is credited and ``depositAccount`` (the bank account) is
+    debited; null or blank clears one. Accounts Payable and Receivable are
+    refused (400), as everywhere in the export. Answers with every schedule's
+    resolved accounts.
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        income, deposit = await service.set_dues_default_accounts(
+            org_id, data.income_account, data.deposit_account
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.dues_export_accounts_set",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "income_account": income or None,
+                "deposit_account": deposit or None,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return (await service.get_export_readiness(org_id))["dues"]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.put("/export/advance-accounts", response_model=AdvanceExportReadinessResponse)
+async def set_advance_accounts(
+    data: AdvanceAccountsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Set the QuickBooks accounts cash advances post to.
+
+    **Requires permission: finance.manage**
+
+    ``advancesAccount`` is the asset account an advance is owed on until it is
+    accounted for; ``cashAccount`` the bank account it is paid from and
+    returned to. Null or blank clears one. Accounts Payable and Receivable are
+    refused (400), as everywhere in the export.
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        advances, cash = await service.set_advance_accounts(
+            org_id, data.advances_account, data.cash_account
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.advance_export_accounts_set",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "advances_account": advances or None,
+                "cash_account": cash or None,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return (await service.get_export_readiness(org_id))["advances"]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
 @router.post("/export/transactions")
 async def generate_export(
     data: ExportRequest,
@@ -3998,19 +4321,29 @@ async def generate_export(
     one is still running is 409.
     """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     try:
         csv_stream = await service.generate_export(
-            str(current_user.organization_id),
+            org_id,
             str(current_user.id),
             data.date_range_start,
             data.date_range_end,
             data.file_format,
             include_exported=data.include_exported,
         )
+        # Named for the department's calendar days it covers, so a month's
+        # file does not overwrite the last one in the treasurer's downloads.
+        tz = await resolve_scheduling_timezone(db, org_id)
+        filename = download_names.descriptive_filename(
+            "quickbooks-journal",
+            data.date_range_start.astimezone(tz).date(),
+            data.date_range_end.astimezone(tz).date(),
+            extension=".csv",
+        )
         return StreamingResponse(
             content=csv_stream,
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except (BudgetLimitExceededError, ExportInProgressError) as e:
         raise HTTPException(status_code=409, detail=str(e))

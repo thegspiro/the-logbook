@@ -149,6 +149,34 @@ POST   /elections/{id}/proxy-authorizations         # Authorize a proxy (manage)
 DELETE /elections/{id}/proxy-authorizations/{authorization_id}  # Revoke a proxy (manage)
 ```
 
+**Optional workflows** are gated server-side by per-organization toggles in
+`org.settings.election_features`: `nominations_enabled`,
+`paper_ballots_enabled`, `reminders_enabled` and `auto_open_enabled` (each
+defaults to on), plus `paper_ballot_attestations_required` (default 2).
+They are read and written through `GET/PATCH /elections/settings`.
+
+**Pre-meeting package.** `package-pdf` and `send-package` work only on draft
+or open elections. `package-recipients` takes `mode=leadership` or
+`mode=eligible_voters`; `package-pdf` takes `variant=member` (eligible
+voters and counts) or `variant=full` (adds per-member ineligibility
+detail). `send-package` mails the edited address list on BCC with the PDF
+attached.
+
+**Paper ballots.** A recorded tally is plausibility-guarded; exceeding it
+needs `allow_over_count`, which is audited. The recording officer cannot
+attest their own batch, and each officer attests a batch once. Voiding a
+batch requires a reason.
+
+**Reminders.** `remind-non-voters` sends a fresh ballot link to eligible
+members who have not voted, with a one-hour cooldown that starts only when
+a reminder is delivered.
+
+**Saved ballot templates** store reusable ballot configuration only —
+`name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and
+`allow_write_ins`. The create schema forbids extra fields, so candidates,
+voters, votes, tokens and attendance are never captured. Names are unique
+per organization, case-insensitively (`409` on a duplicate).
+
 Related endpoints in other modules:
 
 ```

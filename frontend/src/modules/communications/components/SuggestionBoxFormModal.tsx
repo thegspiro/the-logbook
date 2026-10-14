@@ -156,6 +156,14 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
+        {/* Right after the name: what a member is asked shapes everything
+            below it, and at the foot of a long modal it went unfound. */}
+        <IntakeQuestionsEditor
+          questions={questions}
+          onChange={setQuestions}
+          routeTargets={routeTargets}
+          anonymityMode={anonymityMode}
+        />
         <div>
           <label htmlFor="box-anonymity" className="form-label">
             Anonymity
@@ -285,13 +293,6 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             />
           </div>
         </section>
-
-        <IntakeQuestionsEditor
-          questions={questions}
-          onChange={setQuestions}
-          routeTargets={routeTargets}
-          anonymityMode={anonymityMode}
-        />
       </div>
     </Modal>
   );

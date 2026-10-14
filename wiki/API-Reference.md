@@ -1,6 +1,11 @@
 # API Reference
 
-The Logbook provides a RESTful API built with FastAPI. Interactive documentation is available at runtime.
+The Logbook provides a RESTful API built with FastAPI. This page covers the
+conventions every endpoint follows and the cross-module endpoints. Each
+module's own routes, permissions and data model are on its developer page:
+[Training](Module-Training-Developer), [Scheduling](Module-Scheduling-Developer),
+[Events](Module-Events-Developer), [Elections](Module-Elections-Developer) and
+[Inventory](Module-Inventory-Developer).
 
 ---
 
@@ -10,298 +15,450 @@ The Logbook provides a RESTful API built with FastAPI. Interactive documentation
 | --------------- | ----------- | ------------------------------------------------- |
 | `/docs`         | Swagger UI  | Interactive API explorer — try endpoints directly |
 | `/redoc`        | ReDoc       | Clean, readable API documentation                 |
-| `/openapi.json` | OpenAPI 3.0 | Machine-readable JSON spec                        |
+| `/openapi.json` | OpenAPI 3.x | Machine-readable JSON spec                        |
 
-> Access these at `http://YOUR-IP:3001/docs` (or your configured backend port).
-
----
-
-## Breaking response-shape change _(2026-08-20)_
-
-`GET /api/v1/scheduling/swap-requests` and `GET /api/v1/scheduling/time-off`
-**no longer return a bare array.** Both now return a page object:
-
-```json
-{ "items": [ ... ], "total": 128, "skip": 0, "limit": 50 }
-```
-
-Anything that consumed either endpoint as a list — an integration, an export
-script, a dashboard — must read `items`. Indexing the response directly now
-yields object keys rather than requests.
-
-Schemas: `ShiftSwapRequestsPage`, `ShiftTimeOffRequestsPage`.
+Open them on the backend port, e.g. `http://YOUR-IP:3001/docs`. All three
+exist only while `ENABLE_DOCS=true` (the development default). Production must
+set `ENABLE_DOCS=false` — the backend refuses to start in production with it
+on — and the shipped nginx configuration answers `404` for all three paths
+regardless.
 
 ---
 
 ## Authentication
 
-All authenticated endpoints require a JWT token in the `Authorization` header:
+Sessions are carried in **cookies**, not in the response body. A successful
+sign-in sets three cookies:
 
-```
-Authorization: Bearer <access_token>
-```
+| Cookie          | Flags                                       | Path            | Purpose                         |
+| --------------- | ------------------------------------------- | --------------- | ------------------------------- |
+| `access_token`  | httpOnly, Secure, SameSite=Strict           | `/`             | The session JWT                 |
+| `refresh_token` | httpOnly, Secure, SameSite=Strict           | `/api/v1/auth/` | Sent only to the auth endpoints |
+| `csrf_token`    | **readable by JS**, Secure, SameSite=Strict | `/`             | Double-submit CSRF token        |
 
-### Obtaining a Token
+`Secure` is always on in production and staging; in development it is dropped
+automatically when an `http://` origin is configured (`COOKIE_SECURE`
+overrides both).
+
+### Signing in
 
 ```bash
-curl -X POST http://YOUR-IP:3001/api/v1/auth/login \
+curl -c cookies.txt -X POST http://YOUR-IP:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "your-username", "password": "your-password"}'
 ```
 
-Response:
+`username` also accepts an email address. The JSON body carries **no tokens**:
 
 ```json
 {
-  "access_token": "eyJ...",
-  "refresh_token": "eyJ...",
-  "token_type": "bearer"
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "user": { "id": "…", "username": "…", "permissions": ["…"] }
 }
 ```
+
+When the account has TOTP MFA enabled the response is instead
+`{ "mfa_required": true, "mfa_token": "…" }` with no cookies set; complete the
+second factor with `POST /api/v1/auth/mfa/login`, sending the `mfa_token` with
+either a TOTP `code` or a single-use `recovery_code`.
+
+### Authenticating later requests
+
+The backend accepts the token from, in order of preference:
+
+1. the `access_token` cookie (what the browser app uses), or
+2. an `Authorization: Bearer <token>` header (non-browser clients).
+
+`POST /api/v1/auth/refresh` rotates the pair using the `refresh_token` cookie;
+`POST /api/v1/auth/logout` clears all three cookies.
+
+### CSRF
+
+Every state-changing request (anything but `GET`/`HEAD`/`OPTIONS`) under
+`/api/v1` passes a double-submit check: echo the `csrf_token` cookie's value in
+an `X-CSRF-Token` header. A cookie-authenticated request without the
+`csrf_token` cookie is refused (`403`, `LB-AUTH-008`), as is a mismatched
+header. A request carrying no session cookie at all — an unauthenticated call,
+or a Bearer-header client — is not subject to the check, because nothing a
+browser sends automatically is involved. Onboarding endpoints carry their own
+session-based CSRF validation instead.
+
+### OAuth Sign-In
+
+```
+GET    /api/v1/auth/oauth-config                         # Enabled OAuth providers (for the login page)
+GET    /api/v1/auth/oauth/google                         # Initiate Google sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/google/callback                # Google OAuth callback
+GET    /api/v1/auth/oauth/microsoft                      # Initiate Microsoft sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callback
+GET    /api/v1/auth/oauth/authentik                      # Initiate Authentik (OIDC) sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/authentik/callback             # Authentik OAuth callback
+```
+
+See [Authentication > OAuth](Security-Authentication#oauth) for the
+link-existing-only policy, domain restriction, and callback error codes.
+
+OAuth verifies only the primary credential. When the matched account has TOTP
+MFA enabled, the callback issues **no** session cookies: it 302-redirects to
+the SPA's configured success URL (`OAUTH_SUCCESS_REDIRECT`) with a short-lived
+`mfa_token` in the **URL fragment** (`#mfa_token=…`), and the client completes
+the second factor through `POST /api/v1/auth/mfa/login` before any session
+exists. Audit event: `oauth_mfa_challenge`.
+
+---
+
+## Response Casing
+
+**Casing is per module, not API-wide.** Pydantic schema modules that set
+`alias_generator=to_camel` serialize their responses in camelCase (FastAPI
+dumps response models by alias); the rest serialize snake_case, exactly as the
+Python attributes are named. Roughly a third of the schema modules are
+camelCase — among them apparatus, equipment checks, facilities, finance,
+grants, integrations, IP security, legal documents, NFC tags, org chart,
+storefront, suggestions, the scheduling module config and the administration
+hub. Members, notifications, messages, email templates, medical screening and
+most others are snake_case.
+
+To check a module, look for `alias_generator=to_camel` in
+`backend/app/schemas/<module>.py`. The camelCase modules also set
+`populate_by_name=True`, so their request bodies accept either the camelCase
+or the snake_case field names. A hand-written client type in the wrong casing
+does not fail loudly — every field simply reads as missing — so check before
+writing one.
+
+Some lists return a bare array; others return a page object. The page object's
+shape is module-specific (`{ "items": [...], "total", "skip", "limit" }` is
+the common one); the module's developer reference states which a given list
+returns.
+
+---
+
+## Common Response Patterns
+
+### Success (200/201)
+
+```json
+{
+  "id": "uuid",
+  "field": "value",
+  "created_at": "2026-02-23T12:00:00Z"
+}
+```
+
+IDs are string UUIDs. Timestamps are UTC ISO 8601; converting to the viewer's
+or department's timezone is the client's job. (Field names follow the
+module's casing — see above.)
+
+### Errors
+
+Every error body carries a `detail` and a support `code`. The code is a
+curated `LB-<AREA>-<NNN>` value where one exists, otherwise the automatic
+`LB-API-<status>` fallback, so any error a member can quote to IT is
+identifiable.
+
+```json
+{ "detail": "Insufficient permissions", "code": "LB-PERM-001" }
+```
+
+| Status | Typical `detail`                                              | `code`                       |
+| ------ | ------------------------------------------------------------- | ---------------------------- |
+| 401    | Not authenticated / session expired                           | `LB-AUTH-…`                  |
+| 403    | `Insufficient permissions`                                    | `LB-PERM-001`                |
+| 403    | `The <Module> module is not enabled for this organization. …` | `LB-ORG-002`                 |
+| 403    | `Missing CSRF token` / `Invalid CSRF token`                   | `LB-AUTH-…`                  |
+| 429    | Rate-limit message                                            | `LB-SYS-003` or `LB-API-429` |
+| 500    | `Internal server error` (details are logged, never returned)  | `LB-SYS-001`                 |
+
+A permission denial names no permission. A module the department has switched
+off answers `403` with its own code, so a client can tell "your department
+turned this off" apart from "you lack the permission". Some endpoints answer
+`404` instead of `403` on purpose, so the response does not confirm that a
+record (or a module) exists; those are noted in their sections.
+
+### Validation Error (422)
+
+```json
+{
+  "detail": [{ "field": "start_date", "message": "This field is required." }],
+  "code": "LB-VAL-001"
+}
+```
+
+`detail` is always an **array** here, never a string — code that renders
+errors has to handle both this and the string form above. The published
+OpenAPI schema describes this shape, so a generated client gets the right
+type.
+
+`field` is a dotted path to the offending field (`address.zip`), or the
+literal `request` when the error is not attributable to one. `message` is a
+short human-readable sentence, already safe to show a user; a validator's own
+message is passed through after sanitizing.
+
+---
+
+## Rate Limiting
+
+Limits are applied per endpoint scope, keyed on the client IP; there is no
+blanket per-user limit across the API. A limited request answers `429`,
+usually with a `Retry-After` header.
+
+| Endpoint                                   | Limit                                           |
+| ------------------------------------------ | ----------------------------------------------- |
+| `POST /auth/login`, `POST /auth/mfa/login` | 5 / minute per IP (30-minute lockout)           |
+| `POST /auth/register`                      | 3 / minute per IP                               |
+| `POST /auth/forgot-password`               | 3 / 5 minutes per IP                            |
+| Reset-token validate / reset               | 10 / 5 minutes per IP                           |
+| `POST /auth/refresh`                       | 10 / minute per IP                              |
+| `POST /auth/change-password`               | 5 / minute per IP                               |
+| `GET /users/me/data-export`                | 3 / hour                                        |
+| `POST /member-badges/resolve`              | 120 / minute per IP                             |
+| Public form view / submit                  | 60 / minute / 10 / minute per IP                |
+| Public legal text                          | 30 / minute per IP                              |
+| Room display view                          | 60 / minute per IP                              |
+| Room kiosk badge tap                       | 60 / minute per IP **and** 60 / minute per room |
+| Public portal (`X-API-Key`)                | Per-IP limit first, then the key's hourly quota |
+
+Counters live in Redis and fall back to an in-memory limiter when Redis is
+unavailable. The production nginx profile adds its own outer limits: 50
+requests/second per IP across `/api/` (with a burst allowance) and 5/minute on
+`/api/v1/auth/login`.
+
+---
+
+## Pagination
+
+Most list endpoints page with **`skip` / `limit`**:
+
+```
+GET /api/v1/messages?skip=0&limit=50
+```
+
+| Parameter | Default | Description                                        |
+| --------- | ------- | -------------------------------------------------- |
+| `skip`    | 0       | Records to skip (≥ 0)                              |
+| `limit`   | 100     | Records to return (1–1000 on the shared paginator) |
+
+Individual endpoints narrow the range — `50` with a maximum of `200` or `500`
+is common — and the OpenAPI spec states each one. A few lists page with
+`page` / `page_size` instead, and some small lists (the member roster,
+`GET /users`) are not paginated. The notification lists page by cursor; see
+[Notification Endpoints](#notification-endpoints).
 
 ---
 
 ## API Modules
 
+All authenticated routes live under `/api/v1`. A router owned by a
+configurable module refuses with `403 LB-ORG-002` while the department has
+that module switched off; essential modules (members, events, documents,
+roles, settings) and cross-module infrastructure (locations, forms, labels,
+NFC tags, email templates) are not gated this way.
+
 ### Core Endpoints
 
-| Prefix                  | Module         | Description                                                                                 |
-| ----------------------- | -------------- | ------------------------------------------------------------------------------------------- |
-| `/api/v1/auth`          | Authentication | Login, logout, refresh, password reset, MFA                                                 |
-| `/api/v1/users`         | Members        | User CRUD, profiles, leaves, rank validation, personal-data export, consents, anonymization |
-| `/api/v1/organizations` | Organization   | Org settings, modules, retention policy, template export                                    |
-| `/api/v1/onboarding`    | Onboarding     | Organization setup wizard                                                                   |
-| `/api/v1/settings`      | Settings       | Organization and module configuration                                                       |
-| `/api/v1/notifications` | Notifications  | Notification rules, logs, user inbox, and department messages                               |
+| Prefix                  | Module         | Description                                                                                        |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| `/api/v1/auth`          | Authentication | Login, logout, refresh, password reset, MFA, OAuth                                                 |
+| `/api/v1/users`         | Members        | User CRUD, profiles, leaves, status, qualifications, personal-data export, consents, anonymization |
+| `/api/v1/organization`  | Organization   | Org settings (`/settings/*`), modules, profile, setup checklist, retention policy, template export |
+| `/api/v1/onboarding`    | Onboarding     | Organization setup wizard                                                                          |
+| `/api/v1/roles`         | Roles          | Positions and their permissions                                                                    |
+| `/api/v1/notifications` | Notifications  | Notification rules, send log, user inbox, web push                                                 |
+| `/api/v1/messages`      | Messages       | Department messages (admin and member inbox)                                                       |
+| `/api/v1/dashboard`     | Dashboard      | Aggregate widgets and layouts                                                                      |
+| `/api/v1/admin-hub`     | Administration | Per-module administration page frame                                                               |
 
 ### Module Endpoints
 
-| Prefix                        | Module                                                | Permission                                                                                                                                |
-| ----------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/v1/training`            | Training                                              | `training.manage` (admin)                                                                                                                 |
-| `/api/v1/scheduling`          | Scheduling                                            | `scheduling.manage` (admin)                                                                                                               |
-| `/api/v1/events`              | Events                                                | `events.manage` (admin)                                                                                                                   |
-| `/api/v1/elections`           | Elections                                             | `elections.manage` (admin)                                                                                                                |
-| `/api/v1/inventory`           | Inventory                                             | `inventory.manage` (admin)                                                                                                                |
-| `/api/v1/equipment-checks`    | Equipment Checks                                      | `equipment_check.manage` (admin)                                                                                                          |
-| `/api/v1/facilities`          | Facilities                                            | `facilities.manage` (admin)                                                                                                               |
-| `/api/v1/locations`           | Locations & room kiosks                               | Authenticated (reads); `locations.create`/`.edit`/`.delete`/`.manage` to write, `locations.manage_nfc_tags` for the badge-check-in toggle |
-| `/api/v1/apparatus`           | Apparatus                                             | Authenticated                                                                                                                             |
-| `/api/v1/forms`               | Forms                                                 | Authenticated                                                                                                                             |
-| `/api/v1/minutes`             | Meeting Minutes                                       | Authenticated                                                                                                                             |
-| `/api/v1/documents`           | Documents                                             | Authenticated                                                                                                                             |
-| `/api/v1/pipelines`           | Prospective Members                                   | `prospective_members.manage`                                                                                                              |
-| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage`                                                                                                              |
-| `/api/v1/audit-logs`          | Audit Logs (admin read API)                           | `audit.view`                                                                                                                              |
-| `/api/v1/reports`             | Reports                                               | `reports.view`                                                                                                                            |
+| Prefix                                                                  | Module                                                | Main permissions                                                                                                                          |
+| ----------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/training`                                                      | Training                                              | `training.manage` (admin); see [Training developer reference](Module-Training-Developer)                                                  |
+| `/api/v1/scheduling`                                                    | Scheduling                                            | `scheduling.manage` (admin); see [Scheduling developer reference](Module-Scheduling-Developer)                                            |
+| `/api/v1/events`                                                        | Events                                                | `events.manage` (admin); see [Events developer reference](Module-Events-Developer)                                                        |
+| `/api/v1/elections`                                                     | Elections                                             | `elections.manage` (admin); see [Elections developer reference](Module-Elections-Developer)                                               |
+| `/api/v1/inventory`                                                     | Inventory                                             | `inventory.manage` (admin); see [Inventory developer reference](Module-Inventory-Developer)                                               |
+| `/api/v1/equipment-checks`                                              | Equipment Checks                                      | `inventory.check_view` / `.check_submit` / `.check_manage`                                                                                |
+| `/api/v1/facilities`                                                    | Facilities                                            | `facilities.view`; `facilities.create` / `.edit` / `.delete` or `facilities.manage` to write                                              |
+| `/api/v1/locations`                                                     | Locations & room kiosks                               | Authenticated (reads); `locations.create`/`.edit`/`.delete`/`.manage` to write, `locations.manage_nfc_tags` for the badge-check-in toggle |
+| `/api/v1/apparatus`                                                     | Apparatus                                             | `apparatus.view`; `apparatus.edit` or `apparatus.manage` to write                                                                         |
+| `/api/v1/forms`                                                         | Forms                                                 | `forms.view`; `forms.manage` to write                                                                                                     |
+| `/api/v1/meetings`                                                      | Meetings (Minutes module)                             | `meetings.view` or `minutes.view`; `meetings.manage` to write                                                                             |
+| `/api/v1/minutes-records`                                               | Meeting Minutes                                       | `minutes.view`; `minutes.manage` to write                                                                                                 |
+| `/api/v1/documents`                                                     | Documents                                             | `documents.view`; `documents.manage` to write                                                                                             |
+| `/api/v1/prospective-members`                                           | Prospective Members (pipelines, prospects, documents) | `prospective_members.view`; `prospective_members.manage` to write                                                                         |
+| `/api/v1/legal-documents`                                               | Legal Documents (Governance)                          | `legal.propose`, `legal.publish`, `settings.manage`                                                                                       |
+| `/api/v1/email-templates`                                               | Email templates                                       | `settings.manage` or `organization.update_settings`                                                                                       |
+| `/api/v1/member-badges`                                                 | Member badge codes                                    | `members.manage` or `members.manage_id_cards`                                                                                             |
+| `/api/v1/member-id-cards`                                               | ID card printing                                      | `members.manage` or `members.manage_id_cards`                                                                                             |
+| `/api/v1/nfc-tags`                                                      | NFC ID cards & station check-in                       | `members.manage_id_cards`; `members.check_in` for the station                                                                             |
+| `/api/v1/label-printers`, `/api/v1/labels`, `/api/v1/station-documents` | Labels and station printing                           | See [Label Printers & Station Documents](#label-printers--station-documents)                                                              |
+| `/api/v1/audit-logs`                                                    | Audit Logs (admin read API)                           | `audit.view`                                                                                                                              |
+| `/api/v1/reports`                                                       | Reports                                               | `reports.view`; `reports.manage`                                                                                                          |
 
 ### Public Endpoints (No Auth Required)
 
-| Prefix                                                           | Description                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/api/public/v1/forms/{slug}`                                    | Public form access                                                                                                                                                                                                                                                                               |
-| `/api/public/v1/forms/{slug}/submit`                             | Public form submission (rate-limited)                                                                                                                                                                                                                                                            |
-| `/api/public/portal/*`                                           | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use                                                                                                                   |
-| `/api/public/v1/display/{code}`                                  | Room display (kiosk) — current events in that room                                                                                                                                                                                                                                               |
-| `/api/public/v1/display/{code}/badge-tap`                        | Member ID card tap at a room kiosk _(2026-10-03)_ — rate-limited 60/min per IP **and** per room; refuses unless both the room's own switch and the department's NFC ID Cards integration are on, re-checked on every tap. Response carries a first name and last initial only, never a member id |
-| `/api/public/v1/display/{code}/events/{event_id}/guest`          | Guest sign-in page detail _(2026-08-09)_                                                                                                                                                                                                                                                         |
-| `/api/public/v1/display/{code}/events/{event_id}/guest-check-in` | Guest (non-member) attendance write _(2026-08-09)_                                                                                                                                                                                                                                               |
-| `/health`                                                        | Health check                                                                                                                                                                                                                                                                                     |
-| `/health/db`                                                     | Database health                                                                                                                                                                                                                                                                                  |
-| `/health/redis`                                                  | Redis health                                                                                                                                                                                                                                                                                     |
+| Path                                                                            | Description                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/public/v1/forms/{slug}`                                               | Public form access (60/min per IP)                                                                                                                                                                                                                                                |
+| `POST /api/public/v1/forms/{slug}/submit`                                       | Public form submission (10/min per IP; CAPTCHA when enabled)                                                                                                                                                                                                                      |
+| `GET /api/public/v1/organization/info`, `/organization/stats`, `/events/public` | Public portal endpoints (`X-API-Key` required). The per-IP limit runs before any key lookup or bcrypt check; keys are found by a 16-character lookup prefix (`logbook_` + 8), and a key issued with the older 8-character prefix is upgraded on its next use                      |
+| `GET /api/public/v1/health`                                                     | Public portal health                                                                                                                                                                                                                                                              |
+| `GET /api/public/v1/application-status/{token}` (+ `POST …/withdraw`)           | Applicant's own pipeline status, addressed by an emailed token                                                                                                                                                                                                                    |
+| `GET /api/public/v1/display/{code}`                                             | Room display (kiosk) — current events in that room                                                                                                                                                                                                                                |
+| `POST /api/public/v1/display/{code}/badge-tap`                                  | Member ID card tap at a room kiosk — rate-limited 60/min per IP **and** per room; refuses unless both the room's own switch and the department's NFC ID Cards integration are on, re-checked on every tap. Response carries a first name and last initial only, never a member id |
+| `GET /api/public/v1/display/{code}/events/{event_id}/guest`                     | Guest sign-in page detail                                                                                                                                                                                                                                                         |
+| `POST /api/public/v1/display/{code}/events/{event_id}/guest-check-in`           | Guest (non-member) attendance write (10/min per IP)                                                                                                                                                                                                                               |
+| `GET /api/public/v1/calendar/{token}.ics`                                       | Per-member calendar feed, addressed by its token                                                                                                                                                                                                                                  |
+| `/api/public/v1/finance/approvals/{token}` (+ `/approve`, `/deny`)              | External approver actions, addressed by an emailed token                                                                                                                                                                                                                          |
+| `GET /api/public/v1/branding/*`                                                 | Department-branded install icons; `404` when no logo is set                                                                                                                                                                                                                       |
+| `GET /api/public/v1/legal`                                                      | Public privacy / terms text — see [Public Legal Text](#public-legal-text)                                                                                                                                                                                                         |
+| `POST /api/public/v1/webhooks/{documenso,calcom,paypal,salesforce}/…`           | Inbound integration webhooks (signature-verified)                                                                                                                                                                                                                                 |
+| `GET /.well-known/security.txt`                                                 | Vulnerability disclosure — see [Vulnerability Disclosure](#vulnerability-disclosure)                                                                                                                                                                                              |
+| `GET /health`                                                                   | Health check: `{ status, ready }`; `503` when unhealthy. Before startup completes it also reports version, startup phase and database/Redis checks                                                                                                                                |
+| `GET /health/detailed`                                                          | System diagnostics; non-production only                                                                                                                                                                                                                                           |
 
 ### Security & Monitoring
 
-| Prefix                                        | Description                                                                                          |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `/api/v1/security/status`                     | Security dashboard                                                                                   |
-| `/api/v1/security/alerts`                     | Security alerts (org-scoped — caller sees/acks/resolves only their own org's alerts)                 |
-| `/api/v1/security/audit-log/integrity`        | Audit log verification                                                                               |
-| `/api/v1/security/audit-log/export`           | Audit log export (org-scoped; redacts `session_id` to a fingerprint)                                 |
-| `/api/v1/security/audit-log/rehash`           | Break-glass legacy-hash repair (gated by `AUDIT_ALLOW_CHAIN_REHASH`; fails closed on keyed mismatch) |
-| `/api/v1/security/intrusion-detection/status` | IDS status                                                                                           |
-| `/api/v1/ip-security/blocked-countries`       | List / add / remove country blocks (add/remove gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`)       |
+| Path                                                                     | Permission                             | Description                                                                                                     |
+| ------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/security/status`                                            | `audit.view`                           | Security dashboard                                                                                              |
+| `GET /api/v1/security/alerts` (+ `POST …/{id}/acknowledge`, `…/resolve`) | `audit.view` / `audit.export`          | Security alerts (org-scoped — caller sees/acks/resolves only their own org's alerts)                            |
+| `GET /api/v1/security/audit-log/integrity`                               | `audit.view`                           | Audit log hash-chain verification                                                                               |
+| `GET /api/v1/security/audit-log/export`                                  | `audit.export`                         | Audit log export (org-scoped; redacts `session_id` to a fingerprint)                                            |
+| `POST /api/v1/security/audit-log/rehash`                                 | `audit.export`                         | Break-glass legacy-hash repair (`403` unless `AUDIT_ALLOW_CHAIN_REHASH` is set; fails closed on keyed mismatch) |
+| `GET /api/v1/security/intrusion-detection/status`                        | `audit.view`                           | IDS status                                                                                                      |
+| `/api/v1/ip-security/blocked-countries`                                  | `security.manage` or `settings.manage` | List / add / remove country blocks (add/remove refused unless `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` is set)     |
 
 ---
 
-## Notification Endpoints _(2026-03-23)_
+## Notification Endpoints
 
 ```
-GET    /api/v1/notifications/rules                       # List notification rules
-POST   /api/v1/notifications/rules                       # Create notification rule
-GET    /api/v1/notifications/rules/{id}                  # Get rule
-PATCH  /api/v1/notifications/rules/{id}                  # Update rule
-DELETE /api/v1/notifications/rules/{id}                  # Delete rule
-POST   /api/v1/notifications/rules/{id}/toggle           # Toggle rule enabled/disabled
-GET    /api/v1/notifications/logs                        # Send log; ?scope=mine (default) or organization; ?cursor
+GET    /api/v1/notifications/rules                       # List notification rules (notifications.view)
+POST   /api/v1/notifications/rules                       # Create notification rule (notifications.manage)
+GET    /api/v1/notifications/rules/{id}                  # Get rule (notifications.view)
+PATCH  /api/v1/notifications/rules/{id}                  # Update rule (notifications.manage)
+DELETE /api/v1/notifications/rules/{id}                  # Delete rule (notifications.manage)
+POST   /api/v1/notifications/rules/{id}/toggle           # Toggle rule enabled/disabled (notifications.manage)
+GET    /api/v1/notifications/logs                        # Send log; ?scope=mine (default) or organization; ?channel; ?cursor
 POST   /api/v1/notifications/logs/read-all               # Mark send log read; same ?scope
-POST   /api/v1/notifications/logs/{id}/read              # Mark log as read
-GET    /api/v1/notifications/my                          # User's in-app notifications; ?cursor
+POST   /api/v1/notifications/logs/{id}/read              # Mark any log as read (notifications.manage)
+GET    /api/v1/notifications/my                          # User's in-app notifications; ?include_read, ?include_expired, ?cursor
 GET    /api/v1/notifications/my/unread-count             # User's unread count
 GET    /api/v1/notifications/my/unread-by-category       # Unread, unpinned counts per category (inbox stacks)
 POST   /api/v1/notifications/my/read-category            # Mark one category read; ?category (skips pinned)
 POST   /api/v1/notifications/my/read-all                 # Bulk mark all as read
 POST   /api/v1/notifications/my/{log_id}/read            # Mark own notification as read
-GET    /api/v1/notifications/summary                     # Rule and send statistics
+POST   /api/v1/notifications/my/{log_id}/pin             # Pin or unpin own notification; ?pinned=true|false
+GET    /api/v1/notifications/summary                     # Rule and send statistics (notifications.view)
+GET    /api/v1/notifications/push/config                 # Whether web push is available, and the VAPID public key
+POST   /api/v1/notifications/push/subscribe              # Register the caller's browser for push
+POST   /api/v1/notifications/push/unsubscribe            # Drop one of the caller's device endpoints
 ```
+
+The `/my/*` and push routes need only authentication and are always scoped to
+the caller. `GET /logs` with the default `scope=mine` likewise returns only
+the caller's own deliveries; `scope=organization` returns every recipient's,
+including subject, message and recipient address, and requires
+`notifications.manage` (the same gate as the organization-wide `read-all`).
+
+Each rule in a rules response carries `enforced`: whether any sender actually
+reads rules of that trigger. A stored rule whose trigger nothing consults is
+reported as not enforced rather than as active.
 
 Both notification lists page by cursor. Pass `cursor` from a response's
 `next_cursor` to get the page after it; the value is opaque, so hand back
-exactly what was returned. **`next_cursor` is `null` at the end of the list** —
-the key is always present in the response, never omitted — and that null is the
-signal to stop. It is more reliable than comparing loaded rows against `total`,
-which counts the whole filtered list including rows _ahead_ of your cursor that
-a continuation can never return; the two disagree whenever a notification
-arrives between two page requests. `skip` still works for existing callers, and
-a `cursor` supersedes it.
+exactly what was returned, and a malformed one answers `400`. **`next_cursor`
+is `null` at the end of the list** — the key is always present in the
+response, never omitted — and that null is the signal to stop. It is more
+reliable than comparing loaded rows against `total`, which counts the whole
+filtered list including rows _ahead_ of your cursor that a continuation can
+never return; the two disagree whenever a notification arrives between two
+page requests. `skip` also works, and a `cursor` supersedes it.
+
+---
+
+## Department Messages
+
+Admin endpoints require `notifications.manage`. Inbox/read/acknowledge
+endpoints are available to any authenticated member (scoped to messages
+targeted to them).
 
 ```
+# Admin (notifications.manage)
+GET    /api/v1/messages                                  # List messages (include_inactive, search, priority, skip/limit) -> { messages, total }
+POST   /api/v1/messages                                  # Create message (scheduled_at for deferred publish)
+GET    /api/v1/messages/roles                            # Roles available for targeting (id, name, slug)
+GET    /api/v1/messages/{id}                             # Get message
+PATCH  /api/v1/messages/{id}                             # Update message (edit / reschedule)
+DELETE /api/v1/messages/{id}                             # Soft-delete message (read/ack records preserved)
+GET    /api/v1/messages/{id}/stats                       # Read/ack counts with audience denominator
+GET    /api/v1/messages/{id}/acknowledgments             # Per-recipient read/ack breakdown
 
+# Member (authenticated)
+GET    /api/v1/messages/inbox                            # Messages targeted to the current user (include_read, skip/limit)
+GET    /api/v1/messages/inbox/unread-count               # Current user's unread/pending count
+GET    /api/v1/messages/inbox/{id}                       # One message from the caller's own inbox
+POST   /api/v1/messages/{id}/read                        # Mark message as read
+POST   /api/v1/messages/{id}/acknowledge                 # Acknowledge (for ack-required messages)
 ```
 
-## Equipment Check Endpoints _(2026-03-19)_
+Posting a message fans it out across in-app / email / SMS channels by priority
+(see the
+[Training guide](https://github.com/thegspiro/the-logbook/blob/main/docs/training/07-documents-forms.md#department-messages)).
 
-```
-POST   /api/v1/equipment-checks/templates                    # Create template
-GET    /api/v1/equipment-checks/templates                    # List templates
-GET    /api/v1/equipment-checks/templates/{id}               # Get template
-PATCH  /api/v1/equipment-checks/templates/{id}               # Update template
-DELETE /api/v1/equipment-checks/templates/{id}               # Delete template
-POST   /api/v1/equipment-checks/templates/{id}/compartments  # Add compartment
-PATCH  /api/v1/equipment-checks/compartments/{id}            # Update compartment
-DELETE /api/v1/equipment-checks/compartments/{id}            # Delete compartment
-POST   /api/v1/equipment-checks/compartments/{id}/items      # Add item
-PATCH  /api/v1/equipment-checks/items/{id}                   # Update item
-DELETE /api/v1/equipment-checks/items/{id}                   # Delete item
-GET    /api/v1/equipment-checks/shifts/{shift_id}/checklists # Applicable checklists for shift
-POST   /api/v1/equipment-checks/shifts/{shift_id}/checks     # Submit equipment check
-GET    /api/v1/equipment-checks/my-checklists                # Member's pending/recent checks
-POST   /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos  # Upload check photos
-GET    /api/v1/equipment-checks/reports/compliance           # Compliance dashboard
-GET    /api/v1/equipment-checks/reports/failures             # Failure/deficiency log
-GET    /api/v1/equipment-checks/reports/trends               # Item trend history
-GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
-```
+---
 
-### Supply & Deployed Lots _(2026-08-10)_
+## Email Templates
 
-The bridge between Inventory and the Equipment Check system. **Reads** accept
-`equipment_check.view` or `inventory.view`. **Writes** are split by intent
-_(tightened 2026-08-11)_: reporting an item used — and deployed-lot quantity
-updates — accept `equipment_check.submit` (the default member position) as
-well as `equipment_check.manage` / `inventory.manage`, because recording what
-you just used is crew work. Corrections of record are manage-only: withdrawing
-a restock report (`DELETE /items/{id}/used`), lot swaps
-(`POST /items/{id}/swap`), and edits touching a deployed lot's `lot_number`
-or `expiration_date` require `equipment_check.manage` or `inventory.manage`
-(a submit-only caller gets 403; quantity-only lot updates still pass).
-
-```
-GET    /api/v1/equipment-checks/supply/expiring-items                        # ?days_ahead=30 (1-365)
-GET    /api/v1/equipment-checks/supply/item-deployments/{inventory_item_id}  # Reverse lookup
-GET    /api/v1/equipment-checks/apparatus/{apparatus_id}/inventory           # Standing view of one truck
-
-POST   /api/v1/equipment-checks/items/{item_id}/used                # Report used/pulled  → restock report
-DELETE /api/v1/equipment-checks/items/{item_id}/used                # Withdraw the report
-PUT    /api/v1/equipment-checks/items/{item_id}/quantity            # Recount the position
-POST   /api/v1/equipment-checks/items/{item_id}/swap                # Move a ready lot onto the truck
-
-GET    /api/v1/equipment-checks/items/{item_id}/deployed-lots           # Lots aboard, soonest first
-PUT    /api/v1/equipment-checks/items/{item_id}/deployed-lots/{lot_id}  # Correct count + number + date
-
-GET    /api/v1/equipment-checks/templates/{id}/inventory-matches    # Propose catalog links (read-only)
-POST   /api/v1/equipment-checks/templates/{id}/inventory-links      # Apply a reviewed set of links
-GET    /api/v1/equipment-checks/inventory-link-report                # Unlinked positions across all templates, grouped by name (read-only)
-POST   /api/v1/equipment-checks/inventory-links                      # Apply links across templates, all or nothing; response lists skippedPositions
-```
-
-| Behaviour               | Detail                                                                                                                                                                      |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Derived values**      | A position's count is the **sum** of its deployed lots; its expiration is the **earliest**. Neither is read from `check_template_items` any more                            |
-| **Consumption order**   | First-expiring-first-out. Undated lots sort last                                                                                                                            |
-| **Expiry**              | Recomputed **server-side** from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag is what force-fails a safety-critical item                   |
-| **Expired shelf stock** | Excluded from `ready_stock`, flagged in the payload, and **`POST .../swap` refuses it** with a 400                                                                          |
-| **Partial updates**     | `PUT .../deployed-lots/{lot_id}` uses `exclude_unset`: an omitted field is left alone, an explicit `null` clears, and `quantity: 0` removes the lot                         |
-| **Match confidence**    | `inventory-matches` returns `exact` / `strong` / `weak`. Only `exact` is pre-selected client-side — "Oxygen Mask" scores high against both the adult and the pediatric mask |
-| **404 vs 400**          | An unknown template/item/lot is a 404; a business-rule refusal (expired lot, over-draw, cross-org FK) is a 400 via `safe_error_detail()`                                    |
-
-### Inventory bulk write paths _(2026-08-10)_
-
-```
-POST   /api/v1/inventory/items/bulk    # inventory.manage — existing names skipped and reported
-POST   /api/v1/inventory/lots/bulk     # inventory.manage — receive a delivery, all lines or none
-```
-
-`items/bulk` returns `{created, skipped[], item_ids[]}`. `lots/bulk` returns the
-created lots. **Both are all-or-nothing on validation failure**: a partly applied
-delivery is worse than a rejected one, because the caller cannot tell which lines
-landed and re-entering it would double-count whatever did.
-
-### Email template backups _(2026-09-27)_
+### Email template backups
 
 ```
 GET    /api/v1/email-templates/{template_id}/backups   # settings.manage OR organization.update_settings
 ```
 
-Read-only. Lists the versions of a template saved before the 2026-09-27
-redesign reset it, newest first, each with the backup as saved and a restore
-draft (`restored_subject`, `restored_html_body`, `restored_text_body`): the
-department's own wording placed inside the current design. The editor loads
-the draft; nothing is written until the admin saves the template. `404` for a
-template outside the caller's organization.
+Read-only. Lists the saved earlier versions of a template — the versions kept
+when a release reset the template to a new design — newest first. Each carries
+the backup as saved (`subject`, `html_body`, `text_body`, `reason`,
+`created_at`) and a restore draft (`restored_subject`, `restored_html_body`,
+`restored_text_body`): the department's own wording placed inside the current
+design. The editor loads the draft; nothing is written until the admin saves
+the template. `404` for a template outside the caller's organization.
 
-### Email footer library _(2026-08-10)_
+### Email footer library
 
 ```
 GET    /api/v1/email-templates/footers   # settings.manage OR organization.update_settings
 PUT    /api/v1/email-templates/footers   # Replaces the library whole
 ```
 
-`GET` seeds the library on first read and returns a live per-footer **usage
-count**, so the screen can say "3 templates use this" before one is deleted. A
-template's `footer_key` of NULL counts toward the library's `default_key`. `PUT`
-replaces the library **whole** — a per-footer save could leave `default_key`
-naming a footer the same request deleted.
+`GET` returns the built-in library until the department saves one of its own,
+together with a live per-footer **usage count**, so the screen can say "3
+templates use this" before one is deleted. A template's `footer_key` of NULL
+counts toward the library's `default_key`. `PUT` takes
+`{ default_key, footers }` (1–12 footers, unique keys, and `default_key` must
+name one of them) and replaces the library **whole** — a per-footer save could
+leave `default_key` naming a footer the same request deleted.
 
-## Shift Completion Reports _(2026-03-28)_
+---
 
-```
-POST   /api/v1/training/shift-reports                                  # Create shift completion report
-GET    /api/v1/training/shift-reports/my-reports                       # Trainee's approved reports
-GET    /api/v1/training/shift-reports/my-stats                         # Trainee's aggregate statistics
-GET    /api/v1/training/shift-reports/officer-analytics                # Org-wide officer analytics
-GET    /api/v1/training/shift-reports/by-officer                       # Reports filed by current officer
-GET    /api/v1/training/shift-reports/pending-review                   # Reports awaiting review
-GET    /api/v1/training/shift-reports/drafts                           # Auto-created drafts from finalization
-GET    /api/v1/training/shift-reports/all                              # All org reports (filtered, paginated)
-GET    /api/v1/training/shift-reports/trainee/{trainee_id}             # Reports for specific trainee
-GET    /api/v1/training/shift-reports/trainee/{trainee_id}/stats       # Stats for specific trainee
-GET    /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}  # Auto-populate preview
-GET    /api/v1/training/shift-reports/{report_id}                      # Get specific report
-PUT    /api/v1/training/shift-reports/{report_id}                      # Update draft report
-POST   /api/v1/training/shift-reports/{report_id}/acknowledge          # Trainee acknowledges report
-POST   /api/v1/training/shift-reports/{report_id}/review               # Officer reviews (approve/flag/redact)
-```
-
-## Shift Finalization _(2026-03-28)_
-
-```
-POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
-```
-
-## Legal Documents _(2026-08-20)_
+## Legal Documents
 
 Governance record for the wording served on the public `/privacy` and
-`/terms` pages. **Proposing and publishing are separate grants.**
+`/terms` pages. Backs Governance → Legal Documents, where the secretary and
+department leaders read what those pages publish and propose alternatives for
+local rules. **Proposing and publishing are separate grants.** Responses and
+request bodies are camelCase (snake_case request names are also accepted).
 
 ```
-GET    /api/v1/legal-documents                                # Current + first page of drafts/history
+GET    /api/v1/legal-documents                                # Both documents: current text + first page of drafts/history
 GET    /api/v1/legal-documents/{document_type}/revisions      # ?kind=drafts|history&offset=&limit= (Load more)
 POST   /api/v1/legal-documents/revisions                      # Draft a revision
 PUT    /api/v1/legal-documents/revisions/{id}                 # Edit a draft
-DELETE /api/v1/legal-documents/revisions/{id}                 # Discard a draft
+DELETE /api/v1/legal-documents/revisions/{id}                 # Discard a draft (204)
 POST   /api/v1/legal-documents/revisions/{id}/publish         # Make it public
-POST   /api/v1/legal-documents/{document_type}/revert-to-default
+POST   /api/v1/legal-documents/{document_type}/revert-to-default   # 204
 ```
 
 | Endpoint                     | Permission (any of)                                 |
@@ -311,39 +468,173 @@ POST   /api/v1/legal-documents/{document_type}/revert-to-default
 
 `document_type` ∈ `privacy_policy` | `terms_of_service`.
 
+**`GET /legal-documents`** returns `organizationName`, `canPublish` for the
+caller (so the screen can hide controls it would only `403` on), and one entry
+per document with what members currently see (`publishedBody`,
+`publishedEffectiveDate`, `publishedAt`, `publishedByName`,
+`usingPlatformDefault`), and the newest page of `drafts` and published
+`history` with `draftsTotal` / `historyTotal`. The revisions endpoint serves
+the rest, newest first, as `{ items, total, offset, limit }` (default `limit`
+10, maximum 50).
+
 **Notes.**
 
 - The **published text is not served from this API.** It lives in
-  `organizations.settings["legal"]`, which the anonymous public page endpoint
-  reads with no join and no auth. These endpoints manage the governance record
-  around it.
-- `change_note` is **required** on a revision.
-- `effective_date` is free text (max 64 chars) and is never parsed — it is
-  displayed as "Last updated". Send an explicit `null` to clear it; an omitted
-  key means "leave it alone".
-- Publishing archives the previously published revision. Archived revisions
-  are never deleted.
+  `organizations.settings["legal"]`, which the anonymous
+  [public endpoint](#public-legal-text) reads with no join and no auth. These
+  endpoints manage the governance record around it.
+- `changeNote` is **required** on a revision (max 2,000 characters); `body`
+  is required and capped at 100,000 characters, the same cap the public
+  endpoint applies.
+- `effectiveDate` is free text (max 64 chars) and is never parsed — it is
+  displayed as "Last updated". On an edit, send an explicit `null` (or blank)
+  to clear it; an omitted key means "leave it alone".
+- Only drafts are editable or deletable — a published revision is what the
+  department is on record as having published on a date. A proposer may
+  modify only their own draft (`403` otherwise); a publisher may modify
+  anyone's.
+- Publishing archives the previously published revision, writes the body and
+  its effective date into the organization's settings, and audits as
+  `legal.document_published`. Reverting archives the published revision and
+  removes the custom text so the built-in default renders again
+  (`legal.document_reverted_to_default`). Archived revisions are never
+  deleted. Proposing, editing and discarding audit as
+  `legal.revision_proposed`, `legal.revision_updated` and
+  `legal.revision_discarded`.
+- `legal.propose` is granted to every position holding `settings.view` (or
+  `settings.*`), and `legal.publish` to every position holding
+  `settings.manage` (or `settings.*`) — the split that already distinguishes
+  leadership from the general membership.
 
 ---
 
-## Dashboard Widgets _(2026-08-23)_
+## Public Legal Text
+
+Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
+`/terms` pages.
+
+```
+GET    /api/public/v1/legal
+```
+
+```json
+{
+  "organizationName": "…",
+  "privacyPolicy": "…",
+  "termsOfService": null,
+  "privacyPolicyLastUpdated": "January 2026",
+  "termsOfServiceLastUpdated": null,
+  "lastUpdated": "January 2026"
+}
+```
+
+Returns the single organization's configured text
+(`settings.legal.privacy_policy` / `settings.legal.terms_of_service`) and each
+document's own effective date, shown above custom text. `null` values mean the
+frontend renders its built-in defaults, which carry their own date.
+`lastUpdated` is kept for existing v1 clients: it is the privacy policy's date
+if it has one, otherwise the terms' date. On a multi-organization install all
+fields are `null` — with no org context, no tenant's text is served.
+
+`settings["legal"]` is unvalidated JSON, so values are read defensively: a
+non-string value, a non-dict `legal` key, or blank/whitespace text all return
+`null` (the defaults render) rather than erroring on a page anonymous visitors
+reach. Returned text is plain text (rendered as paragraphs, never HTML) and
+capped at 100,000 characters; dates at 64.
+
+---
+
+## Privacy, Consent & Retention
+
+Data-subject rights and records retention. See
+[Privacy & Data Rights](Security-Privacy) for behavior and guarantees.
+
+```
+# Member self-service (authenticated; always scoped to the caller)
+GET    /api/v1/users/me/data-export                      # Full personal-data export (JSON download; 3/hour)
+GET    /api/v1/users/me/consents                         # Consent state per type (granted=null means never asked)
+PUT    /api/v1/users/me/consents/{consent_type}?granted= # Record a consent choice (audited)
+
+# Administrative (members.manage)
+POST   /api/v1/users/{user_id}/anonymize                 # Irreversibly scrub a DEPARTED member's PII
+
+# Records retention (settings.manage OR organization.update_settings)
+GET    /api/v1/organization/retention-policy             # Effective schedule per record class
+PUT    /api/v1/organization/retention-policy/{class}?days=   # Set retention; omit days for keep-forever
+```
+
+Consent types: `photo_use`, `public_roster_listing`, `sms_notifications`.
+
+Retention record classes and their minimum floors — `PUT` returns `400` below
+the floor, and enforcement runs daily:
+
+| Record class           | Minimum days |
+| ---------------------- | ------------ |
+| `message_history`      | 30           |
+| `notification_logs`    | 30           |
+| `error_logs`           | 30           |
+| `form_submissions`     | 90           |
+| `guest_check_ins`      | 90           |
+| `practice_skill_tests` | 30           |
+
+`POST /anonymize` returns `400` for a member who has not departed (drop or
+archive them first), for an already-anonymized member, or for your own
+account, and `404` for a member outside your organization. Audit logs and
+election records are never modified.
+
+---
+
+## Vulnerability Disclosure
+
+Served at the site root (not under `/api`), per RFC 9116.
+
+```
+GET    /.well-known/security.txt                         # Contact, policy, expiry (text/plain)
+```
+
+Configured with `SECURITY_TXT_CONTACT` and `SECURITY_TXT_POLICY_URL`. The
+`Expires` field is regenerated per request so the file never goes stale.
+
+---
+
+## Audit Logs (Admin)
+
+Read-only admin API for browsing the audit trail. Permission: `audit.view`.
+Results are org-scoped on the `audit_logs.organization_id` column, which is
+stamped at write time and covered by the hash chain. Platform-level rows with
+a NULL organization are never returned to org admins.
+
+```
+GET    /api/v1/audit-logs                                # List (filters below; skip/limit)
+GET    /api/v1/audit-logs/stats                          # Summary counts (by severity, by category)
+GET    /api/v1/audit-logs/{log_id}                       # Get a single audit entry
+```
+
+Filters on the list endpoint: `event_type`, `event_category`,
+`severity` (`info` \| `warning` \| `critical`), `user_id`, `search` (username or
+event-type substring), `start_date`, `end_date`, `skip` (≥0), `limit` (1–500,
+default 50).
+
+Hash-chain verification and export live under
+[Security & Monitoring](#security--monitoring).
+
+---
+
+## Dashboard Widgets
 
 Three aggregate endpoints for the dashboard. All authenticate as the current
 user and authorize each section independently, but **they do not all behave the
 same way** — do not generalize from one to the others:
 
-| Endpoint                   | Unauthorized section is…    | Module-gated?                                                            |
-| -------------------------- | --------------------------- | ------------------------------------------------------------------------ |
-| `/dashboard/widgets`       | **`null`** in the response  | Only `fundraising` (`grants`). Finance and community are permission-only |
-| `/dashboard/operations`    | **omitted** from `sections` | Yes — every section checks module **and** permission                     |
-| `/dashboard/asset-widgets` | **omitted** from `widgets`  | Yes — every block checks module **and** permission                       |
+| Endpoint                   | Unauthorized section is…    | Module-gated?                                                             |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------- |
+| `/dashboard/widgets`       | **`null`** in the response  | Yes — every section checks module **and** permission                      |
+| `/dashboard/operations`    | **omitted** from `sections` | Every section except `pending_approvals` checks module **and** permission |
+| `/dashboard/asset-widgets` | **omitted** from `widgets`  | Yes — every block checks module **and** permission                        |
 
-`/dashboard/operations` and `/dashboard/asset-widgets` both combine module and
-permission checks throughout, and only the two list-based responses omit what
-the caller cannot see.
-`/dashboard/widgets` explicitly serializes `finance`, `fundraising` and
-`community` as `null`, so **an integrator can tell the difference between "no
-access" and "no data" on that endpoint** — the other two are opaque.
+Only the two list-based responses omit what the caller cannot see.
+`/dashboard/widgets` serializes `finance`, `fundraising` and `community` as
+`null` instead.
 
 ```
 GET /api/v1/dashboard/widgets?period=month|quarter|year|rolling_30
@@ -353,36 +644,54 @@ GET /api/v1/dashboard/asset-widgets
 
 ### `/dashboard/widgets`
 
+Response: `{ period, period_label, finance, fundraising, community }`.
+
 | Section       | Requires                                   |
 | ------------- | ------------------------------------------ |
-| `finance`     | `finance.manage`                           |
+| `finance`     | `finance` module **and** `finance.manage`  |
 | `fundraising` | `grants` module **and** `fundraising.view` |
-| `community`   | `events.manage`                            |
+| `community`   | `events` module **and** `events.manage`    |
 
 `settings.manage` is **intentionally not financial access.** Any of the three
-sections may be `null` — and `null` here means "you may not see this", which is
-**not** distinguishable from an empty period only because the sections that do
-have data are never `null`. Treat `null` as unauthorized.
+sections may be `null`, and `null` means the section is withheld — the caller
+lacks the permission or the department does not run the module. A section the
+caller may see is never `null`, even for an empty period, so treat `null` as
+"not available to you" rather than as "no data".
 
 ### `/dashboard/operations`
 
-| Section                  | Requires (any of)                                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `operational_readiness`  | `scheduling.manage`                                                                                        |
-| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `inventory.check_manage`, `notifications.manage` |
-| `membership_health`      | `members.manage`                                                                                           |
-| `upcoming_command_dates` | `events.manage`                                                                                            |
-| `period_trends`          | `training.manage`                                                                                          |
-| `pending_approvals`      | `admin_hours.manage`                                                                                       |
+Response: `{ generated_at, timezone, sections: [{ key, title, items: [...] }] }`,
+where each item is `{ key, label, severity, count, oldest_age_days,
+most_urgent, href }`.
+
+| Section                  | Requires (any of)                                                                                          | Module             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------ |
+| `operational_readiness`  | `scheduling.manage`                                                                                        | `scheduling`       |
+| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `inventory.check_manage`, `notifications.manage` | per item           |
+| `membership_health`      | `members.manage`                                                                                           | `members`          |
+| `upcoming_command_dates` | `events.manage`                                                                                            | `events`           |
+| `period_trends`          | `training.manage`                                                                                          | `training`         |
+| `pending_approvals`      | `admin_hours.manage`                                                                                       | — (no module flag) |
 
 `critical_exceptions` is finer-grained than the row above suggests: it is
-assembled item by item, each item behind the single permission owning its data
-source, and the section is omitted entirely when no item survived. Holding
-`notifications.manage` alone therefore returns the section with the notification
-item only — not the shift, action-item or equipment-check items.
+assembled item by item, each item behind its own module and the single
+permission owning its data source, and the section is omitted entirely when no
+item survived:
 
-Dates are resolved in the organization's configured timezone, falling back to
-UTC if it is unset or unrecognized.
+| Item                        | Module          | Permission               |
+| --------------------------- | --------------- | ------------------------ |
+| `unassigned_shift_officers` | `scheduling`    | `scheduling.manage`      |
+| `overdue_action_items`      | `minutes`       | `meetings.manage`        |
+| `minutes_action_items`      | `minutes`       | `minutes.manage`         |
+| `equipment_checks`          | `inventory`     | `inventory.check_manage` |
+| `notification_failures`     | `notifications` | `notifications.manage`   |
+
+Holding `notifications.manage` alone therefore returns the section with the
+notification item only — not the shift, action-item or equipment-check items.
+
+Dates and ages are resolved in the organization's configured timezone, falling
+back to the scheduling default (`America/New_York`) if it is unset or
+unrecognized; the zone used is reported in `timezone`.
 
 ### `/dashboard/asset-widgets`
 
@@ -409,13 +718,24 @@ a tile whose only action is Access Denied. For `inventory` the destination gate
 (`inventory.manage`) is the stricter of the two and subsumes the
 `settings.manage` arm.
 
+### Other dashboard endpoints
+
+| Endpoint                                     | Gate                                                         | Returns                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `GET /dashboard/stats`                       | Authenticated                                                | Member, document and event counts, setup percentage                             |
+| `GET /dashboard/admin-summary`               | `settings.manage`                                            | Department-wide summary; module-owned figures are `null` when the module is off |
+| `GET /dashboard/action-items`                | Authenticated; each half gated as its owning module gates it | Unified meeting and minutes action items                                        |
+| `GET /dashboard/community-engagement`        | `events.manage`                                              | Public-outreach event and attendee counts                                       |
+| `GET/PUT/DELETE /dashboard/pulse-layout`     | Authenticated                                                | The caller's own dashboard layout                                               |
+| `PUT/DELETE /dashboard/pulse-layout/default` | `settings.manage` or `organization.update_settings`          | The department's default layout                                                 |
+
 ---
 
-## Administration Page Frame _(2026-08-23)_
+## Administration Page Frame
 
 One shape serves every module's administration page: four headline metrics and
 a **Needs attention** queue, plus the settings that choose which three metrics
-fill the open slots.
+fill the open slots. Responses and request bodies are camelCase.
 
 ```
 GET  /api/v1/admin-hub/{module_key}/summary
@@ -423,109 +743,58 @@ GET  /api/v1/admin-hub/{module_key}/metrics
 PUT  /api/v1/admin-hub/{module_key}/metrics
 ```
 
-`module_key` is one of `members`, `training`, `inventory`, `events`, and is
-pattern-constrained to `^[a-z_]{1,50}$` at the path.
+`module_key` is one of `members`, `training`, `inventory`, `events`,
+`scheduling`, and is pattern-constrained to `^[a-z_]{1,50}$` at the path.
 
 **Authorization is the module's own manage permission** — `members.manage`,
-`training.manage`, `inventory.manage`, `events.manage` — never a blanket admin
-gate. The attention queue rows name people, so an inventory officer who cannot
-manage members must not read the member queue.
+`training.manage`, `inventory.manage`, `events.manage`, `scheduling.manage` —
+never a blanket admin gate. The attention queue rows name people, so an
+inventory officer who cannot manage members must not read the member queue.
 
 **An unknown module and a forbidden one both answer `404`.** This is
 deliberate: a caller who may not administer Training should not be able to
 learn from this endpoint whether the department runs Training at all. Do not
 "fix" it into a `403`.
 
+`summary` returns `{ moduleKey, generatedAt, timezone, metrics, attention }`.
+Each metric is `{ key, label, value, context, fixed }`, with `value`
+pre-formatted for display (`"87%"`, `"1,840"`); the fourth, `fixed: true`, is
+`needs_attention`. Each attention item is `{ key, title, detail, actionLabel,
+href, severity, count, oldestAgeDays }`, critical items first. `metrics`
+(`GET`) returns the settings screen's state: `options` (each with its current
+value and, when it cannot be chosen, an `unavailableReason`), `selected`,
+`appliesToEveryone`, `isPersonal`, `departmentDefault` and `builtInDefault`.
+`PUT` takes `{ metricKeys, appliesToEveryone }` and audits as
+`admin_hub.metrics_updated`.
+
 Two rules an integrator will otherwise get wrong:
 
 - **Only three metric keys are stored.** The fourth slot is always the count
   that feeds the attention queue and is not part of the settings payload. A
-  `PUT` naming four keys is rejected.
-- **No stored preference means the module's built-in default four, never an
-  empty row.** Absence is "current behaviour", not "off".
+  `PUT` naming more than three keys is rejected (`422`).
+- **No stored preference means the module's built-in default three, never an
+  empty row.** Absence is "current behaviour", not "off". A stored key whose
+  metric is no longer available (its module switched off, say) falls back to
+  the default rather than leaving a blank card.
 
-Preferences have two scopes in one table. The department-wide record carries a
-null user and the scope key `__department__`; its `applies_to_everyone` flag
-decides whether an individual administrator may keep a personal selection.
+Preferences have two scopes in one table. The department-wide record carries
+the scope key `__department__`; its `applies_to_everyone` flag decides
+whether an individual administrator may keep a personal selection.
 
 Some metrics carry a **second** permission beyond the module's. On `members`,
-the screening-currency metric and the whole attention queue additionally
-require `medical_screening.view`; without it the metric is returned with an
-`unknown` value rather than omitted, and the queue is empty.
+the screening-currency metric (`screening_current`) and the whole attention
+queue additionally require `medical_screening.view`; without it the metric is
+returned with the placeholder value `—` rather than omitted, and the queue is
+empty.
 
 ---
 
-## Scheduling — Board, Standing Shifts & Trades _(2026-08-23 → 08-24)_
+## Member Badges and ID Card Printing
 
 ```
-GET    /api/v1/scheduling/shifts/{shift_id}/trade-candidates
-POST   /api/v1/scheduling/swap-requests/{request_id}/respond
-GET    /api/v1/scheduling/swap-requests/open              # 2026-10-05, scheduling.swap
-POST   /api/v1/scheduling/swap-requests/{request_id}/pick-up  # 2026-10-05, scheduling.swap
-GET    /api/v1/scheduling/standing-shifts
-GET    /api/v1/scheduling/standing-shifts/preview
-POST   /api/v1/scheduling/standing-shifts
-DELETE /api/v1/scheduling/standing-shifts/{claim_id}
-GET    /api/v1/scheduling/eligibility/positions/bulk
-```
-
-**Every shift response now carries its `roster`.** A month of shifts arrives
-with its seat occupants in one request, so a client does not need a call per
-day to colour a cell.
-
-`trade-candidates` returns only members who could actually accept — anyone on
-the shift, on approved leave, not cleared for the position, or working an
-abutting tour is already excluded — ranked least-loaded first.
-
-`respond` is **participant acceptance**, deliberately distinct from manager
-review (which refuses participants by design). It is limited to a one-way
-targeted offer: accepting is the offerer withdrawing and the accepter signing
-up, in one step, both already unprivileged. Approved time off is rechecked at
-acceptance, not only when candidates were listed.
-
-`eligibility/positions/bulk` answers one call per day rather than one per
-shift — the expensive half of the answer is about the member and is identical
-across the day's shifts.
-
-**Standing shifts** are a stored recurring claim, not a batch of assignments.
-They have two readers and only work because both exist: creating a claim seats
-the member on matching shifts already on record, and creating a _shift_ seats
-every member whose active claim matches it. A claim's `apparatus_id` is
-verified in-org before it is stored, and claims go through the same
-self-service validation as any other sign-up — eligibility, seat capacity,
-shift mutability and past dates all apply.
-
----
-
-## Scheduling — Dashboard Staffing Widgets _(2026-08-23)_
-
-```
-GET /api/v1/scheduling/dashboard/widgets?start_date=&end_date=&station_id=&platoon=&shift_type=&position=
-GET /api/v1/scheduling/dashboard/widget-preferences
-PUT /api/v1/scheduling/dashboard/widget-preferences
-```
-
-Requires `scheduling.view`.
-
-**The window is bounded at the server.** A range that is inverted, or 93 days
-or longer, is a `422` — not a query that walks the whole schedule.
-
-**`station_id` and `platoon` are validated against the organization's own
-lists.** An unknown value is a `422`, deliberately, rather than an empty result
-that a caller would read as "nothing scheduled".
-
-Preferences are per member and per widget: each of the seven tiles keeps its
-own horizon and filters, so an officer watching one station and a chief
-watching the department can share a dashboard without sharing a lens.
-
----
-
-## Member Badges and ID Card Printing _(2026-10-05)_
-
-```
-GET    /api/v1/member-badges/settings               # { accept_legacy } (members.manage or members.manage_id_cards)
-PUT    /api/v1/member-badges/settings               # { accept_legacy: bool }  (audit: member_badge_settings_updated)
-POST   /api/v1/member-badges/resolve                # { code } -> the member a scan identifies (rate limited, 120/min per address)
+GET    /api/v1/member-badges/settings               # { accept_legacy } (badge officers)
+PUT    /api/v1/member-badges/settings               # { accept_legacy: bool } (audit: member_badge_settings_updated)
+POST   /api/v1/member-badges/resolve                # { code } -> the member a scan identifies (120/min per address)
 GET    /api/v1/member-badges/{user_id}              # { user_id, badge_code } - the member themselves, or a badge officer; else 404
 POST   /api/v1/member-badges/{user_id}/reissue      # Cancel a lost badge, issue a new code (badge officers; audit: member_badge_reissued)
 GET    /api/v1/member-id-cards/layout               # Saved CR80 layout, or the default
@@ -533,111 +802,100 @@ PUT    /api/v1/member-id-cards/layout               # { orientation, sides, symb
 POST   /api/v1/member-id-cards/pdf                  # { user_ids (1-500), orientation?, sides?, symbology? } -> application/pdf (audit: id_cards_printed)
 ```
 
-Badge officers are holders of `members.manage` or `members.manage_id_cards`.
-`resolve` also accepts `users.view` and `inventory.manage` holders, the two
-scanners' own gates, and answers only within the caller's organization with
+Badge officers are holders of `members.manage` or `members.manage_id_cards`;
+the ID card endpoints use the same pair. `resolve` also accepts `users.view`
+and `inventory.manage` holders, the two scanners' own gates, and answers only
+within the caller's organization with
 `{ user_id, name, membership_number, is_active, matched }` where `matched` is
-`badge_code` or `legacy`. The badge code (`users.badge_code`, `MB-` plus ten
-characters) is **never** in a roster, profile, export or anonymized record. Old
-badges (membership number, short id, old digital-card QR) resolve while
-`accept_legacy` is not `false`; absent means accepted. See
+`badge_code` or `legacy`; an unrecognised code answers `404`. The badge code
+(`users.badge_code`, `MB-` plus ten characters) is **never** in a roster,
+profile, export or anonymized record; `GET /{user_id}` assigns one if the
+member has none yet. Old badges (membership number, short id, old digital-card
+QR) resolve while `accept_legacy` is not `false`; absent means accepted.
+
+Layout options: `orientation` ∈ `landscape` | `portrait`, `sides` ∈ `front` |
+`both`, `symbology` ∈ `code128` | `qr`. The default is landscape, front only,
+Code 128. Options omitted from a print request take the saved layout. See
 [Member ID cards](Member-ID-Cards#badge-codes-and-printing-cr80-id-cards-2026-10-05).
-
-## Finance, Scheduling, Training and Prospects — Additions _(2026-10-05)_
-
-```
-GET    /api/v1/finance/approval-chains/approver-coverage   # Every approval step, who can act, any problem, requests waiting (finance.configure_approvals)
-POST   /api/v1/finance/approvals/{step_record_id}/approve  # body { notes?, overrideReason? }; 403 unless the caller is the step's named approver
-POST   /api/v1/finance/approvals/{step_record_id}/deny     # same; an approvals admin overrides with overrideReason (<= 2000 chars)
-GET    /api/v1/scheduling/shifts/{id}/exchange-candidates  # Seats the caller could exchange for; only pairs where both members qualify (409 if the caller holds no seat)
-PATCH  /api/v1/scheduling/swap-requests/{id}/review        # body gains override_qualification (waives the position check only); a lapsed pair is refused 400 with LB-SCHED-002
-GET    /api/v1/training/records?skip=&limit=               # Paged: limit 1-500 (default 500); X-Total-Count carries the matching total; still a bare list
-GET    /api/v1/training/skills-testing/tests               # NOW { items, total }; limit (default 50, max 200), offset, search, date_from, date_to
-GET    /api/v1/training/skills-testing/templates           # Still a bare list; limit (default and cap 500), offset, ordered by name
-GET    /api/v1/training/skills-testing/tests/export/csv    # 400 without BOTH date_from and date_to, or a window over 366 days
-GET    /api/v1/training/submissions/config                 # now carries attachment_retention_days
-PUT    /api/v1/training/submissions/config                 # attachment_retention_days: null (keep, the default) or 90-36500 (audit: self_report_attachment_retention_updated)
-POST   /api/v1/training/cohorts/{id}/members               # add late joiners; classes already held come back as missed classes to decide
-GET    /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes
-POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{cohort_class_id}/credit    # write a completed record (audit: course_cohort_missed_class_credited)
-POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{cohort_class_id}/makeup    # copy the class to a new time for this member alone
-POST   /api/v1/prospective-members/prospects/{id}/advance  # body gains completed_items (<= 200 items, each <= 255 chars) for a checklist stage
-POST   /api/v1/compliance/attestations                     # no compliance_percentage: the server records its own figure and compliance_as_of
-```
-
-- **Skills-testing list shape changed.** `GET /tests` used to return a bare list;
-  it now returns `{ items, total }`, newest first (`created_at DESC, id DESC`).
-  `total` is what the caller may see. The CSV export and the list share one
-  filter and one date, `COALESCE(completed_at, created_at)`, so the file is the
-  rows the Test Records tab shows.
-- **Training records are paged, not truncated.** `trainingService.getRecords`
-  walks the pages until a short one; a script reading `/training/records` must
-  do the same or read `X-Total-Count`.
-- **Attestation** records `compute_org_compliance_pct` for the department as of
-  the period's last day (or today for a running period), refuses a period that
-  has not started, and records no figure (N/A) when nobody is graded.
-- **Compliance figures.** A member nothing grades is `not_applicable` and out of
-  every percentage; `compliance_percentage` is `null` when nobody is graded.
-  Compliance matrix rows carry `standing: "not_applicable"` and
-  `completion_pct: null`; the dashboard summary adds `graded_members` and
-  `not_applicable_members`.
-- **Event RSVPs** (`GET /events/{id}/rsvps`) now carry `credited_check_in_at`,
-  the check-in the credit is actually computed from; other RSVP responses leave
-  it null.
-- **Elections.** The election list now carries `closed_at`.
-
-## NFC ID Cards & Station Check-In _(2026-08-23)_
-
-```
-GET    /api/v1/nfc-tags
-POST   /api/v1/nfc-tags
-PATCH  /api/v1/nfc-tags/{tag_id}
-DELETE /api/v1/nfc-tags/{tag_id}
-POST   /api/v1/nfc-tags/check-in
-```
-
-The whole feature is gated by the `nfc-id-cards` integration row, which starts
-**off**. Every one of these endpoints depends on that check **server-side** —
-hiding the screen would leave the credential surface reachable. The guard fails
-**closed**: an organization whose catalog row has never been seeded counts as
-not having turned it on.
-
-**The credential is never stored or returned in plaintext.** A card's serial
-is the whole of the credential, so the table holds a peppered SHA-256 hash;
-`uid_preview` carries the last four characters purely so an officer can tell
-two of a member's cards apart. There is no endpoint that reads a card number
-back out, and none should be added.
-
-`POST /nfc-tags/check-in` is what a station calls. It will not attach to a
-shift once it is **finalized** — but not merely because its end time has
-passed. `member_check_out` has no deadline, so an unfinalized shift is one
-somebody may still need to tap out of, and a clock-based cutoff would take the
-station away from a crew at the moment they go off duty. Retired and on-leave
-members are accepted —
-they attend meetings and banquets, which is what a station records — while
-suspended, dropped, archived and deleted members are refused. A revoked card
-is never reactivated; a replacement is a fresh registration.
-
-An ID card tapped at an officer-operated station is recorded with entry method
-**`nfc_station`**, not `qr_scan`. The two are different acts by different
-people and exports must be able to tell them apart.
 
 ---
 
-## Label Printers & Station Documents _(2026-08-23 → 08-24)_
+## NFC ID Cards & Station Check-In
 
 ```
-GET    /api/v1/label-printers
-POST   /api/v1/label-printers
-PUT    /api/v1/label-printers/{printer_id}
-DELETE /api/v1/label-printers/{printer_id}
-POST   /api/v1/label-printers/{printer_id}/test
-GET    /api/v1/label-printers/{printer_id}/status
-POST   /api/v1/label-printers/probe
-POST   /api/v1/labels/print
+GET    /api/v1/nfc-tags                    # ?user_id, ?status -> { items, total } (members.manage_id_cards)
+POST   /api/v1/nfc-tags                    # Register a card to a member (members.manage_id_cards)
+PATCH  /api/v1/nfc-tags/{tag_id}           # Relabel / change status (members.manage_id_cards)
+DELETE /api/v1/nfc-tags/{tag_id}           # (members.manage_id_cards)
+POST   /api/v1/nfc-tags/check-in           # A station records a tap (members.check_in)
+```
+
+There is no self-service path: a member cannot register, relabel or revoke a
+card, not even their own. Responses are camelCase.
+
+The whole feature is gated by the `nfc-id-cards` integration row, which starts
+**off**. Every one of these endpoints checks it **server-side** and answers
+`403` while it is off — hiding the screen would leave the credential surface
+reachable. The guard fails **closed**: an organization whose catalog row has
+never been seeded, or whose row is not enabled and connected, counts as not
+having turned it on.
+
+**The credential is never stored or returned in plaintext.** A card's serial
+is the whole of the credential, so the table holds a peppered SHA-256 hash;
+`uidPreview` carries the last four characters purely so an officer can tell
+two of a member's cards apart. There is no endpoint that reads a card number
+back out, and none should be added.
+
+`POST /nfc-tags/check-in` takes `{ tagUid, tagPayload?, targetType, targetId,
+direction? }`, where the target is a shift, an event or an admin-hours
+category and `direction` defaults to `auto`. Every domain outcome is a `200`
+with a `status` the station draws on screen: `checked_in`, `checked_out`,
+`already_checked_in`, `already_checked_out`, `unknown_card`, `card_inactive`,
+`member_inactive` or `refused`. A second tap within 60 seconds is treated as a
+bounce and reports the current state instead of checking the member out.
+
+A tap will not attach to a shift once it is **finalized** — but not merely
+because its end time has passed. Checking out has no deadline, so an
+unfinalized shift is one somebody may still need to tap out of, and a
+clock-based cutoff would take the station away from a crew at the moment they
+go off duty. Retired and on-leave members are accepted — they attend meetings
+and banquets, which is what a station records — while inactive, suspended,
+dropped, archived and deleted members are refused. A lost or revoked card is
+never reactivated; a replacement is a fresh registration.
+
+An ID card tapped at an officer-operated station into an admin-hours category
+is recorded with entry method **`nfc_station`**, not `qr_scan`. The two are
+different acts by different people and exports must be able to tell them
+apart.
+
+The unattended room-kiosk equivalent is the public
+`POST /api/public/v1/display/{code}/badge-tap` — see
+[Public Endpoints](#public-endpoints-no-auth-required).
+
+---
+
+## Label Printers & Station Documents
+
+```
+GET    /api/v1/label-printers                       # Any authenticated member; ?include_inactive
+POST   /api/v1/label-printers                       # settings.manage OR organization.update_settings
+PUT    /api/v1/label-printers/{printer_id}          # settings.manage OR organization.update_settings
+DELETE /api/v1/label-printers/{printer_id}          # settings.manage OR organization.update_settings
+POST   /api/v1/label-printers/{printer_id}/test     # settings.manage OR organization.update_settings
+GET    /api/v1/label-printers/{printer_id}/status   # settings.manage OR organization.update_settings
+POST   /api/v1/label-printers/probe                 # settings.manage OR organization.update_settings
+POST   /api/v1/labels/preview                       # The module's view permission
+POST   /api/v1/labels/generate                      # PDF labels; the module's view permission
+POST   /api/v1/labels/print                         # Send to a network printer; the module's view permission
+GET    /api/v1/label-preset/{module}                # The caller's position's preset for a module
+PUT    /api/v1/label-preset/{module}
 POST   /api/v1/station-documents/preview
 POST   /api/v1/station-documents/print
 ```
+
+Label requests name a `module`; an unknown module answers `404`, and a caller
+holding none of that module's view or manage permissions answers `403`.
+Printing a label reveals nothing the PDF does not, so both share the gate.
 
 **The server opens the socket to the printer**, using the registered host and
 port. Reachability is therefore the backend container's, not the operator's
@@ -648,775 +906,111 @@ nothing validates the address at save time.
 Each printer records the **command language** it speaks: `zpl` (Zebra and the
 many printers with ZPL emulation) or `escpos` (receipt-class thermal, some
 with linerless label media). The renderer, the stock sizes offered and the
-status query all branch on it. Rows that predate the column are `zpl`, which
-is a statement of fact rather than a guess — that was the only language that
-existed when they were written.
+status query all branch on it. A printer with no recorded language is `zpl`.
 
-Status is **best-effort and per printer**: one printer failing to answer no
-longer suppresses the answers from the others.
+Status is **best-effort and per printer**: a printer that fails to answer
+reports its status as unknown and does not suppress the answers from the
+others.
 
 `station-documents` renders the shift roster and the equipment check sheet to
-the watch-desk printer. The check sheet is gated on the same permission as the
-check itself, and a pass-down stays with its own crew.
+the watch-desk printer:
+
+| Document                | Requires (any of)                                                          |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `shift_roster`          | `scheduling.view`, `scheduling.manage`                                     |
+| `apparatus_check_sheet` | `inventory.check_view`, `inventory.check_submit`, `inventory.check_manage` |
+
+An unknown document answers `404`. A printed roster includes the shift's
+pass-down notes only for a viewer who may read them through the handoff
+endpoint — a shift manager, the named shift officer, or a member rostered on
+that shift — so a flat `scheduling.view` grant is not a way around that rule.
 
 ---
 
-## Equipment Checks — Sealed Containers _(2026-08-23)_
+## Labels — Generic Cross-Module Endpoints
+
+Any module that prints barcode labels goes through one generic API. The
+caller must hold one of the permissions the target module accepts for
+labels; an unknown module is a `404`, a caller holding none of the module's
+permissions a `403`. (Assembler: place this beside the "Label Printers"
+section, which documents `/label-printers/*` and `POST /labels/print`.)
 
 ```
-GET /api/v1/equipment-checks/templates/{template_id}/last-seals
+POST   /api/v1/labels/preview            # { module, ids } → { items: [{ name, barcode_value, subtitle }] } (read-only)
+POST   /api/v1/labels/generate           # { module, ids, label_format, ... } → application/pdf
+GET    /api/v1/label-preset/{module}     # Label preset for the caller's position in {module}
+PUT    /api/v1/label-preset/{module}     # Save it
 ```
 
-A template compartment marked `is_sealed` carries a numbered tamper seal. On a
-check, the crew records the number they read; if it is **intact and matches the
-last recorded seal**, the contents count inside is cleared.
+| Module                | Accepted permissions                                     |
+| --------------------- | -------------------------------------------------------- |
+| `inventory`           | `inventory.manage`                                       |
+| `apparatus`           | `apparatus.view`, `apparatus.manage`                     |
+| `prospective_members` | `prospective_members.view`, `prospective_members.manage` |
+| `facilities`          | `facilities.view`, `facilities.manage`                   |
+| `membership`          | `members.manage`, `members.manage_id_cards`              |
+| `storage_areas`       | `inventory.manage`                                       |
 
-Three rules that are load-bearing:
+**`POST /labels/generate`** takes `ids` (1–2000), `label_format` (default
+`letter`), `custom_width` (0.5–8 in) and `custom_height` (0.5–11 in),
+`auto_rotate`, `extra_lines` (up to 20 entries of at most 100 characters —
+a field key or `custom:<text>`), `symbology` (default `code128`) and
+`start_position` (1–30; sheet formats only, ignored on rolls). The PDF
+response carries an `X-Barcodes-Auto-Populated` header with the number of
+records that were given a barcode as part of the run. Generating
+`prospective_members` or `membership` labels is audited as
+`labels_generated`. The caller's own prospect application is filtered out
+of the id list for preview and generate.
 
-- **A seal clears counting only.** Expiry dates and pressure readings move on
-  their own while the bag sits shut and are never cleared by a seal.
-- **A seal proves unchanged, not full.** Confirming carries the previous counts
-  forward; it does **not** write quantities up to par. A bag that was three
-  short at its last count is still three short, and that files as a failure.
-- **Clearing requires an earned shortcut.** Without a prior intact seal whose
-  normalized number matches, the seal is still recorded but the contents must
-  be counted by hand.
-
-`check_template_items.check_type` now stores four values — `level`,
-`function`, `count`, `expiry` (`header` and `text` are layout, not checks).
-The request schema still **accepts** the legacy names and normalizes before
-storing, so an older client does not break over a rename it never asked for;
-it is deliberately stricter than the reader, because an unknown value arriving
-at a request boundary is the caller's mistake.
+**`PUT /label-preset/{module}`** takes `preset`, `printer_id`,
+`custom_width`, `custom_height` and `symbology`. `printer_id` is checked
+against the caller's organization before it is stored; omitting it leaves
+the remembered printer alone and an explicit `null` clears it. The GET
+returns `{ preset, printer_id, custom_width, custom_height, symbology,
+extra_lines, position_id, module }`, or `preset: null` when the caller's
+position has none saved. Inventory also exposes its own
+`GET/PUT /api/v1/inventory/label-preset` (see
+[Module-Inventory-Developer](Module-Inventory-Developer#labels)).
 
 ---
 
-## Self-Reported Training — Attachment With Submission _(2026-08-23 → 08-24)_
+## Prospective Member Documents
 
 ```
-POST /api/v1/training/submissions/with-attachment      (multipart)
-POST /api/v1/training/submissions/{id}/submit
-POST /api/v1/training/submissions/{id}/attachments
-GET  /api/v1/training/submissions/{id}/attachments
-GET  /api/v1/training/submissions/{id}/attachments/{index}/download
+GET    /api/v1/prospective-members/prospects/{id}/documents                        # List (prospective_members.view or .manage)
+POST   /api/v1/prospective-members/prospects/{id}/documents                        # Upload (multipart, ≤50MB) (members.manage or prospective_members.manage)
+GET    /api/v1/prospective-members/prospects/{id}/documents/{document_id}/download # Download (prospective_members.view or .manage)
+DELETE /api/v1/prospective-members/prospects/{id}/documents/{document_id}          # Delete (members.manage or prospective_members.manage)
 ```
 
-The certificate travels **with** the submission rather than as a second step
-that could be skipped. PDF/JPG/PNG, 10 MB, validated by magic bytes and stored
-under a server-generated name.
-
-Files land under the **training-record** attachment root on purpose: approval
-copies the submission's attachment dicts onto the `TrainingRecord` verbatim,
-and the record download route confines paths to `TRAINING_ATTACHMENT_DIR`. A
-sibling directory would `404` every approved certificate from the member's own
-training history.
-
-**Deleting or withdrawing a submission unlinks its file.** That is safe only
-because a submission is deletable in `draft`, `pending_review` and
-`revision_requested` alone — never after approval, the one state where a
-`TrainingRecord` also references the file. **If that guard is ever widened, the
-delete must stop unlinking.**
-
-`start_time` is now stored on both the submission and the approved record.
-Rows written before this have none; that reads as blank, not as 09:00, which
-is what editing previously assumed.
+Accepted types are PDF, Word (`.doc`, `.docx`), JPEG, PNG and GIF. Uploads
+are type-checked by magic bytes against that allowlist and for consistency
+with the file extension, and malware-scanned, before they are stored; every
+later read and delete is confined to the organization's applicant storage.
 
 ---
 
-## Events — Missed Mandatory _(2026-08-23)_
+## Prospective Members — Pipeline Board, Advancement and Bulk Actions
+
+Router prefix `/api/v1/prospective-members`, behind the Prospective Members
+module gate. Bodies are snake_case.
 
 ```
-GET /api/v1/events/missed-mandatory
+GET    /api/v1/prospective-members/pipelines/{pipeline_id}/kanban   # KanbanBoardResponse (prospective_members.view or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/{prospect_id}/advance  # Advance to the next stage (members.manage or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/{prospect_id}/regress  # Back to the previous stage (members.manage or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/{prospect_id}/assign-stage  # Place a prospect with no stage onto one (members.manage or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/{prospect_id}/status   # Set one prospect's status (members.manage or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/bulk-advance           # Advance up to 200 prospects (members.manage or prospective_members.manage)
+POST   /api/v1/prospective-members/prospects/bulk-status            # Set the status of up to 200 prospects (members.manage or prospective_members.manage)
 ```
 
-Mandatory events the calling member did not attend. **Excluded from the
-client-side API cache** — it is per member, and a cached copy on a shared
-device would show one member's misses to the next.
-
-Related: `event_rsvps.early_check_in_minutes` records how far ahead of the
-scheduled start a self check-in landed. **An early check-in is flagged and
-never credited as attendance.** The tap time remains the honest arrival
-record; this column exists so a manager is shown who tapped in early rather
-than having to compare timestamps by eye. Historical rows are null — working
-one out would mean deciding what each event's start time was at the moment
-somebody tapped, and an event edited since would be given a number that was
-never true.
-
----
-
-## Scheduling Requests — Pagination _(2026-08-20)_
-
-```
-GET /api/v1/scheduling/swap-requests?skip=0&limit=50
-GET /api/v1/scheduling/time-off?skip=0&limit=50
-```
-
-Both return `{ items, total, skip, limit }` — see the
-[breaking change notice](#breaking-response-shape-change-2026-08-20) above.
-
-**Access rules changed with it.** Scheduling requests are restricted to their
-participants, and **a requester cannot review their own swap or time-off
-request even holding `scheduling.manage`** — the review path rejects a
-self-review outright ("Requesters cannot review their own swap requests").
-
----
-
-## Equipment Check — Idempotent Submission _(2026-08-22)_
-
-Shift equipment-check submissions are now atomic and safe to retry.
-
-- **One check per `(shift_id, template_id)`**, enforced by
-  `uq_shift_equipment_check_shift_template`.
-- The client mints a **`client_submission_id` before sending**. A retry — from
-  an offline queue replaying on reconnect, a double tap, or a dropped
-  connection — resolves to the row the first attempt created, via
-  `uq_shift_equipment_check_client_submission` on
-  `(organization_id, client_submission_id)`.
-- **Bulk item creation is keyed on `(compartment_id, idempotency_key)`** with a
-  stored `payload_hash`. Same key + same payload replays the original
-  `item_ids`; **same key + different payload is rejected.**
-- Standalone (non-shift) checks require `equipment_check.submit` **or**
-  `equipment_check.manage` — submitting is not a manager-only right.
-- Check timing is enforced server-side — the client no longer supplies it.
-- Compartment parents are cycle-checked.
-
----
-
-## Shift Close-Out _(2026-08-19)_
-
-The resumable close-out wizard for departments recording a call count rather
-than per-incident detail. All four endpoints require `scheduling.manage`
-**or** being the shift's own officer.
-
-```
-GET    /api/v1/scheduling/shifts/{id}/closeout              # State + resume point
-PATCH  /api/v1/scheduling/shifts/{id}/closeout/attendance   # Step 1 — who was on, and when
-PATCH  /api/v1/scheduling/shifts/{id}/closeout/calls        # Step 2 — how many calls
-POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm and close
-```
-
-Each step writes real records as it advances, so an interrupted close-out
-resumes rather than restarting. `closeout_step` in the GET response is `0`
-(not started), `1` (attendance saved) or `2` (calls saved); a finalized shift
-reports `0`, and reopening restarts the wizard.
-
-**`PATCH …/closeout/calls`** accepts `reported_call_count`,
-`reported_call_types` and `attach_call_ids`. An explicit `null` count is
-meaningful — it clears a previously reported figure — and is distinguished from
-an omitted field, so a client that only attaches calls does not wipe a count it
-never mentioned. `reported_call_types` is keyed by the organization's own type
-slugs and must not exceed the total; the remainder is recorded as unclassified.
-
-**`POST …/finalize`** additionally accepts `manual_hours`,
-`member_call_counts`, `override_incomplete_checks` + `override_reason`
-(audited as `shift_finalized_check_override`), and `pass_down_notes`.
-
-`attach_call_ids` claims a call another unit already logged, which is what
-keeps a single incident counted once for the department when two units roll.
-`attachable_calls` in the GET response is **served empty** — the picker has no
-UI yet, and the field stays on the contract so it does not change when one
-lands.
-
-## Shift Calls / Runs _(2026-06-09)_
-
-Log the calls/runs a crew responded to during a shift. Read: `scheduling.view`;
-write: `scheduling.manage`. Hidden once a shift is finalized.
-
-> **This is the `detailed` call-tracking path.** A department on `count_only`
-> tracking does not use these endpoints — its volume lives in `org_calls` /
-> `org_call_responses` and is written through close-out. See
-> [Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms).
-
-```
-GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift
-POST   /api/v1/scheduling/shifts/{shift_id}/calls                       # Log a call (incident_type required)
-GET    /api/v1/scheduling/calls/{call_id}                               # Get a call
-PATCH  /api/v1/scheduling/calls/{call_id}                               # Update a call
-DELETE /api/v1/scheduling/calls/{call_id}                               # Delete a call
-```
-
-> Open-shift results _(2026-06-09)_: `GET /api/v1/scheduling/open-shifts` now returns shifts by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`), capped at 500 candidates in the window, excluding shifts the caller already holds — fixing fully-staffed shifts pushing open ones off a fixed page.
-
-## Inventory — Allowances, Size Preferences & Fulfillment _(2026-06-09)_
-
-```
-GET    /api/v1/inventory/allowances/check/{user_id}/{category_id}       # Remaining issue allowance { max_quantity, issued_this_period, remaining, period_type }
-POST   /api/v1/inventory/allowances                                     # Create allowance (audit: issuance_allowance_created)
-PUT    /api/v1/inventory/allowances/{allowance_id}                      # Update allowance
-DELETE /api/v1/inventory/allowances/{allowance_id}                      # Delete allowance
-GET    /api/v1/inventory/my/size-preferences                           # Current user's sizes (404 if unset)
-PUT    /api/v1/inventory/my/size-preferences                           # Upsert own sizes
-GET    /api/v1/inventory/label-preset                                  # (inventory) Label printer preset { preset, custom_width, custom_height, position_id, module }
-PUT    /api/v1/inventory/label-preset                                  # (inventory) Save label preset { preset, custom_width?, custom_height? }
-GET    /api/v1/label-preset/{module}                                   # Generic: label preset for the user's position in {module}
-PUT    /api/v1/label-preset/{module}                                   # Generic: save label preset for {module}
-POST   /api/v1/labels/preview                                          # { module, ids } → { items: [{ name, barcode_value, subtitle }] } (read-only)
-POST   /api/v1/labels/generate                                         # { module, ids, label_format, ... } → label PDF. Modules: inventory, apparatus, prospective_members, facilities, membership
-GET    /api/v1/inventory/members/{user_id}/size-preferences            # Member sizes (inventory.view)
-PUT    /api/v1/inventory/members/{user_id}/size-preferences            # Upsert member sizes (inventory.manage)
-PUT    /api/v1/inventory/requests/{request_id}/fulfill                  # Fulfill approved request → issuance/checkout/assignment
-GET    /api/v1/inventory/items/{item_id}/issuances?skip=&limit=        # Paginated issuances (default 50, max 200)
-DELETE /api/v1/inventory/categories/{category_id}                      # Soft-delete category (blocked if active items)
-DELETE /api/v1/inventory/variant-groups/{group_id}                     # Soft-delete variant group
-DELETE /api/v1/inventory/kits/{kit_id}                                 # Soft-delete equipment kit
-```
-
-> Issuing a pool item enforces the per-category allowance unless `override_allowance=true`. Member-specific inventory endpoints (`/inventory/my/`, `/inventory/members/`, `/inventory/charges`, `/inventory/checkout/`, `/inventory/users/`, `/inventory/members-summary`) are excluded from client caching (PII).
-
-## Inventory — Impact Planner _(2026-06-23)_
-
-All endpoints require `inventory.manage`.
-
-```
-GET    /api/v1/inventory/impact-planner/options                        # Filter options (ranks, stations, positions, statuses, membership types, categories, size fields)
-POST   /api/v1/inventory/impact-planner                                # Analyze a filter set → matched members, per-size breakdown, counts (contact gated by org settings)
-POST   /api/v1/inventory/impact-planner/reorder                        # Create one pending, pre-priced reorder request per shortfall size
-POST   /api/v1/inventory/impact-planner/issue                          # Bulk-issue matching on-hand pool stock to members who need it (audit + WS event)
-POST   /api/v1/inventory/impact-planner/request-sizes                  # In-app notification to members missing a size on file
-POST   /api/v1/inventory/impact-planner/pdf                            # Print-ready PDF summary (application/pdf)
-GET    /api/v1/inventory/impact-planner/plans                          # List saved plans
-POST   /api/v1/inventory/impact-planner/plans                          # Save a named plan (filter set)
-PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}                # Update a saved plan
-DELETE /api/v1/inventory/impact-planner/plans/{plan_id}                # Delete a saved plan
-```
-
-> The analyze body (statuses, membership types, ranks, stations, position ids, related/stock category, size field, `replacement_aware`, `allowance_aware`) is reused by reorder/issue/pdf and stored verbatim by saved plans. On-hand netting, cost, replacement, and allowance layers only run when their inputs are supplied.
-
-## Election Results & Verification _(2026-03-29)_
-
-```
-POST   /api/v1/elections/{id}/send-report                              # Email election results to voters
-POST   /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification, receipt in the body (rate-limited)
-GET    /api/v1/elections/{id}/verify-receipt                            # Deprecated ?receipt= form of the above (2026-10-05)
-```
-
-## Election Pre-Meeting Package _(2026-07-28)_
-
-All require `elections.manage`; draft/open elections only.
-
-```
-GET    /api/v1/elections/{id}/package-recipients?mode=                  # Prefill list (leadership | eligible_voters)
-GET    /api/v1/elections/{id}/package-pdf?variant=                      # Download package PDF (member | full)
-POST   /api/v1/elections/{id}/send-package                              # Email package to an edited address list (BCC + PDF attachment)
-```
-
-## Election Nominations, Paper Ballots & Meeting-Night Workflows _(2026-07-29)_
-
-Optional workflows are gated by per-org feature toggles in
-`org.settings.election_features` (enforced server-side). All require
-`elections.manage` unless noted. See [Module-Elections](Module-Elections) for
-the full endpoint table and workflow details.
-
-```
-# Nomination phase
-POST   /api/v1/elections/{id}/open-nominations                          # Draft -> nomination phase
-POST   /api/v1/elections/{id}/close-nominations                         # Nomination phase -> draft
-POST   /api/v1/elections/{id}/nominations                               # Nominate a member or yourself (any member)
-POST   /api/v1/elections/{id}/nominations/{cid}/accept                  # Nominee accepts (nominee only)
-POST   /api/v1/elections/{id}/nominations/{cid}/decline                 # Nominee declines (entry removed)
-
-# Paper ballots + officer attestation
-GET    /api/v1/elections/{id}/printable-ballot                          # Official blank paper ballot PDF
-POST   /api/v1/elections/{id}/manual-ballots                            # Record in-room tally (plausibility-guarded; allow_over_count override audited)
-GET    /api/v1/elections/{id}/manual-ballots                            # List paper batches with attestation trail
-POST   /api/v1/elections/{id}/manual-ballots/{batch}/attest             # Attest a batch's count (not the recorder; once per officer)
-POST   /api/v1/elections/{id}/manual-ballots/{batch}/void               # Void a mis-keyed batch (reason required)
-
-# Reminders & lifecycle
-GET    /api/v1/elections/{id}/non-voters                                # Eligible voters who haven't voted
-POST   /api/v1/elections/{id}/remind-non-voters                         # Reminder ballot email (fresh link; 1h cooldown)
-
-# Meeting-night tooling
-POST   /api/v1/elections/{id}/clone                                     # Fresh draft from this election's setup (new salt; votes/tokens never copied)
-POST   /api/v1/elections/{id}/write-ins/merge                           # Consolidate write-in variants (audited alias; vote rows untouched)
-GET    /api/v1/elections/{id}/certified-results                         # Certified results package PDF (closed elections only)
-
-# In-app ballot (authenticated; the emailed ballot's model, 2026-10-05)
-GET    /api/v1/elections/{id}/ballot                                    # Every ballot item and plain position + candidates + per-item standing (?proxy_authorization_id=)
-POST   /api/v1/elections/{id}/ballot                                    # Cast the ballot atomically: {votes: [...], proxy_authorization_id?}
-GET    /api/v1/elections/{id}/ballot/proxies                            # Proxies the caller holds (refused on anonymous elections)
-
-# Public token-ballot endpoints (no auth, rate-limited; token travels in the
-# POST body — never a query string or path)
-POST   /api/v1/elections/ballot/lookup                                  # Load ballot + candidates in one call (eligibility-filtered minimal view)
-POST   /api/v1/elections/ballot/vote                                    # Cast one vote (method-aware)
-POST   /api/v1/elections/ballot/vote/bulk                               # Submit full ballot atomically (choice | candidate_ids | rankings per item)
-```
-
-## Saved Ballot Templates _(2026-08-12)_
-
-Org-scoped, reusable ballot **configuration** snapshots (never candidates,
-voters, votes, tokens, or attendance — the create schema forbids extra
-fields). All require `elections.manage`.
-
-```
-GET    /api/v1/elections/templates/saved-ballots                        # List the org's saved templates
-POST   /api/v1/elections/templates/saved-ballots                        # Save a named template (201; 409 on case-insensitive duplicate name)
-DELETE /api/v1/elections/templates/saved-ballots/{template_id}          # Delete (204; 404 if not in the caller's org)
-```
-
-## Department Messages _(updated 2026-07-17)_
-
-Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints
-are available to any authenticated member (scoped to messages targeted to them).
-
-```
-# Admin (notifications.manage)
-GET    /api/v1/messages                                  # List messages (supports include_inactive, search, priority, pagination)
-POST   /api/v1/messages                                  # Create message (supports scheduled_at for deferred publish)
-GET    /api/v1/messages/roles                            # Roles available for targeting (id, name, slug)
-GET    /api/v1/messages/{id}                             # Get message
-PATCH  /api/v1/messages/{id}                             # Update message (edit / reschedule)
-DELETE /api/v1/messages/{id}                             # Soft-delete message (read/ack records preserved)
-GET    /api/v1/messages/{id}/stats                       # Read/ack counts with audience denominator
-GET    /api/v1/messages/{id}/acknowledgments             # Per-recipient read/ack breakdown
-
-# Member (authenticated)
-GET    /api/v1/messages/inbox                            # Messages targeted to the current user
-GET    /api/v1/messages/inbox/unread-count               # Current user's unread/pending count
-POST   /api/v1/messages/{id}/read                        # Mark message as read
-POST   /api/v1/messages/{id}/acknowledge                 # Acknowledge (for ack-required messages)
-```
-
-Posting a message fans it out across in-app / email / SMS channels by priority
-(see the [Training guide](../docs/training/07-documents-forms.md#department-messages)).
-
----
-
-## Audit Logs (Admin) _(updated 2026-07-30)_
-
-Read-only admin API for browsing the audit trail. Permission: `audit.view`.
-Results are org-scoped on the `audit_logs.organization_id` column (stamped at
-write time and covered by hash-chain v3; previously derived by joining through
-the mutable users table). Platform-level rows with a NULL organization are
-never returned to org admins.
-
-```
-GET    /api/v1/audit-logs                                # List (filters below; skip/limit)
-GET    /api/v1/audit-logs/stats                          # Summary counts (by severity, by category)
-GET    /api/v1/audit-logs/{log_id}                       # Get a single audit entry
-```
-
-Filters on the list endpoint: `event_type`, `event_category`,
-`severity` (`info` \| `warning` \| `critical`), `user_id`, `search` (username or
-event-type substring), `start_date`, `end_date`, `skip` (≥0), `limit` (1–500).
-
-## OAuth Sign-In _(2026-05-29)_
-
-```
-GET    /api/v1/auth/oauth-config                         # Enabled OAuth providers (for the login page)
-GET    /api/v1/auth/oauth/google                         # Initiate Google sign-in (404 if not configured)
-GET    /api/v1/auth/oauth/google/callback                # Google OAuth callback
-GET    /api/v1/auth/oauth/microsoft                      # Initiate Microsoft sign-in (404 if not configured)
-GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callback
-```
-
-See [Authentication > OAuth](Security-Authentication#oauth) for the
-link-existing-only policy, domain restriction, and callback error codes.
-
-_(2026-08-12)_ When the matched account has TOTP MFA enabled, the callback no
-longer issues session cookies: it 302-redirects to the SPA with a short-lived
-`mfa_pending` token in the **URL fragment** (`/auth/callback#mfa_token=…`),
-and the client completes the second factor through the normal
-`POST /api/v1/auth/mfa/login` before any session exists. Audit event:
-`oauth_mfa_challenge`.
-
-## Prospective Member Documents _(2026-05-29)_
-
-```
-GET    /api/v1/prospective-members/prospects/{id}/documents                       # List documents
-POST   /api/v1/prospective-members/prospects/{id}/documents                       # Upload document (multipart, ≤50MB, magic-byte MIME)
-GET    /api/v1/prospective-members/prospects/{id}/documents/{document_id}/download # Download a stored document
-```
-
----
-
-## Training Programs _(2026-07-14)_
-
-Endpoints live under `/api/v1/training/programs` (note the doubled `programs`
-segment on program-scoped routes: prefix `/training/programs` + path
-`/programs/...`).
-
-```
-POST   /api/v1/training/programs/programs/build                        # Atomically create a program + phases + requirements + milestones (training.manage)
-GET    /api/v1/training/programs/programs/{program_id}/enrollments      # List a program's enrollments with member names (training.view_all OR training.manage)
-POST   /api/v1/training/programs/enrollments/{enrollment_id}/advance-phase?force=<bool>  # Manually advance to the next phase (training.manage); requires the current phase complete unless force=true
-PATCH  /api/v1/training/programs/progress/{progress_id}                 # Update requirement progress (training.manage)
-PATCH  /api/v1/training/programs/programs/{program_id}/requirements/{program_requirement_id}  # Toggle a requirement's is_required / is_prerequisite / sort_order (training.manage)
-GET    /api/v1/training/programs/sample-templates                      # List built-in sample program templates (training.manage)
-POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a sample template to the org (training.manage)
-GET    /api/v1/training/programs/programs/{program_id}/eligibility     # Per-member enroll eligibility, eligible first (training.manage)
-PATCH  /api/v1/training/programs/programs/{program_id}                 # Edit program details (training.manage)
-DELETE /api/v1/training/programs/programs/{program_id}                 # Delete a program + all children (training.manage)
-PATCH  /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Edit a phase (training.manage)
-POST   /api/v1/training/programs/programs/{program_id}/phases/reorder            # Renumber phases (training.manage)
-DELETE /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Delete a phase, auto-clean enrollees (training.manage)
-POST   /api/v1/training/programs/programs/{program_id}/requirements/reorder       # Set requirement sort order (training.manage)
-DELETE /api/v1/training/programs/programs/{program_id}/requirements/{prog_req_id} # Remove a requirement, auto-clean (training.manage)
-PATCH  /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}  # Edit a milestone (training.manage)
-DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}  # Delete a milestone (training.manage)
-```
-
-- **`PATCH .../progress/{progress_id}`** — `RequirementProgressUpdate` now also
-  accepts `test_score` (0–100) for officer-entered knowledge/skills scoring.
-  Pass/fail is derived from the requirement's `passing_score`, and `max_attempts`
-  is enforced.
-- **`PATCH .../requirements/{program_requirement_id}`** — flipping `is_required`
-  recomputes affected members' progress and re-checks phase advancement.
-- **`.../sample-templates`** — three curated starting points (Firefighter recruit
-  school, EMT recruit school, new-member orientation). `instantiate` replays the
-  atomic build into the org as an editable template; optional body
-  `{ "name": "…", "is_template": true }`.
-- **`.../{program_id}/eligibility`** — returns every member with `eligible`, a
-  `status` (`eligible` / `enrolled` / `prerequisite` / `concurrent`), and a `reason`.
-  Hard gates (already enrolled, missing prerequisite) set `eligible: false`.
-  **`concurrent`** (active in another program) is a soft advisory: `eligible: true`
-  with a `reason` — never a block. Target position/roles are not gated.
-- **Registry pick-and-choose import.** `GET …/requirements/registries/{name}/preview`
-  lists a registry's requirements (each flagged `already_imported`, with its topic-area
-  `sections`) for a selection UI; `POST …/requirements/import/{name}` accepts a body
-  `{ registry_codes: [...], skip_existing }` to import only those codes (omit the body
-  to import the whole registry). Importing a requirement that distributes hours across
-  sections auto-creates a training category per section and links the requirement to
-  them; the result's `categories_created` reports how many were made.
-- **Editing endpoints** back the inline pipeline editor. `PATCH …requirements/{id}`
-  also accepts `phase_id` to move a requirement between phases. `DELETE` on a phase or
-  requirement is auto-cleaning: it clears only this program's enrolled members'
-  progress for the affected items and re-anchors/recomputes them (see the changelog
-  entry). Reorder endpoints take an ordered id list and renumber in one transaction.
-- **Program create/response** now include `code` and `version`; each program
-  phase includes `requires_manual_advancement`.
-- **Phase prerequisites.** `prerequisite_phase_ids` on a phase create/update names
-  phases in the same program that must be _finished_ before it opens (distinct from
-  `phase_number`, which is only the order). Rejected with a 400 when an id belongs to
-  another program, a phase lists itself, or the result would form a cycle. Both
-  `advance-phase` and automatic advancement honor them; `force=true` overrides.
-- **Requirement prerequisites.** A program↔requirement link with
-  `is_prerequisite: true` gates the other requirements in its scope (its phase, or
-  the program-level pool). `PATCH /progress/{progress_id}` refuses a gated
-  requirement, and `GET /enrollments/{enrollment_id}` returns
-  `locked_requirements: { requirement_id: [blocking requirement names] }` so the UI
-  can grey the step out with the reason.
-- **Deadline reminders.** `reminder_conditions` is now accepted on program
-  create/update: `days_before_deadline` (int or list of ints) and
-  `send_if_below_percentage` (0–100). Unset falls back to `warning_days_before`
-  plus 14- and 7-day follow-ups; the weekly `enrollment_deadline_warnings` sweep
-  reads it per program instead of a fixed `[30, 14, 7]`.
-  `milestone_threshold` is accepted and **ignored** — `ProgramMilestone` rows
-  already fire progress-based notifications, and two mechanisms for one job is
-  how the two drift apart.
-
-### Checklist Requirements — Per-Step Sign-Off _(2026-08-09)_
-
-A `checklist` requirement's steps are stored on `checklist_items`, which now
-holds objects rather than bare strings:
-
-```json
-{ "id": "…", "text": "Tour the apparatus bay", "member_visible": true }
-```
-
-- **Both shapes are accepted on input.** A bare string, an object, or a mix
-  normalizes to the object form (`app/utils/checklist.py`); the `id` is assigned
-  server-side when a step is created. Editors send existing ids back so a step
-  keeps its identity — and the ticks recorded against it — through a rename or a
-  reorder. **Legacy string rows normalize on read**, not through a migration.
-- **`PATCH /progress/{progress_id}`** accepts `checklist_done: [step_id, …]` —
-  the steps ticked so far. Completion is `ticked / total`, so the requirement
-  fills up as the work happens instead of being all-or-nothing.
-- **`member_visible: false`** keeps a step off the member's view (references
-  called, background check returned). **Hidden steps still count toward the
-  denominator** — excluding them would let a requirement read 100% while the
-  background check was outstanding — so the member is told "+N more steps your
-  officer records" rather than shown a total that does not match their screen.
-
-### Enrollment Expiry and Reopen _(2026-08-09)_
-
-```
-POST   /api/v1/training/programs/enrollments/{enrollment_id}/reopen    # Put an expired enrollment back to active (training.manage)
-```
-
-Optional body: `{ "target_completion_date": "…" }` — an officer granting an
-extension to a member who ran out of time.
-
-- **Enrollments past `target_completion_date` now become `EXPIRED`.** The status
-  was read (recert treats it as a renewable state) but never written, so a member
-  stayed `ACTIVE` indefinitely with their page reading "42 days overdue" against a
-  status claiming otherwise.
-- Expiry happens **on read** — the progress endpoint transitions an overdue
-  enrollment the moment someone opens it, the same pattern `auto_reset_if_due`
-  already used — and in a **daily** `enrollment_expiry` scheduled task (05:15).
-  The weekly `enrollment_deadline_warnings` sweep no longer expires anything; it
-  sends warnings.
-- **Reopen leaves progress rows untouched** — the member keeps everything they
-  finished — and re-runs the rollup, so someone who quietly completed the work
-  while expired is marked complete rather than waiting for the next edit.
-- Returns `404` when the enrollment is not in the caller's organization, `400`
-  when it is not in a state that can be reopened.
-
-### Soft Phase Gate on Attendance _(2026-07-14)_
-
-```
-POST   /api/v1/events/{event_id}/rsvp?override=<bool>                   # RSVP to an event
-POST   /api/v1/events/{event_id}/self-check-in?override=<bool>          # Self check-in to an event
-```
-
-When the member is enrolled in a program and the session's phase is **ahead of**
-their current phase, these endpoints return HTTP **409**:
-
-```json
-{ "detail": { "warning_type": "phase_gate", "message": "..." } }
-```
-
-Pass `override=true` to proceed anyway.
-
-## Attendance Requests ("I was there") _(2026-09-30)_
-
-A member with no check-in asks to be marked present at an event that is over,
-and the event's organizer, its alternate or an `events.manage` holder decides.
-All five routes require authentication only; who may review is checked per
-event in the handler, because an organizer need not hold `events.manage`. See
-[Module-Events](Module-Events#attendance-requests-i-was-there).
-
-```
-POST   /api/v1/events/{event_id}/attendance-petitions                         # Ask (201)
-GET    /api/v1/events/{event_id}/attendance-petitions/mine                    # The caller's request and whether they may ask
-GET    /api/v1/events/{event_id}/attendance-petitions                         # Every request, pending first (reviewers)
-POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/approve   # Record the confirmed times (reviewers)
-POST   /api/v1/events/{event_id}/attendance-petitions/{petition_id}/reject    # Decline with a reason (reviewers)
-DELETE /api/v1/events/{event_id}/attendance-petitions/mine                    # Withdraw the caller's pending request (204, 2026-10-09)
-GET    /api/v1/events/attendance-petitions/pending?scope=mine|all             # Pending requests across events, oldest first (2026-10-09)
-```
-
-`GET .../attendance-petitions/pending` lists pending requests with the event
-each is about (`event_title`, `event_start_datetime`, `event_end_datetime`,
-`event_actual_start_time`, `event_actual_end_time`, `attendance_finalized`).
-`scope=mine` (the default) is the events the caller organizes or is alternate
-for; `scope=all` is every event in the department and answers 403 without
-`events.manage`. The caller's own requests are never listed.
-
-| Route         | Body                                                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` (ask)  | `reason` (1–1000 chars, required); `requested_check_in_at`, `requested_check_out_at` (optional, not in the future, departure after arrival) |
-| `.../approve` | `check_in_at`, `check_out_at` (both required, check-out after check-in and not in the future); `review_note` (optional, ≤1000)              |
-| `.../reject`  | `review_note` (1–1000 chars, required — it is the only thing the member is told)                                                            |
-
-`GET .../mine` returns `{ "petition": <request or null>, "can_request": bool,
-"unavailable_reason": <sentence or null> }`. The screen offers **I was there**
-exactly when `can_request` is true, so the rules below live only on the server:
-
-- the event is not a draft and not cancelled;
-- its check-in window has closed — while self check-in still works the answer
-  is "Check in instead";
-- it ended (`actual_end_time`, else `end_datetime`) no more than **30 days** ago;
-- the caller is not already present (`checked_in`, or an officer's
-  `override_check_in_at`);
-- the caller has no request on file — one request per member per event,
-  enforced by a unique index, so a decided request is final.
-
-**Withdrawing** (`DELETE .../mine`) takes back the caller's own request while
-it is still pending, so they may ask again under the same rules; the reviewers'
-in-app prompts are archived and the audit log records it
-(`event_attendance_petition_withdrawn`). The request is kept with status
-`withdrawn` and asking again reuses it, so its withdrawal count carries over:
-after **two** withdrawals the pending request is final, `GET .../mine` reports
-`can_withdraw: false` and a further withdrawal answers 400. An approved or
-declined request cannot be withdrawn (400), and with no request on file the
-answer is 404. The row lock
-it shares with approve and reject means a withdrawal and a decision arriving
-together resolve to one or the other. Every petition response carries
-`withdrawal_count` (0 for a request never withdrawn), so a reviewer notified
-more than once can see the request was resent.
-
-Approval writes the same RSVP override **Edit Times** writes
-(`override_check_in_at`, `override_check_out_at`, `override_duration_minutes`)
-and sets `checked_in`; finalize credits it. It is therefore refused while
-attendance is finalized; declining is not. Nobody decides their own request.
-
-| Status | When                                                                                                           |
-| ------ | -------------------------------------------------------------------------------------------------------------- |
-| `400`  | Not eligible (the sentence says why), invalid times, or the request is already decided (including on withdraw) |
-| `403`  | The caller is not the organizer, alternate or an `events.manage` holder, or is deciding their own request      |
-| `404`  | Event or request not in the caller's organization, or the event is a draft                                     |
-| `409`  | Approve while attendance is finalized — reopen attendance first                                                |
-
-Responses carry member names and free-text reasons, so the frontend never
-caches them (`/attendance-petitions` in `UNCACHEABLE_SUBSTRINGS`).
-
-## Guest Check-In — Non-Member Attendance _(2026-08-09)_
-
-Unauthenticated endpoints reached by scanning the **guest** QR code on a room
-display. They only work when the event has `allow_guest_check_in` set **and** is
-held in the room the display code belongs to.
-
-```
-GET    /api/public/v1/display/{display_code}/events/{event_id}/guest            # Event detail for the sign-in page
-POST   /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in   # Record a guest's attendance (201)
-```
-
-**Why the display code is in the path.** The department is resolved from the
-room's display code, **never from the request body** — an anonymous caller must
-not be able to name the organization it is writing to. The event is then checked
-to be held in that room, so a valid display code cannot be used to sign people in
-to an event somewhere else.
-
-**Request** (`GuestCheckInRequest`):
-
-| Field               | Type   | Required | Notes                                                                |
-| ------------------- | ------ | -------- | -------------------------------------------------------------------- |
-| `first_name`        | string | yes      | 1–100 chars, must contain a non-whitespace character (`\S`), trimmed |
-| `last_name`         | string | yes      | Same                                                                 |
-| `email`             | email  | no       | Required for a prospect to be created                                |
-| `phone`             | string | no       | ≤ 50 chars                                                           |
-| `organization_name` | string | no       | ≤ 255 chars — the company/agency the guest is with                   |
-| `interest_reason`   | string | no       | ≤ 2000 chars, stored on the attendance row as `notes`                |
-| `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in        |
-
-**Response** (`GuestCheckInResponse`): `status` (`checked_in` | `already_checked_in`),
-`attendee_id`, `event_name`, `checked_in_at`, `message`. _(2026-08-11)_
-`prospect_created` was removed from the response: an unauthenticated kiosk
-caller could use it to probe whether a name/email already exists as a
-prospect. The "someone will follow up" notice is now driven client-side from
-the event's `collects_prospect_details` flag.
-
-**GET response** (`GuestCheckInEventInfo`) exposes only what a visitor standing in
-the room can already see — name, type, start/end, room, department name,
-`is_open` + `closed_reason`, `collects_prospect_details`, and the department
-`timezone` so an unauthenticated tablet renders local times rather than UTC. The
-event **description is withheld**, matching the kiosk display.
-
-**Defences and their status codes:**
-
-| Condition                                        | Result                                                               |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| Per-IP rate limit exceeded                       | `429`                                                                |
-| Per-event daily cap exceeded                     | `429` — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0` disables it |
-| Honeypot field populated                         | **`201` with a plausible success body**, nothing written             |
-| Outside the check-in window                      | `400` with the reason (not opened yet / has closed)                  |
-| Event not in that room, or guest check-in is off | `404`                                                                |
-
-> **Guests do not get the member early-arrival grace.** A member may check in
-> before a FLEXIBLE window opens because a member checking in early is
-> identifiable and correctable; an anonymous early write is neither. Guests are
-> held to the window the organizer actually configured.
-
-> **The honeypot answers with success, not an error.** A bot that receives a
-> rejection learns which field to stop filling; one that receives a plausible
-> confirmation has no signal to adapt to. This matches the public forms endpoint.
-
-**Side effects.** Always writes an `event_external_attendees` row with
-`source = 'kiosk_qr'`. When the event also has `guest_check_in_creates_prospect`
-and the guest supplied an email, it opens (or reuses) a `prospective_members`
-record, links it to the event through `prospect_event_links`, and stores the
-prospect id on the attendance row. **A pipeline failure is logged and swallowed**
-— it never costs a guest their attendance.
-
-**Duplicate handling.** A repeat sign-in matches on email where one was given and
-on name where it was not, and returns `already_checked_in` rather than creating a
-second row. Name matching is the weaker fallback: two different Chris Smiths at
-one open house collapse into a single row. A guest pre-registered by staff keeps
-the details staff entered; the kiosk sign-in only fills blanks.
-
-## Skills Testing — Pipeline Requirement Link _(2026-07-14)_
-
-Skills templates and tests can point at the training-pipeline requirement they
-satisfy via a nullable `requirement_id`. Endpoints are under
-`/api/v1/training/skills-testing`.
-
-```
-POST   /api/v1/training/skills-testing/templates                       # Create template (accepts/validates requirement_id — must be a real requirement in the org)
-PUT    /api/v1/training/skills-testing/templates/{id}                   # Update template (accepts/validates requirement_id)
-POST   /api/v1/training/skills-testing/tests                           # Create test (requirement_id from body, else inherited from the template)
-POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complete test; a PASS on a non-practice test with a requirement_id marks it COMPLETE on the candidate's active enrollment(s)
-```
-
-- Template list/detail responses and test responses now include
-  `requirement_id`.
-- On completion, a **pass** routes through the training-program progress updater
-  (percentage, completion, rollup, and phase-advancement all run). A **fail**,
-  a **practice** test, or a test with no `requirement_id` does nothing to the
-  pipeline.
-
-> **Superseded in part on 2026-08-08.** The pipeline credit no longer lands at
-> completion for a member-run test — it lands at **validation**. See the next
-> section.
-
----
-
-## Skills Testing — Member Examining & Officer Validation _(2026-08-08)_
-
-Skills testing was gated on `training.manage` end to end. **Examining is now
-open to every member**; the officer's authority moved to a second step,
-**validating** the result against the candidate's account.
-
-```
-GET    /api/v1/training/skills-testing/candidates?q=<fragment>   # Name lookup for the start-test picker (training.view | training.manage)
-POST   /api/v1/training/skills-testing/tests                     # Start a test — official is now AUTH-ONLY
-POST   /api/v1/training/skills-testing/tests/{id}/complete       # Score — AUTH-ONLY. An officer's completion validates in the same step
-POST   /api/v1/training/skills-testing/tests/{id}/validate       # Accept the result against the candidate's record (training.manage). Idempotent
-POST   /api/v1/training/skills-testing/tests/{id}/void           # The rejection path — keeps the record and the reason (training.manage)
-GET    /api/v1/training/skills-testing/tests?pending_validation=true   # Officer review queue
-GET    /api/v1/training/skills-testing/summary                   # Now carries `pending_validation`
-```
-
-**Until `validated_at` is set, an official test is a submission, not a
-record.** It credits no pipeline requirement, spends no attempt against
-`max_attempts`, and is excluded from the summary's pass rate and average score.
-The candidate sees it listed as _awaiting validation_ with the outcome withheld.
-
-| Gate change                                                                 | Before                | After                         |
-| --------------------------------------------------------------------------- | --------------------- | ----------------------------- |
-| `POST /tests` (official), `PUT`, `/complete`, `/cancel`                     | `training.manage`     | Authenticated                 |
-| `/validate` _(new)_, `/void`, `/release`, `/viewers*`, `DELETE /tests/{id}` | — / `training.manage` | `training.manage`             |
-| `/templates` writes                                                         | `training.manage`     | `training.manage` (unchanged) |
-
-**Separation of duties (CS-8)** holds at both ends: a member cannot examine
-themselves on an official test, and an **officer cannot validate a test they
-are the candidate in** — that would launder a peer-run self-pass. Both are
-`400`.
-
-**`GET /candidates` is a lookup, not a listing.** It exists because examining is
-open to every member while `GET /users` needs `users.view`, which the baseline
-member position does not carry. It returns `[{ id, name }]` only.
-
-| Guard            | Value                                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------- |
-| `q`              | **Required**, min 2 characters — no request returns the roster                          |
-| Whitespace-only  | `422`, refused before the query runs                                                    |
-| `LIKE` wildcards | `\`, `%`, `_` escaped — a bare `%` would match every row                                |
-| Result cap       | **15**, truncated silently                                                              |
-| Scope            | Caller's org, `status = ACTIVE`, `deleted_at IS NULL`; matched on the full display name |
-
-**New response fields:** `SkillTestResponse` gains `validated_at`,
-`validated_by`, `validated_by_name` and the derived `pending_validation`;
-`SkillTestListResponse` gains `validated_at` and `pending_validation`;
-`SkillTestingSummaryResponse` gains a `pending_validation` count (`0` for
-readers who cannot validate).
-
-**Schema:** `skill_tests.validated_at` (`DATETIME`, nullable),
-`skill_tests.validated_by` (`VARCHAR(36)` → `users.id` `ON DELETE SET NULL`),
-index `idx_skill_test_org_validation` (`organization_id`, `is_practice`,
-`validated_at`). Migration `20260808_0001`; existing completed official results
-are backfilled as validated by their examiner.
-
----
-
-## Prospective Members — Kanban Response Model & Bulk Actions _(2026-08-08)_
-
-Router prefix `/api/v1/prospective-members`.
-
-```
-GET    /api/v1/prospective-members/pipelines/{id}/kanban   # Now returns KanbanBoardResponse, not a bare dict
-POST   /api/v1/prospective-members/prospects/bulk-advance  # members.manage | prospective_members.manage
-POST   /api/v1/prospective-members/prospects/bulk-status   # members.manage | prospective_members.manage
-POST   /api/v1/prospective-members/prospects/{id}/advance  # Now 409 when there is nowhere to advance to
-```
-
-**The kanban endpoint declared no response model**, so FastAPI serialized every
-column of `ProspectiveMember` — putting `status_token` (the credential behind
-the public application-status page), coordinator notes, date of birth and home
-address into a board held by anyone with `prospective_members.view`. It now
-returns `KanbanBoardResponse`, whose cards carry the **same projection as the
-prospect list** via a shared mapper.
+**Kanban board.** The endpoint declares `KanbanBoardResponse`, whose cards carry
+the **same projection as the prospect list** via a shared mapper — never the
+full `ProspectiveMember` row (no `status_token`, coordinator notes, date of
+birth or home address). The caller's own prospective-membership record is
+omitted. Cards are capped at 500 per board; each column's `count` is the true
+total regardless.
 
 | `KanbanBoardResponse` field                            | Notes                                            |
 | ------------------------------------------------------ | ------------------------------------------------ |
@@ -1426,311 +1020,136 @@ prospect list** via a shared mapper.
 | `columns[].count`                                      | True column size — can exceed the cards returned |
 | `total_prospects` / `returned_prospects` / `truncated` | Board truncation state                           |
 
-**Bulk actions** take `prospect_ids` (1–**200**) plus `notes` (advance) or
+**Advance.** Optional body `{ notes, completed_items }`. `completed_items` is
+the list of checklist items ticked when completing a checklist stage (at most
+200 items, each at most 255 characters); a checklist stage refuses to complete
+until its items are ticked, and the ticks arrive with the advance that
+completes it. Advance and regress answer **`409`** when the prospect has
+nowhere to move (already at the final stage, no current stage, or a status
+that stops the move) and `404` when the prospect is not in the caller's
+organization. `assign-stage` (body `{ step_id, notes? }`) is recovery only: it
+is refused with `409` when the applicant already has a stage.
+
+**Status changes.** `status` is one of `active`, `on_hold`, `approved`,
+`rejected`, `withdrawn` or `inactive`; `transferred` is refused, because it is
+set by converting the applicant to a member. `reason` (at most 1000
+characters) is recorded in the prospect's **activity log** and never written to
+the `notes` column.
+
+**Bulk actions** take `prospect_ids` (1–200) plus `notes` (advance) or
 `status` + `reason` (status), and return `BulkActionResponse`:
-`succeeded_count`, `failed_count`, and a `results[]` of
+`succeeded_count`, `failed_count`, and `results[]` of
 `{ prospect_id, name, succeeded, error }`. **One failure never aborts the
-rest.** Bulk ids arrive in the body, where the router's path-parameter privacy
-guard cannot see them, so both endpoints filter the caller's own prospect record
-explicitly and report it as **"not found"**. A `bulk-status` `reason` is
-recorded in the **activity log** and never written to the `notes` column.
+rest**: each prospect is committed before the next is attempted, and a prospect
+already at the final stage is reported as a failure, not counted as advanced.
+Bulk ids arrive in the body, where the router's path-parameter privacy guard
+cannot see them, so both endpoints filter the caller's own prospect record
+explicitly and report it as **"Prospect not found"** — identical to an id that
+does not exist.
 
-**`POST /prospects/{id}/advance` now answers `409`** when the prospect is
-already at the final stage or has no current stage, instead of `200` with an
-untouched record and a fabricated `membership_pipeline.prospect_advanced` audit
-entry.
-
-**`referred_by` is validated against the caller's org** on prospect create and
-update (`assert_in_org`, fails closed, generic message so the endpoint is not a
-cross-tenant existence oracle). Conversion **drops** an out-of-org referrer
-rather than copying it onto `User.referred_by_user_id`. Both endpoints now
-translate `ValueError` into `400` rather than letting it surface as a `500`.
+**Referrer validation.** `referred_by` (and `target_role_id`) are validated
+against the caller's organization on prospect create and update
+(`assert_in_org`, fails closed, generic message so the endpoint is not a
+cross-tenant existence oracle); a `ValueError` there is a `400`. Conversion to
+a member drops an out-of-org referrer rather than copying it onto
+`User.referred_by_user_id`.
 
 ---
 
-## Training — Multi-Class Courses & Cohorts _(2026-08-05)_
+## Finance — Approval Steps and Approver Coverage
 
-A course can carry an ordered **syllabus** of classes; a **cohort** is one
-scheduled run of that course. Syllabus routes hang off the existing course
-paths; cohort routes live under `/api/v1/training/cohorts`.
+Router prefix `/api/v1/finance`. Finance request and response bodies are
+camelCase (`alias_generator=to_camel`).
 
 ```
-GET    /api/v1/training/courses/{course_id}/classes                     # List the syllabus, in order (authenticated)
-POST   /api/v1/training/courses/{course_id}/classes                     # Add a class (training.manage)
-PATCH  /api/v1/training/courses/{course_id}/classes/{class_id}          # Update one class (training.manage)
-DELETE /api/v1/training/courses/{course_id}/classes/{class_id}          # Remove a class (training.manage)
-POST   /api/v1/training/courses/{course_id}/classes/reorder             # Set the order — must list every class exactly once (training.manage)
-POST   /api/v1/training/courses/{course_id}/classes/autofill            # Recompute every day_offset from a meeting pattern (training.manage)
-POST   /api/v1/training/cohorts/preview                                 # Compute the dates a cohort would get — read-only (training.manage)
-GET    /api/v1/training/cohorts                                         # List cohorts, filterable by course_id / status (training.manage)
-GET    /api/v1/training/cohorts/mine                                    # Cohorts the caller is on the roster for (authenticated)
-POST   /api/v1/training/cohorts                                         # Generate a cohort (training.manage)
-GET    /api/v1/training/cohorts/{cohort_id}                             # Cohort with class timeline + roster (officer, or a roster member)
-PATCH  /api/v1/training/cohorts/{cohort_id}                             # Update cohort details (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/regenerate                  # Create events for classes that have none (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/shift                       # Shift upcoming classes by N days (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/cancel                      # Cancel the cohort and its remaining classes (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/classes                     # Add an ad-hoc class (training.manage)
-PATCH  /api/v1/training/cohorts/{cohort_id}/classes/{cohort_class_id}   # Reschedule one class (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/classes/{cohort_class_id}/cancel  # Cancel one class (training.manage)
-POST   /api/v1/training/cohorts/{cohort_id}/members                     # Add roster members (training.manage)
-DELETE /api/v1/training/cohorts/{cohort_id}/members/{user_id}           # Withdraw a member (training.manage)
+GET    /api/v1/finance/approval-chains/approver-coverage   # Every approval step, who can act on it, any problem, requests waiting (finance.configure_approvals)
+POST   /api/v1/finance/approvals/{step_record_id}/approve  # Approve the step a request is waiting on (finance.approve)
+POST   /api/v1/finance/approvals/{step_record_id}/deny     # Deny it (finance.approve)
 ```
 
-- **`POST .../courses/{id}/classes`** — `class_course_id` is **required**: every
-  class teaches a real catalog course, which is what supplies its credit hours,
-  certification settings and categories. Title, credit hours and instructor
-  default from that course when omitted. Timing is _relative_ — `day_offset`
-  (days from the cohort start, 0-based) plus a local `start_time` (`"HH:MM"`)
-  and `duration_minutes`. A course cannot list itself as one of its classes,
-  and a syllabus is capped at 200.
-- **`POST .../classes/reorder`** — changes `sequence` only, **not** `day_offset`.
-  Ordering and timing are independent; re-space with `/autofill` or by editing
-  offsets. The body must list every class in the course exactly once.
-- **`POST .../classes/autofill`** — `{meeting_days: [1, 3], start_weekday: 0}`
-  ("Tuesdays and Thursdays, course starts on a Monday") rewrites every class's
-  `day_offset` in sequence order: 1, 3, 8, 10, … Times and durations are only
-  overwritten when defaults are supplied.
-- **`POST /cohorts/preview`** — the safety step. Read-only; creates nothing.
-  Returns every class with its resolved UTC `scheduled_start`/`scheduled_end`
-  plus per-class `warnings` (a date moved off a weekend or blackout day, an
-  archived catalog course, a room already booked), and
-  `suggested_blackout_dates` (US federal holidays inside the course span).
-  Times are resolved as **local wall clock against the organization timezone**,
-  so a course spanning a DST change keeps the same clock time throughout.
-- **`POST /cohorts`** — the consequential call. In one transaction it creates
-  one `Event` + one linked `TrainingSession` **per class**, optionally builds a
-  matching pipeline (`generate_program`), enrolls `member_user_ids` in it, and
-  RSVPs them to every class. `classes` carries the officer's edits from the
-  preview (`scheduled_start`/`scheduled_end` overrides and `skip`). A class
-  whose session fails (room conflict) does not fail the generation — the class
-  is created without an event and the reason comes back in the response's
-  warnings, to be repaired with `/regenerate`.
-- **`POST /cohorts/{id}/regenerate`** — creates events only for classes whose
-  `event_id` is NULL. Safe to run repeatedly: the
-  `(cohort_id, course_class_id)` unique constraint means it can never duplicate
-  a class, and it never moves an existing one.
-- **`PATCH /cohorts/{id}/classes/{class_id}`** — moves the cohort class _and_
-  its linked event; RSVPs are preserved. Rejected for a cancelled class.
-- **`POST .../classes/{class_id}/cancel`** — **cancels** the event rather than
-  deleting it, so members who RSVP'd see a cancellation instead of the class
-  silently disappearing. The class stays on the cohort for the record.
-- **`POST /cohorts/{id}/shift`** — moves only classes that have not started
-  (or, with `from_sequence`, from that position onward). Cancelled classes never
-  move, and classes that already ran keep their dates because attendance is
-  anchored to them. `days` may be negative; zero is rejected.
-- **`POST /cohorts/{id}/members`** — a member added mid-run is RSVP'd only to
-  classes **still to come**; past classes are never backfilled. A member who
-  fails the pipeline's eligibility rules is still added to the roster, with the
-  reason returned in `warnings` rather than failing the request.
-- **`DELETE /cohorts/{id}/members/{user_id}`** — soft withdrawal. The
-  enrollment, training records, and any class already checked into are kept;
-  RSVPs on classes still to come are removed so the course leaves their
-  calendar.
+**Approve and deny are limited to the step's named approver.** Body
+(`ApprovalActionRequest`): `notes` (optional), `overrideReason` (optional,
+at most 2000 characters, blank treated as absent) and
+`acknowledgeLateSubstantiation` (boolean, default `false` — required to approve
+an expense report with lines submitted after the department's substantiation
+deadline).
+
+- An approvals administrator (`finance.configure_approvals`) who is not the
+  named approver may act by giving `overrideReason`; the override is recorded
+  in the audit log (`finance.approval_step_approved` /
+  `finance.approval_step_denied`).
+- The requester can never approve their own request; a requester may deny
+  (withdraw) it.
+
+| Status | When                                                            |
+| ------ | --------------------------------------------------------------- |
+| `400`  | The step cannot be acted on (validation failure, wrong state)   |
+| `403`  | The caller is not the named approver and gave no valid override |
+| `409`  | Approving would exceed a budget limit                           |
+
+**Approver coverage** returns one row per approval step in the organization's
+chains, so an administrator can find steps nobody can act on before requests
+pile up behind them:
+
+| Field                                            | Notes                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                           |
+| `stepId`, `stepName`, `stepOrder`                | The step                                                                |
+| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                      |
+| `eligibleActiveCount`                            | Active members who match the step                                       |
+| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members` or `invalid_email` |
+| `pendingRequestCount`                            | Requests waiting on this step now                                       |
 
 ---
 
-## Member Dues — Payment Ledger _(2026-08-02)_
+## Finance — Member Dues Payment Ledger
 
-Each payment against a member's dues is its own row. The dues record's
-`amountPaid` is the **sum of that ledger**, recomputed on every write, and
-`paymentMethod` / `transactionReference` / `notes` / `paidDate` project the
-newest payment. Write payments, not totals.
+Each payment against a member's dues is its own row in `dues_payments`. The
+dues record's `amountPaid` is the **sum of that ledger**, recomputed on every
+write, and `paidDate`, `paymentMethod`, `transactionReference` and `notes`
+project the newest payment. Write payments, not totals.
 
 ```
 PUT    /api/v1/finance/dues/{dues_id}            # Record a payment (finance.manage)
-GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first (finance.view)
+GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first (finance.view or finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/waive      # Waive dues; reason required (finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/unwaive    # Reverse a waiver; reason required (finance.manage)
 ```
 
+| Route         | Body                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `PUT`         | `amountPaid` (required, `> 0`, two decimals); `paymentMethod`, `transactionReference`, `notes` |
+| `.../waive`   | `reason` (required, non-empty) — stored as `waiveReason`                                       |
+| `.../unwaive` | `reason` (required, non-empty) — handled transiently, never stored or audited                  |
+
+Each ledger row (`DuesPaymentResponse`) carries `id`, `memberDuesId`, `amount`,
+`paymentMethod`, `transactionReference`, `notes`, `receivedAt`, `recordedBy`,
+`createdAt`, `updatedAt`.
+
 **Idempotency.** `PUT /finance/dues/{id}` is idempotent on
 `transactionReference`: resubmitting a reference already recorded against those
 dues returns the record unchanged rather than erroring, so a retried or
-double-submitted payment cannot double-credit. Enforced by a uniqueness
-constraint on `(member_dues_id, transaction_reference)`. Payments **without** a
+double-submitted payment cannot double-credit. A unique constraint on
+`(member_dues_id, transaction_reference)` backs this. Payments **without** a
 reference are never deduplicated — two identical cash amounts are two payments.
+The dues row is locked while a payment is recorded, so two concurrent payments
+cannot overwrite each other's total.
+
+**Separation of duties.** The person recording a payment, or waiving dues,
+must not be the member who owes them (`400`).
 
 **Waived dues reject payment.** `PUT` returns `400` when the record is `WAIVED`
 or `EXEMPT`; those are not owing, and recording money against them would cancel
-the waiver as a side effect. Use `/unwaive` first — it restores whatever the
-ledger says (`PENDING` / `PARTIAL` / `PAID`) and writes a
-`finance.dues_waiver_reversed` audit event carrying the erased waive reason.
+the waiver as a side effect. Use `/unwaive` first: it clears `waivedBy`,
+`waivedAt` and `waiveReason`, restores whatever the ledger says (`PENDING`,
+`PARTIAL` or `PAID`) and writes a `finance.dues_waiver_reversed` audit event
+carrying the dues id and the restored status. The free-text reasons are kept
+out of the audit log because they may contain personal information. `/unwaive`
+on dues that are not waived is `400`.
 
-## Privacy, Consent & Retention _(2026-07-31)_
-
-Data-subject rights and records retention. See
-[Privacy & Data Rights](Security-Privacy) for behavior and guarantees.
-
-```
-# Member self-service (authenticated; always scoped to the caller)
-GET    /api/v1/users/me/data-export                      # Full personal-data export (JSON download; 3/hour)
-GET    /api/v1/users/me/consents                         # Consent state per type (granted=null means never asked)
-PUT    /api/v1/users/me/consents/{consent_type}?granted= # Record a consent choice (audited)
-
-# Administrative (members.manage)
-POST   /api/v1/users/{user_id}/anonymize                 # Irreversibly scrub a DEPARTED member's PII
-
-# Records retention (settings.manage)
-GET    /api/v1/organizations/retention-policy            # Effective schedule per record class
-PUT    /api/v1/organizations/retention-policy/{class}?days=  # Set retention; omit days for keep-forever
-```
-
-Consent types: `photo_use`, `public_roster_listing`, `sms_notifications`.
-Retention record classes: `message_history`, `notification_logs`,
-`form_submissions` — each has a minimum floor, and `PUT` returns 400 below it.
-
-`POST /anonymize` returns 400 for an active member, for an already-anonymized
-member, or for your own account, and 404 for a member outside your
-organization. Audit logs and election records are never modified.
-
----
-
-## Legal Documents (Governance) _(2026-08-18)_
-
-Authenticated. Backs Governance -> Legal Documents, where the secretary and
-department leaders read what `/privacy` and `/terms` publish and propose
-alternatives for local rules.
-
-```
-GET    /api/v1/legal-documents                              # legal.propose | legal.publish | settings.manage
-GET    /api/v1/legal-documents/{document_type}/revisions    # legal.propose | legal.publish | settings.manage
-POST   /api/v1/legal-documents/revisions                    # legal.propose | legal.publish | settings.manage
-PUT    /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage
-DELETE /api/v1/legal-documents/revisions/{id}               # legal.propose | legal.publish | settings.manage
-POST   /api/v1/legal-documents/revisions/{id}/publish       # legal.publish | settings.manage
-POST   /api/v1/legal-documents/{document_type}/revert-to-default   # legal.publish | settings.manage
-```
-
-`GET` returns both documents: what members currently see (from
-`organizations.settings["legal"]`, which is what the anonymous public endpoint
-serves), the open drafts, the published history, and `canPublish` for the
-caller so the screen can hide controls it would only 403 on.
-
-Proposing is deliberately separate from publishing. `legal.propose` is
-backfilled onto every position holding `settings.view` and `legal.publish` onto
-every position holding `settings.manage` (migration `06adc68a8b84`), which is
-the split that already distinguishes leadership from the general membership.
-
-Only drafts are editable or deletable — a published revision is what the
-department is on record as having published on a date. A proposer may modify
-their own draft; a publisher may modify anyone's. Publishing archives the
-previous published revision, writes the body into the organization's settings,
-and audits as `legal.document_published`. Reverting archives the published
-revision and removes the custom text so the built-in default renders again.
-
----
-
-## Public Legal Text _(2026-07-31, updated 2026-08-17)_
-
-Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
-`/terms` pages.
-
-```
-GET    /api/public/v1/legal    # { organizationName, privacyPolicy, termsOfService, lastUpdated }
-```
-
-Returns the single organization's configured text
-(`settings.legal.privacy_policy` / `legal.terms_of_service`, with an optional
-`legal.last_updated` revision date shown above custom text); `null` values mean
-the frontend renders its built-in defaults, which carry their own date. On a
-multi-organization install all fields are `null` — with no org context, no
-tenant's text is served.
-
-`settings["legal"]` is unvalidated JSON, so values are read defensively: a
-non-string value, a non-dict `legal` key, or blank/whitespace text all return
-`null` (the defaults render) rather than erroring on a page anonymous visitors
-reach, and returned text is capped at 100,000 characters.
-
----
-
-## Vulnerability Disclosure _(2026-07-31)_
-
-Served at the site root (not under `/api`), per RFC 9116.
-
-```
-GET    /.well-known/security.txt                         # Contact, policy, expiry (text/plain)
-```
-
-Configured with `SECURITY_TXT_CONTACT` and `SECURITY_TXT_POLICY_URL`. The
-`Expires` field is regenerated per request so the file never goes stale.
-
----
-
-## Common Response Patterns
-
-### Success (200/201)
-
-```json
-{
-  "id": "uuid",
-  "field": "value",
-  "created_at": "2026-02-23T12:00:00Z"
-}
-```
-
-### Validation Error (422)
-
-```json
-{
-  "detail": [
-    {
-      "field": "start_date",
-      "message": "This field is required."
-    }
-  ]
-}
-```
-
-`detail` is always an **array**, never a string — code that renders errors has
-to handle both this and the string form used by 4xx responses below.
-
-`field` is a dotted path to the offending field (`address.zip`), or the
-literal `request` when the error is not attributable to one. `message` is a
-short human-readable sentence, already safe to show a user.
-
-> **This replaced FastAPI's stock `loc`/`msg`/`type` shape.** The application
-> has always returned the `field`/`message` form, but the published OpenAPI
-> advertised FastAPI's default — so a client generated from `/openapi.json`
-> had the wrong type for the most common error response in the API. The schema
-> was corrected on 2026-08-01 and an automated contract suite now checks that
-> the two stay in agreement.
-
-### Permission Error (403)
-
-```json
-{
-  "detail": "Insufficient permissions. Required: training.manage"
-}
-```
-
----
-
-## Rate Limiting
-
-| Endpoint Type      | Limit                       |
-| ------------------ | --------------------------- |
-| Login              | 5 requests/minute per IP    |
-| General API        | 60 requests/minute per user |
-| Public form view   | 60 requests/minute per IP   |
-| Public form submit | 10 requests/minute per IP   |
-
----
-
-## Pagination
-
-List endpoints support pagination:
-
-```
-GET /api/v1/users?page=1&per_page=25&sort=last_name&order=asc
-```
-
-| Parameter  | Default | Description                      |
-| ---------- | ------- | -------------------------------- |
-| `page`     | 1       | Page number                      |
-| `per_page` | 25      | Items per page (max 100)         |
-| `sort`     | varies  | Sort field                       |
-| `order`    | `asc`   | Sort direction (`asc` or `desc`) |
+**Reading the ledger.** A caller without `finance.manage` can read only the
+ledger of their own dues; any other id answers `404`, the same as an id that
+does not exist.
 
 ---
 

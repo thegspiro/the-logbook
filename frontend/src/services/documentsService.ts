@@ -34,6 +34,8 @@ export const documentsService = {
     visibility?: 'organization' | 'leadership' | undefined;
     allowed_roles?: string[] | null | undefined;
     required_permissions?: string[] | null | undefined;
+    /** Confirms a folder only full administrators could open (LB-DOC-001). */
+    confirm_admin_only?: boolean | undefined;
   }): Promise<DocumentFolder> {
     const response = await api.post<DocumentFolder>('/documents/folders', data);
     return response.data;
@@ -54,6 +56,7 @@ export const documentsService = {
       visibility: 'organization' | 'leadership';
       allowed_roles: string[] | null;
       required_permissions: string[] | null;
+      confirm_admin_only: boolean;
     }>
   ): Promise<DocumentFolder> {
     const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);

@@ -6,6 +6,7 @@ import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface MaintenanceFormData {
@@ -172,6 +173,12 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
       toast.error('Description is required');
       return;
     }
+    // The server refuses a record with no type (its column is NOT NULL), and
+    // that refusal used to arrive as a bare "Failed to save record".
+    if (!formData.maintenance_type_id) {
+      toast.error('Choose a maintenance type');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = formToPayload(formData, Boolean(editingRecord));
@@ -184,8 +191,8 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
       }
       setShowModal(false);
       void loadRecords();
-    } catch {
-      toast.error('Failed to save record');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save record'));
     } finally {
       setIsSaving(false);
     }

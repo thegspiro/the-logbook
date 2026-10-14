@@ -243,6 +243,24 @@ const ExpenseReportDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
             </div>
           )}
+          {er.advanceId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Accounts for cash advance</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/check-requests/${er.advanceId}`}
+                  className="text-red-700 hover:underline dark:text-red-400"
+                >
+                  View the advance
+                </Link>
+              </p>
+              <p className="text-theme-text-secondary text-xs">
+                {er.advanceApplied != null
+                  ? `${formatCurrency(er.advanceApplied)} of this report is covered by the advance; the rest is reimbursed`
+                  : 'How much the advance covers is fixed when the report is submitted'}
+              </p>
+            </div>
+          )}
         </div>
 
         {er.description && (

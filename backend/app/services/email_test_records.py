@@ -104,7 +104,9 @@ async def _series_end_reminder(
         .limit(1)
     )
     series = result.scalar_one_or_none()
-    if series is None:
+    # The query's ``recurrence_end_date > now`` already excludes an undated
+    # series; the second test only narrows the type.
+    if series is None or series.recurrence_end_date is None:
         return {}
     upcoming_children = await db.execute(
         select(func.count(Event.id)).where(
