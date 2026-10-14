@@ -59,7 +59,8 @@ Feature suggestions are welcome! Please:
 
 ### Prerequisites
 
-- Python >= 3.11
+- Python >= 3.13
+- Node.js >= 22 and npm >= 11 (the `engines` floor in `frontend/package.json`)
 - MySQL >= 8.0
 - Redis >= 7
 - Docker & Docker Compose (optional but recommended)
@@ -136,8 +137,8 @@ We use ESLint and Prettier for code formatting:
 # Check linting
 npm run lint
 
-# Fix linting issues
-npm run lint:fix
+# Fix linting issues (frontend ESLint; `npm run format` covers the backend)
+npm run lint:fix --workspace frontend
 
 # Format code
 npm run format
@@ -258,16 +259,16 @@ npm run test:backend
 # Frontend tests
 npm run test:frontend
 
-# Watch mode
-npm run test:watch
+# Frontend watch mode (Vitest watches when run in an interactive terminal)
+npm test --workspace frontend
 
 # E2E tests (Playwright). CI runs these on chromium only — the config's
 # mobile projects deliberately fail the navigation specs, whose destinations
 # sit behind a hamburger menu at that width.
-npm run test:e2e
+npm run test:e2e --workspace frontend -- --project=chromium
 
-# Coverage
-npm test -- --coverage
+# Frontend coverage
+npm test --workspace frontend -- --run --coverage
 ```
 
 Both the Playwright suite and the container tests now run in CI (they existed

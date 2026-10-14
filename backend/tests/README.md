@@ -7,7 +7,7 @@ This directory contains comprehensive tests for The Logbook's onboarding process
 The onboarding test suite validates the critical admin user creation and onboarding flow, ensuring:
 
 - Admin user creation with async role assignment works correctly
-- The MissingGreenlet fix (`await db.refresh(user, ['roles'])`) is validated
+- The MissingGreenlet fix (`await db.refresh(user, ['positions'])`) is validated
 - Organization and role creation functions properly
 - Error handling and edge cases are covered
 
@@ -23,7 +23,7 @@ docker compose exec backend pytest tests/test_onboarding_integration.py -v
 docker compose exec backend pytest tests/test_onboarding_integration.py -vv -s
 
 # Run a specific test
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -v
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment -v
 
 # Run using the convenience script
 docker compose exec backend ./run_onboarding_tests.sh
@@ -58,11 +58,11 @@ Key fixtures:
 
 ```python
 @pytest.fixture(scope="session")
-async def initialize_database():
+async def _initialize_database():
     """Connects to database once per test session"""
 
-@pytest.fixture(scope="function")
-async def db_session():
+@pytest.fixture
+async def db_session(_initialize_database):
     """Provides isolated database session per test"""
 ```
 
@@ -70,28 +70,28 @@ async def db_session():
 
 Integration tests for the onboarding flow:
 
-| Test                                            | Purpose                       | Critical? |
-| ----------------------------------------------- | ----------------------------- | --------- |
-| `test_admin_user_creation_with_role_assignment` | Validates MissingGreenlet fix | ⭐ YES    |
-| `test_create_organization`                      | Organization creation         | ✅        |
-| `test_default_roles_creation`                   | Super Admin role creation     | ✅        |
-| `test_duplicate_admin_user_prevention`          | Prevents duplicate admins     | ✅        |
-| `test_onboarding_status_tracking`               | Status tracking               | ✅        |
+| Test                                                  | Purpose                       | Critical? |
+| ----------------------------------------------------- | ----------------------------- | --------- |
+| `test_system_owner_creation_with_position_assignment` | Validates MissingGreenlet fix | ⭐ YES    |
+| `test_create_organization`                            | Organization creation         | ✅        |
+| `test_default_positions_creation`                     | Default position creation     | ✅        |
+| `test_duplicate_system_owner_prevention`              | Prevents duplicate owners     | ✅        |
+| `test_onboarding_status_tracking`                     | Status tracking               | ✅        |
 
 ## Key Tests
 
-### Critical Test: Admin User Creation with Role Assignment
+### Critical Test: System Owner Creation with Position Assignment
 
 ```python
 @pytest.mark.asyncio
-async def test_admin_user_creation_with_role_assignment(...)
+async def test_system_owner_creation_with_position_assignment(...)
 ```
 
 **What it tests:**
 
-- Admin user is created successfully
-- Super Admin role is assigned without errors
-- The `await db.refresh(user, ['roles'])` fix works correctly
+- The system owner account is created successfully
+- Its position is assigned without errors
+- The `await db.refresh(user, ['positions'])` fix works correctly
 - No MissingGreenlet exceptions are raised
 
 **Why it's critical:**
@@ -154,7 +154,7 @@ Available fixtures for writing tests:
 
 ```python
 @pytest.fixture
-async def db_session():
+async def db_session(_initialize_database):
     """Provides an isolated database session"""
 
 @pytest.fixture
@@ -172,7 +172,7 @@ def sample_admin_data():
 
 ```bash
 # 1. Pull latest changes
-git pull origin claude/review-frontend-pages-rb0hk
+git pull origin main
 
 # 2. Run tests WITHOUT rebuilding (fast validation - takes ~5 seconds)
 docker compose exec backend pytest tests/test_onboarding_integration.py -v
@@ -189,10 +189,10 @@ This workflow saves time by catching errors **before** wasting 10-30 minutes reb
 ### ✅ Success
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment PASSED
 tests/test_onboarding_integration.py::TestOnboardingIntegration::test_create_organization PASSED
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_default_roles_creation PASSED
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_duplicate_admin_user_prevention PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_default_positions_creation PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_duplicate_system_owner_prevention PASSED
 tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding_status_tracking PASSED
 
 ========== 5 passed in 2.34s ==========
@@ -203,7 +203,7 @@ tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding
 ### ❌ Failure Example
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment FAILED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment FAILED
 
 E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ```
