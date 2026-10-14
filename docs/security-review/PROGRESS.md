@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Opening now.** Feature 04 (Storefront & payments), pass 9 (watchdog
+pickup): delta re-verify since pass 8 (PR #3128), 0 fixed, 0 new findings —
+SF8-04-2/SF8-04-3 re-confirmed open, unchanged. See
+`SF-04-storefront-payments.md`'s **Pass 9** section and the Log entry above.
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals). The PR number lands in a follow-up commit on this same branch
+once it exists (per this file's own "never as a PR of its own" rule).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3215 (Feature 03, Public surface &
+webhooks, pass 9) merged 2026-10-14 — docs-only (`PROGRESS.md` +
+`PUB-03-public-surface-webhooks.md` only, confirmed via `git show --stat`
+on the merge commit), already fully recorded in that PR's own Open PR note
+below, so there is nothing further to add here. Rotation row 03 stays ✅.
+This watchdog iteration (no `claude/security-review-*` PR open, confirmed
+via `list_pull_requests`) picks up Feature 04 (Storefront & payments), the
+state PR #3215 opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 9, PR #3215, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3215](https://github.com/thegspiro/the-logbook/pull/3215)**: branch
 `claude/security-review-public-webhooks`, Feature 03 (Public surface &
 webhooks), pass 9 (watchdog pickup). PR #3212 (Feature 02, Permissions &
@@ -27,6 +52,8 @@ described, plus unrelated finance/typing changes traced and confirmed
 org-scoped). See `PUB-03-public-surface-webhooks.md`'s **Pass 9** section.
 Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
 payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
@@ -19076,6 +19103,56 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — PR #3215 merge recorded (docs-only); Feature 04 (Storefront & payments, pass 9, watchdog pickup) — 0 fixed, 0 new findings
+
+**Step 0.** Scheduled watchdog check-in. Verified directly against GitHub
+(`list_pull_requests`, state=open) that no `claude/security-review-*` PR was
+open. PR #3215 (Feature 03, Public surface & webhooks, pass 9) had merged
+(confirmed docs-only via `git show --stat` on the merge commit:
+`PROGRESS.md` + `PUB-03-public-surface-webhooks.md` only), so nothing further
+to record beyond clearing the Open PR row. That clear rides along in this
+iteration's own commit.
+
+**Step 1.** Row 04 (Storefront & payments) was the next `⬜`.
+
+**Review.** Loaded `CHECKLIST.md` and `SF-04-storefront-payments.md`'s
+existing 8 passes before reading any code. Baseline `44a66e34` (PR #3128's
+merge, pass 8) to head. Caught and corrected a shallow-clone truncation
+before trusting the delta (`git rev-parse --is-shallow-repository` was
+`true`; an unrelated member-tier commit, `793d3209`, appeared to touch
+`storefront_service.py` only because at the shallow boundary git had no
+parent to diff against and reported the whole file as newly added —
+`git fetch --unshallow` resolved it). The real delta is 3 non-merge commits:
+`e3f236d8` (AH-16's CSV streaming, read in full — `export_orders_csv` is now
+a `collect_csv` join over a streamed generator, still through
+`SafeCsvWriter`/`SafeCsvChunks`, org-scoping and paging unchanged; also
+resolves the order-export unbounded-pagination item already marked
+**Resolved 2026-10-11** in `KNOWN_LIMITATIONS.md`) and two accessibility-only
+frontend commits (`7770b180`, `fb70c06a` — aria-live quantity
+announcements, a loading-state flash fix, no route/permission/scoping
+change). No new migration touches storefront/embroidery/personalization
+tables. Re-verified by direct read: `update_order_status`'s settlement
+branch still reads unlocked (**SF8-04-2 stays OPEN**) and
+`waive_order_payment` still has no settled-order guard (**SF8-04-3 stays
+OPEN**) — neither touched by this window's delta, so pass 8's "why flagged,
+not fixed" rationale (both need an owner decision, not a low-risk mechanical
+fix) still holds, unchanged. Nothing to fix, nothing new to flag.
+
+**Completion gate.** Change is docs-only (`PROGRESS.md` +
+`SF-04-storefront-payments.md`), so per CLAUDE.md's verification-scaling
+rule no local suite is required — ran the backend gate anyway since the
+review itself touched application code conceptually: `flake8`/`black
+--check`/`isort --check-only` clean against `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head `252c7517d80a`, 594
+revisions; scoped backend tests (`-k "storefront or paypal"`) — 811 passed,
+1 skipped (environment-only — `pywebpush`). Frontend `npm run typecheck` —
+0 errors; `npm run lint` — ran in background, no frontend file in the
+reviewed diff.
+
+Row 04 → ✅. Next: Feature 05 (Finance & approvals).
+
+---
 
 ### 2026-10-14 — PR #3212 merge recorded (docs-only); Feature 03 (Public surface & webhooks, pass 9, watchdog pickup) — 0 fixed, 0 new findings
 
