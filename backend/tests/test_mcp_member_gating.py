@@ -144,6 +144,57 @@ class TestListAndCall:
             names = {t.name for t in await server.list_tools()}
         assert {"list_events", "list_members", "create_event_draft"} <= names
 
+    async def test_member_with_the_permission_can_call_a_plain_read(self):
+        """The allowed half of the check above. A member holding the tool's
+        permission must get its result, not a refusal: every OAuth call to a
+        read tool once failed here with a KeyError the client saw only as
+        "Error executing tool"."""
+        server = LogbookMcpServer(name="t")
+        handler = AsyncMock(return_value={"ok": True})
+
+        @logbook_tool(server, permissions=("events.view",))
+        async def probe(db, principal) -> dict:
+            return await handler()
+
+        session = AsyncMock()
+        session.__aenter__.return_value = AsyncMock()
+        member = _principal(oauth=True, permissions=frozenset({"events.view"}))
+        with (
+            patch("app.mcp.registry.open_session", return_value=session),
+            patch("app.mcp.registry._audit", AsyncMock()) as audit,
+        ):
+            with bind_principal(member):
+                result = await server.call_tool("probe", {})
+        handler.assert_awaited_once()
+        assert "ok" in str(result)
+        assert audit.await_args is not None
+        assert audit.await_args.args[4] == "ok"
+
+    async def test_member_refused_by_a_department_switch_is_told_so(self):
+        """A member who holds the permission but meets a switch the
+        department left off gets that switch's message, not a crash."""
+        server = LogbookMcpServer(name="t")
+        handler = AsyncMock(return_value={"ok": True})
+
+        @logbook_tool(server, gate="write", permissions=("events.manage",))
+        async def probe(db, principal) -> dict:
+            return await handler()
+
+        audit = AsyncMock(return_value=True)
+        member = _principal(
+            oauth=True,
+            permissions=frozenset({"events.manage"}),
+            access_mode="read_only",
+        )
+        with patch("app.mcp.registry._audit_apart", audit):
+            with bind_principal(member):
+                with pytest.raises(ToolError) as excinfo:
+                    await server.call_tool("probe", {})
+        assert "read-only" in str(excinfo.value)
+        handler.assert_not_called()
+        assert audit.await_args is not None
+        assert audit.await_args.args[3] == "refused"
+
     async def test_call_without_the_permission_is_refused_and_audited(self):
         server = LogbookMcpServer(name="t")
         handler = AsyncMock(return_value={"ok": True})
