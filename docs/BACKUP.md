@@ -8,11 +8,20 @@ from a total loss. Business-continuity alignment context (ISO 22301) lives in
 
 `scripts/backup.sh` produces a single timestamped archive containing:
 
-| Component        | Contents                                                                  | Notes                                                                   |
-| ---------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server           |
-| `uploads.tar.gz` | The `uploads/` directory (documents, photos, attachments)                 | Only if local uploads are used — S3/MinIO-stored files are not included |
-| `config/`        | `.env.example`, docker-compose files, and a **sanitized** `.env` template | Values are stripped — see the warning below                             |
+| Component        | Contents                                                                  | Notes                                                         |
+| ---------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server |
+| `uploads.tar.gz` | Every uploaded file (documents, photos, attachments)                      | See where uploads are read from, below                        |
+| `config/`        | `.env.example`, `docker-compose.yml`, and a **sanitized** `.env` template | Values are stripped — see the warning below                   |
+
+Uploads are read from `/app/uploads` inside the running backend container
+(`intranet-backend`, or `logbook-backend` on Unraid; set `BACKEND_CONTAINER`
+in `.env` for any other name), which reaches the `uploads` volume or the
+Unraid appdata bind mount. On a traditional install with no backend container
+they are read from `uploads/` in the install directory. If neither exists the
+backup still completes, but prints a warning that uploaded files were **not**
+backed up — so run the script while the stack is up. A restore writes the
+files back to the same place.
 
 Destinations: local disk (default `./backups`), S3, Azure Blob, or Google
 Cloud Storage via `--destination`. Old local backups are pruned after

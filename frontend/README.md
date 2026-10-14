@@ -18,7 +18,7 @@ React + TypeScript + Vite frontend application for The Logbook fire department i
 ### Prerequisites
 
 - Node.js 22.x or higher (enforced via `engines` in `package.json`)
-- npm 10 or higher — this repo uses npm workspaces with a single root lockfile, so run `npm install` from the repo root, not from `frontend/`
+- npm 11 or higher (the `engines` floor in `package.json`) — this repo uses npm workspaces with a single root lockfile, so run `npm install` from the repo root, not from `frontend/`
 
 ### Installation
 
@@ -86,19 +86,21 @@ frontend/
 ├── src/
 │   ├── components/      # Reusable components
 │   ├── pages/           # Page components
-│   │   ├── Welcome.tsx          # Landing page with fade-in
-│   │   └── OnboardingCheck.tsx  # Onboarding status check
+│   ├── modules/         # Feature modules
+│   │   └── onboarding/pages/
+│   │       ├── Welcome.tsx          # Landing page with fade-in
+│   │       └── OnboardingCheck.tsx  # Onboarding status check
 │   ├── hooks/           # Custom React hooks
 │   ├── utils/           # Utility functions
 │   ├── types/           # TypeScript types
 │   ├── styles/          # Global styles
-│   │   └── index.css    # Tailwind imports
+│   │   └── index.css    # Tailwind import, @theme tokens and @utility classes
 │   ├── App.tsx          # Main app component
 │   ├── main.tsx         # Entry point
 │   └── vite-env.d.ts    # Vite TypeScript definitions
 ├── index.html           # HTML template
 ├── vite.config.ts       # Vite configuration
-├── tailwind.config.js   # Tailwind configuration
+├── postcss.config.js    # Loads @tailwindcss/postcss (Tailwind v4 is configured in CSS; there is no tailwind.config.js)
 ├── tsconfig.json        # TypeScript configuration
 └── package.json         # Dependencies
 ```

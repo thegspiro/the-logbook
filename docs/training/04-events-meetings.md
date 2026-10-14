@@ -1914,7 +1914,7 @@ Event notifications now deliver via **in-app notifications** in addition to emai
 > straight to **Notifications > Inbox**, carrying an unread-count badge; event
 > notifications arrive in that inbox alongside every other type. The inbox is
 > pictured in
-> [Admin & Reports > Notifications Overhaul](./08-admin-reports.md#notifications-overhaul-2026-03-24).
+> [Admin & Reports > The notifications inbox](./08-admin-reports.md#the-notifications-inbox).
 
 ## Time Picker Standardization (2026-03-17)
 
@@ -2508,7 +2508,7 @@ built-in three metrics are **Upcoming**, **RSVPs this week** and **Check-ins
 logged**; the fourth slot is always the count the queue is about. Access is
 `events.manage`. Choosing the three metrics, and who may see the queue, are
 covered in
-[Administration & Reports → Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23).
+[Administration & Reports → Administration Hubs](./08-admin-reports.md#administration-hubs).
 
 ## Who's going, RSVP and the waitlist _(2026-09-01)_
 

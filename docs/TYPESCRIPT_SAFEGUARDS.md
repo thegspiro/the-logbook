@@ -75,38 +75,47 @@ Catches issues while you type:
 
 ### Layer 2: ESLint (On Save) 🔧
 
-**ESLint Configuration** (`frontend/.eslintrc.json`)
+**ESLint Configuration** (`frontend/eslint.config.js`, ESLint flat config)
 
-Enforces code quality rules:
+Enforces code quality rules. An excerpt of the TypeScript rules:
 
-```json
-{
-  "rules": {
-    // Error on unused variables/imports
-    "@typescript-eslint/no-unused-vars": [
-      "error",
-      {
-        "vars": "all",
-        "args": "after-used"
-      }
-    ],
+```js
+rules: {
+  // Unused variables/imports are errors; a leading underscore opts out
+  '@typescript-eslint/no-unused-vars': [
+    'error',
+    {
+      argsIgnorePattern: '^_',
+      varsIgnorePattern: '^_',
+      caughtErrorsIgnorePattern: '^_',
+      vars: 'all',
+      args: 'after-used',
+      ignoreRestSiblings: true,
+    },
+  ],
 
-    // Catch unhandled Promises
-    "@typescript-eslint/no-floating-promises": "error",
+  // Unhandled Promises are warnings (prefix intentional ones with `void`)
+  '@typescript-eslint/no-floating-promises': 'warn',
+  '@typescript-eslint/no-misused-promises': 'warn',
 
-    // Enforce strict null checks
-    "@typescript-eslint/strict-boolean-expressions": "error"
-  }
-}
+  // Off: too many false positives in existing code
+  '@typescript-eslint/strict-boolean-expressions': 'off',
+},
 ```
+
+`npm run lint` runs `eslint --max-warnings 10`, so warnings are not free: more
+than ten across the tree fails the run.
+
+Type-aware linting runs on the plain `typescript` dependency (5.9.3), because
+typescript-eslint cannot load TypeScript 7. See "Two TypeScript installs" in
+[CLAUDE.md](../CLAUDE.md#two-typescript-installs--do-not-tidy-this-away).
 
 **What It Catches**:
 
-- ✅ Unused imports (like `getOnboardingErrorMessage` we removed)
-- ✅ Unused variables
-- ✅ Type mismatches
-- ✅ Unhandled promises
-- ✅ Potential null/undefined errors
+- ✅ Unused imports and variables (errors)
+- ✅ Unhandled and misused promises (warnings)
+- ✅ Unsafe `any` flows and non-null assertions (warnings)
+- ✅ Project-specific bans such as `window.confirm` and the locale date methods
 
 **Usage**:
 
@@ -123,7 +132,7 @@ npm run lint:fix
 **Auto-runs**:
 
 - On file save (if VSCode settings configured)
-- Before commit (via pre-commit hook)
+- Before commit, on staged files only, as `eslint --fix` (via the pre-commit hook)
 - In CI/CD pipeline
 
 ---
@@ -135,12 +144,22 @@ npm run lint:fix
 ```json
 {
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "typecheck:watch": "tsc --noEmit --watch",
+    "build": "node scripts/tsc-native.mjs && vite build",
+    "typecheck": "node scripts/tsc-native.mjs --noEmit",
+    "typecheck:watch": "node scripts/tsc-native.mjs --noEmit --watch",
+    "typecheck:tests": "node scripts/tsc-native.mjs -p tsconfig.test.json --noEmit",
     "validate": "npm run typecheck && npm run lint"
   }
 }
 ```
+
+`scripts/tsc-native.mjs` runs the TypeScript 7.0.2 compiler, installed under
+the npm alias `typescript-native`. Do not replace it with a bare `tsc`: which
+compiler a bare `tsc` resolves to depends on the current directory. See "Two
+TypeScript installs" in [CLAUDE.md](../CLAUDE.md#two-typescript-installs--do-not-tidy-this-away).
+
+`tsconfig.json` excludes test files; `typecheck:tests` compiles them through
+`tsconfig.test.json`.
 
 **Usage**:
 
@@ -181,77 +200,27 @@ npm run validate
 
 **Git Hook** (`.husky/pre-commit`)
 
-Automatically runs before every commit:
+The hook is one line, `npx lint-staged`, which runs the `lint-staged` block in
+the root `package.json` against the **staged files only**:
 
-```bash
-#!/bin/sh
-echo "🔍 Running pre-commit checks..."
+| Staged files                         | Commands                                               |
+| ------------------------------------ | ------------------------------------------------------ |
+| `frontend/**/*.{ts,tsx,js,jsx}`      | `eslint --fix`, then `prettier --write`                |
+| `frontend/src/**/*.{ts,tsx}`         | `vitest related --run` (tests that import those files) |
+| `*.{json,md}`                        | `prettier --write`                                     |
+| `backend/**/*.py`                    | `black --check`, `flake8`, `isort --check-only`        |
+| `generate_registry.py`, `scripts/**` | `flake8 --config backend/.flake8`                      |
 
-# TypeScript type checking
-echo "📘 Checking TypeScript types..."
-cd frontend
-npm run typecheck
-if [ $? -ne 0 ]; then
-  echo "❌ TypeScript type check failed!"
-  exit 1
-fi
+**What It Does Not Do**:
 
-# ESLint
-echo "🔧 Running ESLint..."
-npm run lint
-if [ $? -ne 0 ]; then
-  echo "⚠️  ESLint found issues!"
-  exit 1
-fi
+- It does **not** run the TypeScript compiler. A type error in a staged file,
+  or one that a change causes in a file you did not touch, passes the hook. Run
+  `npm run typecheck` (and `npm run typecheck:tests` if you touched tests)
+  yourself before pushing; CI runs both.
+- It does not lint unstaged files or the rest of the tree.
 
-echo "✅ All pre-commit checks passed!"
-```
-
-**What It Does**:
-
-1. Runs TypeScript type checking (`npm run typecheck`)
-2. Runs ESLint (`npm run lint`)
-3. **Blocks commit** if any errors found
-4. Shows clear error messages
-
-**Example Output**:
-
-**Success**:
-
-```
-🔍 Running pre-commit checks...
-📘 Checking TypeScript types...
-✅ TypeScript type check passed
-🔧 Running ESLint...
-✅ ESLint check passed
-✅ All pre-commit checks passed!
-[main abc123] Your commit message
-```
-
-**Failure**:
-
-```
-🔍 Running pre-commit checks...
-📘 Checking TypeScript types...
-src/pages/AdminUserCreation.tsx(10,1): error TS6133:
-  'getOnboardingErrorMessage' is declared but its value is never read.
-❌ TypeScript type check failed!
-Fix the errors above before committing.
-```
-
-**Benefits**:
-
-- ✅ Impossible to commit broken code
-- ✅ Catches errors before CI/CD
-- ✅ Saves time (no waiting for build failures)
-- ✅ Maintains code quality
-
-**Setup** (already configured):
-
-```bash
-# Hooks are in .husky/pre-commit
-# Automatically runs on git commit
-```
+**Setup**: the root `prepare` script runs `husky` on `npm install`, which
+points git at `.husky/`. Nothing else is needed.
 
 ---
 
@@ -261,7 +230,7 @@ Fix the errors above before committing.
 
 ```dockerfile
 # TypeScript compilation happens during build
-RUN npm run build  # Runs: tsc && vite build
+RUN npm run build  # Runs: node scripts/tsc-native.mjs && vite build
 ```
 
 **What It Catches**:
@@ -270,7 +239,8 @@ RUN npm run build  # Runs: tsc && vite build
 - ✅ Module resolution in production
 - ✅ Build-time optimizations
 
-**This is the last line of defense** - but with layers 1-4, errors rarely reach here.
+**This is the last line of defense.** CI runs the same `npm run build`, so a
+type error fails the pull request before it reaches a Docker build.
 
 ---
 
@@ -287,8 +257,9 @@ import { getOnboardingErrorMessage } from "../utils/errorHandler"; // ❌ Never 
 **Prevention**:
 
 - **Layer 1**: VSCode highlights in gray, auto-removes on save
-- **Layer 2**: ESLint error: "TS6133: declared but never read"
-- **Layer 4**: Pre-commit hook blocks commit
+- **Layer 2**: ESLint error: `@typescript-eslint/no-unused-vars`
+- **Layer 3**: TypeScript compiler error TS6133 (`noUnusedLocals`)
+- **Layer 4**: Pre-commit `eslint --fix` reports it on a staged file
 
 ---
 
@@ -304,9 +275,8 @@ const portNumber = parseInt(config.smtpPort, 10);
 **Prevention**:
 
 - **Layer 1**: VSCode red squiggle: "Type 'string | undefined' not assignable"
-- **Layer 2**: ESLint error
 - **Layer 3**: TypeScript compiler error
-- **Layer 4**: Pre-commit hook blocks
+- **Layer 5**: Build fails
 
 **After** (fixed):
 
@@ -329,8 +299,8 @@ async function fetchData() {
 
 **Prevention**:
 
-- **Layer 2**: ESLint error: "@typescript-eslint/no-floating-promises"
-- **Layer 4**: Pre-commit hook blocks
+- **Layer 2**: ESLint warning: `@typescript-eslint/no-floating-promises`
+- **Layer 4**: Pre-commit `eslint --fix` reports it on a staged file
 
 **After**:
 
@@ -359,10 +329,9 @@ const data = await schedulingService.getShiftCalls(shiftId);
 **Prevention**:
 
 - **Layer 3**: `npm run typecheck` catches missing method errors immediately
-- **Layer 4**: Pre-commit hook blocks if methods are missing
-- **Layer 5**: Docker build fails (last resort)
+- **Layer 5**: Build fails (CI, then Docker)
 
-**Rule**: Always add API service methods to `services/api.ts` before or alongside creating page components that use them. Run `npx tsc --noEmit` before pushing.
+**Rule**: Always add API service methods to `services/api.ts` before or alongside creating page components that use them. Run `npm run typecheck` before pushing.
 
 ---
 
@@ -379,7 +348,7 @@ import { ArchivedMember } from "../types/user";
 
 - **Layer 1**: VSCode red squiggle on import
 - **Layer 3**: TypeScript compiler error
-- **Layer 4**: Pre-commit hook blocks
+- **Layer 5**: Build fails
 
 **Rule**: When a page component needs a new type, define it in the appropriate types file (`types/user.ts`, `types/event.ts`, etc.) before importing it.
 
@@ -405,15 +374,15 @@ npm run typecheck:watch  # In separate terminal
 # 4. Commit changes
 git add .
 git commit -m "Your message"
-# → Pre-commit hook runs automatically
-# → Blocks if errors found
+# → Pre-commit hook lints, formats and tests the staged files
+# → It does not typecheck: run `npm run typecheck` before pushing
 ```
 
 ---
 
 ### Before Pushing (Manual Check)
 
-Even though pre-commit hooks run automatically, you can manually validate:
+The pre-commit hook does not typecheck, so run this before pushing:
 
 ```bash
 cd frontend
@@ -510,32 +479,26 @@ From `.vscode/settings.json`:
 
 ---
 
-## CI/CD Integration (Future)
+## CI/CD Integration
 
-**Recommended** GitHub Actions workflow:
+The **Frontend Lint, Typecheck & Build** job in `.github/workflows/ci.yml` runs
+in `frontend/` after `npm ci`:
 
 ```yaml
-name: Frontend Type Check
+- name: Run ESLint
+  run: npm run lint
 
-on: [push, pull_request]
+# Also the typecheck: `npm run build` runs tsc-native before vite build.
+- name: Build (runs tsc, then bundles)
+  run: npm run build
 
-jobs:
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "22"
-      - name: Install dependencies
-        run: cd frontend && npm ci
-      - name: Run TypeScript check
-        run: cd frontend && npm run typecheck
-      - name: Run ESLint
-        run: cd frontend && npm run lint
+- name: Typecheck tests
+  run: npm run typecheck:tests
 ```
 
-This adds **Layer 6**: CI/CD pipeline check.
+There is no separate `npm run typecheck` step: the build carries the typecheck
+for application code, and `typecheck:tests` covers the test files that
+`tsconfig.json` excludes. This is **Layer 6**.
 
 ---
 
@@ -544,9 +507,8 @@ This adds **Layer 6**: CI/CD pipeline check.
 ### Pre-commit hook not running
 
 ```bash
-# Reinstall husky hooks
-cd /home/user/the-logbook
-npx husky install
+# Re-run the prepare script from the repo root (it calls `husky`)
+npm run prepare
 chmod +x .husky/pre-commit
 ```
 
@@ -572,10 +534,13 @@ chmod +x .husky/pre-commit
 1. **Check TypeScript version**:
 
    ```bash
-   cd frontend
-   npm list typescript
-   # Should be 5.7.3
+   # From the repo root
+   node node_modules/typescript-native/bin/tsc --version  # compiler: 7.0.2
+   node node_modules/typescript/bin/tsc --version         # linter: 5.9.3
    ```
+
+   The editor should use the 7.0.2 compiler. See "Two TypeScript installs" in
+   [CLAUDE.md](../CLAUDE.md#two-typescript-installs--do-not-tidy-this-away).
 
 2. **Restart TS Server**:
    - Cmd/Ctrl+Shift+P → "TypeScript: Restart TS Server"
@@ -630,7 +595,7 @@ git commit -m "Fix type errors"
 1. ⚡ **IDE** - Immediate feedback while typing
 2. 🔧 **ESLint** - Auto-fix on save
 3. 📘 **TypeScript** - Continuous type checking
-4. 🛡️ **Pre-commit** - Blocks bad commits
+4. 🛡️ **Pre-commit** - Lints, formats and tests staged files
 5. 🏗️ **Build** - Final verification
 
 **Result**: TypeScript errors caught progressively earlier, before they cause build failures.
@@ -684,7 +649,7 @@ class Event(Base):
 
 ### Monthly
 
-- [ ] Update TypeScript: `cd frontend && npm update typescript`
+- [ ] Update the compiler by bumping `typescript-native`; the plain `typescript` moves only when typescript-eslint's peer range allows it
 - [ ] Update ESLint plugins: `npm update @typescript-eslint/*`
 - [ ] Review ESLint rules for new patterns
 

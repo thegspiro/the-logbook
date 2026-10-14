@@ -44,7 +44,7 @@ Three mechanisms build a database in this repository:
 
 Two consequences follow, and both have taken CI red:
 
-- **40 of the schema's 254 tables are created by `create_all` and by no
+- **65 of the schema's 306 tables are created by `create_all` and by no
   migration at all.** A migration that alters one of them must tolerate its
   absence — see the `create_all` rule below.
 - **`alembic upgrade head` alone does not produce a working schema.** On a
@@ -90,7 +90,7 @@ permission to diverge from the template.
 
 _CLAUDE.md pitfall #26, 2026-08-25._
 
-**40 of this schema's 254 tables are never created by any migration.**
+**65 of this schema's 306 tables are never created by any migration.**
 `event_requests`, `prospects`, the whole finance-approval set (`budgets`,
 `budget_categories`, `check_requests`, `expense_reports`, ...) and more come
 into being when `main.py`'s `_fast_path_init()` calls `create_all()` and

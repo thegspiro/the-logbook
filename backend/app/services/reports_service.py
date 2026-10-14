@@ -229,9 +229,7 @@ class ReportsService:
         inactive_count = 0
 
         for user in users:
-            status_val = (
-                user.status.value if hasattr(user.status, "value") else str(user.status)
-            )
+            status_val = str(getattr(user.status, "value", user.status))
             is_active = status_val == UserStatus.ACTIVE.value
             if is_active:
                 active_count += 1
@@ -343,11 +341,7 @@ class ReportsService:
             if uid in member_stats:
                 counted_records += 1
                 member_stats[uid]["total_courses"] += 1
-                status_val = (
-                    record.status.value
-                    if hasattr(record.status, "value")
-                    else str(record.status)
-                )
+                status_val = str(getattr(record.status, "value", record.status))
                 if status_val == TrainingStatus.COMPLETED.value:
                     member_stats[uid]["completed_courses"] += 1
                     completed_count += 1
@@ -372,11 +366,7 @@ class ReportsService:
                     "total_hours": 0,
                 }
             course_stats[cid]["total"] += 1
-            status_val2 = (
-                record.status.value
-                if hasattr(record.status, "value")
-                else str(record.status)
-            )
+            status_val2 = str(getattr(record.status, "value", record.status))
             if status_val2 == TrainingStatus.COMPLETED.value:
                 course_stats[cid]["completed"] += 1
             if record.hours_completed:
@@ -624,11 +614,7 @@ class ReportsService:
         status_summary = {"active": 0, "completed": 0, "expired": 0, "withdrawn": 0}
 
         for enrollment in enrollments:
-            status_val = (
-                enrollment.status.value
-                if hasattr(enrollment.status, "value")
-                else str(enrollment.status)
-            )
+            status_val = str(getattr(enrollment.status, "value", enrollment.status))
             status_summary[status_val] = status_summary.get(status_val, 0) + 1
 
             # Count requirement progress
@@ -779,11 +765,7 @@ class ReportsService:
 
         for record in records:
             uid = str(record.user_id)
-            status_val = (
-                record.status.value
-                if hasattr(record.status, "value")
-                else str(record.status)
-            )
+            status_val = str(getattr(record.status, "value", record.status))
             hours = float(record.hours_completed or 0)
             training_type = (
                 record.training_type.value
