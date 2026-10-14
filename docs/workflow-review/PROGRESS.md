@@ -122,7 +122,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W61 | Budgets                                                                | treasurer                 | `/finance/budgets`                                               | ✅     |
 | W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ✅     |
 | W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ✅     |
-| W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ⬜     |
+| W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ✅     |
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ⬜     |
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ⬜     |
 | W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ⬜     |
@@ -175,10 +175,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W64 / W65** — an expense report's or check request's detail page may
-  carry the same 20–36px back link and action buttons the purchase request
-  screens had (W63-4); W63-1's fix to their submit responses should be seen
-  in the browser there.
+- **W65** — a check request's screens may carry the same 20–36px back link,
+  buttons and filters that W63-4 and W64-3 sized on the purchase and expense
+  screens; W63-1's fix to the submit response should be seen there. A check
+  request is routed by purchase-request chains too (W64-4).
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -208,6 +208,44 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W64 — An expense report, from receipt to reimbursement — 2026-10-14
+
+Driven as:
+
+- `member` building a two-line report, attaching receipts and submitting;
+- `treasurer` approving, overriding the emailed step and recording payment;
+- `member2` probing another member's report;
+- 390×844 for the list, form and detail page.
+
+Held:
+
+- validation;
+- receipts required before submit;
+- every double-click records once;
+- uploads fail closed, with a clear message, when no scanner is reachable;
+- another member gets 404, and only a finance manager can mark paid.
+
+Fixed:
+
+- W64-1 (HIGH — an approved report could never be marked paid: the endpoint
+  existed and no control called it).
+- W64-2 (LOW — unlabelled report and line fields).
+- W64-3 (LOW — small controls on four screens).
+
+Flagged:
+
+- W64-4 (HIGH — purchase-request chains also route expense reports and check
+  requests, and can outrank their own chains).
+- W64-5 (MED — an expense line cannot be charged to a budget, so a paid
+  reimbursement reaches no budget line).
+
+Harness: the review backend now runs with `CLAMAV_ENABLED=false` (overridable
+with `WR_CLAMAV_ENABLED`), because without a scanner no upload could be made.
+
+Gate: typecheck and lint are clean; 558 finance tests pass (6 new).
+
+Next: W65.
 
 ### W63 — A purchase request through its approval chain — 2026-10-14
 

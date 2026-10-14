@@ -5605,6 +5605,35 @@ W63-5, W63-6 and W63-7).
   no way to correct them on screen. Decision: whether "Mark Paid" asks for
   the amount, and how a difference from the commitment is shown.
 
+## Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)
+
+Found driving W64 (`docs/workflow-review/W64-expense-report.md`, W64-4 and
+W64-5).
+
+- **Purchase-request chains route everything.** `resolve_approval_chain`
+  matches chains whose `applies_to` is the request's type **or
+  `PURCHASE_REQUEST`**, and scores them without preferring the exact type.
+  - Every chain marked "Purchase Requests" also routes expense reports and
+    check requests.
+  - A purchase chain with an amount range or category outranks a default
+    expense or check chain.
+  - In this review an expense reimbursement went to the board chair's emailed
+    sign-off. `FINANCE_MODULE.md`'s own example ("Large Purchase" $5,000+
+    beside "General Expense") would send a $6,000 reimbursement to the Board
+    of Trustees.
+  - It has worked this way since the module was added, so changing it
+    re-routes live requests.
+  - Decision: match only the request's own type (with an `UPGRADING.md` note
+    and perhaps a migration copying purchase chains to the other types), add
+    an explicit "All requests" option, or keep it and say so on the chain
+    screen.
+- **Expense lines carry no budget.** The form offers no budget line, so
+  `budget_id` is null, and `mark_expense_paid` posts spending only to lines
+  that have one. A paid reimbursement reaches no budget line, and nothing
+  commits it on approval as a purchase request's amount is. Decision: who
+  picks the line (the member, or the Treasurer on approval), and whether
+  approval commits it.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
@@ -38,6 +39,7 @@ vi.mock('../services/api', () => ({
   fiscalYearService: { options: () => fiscalYearOptions() as unknown },
   budgetService: { options: (fy: string) => budgetOptions(fy) as unknown },
   purchaseRequestService: {},
+  advanceService: { list: () => Promise.resolve([]) },
   fundService: { list: () => Promise.resolve([]) },
   financeSettingsService: {
     get: () =>
@@ -55,6 +57,7 @@ import ExpenseReportsPage from './ExpenseReportsPage';
 import CheckRequestsPage from './CheckRequestsPage';
 import PurchaseRequestFormPage from './PurchaseRequestFormPage';
 import CheckRequestFormPage from './CheckRequestFormPage';
+import ExpenseReportFormPage from './ExpenseReportFormPage';
 import PurchaseRequestDetailPage from './PurchaseRequestDetailPage';
 import CheckRequestDetailPage from './CheckRequestDetailPage';
 
@@ -210,6 +213,27 @@ describe('request forms pick a budget line by name and amount left', () => {
       'Priority *',
       'Fiscal Year *',
       'Budget',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+  });
+
+  // W64: only a line's Date was tied to its label.
+  it('names every expense report field by its label, line items included', async () => {
+    const user = userEvent.setup();
+    renderAt('/finance/expenses/new', '/finance/expenses/new', ExpenseReportFormPage);
+
+    await screen.findByRole('option', { name: /FY2026/ });
+    await user.click(screen.getByRole('button', { name: 'Add Item' }));
+    for (const label of [
+      'Title *',
+      'Description',
+      'Fiscal Year *',
+      'Description *',
+      'Amount *',
+      'Date *',
+      'Type *',
+      'Merchant',
     ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
