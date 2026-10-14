@@ -253,7 +253,7 @@ Settings); nothing about NFC changes it.
 > event open in that room. One rule (`parseNfcTagPath` with the `TAG_TARGETS`
 > spec, now including `ROOM_CHECK_IN`) governs both what the button offers and
 > what a scan will accept. See
-> [Training 06 — Room door tags](https://github.com/thegspiro/the-logbook/blob/main/docs/training/06-apparatus-facilities.md#room-door-tags-2026-10-02).
+> [Training 06 — Room door tags](https://github.com/thegspiro/the-logbook/blob/main/docs/training/06-apparatus-facilities.md#room-door-tags).
 
 > **A failed write raises a toast, not a silent no-op.** The directory is a
 > print-oriented grid of fixed-size cards with no inline slot to report into,
