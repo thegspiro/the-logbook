@@ -934,7 +934,7 @@ async def get_staffing_state(
     """Who has signed up to cover this request, and which roles are still open."""
     from app.models.training import AssignmentStatus, ShiftAssignment
 
-    empty = {
+    empty: dict[str, Any] = {
         "shift_id": None,
         "shift_date": None,
         "slots_total": 0,

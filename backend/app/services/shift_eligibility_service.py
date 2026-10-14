@@ -562,25 +562,31 @@ class ShiftEligibilityService:
 
         answers: Dict[str, List[str]] = {}
         for shift_id in shift_ids:
-            shift = shifts.get(str(shift_id))
-            if not shift:
+            answered_shift = shifts.get(str(shift_id))
+            if not answered_shift:
                 # An id from another org, or one that has since been deleted.
                 # Empty rather than absent: the caller asked about it, and a
                 # missing key would read as "not answered yet".
                 answers[str(shift_id)] = []
                 continue
             if administrative:
-                answers[str(shift_id)] = self._administrative_shift_positions(shift)
+                answers[str(shift_id)] = self._administrative_shift_positions(
+                    answered_shift
+                )
                 continue
-            if shift.open_to_all_members and can_ride:
-                answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
+            if answered_shift.open_to_all_members and can_ride:
+                answers[str(shift_id)] = sorted(
+                    set(self._shift_position_list(answered_shift))
+                )
                 continue
             if blocked:
                 answers[str(shift_id)] = []
                 continue
             eligible = set(base)
-            eligible.update(quals_by_date.get(self._shift_date(shift, org), set()))
-            shift_positions = set(self._shift_position_list(shift))
+            eligible.update(
+                quals_by_date.get(self._shift_date(answered_shift, org), set())
+            )
+            shift_positions = set(self._shift_position_list(answered_shift))
             if shift_positions:
                 eligible = self._seats_granted(eligible, shift_positions)
             answers[str(shift_id)] = sorted(eligible)

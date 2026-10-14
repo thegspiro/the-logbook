@@ -1189,7 +1189,7 @@ If you prefer Docker Compose over Community Applications, see:
 
 - **[Quick Start Guide](./QUICK-START.md)** - Automated one-liner setup or step-by-step manual installation
 - **[Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)** - Build locally without GitHub Container Registry
-- **[docker-compose-unraid.yml](./docker-compose-unraid.yml)** - Pre-built image compose file
+- **[docker-compose-unraid.yml](./docker-compose-unraid.yml)** - Compose file the setup script installs (builds images locally)
 - **[docker-compose-build-from-source.yml](./docker-compose-build-from-source.yml)** - Local build compose file
 
 ---

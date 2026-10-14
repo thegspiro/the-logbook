@@ -1926,7 +1926,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 
 #### Platoon Rotations (Person-Level): No Platoon Fields or Generated Shifts
 
-See [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19)
+See [Scheduling Module → Platoon Rotations](../wiki/Module-Scheduling.md#platoon-rotations)
 for the full feature reference.
 
 **Symptoms**: Platoon badges, the hold-over roster, or platoon-based generation
@@ -4475,11 +4475,10 @@ Equipment checks, shift reports or submissions queued before 2026-10-05 carry no
 
 ### Problem: How to list available training registries
 
-**Solution:** Use the standalone registry generator tool with the `--list` flag:
+**Solution:** Use the standalone registry generator tool (at the repository root) with the `--list` flag:
 
 ```bash
-cd backend
-python scripts/generate_registry.py --list
+python generate_registry.py --list
 ```
 
 This shows all available registries (NFPA, NREMT, Pro Board, etc.) without generating any files.
@@ -9343,13 +9342,14 @@ docker-compose up -d backend frontend
 ```bash
 # Backend health
 curl http://YOUR-IP:3001/health
-# Expected: {"status":"healthy","timestamp":"..."}
+# Expected once started: {"status":"healthy","ready":true}
+# "degraded" means MySQL or Redis is unreachable; "unhealthy" (HTTP 503)
+# means startup failed, the schema is inconsistent, or the database query
+# raised an error. While the app is still starting,
+# the body also carries "checks": {"database": ..., "redis": ...}.
 
-# Database health
-curl http://YOUR-IP:3001/health/db
-
-# Redis health
-curl http://YOUR-IP:3001/health/redis
+# System and configuration detail (non-production environments only)
+curl http://YOUR-IP:3001/health/detailed
 ```
 
 #### Common API Errors

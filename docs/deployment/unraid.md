@@ -60,7 +60,7 @@ The script will:
 - Clone the repository to `/mnt/user/appdata/the-logbook`
 - Generate secure passwords and encryption keys
 - Create the directory structure with correct Unraid permissions
-- Build and start all containers (frontend, backend, MySQL, Redis, nightly backup sidecar)
+- Build and start all containers (frontend, backend, MySQL, Redis, nightly backup sidecar, ClamAV malware scanner)
 - Verify the deployment
 
 When prompted, choose:
@@ -68,6 +68,7 @@ When prompted, choose:
 - **1** for a fresh installation
 - **2** to update an existing installation
 - **3** for a clean install (removes all data)
+- **4** to uninstall / remove the application
 
 ### Manual Install
 
@@ -380,7 +381,12 @@ cd /mnt/user/appdata/the-logbook/unraid
 
 ```bash
 cd /mnt/user/appdata/the-logbook
+
+# docker-compose.yml is a copy of the Unraid template over a tracked file;
+# restore the tracked file so the pull cannot conflict, then re-copy it
+git checkout -- docker-compose.yml
 git pull origin main
+cp unraid/docker-compose-unraid.yml docker-compose.yml
 
 # Reconcile the compose build contexts with the Dockerfiles that were just
 # pulled. Skipping this is what produces `"/frontend/nginx.conf": not found`
@@ -396,7 +402,10 @@ docker compose up -d
 > build context, and `docker compose config` never opens the Dockerfile — so a
 > stale context passes validation and fails the build. If you maintain your own
 > compose file (custom volume paths, service names, pinned tags), the pull does
-> not correct it for you. `./unraid/update.sh` runs this automatically.
+> not correct it for you. `./unraid/update.sh` runs this automatically, but
+> only for the build-from-source layout
+> (`unraid/docker-compose-build-from-source.yml` copied to `docker-compose.yml`);
+> it refuses to run on an install made by `unraid-setup.sh`.
 
 Back up before updating:
 

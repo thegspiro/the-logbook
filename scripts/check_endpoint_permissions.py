@@ -287,8 +287,8 @@ def enforced_permissions(
        Used where the permission is not the only way in: the officer named on a
        shift may manage that shift's crew, attendance, calls, finalization and
        cancellation *without* ``scheduling.assign``/``scheduling.manage``
-       (documented in docs/SCHEDULING_MODULE.md, "Per-shift officer
-       authority"). That check needs the shift row, so it cannot live in the
+       (documented in wiki/Module-Scheduling-Developer.md, "API
+       Endpoints"). That check needs the shift row, so it cannot live in the
        signature — a dependency would have to load the shift a second time, and
        a route carrying both would enforce the permission twice and defeat the
        officer path entirely.

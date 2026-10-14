@@ -84,6 +84,12 @@ export interface MedicalCategoryUpdate {
   low_stock_threshold?: number | null;
 }
 
+export interface MedicalCategoryDeleteResult {
+  category_name: string;
+  items_moved: number;
+  moved_to_name: string | null;
+}
+
 /**
  * Every property carries an explicit `| undefined` because the workspace runs
  * `exactOptionalPropertyTypes`, under which `?:` alone rejects an assigned
@@ -128,6 +134,18 @@ export const medicalSuppliesService = {
 
   async updateCategory(categoryId: string, data: MedicalCategoryUpdate): Promise<InventoryCategory> {
     const response = await api.patch<InventoryCategory>(`/medical-supplies/categories/${categoryId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Permanently deletes a category. One that still holds supplies is refused
+   * (409) unless `moveItemsTo` names the category to move them to — a deleted
+   * category would otherwise leave them with none, which files them as gear.
+   */
+  async deleteCategory(categoryId: string, moveItemsTo?: string): Promise<MedicalCategoryDeleteResult> {
+    const response = await api.delete<MedicalCategoryDeleteResult>(`/medical-supplies/categories/${categoryId}`, {
+      params: moveItemsTo ? { move_items_to: moveItemsTo } : undefined,
+    });
     return response.data;
   },
 
