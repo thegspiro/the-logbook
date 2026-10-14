@@ -105,6 +105,13 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     - Deletion is refused while it is the only position opening a folder,
       naming those folders, so nothing opens to the whole department by
       accident.
+29. **A folder only full administrators could open is confirmed, not
+    refused** (2026-10-14). When a create, an access change or a move would
+    leave the folder open to no active member except full administrators,
+    the server answers `LB-DOC-001` and the dialog asks before saving. The
+    count asks the access check itself, parent folders included. A department
+    whose only active members are full administrators, such as a fresh
+    install, is not asked.
 
 ## Phases
 

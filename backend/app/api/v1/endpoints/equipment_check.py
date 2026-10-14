@@ -1397,6 +1397,30 @@ async def upload_check_item_photos(
         if data_uri not in existing_urls and data_uri not in new_urls:
             new_urls.append(data_uri)
 
+    # Re-read the list under a row lock before merging. The read above is
+    # unlocked and the scan and re-encode between it and here are slow, so two
+    # uploads to the same item would otherwise both append to the same stale
+    # list: the later commit drops the earlier one's photos and the cap is
+    # checked against a count that is no longer true. The lock is taken only
+    # now so a slow scan never holds it.
+    locked = await db.execute(
+        select(ShiftEquipmentCheckItem)
+        .join(
+            ShiftEquipmentCheck,
+            ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
+        )
+        .where(
+            ShiftEquipmentCheckItem.id == item_id,
+            ShiftEquipmentCheckItem.check_id == check_id,
+            ShiftEquipmentCheck.organization_id == current_user.organization_id,
+        )
+        .with_for_update(of=ShiftEquipmentCheckItem)
+        .execution_options(populate_existing=True)
+    )
+    check_item = locked.scalars().one()
+    existing_urls = check_item.photo_urls or []
+    new_urls = [url for url in new_urls if url not in existing_urls]
+
     if len(existing_urls) + len(new_urls) > MAX_PHOTOS_PER_ITEM:
         raise HTTPException(
             status_code=400,

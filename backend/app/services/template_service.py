@@ -304,19 +304,6 @@ class TemplateService:
         await self.db.commit()
         return True
 
-    async def get_default_for_type(
-        self, organization_id: UUID, meeting_type: str
-    ) -> Optional[MinutesTemplate]:
-        """Get the default template for a meeting type"""
-        result = await self.db.execute(
-            select(MinutesTemplate)
-            .where(MinutesTemplate.organization_id == str(organization_id))
-            .where(MinutesTemplate.meeting_type == meeting_type)
-            .where(MinutesTemplate.is_default.is_(True))
-        )
-        minutes_template: Optional[MinutesTemplate] = result.scalar_one_or_none()
-        return minutes_template
-
     async def _clear_defaults(self, organization_id: UUID | str, meeting_type: str):
         """Clear the is_default flag for all templates of a given type"""
         result = await self.db.execute(

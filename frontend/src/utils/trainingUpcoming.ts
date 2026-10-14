@@ -16,7 +16,7 @@ export const UPCOMING_WINDOW_DAYS = 183;
 /** Inside this many days an item reads as due soon rather than merely upcoming. */
 export const DUE_SOON_DAYS = 90;
 
-export type UpcomingKind = 'requirement' | 'certification' | 'window' | 'shortfall';
+export type UpcomingKind = 'requirement' | 'certification' | 'skill' | 'window' | 'shortfall';
 export type UpcomingUrgency = 'overdue' | 'soon' | 'later';
 
 export interface UpcomingItem {
@@ -135,12 +135,32 @@ const certificationItems = (certs: NonNullable<MyTrainingSummary['certifications
   });
 };
 
+const skillItems = (tests: NonNullable<MyTrainingSummary['skill_test_expirations']>): UpcomingItem[] =>
+  tests.flatMap((test): UpcomingItem[] => {
+    if (test.days_until_expiry > UPCOMING_WINDOW_DAYS) return [];
+    return [
+      {
+        key: `skill-${test.id}`,
+        kind: 'skill',
+        title: test.template_name,
+        detail: test.days_until_expiry < 0 ? 'Skills test expired' : 'Skills test expires',
+        date: test.expiration_date,
+        days: test.days_until_expiry,
+        urgency: urgencyFor(test.days_until_expiry),
+      },
+    ];
+  });
+
 /**
  * Overdue first, then soonest, then anything short with no date. Requirement rows are left out when the
  * department hides requirement details, and certification rows when it hides
  * certification status — the server omits the underlying lists in that case.
  */
-export const buildUpcomingItems = (data: MyTrainingSummary, today: string): UpcomingItem[] => {
+export const buildUpcomingItems = (
+  data: MyTrainingSummary,
+  today: string,
+  includeSkillTests = true
+): UpcomingItem[] => {
   const certs = certificationItems(data.certifications ?? []);
   const certTitles = new Set(certs.map((c) => c.title.trim().toLowerCase()));
   // A certification requirement and the record it is graded on are one
@@ -148,7 +168,8 @@ export const buildUpcomingItems = (data: MyTrainingSummary, today: string): Upco
   const requirements = requirementItems(data.requirements_detail ?? [], today).filter(
     (r) => r.kind !== 'requirement' || !certTitles.has(r.title.trim().toLowerCase())
   );
-  return [...requirements, ...certs].sort((a, b) => {
+  const skills = includeSkillTests ? skillItems(data.skill_test_expirations ?? []) : [];
+  return [...requirements, ...certs, ...skills].sort((a, b) => {
     // Dated items by how soon, then the ones with no date, which are short
     // every day and so have no "soonest".
     if (a.days === null || b.days === null) return Number(a.days === null) - Number(b.days === null);

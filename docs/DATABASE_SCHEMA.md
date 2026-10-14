@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**304 tables · 5034 columns · 1017 foreign keys**
+**304 tables · 5035 columns · 1017 foreign keys**
 
 ---
 
@@ -574,7 +574,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`skill_templates`](#skill_templates) | `SkillTemplate` | 21 | Skill Template model |
+| [`skill_templates`](#skill_templates) | `SkillTemplate` | 22 | Skill Template model |
 | [`skill_test_viewers`](#skill_test_viewers) | `SkillTestViewer` | 5 | A person granted sight of one specific test's result. |
 | [`skill_tests`](#skill_tests) | `SkillTest` | 34 | Skill Test model |
 
@@ -7668,6 +7668,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `require_all_critical` | BOOL | yes |  | `True` |  |
 | `score_pass_fail_criteria` | BOOL | no |  | `0` |  |
 | `requirement_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_requirements.id` ON DELETE SET NULL |
+| `valid_for_months` | INTEGER | yes |  |  |  |
 | `result_disclosure` | VARCHAR(20) | yes |  |  |  |
 | `result_release` | VARCHAR(20) | yes |  |  |  |
 | `result_viewer_positions` | JSON | yes |  |  |  |

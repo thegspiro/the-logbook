@@ -2290,6 +2290,15 @@ export interface MyTrainingSummary {
     is_expired: boolean;
     days_until_expiry: number | null;
   }>;
+  /** Passing official skills tests that lapse; absent from older servers. */
+  skill_test_expirations?: Array<{
+    id: string;
+    template_id: string;
+    template_name: string;
+    passed_on: string;
+    expiration_date: string;
+    days_until_expiry: number;
+  }>;
   enrollments?: Array<{
     id: string;
     program_id: string;

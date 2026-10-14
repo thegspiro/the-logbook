@@ -168,7 +168,9 @@ first. Amber means due within 90 days; red means overdue or expired.
 | **Opens _date_ · N days**       | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13)). |
 | **_N_ hrs to go**, with no date | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any day. It is listed last, with the counting window beneath.               |
 
-Skills tests are not in the list. When nothing is due, it says so.
+| **Expires _date_ · N days** (skills test) | A passing official skills test whose skill has a validity period. Set by an officer in the skill sheet's **Valid for (months)** field; see [Skills Testing](./09-skills-testing.md). |
+
+When nothing is due, it says so.
 
 ### The History Tab _(2026-10-13)_
 

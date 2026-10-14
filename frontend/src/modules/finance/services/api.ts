@@ -5,7 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
-import { fetchFile, type DownloadedFile } from '../../../utils/fileDownload';
+import { fetchFile, filenameFromContentDisposition, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   ApprovalChain,
   ApprovalChainCreatePayload,
@@ -77,6 +77,7 @@ import type {
   FunctionalExpensesReport,
   FundBalancesReport,
   FundOption,
+  ExportRunPayload,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -927,5 +928,16 @@ export const exportMappingService = {
   async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
     const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
     return asArray(response.data);
+  },
+
+  /** Run the QuickBooks export for a period, as the file the server names. */
+  async run(data: ExportRunPayload): Promise<DownloadedFile> {
+    const response = await api.post<Blob>('/finance/export/transactions', data, { responseType: 'blob' });
+    const header: unknown = response.headers['content-disposition'];
+    return {
+      blob: response.data,
+      filename:
+        filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? 'quickbooks-journal.csv',
+    };
   },
 };

@@ -13,17 +13,18 @@ Three steps, each safe to interrupt and re-run:
     docker exec -it intranet-backend python scripts/relocate_uploads.py
 
     # 2. Copy, verify and repoint. Old files are KEPT; a manifest is written
-    #    to /app/uploads/.relocation/ and its path printed:
+    #    to /app/uploads/.relocation/ and its path printed. Use that printed
+    #    path below; the name shown is only an example:
     docker exec -it intranet-backend python scripts/relocate_uploads.py --apply
 
     #    Changed your mind? Point everything back and drop the new copies:
     docker exec -it intranet-backend python scripts/relocate_uploads.py \\
-        --rollback /app/uploads/.relocation/relocation-<stamp>.json
+        --rollback /app/uploads/.relocation/relocation-20261013T224204Z.json
 
     # 3. Once satisfied, delete the old copies (each re-verified first).
     #    After this there is nothing to roll back to:
     docker exec -it intranet-backend python scripts/relocate_uploads.py \\
-        --finalize /app/uploads/.relocation/relocation-<stamp>.json
+        --finalize /app/uploads/.relocation/relocation-20261013T224204Z.json
 
 Add ``--org <organization id>`` to steps 1 and 2 to do one department at a
 time. Run it at a quiet time: rows are re-read under a lock before they are
