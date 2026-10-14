@@ -93,7 +93,7 @@ const FundraisingEventsPage: React.FC = () => {
         </p>
       </div>
       {canManage && (
-        <button type="button" onClick={() => setDialog({})} className="btn-primary">
+        <button type="button" onClick={() => setDialog({})} className="btn-primary inline-flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Add Event
         </button>
@@ -209,7 +209,7 @@ const FundraisingEventsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setDialog({ event: ev })}
-                      className="btn-secondary"
+                      className="btn-secondary inline-flex items-center gap-2"
                       aria-label={`Edit ${ev.name}`}
                     >
                       <Pencil className="h-4 w-4" />

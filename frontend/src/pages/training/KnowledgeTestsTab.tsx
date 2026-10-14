@@ -214,7 +214,7 @@ const TestEditor: React.FC<{ testId: string; onBack: () => void }> = ({ testId, 
 
   return (
     <div className="space-y-4">
-      <button type="button" className="btn-secondary" onClick={onBack}>
+      <button type="button" className="btn-secondary inline-flex items-center gap-2" onClick={onBack}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         All tests
       </button>
@@ -426,7 +426,7 @@ const TestEditor: React.FC<{ testId: string; onBack: () => void }> = ({ testId, 
             {form.type !== 'true_false' && form.options.length < 10 && (
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary inline-flex items-center gap-2"
                 onClick={() => setForm({ ...form, options: [...form.options, { text: '', correct: false }] })}
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -645,12 +645,20 @@ const KnowledgeTestsTab: React.FC = () => {
                 <button type="button" className="btn-primary" onClick={() => setSelected(test.id)}>
                   Questions &amp; results
                 </button>
-                <button type="button" className="btn-secondary" onClick={() => openSettings(test)}>
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2"
+                  onClick={() => openSettings(test)}
+                >
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                   Settings
                 </button>
                 {test.attempt_count === 0 && (
-                  <button type="button" className="btn-secondary" onClick={() => void remove(test)}>
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-2"
+                    onClick={() => void remove(test)}
+                  >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                     Delete
                   </button>

@@ -307,7 +307,7 @@ export const InventoryKioskPage: React.FC = () => {
               Stop kiosk
             </button>
           ) : (
-            <button type="button" className="btn-primary" onClick={() => void start()}>
+            <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => void start()}>
               <Nfc className="h-4 w-4" aria-hidden="true" /> Start kiosk
             </button>
           ))}
