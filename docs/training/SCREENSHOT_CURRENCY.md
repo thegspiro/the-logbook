@@ -1,5 +1,16 @@
 # Screenshot currency
 
+## Moved out of 14-elections.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `14-01-elections-list.png` | **REPLACE** | The subtitle under **Elections** reads "Create elections, send ballots and publish results" for an elections manager ("See elections and their results" for a member); it read "Manage elections and view results". Re-shoot the same list as an administrator |
+| `19-25-ballot-template-settings-before.png`, `19-26-ballot-template-settings-after.png` | **REPLACE** | The details card's **Voting Method** reads "One choice per voter" (before) and "Ranked choice" (after) instead of "Simple Majority" / "Ranked Choice", and a **Winner** row shows the victory condition — in this example "Supermajority (67% of votes)" on both frames. Re-shoot the same draft before and after applying the template; the `19-25` alt text still says "Simple Majority" |
+| `14-16-election-settings.png` | **REPLACE** | The **Defaults** section (default voting method, victory condition, anonymity, write-ins) is gone; the sections are **Proxy Voting**, **Features**, **Test Ballot** and **Security**. Re-shoot so the section list no longer shows Defaults, and update the alt text, which still says "default rule toggles" |
+
 ## Moved out of 13-medical-screening.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
