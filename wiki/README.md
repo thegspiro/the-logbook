@@ -376,7 +376,6 @@ When main documentation files are updated:
 
 ```bash
 # Copy updated files to wiki directory
-cp ../docs/backend/python-backend.md Development-Backend.md
 cp ../SECURITY.md Security-Overview.md
 
 # Deploy to GitHub
@@ -389,6 +388,9 @@ cp ../SECURITY.md Security-Overview.md
 > That guide is the single source for troubleshooting content — the former
 > `docs/troubleshooting/README.md` and the hand-maintained wiki copy were
 > consolidated into it after the three drifted apart.
+>
+> **Development-Backend is not in that list either.** It is edited here
+> directly; `docs/backend/python-backend.md` only points to it.
 
 ### Regular Updates
 

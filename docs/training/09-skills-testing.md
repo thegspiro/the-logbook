@@ -136,6 +136,8 @@ months before it lapses. It reads **Skills test expires** with the date, and
   [Who Sees a Result](#who-sees-a-result--disclosure-settings)) is not listed.
 - Changing the number of months also applies to tests already passed.
 
+![Valid for (months) field on the skill sheet template form, with its help text](./images/09-03-template-valid-for.png)
+
 ![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 
 ### Step 2: Define Sections and Criteria

@@ -9,7 +9,7 @@ This guide provides instructions for testing The Logbook, with special focus on 
 docker compose exec backend pytest tests/test_onboarding_integration.py -v
 
 # Test specific functionality (the critical MissingGreenlet fix)
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -v
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment -v
 ```
 
 ## Onboarding Test Suite
@@ -46,7 +46,7 @@ If you've made changes to onboarding code, validate them:
 
 ```bash
 # Test admin user creation (where the MissingGreenlet error was)
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -vv -s
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment -vv -s
 
 # Test organization creation
 docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_create_organization -vv -s
@@ -65,7 +65,7 @@ docker compose exec backend pytest tests/test_onboarding_integration.py -vv -s
 docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration -v
 
 # Run a specific test method
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_complete_onboarding_flow -v
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding_status_tracking -v
 
 # Run with coverage report
 docker compose exec backend pytest tests/test_onboarding_integration.py --cov=app/services/onboarding --cov-report=term-missing
@@ -117,13 +117,13 @@ is already `NaN`), so its effective score is 100%, not the 96% reported.
 
 ### Onboarding Tests (Backend)
 
-| Test                                            | Purpose                        | Status |
-| ----------------------------------------------- | ------------------------------ | ------ |
-| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation | ✅     |
-| `test_create_organization`                      | Organization creation          | ✅     |
-| `test_default_roles_creation`                   | Super Admin role creation      | ✅     |
-| `test_duplicate_admin_user_prevention`          | Duplicate user protection      | ✅     |
-| `test_onboarding_status_tracking`               | Status tracking                | ✅     |
+| Test                                                  | Purpose                        | Status |
+| ----------------------------------------------------- | ------------------------------ | ------ |
+| `test_system_owner_creation_with_position_assignment` | MissingGreenlet fix validation | ✅     |
+| `test_create_organization`                            | Organization creation          | ✅     |
+| `test_default_positions_creation`                     | Default position creation      | ✅     |
+| `test_duplicate_system_owner_prevention`              | Duplicate user protection      | ✅     |
+| `test_onboarding_status_tracking`                     | Status tracking                | ✅     |
 
 ### Event Component Tests (Frontend - Added 2026-02-14)
 
@@ -360,10 +360,10 @@ make test
 ### ✅ All Tests Pass
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment PASSED
 tests/test_onboarding_integration.py::TestOnboardingIntegration::test_create_organization PASSED
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_default_roles_creation PASSED
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_duplicate_admin_user_prevention PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_default_positions_creation PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_duplicate_system_owner_prevention PASSED
 tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding_status_tracking PASSED
 
 ========== 5 passed in 2.34s ==========
@@ -374,7 +374,7 @@ tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding
 ### ❌ Test Failure Example
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment FAILED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment FAILED
 
 E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ```
@@ -390,7 +390,7 @@ sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ```
 
 **Cause:** Accessing lazy-loaded relationship without proper async handling
-**Fix:** Use `await db.refresh(user, ['roles'])` before accessing `user.roles`
+**Fix:** Use `await db.refresh(user, ['positions'])` before accessing `user.positions`
 
 #### Duplicate User Error
 
@@ -414,12 +414,12 @@ ValueError: Cannot create admin user before organization
 
 When fixing issues like we did with the MissingGreenlet error:
 
-1. **Write a test that reproduces the issue** (test_admin_user_creation_with_role_assignment)
+1. **Write a test that reproduces the issue** (test_system_owner_creation_with_position_assignment)
 2. **Run the test and confirm it fails**
    ```bash
-   docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -v
+   docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_system_owner_creation_with_position_assignment -v
    ```
-3. **Fix the code** (add `await db.refresh(user, ['roles'])`)
+3. **Fix the code** (add `await db.refresh(user, ['positions'])`)
 4. **Run the test again and confirm it passes**
 5. **Run ALL tests to ensure no regressions**
    ```bash
