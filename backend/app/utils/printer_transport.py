@@ -163,7 +163,8 @@ async def resolve_printer_host(host: str) -> str:
     for info in infos:
         sockaddr = info[4]
         candidate = sockaddr[0]
-        if candidate not in addresses:
+        # An address family that is neither IPv4 nor IPv6 leads with an int.
+        if isinstance(candidate, str) and candidate not in addresses:
             addresses.append(candidate)
     if not addresses:
         raise PrinterUnreachableError(f"Could not resolve printer host {hostname}")

@@ -21,6 +21,7 @@ import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { expenseReportService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
+import { FundShortfallNotice } from '../components/FundShortfallNotice';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -268,6 +269,8 @@ const ExpenseReportDetailPage: React.FC = () => {
           </div>
         )}
 
+        <FundShortfallNotice shortfall={er.fundShortfall} />
+
         {er.denialReason && (
           <div className="alert-danger mt-4">
             <p className="text-theme-alert-danger-title text-xs font-medium">Denial Reason</p>
@@ -307,6 +310,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                         <div className="mt-1">
                           <LateLinesBadge />
                         </div>
+                      )}
+                      {item.fundName && (
+                        <p className="text-theme-text-secondary mt-1 text-xs">Restricted fund: {item.fundName}</p>
                       )}
                     </td>
                     <td className="text-theme-text-secondary px-4 py-3 text-sm">

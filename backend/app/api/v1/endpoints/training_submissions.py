@@ -7,7 +7,7 @@ and self-report configuration management.
 
 import asyncio
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import (
     APIRouter,
@@ -21,6 +21,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -34,9 +35,23 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.training import SubmissionStatus, TrainingSubmission
+from app.models.training import (
+    AssignmentStatus,
+    Shift,
+    ShiftAssignment,
+    ShiftStatus,
+    SubmissionStatus,
+    TrainingSubmission,
+)
 from app.models.user import User
 from app.schemas.training_submission import (
+    CrewBatchApproveRequest,
+    CrewBatchApproveResult,
+    CrewMemberOption,
+    CrewRecordingContext,
+    CrewShiftOption,
+    CrewTrainingCreate,
+    CrewTrainingResult,
     SelfReportConfigResponse,
     SelfReportConfigUpdate,
     SubmissionReviewRequest,
@@ -51,8 +66,13 @@ from app.services.file_storage_service import (
     StorageArea,
     stored_file_response,
 )
-from app.services.training_submission_service import TrainingSubmissionService
+from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.services.training_submission_service import (
+    TrainingSubmissionService,
+    assert_member_may_change,
+)
 from app.utils import download_names
+from app.utils.member_names import format_display_name
 
 router = APIRouter()
 
@@ -249,6 +269,218 @@ async def get_all_submissions(
         exclude_statuses=None if status else [SubmissionStatus.DRAFT.value],
     )
     return submissions
+
+
+# ==================== Crew-Recorded Training ====================
+
+# Assignments that mean the member was not actually on the shift.
+_ABSENT_ASSIGNMENT_STATUSES = (
+    AssignmentStatus.DECLINED,
+    AssignmentStatus.CANCELLED,
+    AssignmentStatus.NO_SHOW,
+)
+
+
+async def _may_record_crew_training(db: AsyncSession, user: User) -> bool:
+    """``training.manage``, or able to serve as a shift officer.
+
+    Any member whose rank, qualifications or completed training clear the
+    officer seat may record a drill — the driver who could be in charge on
+    another day included — whether or not they are today's assigned officer.
+    The grant is narrow on purpose: it files *pending* submissions only. Every
+    one waits for a training officer, who cannot be the recorder, so recording
+    credits nobody by itself.
+    """
+    if _has_permission("training.manage", _collect_user_permissions(user)):
+        return True
+    return await ShiftEligibilityService(db).can_serve_as_shift_officer(
+        user, str(user.organization_id)
+    )
+
+
+async def _require_crew_recorder(db: AsyncSession, user: User) -> None:
+    if not await _may_record_crew_training(db, user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only members who can serve as a shift officer may record "
+            "crew training.",
+        )
+
+
+@router.get("/crew/context", response_model=CrewRecordingContext)
+async def get_crew_recording_context(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether the caller may record crew training, and the members to pick.
+
+    Answers ``can_record: false`` rather than 403 so the app can decide
+    whether to offer the action without treating every member's visit as an
+    error. The member list is returned only to someone who may record.
+    """
+    if not await _may_record_crew_training(db, current_user):
+        return CrewRecordingContext(can_record=False, members=[])
+
+    result = await db.execute(
+        select(User.id, User.first_name, User.last_name, User.preferred_name)
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.is_active)
+        .order_by(User.last_name, User.first_name)
+    )
+    members = [
+        CrewMemberOption(
+            id=row.id,
+            name=format_display_name(row.first_name, row.last_name, row.preferred_name)
+            or "Unnamed member",
+        )
+        for row in result.all()
+    ]
+    return CrewRecordingContext(can_record=True, members=members)
+
+
+@router.get("/crew/shifts", response_model=list[CrewShiftOption])
+async def get_crew_shift_options(
+    shift_date: date = Query(..., description="The day the training ran"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Shifts on a day, with who was on each, to pre-fill who was present."""
+    await _require_crew_recorder(db, current_user)
+    org_id = str(current_user.organization_id)
+
+    shifts = (
+        (
+            await db.execute(
+                select(Shift)
+                .where(Shift.organization_id == org_id)
+                .where(Shift.shift_date == shift_date)
+                .where(Shift.status != ShiftStatus.CANCELLED)
+                .order_by(Shift.start_time)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not shifts:
+        return []
+
+    shift_ids = [str(shift.id) for shift in shifts]
+    assignment_rows = (
+        await db.execute(
+            select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
+            .where(ShiftAssignment.organization_id == org_id)
+            .where(ShiftAssignment.shift_id.in_(shift_ids))
+            .where(ShiftAssignment.user_id.isnot(None))
+            .where(
+                ShiftAssignment.assignment_status.notin_(_ABSENT_ASSIGNMENT_STATUSES)
+            )
+        )
+    ).all()
+    crew: dict[str, list[str]] = {}
+    for shift_id, user_id in assignment_rows:
+        members = crew.setdefault(str(shift_id), [])
+        if str(user_id) not in members:
+            members.append(str(user_id))
+
+    officer_ids = {str(s.shift_officer_id) for s in shifts if s.shift_officer_id}
+    officer_names: dict[str, str] = {}
+    if officer_ids:
+        for row in (
+            await db.execute(
+                select(
+                    User.id, User.first_name, User.last_name, User.preferred_name
+                ).where(User.id.in_(officer_ids), User.organization_id == org_id)
+            )
+        ).all():
+            officer_names[str(row.id)] = format_display_name(
+                row.first_name, row.last_name, row.preferred_name
+            )
+
+    return [
+        CrewShiftOption(
+            id=shift.id,
+            start_time=shift.start_time,
+            end_time=shift.end_time,
+            platoon=shift.platoon,
+            shift_officer_name=(
+                officer_names.get(str(shift.shift_officer_id))
+                if shift.shift_officer_id
+                else None
+            ),
+            member_ids=crew.get(str(shift.id), []),
+        )
+        for shift in shifts
+    ]
+
+
+@router.post("/crew", response_model=CrewTrainingResult, status_code=201)
+async def record_crew_training(
+    data: CrewTrainingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Record a drill for every member present; each entry awaits review."""
+    await _require_crew_recorder(db, current_user)
+    service = TrainingSubmissionService(db)
+    fields = data.model_dump(exclude={"member_ids", "shift_id", "category_id"})
+    async with handle_service_errors("Failed to record crew training"):
+        batch_id, submissions = await service.create_crew_submissions(
+            organization_id=str(current_user.organization_id),
+            recorded_by=str(current_user.id),
+            member_ids=[str(m) for m in data.member_ids],
+            shift_id=str(data.shift_id) if data.shift_id else None,
+            category_id=str(data.category_id) if data.category_id else None,
+            **fields,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="crew_training_recorded",
+            event_category="training",
+            severity="info",
+            event_data={
+                "crew_batch_id": batch_id,
+                "course_name": data.course_name,
+                "hours_completed": data.hours_completed,
+                "completion_date": str(data.completion_date),
+                "shift_id": str(data.shift_id) if data.shift_id else None,
+                "member_ids": [str(s.submitted_by) for s in submissions],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return CrewTrainingResult(crew_batch_id=batch_id, submissions=submissions)
+
+
+@router.post("/crew/{batch_id}/approve", response_model=CrewBatchApproveResult)
+async def approve_crew_training(
+    batch_id: str,
+    review: CrewBatchApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Approve every pending entry in a crew recording as it was recorded."""
+    service = TrainingSubmissionService(db)
+    async with handle_service_errors("Failed to approve crew training"):
+        approved, skipped = await service.approve_crew_batch(
+            batch_id=batch_id,
+            reviewer_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            reviewer_notes=review.reviewer_notes,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="crew_training_approved",
+            event_category="training",
+            severity="info",
+            event_data={
+                "crew_batch_id": batch_id,
+                "approved_submission_ids": [str(s.id) for s in approved],
+                "skipped_submission_ids": [str(s["submission_id"]) for s in skipped],
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return CrewBatchApproveResult(approved=len(approved), skipped=skipped)
 
 
 @router.get("/{submission_id}", response_model=TrainingSubmissionResponse)
@@ -615,6 +847,11 @@ async def upload_submission_attachment(
             detail="Only the submitter can attach a certificate.",
         )
 
+    try:
+        assert_member_may_change(submission)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
     if submission.status not in EDITABLE_SUBMISSION_STATUSES:
         raise HTTPException(
             status_code=400,
@@ -673,7 +910,9 @@ async def download_submission_attachment(
 
     attachment = attachments[index]
     real_path = _confined_path(attachment, submission.organization_id)
-    if not real_path:
+    # A legacy bare-string attachment has no path to confine, so `real_path` is
+    # already None for it; the isinstance narrows the type for what follows.
+    if not real_path or not isinstance(attachment, dict):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     if not await asyncio.to_thread(os.path.isfile, real_path):
@@ -711,6 +950,11 @@ async def delete_submission_attachment(
             status_code=403,
             detail="Only the submitter can remove an attachment.",
         )
+
+    try:
+        assert_member_may_change(submission)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     if submission.status not in EDITABLE_SUBMISSION_STATUSES:
         raise HTTPException(

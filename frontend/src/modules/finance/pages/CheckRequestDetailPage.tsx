@@ -13,6 +13,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { checkRequestService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
+import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -280,6 +281,7 @@ const CheckRequestDetailPage: React.FC = () => {
               await fetchCheckRequest(cr.id);
             }}
           />
+          <FundNameItem name={cr.fundName} />
           {cr.qbExportedAt && (
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
@@ -320,6 +322,8 @@ const CheckRequestDetailPage: React.FC = () => {
             <p className="text-theme-text-primary mt-1 text-sm">{cr.memo}</p>
           </div>
         )}
+
+        <FundShortfallNotice shortfall={cr.fundShortfall} />
 
         {cr.denialReason && (
           <div className="alert-danger mt-4">

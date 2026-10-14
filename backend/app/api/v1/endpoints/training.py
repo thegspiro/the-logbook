@@ -279,7 +279,8 @@ async def get_training_dashboard_summary(
             and r.completion_date
             and recent_start <= r.completion_date <= today
         ],
-        key=lambda r: r.completion_date,
+        # The filter above keeps only records with a completion date.
+        key=lambda r: r.completion_date or date.min,
         reverse=True,
     )
     year_records = [
@@ -347,6 +348,9 @@ async def get_training_dashboard_summary(
     ).all()
     capacities = []
     for session, event in session_rows:
+        # The query above keeps only events with a cap.
+        if event.max_attendees is None:
+            continue
         registered = (
             await db.scalar(
                 select(func.count(EventRSVP.id)).where(
@@ -413,10 +417,11 @@ async def get_training_dashboard_summary(
                 "member_name": user_map[str(r.user_id)].display_name
                 or user_map[str(r.user_id)].username,
                 "course_name": r.course_name,
-                "expiration_date": r.expiration_date.isoformat(),
-                "days_left": (r.expiration_date - today).days,
+                "expiration_date": expiry.isoformat(),
+                "days_left": (expiry - today).days,
             }
             for r in expiring_records[:5]
+            if (expiry := r.expiration_date)
         ],
         "recent_completions": [
             {
@@ -425,10 +430,11 @@ async def get_training_dashboard_summary(
                 "member_name": user_map[str(r.user_id)].display_name
                 or user_map[str(r.user_id)].username,
                 "course_name": r.course_name,
-                "completion_date": r.completion_date.isoformat(),
+                "completion_date": completed_on.isoformat(),
                 "hours_completed": r.hours_completed or 0,
             }
             for r in recent[:5]
+            if (completed_on := r.completion_date)
         ],
         "requirements": [
             {
@@ -3072,6 +3078,9 @@ async def get_category_hour_breakdown(
     hours_by_category: dict[str, float] = {}
     for rec in records:
         cid = rec.category_id
+        # The query above keeps only records with a category.
+        if cid is None:
+            continue
         hours_by_category[cid] = hours_by_category.get(cid, 0) + (
             rec.hours_completed or 0
         )

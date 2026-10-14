@@ -4,6 +4,7 @@ Training Module Configuration API Endpoints
 GET  /config          - Any authenticated member can read the visibility settings
 PUT  /config          - training.configure (or training.manage) to update them
 GET  /my-training     - Member's aggregated training data (respects visibility config)
+GET  /my-training/records - Member's full training history, paginated and grouped by year
 """
 
 from datetime import date
@@ -12,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,6 +37,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
     TrainingSubmission,
+    TrainingType,
 )
 from app.models.user import User
 from app.schemas.training_module_config import (
@@ -57,6 +59,7 @@ from app.services.training_program_service import TrainingProgramService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
 from app.utils.org_timezone import resolve_org_today
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
 
@@ -157,15 +160,15 @@ async def get_member_visibility(
     return visibility
 
 
-@router.get("/my-training")
-async def get_my_training_summary(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Get the current member's aggregated training data.
-    Respects the organization's visibility configuration.
-    Officers always get the full dataset.
+async def _resolve_caller_visibility(
+    db: AsyncSession, current_user: User
+) -> tuple[dict[str, Any], bool, User | None]:
+    """What this caller may see of their own training record.
+
+    Shared by ``/my-training`` and ``/my-training/records`` so the officer
+    exemption and the visibility flags have one definition: a second copy is
+    how two screens come to disagree about what a member may see.
+    Returns ``(visibility, is_officer, user_with_roles)``.
     """
     config_service = TrainingModuleConfigService(db)
     visibility = await config_service.get_member_visibility(
@@ -211,6 +214,22 @@ async def get_my_training_summary(
             key: (True if key.startswith("show_") else value)
             for key, value in visibility.items()
         }
+    return visibility, is_officer, user_with_roles
+
+
+@router.get("/my-training")
+async def get_my_training_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the current member's aggregated training data.
+    Respects the organization's visibility configuration.
+    Officers always get the full dataset.
+    """
+    visibility, is_officer, user_with_roles = await _resolve_caller_visibility(
+        db, current_user
+    )
 
     org_id = str(current_user.organization_id)
     user_id = str(current_user.id)
@@ -246,7 +265,11 @@ async def get_my_training_summary(
                     else str(r.training_type)
                 ),
                 "status": (
-                    r.status.value if hasattr(r.status, "value") else str(r.status)
+                    None
+                    if r.status is None
+                    else (
+                        r.status.value if hasattr(r.status, "value") else str(r.status)
+                    )
                 ),
                 "completion_date": (
                     str(r.completion_date) if r.completion_date else None
@@ -295,6 +318,23 @@ async def get_my_training_summary(
             TrainingRecord.completion_date >= month_start,
         )
     )
+    # The calendar year to date, which the member's landing tiles report. The
+    # lifetime totals above belong to the History tab: the department has no
+    # single "training year" (cycles are per requirement), and a lifetime
+    # figure beside "your requirements" read as this year's progress.
+    year_start = today.replace(month=1, day=1)
+    ytd_result = await db.execute(
+        select(
+            func.count(TrainingRecord.id),
+            func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
+        ).where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id == user_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.completion_date >= year_start,
+        )
+    )
+    ytd_row = ytd_result.one()
     # The counts stay regardless — "how many courses have I completed" is
     # history, not hours, and the page's core stat row needs it. Only the two
     # hour figures answer to ``show_training_hours``; a department that hides
@@ -306,6 +346,9 @@ async def get_my_training_summary(
     if is_officer or visibility.get("show_training_hours", True):
         hours_summary["total_hours"] = float(row[1])
         hours_summary["hours_this_month"] = float(month_result.scalar() or 0)
+        hours_summary["year_to_date_hours"] = float(ytd_row[1])
+    hours_summary["year_to_date_courses"] = ytd_row[0]
+    hours_summary["year"] = today.year
     result["hours_summary"] = hours_summary
 
     # --- Requirements Summary (always returned for core stats) ---
@@ -495,9 +538,13 @@ async def get_my_training_summary(
                 "program_id": str(enrollment.program_id),
                 "program_name": program_names.get(str(enrollment.program_id), ""),
                 "status": (
-                    enrollment.status.value
-                    if hasattr(enrollment.status, "value")
-                    else str(enrollment.status)
+                    None
+                    if enrollment.status is None
+                    else (
+                        enrollment.status.value
+                        if hasattr(enrollment.status, "value")
+                        else str(enrollment.status)
+                    )
                 ),
                 "progress_percentage": float(enrollment.progress_percentage or 0),
                 "enrolled_at": (
@@ -543,9 +590,13 @@ async def get_my_training_summary(
                         "requirement_id": str(rp.requirement_id),
                         "requirement_name": name_map.get(str(rp.requirement_id), ""),
                         "status": (
-                            rp.status.value
-                            if hasattr(rp.status, "value")
-                            else str(rp.status)
+                            None
+                            if rp.status is None
+                            else (
+                                rp.status.value
+                                if hasattr(rp.status, "value")
+                                else str(rp.status)
+                            )
                         ),
                         "progress_value": float(rp.progress_value or 0),
                         "progress_percentage": float(rp.progress_percentage or 0),
@@ -675,6 +726,149 @@ async def get_my_training_summary(
         ]
 
     return result
+
+
+UNDATED_YEAR = "undated"
+
+
+def _record_year_filter(year: str | None) -> list[Any]:
+    """The WHERE clause for one year group of the history, or none for all.
+
+    ``undated`` selects records still awaiting approval, which have no
+    completion date and so belong to no year.
+    """
+    if year is None:
+        return []
+    if year == UNDATED_YEAR:
+        return [TrainingRecord.completion_date.is_(None)]
+    if not year.isdigit() or len(year) != 4:
+        raise HTTPException(status_code=400, detail="Invalid year")
+    return [func.extract("year", TrainingRecord.completion_date) == int(year)]
+
+
+@router.get("/my-training/records")
+async def get_my_training_records(
+    year: str | None = Query(None, max_length=8),
+    search: str | None = Query(None, max_length=100),
+    training_type: str | None = Query(None, max_length=50),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The member's entire training history, one page at a time.
+
+    ``/my-training`` caps its record list at the newest 100 so the page loads
+    quickly, which silently drops the oldest records of a member with a long
+    history. This is the uncapped view: ``years`` totals every year the filters
+    match, and ``items`` is one page of the requested ``year`` (or of everything
+    when no year is given). Answers to the same visibility flags as the summary.
+    """
+    visibility, is_officer, _ = await _resolve_caller_visibility(db, current_user)
+    if not (is_officer or visibility.get("show_training_history", True)):
+        raise HTTPException(
+            status_code=403,
+            detail="Your department does not make training history visible to members.",
+        )
+    show_hours = is_officer or visibility.get("show_training_hours", True)
+
+    filters: list[Any] = [
+        TrainingRecord.organization_id == str(current_user.organization_id),
+        TrainingRecord.user_id == str(current_user.id),
+    ]
+    if search and search.strip():
+        filters.append(
+            TrainingRecord.course_name.ilike(
+                like_pattern(search.strip()), escape=LIKE_ESCAPE_CHAR
+            )
+        )
+    if training_type:
+        try:
+            filters.append(TrainingRecord.training_type == TrainingType(training_type))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid training type")
+    year_filters = _record_year_filter(year)
+
+    year_col = func.extract("year", TrainingRecord.completion_date)
+    counted = (
+        TrainingRecord.status == TrainingStatus.COMPLETED,
+        TrainingRecord.voided_at.is_(None),
+    )
+    aggregate_columns: list[Any] = [year_col, func.count(TrainingRecord.id)]
+    if show_hours:
+        aggregate_columns.append(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (and_(*counted), TrainingRecord.hours_completed),
+                        else_=0,
+                    )
+                ),
+                0,
+            )
+        )
+    aggregate_result = await db.execute(
+        select(*aggregate_columns).where(*filters).group_by(year_col)
+    )
+    years: list[dict[str, Any]] = []
+    for row in aggregate_result.all():
+        entry: dict[str, Any] = {
+            "year": str(int(row[0])) if row[0] is not None else UNDATED_YEAR,
+            "records": row[1],
+        }
+        if show_hours:
+            entry["hours"] = float(row[2])
+        years.append(entry)
+    # Newest year first, pending records (no year) ahead of all of them.
+    years.sort(key=lambda y: (y["year"] == UNDATED_YEAR, y["year"]), reverse=True)
+
+    total = (
+        await db.execute(
+            select(func.count(TrainingRecord.id)).where(*filters, *year_filters)
+        )
+    ).scalar() or 0
+    records_result = await db.execute(
+        select(TrainingRecord)
+        .where(*filters, *year_filters)
+        .order_by(
+            TrainingRecord.completion_date.is_(None).desc(),
+            TrainingRecord.completion_date.desc(),
+            TrainingRecord.id,
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items: list[dict[str, Any]] = []
+    for r in records_result.scalars().all():
+        item: dict[str, Any] = {
+            "id": str(r.id),
+            "course_name": r.course_name,
+            "course_code": r.course_code,
+            "training_type": (
+                r.training_type.value
+                if hasattr(r.training_type, "value")
+                else str(r.training_type)
+            ),
+            "status": r.status.value if r.status else "",
+            "completion_date": str(r.completion_date) if r.completion_date else None,
+            "expiration_date": str(r.expiration_date) if r.expiration_date else None,
+            "instructor": r.instructor,
+            "voided_at": r.voided_at.isoformat() if r.voided_at else None,
+            "void_reason": r.void_reason,
+        }
+        if show_hours:
+            item["hours_completed"] = (
+                float(r.hours_completed) if r.hours_completed else 0
+            )
+        items.append(item)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "years": years,
+    }
 
 
 @router.get("/my-training/export")

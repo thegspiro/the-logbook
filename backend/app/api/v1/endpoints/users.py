@@ -406,12 +406,12 @@ async def create_member(
     roles: list[Role] = []
     if user_data.role_ids:
         # Verify all role IDs exist and belong to the organization
-        result = await db.execute(
+        role_result = await db.execute(
             select(Role)
             .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
-        roles = result.scalars().all()
+        roles = list(role_result.scalars().all())
 
         if len(roles) != len(user_data.role_ids):
             raise HTTPException(
@@ -528,15 +528,16 @@ async def create_member(
     await db.commit()
 
     # Re-query with eager loading so Pydantic can serialize roles without lazy loading
-    result = await db.execute(
+    reload_result = await db.execute(
         select(User).where(User.id == new_user.id).options(selectinload(User.positions))
     )
-    new_user = result.scalar_one_or_none()
-    if not new_user:
+    reloaded_user = reload_result.scalar_one_or_none()
+    if not reloaded_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User disappeared after creation",
         )
+    new_user = reloaded_user
 
     await log_audit_event(
         db=db,
@@ -579,8 +580,8 @@ async def create_member(
         # request `db` or the detached `organization` ORM object.
         welcome_email = new_user.email
         # Greet the member by the name they go by.
-        welcome_first = new_user.preferred_name or new_user.first_name
-        welcome_last = new_user.last_name
+        welcome_first = new_user.preferred_name or new_user.first_name or ""
+        welcome_last = new_user.last_name or ""
         welcome_username = new_user.username
         welcome_org_id = str(current_user.organization_id)
 
@@ -750,10 +751,9 @@ def _withhold_profile_visibility(
 
     What a member chose to hide is itself private: the contact nulls say
     nothing about whether a field is empty or withheld, and the choice object
-    would say exactly that. Applied on every route that serialises
-    ``UserProfileResponse`` — the profile read and both profile writes — so a
-    ``users.edit`` holder editing a colleague's phone does not learn what that
-    colleague hides from the roster.
+    would say exactly that. The profile writes need no copy of this: only the
+    subject and ``members.manage`` holders can make them, and both are entitled
+    to the choice.
     """
     if is_self:
         return
@@ -771,14 +771,13 @@ async def _redact_profile_for_viewer(
 ) -> None:
     """Blank, in place, what ``current_user`` may not see of ``user``'s profile.
 
-    The one rule for every route that serialises ``UserProfileResponse`` — the
-    profile read and both profile writes. A write answering with fields the
-    read withholds would make the read's redaction advisory: a ``users.edit``
-    holder without ``members.manage`` could save a colleague's profile
-    unchanged and read back the date of birth, emergency contacts and home
-    address the profile page redacts for them.
+    Applied by the profile read. The profile writes return the row unredacted,
+    which is safe only because they accept nobody but the subject and
+    ``members.manage`` holders — the same viewers this exempts. If a write is
+    ever opened wider, it must redact through here, or the read's redaction
+    becomes advisory.
 
-    The subject and members-managers are exempt, as on the read. Those are
+    The subject and members-managers are exempt. Those are
     also exactly the viewers ``_withhold_profile_visibility`` leaves the
     ``profile_visibility`` object for, and ``MemberProfilePage`` reads its
     presence as "this record arrived unredacted" to decide whether to show
@@ -795,27 +794,6 @@ async def _redact_profile_for_viewer(
         if not _has_permission("users.view", user_permissions):
             _clear_directory_only_profile_metadata(payload)
     _withhold_profile_visibility(payload, current_user, is_self)
-
-
-async def _profile_response(
-    db: AsyncSession, user: User, current_user: User, is_self: bool
-) -> User | UserProfileResponse:
-    """What a profile write returns.
-
-    The subject and members-managers get the row itself, which FastAPI
-    serialises through ``UserProfileResponse`` exactly as before. Anyone else
-    — a ``users.edit`` holder editing a colleague — gets the payload redacted
-    by ``_redact_profile_for_viewer``, on exactly the terms of the read.
-    Serialising only on that path keeps the write handlers indifferent to how
-    complete the row object is, which their unit tests rely on.
-    """
-    if is_self or _has_permission(
-        "members.manage", _collect_user_permissions(current_user)
-    ):
-        return user
-    payload = UserProfileResponse.model_validate(user)
-    await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
-    return payload
 
 
 def _clear_hidden_contact_fields(
@@ -1189,12 +1167,12 @@ async def assign_user_roles(
 
     # Verify all role IDs exist and belong to the same organization
     if role_assignment.role_ids:
-        result = await db.execute(
+        role_result = await db.execute(
             select(Role)
             .where(Role.id.in_([str(rid) for rid in role_assignment.role_ids]))
             .where(Role.organization_id == str(current_user.organization_id))
         )
-        roles = result.scalars().all()
+        roles = role_result.scalars().all()
 
         if len(roles) != len(role_assignment.role_ids):
             raise HTTPException(
@@ -1332,12 +1310,12 @@ async def add_role_to_user(
         )
 
     # Get role
-    result = await db.execute(
+    role_result = await db.execute(
         select(Role)
         .where(Role.id == str(role_id))
         .where(Role.organization_id == str(current_user.organization_id))
     )
-    role = result.scalar_one_or_none()
+    role = role_result.scalar_one_or_none()
 
     if not role:
         raise HTTPException(
@@ -1616,17 +1594,18 @@ async def update_contact_info(
     """
     Update user contact information and notification preferences
 
-    Users can only update their own contact information unless they have admin permissions.
+    Members update their own contact information. Updating a colleague's
+    requires ``members.manage``.
 
     **Authentication required**
     """
-    # Check if user is updating their own profile or has admin permissions
     if current_user.id != str(user_id):
-        # Admins with users.edit or members.manage can update other users
+        # members.manage only. users.edit once passed here too, but a member's
+        # record is maintained by membership leadership: the profile page
+        # hides these forms from a users.edit holder, and the API must refuse
+        # what the page does not offer.
         user_perms = _collect_user_permissions(current_user)
-        if not _has_permission("users.edit", user_perms) and not _has_permission(
-            "members.manage", user_perms
-        ):
+        if not _has_permission("members.manage", user_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only update your own contact information",
@@ -1750,9 +1729,7 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    return await _profile_response(
-        db, user, current_user, is_self=str(current_user.id) == str(user_id)
-    )
+    return user
 
 
 @router.patch("/{user_id}/profile", response_model=UserProfileResponse)
@@ -1765,8 +1742,8 @@ async def update_user_profile(
     """
     Update user profile information (name, address, emergency contacts, etc.)
 
-    Users can update their own profile. Admins with users.edit or members.manage
-    permission can update any user's profile.
+    Members update their own profile. Updating a colleague's requires
+    ``members.manage``.
 
     **Authentication required**
     """
@@ -1781,13 +1758,10 @@ async def update_user_profile(
         )
         perm_user = perm_result.scalar_one()
         user_permissions = _collect_user_permissions(perm_user)
-        # Use the catalog permission "users.edit" (there is no "users.update"
-        # permission, so the old string never matched a granted permission and
-        # silently blocked legitimate users.edit holders). Matches the sibling
-        # admin-update path above. (ORU-9)
-        if not _has_permission("users.edit", user_permissions) and not _has_permission(
-            "members.manage", user_permissions
-        ):
+        # members.manage only, as on the contact-info write: a colleague's
+        # record is maintained by membership leadership, and users.edit alone
+        # no longer reaches it.
+        if not _has_permission("members.manage", user_permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to update this user's profile",
@@ -1853,9 +1827,9 @@ async def update_user_profile(
             ) from e
 
     # Eligibility and assignment fields are restricted to leadership,
-    # the secretary, or the membership coordinator. In particular, hire_date
-    # drives automatic membership tier advancement and must not be editable
-    # with the broader users.edit grant.
+    # the secretary, or the membership coordinator — including on a member's
+    # own profile. In particular, hire_date drives automatic membership tier
+    # advancement, so a member must not be able to edit their own.
     restricted_fields = {
         "hire_date",
         "rank",
@@ -1863,9 +1837,9 @@ async def update_user_profile(
         "platoon",
         "membership_number",
         # Membership classification decides who is in the operational body and
-        # therefore who receives which ballot. Left out of this set, any holder
-        # of the broader users.edit grant could move themselves from social or
-        # administrative into operational and vote on what they liked.
+        # therefore who receives which ballot. Left out of this set, any member
+        # could move themselves from social or administrative into operational
+        # and vote on what they liked.
         "member_class",
         "member_status",
     }
@@ -1876,9 +1850,9 @@ async def update_user_profile(
             .where(User.id == current_user.id)
             .options(selectinload(User.positions))
         )
-        perm_user = perm_result.scalar_one_or_none()
-        if not perm_user or not _has_permission(
-            "members.manage", _collect_user_permissions(perm_user)
+        acting_member = perm_result.scalar_one_or_none()
+        if not acting_member or not _has_permission(
+            "members.manage", _collect_user_permissions(acting_member)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1940,7 +1914,7 @@ async def update_user_profile(
             )
             if update_data["rank"] != user.rank:
                 await _enforce_rank_grant_ceiling(
-                    perm_user, update_data["rank"], db, None
+                    acting_member, update_data["rank"], db, None
                 )
 
         # An administrative member holds no operational rank. Judge against the
@@ -2010,8 +1984,7 @@ async def update_user_profile(
         ec_list = update_data.pop("emergency_contacts")
         if ec_list is not None:
             user.emergency_contacts = [
-                ec.model_dump() if hasattr(ec, "model_dump") else ec
-                for ec in profile_update.emergency_contacts
+                ec.model_dump() for ec in profile_update.emergency_contacts or []
             ]
 
     # Allowlist of safe fields to prevent mass-assignment of sensitive columns
@@ -2086,7 +2059,7 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    return await _profile_response(db, user, current_user, is_self)
+    return user
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2579,7 +2552,11 @@ async def get_deletion_impact(
         user_id=str(user_id),
         full_name=user.full_name,
         display_name=user.display_name,
-        status=user.status.value if hasattr(user.status, "value") else str(user.status),
+        status=(
+            user.status.value
+            if isinstance(user.status, UserStatus)
+            else str(user.status or "unknown")
+        ),
         training_records=training_count,
         inventory_items=inventory_count,
         documents=document_count,
@@ -2917,8 +2894,8 @@ async def get_member_audit_history(
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
-    logs = result.scalars().all()
+    logs_result = await db.execute(query)
+    logs = logs_result.scalars().all()
 
     # Convert to response format
     entries = []

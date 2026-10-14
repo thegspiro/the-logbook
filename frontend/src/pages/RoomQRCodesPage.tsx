@@ -190,7 +190,13 @@ function QRCard({
       {isSign && subtitle && <p className="text-theme-text-secondary mb-4 text-lg print:text-black">{subtitle}</p>}
       {/* bg-white intentional for QR code readability in dark mode */}
       <div ref={qrContainerRef} className="rounded-lg bg-white p-2">
-        <QRCodeSVG value={url} size={isSign ? 320 : 160} level="H" includeMargin />
+        <QRCodeSVG
+          value={url}
+          size={isSign ? 320 : 160}
+          level="H"
+          includeMargin
+          title={`Check-in QR code for ${title}`}
+        />
       </div>
       <p
         className={`text-theme-text-muted mt-2 font-mono break-all print:text-black ${isSign ? 'text-xs' : 'text-[10px]'}`}
@@ -222,12 +228,15 @@ function QRCard({
         {extraAction}
         {onRegenerate && (
           <button
+            type="button"
             onClick={() => {
-              void handleRegenerate();
+              if (!isRegenerating) void handleRegenerate();
             }}
-            disabled={isRegenerating}
+            // aria-disabled for the same reason as the badge switch: the
+            // confirmation it raises must be able to return focus here.
+            aria-disabled={isRegenerating}
             title="Generate a new code — the current QR code stops working"
-            className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 disabled:opacity-50"
+            className="text-theme-text-muted touch:min-h-11 flex items-center gap-1.5 text-xs transition-colors hover:text-red-500 aria-disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${isRegenerating ? 'animate-spin' : ''}`} aria-hidden="true" />
             Regenerate
@@ -283,8 +292,12 @@ function BadgeCheckInSwitch({
       role="switch"
       aria-checked={on}
       aria-label={`Badge check-in at ${locationTitle(location)}`}
-      disabled={saving}
+      // aria-disabled, not disabled: turning it on asks for confirmation first,
+      // and a disabled button cannot take focus back when that dialog closes,
+      // which left a keyboard user at <body>.
+      aria-disabled={saving}
       onClick={() => {
+        if (saving) return;
         setSaving(true);
         void onToggle(location).finally(() => setSaving(false));
       }}
@@ -550,7 +563,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('grid')}
               aria-pressed={layout === 'grid'}
-              className={`touch:min-h-11 flex items-center gap-1.5 px-3 py-2 transition-colors ${
+              className={`focus-ring-inset touch:min-h-11 flex items-center gap-1.5 px-3 py-2 transition-colors ${
                 layout === 'grid'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -561,7 +574,7 @@ export default function RoomQRCodesPage() {
             <button
               onClick={() => setLayout('signs')}
               aria-pressed={layout === 'signs'}
-              className={`border-theme-surface-border touch:min-h-11 flex items-center gap-1.5 border-l px-3 py-2 transition-colors ${
+              className={`focus-ring-inset border-theme-surface-border touch:min-h-11 flex items-center gap-1.5 border-l px-3 py-2 transition-colors ${
                 layout === 'signs'
                   ? 'bg-theme-surface-hover text-theme-text-primary font-medium'
                   : 'text-theme-text-muted hover:text-theme-text-primary'

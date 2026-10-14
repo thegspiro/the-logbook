@@ -1,6 +1,324 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), pass 8 (this PR)
+
+---
+
+## Pass 8 (2026-10-13) — watchdog pickup, real delta (50 commits), 0 code fixes needed, INV-8/INV-9/INV-16/INV-17 re-verified already fixed by owner-direct work, 1 doc correction (finding-id collision)
+
+**Watchdog pickup.** PR #3160 (Feature 10, Documents & legal, pass 8) merged
+2026-10-13T11:31:55Z; no `claude/security-review-*` branch or PR existed a few
+minutes later (confirmed via `search_pull_requests` and a remote branch
+listing — both empty). Rotation row 11 (Inventory) was the next `⬜`/next
+pointer per PR #3160's own body.
+
+**Backend:** same 15 files pass 7 declared (`inventory.py`, `inventory_service.py`,
+`labels.py`, `label_service.py`, `label_printer_service.py`,
+`inventory_kiosk.py`, `inventory_last_seen.py`, `inventory_nfc.py` (endpoints
+
+- schemas + services), `inventory_notification_service.py`,
+  `inventory_audit_schedule_service.py`, `utils/inventory_nfc.py`,
+  `utils/label_renderer.py`, `models/label_printer.py`, plus the inventory slice
+  of `app/mcp/tools/inventory.py` / `app/mcp/tools/writes.py`), unchanged.
+  **Frontend:** `modules/inventory/*` (unchanged scope).
+  **Migrations:** one landed touching this feature — `9e8b0b6f3fe8`
+  (`grant_quartermaster_locations_create`), reviewed below; 585 revisions
+  total (up from 527 at pass 7), single head, no other migration in range
+  touches an inventory table.
+
+### Scope
+
+Baseline is pass 7's own merge commit, `b892afba` (PR #2966) — confirmed an
+ancestor of `origin/main` via `git merge-base --is-ancestor`. This repo's
+working copy was a shallow clone again (the exact failure mode pass 7's own
+doc warned about); `git fetch --unshallow` was run **before** counting
+anything, per that warning, rather than trusting a shallow `git log`.
+
+`git log --no-merges b892afba..origin/main -- <every scope file>` returns
+**50** commits (530 non-merge commits landed repo-wide in the same range, so
+this feature is a small slice of a large window). All 50 were read via
+`git show`, not sampled: roughly a third are mechanical mypy/typing
+commits repo-wide sweeps touched in passing (`0d4d7c5a0`, `de96f2367`,
+`9aca4fb41`, `c1b61de67`, `d59c4cfda`'s audit-chain-head fix) — each diffed in
+full to confirm the only behavioral change is a strict robustness
+improvement (`if error or obj is None` replacing bare `if error`, which
+previously let a `None`-but-no-error service result fall through to an
+`AttributeError`/500 instead of the correct 400); the rest are real feature
+and correctness work, both owner-direct (the four items below) and
+AI-authored. Route decorators were diffed directly
+(`git diff ... | grep '^[+-]@router\.'`) rather than only counted: **zero**
+route lines added or removed in `inventory.py`, `labels.py`,
+`inventory_kiosk.py`, `inventory_last_seen.py`, or `inventory_nfc.py` since
+pass 7 — every one of the 50 commits' functional changes landed on an
+existing route (a new accepted field, a new status value, a new query
+response field), confirmed by re-running the AST route count below rather
+than assumed from the diff.
+
+### Re-verified: four standing findings, all fixed by owner-direct work since pass 7
+
+All four were pass 7's full list of open/flagged items. None of the fixes
+below were reviewed by this rotation before now (they landed as
+owner-direct commits between pass 7's merge and this pass, the same
+"reviewed-after-the-fact" shape pass 8 of Documents & legal and Medical
+screening both hit this cycle) — each re-derived against the current code,
+not taken on its `KNOWN_LIMITATIONS.md` entry or commit message alone.
+
+- **INV-8 / INV-9 — ✅ FIXED**, confirmed sound. `check_member_allowance`
+  and `get_member_size_preferences` (`inventory.py:6187`, `:7162`) no longer
+  depend on `require_permission("inventory.view")`; both now depend on
+  `get_current_user` alone and call `_require_self_or_quartermaster(user_id,
+current_user)` (`inventory.py:252-270`) before any query — self or
+  `inventory.manage`, matching the clearance route's existing gate
+  (`inventory.py:218-224`'s `_is_quartermaster` reuses the same permission
+  check). Read both handlers and the guard function in full
+  (commit `21afaf34d`). The guard does not itself re-check that `user_id`
+  belongs to the caller's org, but both downstream service reads
+  (`check_allowance`'s `ItemIssuance` query and
+  `get_member_size_preferences`'s `MemberSizePreferences` query) filter on
+  `organization_id == current_user.organization_id` in the same `WHERE` as
+  the id, so a quartermaster passing a foreign org's user id gets an empty/
+  default answer, never another org's row — no XC-3 gap, confirmed by
+  reading `check_allowance` (`inventory_service.py:6872-6961`) and
+  `get_member_size_preferences` (`:10813-10825`) in full. 8 new unit tests
+  (`test_inventory_member_reads_self_or_manage.py`) re-run individually:
+  8 passed.
+- **INV-16 — ✅ FIXED**, confirmed sound. `update_reorder_request`
+  (`inventory_service.py:9121-9180`) now reads the row with
+  `select(...).where(id, organization_id).with_for_update()
+.execution_options(populate_existing=True)` before any field is touched —
+  a locking, org-scoped read, not the plain `get_reorder_request` fetch pass
+  7 described. A `quantity_requested` below the row's current
+  `quantity_received` is refused with a 400 naming the received count,
+  closing the negative-outstanding-quantity state `receive_reorder` did not
+  anticipate. `status`/`quantity_received` are still refused through this
+  path entirely (unchanged from the MSUP-25 narrowing pass 7 recorded) — so
+  the row-lock-plus-floor-check closes the race pass 7 flagged without the
+  `expected_version` contract change pass 2's original finding assumed was
+  necessary. 6 new integration tests
+  (`test_inventory_reorder_edit_lock.py`) re-run individually: 6 passed.
+- **INV-17 — ✅ FIXED**, confirmed sound, in two commits. `da1b5a9fe`
+  (Complete work) and `4e18814f0` (Record inspection) both route through a
+  new `GET /inventory/items/{id}/maintenance?open_only=true` query and a
+  shared `InventoryService._apply_completion_to_item` helper, so "Complete
+  work" and "Record inspection" grade a closed record identically (the PATCH
+  path previously lacked the create path's failed-inspection quarantine —
+  now shared). `update_maintenance_record` reads the target record
+  `FOR UPDATE` so two officers completing the same open record cannot both
+  succeed. Read `InventoryMaintenancePage.tsx`'s updated Complete
+  work/Record inspection handlers and the backend helper in full; 12
+  integration/component tests (`test_inventory_maintenance_close_open.py`,
+  `InventoryMaintenancePage.test.tsx`) re-run individually: 12 passed.
+- **INV-22 — still OPEN, owner-accepted, unchanged.** `get_fulfillment_options`
+  / `get_requestable_categories` (`inventory_service.py:9997`, `:10186`) are
+  untouched in this window except for a mypy-driven signature widening
+  (`UUID` → `UUID | str`, no logic change — confirmed by diffing exactly
+  those two function signatures). `KNOWN_LIMITATIONS.md` already records
+  the owner's 2026-10-05 decision to leave this as is (full catalog materialization
+  is load-bearing for correctness, not a safe drive-by `LIMIT`); nothing new
+  to add.
+
+### New real delta reviewed, all clean
+
+- **`f60d0f252` — XC-1 sweep, 3 endpoints.** `create_equipment_request`
+  (`category_id`), `create_exposure_record` (`user_id`, the exposed member)
+  and `create_allowance` (`category_id`, `role_id`) each now call
+  `assert_in_org` before the write, mapping a `ValueError` to 400 through
+  `safe_error_detail`. 18 new integration tests
+  (`test_xc1_operations_finance.py`) cover the cross-org-refused/same-org-
+  accepted/`None`-accepted triple for each field; re-run individually: 18
+  passed.
+- **`d84bcc8bb`, `da1b5a9fe`, `4e18814f0`, `21afaf34d`, `bbaff4888`** — the
+  four INV-8/9/16/17 fixes and the new storage-area scan-lookup feature,
+  detailed above and in the route/finding sections.
+- **`42dc0d663` — new departure-clearance record screen.**
+  `GET /inventory/clearances/{id}` (existing route, `inventory.manage`,
+  unchanged gate) now additionally resolves and returns `member_name`
+  through an org-scoped `User` lookup
+  (`User.id == clearance.user_id, User.organization_id ==
+current_user.organization_id`) rather than returning the ORM row
+  directly. No new route (confirmed against the route-decorator diff
+  above); no tenant-isolation change — `DepartureClearanceService.get_clearance`
+  was already org-scoped per pass 2's original INV-7 fix.
+- **`ece7f153b` (W39-5) — a direct return now marks the open return notice
+  "received".** `unassign_item`, `return_to_pool` and `checkin_item` each
+  now call a new `_lock_open_return_notices` (locks the notice row(s)
+  **before** the item, matching `review_return_request`'s existing lock
+  order — a parametrized source-inspection test,
+  `TestLockOrder::test_the_notice_is_locked_before_the_item`, asserts the
+  call appears before `_get_item_locked` in each method's source, closing
+  off the specific deadlock CLAUDE.md Pitfall #22/#27 warns about).
+  Org-scoped by construction (`ReturnRequest.organization_id ==
+str(organization_id)` in the lock query). 10 integration tests re-run
+  individually: 10 passed.
+- **`caf954d7f` (W39-5 follow-on) — inspecting a notice received another
+  way.** `review_return_request` accepts a new `status="inspected"` only
+  for a notice already `RECEIVED` (locked, org-scoped read with
+  `populate_existing=True`); `_inspect_received_return`
+  (`inventory_service.py:7940-8020+`) re-locks the item through the
+  existing `_get_item_locked` (org-scoped) and resolves the receiving
+  user/issuance through additional org-filtered queries — no new
+  unscoped by-id read introduced. The follow-up logic (write-off/
+  maintenance/charge-review selection) was extracted into
+  `_record_return_follow_up`, shared by the receipt and the inspection
+  path, so the two cannot grade a condition differently — read in full,
+  confirmed identical business rules on both call sites (the W41-6
+  pool-issuance write-off exclusion applies on both).
+- **`f40489e1b` (W41-6)** — pool-issuance returns can no longer raise a
+  write-off follow-up (400 if requested; `auto` now maps to maintenance for
+  an out-of-service pool return). Correctness-only, no tenancy/auth surface.
+- **`892d3483e`** — adds a Permanent/Temporary assignment choice with a
+  return date to `assign_item_to_user`/`distribute_items`'s batch path; the
+  new `expected_return_date` flows through the same already-org-scoped
+  assignment-creation path, no new by-id read.
+- **`891ff45d9` (W47-6)** — `get_low_stock_items` now sums in-date lot
+  quantities for lot-stocked categories instead of a flat `quantity` column
+  sum, matching `get_low_stock_items_for_alerts`'s existing rule. Read the
+  new subquery/CASE construction in full: still a single org-scoped
+  aggregate query, no per-row loop, no new cap needed (bounded by category
+  count, as before).
+- **`9bdd4d734` — equipment-check swap auto-reorder** (new file,
+  `app/services/auto_reorder_service.py`, 213 lines; the triggering 76-line
+  change to `equipment_check_service.py` is Feature 14/Equipment-check's own
+  scope, not re-reviewed here beyond its call site). Read the new file in
+  full: the item lookup and lock are org-scoped
+  (`InventoryItem.organization_id == str(organization_id)`,
+  `.with_for_update()`), the "already open" check is a **locked** read
+  (`.with_for_update()` on the `ReorderRequest` scalar lookup — the correct
+  Pitfall #27 shape, not a plain `SELECT` that could answer from a stale
+  snapshot), `requested_by`/`organization_id`/`item_id` are all
+  server-derived (the authenticated submitter, the caller's own org, and a
+  lot's own already-org-scoped `inventory_item_id` — never client input),
+  and the notification email HTML-escapes the item name and goes through
+  the existing low-stock audience resolver (email-only, consistent with
+  CLAUDE.md Pitfall #18). 23 new tests re-run individually: 23 passed.
+- **`1a8c78e29` — equipment-check builder links checklist items to medical
+  supplies.** New `InventoryService.create_item_if_absent(..., item_types=)`
+  parameter and `ItemNameTakenOutsideDomainError`; the name lookup stays
+  org-scoped (`_item_id_by_name(organization_id, name)`) and a cross-domain
+  name collision now raises instead of silently handing back a gear row to
+  a medical caller (or vice versa) — a correctness improvement, not a
+  tenancy change. The new `POST /medical-supplies/items/create-if-absent`
+  endpoint itself is Feature 23/Medical-supplies' own route, not
+  re-enumerated here.
+- **`6c45efd38` — MCP OAuth gating groundwork** (primarily Feature 33/Core
+  infrastructure scope). The inventory slice: all four read tools in
+  `app/mcp/tools/inventory.py` now declare
+  `permissions=("inventory.view", "inventory.manage")` and
+  `create_reorder_request` in `writes.py` declares
+  `permissions=("inventory.manage",)` — matching the equivalent endpoints'
+  existing gates exactly, and (per the registry's own fail-closed design,
+  read in `app/mcp/registry.py` during pass 4's original review and
+  unchanged here) an undeclared-permission tool now refuses for an OAuth
+  principal rather than silently allowing it.
+- **Mechanical mypy/typing commits** (`0d4d7c5a0`, `de96f2367`, `9aca4fb41`,
+  `c1b61de67`, `d59c4cfda`) — each diffed in full; the only behavioral
+  deltas are `if error or obj is None` guards replacing bare `if error`
+  (seven call sites in `inventory.py`: `create_category`, `create_item`,
+  `update_item`, `checkout_item`, `initiate_departure_clearance`,
+  `resolve_clearance_item`, `complete_departure_clearance`,
+  `fulfill_equipment_request` — a strict robustness improvement, since the
+  prior code let a `(None, None)` service result fall through to an
+  unguarded attribute read instead of the intended 400), a `ChargeStatus`
+  enum conversion in two call sites (`issuance.charge_status = charge_status`
+  → `ChargeStatus(charge_status)` — fails loudly on an invalid value instead
+  of writing a non-enum string into an enum column), and
+  `Mapped`/`mapped_column` conversions in `models/label_printer.py` with
+  every argument (type, nullability, FK, `ondelete`) preserved — confirmed
+  by diffing nullability/ondelete explicitly rather than trusting the
+  commit's own "schema unchanged" claim.
+- **Frontend commits in this window** (`642b0b7b2` through `6c45efd38`'s
+  frontend halves) are overwhelmingly the matching UI for the backend items
+  above (`AssignTermsModal`, `DepartureClearancePage`,
+  `InventoryMaintenancePage`, `ReturnRequestsPanel`, `InventoryScanModal`),
+  plus repo-wide sweeps whose own guard tests already cover this module
+  (the dialog-dismiss-on-outside-click sweep, Pitfall #31; a page-level
+  keyboard/screen-reader a11y sweep; dark-mode surface-opacity fixes) and
+  the `CatalogLinkReportPage`/`EquipmentCheckTemplateBuilder` checklist-
+  catalog-linking feature, whose backend routes
+  (`/equipment-checks/inventory-link-report`,
+  `/equipment-checks/inventory-links`) live in Feature 14/Equipment-check's
+  endpoint file, not `inventory.py` — noted, not re-enumerated here, per
+  this rotation's standing "own the feature's endpoint file" scope rule.
+  None of the frontend diffs add `dangerouslySetInnerHTML`, a direct
+  `axios`/`fetch` call bypassing `inventoryService`, or a
+  `window.confirm`/`alert`/`prompt`.
+
+### Doc correction: an unrelated 2026-10-11 feature reused the "INV-8" label
+
+`docs/KNOWN_LIMITATIONS.md`'s "Inventory: storage-area barcodes are assigned
+but the scanner cannot resolve them" entry (resolved by `bbaff4888`) cited
+itself as "(INV-8)" in its own commit message and doc entry — the same
+calendar day session `21afaf34d` used "INV-8"/"INV-9" for this rotation's
+actual INV-8/INV-9 finding (the cross-member permission gate). The two are
+unrelated: one is a security-review finding tracked in this file, the other
+is a workflow-review-style feature docket that borrowed the same short label.
+Nothing was miscategorized in code or tests — both commits' tests target the
+right behavior — but a future reader searching this file for "INV-8" would
+find two unrelated entries under the same id. Corrected in
+`KNOWN_LIMITATIONS.md` with a disambiguating parenthetical rather than
+renumbering either (renumbering a merged, shipped commit message is not
+worth doing); this file's own INV-8/INV-9 numbering is unaffected and
+unchanged.
+
+### Route inventory (re-confirmed unchanged)
+
+AST-walked `inventory.py` this pass: **149** routes (unchanged from pass 7).
+`labels.py`: 12 (unchanged). `inventory_kiosk.py`: 4, `inventory_last_seen.py`:
+2, `inventory_nfc.py`: 24 — counted explicitly this pass for the first time
+(prior passes described these files narratively but had not run the AST
+count on them); all three unchanged in this window per the route-decorator
+diff above. `check_route_permissions.py --strict`: 268 routes repo-wide
+(up from 245 at pass 7, reflecting growth elsewhere in the app), 0 errors,
+0 warnings.
+
+### Verified good ✅ (pass 8)
+
+- **No route added or removed anywhere in this feature's five endpoint
+  files since pass 7** — confirmed by diffing `@router.` decorator lines
+  directly, not inferred from an unchanged count (a route could in
+  principle be both added and removed between counts; the direct diff
+  rules that out).
+- **Every new/changed write path this pass reviewed is org-scoped and,
+  where a concurrent write could race it, lock-ordered correctly**: the
+  three XC-1 fixes, the reorder-edit lock, the maintenance-close-open
+  locks, the return-notice locks (notice before item, matching the
+  existing order), and the auto-reorder service's locked "already open"
+  check.
+- **No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no new
+  bare `csv.writer`, no new JSON-column shallow-copy mutation** — confirmed
+  by a direct grep of the added lines across every scope file in this
+  window, not a prose claim.
+- **INV-22's "leave as is" owner decision is unchanged in code and in
+  `KNOWN_LIMITATIONS.md`**, re-confirmed by diffing the two functions'
+  signatures (mypy-only widening) rather than re-litigating the decision.
+
+### Completion gate {#completion-gate-pass-8}
+
+| Check                                                   | Result                                            |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations (repo-wide)                       |
+| `black --check app/ tests/ alembic/`                    | ✅ clean, 2257 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head (`4d8807bdd737`), 585 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 268 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"` | ✅ 1657 passed, 1 pre-existing skip (`pywebpush`) |
+| 10 new/touched guard-test files, run individually       | ✅ all pass (118 tests total across the 10 files) |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)         | ✅ clean                                          |
+| `npm run lint` (`eslint --max-warnings 10`)             | ✅ 0 errors/warnings                              |
+| `npx vitest run src/modules/inventory`                  | ✅ 1652 passed (113 files)                        |
+
+No application-code fix was needed this pass — the four previously-open
+findings were already fixed by owner-direct work between pass 7 and now, and
+the new real delta (XC-1 sweep, the two W39-5 return-notice features, the
+temporary-assignment control, the low-stock lot-sum fix, the auto-reorder
+service, the mypy sweeps) was reviewed fresh and found sound throughout. The
+one change this pass makes is the `KNOWN_LIMITATIONS.md` doc correction
+above (a disambiguating parenthetical, not a renumbering) plus this file's
+own new Pass 8 section — both documentation, which is why there is no
+application-code diff to list beyond the doc edit.
+
+Rotation row 11 stays ✅ (pending this PR merge). Next: Feature 12
+(Facilities).
 
 ---
 

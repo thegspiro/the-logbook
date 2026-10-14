@@ -388,3 +388,84 @@ describe('apiClient — background revalidation of a stale entry', () => {
     expect(calls).toBe(3);
   });
 });
+
+/** An adapter whose every call answers 503 with `code`, counting the calls. */
+function unavailableAdapter(code: string | undefined, seen: InternalAxiosRequestConfig[]): AxiosAdapter {
+  return (config) => {
+    seen.push(config);
+    return Promise.reject(
+      Object.assign(new Error('Request failed with status code 503'), {
+        isAxiosError: true,
+        config,
+        response: {
+          status: 503,
+          data: code === undefined ? {} : { detail: 'unavailable', code },
+          statusText: '',
+          headers: { 'retry-after': '60' },
+          config,
+        },
+      })
+    );
+  };
+}
+
+describe('apiClient — 503 retry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    clearCache();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // The malware scanner's refusal (LB-UPLD-005, Retry-After: 60) used to be
+  // retried three times, waiting about 4.75 minutes with no message while the
+  // upload spinner kept turning.
+  it('does not retry a 503 the server sent deliberately, so its message surfaces at once', async () => {
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(unavailableAdapter('LB-UPLD-005', seen));
+
+    await expect(api.post('/training/external/providers/p1/upload-report', new FormData())).rejects.toMatchObject({
+      response: { status: 503, data: { code: 'LB-UPLD-005' } },
+    });
+
+    expect(seen).toHaveLength(1);
+  });
+
+  it('still retries a 503 for a database outage', async () => {
+    vi.useFakeTimers();
+    const seen: InternalAxiosRequestConfig[] = [];
+    const first = unavailableAdapter('LB-SYS-002', seen);
+    let calls = 0;
+    withAdapter((config) => {
+      calls += 1;
+      return calls === 1 ? first(config) : failThenOkAdapter(503, 0, seen)(config);
+    });
+
+    const request = api.get('/members');
+    await vi.advanceTimersByTimeAsync(60_000);
+    const response = await request;
+
+    expect(response.data).toEqual({ retried: true });
+    expect(calls).toBe(2);
+  });
+
+  it('still retries a 503 that carries no code, such as a proxy error page', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter((config) => {
+      calls += 1;
+      return calls === 1 ? unavailableAdapter(undefined, seen)(config) : failThenOkAdapter(503, 0, seen)(config);
+    });
+
+    const request = api.get('/members');
+    await vi.advanceTimersByTimeAsync(60_000);
+    const response = await request;
+
+    expect(response.data).toEqual({ retried: true });
+    expect(calls).toBe(2);
+  });
+});

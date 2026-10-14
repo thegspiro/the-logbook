@@ -337,7 +337,9 @@ async def change_member_status(
     member = ensure_found(result.scalar_one_or_none(), "Member")
 
     previous_status = (
-        member.status.value if hasattr(member.status, "value") else str(member.status)
+        member.status.value
+        if isinstance(member.status, UserStatus)
+        else str(member.status)
     )
 
     # Prevent no-op
@@ -523,9 +525,10 @@ async def change_member_status(
 
             # Build recipient list — primary email + optionally personal email
             to_emails = [member.email]
-            if include_personal and getattr(member, "personal_email", None):
-                if member.personal_email not in to_emails:
-                    to_emails.append(member.personal_email)
+            personal_email = getattr(member, "personal_email", None)
+            if include_personal and personal_email:
+                if personal_email not in to_emails:
+                    to_emails.append(personal_email)
 
             background_tasks.add_task(
                 _send_property_return_email,
@@ -1041,7 +1044,7 @@ async def change_membership_type(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    organization = org_result.scalar_one_or_none()
+    organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
     # Locked, and locked here rather than only in the profile endpoint: this is
     # the other half of the same read-then-write. A request setting a rank and

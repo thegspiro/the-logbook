@@ -4669,7 +4669,7 @@ class EquipmentCheckService:
         *,
         user_id: str,
         user_name: str,
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Any]:
         """Apply a reviewed set of links that may span many templates.
 
         All or nothing, for the same reason as ``link_inventory_items``.
@@ -4678,16 +4678,24 @@ class EquipmentCheckService:
         officer reviewed was a snapshot; if somebody linked one of those
         positions in the builder since, their choice stands and the position
         comes back in ``skipped`` rather than being silently overwritten.
+        ``skipped_positions`` names each one, with what it is linked to now and
+        what the officer chose, so the screen can say where to look instead of
+        reporting a bare count.
         Unlinking is not offered here — this screen only ever showed unlinked
         positions, so there is nothing on it to undo.
         """
         if not links:
-            return {"linked": 0, "skipped": 0}
+            return {"linked": 0, "skipped": 0, "skipped_positions": []}
 
         # XC-1: every template item id is resolved through an org-scoped
         # template, never by id alone.
         result = await self.db.execute(
-            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            select(
+                CheckTemplateItem,
+                EquipmentCheckTemplate.id,
+                EquipmentCheckTemplate.name,
+                CheckTemplateCompartment.name,
+            )
             .join(
                 CheckTemplateCompartment,
                 CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
@@ -4702,7 +4710,10 @@ class EquipmentCheckService:
             )
             .with_for_update()
         )
-        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        found = {
+            item.id: (item, template_id, template_name, compartment_name)
+            for item, template_id, template_name, compartment_name in result.all()
+        }
         unknown = set(links) - set(found)
         if unknown:
             raise ValueError(
@@ -4725,11 +4736,21 @@ class EquipmentCheckService:
             )
 
         linked = 0
-        skipped = 0
+        skipped: List[Dict[str, Any]] = []
         for item_id, inventory_item_id in links.items():
-            item, template_id = found[item_id]
+            item, template_id, template_name, compartment_name = found[item_id]
             if item.inventory_item_id:
-                skipped += 1
+                skipped.append(
+                    {
+                        "template_item_id": item.id,
+                        "item_name": item.name,
+                        "template_id": template_id,
+                        "template_name": template_name,
+                        "compartment_name": compartment_name,
+                        "current_inventory_item_id": str(item.inventory_item_id),
+                        "chosen_inventory_item_id": str(inventory_item_id),
+                    }
+                )
                 continue
             item.inventory_item_id = str(inventory_item_id)
             await self.log_template_change(
@@ -4748,8 +4769,33 @@ class EquipmentCheckService:
             )
             linked += 1
 
+        # Names for both sides of each conflict, org-scoped like every other
+        # read here: a stored link is not proof the item is in this org.
+        if skipped:
+            ids = {s["current_inventory_item_id"] for s in skipped} | {
+                s["chosen_inventory_item_id"] for s in skipped
+            }
+            named = await self.db.execute(
+                select(InventoryItem.id, InventoryItem.name).where(
+                    InventoryItem.id.in_(ids),
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+            names = {str(row_id): name for row_id, name in named.all()}
+            for entry in skipped:
+                entry["current_inventory_item_name"] = names.get(
+                    entry["current_inventory_item_id"]
+                )
+                entry["chosen_inventory_item_name"] = names.get(
+                    entry["chosen_inventory_item_id"]
+                )
+
         await self.db.commit()
-        return {"linked": linked, "skipped": skipped}
+        return {
+            "linked": linked,
+            "skipped": len(skipped),
+            "skipped_positions": skipped,
+        }
 
     # ------------------------------------------------------------------
     # Private Helpers

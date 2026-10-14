@@ -731,10 +731,34 @@ GET    /api/v1/training/records/{id}/attachments/{index}/download # Stream by in
 ### Reports & Exports (2026-04 / 2026-05)
 
 ```
+GET    /api/v1/training/module-config/my-training/records  # Full history, paginated, grouped by year
 GET    /api/v1/training/module-config/my-training/export   # Member self-export (CSV/PDF)
 POST   /api/v1/training/reports/export                      # Officer export (training.manage)
 ```
 
+- **Full history** (`GET .../my-training/records`): query `year` (four digits, or
+  `undated` for records awaiting approval), `search`, `training_type`, `page`,
+  `page_size` (max 100). Returns `items` for the requested page plus `years`, the
+  record count and hours per year for the same filters. `/my-training` caps its
+  own `training_records` at the newest 100; this is the uncapped view. Answers to
+  `show_training_history` (403 when off) and drops hours when `show_training_hours`
+  is off.
+- **Landing-page figures** (`GET .../my-training`): `hours_summary` also carries
+  `year_to_date_courses`, `year_to_date_hours` and `year` (calendar year in the
+  department's timezone), and each `requirements_detail` entry carries
+  `next_window_opens` — the date the next completion window opens for a
+  requirement whose window crosses the year (start month after end month), else null.
+- **Rolling windows** (`due_date_type = rolling`): the window is the whole calendar
+  months ending with the current one (`rolling_window` in `training_compliance.py`),
+  so 12 months on 2026-10-13 starts 2025-11-01. A rolling **hours** requirement has no
+  due date: it is a continuous count, met or short on any day. Rolling requirements of
+  other types keep their anchored due date (last completion plus the interval).
+- **Monthly hours** (`GET .../my-training`, each hours entry in `requirements_detail`):
+  `monthly_hours` lists every month of the window (zeros included) with the hours of the
+  records counted toward the requirement, so the months sum to `completed_hours`;
+  `waived` marks months covered by leave (the same months the target is prorated by).
+  `window_start`, `window_end` and `window_months` describe the window. Null for
+  requirement types other than hours.
 - **Member self-export** (`GET .../my-training/export`): `format=csv|pdf`,
   optional `start_date`/`end_date` (no `start_date` = lifetime). Gated by the org
   `allow_member_report_export` setting → **403** when disabled.

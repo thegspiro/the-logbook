@@ -15,7 +15,7 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 from uuid import UUID
 
 from loguru import logger
@@ -43,6 +43,20 @@ def build_template_snapshot(template: SkillTemplate) -> dict[str, Any]:
             getattr(template, "score_pass_fail_criteria", False)
         ),
     }
+
+
+@overload
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate
+) -> SimpleNamespace | SkillTemplate:
+    """With a live template in hand there is always something to score by."""
+
+
+@overload
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate | None
+) -> SimpleNamespace | SkillTemplate | None:
+    """Without one, a test that has no snapshot has no structure at all."""
 
 
 def resolve_test_template(
@@ -273,7 +287,9 @@ def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None)
     return "passed" if passed else "failed"
 
 
-def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str, Any]:
+def build_score_breakdown(
+    test: SkillTest, template: SkillTemplate | SimpleNamespace
+) -> dict[str, Any]:
     """The arithmetic behind a test's percentage, section by section.
 
     Exists so a scorecard can show its own working. The overall percentage is
@@ -647,7 +663,7 @@ def waived_critical_criteria(test: SkillTest, template: Any) -> list[dict[str, A
 
 
 def calculate_test_result(
-    test: SkillTest, template: SkillTemplate
+    test: SkillTest, template: SkillTemplate | SimpleNamespace
 ) -> tuple[float | None, str]:
     """
     Calculate the overall score and pass/fail result for a completed test.

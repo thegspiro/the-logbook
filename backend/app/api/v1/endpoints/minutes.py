@@ -21,6 +21,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.document import DocumentType
 from app.models.minute import MinutesStatus
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
@@ -792,7 +793,8 @@ async def publish_minutes(
         folder_id=doc.folder_id,
         title=doc.name,
         description=doc.description,
-        document_type=dt if isinstance(dt, str) else dt.value,
+        # The column is nullable; a row without one reads as the column's default.
+        document_type=dt if isinstance(dt, str) else DocumentType.UPLOADED.value,
         content_html=doc.content_html,
         mime_type=doc.file_type,
         source_type=doc.source_type,

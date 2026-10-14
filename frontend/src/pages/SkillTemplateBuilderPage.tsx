@@ -25,6 +25,7 @@ import { trainingProgramService, trainingModuleConfigService, roleService } from
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
 import { ConfirmDialog } from '../components/ux';
+import { blankToNull } from '../utils/formValues';
 import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
 import type {
   SkillTemplateSectionCreate,
@@ -782,23 +783,25 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
+    // Every optional field goes out as null (tags as []) when blank, never as
+    // an omitted key: on an edit, exclude_unset on the backend reads an omitted
+    // key as "keep the old value", so emptying the pass mark kept grading new
+    // tests against it and "None" kept crediting the old requirement. Create
+    // accepts the same nulls, so one builder serves both.
     return {
       name: name.trim(),
-      description: description.trim() || undefined,
-      category: category.trim() || undefined,
+      description: blankToNull(description),
+      category: blankToNull(category),
       visibility: visibility as 'all_members' | 'officers_only' | 'assigned_only',
-      time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
-      passing_percentage: passingPercentage,
+      time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : null,
+      passing_percentage: passingPercentage ?? null,
       require_all_critical: requireAllCritical,
       score_pass_fail_criteria: scorePassFailCriteria,
-      requirement_id: requirementId || undefined,
-      // null, not undefined: undefined is dropped by exclude_unset on the
-      // backend, so clearing an override back to "inherit" would silently keep
-      // the old value. null is an explicit "unset this".
+      requirement_id: requirementId || null,
       result_disclosure: (resultDisclosure || null) as ResultDisclosure | null,
       result_release: (resultRelease || null) as ResultRelease | null,
       result_viewer_positions: viewerPositions.length > 0 ? viewerPositions : null,
-      tags: parsedTags.length > 0 ? parsedTags : undefined,
+      tags: parsedTags,
       sections: sections.map((s, si) => ({
         name: s.name.trim(),
         description: s.description?.trim() || undefined,

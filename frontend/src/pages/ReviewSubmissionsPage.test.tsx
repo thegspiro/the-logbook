@@ -6,6 +6,8 @@ import { renderWithRouter } from '../test/utils';
 const getPendingSubmissions = vi.fn();
 const getConfig = vi.fn();
 const updateConfig = vi.fn();
+const approveCrewBatch = vi.fn();
+const updateRecord = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
@@ -14,8 +16,11 @@ vi.mock('../services/api', () => ({
     getPendingCount: () => Promise.resolve({ pending_count: 1 }),
     getPendingSubmissions: (...args: unknown[]) => getPendingSubmissions(...args) as unknown,
     getAttachmentDownloadUrl: () => '',
+    approveCrewBatch: (...args: unknown[]) => approveCrewBatch(...args) as unknown,
   },
-  trainingService: {},
+  trainingService: {
+    updateRecord: (...args: unknown[]) => updateRecord(...args) as unknown,
+  },
   trainingProgramService: {
     getUserEnrollments: () => Promise.resolve([]),
     getPrograms: () => Promise.resolve([]),
@@ -68,6 +73,55 @@ describe('ReviewSubmissionsPage', () => {
     expect(screen.getByRole('textbox', { name: 'Reason for the member (required)' })).toBeInTheDocument();
   });
 
+  describe('crew-recorded training', () => {
+    const crewEntry = (id: string, name: string) => ({
+      id,
+      organization_id: 'org-1',
+      submitted_by: `user-${id}`,
+      submitter_name: name,
+      recorded_by: 'officer-1',
+      recorder_name: 'Lee Crew',
+      crew_batch_id: 'batch-1',
+      course_name: 'Hose Advancement Drill',
+      training_type: 'skills_practice',
+      completion_date: '2026-10-11',
+      hours_completed: 0.75,
+      status: 'pending_review',
+      submitted_at: '2026-10-11T18:00:00Z',
+      updated_at: '2026-10-11T18:00:00Z',
+    });
+
+    beforeEach(() => {
+      getPendingSubmissions.mockReset();
+      getPendingSubmissions.mockResolvedValue([crewEntry('a', 'Ana Crew'), crewEntry('b', 'Ben Crew')]);
+      approveCrewBatch.mockReset();
+      approveCrewBatch.mockResolvedValue({ approved: 2, skipped: [] });
+    });
+
+    it('groups the crew under one heading and approves it in one action', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      const group = await screen.findByRole('region', { name: 'Crew training: Hose Advancement Drill' });
+      expect(group).toHaveTextContent('Recorded by Lee Crew');
+      expect(group).toHaveTextContent('2 members');
+
+      await user.click(screen.getByRole('button', { name: 'Approve all 2' }));
+      expect(approveCrewBatch).toHaveBeenCalledWith('batch-1');
+    });
+
+    it('lets the reviewer open one member, but not send it back to them', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Ana Crew/ }));
+
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Request Revision' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('certificate file retention', () => {
     const openSettings = async () => {
       const user = userEvent.setup();
@@ -100,6 +154,53 @@ describe('ReviewSubmissionsPage', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent('at least 90 days');
       expect(screen.getByRole('button', { name: /Save Configuration/ })).toBeDisabled();
+    });
+  });
+
+  describe('editing the record of an approved submission', () => {
+    beforeEach(() => {
+      updateRecord.mockReset();
+      updateRecord.mockResolvedValue({});
+      getPendingSubmissions.mockReset();
+      getPendingSubmissions.mockResolvedValue([
+        {
+          id: 'sub-2',
+          organization_id: 'org-1',
+          submitted_by: 'user-1',
+          submitter_name: 'Jordan Avery',
+          course_name: 'EMT Recertification',
+          training_type: 'certification',
+          completion_date: '2026-09-27',
+          expiration_date: '2028-09-27',
+          certification_number: 'EMT-12345',
+          issuing_agency: 'NREMT',
+          instructor: 'Capt. Reyes',
+          hours_completed: 24,
+          status: 'approved',
+          training_record_id: 'rec-1',
+          submitted_at: '2026-09-29T03:50:00Z',
+          updated_at: '2026-09-29T03:50:00Z',
+        },
+      ]);
+    });
+
+    it('sends a cleared field as null so the old value is removed', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ReviewSubmissionsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /EMT Recertification/ }));
+      await user.click(screen.getByRole('button', { name: 'Edit Training Record' }));
+      for (const value of ['EMT-12345', 'NREMT', '2028-09-27', 'Capt. Reyes']) {
+        await user.clear(screen.getByDisplayValue(value));
+      }
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      expect(updateRecord).toHaveBeenCalledWith('rec-1', {
+        certification_number: null,
+        issuing_agency: null,
+        expiration_date: null,
+        instructor: null,
+      });
     });
   });
 });

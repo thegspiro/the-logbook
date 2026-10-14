@@ -207,13 +207,26 @@ const VendorFormModal: React.FC<{
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editVendor ? 'Edit Vendor' : 'New Vendor'} size="lg">
-      <form
-        onSubmit={(e) => {
-          void submit(e);
-        }}
-        className="space-y-4 p-4"
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editVendor ? 'Edit Vendor' : 'New Vendor'}
+      size="lg"
+      onSubmit={(e) => {
+        void submit(e);
+      }}
+      footer={
+        <>
+          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
+            {saving ? 'Saving...' : editVendor ? 'Save Changes' : 'Add Vendor'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4 p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={lbl} htmlFor="vendor-name">
@@ -445,16 +458,7 @@ const VendorFormModal: React.FC<{
           />
           Preferred vendor (sorts first when picking one)
         </label>
-
-        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
-            {saving ? 'Saving...' : editVendor ? 'Save Changes' : 'Add Vendor'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };
@@ -791,13 +795,30 @@ const MergeVendorModal: React.FC<{
   };
 
   return (
-    <Modal isOpen={vendor !== null} onClose={onClose} title={vendor ? `Merge into ${vendor.name}` : 'Merge'} size="md">
-      <form
-        onSubmit={(e) => {
-          void submit(e);
-        }}
-        className="space-y-4 p-4"
-      >
+    <Modal
+      isOpen={vendor !== null}
+      onClose={onClose}
+      title={vendor ? `Merge into ${vendor.name}` : 'Merge'}
+      size="md"
+      onSubmit={(e) => {
+        void submit(e);
+      }}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={saving || !source}
+            className="btn-info btn-md text-center disabled:opacity-50"
+          >
+            {saving ? 'Merging...' : 'Merge Vendors'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4 p-4">
         <p className="text-theme-text-muted text-sm">
           The same supplier entered twice. Everything on the duplicate — items, reorder requests and contacts — moves to{' '}
           <span className="text-theme-text-primary font-medium">{vendor?.name}</span>, and the duplicate is removed.
@@ -831,20 +852,7 @@ const MergeVendorModal: React.FC<{
             </p>
           </div>
         )}
-
-        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving || !source}
-            className="btn-info btn-md text-center disabled:opacity-50"
-          >
-            {saving ? 'Merging...' : 'Merge Vendors'}
-          </button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 };

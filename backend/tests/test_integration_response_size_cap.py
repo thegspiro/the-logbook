@@ -74,6 +74,24 @@ async def test_oversized_response_aborts_before_full_buffering():
             await client.get("https://example.test/big")
 
 
+class _SyncStream(httpx.SyncByteStream):
+    def __iter__(self):
+        yield b"sync body"
+
+
+async def test_a_sync_response_stream_from_an_async_transport_is_refused():
+    # httpx.MockTransport hands back whatever stream the handler built, so a
+    # sync one stands in for a misbehaving async transport. Wrapping it would
+    # raise on first read instead of failing at the boundary.
+    transport = _SizeLimitedTransport(
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=_SyncStream())),
+        max_bytes=5000,
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(TypeError, match="async response stream"):
+            await client.get("https://example.test/sync")
+
+
 async def test_response_at_or_under_the_limit_is_unaffected():
     body = b"y" * 5000
     transport = _SizeLimitedTransport(

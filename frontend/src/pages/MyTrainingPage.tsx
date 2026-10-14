@@ -24,46 +24,29 @@ import {
   Shield,
   Send,
   BarChart3,
-  Download,
+  History,
   ClipboardCheck,
+  CalendarClock,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
-import { DateRangePicker } from '../components/ux/DateRangePicker';
-import { formatCalendarDate, formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
+import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
+import { countingWindowLabel } from '../utils/requirementMonths';
+import { UpcomingDueList } from '../components/training/UpcomingDueList';
+import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
+import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
-import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
-import { getProgressBarColor, getPercentageBarColor } from '../utils/trainingColors';
+import { buildUpcomingItems, UPCOMING_WINDOW_DAYS } from '../utils/trainingUpcoming';
+import { getProgressBarColor, getPercentageBarColor, getTrainingStatusColor } from '../utils/trainingColors';
 
 // ==================== Helpers ====================
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'completed':
-      return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
-    case SubmissionStatus.APPROVED:
-      return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
-    case 'active':
-      return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
-    case 'in_progress':
-      return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
-    case SubmissionStatus.PENDING_REVIEW:
-      return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
-    case SubmissionStatus.REJECTED:
-      return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
-    case SubmissionStatus.REVISION_REQUESTED:
-      return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
-    default:
-      return 'bg-theme-surface-secondary text-theme-text-secondary';
-  }
-};
 
 // ==================== Stat Card ====================
 
@@ -560,6 +543,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
 
 // ==================== Main Component ====================
 
+const RECENT_RECORDS_SHOWN = 5;
+
 const MyTrainingPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -570,7 +555,7 @@ const MyTrainingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'settings'>('overview');
   // GET /config is open to every authenticated member — it has to be, the
   // member page reads the visibility flags out of it — so a 200 from it says
   // nothing about who may *edit* the settings. Gating the tab on that call
@@ -579,20 +564,6 @@ const MyTrainingPage: React.FC = () => {
   const canManageTraining = useAuthStore((state) => state.checkPermission('training.manage'));
   const canConfigureDisclosure = useAuthStore((state) => state.checkPermission('training.configure'));
   const canConfigure = canConfigureDisclosure || canManageTraining;
-  // Falls back rather than trusting the stored tab: if the grant goes away
-  // while the settings tab is open, `activeTab` still says 'settings' and
-  // every branch below would decline to render, leaving a blank page.
-  const tab = canConfigure ? activeTab : 'overview';
-  const [exporting, setExporting] = useState(false);
-  // Training-history view defaults to the last 12 months; clearing the range
-  // shows (and exports) the member's entire history.
-  const [rangeStart, setRangeStart] = useState(() => {
-    const start = new Date();
-    start.setFullYear(start.getFullYear() - 1);
-    return toLocalDateString(start, tz);
-  });
-  const [rangeEnd, setRangeEnd] = useState(() => getTodayLocalDate(tz));
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -633,40 +604,21 @@ const MyTrainingPage: React.FC = () => {
     setData(trainingData);
   };
 
-  const handleExport = async (format: 'csv' | 'pdf') => {
-    try {
-      setExporting(true);
-      const blob = await trainingModuleConfigService.exportMyTraining(
-        format,
-        rangeStart || undefined,
-        rangeEnd || undefined
-      );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `my_training_record.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to export training record'));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const v = data?.visibility;
-
-  const allRecords = data?.training_records ?? [];
-  // A record still awaiting approval has no completion date, so a date range
-  // cannot place it; hiding it behind the default 12-month window made a
-  // member's own pending submission vanish from their history.
-  const recordInRange = (completionDate?: string | null): boolean => {
-    if (!completionDate) return true;
-    if (rangeStart && completionDate < rangeStart) return false;
-    if (rangeEnd && completionDate > rangeEnd) return false;
-    return true;
-  };
-  const filteredRecords = allRecords.filter((r) => recordInRange(r.completion_date));
+  const canSeeHistory = Boolean(v?.show_training_history);
+  // Falls back rather than trusting the stored tab: if the grant goes away
+  // while the settings tab is open (or the department hides the history),
+  // `activeTab` still names it and every branch below would decline to
+  // render, leaving a blank page.
+  const tab =
+    activeTab === 'settings' && !canConfigure
+      ? 'overview'
+      : activeTab === 'history' && !canSeeHistory
+        ? 'overview'
+        : activeTab;
+  const recentRecords = (data?.training_records ?? []).slice(0, RECENT_RECORDS_SHOWN);
+  const today = getTodayLocalDate(tz);
+  const upcoming = data ? buildUpcomingItems(data, today) : [];
 
   if (loading) {
     return (
@@ -713,30 +665,34 @@ const MyTrainingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs (settings tab only for those who may edit the settings) */}
-      {canConfigure && (
+      {/* Tabs: History for anyone the department lets see it, settings only
+          for those who may edit them. A lone "My Training" tab is not drawn. */}
+      {(canConfigure || canSeeHistory) && (
         <div className="hscroll mb-6 flex gap-2">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`touch:min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              tab === 'overview'
-                ? 'bg-red-800 text-white'
-                : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-            }`}
-          >
-            My Training
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              tab === 'settings'
-                ? 'bg-red-800 text-white'
-                : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <Settings className="h-4 w-4" />
-            <span>Member Visibility Settings</span>
-          </button>
+          {(
+            [
+              { id: 'overview', label: 'My Training', icon: null, show: true },
+              { id: 'history', label: 'History', icon: History, show: canSeeHistory },
+              { id: 'settings', label: 'Member Visibility Settings', icon: Settings, show: canConfigure },
+            ] as const
+          )
+            .filter((t) => t.show)
+            .map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={tab === t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  tab === t.id
+                    ? 'bg-red-800 text-white'
+                    : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
+                }`}
+              >
+                {t.icon && <t.icon className="h-4 w-4" aria-hidden="true" />}
+                <span>{t.label}</span>
+              </button>
+            ))}
         </div>
       )}
 
@@ -753,50 +709,12 @@ const MyTrainingPage: React.FC = () => {
         </Section>
       )}
 
+      {/* History Tab */}
+      {tab === 'history' && data && v && <MyTrainingHistory visibility={v} hoursSummary={data.hours_summary} />}
+
       {/* Overview Tab */}
       {tab === 'overview' && data && (
         <div className="space-y-6">
-          {/* Records range + export toolbar */}
-          {v?.show_training_history && (
-            <div className="card flex flex-wrap items-end justify-between gap-4 p-4">
-              <div>
-                <DateRangePicker
-                  label="Training records date range"
-                  startDate={rangeStart}
-                  endDate={rangeEnd}
-                  onChange={(s, e) => {
-                    setRangeStart(s);
-                    setRangeEnd(e);
-                  }}
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Showing the last 12 months by default. Clear the dates to see and export your entire history (e.g. for
-                  an audit or new employer).
-                </p>
-              </div>
-              {v?.allow_member_report_export && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => void handleExport('csv')}
-                    disabled={exporting}
-                    className="btn-secondary btn-auto text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Export CSV</span>
-                  </button>
-                  <button
-                    onClick={() => void handleExport('pdf')}
-                    disabled={exporting}
-                    className="btn-secondary btn-auto text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Export PDF</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Core stats. The course count and the compliance percentage are
               always shown; the hours figure is the one `show_training_hours`
               names, and the backend withholds it too rather than sending a
@@ -804,15 +722,15 @@ const MyTrainingPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <StatCard
               icon={GraduationCap}
-              label="Completed Courses"
-              value={data.hours_summary?.completed_courses ?? 0}
+              label={`Completed Courses · ${data.hours_summary?.year ?? 'this year'}`}
+              value={data.hours_summary?.year_to_date_courses ?? data.hours_summary?.completed_courses ?? 0}
               color="text-green-700 dark:text-green-400"
             />
             {v?.show_training_hours && (
               <StatCard
                 icon={Clock}
-                label="Completed Hours"
-                value={formatHours(data.hours_summary?.total_hours)}
+                label={`Completed Hours · ${data.hours_summary?.year ?? 'this year'}`}
+                value={formatHours(data.hours_summary?.year_to_date_hours ?? data.hours_summary?.total_hours)}
                 color="text-blue-700 dark:text-blue-400"
               />
             )}
@@ -835,6 +753,18 @@ const MyTrainingPage: React.FC = () => {
               }
             />
           </div>
+
+          {/* Upcoming expirations and due dates: what to act on in the next
+              six months, drawn from the same requirement and certification
+              data the sections below show, so they cannot disagree. */}
+          {(v?.show_requirement_details || v?.show_certification_status) && (
+            <Section title="Upcoming Expirations & Due Dates" icon={CalendarClock}>
+              <p className="text-theme-text-muted mb-3 text-xs">
+                Next {Math.round(UPCOMING_WINDOW_DAYS / 30.5)} months, soonest first.
+              </p>
+              <UpcomingDueList items={upcoming} />
+            </Section>
+          )}
 
           {/* Outstanding Requirements. Gated on `show_requirement_details`,
               which previously only reached the copy nested under Pipeline
@@ -900,6 +830,8 @@ const MyTrainingPage: React.FC = () => {
                           />
                         </div>
 
+                        <RequirementMonthlyHours requirement={req} />
+
                         {/* Expired certification / blocks activity warning */}
                         {req.blocks_activity && (
                           <div className="mb-2 rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-1.5">
@@ -957,6 +889,8 @@ const MyTrainingPage: React.FC = () => {
                               <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
                                 Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
                               </span>
+                            ) : req.monthly_hours && req.monthly_hours.length > 0 ? (
+                              <span>Counting {countingWindowLabel(req.monthly_hours)}</span>
                             ) : null}
                           </div>
                         </div>
@@ -967,9 +901,73 @@ const MyTrainingPage: React.FC = () => {
             </Section>
           )}
 
+          {/* Recent training: the newest few records. The full history, which
+              the summary caps at the newest 100, lives on the History tab. */}
+          {v?.show_training_history && recentRecords.length > 0 && (
+            <Section title="Recent Training" icon={FileText}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
+                    <tr>
+                      <th scope="col" className="px-4 py-2">
+                        Course
+                      </th>
+                      <th scope="col" className="px-4 py-2">
+                        Type
+                      </th>
+                      <th scope="col" className="px-4 py-2">
+                        Date
+                      </th>
+                      {v.show_training_hours && (
+                        <th scope="col" className="px-4 py-2">
+                          Hours
+                        </th>
+                      )}
+                      <th scope="col" className="px-4 py-2">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-theme-surface-border divide-y">
+                    {recentRecords.map((r) => (
+                      <tr key={r.id} className="text-theme-text-secondary">
+                        <td className="px-4 py-2">{r.course_name}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          {TRAINING_TYPE_LABELS[r.training_type] ?? r.training_type.replace('_', ' ')}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
+                        {v.show_training_hours && (
+                          <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
+                        )}
+                        <td className="px-4 py-2">
+                          {r.voided_at ? (
+                            <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                              voided
+                            </span>
+                          ) : (
+                            <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
+                              {r.status.replace('_', ' ')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('history')}
+                className="mobile-touch-target mt-3 text-sm text-red-800 hover:underline dark:text-red-300"
+              >
+                View full history →
+              </button>
+            </Section>
+          )}
+
           {/* Certifications */}
           {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (
-            <Section title="Certifications" icon={Award}>
+            <Section title="Certifications" icon={Award} defaultOpen={false}>
               <div className="space-y-2">
                 {[...data.certifications]
                   .sort((a, b) => {
@@ -1037,7 +1035,7 @@ const MyTrainingPage: React.FC = () => {
                       <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">{e.program_name}</h3>
                     )}
                     <div className="mb-2 flex items-center justify-between">
-                      <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(e.status)}`}>
+                      <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
                       </span>
                       <span className="text-theme-text-primary text-sm font-semibold">
@@ -1069,7 +1067,7 @@ const MyTrainingPage: React.FC = () => {
                                 {Math.round(r.progress_percentage)}%
                               </span>
                             </div>
-                            <span className={`rounded-sm px-1.5 py-0.5 ${getStatusColor(r.status)}`}>
+                            <span className={`rounded-sm px-1.5 py-0.5 ${getTrainingStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
                             </span>
                           </div>
@@ -1086,71 +1084,6 @@ const MyTrainingPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-            </Section>
-          )}
-
-          {/* Training History */}
-          {v?.show_training_history && allRecords.length > 0 && (
-            <Section title="Training History" icon={FileText} defaultOpen>
-              {filteredRecords.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
-                      <tr>
-                        <th scope="col" className="px-4 py-2">
-                          Course
-                        </th>
-                        <th scope="col" className="px-4 py-2">
-                          Type
-                        </th>
-                        <th scope="col" className="px-4 py-2">
-                          Date
-                        </th>
-                        <th scope="col" className="px-4 py-2">
-                          Hours
-                        </th>
-                        <th scope="col" className="px-4 py-2">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-theme-surface-border divide-y">
-                      {filteredRecords.map((r) => (
-                        <tr key={r.id} className="text-theme-text-secondary">
-                          <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
-                          <td className="px-4 py-2 whitespace-nowrap capitalize">
-                            {r.training_type.replace('_', ' ')}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
-                          <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
-                          <td className="px-4 py-2">
-                            {r.voided_at ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                                  voided
-                                </span>
-                                {r.void_reason && (
-                                  <span className="text-theme-text-secondary text-xs whitespace-pre-line">
-                                    Reason: {r.void_reason}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(r.status)}`}>
-                                {r.status.replace('_', ' ')}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-theme-text-muted py-2 text-sm">
-                  No training records in the selected date range. Adjust or clear the date range above to see more.
-                </p>
-              )}
             </Section>
           )}
 
@@ -1273,7 +1206,7 @@ const MyTrainingPage: React.FC = () => {
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatHours(s.hours_completed)}</td>
                         <td className="px-4 py-2">
-                          <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(s.status)}`}>
+                          <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(s.status)}`}>
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>

@@ -88,12 +88,30 @@ confirm that approved credit appears in history and compliance.
 
 Navigate to **Training > My Training** to view your personal training dashboard.
 
-This page shows:
+The page has tabs under its title: **My Training** (what you need to do now),
+**History** (everything on your record, when your department shows training
+history to members) and, for officers who may change what members see,
+**Member Visibility Settings**.
 
-- **Summary Stats** - Total hours, courses completed, active enrollments, certifications
-- **Active Program Enrollments** - Programs you are enrolled in with progress bars
-- **Requirement Progress** - Your progress toward department training requirements
-- **Recent Training Records** - Your latest completed training entries
+The **My Training** tab is tailored to your current needs:
+
+- **Summary tiles** _(2026-10-13)_ - **Completed Courses** and **Completed
+  Hours** for the **calendar year so far** (the tile is labelled with the
+  year), and **Required Training**, the share of your requirements you meet.
+  Your lifetime totals are on the History tab. There is no department-wide
+  "training year", so the tiles use the calendar year; each requirement keeps
+  its own window.
+- **Upcoming Expirations & Due Dates** _(2026-10-13)_ - the next six months,
+  soonest first, with anything overdue at the top. See below.
+- **Training Requirements** - your progress toward each requirement. An hours
+  requirement has a **Show monthly hours** control that lists the hours counted
+  in each month.
+- **Recent Training** - your five newest records, with a **View full history**
+  link to the History tab.
+- **Certifications**, **Skills Tests**, **Pipeline Progress**, **Shift
+  Statistics**, **Shift Completion Reports** and **Self-Reported Training** -
+  as before, with Certifications now collapsed (its expiring entries are in the
+  upcoming list above it).
 - **Skills Tests** _(2026-08-08)_ - Your own official and practice skills-test
   results, each opening a read-only scorecard. Previously these lived on the
   examiner's device and had to be read over their shoulder. What appears here —
@@ -137,25 +155,73 @@ _[My Training → as a brand-new member with no records and no requirements: the
 
 > **Hint:** The visibility of sections on this page is controlled by your department's Training Module Configuration. Your officers may choose to show or hide certain sections for regular members.
 
-### Filtering and Exporting Your Own Records
+### Upcoming Expirations & Due Dates _(2026-10-13)_
 
-At the top of the **My Training** overview is a date-range toolbar that scopes your Training History list.
+One list for everything with a date on it, so you do not have to read three
+sections to find what is next. It looks six months ahead and is sorted soonest
+first. Amber means due within 90 days; red means overdue or expired.
 
-1. Use the **Training records date range** picker to choose a start and end date. The range defaults to the **last 12 months**.
-2. The Training History list (and any export) updates to show only records completed within the selected range.
+| Row                             | What it means                                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Due _date_ · N days**         | A requirement you have not met yet, with its deadline.                                                                                                                    |
+| **Expires _date_ · N days**     | A certification, or any training record that carries an expiry date. A renewed certification is listed once, from its newest record.                                      |
+| **Opens _date_ · N days**       | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13)). |
+| **_N_ hrs to go**, with no date | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any day. It is listed last, with the counting window beneath.               |
 
-   A record **still awaiting approval has no completion date**, so it is always shown whatever range you pick, and listed first; it used to disappear behind the 12-month range, or fall off a long history, until it was approved. _(2026-10-05)_
+Skills tests are not in the list. When nothing is due, it says so.
 
-3. To see and export your **entire** history — for example, for an external audit or a new employer — clear the dates. Omitting a start date exports your lifetime history.
+### The History Tab _(2026-10-13)_
 
-![The My Training date-range toolbar with its helper text and the two export buttons](./images/02-78-my-training-toolbar.png)
+Click **History** under the page title for everything the department has on
+record for you.
 
-If your department has enabled member exports, two buttons appear beside the date range:
+1. Records are **grouped by year, newest first**. The newest year is open and
+   older years are collapsed; click a year to open it. Each year's header shows
+   how many records it holds and their hours.
+2. A year with more than 25 records loads 25 at a time. Click **Show more** for
+   the rest.
+3. **Search courses** filters by course name and **Type** by training type.
+   Both narrow the years and the lists together.
+4. A record **still awaiting approval has no completion date**, so it is grouped
+   under **Awaiting approval**, above the years, whatever you filter by.
 
-1. Click **Export CSV** to download your records as a spreadsheet-friendly file.
-2. Click **Export PDF** to download a formatted document of your records for the selected period.
+The top of the tab shows your **all-time** courses and hours and how many years
+are on record.
+
+> **The page used to show only your newest 100 records.** A member with a long
+> history lost the oldest ones from the list, even with the date range cleared.
+> The History tab reads the whole record. The date-range picker that used to sit
+> on the My Training tab is gone; the years replace it.
+
+If your department has enabled member exports, **Export CSV** and **Export PDF**
+sit beside the search. An export always covers your **entire** history, whatever
+is filtered on screen, which is what an external audit or a new employer wants.
 
 > **Hint:** The Export CSV / Export PDF buttons only appear when your administrator has turned on **Allow Report Export** ("Members can download their own training data") in the Member Visibility Settings. If you do not see the buttons, your department has not enabled member self-export — ask an officer to export your records for you.
+
+<!-- Screenshot needed:
+_[My Training → History tab: the three totals, the search and Type controls, the newest year open with its table and an older year collapsed with its record count and hours.]_
+_[My Training → the Upcoming Expirations & Due Dates list with one row of each kind, including an hours requirement reading "52.5 hrs to go".]_
+_[My Training → an hours requirement with Show monthly hours open: the twelve-month strip with a leave month marked.]_
+-->
+
+### Checking an Hours Requirement Month by Month _(2026-10-13)_
+
+On an hours requirement, click **Show monthly hours**. You get every month of the
+requirement's window, including months with nothing in them, with the hours
+counted in each, and a line giving your total, your average per month and the
+pace the requirement implies. Each bar is scaled to that pace — the requirement's
+annual hours divided by the months in its window, so 72 hours over 12 months is
+6 a month — and a **full bar is a month that kept pace**.
+
+The months are the same records that make up the total on the card, so they add
+up to it. If a month looks short, it is: the class is missing, not yet approved,
+or counted elsewhere.
+
+A month covered by **leave of absence** is marked **Leave** and left out of the
+average, and the pace still uses the department's full annual hours. They are
+the same months the card's "adjusted for waived months" note prorated the target
+by.
 
 ---
 
@@ -1052,14 +1118,81 @@ keeps counting.
 > 2026-09-29; it is the same setting (`biannual`), renamed because "biannual"
 > is as often read as "twice a year".
 
-| Due Date Type            | Description                              |
-| ------------------------ | ---------------------------------------- |
-| **Calendar Period**      | Based on the calendar year/quarter/month |
-| **Rolling**              | Sliding window of N months from today    |
-| **Certification Period** | Based on certification expiry dates      |
-| **Fixed Date**           | Specific due date                        |
+| Due Date Type            | Description                                                           |
+| ------------------------ | --------------------------------------------------------------------- |
+| **Calendar Period**      | Based on the calendar year/quarter/month                              |
+| **Rolling**              | The last N whole calendar months, ending with this one _(2026-10-13)_ |
+| **Certification Period** | Based on certification expiry dates                                   |
+| **Fixed Date**           | Specific due date                                                     |
 
 ![Training requirements management table](./images/02-16-requirements.png)
+
+### When a Yearly Class Isn't Counted _(2026-10-13)_
+
+A member took the annual class — HIPAA in December, say — and the requirement
+still reads unmet. Work down this list in order. Each cause is a setting on the
+requirement (**Training Admin > Curriculum > Requirements**, then edit) or on
+the record.
+
+**1. Which window is the requirement graded over?** The window decides which
+completion dates can count at all.
+
+| Requirement settings                                   | Window on 2026-10-13                  | A class taken 2025-12-02 counts for                                                    |
+| ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Calendar Period**, start month January, no end month | Jan 1 – Dec 31, 2026                  | 2025 only. It does not count today.                                                    |
+| **Calendar Period**, start November, end **December**  | Nov 1 – Dec 31, 2026 (or the end day) | Nothing yet. Only a Nov–Dec 2026 class counts, and the requirement resets every Jan 1. |
+| **Calendar Period**, start November, end **January**   | Nov 1, 2025 – Oct 31, 2026            | The whole year, until Oct 31, 2026. The next window opens Nov 1.                       |
+
+If your practice is "everyone takes it in November or December and is covered
+until the next one", you want the last row, a **cross-year window**:
+
+1. Set **Period Start Month** to November and **Period Start Day** to 1.
+2. Set **Period End Month** to a month **before** the start month — January
+   works, and the form notes "Cross-year window". A same-year end such as
+   December is the middle row, not this.
+3. Leave **Period End Day** blank, which means the last day of the month. A
+   leftover **1** there ends the window on the first.
+
+From November 1 the new window is open and the requirement reads unmet until the
+member takes the class again. Before then, the member's upcoming list shows the
+requirement as **Opens Nov 1**, so they know when to do it.
+
+**2. Is the record linked to the requirement's course?** A **Courses**
+requirement credits only records linked to the library course it names. It does
+not match by name, on purpose: a "CPR Refresher" must not credit a "CPR"
+requirement. A record imported from an outside provider (TargetSolutions, CAPCE)
+carries that link only once the provider's course has been **mapped**.
+
+- Open **Training Admin > Setup > Integrations** and check the provider's
+  course (the Course ID is in its name, for example "CAPCE HIPAA Awareness
+  (3088740)") is mapped to the **same** library course the requirement lists
+  under **Courses to complete**. Similar names are easy to mix up, and the list
+  truncates long ones.
+- Mapping a course also links the records already imported from it. It leaves
+  alone a record an officer linked to a different course by hand.
+- A provider that issues a **new version** under a new Course ID needs the new
+  ID mapped too; members who took it before then are credited the moment it is.
+
+**3. Is a freshness window turned on?** **Require a recent completion** (see
+[Freshness Window](#freshness-window--taken-within-the-last-n-days-2026-08-07))
+makes a record too old to count even inside the window. It only bites when it is
+shorter than the window: with 180 days, a class from December 2, 2025 stops
+counting on May 31, 2026, though a November–January window would run to October 31. 365 days or more never outlasts a yearly window.
+
+**4. Does the requirement accept imported credit?** Under **External / Imported
+Training Credit**, **Accept external / imported training credit for this
+requirement** is **off by default**. Off, a record imported from an outside
+provider is not credited to the requirement by category; it has to be satisfied
+in-house or by an officer's sign-off. Turn it on for a requirement that online
+or third-party delivery may satisfy — HIPAA is the stock example.
+
+**5. Is the record completed?** Only **completed** records count. A record
+awaiting approval is shown under **Awaiting approval** on the member's History
+tab until an officer approves it.
+
+The member can see most of this themselves: **My Training** shows the
+requirement's progress and, for a requirement with a window about to open, an
+**Opens** row; the **History** tab shows each record's status.
 
 ### Existing Members — Exempting or Giving a Catch-Up Deadline _(2026-10-03)_
 
@@ -1146,7 +1279,25 @@ _[Training Admin → Setup → Requirements → edit a requirement, change its h
 
 ### Rolling Period Requirements and Leave of Absence
 
-When a requirement uses **Rolling** due date type with a rolling period (e.g., 12 months), the system calculates compliance over that sliding window. If a member has an active **Leave of Absence** during part of that window, the months on leave are excluded and the requirement is pro-rated.
+A **Rolling** requirement counts the last N **whole calendar months**, ending
+with the current one _(2026-10-13)_. A 12-month rolling window on October 13, 2026
+starts on **November 1, 2025**, not October 13: a month is in the window or it is
+not. Hours leave the count when the month they were earned in leaves it, which
+can be up to a month earlier than a window cut on the day of the month would
+have dropped them. The grading, the compliance screens and the member's monthly
+hours all use this one window.
+
+**An hours requirement that rolls has no due date** _(2026-10-13)_. "72 hours in
+any 12 months" is a continuous count, met or short on any day; "last class plus
+12 months" is a recertification interval, and for hours it read as a deadline
+nearly a year away for a member 52 hours short. The member's card shows
+"Counting Nov 2025 – Oct 2026" instead, and an unmet one is listed in
+[Upcoming Expirations & Due Dates](#upcoming-expirations--due-dates-2026-10-13)
+by the hours still to go. A rolling requirement of **any other type** — a
+certification, a course, a checklist — keeps its due date, which is the member's
+last completion plus the interval.
+
+If a member has an active **Leave of Absence** during part of that window, the months on leave are excluded and the requirement is pro-rated. Those months are marked **Leave** in the member's monthly hours.
 
 **Example:** A requirement of 12 hours over 12 rolling months, for a member with 3 months of leave, becomes 9 hours required (12 x 9/12).
 
@@ -2223,8 +2374,12 @@ Supported integrations:
 The page has three tabs. **Providers** is one card per provider, giving its
 name and platform, whether it is active, when it last synced, and its auto-sync
 interval — with **Test**, **Fetch Categories**, **Sync Now** and **Mappings**
-along the bottom. **Import Queue** and **All Mappings** are what a sync fills;
-both stay empty until one has run.
+along the bottom. **Import Queue** and **All Mappings** are what a sync fills.
+**Import Queue** lists, per provider, the records waiting for review and the ones
+that failed (a count at the page limit is a floor, not a total); **All Mappings**
+lists each provider's mapped and unmapped counts and the names of unmapped
+categories, users and courses. Each has an **Open mappings** button that opens the
+same mapping dialog as the provider card. Both stay empty until a sync has run.
 
 For a **Target Solutions** provider the auto-sync line reads "Every 1h · review
 daily at 02:00": a frequent pull of new completions plus a daily re-check of the
@@ -2763,28 +2918,30 @@ The training module has several boundary behaviors that affect how submissions a
 
 ## Troubleshooting
 
-| Issue                                        | Solution                                                                                                                                                                                                                      |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "My training submission was rejected"        | Check the rejection reason in your notification. Correct the issue and resubmit.                                                                                                                                              |
-| Hours not counting toward a requirement      | Verify the training record's course is linked to the correct requirement. The record must be in "Approved" status.                                                                                                            |
-| Program progress not updating after a shift  | Shift completion reports must be filed by the shift officer. Auto-progression only works for enrolled members with matching requirement types.                                                                                |
-| Compliance matrix shows incorrect data       | Check the requirement's frequency and due date type settings. Rolling periods use today's date as the reference point.                                                                                                        |
-| Member on leave still shows as non-compliant | Verify the Leave of Absence is active under **Members > Admin > Waivers**. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted.                     |
-| LOA created but training not adjusted        | Check that `exempt_from_training_waiver` is not set on the leave. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone training waiver from the Waiver Management page. |
-| Duplicate training record warning            | The system detects records with the same member + course name (case-insensitive) + completion date within ±1 day. Review the warning and either proceed or skip the duplicate.                                                |
-| Compliance card shows wrong color            | Red = expired certs or <50% requirements met; Yellow = expiring certs or <100% requirements met; Green = all met. Check individual requirement progress for details.                                                          |
-| Certification alert not received             | Alerts are sent once per tier (90/60/30/7 days). Check the record's `alert_*_sent_at` fields. If all tiers are already sent, no further alerts will be triggered.                                                             |
-| Rank shows as unrecognized                   | Navigate to Members Admin to see rank validation results. Update the member's rank to match one of the configured operational ranks in Settings.                                                                              |
-| Cannot see the Training module               | Training is an optional module. Your department administrator must enable it in Settings > Modules.                                                                                                                           |
-| External integration not syncing             | Check the integration configuration and sync logs. Ensure user mappings are correctly set up.                                                                                                                                 |
-| Imported requirements missing source info    | Update to the latest version. Imports now include `source`, `source_url`, and `last_updated` fields displayed in the UI for traceability.                                                                                     |
-| How to list available registries             | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.).                                                                                                |
-| Source filter not working on requirements    | Update to the latest version. The source field has been added to the API schema and the filter is now wired up.                                                                                                               |
-| Recertification reminders not sending        | Verify: (1) certification has expiration date, (2) recertification lead time is configured, (3) `EMAIL_ENABLED=true` in environment, (4) Celery beat is running the `process_recertification_reminders` task.                 |
-| Competency matrix shows stale data           | The readiness heat-map is read when the Competency tab opens and is never cached. Switch away and back to see an evaluation recorded since.                                                                                   |
-| xAPI statements not appearing in LRS         | Multi-agency training records are sent asynchronously via Celery. Check Celery worker logs for delivery failures. Verify LRS endpoint URL and API key in training integration settings.                                       |
-| Instructor not available for session         | Instructor availability is tracked separately from member scheduling. Check the instructor's availability calendar in Training Admin > Instructors.                                                                           |
-| Effectiveness score not calculating          | Training effectiveness scoring (Kirkpatrick model) requires post-training evaluations to be submitted. Scores appear after the evaluation period configured on the training session.                                          |
+| Issue                                                  | Solution                                                                                                                                                                                                                            |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "My training submission was rejected"                  | Check the rejection reason in your notification. Correct the issue and resubmit.                                                                                                                                                    |
+| Hours not counting toward a requirement                | Verify the training record's course is linked to the correct requirement. The record must be in "Approved" status.                                                                                                                  |
+| A yearly class is not counted (HIPAA, annual training) | Work through [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13): the requirement's window, the course link and the provider's course mapping, the freshness window, and the imported-credit setting. |
+| An hours requirement shows no due date                 | Intended for an hours requirement that rolls: it is a continuous count, so the card shows the months it is counting and the upcoming list shows the hours still to go.                                                              |
+| Program progress not updating after a shift            | Shift completion reports must be filed by the shift officer. Auto-progression only works for enrolled members with matching requirement types.                                                                                      |
+| Compliance matrix shows incorrect data                 | Check the requirement's frequency and due date type settings. Rolling periods use today's date as the reference point.                                                                                                              |
+| Member on leave still shows as non-compliant           | Verify the Leave of Absence is active under **Members > Admin > Waivers**. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted.                           |
+| LOA created but training not adjusted                  | Check that `exempt_from_training_waiver` is not set on the leave. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone training waiver from the Waiver Management page.       |
+| Duplicate training record warning                      | The system detects records with the same member + course name (case-insensitive) + completion date within ±1 day. Review the warning and either proceed or skip the duplicate.                                                      |
+| Compliance card shows wrong color                      | Red = expired certs or <50% requirements met; Yellow = expiring certs or <100% requirements met; Green = all met. Check individual requirement progress for details.                                                                |
+| Certification alert not received                       | Alerts are sent once per tier (90/60/30/7 days). Check the record's `alert_*_sent_at` fields. If all tiers are already sent, no further alerts will be triggered.                                                                   |
+| Rank shows as unrecognized                             | Navigate to Members Admin to see rank validation results. Update the member's rank to match one of the configured operational ranks in Settings.                                                                                    |
+| Cannot see the Training module                         | Training is an optional module. Your department administrator must enable it in Settings > Modules.                                                                                                                                 |
+| External integration not syncing                       | Check the integration configuration and sync logs. Ensure user mappings are correctly set up.                                                                                                                                       |
+| Imported requirements missing source info              | Update to the latest version. Imports now include `source`, `source_url`, and `last_updated` fields displayed in the UI for traceability.                                                                                           |
+| How to list available registries                       | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.).                                                                                                      |
+| Source filter not working on requirements              | Update to the latest version. The source field has been added to the API schema and the filter is now wired up.                                                                                                                     |
+| Recertification reminders not sending                  | Verify: (1) certification has expiration date, (2) recertification lead time is configured, (3) `EMAIL_ENABLED=true` in environment, (4) Celery beat is running the `process_recertification_reminders` task.                       |
+| Competency matrix shows stale data                     | The readiness heat-map is read when the Competency tab opens and is never cached. Switch away and back to see an evaluation recorded since.                                                                                         |
+| xAPI statements not appearing in LRS                   | Multi-agency training records are sent asynchronously via Celery. Check Celery worker logs for delivery failures. Verify LRS endpoint URL and API key in training integration settings.                                             |
+| Instructor not available for session                   | Instructor availability is tracked separately from member scheduling. Check the instructor's availability calendar in Training Admin > Instructors.                                                                                 |
+| Effectiveness score not calculating                    | Training effectiveness scoring (Kirkpatrick model) requires post-training evaluations to be submitted. Scores appear after the evaluation period configured on the training session.                                                |
 
 ---
 
@@ -2878,6 +3035,37 @@ With Skills Testing, examiners can:
 > official result only counts once a training officer **validates** it.
 
 For a comprehensive guide with a realistic NREMT example walkthrough, see the dedicated **[Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)** training guide.
+
+![Skills Testing section within Training Admin showing the template list](./images/02-64-skills-testing-admin.png)
+
+### A department runs one practical-skills system _(2026-10-12)_
+
+Skills Testing (station sheets, scored step by step and validated by an officer)
+and **shift report sign-offs** (the shift officer ticks the skills a member
+demonstrated, which raises their competency) both record practical skills. A
+department now picks one, so officers always know which one counts.
+
+**Where:** **Training Administration > Settings & Data > Practical Skills**.
+**Needs:** `training.manage`.
+
+| Choice                     | What stays                                                                                       | What is hidden                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Skills Testing**         | Skill test templates and records, critical criteria, retest limits, results on My Training       | The skills list on shift reports and the Skill Evaluations those skills match                                                                   |
+| **Shift report sign-offs** | The skills list on shift reports, competency levels that rise with each sign-off, program credit | Skills Testing navigation and command-palette entries, the Evaluations destinations in the Training hub, and My Training's Skills Tests section |
+
+Changing it **deletes nothing**: the hidden system keeps what it recorded, and
+shows it again if you switch back. Existing departments start on Skills Testing,
+except a department that already has shift-report sign-offs and has never run a
+skill test, which starts on sign-offs. The Training hub's skills-test validation
+row and its tests-passed figure follow the choice.
+
+Under Skills Testing, the **Shift Reports** settings tab still lets you edit the
+**Observable Skills** list (Feedback Defaults) and the per-apparatus skills in
+**Apparatus Skills**, but they do nothing: the report form shows no skills list.
+Each now carries a note saying so, with a link to the Practical Skills setting.
+The lists are kept and apply again under sign-offs.
+
+_[Screenshot needed: Training Administration > Settings & Data > Practical Skills, both options visible, Skills Testing selected, with the "Changing this deletes nothing" confirmation open. Replaces nothing; new.]_
 
 ![Skills Testing section within Training Admin showing the template list](./images/02-64-skills-testing-admin.png)
 

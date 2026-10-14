@@ -3553,6 +3553,29 @@ every position keeps exactly the authority it had.
 > deliberate; if it is wider than you intend, replace the wildcard with the
 > specific `inventory.` grants you want.
 
+### Catalog Links: link every unlinked checklist line at once _(2026-10-12)_
+
+**Where:** Equipment Checklists admin > **Catalog Links**
+(`/inventory/admin/checklists/catalog-links`). **Needs:** `inventory.check_manage`.
+
+The per-template match tool asks "which catalog item is 4x4 gauze?" once per rig.
+Catalog Links asks it once for the whole department: it lists every unlinked
+checklist line across active and draft templates, grouped by name, with catalog
+suggestions. Names with a plausible match come first; the rest (usually tasks)
+come last.
+
+1. Exact matches are ticked for you; **likely** ones wait for you to confirm.
+2. For any name, search the gear and medical catalog and pick the item.
+3. Press **Link N positions**. The links land on every position carrying that line, all or nothing, with
+   a change-log entry on each affected template.
+
+If someone linked a line themselves after the page loaded, your choice does not
+overwrite theirs. The page lists those lines (line, template, compartment, current
+item and the item you chose) with a link into each template, and keeps the list
+across the reload until you dismiss it.
+
+_[Screenshot needed: Catalog Links with a mix of ticked exact matches and unticked likely ones; and the "had been linked by someone else" list after an apply.]_
+
 ### Checklists now require the Inventory module
 
 A department that had Inventory switched off but uses equipment checks has it
