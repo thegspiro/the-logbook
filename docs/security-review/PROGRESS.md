@@ -16,12 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 9. 0 fixed, 0 new findings; `ea4d2b18`'s already-landed
+colleague-profile-write fix (`users.edit` alone no longer reaches a
+colleague's `/profile`/`/contact-info` write) re-verified end to end rather
+than taken on its commit message's word. USR-5 and USR-8 re-confirmed
+open/accepted, unchanged; USR-10a re-confirmed resolved. Also carries the
+prior commit (`023d39c2`) clearing the stale Open PR row for merged PR
+#3248. See `USR-07-users-organizations.md`'s **Pass 9** section. Row 07 → ✅
+(pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3248's merge, Feature 06, Elections & ballots, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
 **None, as of this commit.** PR #3248 (Feature 06, Elections & ballots, pass 9) merged 2026-10-14T20:55:44Z — docs-only (`ELEC-06-elections-ballots.md` +
 `PROGRESS.md` only; confirmed via the PR's own file list, no application
 code changed), already fully recorded in that PR's own Open PR note below,
 so there is nothing further to add here. Rotation row 06 stays ✅. This
 iteration (no `claude/security-review-*` PR open, confirmed via
 `search_pull_requests`) picks up Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 9, PR #3248, merged 2026-10-14), preserved for history</summary>
