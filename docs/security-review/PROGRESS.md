@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None, as of this commit.** PR #3210 (Feature 01, Auth & session lifecycle,
+pass 9) merged 2026-10-14T11:12:59Z — a docs-only merge (its own review file
+plus the Open PR row-clear it carried), nothing else to record. Row 01 stays
+✅. This commit records Feature 02 (Permissions & roles), pass 9 — see the
+Log below and `PERM-02-permissions-roles.md`'s **Pass 9** section; its own PR
+number is added as a second commit on this branch once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 9, PR #3210, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3210](https://github.com/thegspiro/the-logbook/pull/3210)**: branch
 `claude/security-review-auth-session`, Feature 01 (Auth & session
 lifecycle), pass 9 (watchdog pickup). PR #3204 (Feature 00, Cross-cutting
@@ -28,6 +38,8 @@ unrelated mypy/UX commits merged through other tracks and each confirmed
 benign on direct read. See `AUTH-01-auth-session.md`'s **Pass 9** section.
 Row 01 stays ✅ (pending this PR's merge); next is Feature 02 (Permissions
 & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 9, PR #3204, merged 2026-10-14), preserved for history</summary>
@@ -18988,7 +19000,7 @@ here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -19028,6 +19040,63 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — PR #3210 merge recorded (docs-only); Feature 02 (Permissions & roles, pass 9, watchdog pickup) — 0 fixed in source, 1 doc correction, 0 new findings
+
+**Step 0.** The `/security-review` loop appeared stalled. Verified directly
+against GitHub (`list_pull_requests`, state=open) that no
+`claude/security-review-*` PR was open. PR #3210 (Feature 01, Auth & session
+lifecycle, pass 9) had merged 2026-10-14T11:12:59Z since the last
+iteration — a docs-only merge (its own review file plus the Open PR row-clear
+it carried), so nothing further to record beyond clearing the Open PR row.
+That clear rides along in this iteration's own commit, per the "docs-only PR
+is not a recordable event" rule.
+
+**Step 1.** Row 02 (Permissions & roles) was the next `⬜`.
+
+**Review.** Loaded `CHECKLIST.md` and `PERM-02-permissions-roles.md`'s
+existing 8 passes before reading any code. Baseline `d9a3357c` (PR #3097's
+merge, pass 8) to head `d5711ecc` — 370 commits. Of the twelve files this
+feature tracks, only two carried a real diff: `core/permissions.py` (+5, one
+new seeded grant — `locations.create` on `quartermaster`, Pitfall #23
+compliant, backed by migration `9e8b0b6f3fe8` and verified to target the same
+slug/permission on both sides) and `role_service.py` (+14/-2, `delete_role`
+now refuses to orphan a document folder's sole opening position via
+`documents_service.release_position_from_folders` — read in full and
+confirmed org-scoped, lock-guarded (Pitfall #27 shape) and deep-copy-safe
+(Pitfall #12) — plus a `rows_affected()` swap for a raw `.rowcount` read, the
+same AUTH-21-pattern hardening Feature 01's pass 9 found elsewhere). All
+three prior-pass findings (PERM-1, PERM-2 fixed; PERM-5 closed by other work
+at pass 8) re-confirmed unchanged, not re-derived. Re-enumerated all 28
+routes across the four routers directly against the code rather than trusting
+this doc's own "Route inventory" section — which turned out to be stale since
+pass 6 (`operational_ranks.py`'s four mutating routes no longer read
+`settings.manage` alone; pass 6 widened them to an OR-gate with
+`members.manage`, correctly recorded in that pass's own write-up but never
+corrected in the static section below it). Logged as **PERM-9 (INFO, FIXED —
+doc only)** and corrected in place. Checked every `require_permission`
+OR-gate alternative individually against all 35 seeded `DEFAULT_POSITIONS`
+entries per the checklist's dimension-2 item: `members.manage` is seeded only
+to six officer-tier positions, never `member`/`firefighter`, so the widening
+does not open rank management department-wide.
+
+**Completion gate.** `flake8`/`black`/`isort` (CI's exact pins) clean against
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — single head
+`a39a1999776f`, 593 revisions; `check_route_permissions.py --strict` — 269
+routes, 0 errors/warnings; standing guard suite (12 files) — 224 passed;
+scoped backend tests (`-k "permission or role or rank or officer or
+org_chart"`) — one unrelated failure on the first run
+(`test_finance_receipts.py`, Feature 05's territory, matched only via the
+`officer` keyword) traced to the sandbox's test database being two
+migrations behind `main` (`0d32069fea4d`, `a39a1999776f`, the latter landing
+same-day via PR #3208); fixed by `alembic upgrade head` against the test
+database (environment setup, not an application defect) and re-run clean —
+1362 passed, 1 skipped (environment-only). Frontend `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings (no frontend files touched).
+
+Row 02 → ✅. Next: Feature 03 (Public surface & webhooks).
+
+---
 
 ### 2026-10-14 — PR #3204 merge recorded (docs-only); Feature 01 (Auth & session lifecycle, pass 9, watchdog pickup) — 0 fixed, 0 new findings
 
