@@ -51,7 +51,9 @@ from app.models.finance import (
     BudgetAmendment,
     BudgetAmendmentStatus,
     BudgetCategory,
+    BudgetCategoryChargePosition,
     BudgetPlanningStage,
+    ChargeAccess,
     CheckRequest,
     CheckRequestStatus,
     DuesPayment,
@@ -81,6 +83,12 @@ from app.services.finance_approver_matching import (
     is_valid_single_email,
     normalize_approver_type,
     user_matches_step,
+)
+from app.services.finance_budget_access import (
+    CategoryTree,
+    assert_may_charge,
+    held_position_ids,
+    load_category_tree,
 )
 from app.services.finance_budget_ownership import owned_budgets_query, resolve_owner
 from app.services.restricted_funds import (
@@ -903,25 +911,42 @@ class FinanceService:
         )
 
     @staticmethod
-    def _category_row(category: BudgetCategory, owner_position_name) -> dict:
+    def _category_row(
+        category: BudgetCategory, owner_position_name, tree: CategoryTree
+    ) -> dict:
         row = {
             column.key: getattr(category, column.key)
             for column in BudgetCategory.__table__.columns
         }
         row["owner_position_name"] = owner_position_name
+        # What the category's lines are actually subject to, so a screen
+        # reports the inherited rule rather than re-deriving it (pitfall #29).
+        rule = tree.rule(str(category.id))
+        row["effective_charge_access"] = rule.access.value
+        row["charge_access_inherited_from"] = (
+            tree.by_id[rule.source_category_id].name
+            if rule.source_category_id and rule.source_category_id != str(category.id)
+            else None
+        )
+        row["charge_position_ids"] = sorted(
+            tree.named_positions.get(str(category.id), set())
+        )
+        row["path"] = tree.path(str(category.id))
         return row
 
     async def list_budget_category_details(
         self, org_id: str, pagination: PaginationParams
     ) -> list[dict]:
-        """``list_budget_categories`` plus each category's owner position name."""
+        """``list_budget_categories`` plus each category's owner and charge rule."""
         result = await self.db.execute(
             self._category_detail_query(org_id)
             .order_by(BudgetCategory.sort_order, BudgetCategory.id)
             .offset(pagination.skip)
             .limit(pagination.limit)
         )
-        return [self._category_row(cat, name) for cat, name in result.all()]
+        rows = result.all()
+        tree = await load_category_tree(self.db, org_id)
+        return [self._category_row(cat, name, tree) for cat, name in rows]
 
     async def get_budget_category_detail(
         self, cat_id: str, org_id: str
@@ -930,7 +955,10 @@ class FinanceService:
             self._category_detail_query(org_id).where(BudgetCategory.id == cat_id)
         )
         row = result.first()
-        return self._category_row(row[0], row[1]) if row else None
+        if not row:
+            return None
+        tree = await load_category_tree(self.db, org_id)
+        return self._category_row(row[0], row[1], tree)
 
     async def get_budget_category(
         self, cat_id: str, org_id: str
@@ -945,26 +973,142 @@ class FinanceService:
         return budget_category
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
+        charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
+        await self._validate_charge_positions(org_id, charge_position_ids)
         _refuse_name_required(kwargs.get("qb_account_name"))
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
+        if charge_position_ids is not None:
+            await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
         await self.db.refresh(cat, ["created_at", "updated_at"])
         return cat
 
     async def update_budget_category(
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
+        charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
+        await self._validate_charge_positions(org_id, charge_position_ids)
         _refuse_name_required(kwargs.get("qb_account_name"))
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
+        if kwargs.get("parent_category_id"):
+            await self._refuse_category_cycle(
+                org_id, cat.id, kwargs["parent_category_id"]
+            )
         apply_updates(cat, kwargs)
         await self.db.flush()
+        if charge_position_ids is not None:
+            await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
         await self.db.refresh(cat, ["updated_at"])
         return cat
+
+    async def set_category_charge_access(
+        self,
+        cat_id: str,
+        org_id: str,
+        manager_id: Optional[str],
+        charge_access: Optional[ChargeAccess],
+        charge_position_ids: list[str],
+    ) -> BudgetCategory:
+        """Set who may charge a category's lines.
+
+        ``manager_id`` None is ``finance.manage``; otherwise the caller must
+        hold an owner position on the category or one above it
+        (``CategoryTree.manageable_by``). A category the caller may not manage
+        reads as not found, so the endpoint does not confirm it exists.
+        """
+        cat = await self.get_budget_category(cat_id, org_id)
+        if not cat:
+            raise FinanceEntityNotFoundError("Budget category not found")
+        if manager_id is not None:
+            tree = await load_category_tree(self.db, org_id)
+            held = await held_position_ids(self.db, org_id, manager_id)
+            if not tree.manageable_by(str(cat.id), held):
+                raise FinanceEntityNotFoundError("Budget category not found")
+        await self._validate_charge_positions(org_id, charge_position_ids)
+        cat.charge_access = charge_access
+        await self.db.flush()
+        await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
+        await self.db.refresh(cat, ["updated_at"])
+        return cat
+
+    async def list_charge_access_categories(
+        self, org_id: str, user_id: str
+    ) -> list[dict]:
+        """The active categories ``user_id`` owns or that sit beneath one they
+        own, with the charge rule each is under — the owner's own settings.
+
+        Ordered as a tree, parents before their children.
+        """
+        tree = await load_category_tree(self.db, org_id)
+        held = await held_position_ids(self.db, org_id, user_id)
+        if not held:
+            return []
+        result = await self.db.execute(
+            self._category_detail_query(org_id).where(BudgetCategory.is_active)
+        )
+        rows = [
+            self._category_row(cat, name, tree)
+            for cat, name in result.all()
+            if tree.manageable_by(str(cat.id), held)
+        ]
+        rows.sort(key=lambda row: [part.casefold() for part in row["path"]])
+        return rows
+
+    async def _refuse_category_cycle(
+        self, org_id: str, cat_id: str, parent_id: str
+    ) -> None:
+        """Refuse a parent that is the category itself or one of its children.
+
+        Every walk up the tree (QuickBooks account, functional class, charge
+        rule) would otherwise loop, and the category would vanish from the
+        tree the settings screen draws.
+        """
+        if str(parent_id) == str(cat_id):
+            raise ValueError("A category cannot be its own parent")
+        tree = await load_category_tree(self.db, org_id)
+        if str(parent_id) in tree.descendant_ids(str(cat_id)):
+            raise ValueError(
+                "A category cannot be placed under one of its own sub-categories"
+            )
+
+    async def _validate_charge_positions(
+        self, org_id: str, position_ids: Optional[list[str]]
+    ) -> None:
+        """Pitfall 14c: every named position must be one of the org's."""
+        for position_id in position_ids or []:
+            await assert_in_org(
+                self.db, Position, position_id, org_id, label="Position"
+            )
+
+    async def _replace_charge_positions(
+        self, org_id: str, cat_id: str, position_ids: list[str]
+    ) -> None:
+        existing = await self.db.execute(
+            select(BudgetCategoryChargePosition).where(
+                BudgetCategoryChargePosition.organization_id == org_id,
+                BudgetCategoryChargePosition.category_id == cat_id,
+            )
+        )
+        wanted = {str(p) for p in position_ids}
+        for row in existing.scalars().all():
+            if row.position_id in wanted:
+                wanted.discard(row.position_id)
+            else:
+                await self.db.delete(row)
+        for position_id in sorted(wanted):
+            self.db.add(
+                BudgetCategoryChargePosition(
+                    organization_id=org_id,
+                    category_id=cat_id,
+                    position_id=position_id,
+                )
+            )
+        await self.db.flush()
 
     async def _validate_budget_category_fks(self, org_id: str, data: dict) -> None:
         """Reject a client-supplied ``parent_category_id`` outside the org.
@@ -1996,7 +2140,9 @@ class FinanceService:
             "category_breakdown": [],
         }
 
-    async def list_budget_options(self, org_id: str, fiscal_year_id: str) -> list[dict]:
+    async def list_budget_options(
+        self, org_id: str, fiscal_year_id: str, charger_id: Optional[str] = None
+    ) -> list[dict]:
         """The budget lines a requester may charge, as a label and what is left.
 
         The narrow read behind the request forms' budget picker. A member who
@@ -2004,13 +2150,27 @@ class FinanceService:
         remaining amount, nothing else: the budgeted, spent and encumbered
         figures, notes and the summary stay behind ``finance.view``.
 
-        The label is the category name, plus the station when the line has
-        one. Two lines that would still read the same are numbered, so a
-        member never has to pick between identical entries.
+        ``charger_id`` leaves out the restricted lines that member may not
+        charge (app/services/finance_budget_access.py); None, for
+        ``finance.manage``, lists every line. The request writes enforce the
+        same rule, so a line hidden here is also refused there.
+
+        The label is the category's path — ``Quartermaster › Officer brass``
+        for a sub-category — plus the station when the line has one. Two lines
+        that would still read the same are numbered, so a member never has to
+        pick between identical entries.
         """
+        tree = await load_category_tree(self.db, org_id)
+        held = (
+            await held_position_ids(self.db, org_id, charger_id)
+            if charger_id
+            else set()
+        )
         result = await self.db.execute(
             select(
                 Budget.id,
+                Budget.category_id,
+                Budget.owner_position_id,
                 Budget.amount_budgeted,
                 Budget.amount_spent,
                 Budget.amount_encumbered,
@@ -2037,10 +2197,23 @@ class FinanceService:
             )
             .order_by(BudgetCategory.name, Facility.name, Budget.id)
         )
+        rows = [
+            row
+            for row in result.all()
+            if not charger_id
+            or tree.rule(str(row.category_id)).allows(held, row.owner_position_id)
+        ]
+        rows.sort(
+            key=lambda row: (
+                [part.casefold() for part in tree.path(str(row.category_id))],
+                (row.station_name or "").casefold(),
+                row.id,
+            )
+        )
         options = []
         seen: dict[str, int] = {}
-        for row in result.all():
-            label = row.category_name
+        for row in rows:
+            label = " › ".join(tree.path(str(row.category_id))) or row.category_name
             if row.station_name:
                 label = f"{label} ({row.station_name})"
             seen[label] = seen.get(label, 0) + 1
@@ -4210,9 +4383,15 @@ class FinanceService:
         return purchase_request
 
     async def create_purchase_request(
-        self, org_id: str, requested_by: str, **kwargs
+        self,
+        org_id: str,
+        requested_by: str,
+        *,
+        charger_id: Optional[str] = None,
+        **kwargs,
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
@@ -4246,6 +4425,13 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a purchase request in this status")
         await self._validate_finance_fks(org_id, kwargs)
+        # The requester scope doubles as the charger: None is finance.manage.
+        # Only a change of line is checked, so a request filed before its line
+        # was restricted can still be edited.
+        if kwargs.get("budget_id") != pr.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
         apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -4521,11 +4707,16 @@ class FinanceService:
         org_id: str,
         submitted_by: str,
         line_items: Optional[list] = None,
+        *,
+        charger_id: Optional[str] = None,
         **kwargs,
     ) -> ExpenseReport:
         await self._validate_finance_fks(org_id, kwargs)
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
+            await assert_may_charge(
+                self.db, org_id, charger_id, item_data.get("budget_id")
+            )
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
@@ -4588,6 +4779,7 @@ class FinanceService:
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, requester_id, kwargs.get("budget_id"))
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -4813,9 +5005,15 @@ class FinanceService:
         return check_request
 
     async def create_check_request(
-        self, org_id: str, requested_by: str, **kwargs
+        self,
+        org_id: str,
+        requested_by: str,
+        *,
+        charger_id: Optional[str] = None,
+        **kwargs,
     ) -> CheckRequest:
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
@@ -4848,6 +5046,11 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a check request in this status")
         await self._validate_finance_fks(org_id, kwargs)
+        # As update_purchase_request: only a change of line is checked.
+        if kwargs.get("budget_id") != cr.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
         apply_updates(cr, kwargs)
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])

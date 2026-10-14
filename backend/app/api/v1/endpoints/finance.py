@@ -47,6 +47,7 @@ from app.schemas.finance import (
     BudgetAmendmentReject,
     BudgetAmendmentResponse,
     BudgetAmendmentReverse,
+    BudgetCategoryChargeAccessUpdate,
     BudgetCategoryCreate,
     BudgetCategoryResponse,
     BudgetCategoryUpdate,
@@ -63,6 +64,7 @@ from app.schemas.finance import (
     BudgetTransactionPageResponse,
     BudgetUpdate,
     BudgetVsActualReportResponse,
+    ChargeAccessSettingsResponse,
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
@@ -710,6 +712,81 @@ async def delete_budget_category(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+@router.get("/charge-access", response_model=ChargeAccessSettingsResponse)
+async def get_charge_access_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The categories the caller owns, for setting who may charge them.
+
+    **Authentication required** — no permission: the categories are confined
+    to those the caller owns or that sit beneath one they own
+    (``app/services/finance_budget_access.py``), for the owner's own "My
+    budgets" page. ``finance.manage`` sets every category's rule from the
+    category settings instead, so it is not widened here. A member who owns
+    none gets two empty lists rather than a 403, and no position names.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    categories = await service.list_charge_access_categories(
+        org_id, str(current_user.id)
+    )
+    positions = await service.list_position_options(org_id) if categories else []
+    return {"categories": categories, "positions": positions}
+
+
+@router.put(
+    "/budget-categories/{cat_id}/charge-access",
+    response_model=BudgetCategoryResponse,
+)
+async def update_budget_category_charge_access(
+    cat_id: str,
+    data: BudgetCategoryChargeAccessUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Set who may charge a category's lines.
+
+    **Authentication required** — ``finance.manage``, or a holder of an owner
+    position on the category or on one above it (the Quartermaster sets up
+    their own lines). Any other caller, and a category in another department,
+    gets 404.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        category = await service.set_category_charge_access(
+            cat_id,
+            org_id,
+            _requester_scope(current_user),
+            data.charge_access,
+            data.charge_position_ids,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.budget_category_charge_access_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "category_id": cat_id,
+                "charge_access": (
+                    data.charge_access.value if data.charge_access else None
+                ),
+                "charge_position_ids": data.charge_position_ids,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+        return await service.get_budget_category_detail(category.id, org_id)
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Budget category not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
 # ============================================
 # Budget form options
 # ============================================
@@ -836,7 +913,9 @@ async def list_budget_options(
     # get_budget_summary gives.
     service = FinanceService(db)
     return await service.list_budget_options(
-        str(current_user.organization_id), fiscal_year_id
+        str(current_user.organization_id),
+        fiscal_year_id,
+        charger_id=_requester_scope(current_user),
     )
 
 
@@ -2792,6 +2871,7 @@ async def create_purchase_request(
         pr = await service.create_purchase_request(
             str(current_user.organization_id),
             str(current_user.id),
+            charger_id=_requester_scope(current_user),
             **data.model_dump(),
         )
         await log_audit_event(
@@ -3185,6 +3265,7 @@ async def create_expense_report(
             str(current_user.organization_id),
             str(current_user.id),
             line_items=line_items_data,
+            charger_id=_requester_scope(current_user),
             **er_data,
         )
         return er
@@ -3446,6 +3527,7 @@ async def create_check_request(
         return await service.create_check_request(
             str(current_user.organization_id),
             str(current_user.id),
+            charger_id=_requester_scope(current_user),
             **data.model_dump(),
         )
     except BudgetLimitExceededError as e:

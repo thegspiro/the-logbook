@@ -17,6 +17,7 @@ from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepType,
     ApproverType,
+    ChargeAccess,
     DuesFrequency,
     ExpenseType,
     ExportMappingType,
@@ -235,6 +236,11 @@ class BudgetCategoryCreate(BaseModel):
     owner_position_id: Optional[str] = None
     # Null inherits the parent category's (app/services/functional_expenses.py).
     functional_class: Optional[FunctionalClass] = None
+    # Null inherits the parent's rule (app/services/finance_budget_access.py).
+    charge_access: Optional[ChargeAccess] = None
+    # Positions beyond the answerable owners that may charge a restricted
+    # category's lines. Omitted names none.
+    charge_position_ids: Optional[list[str]] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -252,6 +258,10 @@ class BudgetCategoryUpdate(BaseModel):
     owner_position_id: Optional[str] = None
     # Omitted leaves it alone; an explicit null inherits the parent's again.
     functional_class: Optional[FunctionalClass] = None
+    # Omitted leaves it alone; an explicit null inherits the parent's rule.
+    charge_access: Optional[ChargeAccess] = None
+    # Omitted leaves the named positions alone; a list replaces them.
+    charge_position_ids: Optional[list[str]] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -270,8 +280,30 @@ class BudgetCategoryResponse(UTCResponseBase):
     owner_position_id: Optional[str] = None
     owner_position_name: Optional[str] = None
     functional_class: Optional[str] = None
+    # The category's own setting; null inherits.
+    charge_access: Optional[str] = None
+    # The rule its lines are actually under, and the ancestor it came from
+    # when it is inherited (null when the category set it, or nothing did).
+    effective_charge_access: str = "open"
+    charge_access_inherited_from: Optional[str] = None
+    charge_position_ids: list[str] = Field(default_factory=list)
+    # Names from the top-level category down to this one.
+    path: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class BudgetCategoryChargeAccessUpdate(BaseModel):
+    """Who may charge a category's lines, as its owner or the Treasurer sets it.
+
+    The whole setting at once: ``charge_access`` null inherits the parent's
+    rule, and ``charge_position_ids`` replaces the named positions.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    charge_access: Optional[ChargeAccess] = None
+    charge_position_ids: list[str] = Field(default_factory=list, max_length=200)
 
 
 # ============================================
@@ -527,6 +559,17 @@ class FinanceNamedOptionResponse(BaseModel):
 
     id: str
     name: str
+
+
+class ChargeAccessSettingsResponse(BaseModel):
+    """The categories whose charge rule the caller may set, and the positions
+    they may name — an id and a name each, as the owner may hold no
+    position-administration grant."""
+
+    model_config = _RESPONSE_CONFIG
+
+    categories: list[BudgetCategoryResponse]
+    positions: list[FinanceNamedOptionResponse]
 
 
 class BudgetRequestProposalOptionsResponse(BaseModel):

@@ -302,6 +302,16 @@ export const FUNCTIONAL_CLASS_LABELS: Record<FunctionalClass, string> = {
   [FunctionalClass.FUNDRAISING]: 'Fundraising',
 };
 
+/** Who may charge a category's lines on a request. `null` on a category inherits its parent's. */
+export const ChargeAccess = {
+  OPEN: 'open',
+  RESTRICTED: 'restricted',
+} as const;
+export type ChargeAccess = (typeof ChargeAccess)[keyof typeof ChargeAccess];
+
+export const isChargeAccess = (value: string | null | undefined): value is ChargeAccess =>
+  (Object.values(ChargeAccess) as string[]).includes(value ?? '');
+
 export interface BudgetCategory {
   id: string;
   organizationId: string;
@@ -316,6 +326,16 @@ export interface BudgetCategory {
   ownerPositionName?: string | null;
   /** Default for payments against its lines; null inherits the parent category's. */
   functionalClass?: FunctionalClass | null;
+  /** The category's own charge setting; null inherits its parent's. */
+  chargeAccess?: ChargeAccess | null;
+  /** The rule its lines are actually under, as the backend resolved it. */
+  effectiveChargeAccess?: ChargeAccess;
+  /** The ancestor the rule comes from when it is inherited; null otherwise. */
+  chargeAccessInheritedFrom?: string | null;
+  /** Positions this category names as able to charge it while restricted. */
+  chargePositionIds?: string[];
+  /** Category names from the top-level category down to this one. */
+  path?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -501,6 +521,20 @@ export interface BudgetCategoryUpdatePayload {
   qbAccountName?: string | null;
   ownerPositionId?: string | null;
   functionalClass?: FunctionalClass | null;
+  chargeAccess?: ChargeAccess | null;
+  chargePositionIds?: string[];
+}
+
+/** `PUT /finance/budget-categories/:id/charge-access` — the whole setting at once. */
+export interface ChargeAccessPayload {
+  chargeAccess: ChargeAccess | null;
+  chargePositionIds: string[];
+}
+
+/** `GET /finance/charge-access`: the categories the caller may set, and the positions. */
+export interface ChargeAccessSettings {
+  categories: BudgetCategory[];
+  positions: FinanceNamedOption[];
 }
 
 /** `POST /finance/budgets`. Blank optional fields are omitted. */

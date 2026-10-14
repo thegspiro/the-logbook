@@ -179,6 +179,21 @@ class FunctionalClass(str, enum.Enum):
     FUNDRAISING = "fundraising"
 
 
+class ChargeAccess(str, enum.Enum):
+    """Who may charge a budget category's lines on a request.
+
+    ``open`` lines are offered to every member who can raise a request (a
+    boot reimbursement); ``restricted`` lines only to the positions
+    answerable for them and the positions they name (officer brass, kept for
+    the Quartermaster). A category with no setting inherits its parent's,
+    and a top-level category with none is open — how every line behaved
+    before the setting existed (app/services/finance_budget_access.py).
+    """
+
+    OPEN = "open"
+    RESTRICTED = "restricted"
+
+
 class ExpenseType(str, enum.Enum):
     """Type of expense line item"""
 
@@ -378,6 +393,12 @@ class BudgetCategory(Base):
         nullable=True,
         index=True,
     )
+    # Who may charge this category's lines. Null inherits the parent's; see
+    # ChargeAccess and app/services/finance_budget_access.py.
+    charge_access: Mapped[Optional[ChargeAccess]] = mapped_column(
+        SQLEnum(ChargeAccess, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -408,6 +429,47 @@ class BudgetCategory(Base):
     )
 
     __table_args__ = (Index("ix_budget_categories_org_id", "organization_id"),)
+
+
+class BudgetCategoryChargePosition(Base):
+    """A position named as able to charge a restricted category's lines.
+
+    Only read while the category's own ``charge_access`` is ``restricted``:
+    a category that inherits its rule inherits the parent's list with it, so
+    the positions always belong to the category that set the restriction.
+    """
+
+    __tablename__ = "budget_category_charge_positions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("budget_categories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("positions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "category_id",
+            "position_id",
+            name="uq_budget_category_charge_positions_category_position",
+        ),
+    )
 
 
 class Budget(Base):
