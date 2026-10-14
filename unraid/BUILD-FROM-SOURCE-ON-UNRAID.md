@@ -468,22 +468,13 @@ redis:
 
 ---
 
-## Switching to Pre-Built Images Later
+## Pre-Built Images
 
-Once you push images to ghcr.io, you can switch back to the regular docker-compose file:
-
-```bash
-cd /mnt/user/appdata/the-logbook
-
-# Switch to the pull-based compose file
-cp unraid/docker-compose-unraid.yml docker-compose.yml
-
-# Pull pre-built images
-docker compose pull
-
-# Recreate containers
-docker compose up -d
-```
+The project does not publish pre-built images, and no Unraid compose file pulls
+them. `unraid/docker-compose-unraid.yml` — the file `unraid-setup.sh` installs —
+also builds the backend and frontend locally (tagged
+`the-logbook-backend:local` / `the-logbook-frontend:local`), so switching to it
+gains nothing over this layout and stops `./unraid/update.sh` from running.
 
 ---
 

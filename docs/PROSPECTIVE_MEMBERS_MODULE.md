@@ -110,23 +110,32 @@ The `ApplicantDetailDialog` was decomposed into focused sub-components:
 
 ### Stage Types
 
-| Type              | Icon        | Description                                        | Integration                                                                              |
-| ----------------- | ----------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `form_submission` | FileText    | Applicant completes a form                         | Links to Forms module                                                                    |
-| `document_upload` | Upload      | Applicant uploads required documents               | File storage; optional **Documenso** e-signature                                         |
-| `election_vote`   | Vote        | Membership votes on applicant                      | Links to Elections module via election packages                                          |
-| `manual_approval` | CheckCircle | Coordinator manually approves                      | Internal action                                                                          |
-| `automated_email` | Mail        | Sends configurable email to applicant              | Email template selection, variable interpolation, send delay                             |
-| `form_dropdown`   | ListChecks  | Links a form from Forms module for data collection | Links to Forms module via dropdown selector                                              |
-| `meeting`         | Calendar    | Schedule interview or orientation meeting          | Links to Events module; auto-links upcoming events; optional **Cal.com** self-scheduling |
+The twelve types offered by `StageConfigModal` (`StageType` in
+`frontend/src/constants/enums.ts`; the backend `PipelineStepType` enum also
+keeps the legacy `action`, `checkbox` and `note` types):
+
+| Type                    | Label                 | Icon          | Description                                                 | Integration                                                                              |
+| ----------------------- | --------------------- | ------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `form_submission`       | Form Submission       | FileText      | Require a form to be filled out before advancing            | Links to a form in the Forms module                                                      |
+| `document_upload`       | Document Upload       | Upload        | Require document uploads (ID, background check, etc.)       | File storage; optional **Documenso** e-signature                                         |
+| `meeting`               | Meeting               | CalendarCheck | Require attendance at or scheduling of a meeting            | Links to Events module; auto-links upcoming events; optional **Cal.com** self-scheduling |
+| `election_vote`         | Election / Vote       | Vote          | Require a membership vote                                   | Links to Elections module via election packages                                          |
+| `manual_approval`       | Manual Approval       | CheckCircle   | A pipeline manager approves the applicant                   | Internal action                                                                          |
+| `status_page_toggle`    | Enable Status Page    | Globe         | Activate the public status page for the applicant           | Public application-status page                                                           |
+| `automated_email`       | Automated Email       | Mail          | Send an automated email to the applicant                    | Email template selection, variable interpolation, send delay                             |
+| `reference_check`       | Reference Check       | UserCheck     | Collect and verify personal or professional references      | Internal action                                                                          |
+| `checklist`             | Checklist             | ClipboardList | Multi-item checklist (orientation, gear issue, etc.)        | Internal action                                                                          |
+| `interview_requirement` | Interview Requirement | MessageSquare | Require a set number of interviews before advancing         | Interview records                                                                        |
+| `multi_approval`        | Multi-Signer Approval | Users         | Require multiple designated roles to all sign off           | Sign-offs page                                                                           |
+| `medical_screening`     | Medical Screening     | Stethoscope   | Require physical exam or medical clearance before advancing | Medical Screening module                                                                 |
 
 ### Quick Presets (StageConfigModal)
 
-The StageConfigModal includes quick presets for common stage configurations:
-
-| Preset              | Type      | Description                                                                                |
-| ------------------- | --------- | ------------------------------------------------------------------------------------------ |
-| President Interview | `meeting` | Pre-configured meeting stage for scheduling a president/chief interview with the applicant |
+The StageConfigModal offers one-click presets: Application Form, Background
+Check Docs, Chief Interview, President Interview, Membership Vote, Welcome
+Email, Coordinator Approval, Reference Check, New Member Orientation (a
+checklist), Interview Panel, Officer Sign-Off and Physical Exam. Each fills in
+the stage type, name, description and a starting configuration.
 
 ### Pipeline Builder
 
@@ -142,12 +151,12 @@ Each stage can be configured with:
 
 - **Name**: Display name for the stage
 - **Description**: Optional description explaining the stage's purpose
-- **Type**: One of the seven stage types above
+- **Type**: One of the twelve stage types above
 - **Inactivity timeout override**: Optional custom timeout (in days) for this specific stage
 - **Auto-advance** (form_submission and document_upload only): When enabled, the prospect is automatically advanced to the next stage when the form is submitted or all required documents are uploaded. Toggled via checkbox: "Auto-advance when form is submitted" / "Auto-advance when documents are uploaded". Default: off
 - **Election package fields** (election_vote only): Choose which applicant data to include in election packages (email, phone, address, DOB, documents, stage history, custom coordinator prompt)
 - **Email configuration** (automated_email only): Configure email subject, welcome message, FAQ link, next meeting details, custom sections (title + content), and application status tracker. Email is automatically sent when a prospect advances to this stage
-- **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection via dropdown selector
+- **Form selection** (form_submission): Choose a form from the Forms module for applicant data collection via dropdown selector
 - **Event linking** (meeting and others): Link a stage to a specific event for scheduling. Meeting stages auto-link the next upcoming event matching the stage configuration
 - **Cal.com scheduling** (meeting only, when the Cal.com integration is connected): Set the stage's scheduling method to _Cal.com_ and provide a booking link. Applicants see a **Schedule** button on their public status page; a `MEETING_ENDED` webhook (with a configured secret) auto-advances the applicant once the booked meeting has finished, ignoring an attendee Cal.com has marked a no-show. When Cal.com is not connected, a "Connect Cal.com" hint links to the Integrations page
 - **Documenso e-signature** (document*upload only, when the Documenso integration is connected): Set the stage's collection method to \_Documenso e-signature* and optionally store a template ID. Applicants see a "Documents sent for signature" note; a `DOCUMENT_COMPLETED` webhook (with a configured secret) auto-advances the applicant. When Documenso is not connected, a "Connect Documenso" hint links to the Integrations page
@@ -178,9 +187,9 @@ Coordinators can link upcoming department events to individual applicants in the
 
 ### Database Model
 
-| Table                  | Description                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `prospect_event_links` | Links applicants to events with `prospect_id` (FK), `event_id` (FK), `stage_id` (FK, nullable), `linked_by` (FK users), `created_at` |
+| Table                  | Description                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prospect_event_links` | Links applicants to events with `prospect_id` (FK, cascade), `event_id` (FK, cascade), `notes`, `linked_by` (FK users, nullable), `created_at`; one link per prospect and event |
 
 ### API Endpoints
 
@@ -342,6 +351,11 @@ than selected.
 | `converted` | Blue         | Successfully converted to a member        |
 | `rejected`  | Red          | Application was rejected                  |
 | `inactive`  | Slate (dark) | Deactivated due to inactivity timeout     |
+
+The backend `ProspectStatus` enum stores `transferred` for a converted
+applicant; the frontend service maps it to `converted` on read and back on
+write. The backend also has an `approved` status (an application the department
+has accepted, awaiting conversion), which the status endpoints accept.
 
 #### Lifecycle stamps _(2026-09-24, migration `77d4aa7798dd`)_
 
@@ -531,12 +545,11 @@ Each package includes a `recommended_ballot_item` pre-configured from the stage'
 
 ### API Endpoints
 
-| Method  | Path                                                           | Permission | Description                                           |
-| ------- | -------------------------------------------------------------- | ---------- | ----------------------------------------------------- |
-| `GET`   | `/api/v1/prospective-members/applicants/{id}/election-package` | `view`     | Get election package for applicant                    |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage`   | Create election package                               |
-| `PATCH` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage`   | Update election package                               |
-| `GET`   | `/api/v1/prospective-members/election-packages`                | `view`     | List election packages (with status/pipeline filters) |
+The package is read with `GET`, created with `POST` and edited with `PUT` on
+`/api/v1/prospective-members/prospects/{prospect_id}/election-package`;
+`POST …/election-package/assign` attaches it to an election, and
+`GET /api/v1/prospective-members/election-packages` lists packages across
+applicants. Permissions are in [Election Package Endpoints](#election-package-endpoints).
 
 ---
 
@@ -578,12 +591,17 @@ The leadership Pipeline Overview report additionally provides year-over-year app
 
 ### Default Role Assignments
 
-| Role                                            | Permission                                                                                           |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| IT Administrator                                | Full access (wildcard)                                                                               |
-| Secretary                                       | `prospective_members.manage`                                                                         |
-| Membership Coordinator                          | `prospective_members.manage`                                                                         |
-| Assistant Membership Coordinator _(2026-09-24)_ | `prospective_members.manage` (plus read-only roster, and `members.manage_id_cards` since 2026-10-02) |
+| Position                                                 | Permission                                               |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| IT Manager                                               | Full access (wildcard)                                   |
+| Chief, Deputy Chief, Assistant Chief, Captain            | `prospective_members.view`, `prospective_members.manage` |
+| Lieutenant                                               | `prospective_members.view`                               |
+| President, Vice President, Secretary                     | `prospective_members.manage`                             |
+| Membership Coordinator, Assistant Membership Coordinator | `prospective_members.manage`                             |
+
+The officer operational ranks (fire chief through lieutenant) also carry
+`prospective_members.view` by default. Source of truth: `DEFAULT_POSITIONS` and
+`OPERATIONAL_RANKS` in `backend/app/core/permissions.py`.
 
 **Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
 
@@ -641,95 +659,127 @@ The `useProspectiveMembersStore` manages all module state:
 
 ## API Endpoints
 
+Every path below is under `/api/v1/prospective-members` (router in
+`backend/app/api/v1/endpoints/membership_pipeline.py`). Applicants are addressed
+as **prospects**. "view" means `prospective_members.view` **or**
+`prospective_members.manage`; permissions written with `|` are OR.
+
 ### Pipeline Endpoints
 
-| Method   | Path                                                          | Permission | Description                                   |
-| -------- | ------------------------------------------------------------- | ---------- | --------------------------------------------- |
-| `GET`    | `/api/v1/prospective-members/pipelines`                       | `view`     | List pipelines                                |
-| `POST`   | `/api/v1/prospective-members/pipelines`                       | `manage`   | Create pipeline                               |
-| `GET`    | `/api/v1/prospective-members/pipelines/{id}`                  | `view`     | Get pipeline with stages                      |
-| `PATCH`  | `/api/v1/prospective-members/pipelines/{id}`                  | `manage`   | Update pipeline (including inactivity config) |
-| `POST`   | `/api/v1/prospective-members/pipelines/{id}/stages`           | `manage`   | Add stage                                     |
-| `PATCH`  | `/api/v1/prospective-members/pipelines/{id}/stages/{stageId}` | `manage`   | Update stage                                  |
-| `DELETE` | `/api/v1/prospective-members/pipelines/{id}/stages/{stageId}` | `manage`   | Remove stage                                  |
-| `POST`   | `/api/v1/prospective-members/pipelines/{id}/purge-inactive`   | `manage`   | Purge inactive applicants                     |
+| Method   | Path                                       | Permission                                       | Description                                                        |
+| -------- | ------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
+| `GET`    | `/pipelines`                               | view                                             | List pipelines (`include_templates`, default true)                 |
+| `POST`   | `/pipelines`                               | `members.manage` \| `prospective_members.manage` | Create pipeline                                                    |
+| `GET`    | `/pipelines/{pipeline_id}`                 | view                                             | Get pipeline with steps                                            |
+| `PUT`    | `/pipelines/{pipeline_id}`                 | `members.manage` \| `prospective_members.manage` | Update pipeline (including inactivity config, `conversion_config`) |
+| `DELETE` | `/pipelines/{pipeline_id}`                 | `members.manage` \| `prospective_members.manage` | Delete pipeline                                                    |
+| `POST`   | `/pipelines/{pipeline_id}/duplicate`       | `members.manage` \| `prospective_members.manage` | Copy a pipeline                                                    |
+| `POST`   | `/pipelines/{pipeline_id}/seed-templates`  | `members.manage` \| `prospective_members.manage` | Seed the default steps                                             |
+| `PATCH`  | `/pipelines/{pipeline_id}/report-settings` | `members.manage` \| `prospective_members.manage` | Report stage groups                                                |
+| `GET`    | `/pipelines/{pipeline_id}/steps`           | view                                             | List steps                                                         |
+| `POST`   | `/pipelines/{pipeline_id}/steps`           | `members.manage` \| `prospective_members.manage` | Add step                                                           |
+| `PUT`    | `/pipelines/{pipeline_id}/steps/reorder`   | `members.manage` \| `prospective_members.manage` | Reorder steps                                                      |
+| `PUT`    | `/pipelines/{pipeline_id}/steps/{step_id}` | `members.manage` \| `prospective_members.manage` | Update step                                                        |
+| `DELETE` | `/pipelines/{pipeline_id}/steps/{step_id}` | `members.manage` \| `prospective_members.manage` | Remove step                                                        |
+| `GET`    | `/pipelines/{pipeline_id}/kanban`          | view                                             | Kanban board — see [below](#the-kanban-board-endpoint)             |
+| `GET`    | `/pipelines/{pipeline_id}/stats`           | view                                             | Pipeline statistics — see [below](#statistics-endpoint)            |
+| `POST`   | `/pipelines/{pipeline_id}/purge-inactive`  | `members.manage` \| `prospective_members.manage` | Purge inactive applicants                                          |
+| `GET`    | `/validate-form/{form_id}`                 | `prospective_members.manage`                     | Check a form's fields against the pipeline mapping                 |
 
-### Applicant Endpoints
+### Prospect Endpoints
 
-| Method  | Path                                                           | Permission | Description                                  |
-| ------- | -------------------------------------------------------------- | ---------- | -------------------------------------------- |
-| `GET`   | `/api/v1/prospective-members/applicants`                       | `view`     | List applicants (with filtering, pagination) |
-| `POST`  | `/api/v1/prospective-members/applicants`                       | `manage`   | Create applicant                             |
-| `GET`   | `/api/v1/prospective-members/applicants/{id}`                  | `view`     | Get applicant details                        |
-| `PATCH` | `/api/v1/prospective-members/applicants/{id}`                  | `manage`   | Update applicant                             |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/advance`          | `manage`   | Advance to next stage                        |
-| `POST`  | `/api/v1/prospective-members/prospects/{id}/regress`           | `manage`   | Move back to previous stage                  |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/hold`             | `manage`   | Put on hold                                  |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/reject`           | `manage`   | Reject applicant                             |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/withdraw`         | `manage`   | Withdraw applicant from pipeline             |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/reactivate`       | `manage`   | Reactivate inactive or withdrawn applicant   |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/convert`          | `manage`   | Convert to member                            |
-| `GET`   | `/api/v1/prospective-members/applicants/{id}/election-package` | `view`     | Get election package                         |
-| `POST`  | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage`   | Create election package                      |
-| `PATCH` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage`   | Update election package                      |
+| Method | Path                                     | Permission                                       | Description                                                     |
+| ------ | ---------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- |
+| `GET`  | `/prospects`                             | view                                             | List — see [Query Parameters](#query-parameters-prospect-list)  |
+| `POST` | `/prospects`                             | `members.create` \| `prospective_members.manage` | Create prospect                                                 |
+| `POST` | `/prospects/check-existing`              | `members.create` \| `prospective_members.manage` | Look for an existing member matching the applicant              |
+| `GET`  | `/prospects/{prospect_id}`               | view                                             | Get prospect details                                            |
+| `PUT`  | `/prospects/{prospect_id}`               | `members.manage` \| `prospective_members.manage` | Update prospect                                                 |
+| `GET`  | `/prospects/{prospect_id}/activity`      | view                                             | Activity log                                                    |
+| `POST` | `/prospects/{prospect_id}/advance`       | `members.manage` \| `prospective_members.manage` | Advance to the next stage                                       |
+| `POST` | `/prospects/{prospect_id}/regress`       | `members.manage` \| `prospective_members.manage` | Move back to the previous stage                                 |
+| `POST` | `/prospects/{prospect_id}/assign-stage`  | `members.manage` \| `prospective_members.manage` | Place the prospect on a chosen stage                            |
+| `POST` | `/prospects/{prospect_id}/complete-step` | `members.manage` \| `prospective_members.manage` | Complete a step                                                 |
+| `POST` | `/prospects/{prospect_id}/skip-step`     | `prospective_members.manage`                     | Skip the current step                                           |
+| `POST` | `/prospects/{prospect_id}/approve-step`  | any signed-in member                             | Multi-signer sign-off — see [Permissions](#permissions)         |
+| `POST` | `/prospects/{prospect_id}/status`        | `members.manage` \| `prospective_members.manage` | Hold, reject, withdraw or reactivate — body `{status, reason?}` |
+| `POST` | `/prospects/{prospect_id}/transfer`      | `members.manage` \| `prospective_members.manage` | Convert to member — see [Conversion](#conversion)               |
+| `POST` | `/prospects/bulk-advance`                | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                               |
+| `POST` | `/prospects/bulk-status`                 | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                               |
+| `POST` | `/prospects/process-inactivity`          | `members.manage` \| `prospective_members.manage` | Run the inactivity check                                        |
+| `GET`  | `/my-sign-offs`                          | any signed-in member                             | Stages awaiting the caller's signature                          |
+| `GET`  | `/source-events`                         | view                                             | Events that produced applicants                                 |
+| `GET`  | `/widget-summary`                        | view                                             | Dashboard widget counts                                         |
 
-### Prospect Document Endpoints (2026-05)
+`POST /prospects/{prospect_id}/status` accepts `active`, `on_hold`, `approved`,
+`rejected`, `withdrawn` or `inactive`; `transferred` is refused, because only
+`/transfer` sets it. `reason` (max 1000 characters) is recorded in the activity
+log, not in the coordinator notes.
 
-These endpoints now persist real files (previously metadata-only). The router
-prefix is `/prospective-members`, so the full paths are as shown.
+### Interview Endpoints
 
-| Method   | Path                                                                                   | Permission                                                                   | Description                                                                |
-| -------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `GET`    | `/api/v1/prospective-members/prospects/{prospect_id}/documents`                        | `members.view` \| `prospective_members.view` \| `prospective_members.manage` | List a prospect's documents (sanitized metadata)                           |
-| `POST`   | `/api/v1/prospective-members/prospects/{prospect_id}/documents`                        | `members.manage` \| `prospective_members.manage`                             | Upload a document (multipart: `file`, `document_type`, optional `step_id`) |
-| `GET`    | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}/download` | `members.view` \| `prospective_members.view` \| `prospective_members.manage` | Download the stored file (`FileResponse`, path-traversal guarded)          |
-| `DELETE` | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}`          | `members.manage` \| `prospective_members.manage`                             | Delete the document record **and** remove the file from disk               |
+| Method   | Path                                  | Permission                   | Description      |
+| -------- | ------------------------------------- | ---------------------------- | ---------------- |
+| `GET`    | `/prospects/{prospect_id}/interviews` | view                         | List interviews  |
+| `POST`   | `/prospects/{prospect_id}/interviews` | `prospective_members.manage` | Record interview |
+| `PUT`    | `/interviews/{interview_id}`          | `prospective_members.manage` | Update interview |
+| `DELETE` | `/interviews/{interview_id}`          | `prospective_members.manage` | Delete interview |
 
-### Election Package Endpoints (Cross-Module)
+### Event Link Endpoints
 
-| Method | Path                                            | Permission | Description                                                |
-| ------ | ----------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| `GET`  | `/api/v1/prospective-members/election-packages` | `view`     | List election packages (filterable by pipeline_id, status) |
+| Method   | Path                                        | Permission                   | Description   |
+| -------- | ------------------------------------------- | ---------------------------- | ------------- |
+| `GET`    | `/prospects/{prospect_id}/events`           | view                         | Linked events |
+| `POST`   | `/prospects/{prospect_id}/events`           | `prospective_members.manage` | Link an event |
+| `DELETE` | `/prospects/{prospect_id}/events/{link_id}` | `prospective_members.manage` | Unlink        |
+
+### Prospect Document Endpoints
+
+| Method   | Path                                                        | Permission                                       | Description                                                                |
+| -------- | ----------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| `GET`    | `/prospects/{prospect_id}/documents`                        | view                                             | List a prospect's documents (sanitized metadata)                           |
+| `POST`   | `/prospects/{prospect_id}/documents`                        | `members.manage` \| `prospective_members.manage` | Upload a document (multipart: `file`, `document_type`, optional `step_id`) |
+| `GET`    | `/prospects/{prospect_id}/documents/{document_id}/download` | view                                             | Download the stored file (`FileResponse`, path-traversal guarded)          |
+| `DELETE` | `/prospects/{prospect_id}/documents/{document_id}`          | `members.manage` \| `prospective_members.manage` | Delete the document record **and** remove the file from disk               |
+
+### Election Package Endpoints
+
+| Method | Path                                               | Permission                                         | Description                                                       |
+| ------ | -------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET`  | `/prospects/{prospect_id}/election-package`        | view \| `elections.manage`                         | Get the prospect's election package                               |
+| `POST` | `/prospects/{prospect_id}/election-package`        | `members.manage` \| `prospective_members.manage`   | Create election package                                           |
+| `PUT`  | `/prospects/{prospect_id}/election-package`        | `members.manage` \| `prospective_members.manage`   | Update election package                                           |
+| `POST` | `/prospects/{prospect_id}/election-package/assign` | `elections.manage` \| `prospective_members.manage` | Attach the package to an election                                 |
+| `GET`  | `/election-packages`                               | view \| `elections.manage`                         | List packages (`pipeline_id`, `status`, `include_closed` filters) |
 
 ### Statistics Endpoint
 
-| Method | Path                                                        | Permission         | Description             |
-| ------ | ----------------------------------------------------------- | ------------------ | ----------------------- |
-| `GET`  | `/api/v1/prospective-members/pipelines/{pipeline_id}/stats` | `view` or `manage` | Get pipeline statistics |
+`GET /pipelines/{pipeline_id}/stats` takes optional `search` and `event_id`,
+which narrow the counted population exactly as they narrow `GET /prospects`,
+through one shared predicate builder. Omitting both returns the whole-pipeline
+counts. `event_id` is confirmed in-org before it is counted through (pitfall
+#14c). The status filter is deliberately **not** accepted: it scopes the
+open-pipeline view alone, and counting through it would zero the Rejected /
+Withdrawn / Converted figures the same response feeds.
 
-Optional query parameters _(2026-09-16)_: `search` and `event_id` narrow the
-counted population exactly as they narrow `GET /prospects`, through one shared
-predicate builder. Omitting both returns the whole-pipeline counts, so clients
-written before they existed are unaffected. `event_id` is confirmed in-org
-before it is counted through (pitfall #14c). The status filter is deliberately
-**not** accepted: it scopes the open-pipeline view alone, and counting through
-it would zero the Rejected / Withdrawn / Converted figures the same response
-feeds.
+### Query Parameters (Prospect List)
 
-_(Corrected 2026-09-24: this table previously gave the path as
-`/api/v1/prospective-members/stats`, which does not exist.)_
+| Parameter     | Type      | Description                                                                            |
+| ------------- | --------- | -------------------------------------------------------------------------------------- |
+| `pipeline_id` | `UUID`    | Filter by pipeline                                                                     |
+| `status`      | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                 |
+| `search`      | `string`  | Search by name or email                                                                |
+| `event_id`    | `UUID`    | Only prospects produced by or linked to this event                                     |
+| `open_only`   | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false` |
+| `limit`       | `number`  | Page size (default 50, max 200)                                                        |
+| `offset`      | `number`  | Rows to skip (default 0)                                                               |
 
-### Query Parameters (Applicant List)
-
-| Parameter          | Type              | Description                            |
-| ------------------ | ----------------- | -------------------------------------- |
-| `page`             | `number`          | Page number (default: 1)               |
-| `per_page`         | `number`          | Items per page (default: 20)           |
-| `status`           | `string`          | Filter by status                       |
-| `stage_id`         | `string`          | Filter by current stage                |
-| `search`           | `string`          | Search by name or email                |
-| `sort_by`          | `string`          | Sort field                             |
-| `sort_order`       | `'asc' \| 'desc'` | Sort direction                         |
-| `include_inactive` | `boolean`         | Include inactive applicants in results |
+The response is `{items, total, limit, offset}`. The caller's own prospect
+record, if any, is omitted from both `items` and `total`.
 
 ---
 
 ## As Built — Board, Bulk Actions & Cross-Tenant Guards _(2026-08-08)_
-
-> The endpoint tables above are the module's design sketch and use
-> `/applicants` paths. The **shipped** router is
-> `/api/v1/prospective-members` and addresses applicants as `/prospects`. The
-> endpoints in this section are verified against the code.
 
 ### The Kanban Board Endpoint
 
@@ -785,12 +835,12 @@ and a partial failure surfaced as a bare count naming nobody.
 
 **Request**
 
-| Field          | Type         | Notes                                                                            |
-| -------------- | ------------ | -------------------------------------------------------------------------------- |
-| `prospect_ids` | `List[UUID]` | 1–**200** ids. The cap is a guardrail against an unbounded body, not a page size |
-| `notes`        | `str?`       | `bulk-advance` only                                                              |
-| `status`       | `str`        | `bulk-status` only — `active`, `on_hold`, `approved`, `rejected`, `withdrawn`    |
-| `reason`       | `str?`       | `bulk-status` only, max 1000 chars                                               |
+| Field          | Type         | Notes                                                                                     |
+| -------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `prospect_ids` | `List[UUID]` | 1–**200** ids. The cap is a guardrail against an unbounded body, not a page size          |
+| `notes`        | `str?`       | `bulk-advance` only                                                                       |
+| `status`       | `str`        | `bulk-status` only — `active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive` |
+| `reason`       | `str?`       | `bulk-status` only, max 1000 chars                                                        |
 
 **Response** (`BulkActionResponse`)
 
@@ -1148,7 +1198,7 @@ Response: ProspectResponse
 
 | Scenario                        | Behavior                                                                                      |
 | ------------------------------- | --------------------------------------------------------------------------------------------- |
-| Prospect is at the first stage  | Regression is blocked; prospect returned unchanged                                            |
+| Prospect is at the first stage  | Refused with `409`; nothing changes                                                           |
 | Prospect is on hold or inactive | Regression only applies to active prospects                                                   |
 | Repeated regression             | Prospect can be regressed multiple times until reaching the first stage                       |
 | Audit trail                     | All regressions are logged in the prospect's activity history with user, timestamp, and notes |
@@ -1204,8 +1254,8 @@ Document upload was metadata-only and is now backed by real file storage
   `os.path.realpath` and must reside under the uploads base directory or the
   request is rejected with 403.
 - **Permissions**: upload/delete require `members.manage` or
-  `prospective_members.manage`; list/download additionally accept the `.view`
-  variants.
+  `prospective_members.manage`; list/download require
+  `prospective_members.view` or `prospective_members.manage`.
 
 ### March 15, 2026
 

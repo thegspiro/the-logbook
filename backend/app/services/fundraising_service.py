@@ -398,10 +398,12 @@ class FundraisingService:
         # reason create_donation locks them before its insert.
         new_campaign_id = data.get("campaign_id", old_campaign_id)
         new_donor_id = data.get("donor_id", old_donor_id)
-        for cid in {old_campaign_id, new_campaign_id} - {None}:
-            await self._lock_campaign(cid, organization_id)
-        for did in {old_donor_id, new_donor_id} - {None}:
-            await self._lock_donor(did, organization_id)
+        for cid in {old_campaign_id, new_campaign_id}:
+            if cid is not None:
+                await self._lock_campaign(cid, organization_id)
+        for did in {old_donor_id, new_donor_id}:
+            if did is not None:
+                await self._lock_donor(did, organization_id)
 
         apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
@@ -481,7 +483,7 @@ class FundraisingService:
             )
             .with_for_update()
         )
-        campaign.current_amount = result.scalar()
+        campaign.current_amount = result.scalar() or Decimal(0)
 
     async def _update_donor_stats(self, donor_id: str, organization_id: str) -> None:
         """Recalculate a donor's lifetime stats from their donations.

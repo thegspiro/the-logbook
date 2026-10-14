@@ -135,7 +135,7 @@ API under `/api/v1/suggestions` (`/boxes`, `/mine`, `/follow-up/*`, `/review/*`,
 `/admin/*`). Engineering detail:
 [`docs/COMMUNICATIONS_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/COMMUNICATIONS_MODULE.md#suggestion-boxes-2026-09-23).
 Walkthrough:
-[`docs/training/07-documents-forms.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/07-documents-forms.md#suggestion-boxes-2026-09-23).
+[`docs/training/07-documents-forms.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/07-documents-forms.md#suggestion-boxes).
 
 ## Delivery matrix
 

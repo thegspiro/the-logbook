@@ -520,7 +520,7 @@ class DepartureClearanceService:
 
         # Count
         count_q = select(func.count()).select_from(query.subquery())
-        total = (await self.db.execute(count_q)).scalar()
+        total = (await self.db.execute(count_q)).scalar() or 0
 
         # Paginate
         query = (

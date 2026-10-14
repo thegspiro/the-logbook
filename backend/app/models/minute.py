@@ -860,6 +860,12 @@ class ActionItem(Base):
         "MeetingMinutes", back_populates="action_items"
     )
 
+    if TYPE_CHECKING:
+        # Not a column. MinuteService records which fields an update applied so the
+        # endpoint can audit them. Declared only for the type checker: an annotation
+        # SQLAlchemy sees would have to be mapped.
+        applied_fields: set[str]
+
     __table_args__ = (
         Index("ix_minutes_action_items_minutes_id", "minutes_id"),
         Index("ix_minutes_action_items_assignee_id", "assignee_id"),

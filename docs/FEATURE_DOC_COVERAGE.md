@@ -24,7 +24,7 @@ Several modules carry **both**, and that is by design rather than duplication:
 | `docs/<NAME>_MODULE.md` | **Structured reference** — data models, endpoint-and-permission tables, enums, data flows, edge cases, troubleshooting |
 | `wiki/Module-<Name>.md` | **Feature narrative** — what the feature does, page-by-page walkthroughs, and the dated change history                 |
 
-`docs/SCHEDULING_MODULE.md` ↔ `wiki/Module-Scheduling.md` is the precedent, and
+`docs/COMMUNICATIONS_MODULE.md` ↔ `wiki/Module-Communications.md` is an example, and
 the two cross-link. When adding one, link the other.
 
 ---
@@ -70,7 +70,7 @@ covered incidentally by a doc about something else · ❌ nothing
 | B16 | reports & analytics        | —                                                                                 | —                                                                            | ❌    |
 | B17 | events                     | —                                                                                 | `Module-Events.md`                                                           | 📖    |
 | B18 | training                   | `TRAINING_PROGRAMS.md`, `training-compliance-calculations.md`                     | `Module-Training.md`                                                         | ✅    |
-| B19 | scheduling                 | `SCHEDULING_MODULE.md`                                                            | `Module-Scheduling.md`                                                       | ✅    |
+| B19 | scheduling                 | — (reference is `wiki/Module-Scheduling-Developer.md`)                            | `Module-Scheduling.md`, `Module-Scheduling-Developer.md`                     | ✅    |
 | B20 | finance                    | `FINANCE_MODULE.md`                                                               | —                                                                            | ✅    |
 | B21 | orgs, roles & users        | `ROLE_SYSTEM_README.md` (repo root), `DEPARTMENT_OFFICERS.md`, `PLATOON_SETUP.md` | `Module-Governance-Org-Chart.md`                                             | ◐     |
 | B22 | compliance & skills        | `COMPLIANCE.md`, `COMPLIANCE_CONFIG.md`, `SKILLS_TESTING_FEATURE.md`              | `Module-Compliance.md`                                                       | ✅    |
