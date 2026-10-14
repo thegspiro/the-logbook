@@ -16,11 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3225 (Feature 05, Finance & approvals, pass 9) merged
-2026-10-14T19:27:15Z; rotation row 05 was already ✅ as part of that merge, so
-nothing further to record beyond clearing this row. Feature 06 (Elections &
-ballots), pass 9, is this PR — see the Log below. Next: Feature 07 (Users &
-organizations).
+**PR [#3248](https://github.com/thegspiro/the-logbook/pull/3248)**: branch
+`claude/security-review-elections-ballots-p9`, Feature 06 (Elections &
+ballots), pass 9. 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected
+to RESOLVED (pass 7/8 had re-cited pre-fix code — see the Log). ELEC-12,
+ELEC-16 and ELEC-40 re-confirmed open/flagged, unchanged. See
+`ELEC-06-elections-ballots.md`'s **Pass 9** section. Row 06 → ✅ (pending
+this PR's merge); next is Feature 07 (Users & organizations).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 9, PR #3225, merged 2026-10-14), preserved for history</summary>
