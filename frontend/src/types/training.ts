@@ -2179,8 +2179,9 @@ export interface RequirementDetail {
   completed_hours: number;
   progress_percentage: number;
   is_met: boolean;
-  due_date?: string;
-  days_until_due?: number;
+  /** Null when the requirement has no deadline, as a rolling hours requirement has not. */
+  due_date?: string | null;
+  days_until_due?: number | null;
   waived_months?: number;
   active_months?: number;
   cert_expired?: boolean;
@@ -2191,6 +2192,56 @@ export interface RequirementDetail {
    * the met/total summary until it passes.
    */
   catch_up_deadline?: string | null;
+  /**
+   * For a requirement whose completion window crosses the year (November to
+   * January): the date the next window opens. Until then a class taken in the
+   * last window still counts, so the requirement reads as met.
+   */
+  next_window_opens?: string | null;
+  /** The completion window the requirement was graded over, as dates. */
+  window_start?: string | null;
+  window_end?: string | null;
+  /** Calendar months the whole window spans: the pace denominator. */
+  window_months?: number | null;
+  /**
+   * Hours per calendar month over the window, zeros included, for an hours
+   * requirement. These are the records the server counted, so they sum to
+   * `completed_hours`. `waived` marks a month covered by leave, the same
+   * months the requirement's target was prorated by. Null for every other
+   * requirement type.
+   */
+  monthly_hours?: Array<{ month: string; hours: number; waived?: boolean }> | null;
+}
+
+/** One training record on the History tab, from `/my-training/records`. */
+export interface MyTrainingHistoryRecord {
+  id: string;
+  course_name: string;
+  course_code?: string | null;
+  training_type: string;
+  status: string;
+  completion_date: string | null;
+  expiration_date: string | null;
+  /** Absent when the department hides training hours from members. */
+  hours_completed?: number;
+  instructor?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+}
+
+export interface MyTrainingHistoryYear {
+  /** Four digits, or `undated` for records still awaiting approval. */
+  year: string;
+  records: number;
+  hours?: number;
+}
+
+export interface MyTrainingHistoryPage {
+  items: MyTrainingHistoryRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  years: MyTrainingHistoryYear[];
 }
 
 export interface MyTrainingSummary {
@@ -2223,6 +2274,12 @@ export interface MyTrainingSummary {
      */
     hours_this_month?: number;
     completed_courses: number;
+    /** Calendar year to date, in the department's timezone. */
+    year_to_date_courses?: number;
+    /** Withheld alongside `total_hours`. */
+    year_to_date_hours?: number;
+    /** The calendar year the `year_to_date_*` figures cover. */
+    year?: number;
   };
   requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };
   certifications?: Array<{
@@ -2232,6 +2289,15 @@ export interface MyTrainingSummary {
     expiration_date: string | null;
     is_expired: boolean;
     days_until_expiry: number | null;
+  }>;
+  /** Passing official skills tests that lapse; absent from older servers. */
+  skill_test_expirations?: Array<{
+    id: string;
+    template_id: string;
+    template_name: string;
+    passed_on: string;
+    expiration_date: string;
+    days_until_expiry: number;
   }>;
   enrollments?: Array<{
     id: string;

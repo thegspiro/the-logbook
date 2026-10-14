@@ -282,18 +282,15 @@ class ImageValidator:
             output_buffer = io.BytesIO()
 
             # Save with optimal settings (no metadata)
-            save_kwargs = {
-                "format": format_name,
-                "optimize": True,
-            }
+            save_options: dict[str, int | bool] = {"optimize": True}
 
             if format_name == "JPEG":
-                save_kwargs["quality"] = 90  # High quality, reasonable size
-                save_kwargs["progressive"] = True
+                save_options["quality"] = 90  # High quality, reasonable size
+                save_options["progressive"] = True
             elif format_name == "PNG":
-                save_kwargs["compress_level"] = 6  # Good compression
+                save_options["compress_level"] = 6  # Good compression
 
-            output_image.save(output_buffer, **save_kwargs)
+            output_image.save(output_buffer, format=format_name, **save_options)
 
             # Get bytes
             clean_bytes = output_buffer.getvalue()

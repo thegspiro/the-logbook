@@ -15,6 +15,7 @@ import { checkRequestService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
+import { AdvancePanel } from '../components/AdvancePanel';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { PromptDialog } from '@/components/ux/PromptDialog';
@@ -203,6 +204,11 @@ const CheckRequestDetailPage: React.FC = () => {
               >
                 {STATUS_LABELS[cr.status] ?? cr.status}
               </span>
+              {cr.isAdvance && (
+                <span className="badge bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
+                  Cash advance
+                </span>
+              )}
             </div>
             <p className="text-theme-text-secondary mt-1 text-sm">{cr.requestNumber}</p>
           </div>
@@ -272,15 +278,19 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
-          <FunctionalClassControl
-            value={cr.functionalClass}
-            effective={cr.effectiveFunctionalClass}
-            subject={cr.requestNumber}
-            onChange={async (next) => {
-              await functionalClassService.setCheckRequest(cr.id, next);
-              await fetchCheckRequest(cr.id);
-            }}
-          />
+          {/* An advance charges no budget line or fund; the expense reports that
+              account for it are classified instead. */}
+          {!cr.isAdvance && (
+            <FunctionalClassControl
+              value={cr.functionalClass}
+              effective={cr.effectiveFunctionalClass}
+              subject={cr.requestNumber}
+              onChange={async (next) => {
+                await functionalClassService.setCheckRequest(cr.id, next);
+                await fetchCheckRequest(cr.id);
+              }}
+            />
+          )}
           <FundNameItem name={cr.fundName} />
           {cr.qbExportedAt && (
             <div>
@@ -332,6 +342,10 @@ const CheckRequestDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {cr.isAdvance && cr.status === CheckRequestStatus.ISSUED && (
+        <AdvancePanel advanceId={cr.id} canManage={access.canManage} />
+      )}
 
       <ManualApprovalPanel
         entityType={ApprovalEntityType.CHECK_REQUEST}

@@ -6,6 +6,8 @@
  */
 
 import type { DocumentFolder } from '../../services/api';
+import type { ConfirmOptions } from '../../contexts/ConfirmContext';
+import { toAppError } from '../../utils/errorHandling';
 
 export type FolderAccess = 'organization' | 'leadership' | 'roles';
 
@@ -59,3 +61,19 @@ export const folderAccessCreatePayload = (
   ...(value.access === 'roles' ? { allowed_roles: value.roles } : {}),
   ...(value.permissions.length > 0 ? { required_permissions: value.permissions } : {}),
 });
+
+/**
+ * LB-DOC-001: the server refused a folder that no active member but a full
+ * administrator could open (decision 29). Not an error to show — a question
+ * to ask, after which the save is sent again with `confirm_admin_only`.
+ */
+export const isAdminOnlyRefusal = (err: unknown): boolean => toAppError(err).code === 'LB-DOC-001';
+
+export const ADMIN_ONLY_CONFIRMATION: ConfirmOptions = {
+  title: 'Only full administrators could open this folder',
+  message:
+    'No active member holds what these settings require — a permission nobody has, a position nobody fills, or a restriction on a folder above it. Save it anyway if it is meant for administrators only.',
+  confirmLabel: 'Save for administrators only',
+  cancelLabel: 'Go back and change it',
+  variant: 'warning',
+};

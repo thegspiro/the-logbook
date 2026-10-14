@@ -82,7 +82,7 @@ async def get_platform_analytics(
         new_users_last_30 = result.scalar() or 0
 
         # Daily login trend (past 30 days)
-        result = await db.execute(
+        login_result = await db.execute(
             select(
                 cast(User.last_login_at, Date).label("login_date"),
                 func.count(User.id),
@@ -95,7 +95,7 @@ async def get_platform_analytics(
             .group_by("login_date")
             .order_by("login_date")
         )
-        login_map = {str(row[0]): row[1] for row in result.all()}
+        login_map = {str(row[0]): row[1] for row in login_result.all()}
 
         # Fill in all 30 days including zeros
         for i in range(30):
@@ -263,7 +263,7 @@ async def get_platform_analytics(
         errors_last_7 = result.scalar() or 0
 
         # Daily error trend (past 7 days)
-        result = await db.execute(
+        error_trend_result = await db.execute(
             select(
                 cast(ErrorLog.created_at, Date).label("error_date"),
                 func.count(ErrorLog.id),
@@ -275,13 +275,13 @@ async def get_platform_analytics(
             .group_by("error_date")
             .order_by("error_date")
         )
-        error_map = {str(row[0]): row[1] for row in result.all()}
+        error_map = {str(row[0]): row[1] for row in error_trend_result.all()}
         for i in range(7):
             day = (seven_days_ago + timedelta(days=i)).strftime("%Y-%m-%d")
             error_trend.append(DailyCount(date=day, count=error_map.get(day, 0)))
 
         # Top error types
-        result = await db.execute(
+        error_type_result = await db.execute(
             select(ErrorLog.error_type, func.count(ErrorLog.id))
             .where(
                 ErrorLog.organization_id == org_id,
@@ -291,7 +291,7 @@ async def get_platform_analytics(
             .order_by(func.count(ErrorLog.id).desc())
             .limit(10)
         )
-        top_error_types = {row[0]: row[1] for row in result.all() if row[0]}
+        top_error_types = {row[0]: row[1] for row in error_type_result.all() if row[0]}
     except Exception as exc:
         logger.warning("platform-analytics: error logs query failed: {}", exc)
 

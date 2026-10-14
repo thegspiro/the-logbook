@@ -931,6 +931,14 @@ def resolve_position(
 # ---------------------------------------------------------------------------
 
 
+def percent_phrase(score: int) -> str:
+    """``"an 85%"`` / ``"a 70%"``: the article follows how the number is read
+    aloud, so eight, eleven and eighteen take "an"."""
+    spoken = str(score)
+    article = "an" if spoken.startswith("8") or spoken in ("11", "18") else "a"
+    return f"{article} {score}%"
+
+
 def match_confidence(
     a_start: datetime,
     a_end: Optional[datetime],
@@ -1116,8 +1124,9 @@ def _group(attendances: List[Attendance], issues: List[Issue]) -> List[ProposedS
                         Issue(
                             code="probable_match",
                             message=(
-                                f"Line {att.seed.line_number} is a {best_score}% "
-                                f"match for the shift starting with line "
+                                f"Line {att.seed.line_number} is "
+                                f"{percent_phrase(best_score)} match for the "
+                                f"shift starting with line "
                                 f"{best.attendances[0].seed.line_number}. Confirm "
                                 "it is the same shift, or keep it separate."
                             ),
@@ -1202,8 +1211,9 @@ def _match_existing(
                     code="probable_existing_match",
                     message=(
                         f"The shift starting with line "
-                        f"{proposed.attendances[0].seed.line_number} is a "
-                        f"{best_score}% match for a shift already on the "
+                        f"{proposed.attendances[0].seed.line_number} is "
+                        f"{percent_phrase(best_score)} match for a shift "
+                        "already on the "
                         "schedule. Add these members to it, or import it as a "
                         "separate shift."
                     ),

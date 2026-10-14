@@ -29,7 +29,19 @@ const createMapping = vi.fn();
 const updateMapping = vi.fn();
 const deleteMapping = vi.fn();
 const listLogs = vi.fn();
-vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+const runExport = vi.fn();
+const setDuesDefaults = vi.fn();
+const setAdvanceAccounts = vi.fn();
+const mockSaveFile = vi.fn();
+vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
+vi.mock('@/utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/dateFormatting')>()),
+  getTodayLocalDate: () => '2026-10-14',
+}));
+vi.mock('@/utils/fileDownload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/fileDownload')>()),
+  saveFile: (...args: unknown[]) => mockSaveFile(...args) as unknown,
+}));
 vi.mock('../services/api', () => ({
   exportMappingService: {
     list: (...args: unknown[]) => listMappings(...args) as unknown,
@@ -38,6 +50,9 @@ vi.mock('../services/api', () => ({
     update: (...args: unknown[]) => updateMapping(...args) as unknown,
     delete: (...args: unknown[]) => deleteMapping(...args) as unknown,
     logs: (...args: unknown[]) => listLogs(...args) as unknown,
+    run: (...args: unknown[]) => runExport(...args) as unknown,
+    setDuesDefaults: (...args: unknown[]) => setDuesDefaults(...args) as unknown,
+    setAdvanceAccounts: (...args: unknown[]) => setAdvanceAccounts(...args) as unknown,
   },
 }));
 
@@ -82,6 +97,18 @@ const report: ExportReadiness = {
       mappingIds: ['map-fuel'],
     },
     {
+      categoryId: 'cat-diesel',
+      categoryName: 'Diesel',
+      isActive: true,
+      status: 'ready',
+      accountName: 'Vehicle Expense:Fuel',
+      accountSource: 'parent',
+      accountInheritedFrom: 'Fuel',
+      offsetAccountName: 'Operating Checking',
+      offsetInheritedFrom: 'Fuel',
+      mappingIds: [],
+    },
+    {
       categoryId: 'cat-gear',
       categoryName: 'Gear',
       isActive: false,
@@ -93,6 +120,34 @@ const report: ExportReadiness = {
     },
   ],
   unmatchedMappingIds: ['map-stray'],
+  dues: {
+    enabled: true,
+    defaultIncomeAccount: 'Dues Income',
+    defaultDepositAccount: null,
+    schedules: [
+      {
+        scheduleId: 'sch-annual',
+        name: 'Annual dues',
+        isActive: true,
+        status: 'no_deposit',
+        incomeAccount: 'Dues Income',
+        incomeSource: 'default',
+        depositAccount: null,
+        depositSource: null,
+      },
+      {
+        scheduleId: 'sch-fines',
+        name: 'Fines',
+        isActive: true,
+        status: 'ready',
+        incomeAccount: 'Fines Income',
+        incomeSource: 'schedule',
+        depositAccount: 'Petty Cash',
+        depositSource: 'schedule',
+      },
+    ],
+  },
+  advances: { status: 'no_cash_account', advancesAccount: 'Employee Advances', cashAccount: null },
 };
 
 const renderPage = () =>
@@ -115,9 +170,21 @@ const rowFor = async (category: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const mock of [listMappings, readiness, createMapping, updateMapping, deleteMapping, listLogs]) {
+  for (const mock of [
+    listMappings,
+    readiness,
+    createMapping,
+    updateMapping,
+    deleteMapping,
+    listLogs,
+    runExport,
+    mockSaveFile,
+    setDuesDefaults,
+    setAdvanceAccounts,
+  ]) {
     mock.mockReset();
   }
+  runExport.mockResolvedValue({ blob: new Blob(['x']), filename: 'quickbooks-journal_2026-09-01_2026-09-30.csv' });
   listMappings.mockResolvedValue([fuelMapping, strayMapping]);
   readiness.mockResolvedValue(report);
   createMapping.mockResolvedValue(fuelMapping);
@@ -136,6 +203,11 @@ describe('QuickBooksExportSettingsPage readiness', () => {
 
     const fuel = await rowFor('Fuel');
     expect(within(fuel).getByText('From its mapping')).toBeInTheDocument();
+
+    // A subcategory with no accounts of its own posts where its parent does.
+    const diesel = await rowFor('Diesel');
+    expect(within(diesel).getAllByText('From Fuel')).toHaveLength(2);
+    expect(within(diesel).getByText('Ready')).toBeInTheDocument();
 
     const gear = await rowFor('Gear');
     expect(within(gear).getByText('No account')).toBeInTheDocument();
@@ -353,5 +425,206 @@ describe('QuickBooksExportSettingsPage export history', () => {
     const history = await screen.findByRole('region', { name: 'Export history' });
     expect(await within(history).findByText('History unavailable')).toBeInTheDocument();
     expect(await rowFor('Fuel')).toBeInTheDocument();
+  });
+});
+
+describe('QuickBooksExportSettingsPage running an export', () => {
+  const panel = () => screen.findByRole('region', { name: 'Run an export' });
+
+  it("offers last month and sends it as the department's whole days", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const section = await panel();
+
+    expect(within(section).getByLabelText('First day')).toHaveValue('2026-09-01');
+    expect(within(section).getByLabelText('Last day')).toHaveValue('2026-09-30');
+    listLogs.mockClear();
+    await user.click(within(section).getByRole('button', { name: /Download QuickBooks file/ }));
+
+    await waitFor(() =>
+      expect(runExport).toHaveBeenCalledWith({
+        dateRangeStart: '2026-09-01T04:00:00.000Z',
+        dateRangeEnd: '2026-10-01T03:59:59.999Z',
+        includeExported: false,
+      })
+    );
+    expect(mockSaveFile).toHaveBeenCalledWith({
+      blob: expect.any(Blob) as Blob,
+      filename: 'quickbooks-journal_2026-09-01_2026-09-30.csv',
+    });
+    expect(toastSuccess).toHaveBeenCalledWith('QuickBooks file downloaded');
+    // The history reloads, so the run just made is listed.
+    await waitFor(() => expect(listLogs).toHaveBeenCalled());
+  });
+
+  it("shows the server's refusal, which names what to fix", async () => {
+    runExport.mockRejectedValue(new Error("Set QuickBooks accounts before exporting: 'Diesel' has no account"));
+    const user = userEvent.setup();
+    renderPage();
+    const section = await panel();
+
+    await user.click(within(section).getByRole('button', { name: /Download QuickBooks file/ }));
+
+    expect(await within(section).findByRole('alert')).toHaveTextContent("'Diesel' has no account");
+    expect(mockSaveFile).not.toHaveBeenCalled();
+  });
+
+  it('confirms before sending payments again, and stops when declined', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const section = await panel();
+
+    await user.click(within(section).getByLabelText('Include payments already sent to QuickBooks'));
+    await user.click(within(section).getByRole('button', { name: /Download QuickBooks file/ }));
+    await user.click(await screen.findByRole('button', { name: 'Leave them out' }));
+
+    expect(runExport).not.toHaveBeenCalled();
+
+    await user.click(within(section).getByRole('button', { name: /Download QuickBooks file/ }));
+    await user.click(await screen.findByRole('button', { name: 'Include them' }));
+
+    await waitFor(() => expect(runExport).toHaveBeenCalledWith(expect.objectContaining({ includeExported: true })));
+  });
+
+  it('refuses a period that ends before it starts, or runs past a year', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const section = await panel();
+    const button = within(section).getByRole('button', { name: /Download QuickBooks file/ });
+
+    const last = within(section).getByLabelText('Last day');
+    await user.clear(last);
+    await user.type(last, '2026-08-01');
+    expect(within(section).getByText('The last day must be on or after the first.')).toBeInTheDocument();
+    expect(button).toBeDisabled();
+
+    await user.clear(last);
+    await user.type(last, '2027-09-30');
+    expect(within(section).getByText(/at most 366 days/)).toBeInTheDocument();
+    expect(button).toBeDisabled();
+  });
+});
+
+describe('QuickBooksExportSettingsPage dues', () => {
+  const section = () => screen.findByRole('region', { name: 'Dues' });
+
+  it("shows each schedule's accounts, where they come from, and whether it exports", async () => {
+    renderPage();
+    const dues = await section();
+
+    const annual = within(dues).getByRole('row', { name: /Annual dues/ });
+    expect(within(annual).getByText('Department default')).toBeInTheDocument();
+    expect(within(annual).getByText('No deposit account')).toBeInTheDocument();
+    const fines = within(dues).getByRole('row', { name: /Fines/ });
+    expect(within(fines).getAllByText('Set on the schedule')).toHaveLength(2);
+    expect(within(fines).getByText('Ready')).toBeInTheDocument();
+    expect(within(dues).getByLabelText('Default income account')).toHaveValue('Dues Income');
+  });
+
+  it('saves the defaults, a blank one as null, and shows the new reading', async () => {
+    setDuesDefaults.mockResolvedValue({
+      defaultIncomeAccount: 'Dues Income',
+      defaultDepositAccount: 'Operating Checking',
+      schedules: [
+        {
+          scheduleId: 'sch-annual',
+          name: 'Annual dues',
+          isActive: true,
+          status: 'ready',
+          incomeAccount: 'Dues Income',
+          incomeSource: 'default',
+          depositAccount: 'Operating Checking',
+          depositSource: 'default',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderPage();
+    const dues = await section();
+
+    await user.type(within(dues).getByLabelText('Default deposited to'), ' Operating Checking ');
+    await user.click(within(dues).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setDuesDefaults).toHaveBeenCalledWith({
+        incomeAccount: 'Dues Income',
+        depositAccount: 'Operating Checking',
+      })
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('Dues accounts saved');
+    expect(await within(dues).findByText('Ready')).toBeInTheDocument();
+  });
+
+  it('says dues are not exported until an account is set', async () => {
+    readiness.mockResolvedValue({
+      ...report,
+      dues: { enabled: false, defaultIncomeAccount: null, defaultDepositAccount: null, schedules: [] },
+    });
+    renderPage();
+    const dues = await section();
+
+    expect(within(dues).getByText(/Dues are not exported yet/)).toBeInTheDocument();
+  });
+
+  it("shows the server's refusal", async () => {
+    setDuesDefaults.mockRejectedValue(new Error("Accounts Payable and Accounts Receivable can't be used"));
+    const user = userEvent.setup();
+    renderPage();
+    const dues = await section();
+
+    await user.clear(within(dues).getByLabelText('Default income account'));
+    await user.click(within(dues).getByRole('button', { name: 'Save' }));
+
+    expect(await within(dues).findByRole('alert')).toHaveTextContent("can't be used");
+    expect(setDuesDefaults).toHaveBeenCalledWith({ incomeAccount: null, depositAccount: null });
+  });
+});
+
+describe('QuickBooksExportSettingsPage cash advances', () => {
+  const section = () => screen.findByRole('region', { name: /Cash advances/ });
+
+  it("shows the server's reading of the accounts", async () => {
+    renderPage();
+    const advances = await section();
+
+    expect(within(advances).getByText('No bank account')).toBeInTheDocument();
+    expect(within(advances).getByLabelText('Advances account')).toHaveValue('Employee Advances');
+    expect(within(advances).getByLabelText('Paid from and returned to')).toHaveValue('');
+  });
+
+  it('saves both accounts, a blank one as null, and shows the new reading', async () => {
+    setAdvanceAccounts.mockResolvedValue({
+      status: 'ready',
+      advancesAccount: 'Employee Advances',
+      cashAccount: 'Operating Checking',
+    });
+    const user = userEvent.setup();
+    renderPage();
+    const advances = await section();
+
+    await user.type(within(advances).getByLabelText('Paid from and returned to'), ' Operating Checking ');
+    await user.click(within(advances).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setAdvanceAccounts).toHaveBeenCalledWith({
+        advancesAccount: 'Employee Advances',
+        cashAccount: 'Operating Checking',
+      })
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('Cash advance accounts saved');
+    expect(await within(advances).findByText('Ready')).toBeInTheDocument();
+  });
+
+  it("shows the server's refusal", async () => {
+    setAdvanceAccounts.mockRejectedValue(new Error("Accounts Payable and Accounts Receivable can't be used"));
+    const user = userEvent.setup();
+    renderPage();
+    const advances = await section();
+
+    await user.clear(within(advances).getByLabelText('Advances account'));
+    await user.click(within(advances).getByRole('button', { name: 'Save' }));
+
+    expect(await within(advances).findByRole('alert')).toHaveTextContent("can't be used");
+    expect(setAdvanceAccounts).toHaveBeenCalledWith({ advancesAccount: null, cashAccount: null });
   });
 });

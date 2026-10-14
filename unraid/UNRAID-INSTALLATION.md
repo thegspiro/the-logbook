@@ -761,7 +761,10 @@ backup without its era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 ### Manual Backup
 
 `backup.sh` is a host-side script (it is not shipped inside the container
-image) — run it from a clone of the repository on the Unraid host:
+image) — run it from a clone of the repository on the Unraid host. If your
+stack runs under the Compose Manager plugin, this script does not reach it; see
+[Stacks run by the Compose Manager plugin](#stacks-run-by-the-compose-manager-plugin)
+for the backup command to use instead.
 
 ```bash
 # Create backup
@@ -832,6 +835,71 @@ It takes a verified database dump first, rebuilds, recreates the containers
 and waits for the backend to report healthy; on a failure it prints the exact
 rollback steps. See [QUICK-START.md](./QUICK-START.md#updating-the-logbook)
 for the manual equivalent.
+
+### Stacks run by the Compose Manager plugin
+
+`update.sh` and `backup.sh` drive the stack defined by the compose file in
+`/mnt/user/appdata/the-logbook`. A stack created in Unraid's Compose Manager
+plugin is defined by the plugin's own file on the flash drive instead, so
+neither script can see it. `update.sh` then stops with "The 'db' service isn't
+running" even though `logbook-db` is up and healthy. Nothing has been changed
+when it stops there.
+
+**Check which one you have** (read-only):
+
+```bash
+docker inspect logbook-backend --format \
+  '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+```
+
+A path under `/boot/config/plugins/compose.manager/projects/` means the plugin
+runs your stack, and the rest of this section applies. A path of
+`/mnt/user/appdata/the-logbook` means the scripts above are the right tools.
+
+**Do not run `docker compose` from `/mnt/user/appdata/the-logbook`** on such an
+install. That folder's compose file is not the one your containers came from,
+and without the stack's `.env` it either fails with "must be set in .env"
+errors or, worse, starts a second, empty stack beside yours.
+
+**Back up before any update** by dumping the running database directly:
+
+```bash
+mkdir -p /mnt/user/backups/the-logbook
+docker exec logbook-db sh -c 'exec mysqldump --single-transaction --routines --triggers -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+  | gzip > /mnt/user/backups/the-logbook/preupdate_$(date +%Y%m%d_%H%M%S).sql.gz
+```
+
+The credentials come from the container's own environment, so no password is
+typed on the command line. Keep `ENCRYPTION_KEY` and `ENCRYPTION_SALT` from the
+plugin's `.env` somewhere off the server as well: a dump cannot be decrypted
+without them.
+
+**Update** from the plugin (**Docker → Compose**, the stack's gear icon). If
+the stack's `compose.yaml` builds from a repository clone (it has `build:`
+entries; `grep -n "context:"` on the file shows where), run `git pull` in that
+clone first, then **Compose Up** so the images are rebuilt. The backend applies
+database migrations when it starts. Confirm they landed:
+
+```bash
+docker exec logbook-backend alembic heads     # must print exactly one revision
+docker exec logbook-backend alembic current   # must show that revision with (head)
+```
+
+**Settings live in the plugin's files, not in this repository.** The compose
+file and `.env` under `/boot/config/plugins/compose.manager/projects/<name>/`
+are the only copies, and pulling the repository never updates them, so a
+setting added upstream has to be added there by hand. A setting reaches the
+backend only if the backend's `environment:` block lists it; adding it to
+`.env` alone does nothing. To set the public address used in email links, for
+example, add this line to that block, indented to match the lines around it:
+
+```yaml
+FRONTEND_URL: https://your-logbook.example.org
+```
+
+[UPGRADING.md](../docs/UPGRADING.md#unraid-compose-manager) shows how to find
+every setting the plugin's file is missing before an upgrade starts requiring
+it.
 
 **Installed from the Community Applications template — once the listing is
 live.** The three methods below pull `ghcr.io/thegspiro/the-logbook`, which is

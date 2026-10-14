@@ -23,13 +23,13 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   AlertTriangle,
   ArrowLeft,
+  CheckCircle2,
   ChevronRight,
   Clock,
   Loader2,
   PackageCheck,
   PackageX,
   Repeat,
-  Save,
   Truck,
   Undo2,
   X,
@@ -45,6 +45,7 @@ import type {
   ReadyLot,
 } from '../../../modules/inventory/types/equipmentCheck';
 import { PromptDialog } from '../../../components/ux';
+import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 import LotsAboardPanel from '../../../modules/inventory/components/LotsAboardPanel';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
@@ -66,6 +67,22 @@ interface ApparatusInventoryPageProps {
   apparatusId?: string;
 }
 
+type InventoryFilter = 'all' | 'expired' | 'restock' | 'expiring';
+
+const isExpiringSoon = (item: ApparatusInventoryItem) => !item.isExpired && (item.daysUntilExpiration ?? 999) <= 30;
+
+/**
+ * Which items each summary chip narrows the list to. The counts on the chips
+ * come from the same predicates, so a chip never promises more rows than it
+ * shows.
+ */
+const FILTER_PREDICATES: Record<InventoryFilter, (item: ApparatusInventoryItem) => boolean> = {
+  all: () => true,
+  expired: (item) => item.isExpired,
+  restock: (item) => item.restockNeeded || item.isShort,
+  expiring: isExpiringSoon,
+};
+
 const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparatusId }) => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -81,8 +98,12 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const [fleet, setFleet] = useState<FleetOption[]>([]);
   const [inventory, setInventory] = useState<ApparatusInventory | null>(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  // Whether the most recent change failed to reach the server, for the status
+  // line: every tap saves on its own, so "saved" is only true while the last
+  // one landed.
+  const [lastChangeFailed, setLastChangeFailed] = useState(false);
+  const [filter, setFilter] = useState<InventoryFilter>('all');
   const [usedTarget, setUsedTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<ApparatusInventoryItem | null>(null);
 
@@ -127,19 +148,17 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
 
   // Named `targetId` rather than `apparatusId` so it cannot be confused with
   // the prop of that name now that this page can be pinned to one rig.
-  const load = useCallback(async (targetId: string): Promise<boolean> => {
+  const load = useCallback(async (targetId: string) => {
     if (!targetId) {
       setInventory(null);
-      return false;
+      return;
     }
     setLoading(true);
     try {
       setInventory(await equipmentCheckService.getApparatusInventory(targetId));
-      return true;
     } catch (err: unknown) {
       setInventory(null);
       toast.error(getErrorMessage(err, 'Failed to load apparatus inventory'));
-      return false;
     } finally {
       setLoading(false);
     }
@@ -150,32 +169,37 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   }, [selectedId, load]);
 
   const selectApparatus = (id: string) => {
+    setFilter('all');
+    setLastChangeFailed(false);
     // Mirrored into the URL so a crew can bookmark their own rig.
     setSearchParams(id ? { apparatus: id } : {}, { replace: true });
   };
 
-  const confirmSaved = async () => {
-    if (!selectedId) return;
-    setSaving(true);
-    const refreshed = await load(selectedId);
-    if (refreshed) toast.success('Inventory changes are saved');
-    setSaving(false);
-  };
-
   const items = useMemo(() => inventory?.compartments.flatMap((c) => c.items) ?? [], [inventory]);
-  const needingRestock = items.filter((i) => i.restockNeeded || i.isShort).length;
+  const needingRestock = items.filter(FILTER_PREDICATES.restock).length;
   // Expired and expiring are counted apart. Lumping them reads as "two items
   // want attention some time soon" when one of them is unusable right now.
-  const expired = items.filter((i) => i.isExpired).length;
-  const expiring = items.filter((i) => !i.isExpired && (i.daysUntilExpiration ?? 999) <= 30).length;
+  const expired = items.filter(FILTER_PREDICATES.expired).length;
+  const expiring = items.filter(FILTER_PREDICATES.expiring).length;
+  // A filter whose chip has gone (the last expired item was swapped out) falls
+  // back to everything rather than leaving an empty list with no way back.
+  const activeFilter: InventoryFilter = filter === 'all' || items.some(FILTER_PREDICATES[filter]) ? filter : 'all';
+  const visibleCompartments = (inventory?.compartments ?? [])
+    .map((compartment) => ({
+      ...compartment,
+      items: compartment.items.filter(FILTER_PREDICATES[activeFilter]),
+    }))
+    .filter((compartment) => compartment.items.length > 0);
 
   const reportUsed = async (item: ApparatusInventoryItem, note: string) => {
     setBusyItemId(item.templateItemId);
     try {
       await equipmentCheckService.reportItemUsed(item.templateItemId, note);
       toast.success('Reported — the supply officer sees this now');
+      setLastChangeFailed(false);
       await load(selectedId);
     } catch (err: unknown) {
+      setLastChangeFailed(true);
       toast.error(getErrorMessage(err, 'Failed to report the item'));
     } finally {
       setBusyItemId(null);
@@ -199,8 +223,10 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
       } else {
         await equipmentCheckService.setItemQuantity(item.templateItemId, current + delta);
       }
+      setLastChangeFailed(false);
       await load(selectedId);
     } catch (err: unknown) {
+      setLastChangeFailed(true);
       toast.error(getErrorMessage(err, 'Failed to update the count'));
     } finally {
       setBusyItemId(null);
@@ -236,8 +262,10 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
     try {
       const updated = await equipmentCheckService.updateDeployedLot(lotsTarget.templateItemId, lotId, changes);
       setLotsTarget(updated);
+      setLastChangeFailed(false);
       await load(selectedId);
     } catch (err: unknown) {
+      setLastChangeFailed(true);
       toast.error(getErrorMessage(err, 'Failed to update the lot'));
     } finally {
       setLotsBusy(false);
@@ -249,8 +277,10 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
     try {
       await equipmentCheckService.clearItemRestock(item.templateItemId);
       toast.success('Restock report withdrawn');
+      setLastChangeFailed(false);
       await load(selectedId);
     } catch (err: unknown) {
+      setLastChangeFailed(true);
       toast.error(getErrorMessage(err, 'Failed to withdraw the report'));
     } finally {
       setBusyItemId(null);
@@ -263,8 +293,10 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
       await equipmentCheckService.swapItemLot(item.templateItemId, lot.id, quantity);
       toast.success('Fresh stock is on the truck');
       setSwapTarget(null);
+      setLastChangeFailed(false);
       await load(selectedId);
     } catch (err: unknown) {
+      setLastChangeFailed(true);
       toast.error(getErrorMessage(err, 'Failed to swap in stock'));
     } finally {
       setBusyItemId(null);
@@ -273,11 +305,13 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
 
   const renderItem = (item: ApparatusInventoryItem) => {
     const busy = busyItemId === item.templateItemId;
-    const expiringSoon = !item.isExpired && (item.daysUntilExpiration ?? 999) <= 30;
+    const expiringSoon = isExpiringSoon(item);
 
     return (
       <li key={item.templateItemId} className="border-theme-surface-border border-t px-3 py-3 first:border-t-0">
-        <div className="flex flex-wrap items-start justify-between gap-2">
+        {/* Stacked on a phone: side by side, the controls took a fixed width
+            and squeezed the name and its details into a column one word wide. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-theme-text-primary text-sm font-medium">{item.itemName}</span>
@@ -327,16 +361,9 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </span>
               )}
             </div>
-            {item.restockNeeded && (
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Reported{item.restockReportedByName ? ` by ${item.restockReportedByName}` : ''}
-                {item.restockReportedAt ? ` · ${formatDateTime(item.restockReportedAt, tz)}` : ''}
-                {item.restockNote ? ` · "${item.restockNote}"` : ''}
-              </p>
-            )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
             {busy && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
             {item.deployedLots.length > 0 ? (
               <button
@@ -425,39 +452,61 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
             )}
           </div>
         </div>
+        {item.restockNeeded && (
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Reported{item.restockReportedByName ? ` by ${item.restockReportedByName}` : ''}
+            {item.restockReportedAt ? ` · ${formatDateTime(item.restockReportedAt, tz)}` : ''}
+            {item.restockNote ? ` · "${item.restockNote}"` : ''}
+          </p>
+        )}
       </li>
     );
   };
 
-  const saveButton = (
-    <button
-      type="button"
-      onClick={() => void confirmSaved()}
-      disabled={!selectedId || loading || saving || busyItemId !== null || lotsBusy}
-      aria-label="Save inventory"
-      className="btn-primary inline-flex shrink-0 items-center gap-2 self-end px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+  // Every tap saves on its own, so there is nothing for a Save button to do;
+  // this says whether the last one landed instead of asking the crew to press
+  // something that only re-read the list.
+  const saving = busyItemId !== null || lotsBusy;
+  const saveStatus = inventory ? (
+    <p
+      role="status"
+      aria-live="polite"
+      className={`flex items-center gap-1.5 text-xs ${
+        saving
+          ? 'text-theme-text-muted'
+          : lastChangeFailed
+            ? 'text-red-700 dark:text-red-400'
+            : 'text-green-700 dark:text-green-400'
+      }`}
     >
       {saving ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Saving…
+        </>
+      ) : lastChangeFailed ? (
+        <>
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Last change didn&apos;t save
+        </>
       ) : (
-        <Save className="h-4 w-4" aria-hidden="true" />
+        <>
+          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> All changes saved
+        </>
       )}
-      {saving ? 'Saving…' : 'Save'}
-    </button>
-  );
+    </p>
+  ) : null;
 
   return (
     <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-6'}>
       {embedded ? (
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 space-y-1">
           <p className="text-theme-text-muted text-sm">
             Record what you used when you use it, and put fresh stock in the bracket. No check required.
           </p>
-          {saveButton}
+          {saveStatus}
         </div>
       ) : (
         <>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="mb-4">
             <div className="flex min-w-0 items-start gap-2">
               <button
                 type="button"
@@ -478,7 +527,6 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </p>
               </div>
             </div>
-            {saveButton}
           </div>
 
           <div className="mb-4">
@@ -499,6 +547,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </option>
               ))}
             </select>
+            <div className="mt-1.5">{saveStatus}</div>
           </div>
         </>
       )}
@@ -518,33 +567,68 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
 
       {!loading && inventory && items.length > 0 && (
         <>
-          <div className="text-theme-text-muted mb-3 flex flex-wrap gap-4 text-sm">
-            <span className="flex items-center gap-1.5">
-              <PackageCheck className="h-4 w-4" /> {items.length} tracked
-            </span>
-            {expired > 0 && (
-              <span className="flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
-                <AlertTriangle className="h-4 w-4" /> {expired} expired
-              </span>
-            )}
-            {needingRestock > 0 && (
-              <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
-                <PackageX className="h-4 w-4" /> {needingRestock} need restock
-              </span>
-            )}
-            {expiring > 0 && (
-              <span className="flex items-center gap-1.5 text-yellow-700 dark:text-yellow-400">
-                <Clock className="h-4 w-4" /> {expiring} expiring
-              </span>
-            )}
-          </div>
+          {/* Chips filter the list: on a phone the expired item is otherwise
+              somewhere down a long scroll, with nothing pointing at it. */}
+          <ScrollCueRow className="mb-3 flex gap-2" data-mobile-scroll-region role="group" aria-label="Filter items">
+            {(
+              [
+                { key: 'all', count: items.length, label: 'tracked', Icon: PackageCheck, tone: '' },
+                {
+                  key: 'expired',
+                  count: expired,
+                  label: 'expired',
+                  Icon: AlertTriangle,
+                  tone: 'text-red-700 dark:text-red-400',
+                },
+                {
+                  key: 'restock',
+                  count: needingRestock,
+                  label: 'need restock',
+                  Icon: PackageX,
+                  tone: 'text-orange-700 dark:text-orange-400',
+                },
+                {
+                  key: 'expiring',
+                  count: expiring,
+                  label: 'expiring',
+                  Icon: Clock,
+                  tone: 'text-yellow-700 dark:text-yellow-400',
+                },
+              ] as const
+            )
+              .filter((chip) => chip.key === 'all' || chip.count > 0)
+              .map(({ key, count, label, Icon, tone }) => {
+                const active = activeFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFilter(active || key === 'all' ? 'all' : key)}
+                    className={`touch-target-phone flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors ${
+                      active
+                        ? 'border-theme-text-primary bg-theme-surface-secondary text-theme-text-primary'
+                        : `border-theme-surface-border ${tone || 'text-theme-text-muted'} hover:bg-theme-surface-hover`
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" /> {count} {label}
+                  </button>
+                );
+              })}
+          </ScrollCueRow>
 
           <div className="space-y-4">
-            {inventory.compartments.map((compartment) => (
-              <section key={compartment.compartmentId} className="card overflow-hidden p-0">
-                <h2 className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary border-b px-3 py-2 text-sm font-semibold">
-                  {compartment.compartmentName}
-                </h2>
+            {visibleCompartments.map((compartment) => (
+              // No overflow-hidden: it would make the card the heading's
+              // scroll container, and the heading could then never stick.
+              <section key={compartment.compartmentId} className="card p-0">
+                {/* Pinned below the fixed mobile header (top-0 from 768px) on
+                    an opaque layer, so the items do not show through it. */}
+                <div className="bg-theme-bg mobile-header-inset sticky z-10 rounded-t-xl md:top-0">
+                  <h2 className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary rounded-t-xl border-b px-3 py-2 text-sm font-semibold">
+                    {compartment.compartmentName}
+                  </h2>
+                </div>
                 <ul>{compartment.items.map(renderItem)}</ul>
               </section>
             ))}

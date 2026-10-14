@@ -255,7 +255,7 @@ administrator has already saved is left as they set it.
 
 A box can ask its own questions before the title and details
 (`suggestion_boxes.intake_questions`, edited in the box modal's **Questions**
-section). The answers are stored on the submission as `intake_answers`,
+section, which follows Name and Description). The answers are stored on the submission as `intake_answers`,
 together with the question labels as they read at the time. Reviewers and the
 submitter both see them.
 

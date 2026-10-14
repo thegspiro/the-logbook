@@ -149,6 +149,15 @@ POST   /api/v1/training/certifications/process-alerts      # Run cert alerts for
 POST   /api/v1/training/certifications/process-alerts/all-orgs  # Run cert alerts for every organization
 ```
 
+**Compliance figures exclude members nothing grades.** A member with no
+applicable requirement is `not_applicable` and is left out of every
+percentage. `GET /training/dashboard-summary` reports `graded_members` and
+`not_applicable_members` beside `compliant_members`, and its
+`compliance_percentage` is `null` when nobody is graded — an empty
+population is not 100%. `GET /training/compliance-matrix` rows carry
+`standing` (`compliant` / `at_risk` / `non_compliant` / `not_applicable`)
+and `completion_pct`, which is `null` for a `not_applicable` member.
+
 ### Training Programs
 
 The router is mounted at `/training/programs`, and program resources sit at
@@ -203,6 +212,98 @@ POST   /api/v1/training/programs/recert/run-due            # Auto-reset every en
 POST   /api/v1/training/programs/apply-training-record     # Apply an approved training record toward a pipeline requirement (training.manage)
 ```
 
+**Progress updates.** `PATCH /progress/{id}` is open to any authenticated
+member for their **own** progress; `training.manage` may update and verify
+anyone's. `RequirementProgressUpdate` accepts `status`, `progress_value`,
+`progress_notes`, `verified_by`, plus:
+
+- `test_score` (0–100) — an officer-entered knowledge/skills score; pass/fail
+  is derived from the requirement's `passing_score`, a pass completes the
+  requirement, and `max_attempts` is enforced.
+- `checklist_done: [step_id, …]` — the **full set** of ticked steps of a
+  `checklist` requirement (sending the whole set keeps the write idempotent).
+  Completion is `ticked / total`.
+- `checklist_claimed: [step_id, …]` — member-reported steps awaiting officer
+  validation; accepted only for steps configured with
+  `member_can_complete: true`.
+
+A gated requirement (see prerequisites below) is refused.
+
+**Checklist steps.** `checklist_items` holds objects —
+`{ "id", "text", "member_visible", "member_can_complete" }` (`text` 1–500
+chars, `member_visible` default `true`, `member_can_complete` default
+`false`). A bare string, an object, or a mix is accepted on input and
+normalized to the object form (`app/schemas/checklist.py`,
+`app/utils/checklist.py`); the `id` is assigned server-side when a step is
+created, and editors send it back so a step keeps its ticks through a rename
+or reorder. String rows normalize on read. A `member_visible: false` step is
+kept off the member's view but **still counts toward the denominator**, so
+the member is told "+N more steps your officer records" rather than seeing
+100% while a background check is outstanding.
+
+**Program and phase fields.** Program create/update accept `code` (≤ 50
+chars), `is_template` and `reminder_conditions`; responses carry `version`.
+Phases carry `requires_manual_advancement` and `prerequisite_phase_ids` —
+phases in the same program that must be **finished** before this one opens
+(distinct from `phase_number`, which is only the order). A prerequisite id
+from another program, a phase listing itself, or a cycle is refused with
+`400`. Both `advance-phase` and automatic advancement honour them;
+`force=true` overrides.
+
+**Requirement links.** `PATCH /programs/{id}/requirements/{pr_id}` accepts
+`is_required`, `is_prerequisite`, `sort_order` (none may be sent as null),
+`phase_id` (move to another phase, or null for program level),
+`program_specific_description`, `custom_deadline_days` and
+`notification_message`. Flipping `is_required` recomputes affected members'
+progress and re-checks phase advancement. A link with
+`is_prerequisite: true` gates the other requirements in its scope (its phase,
+or the program-level pool); `GET /enrollments/{id}` returns
+`locked_requirements: { requirement_id: [blocking requirement names] }` so
+the member's page can grey a step out with the reason. `DELETE` on a phase or
+requirement clears only this program's enrolled members' progress for the
+affected items and recomputes them; the reorder endpoints take an ordered id
+list and renumber in one transaction.
+
+**Deadline reminders.** `reminder_conditions` takes `days_before_deadline`
+(an int or a list of non-negative ints) and `send_if_below_percentage`
+(0–100; members at or above it are not warned). Unset, the schedule is
+`warning_days_before` (default 30) plus 14- and 7-day follow-ups. The weekly
+`enrollment_deadline_warnings` task (Mondays 07:30) reads it per program.
+`milestone_threshold` is accepted and ignored — `ProgramMilestone` rows
+already fire progress-based notifications.
+
+**Enrollment expiry and reopen.** An enrollment past
+`target_completion_date` becomes `expired` **on read** (opening its progress
+transitions it) and in the daily `enrollment_expiry` task (05:15).
+`POST /enrollments/{id}/reopen` takes an optional
+`{ "target_completion_date": "YYYY-MM-DD" }` (omitted keeps the old
+deadline), leaves progress rows untouched and re-runs the rollup, so a member
+who completed the work while expired is marked complete. `404` when the
+enrollment is not in the caller's organization, `400` when it is not in a
+reopenable state.
+
+**Eligibility.** `GET /programs/{id}/eligibility` returns every member with
+`eligible`, `status` and `reason`, eligible first. `enrolled` (already active
+in this program) and `prerequisite` (a prerequisite program not completed)
+set `eligible: false`. `concurrent` — active in another program when this
+program has `allows_concurrent_enrollment: false` — is advisory only
+(`eligible: true` with a reason). Target position/roles are not gated.
+
+**Sample templates.** `GET /sample-templates` lists three built-ins —
+`firefighter-recruit-school`, `emt-recruit-school`,
+`new-member-orientation` — with phase and requirement counts.
+`POST /sample-templates/{key}/instantiate` replays the atomic build into the
+organization; optional body `{ "name": "…", "is_template": true }`.
+
+**Registry import.** `GET /requirements/registries/{name}/preview` lists a
+registry's requirements, each with `registry_code`, `already_imported` and
+its topic-area `sections`. `POST /requirements/import/{name}` accepts
+`{ registry_codes: [...], skip_existing: true }` to import only those codes
+(omit the body, or `registry_codes`, to import everything). Importing a
+requirement that distributes hours across sections creates a training
+category per section and links them; the result reports
+`categories_created`.
+
 ### Training Sessions
 
 ```
@@ -245,6 +346,49 @@ POST   /api/v1/training/cohorts/{id}/members/{user_id}/missed-classes/{class_id}
 DELETE /api/v1/training/cohorts/{id}/members/{user_id}     # Withdraw a member; clears their upcoming RSVPs
 ```
 
+**Syllabus classes.** `class_course_id` is **required** — every class teaches
+a real catalog course, which supplies its credit hours, certification
+settings and categories; title, credit hours and instructor default from it.
+Timing is relative: `day_offset` (days from the cohort start, 0-based), a
+local `start_time` (`"HH:MM"`) and `duration_minutes` (1–1440). A course
+cannot list itself, and a syllabus is capped at 200 classes.
+`POST .../classes/reorder` takes `{ class_ids: [...] }` listing every class
+exactly once and changes `sequence` only, never `day_offset`.
+`POST .../classes/autofill` takes `{ meeting_days: [0–6], start_weekday,
+default_start_time?, default_duration_minutes? }` (0 = Monday) and rewrites
+every `day_offset` in sequence order — `meeting_days: [1, 3]`,
+`start_weekday: 0` gives 1, 3, 8, 10, … Times and durations change only when
+defaults are supplied.
+
+**Preview and generation.** `POST /cohorts/preview` is read-only: every class
+with its resolved UTC `scheduled_start`/`scheduled_end`, per-class `warnings`
+(moved off a weekend or blackout day, archived catalog course, room already
+booked) and `suggested_blackout_dates` (US federal holidays inside the span).
+Times resolve as local wall clock in the organization timezone, so a course
+spanning a DST change keeps its clock time. `POST /cohorts` creates one
+`Event` + one `TrainingSession` per class in one transaction, optionally
+builds a pipeline (`generate_program`), enrolls `member_user_ids` and RSVPs
+them to every class; `classes` carries the preview edits
+(`scheduled_start`/`scheduled_end` overrides, `skip`). A class whose session
+fails (room conflict) is created without an event and reported in
+`warnings`, to be repaired with `/regenerate`, which only fills classes whose
+`event_id` is NULL and can never duplicate one (unique
+`(cohort_id, course_class_id)`).
+
+**Changing a running cohort.** `PATCH /cohorts/{id}/classes/{class_id}` moves
+the class and its event, keeping RSVPs; refused for a cancelled class.
+Cancelling a class **cancels** its event rather than deleting it.
+`POST /cohorts/{id}/shift` takes `{ days, from_sequence? }` — `days` may be
+negative, zero is refused — and moves only classes that have not started;
+cancelled and already-held classes keep their dates. A member added mid-run
+(`POST /cohorts/{id}/members`, `user_ids` 1–200) is RSVP'd only to classes
+still to come; classes already held come back from `missed-classes` for an
+officer to credit (writes a completed record, audited as
+`course_cohort_missed_class_credited`) or to schedule a make-up for that
+member alone. A member who fails the pipeline's eligibility rules is still
+added, with the reason in `warnings`. Withdrawal is soft: the enrollment,
+records and attended classes are kept; upcoming RSVPs are removed.
+
 ### Self-Reported Training (Submissions)
 
 ```
@@ -267,6 +411,24 @@ GET    /api/v1/training/submissions/all                    # All submissions (tr
 POST   /api/v1/training/submissions/{id}/review            # Review submission (approve/reject/request revision) (training.manage)
 POST   /api/v1/training/submissions/{id}/reverse-approval  # Undo an approval (voids record, un-applies credit, reopens) (training.manage)
 ```
+
+**Attachments.** PDF, JPG or PNG, at most 10 MB, type checked by content,
+stored under a server-generated name in the organization's self-reports
+storage area. `with-attachment` sends the certificate with the submission so
+it cannot be skipped. Approval copies the submission's attachment entries onto
+the `TrainingRecord` verbatim, and the record download route accepts the
+self-reports area as well as its own. Only the submitter or a
+`training.manage` holder can read a submission's attachments (`403`
+otherwise); paths are confined to the submission's own organization.
+**Deleting a submission unlinks its files** — safe only because deletion is
+limited to `draft`, `pending_review` and `revision_requested`, never after
+approval, the one state where a record also references the file. If that
+guard is ever widened, the delete must stop unlinking.
+
+`attachment_retention_days` on the config is `null` (keep — the default) or
+90–36500; changing it is audited as
+`self_report_attachment_retention_updated`. `start_time` is stored on the
+submission and the approved record; a row with none reads as blank.
 
 ### Training Waivers
 
@@ -381,6 +543,40 @@ GET    /api/v1/training/skills-testing/summary                # Department-wide 
 > needs is an officer's **validation** before it counts, and that is where the
 > requirement's `max_attempts` is spent; creation still checks the cap so an
 > examiner is refused before running an evaluation that could not count.
+
+**Candidate lookup.** `GET /candidates?q=` exists because examining is open
+to every member while `GET /users` needs `users.view`. It returns
+`[{ id, name }]` only. `q` is required, at least 2 characters;
+whitespace-only is `422`; `LIKE` wildcards are escaped; results are capped at
+**15**; scope is the caller's organization, active, not deleted, matched on
+first + last name or preferred + last name.
+
+**Validation.** Until `validated_at` is set, an official test is a
+submission: it credits no pipeline requirement, spends no attempt and is out
+of the summary's pass rate and average score; the candidate sees it as
+awaiting validation with the outcome withheld. A member cannot examine
+themselves on an official test (`400`). `SkillTestResponse` carries
+`validated_at`, `validated_by`, `validated_by_name` and `pending_validation`;
+`SkillTestListResponse` carries `validated_at` and `pending_validation`;
+`SkillTestingSummaryResponse.pending_validation` is `0` for readers who
+cannot validate. Columns: `skill_tests.validated_at`,
+`skill_tests.validated_by` (`users.id`, `ON DELETE SET NULL`), index
+`idx_skill_test_org_validation` (`organization_id`, `is_practice`,
+`validated_at`).
+
+**Pipeline link.** Templates and tests carry a nullable `requirement_id`,
+validated as a requirement in the caller's organization on template
+create/update and test create/update. A test takes the body's
+`requirement_id`, else inherits the template's. A validated **pass** on a
+non-practice test runs the program progress updater (percentage, completion,
+rollup, phase advancement); a fail, a practice test or a test with no link
+does nothing to the pipeline.
+
+**Listing.** `GET /tests` returns `{ items, total }`, newest first
+(`created_at DESC, id DESC`); `total` counts what the caller may see. The
+list's date filter and the CSV export share one date,
+`COALESCE(completed_at, created_at)`. `GET /templates` is a bare list
+ordered by name (limit default and cap 500).
 
 ### Knowledge Tests
 
@@ -497,6 +693,14 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 ```
 
 Every route here other than `contributed-hours` requires `training.manage`.
+
+**Attestations carry the server's figure.** `POST /compliance/attestations`
+takes `period_type` (`annual` / `quarterly`), `period_year`,
+`period_quarter` (1–4 for quarterly), `notes`, `areas_reviewed` and
+`exceptions` — no percentage; one sent by a client is ignored. The server
+records the department compliance percentage as of the period's last day (or
+today for a running period) with `compliance_as_of`, refuses a period that
+has not started (`400`), and records no figure when nobody is graded.
 
 ---
 

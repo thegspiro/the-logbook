@@ -10,7 +10,8 @@
  * is one the export accepts. This page does not decide readiness, which
  * account wins, or which mappings match a category (CLAUDE.md pitfall #29).
  *
- * Below the mappings, the export history (`GET /finance/export/logs`) lists
+ * Below the mappings, the Run an export panel produces the import file, and
+ * the export history (`GET /finance/export/logs`) lists
  * every export run, so a Treasurer can see what was exported and whether it
  * finished beside the settings that shaped it.
  */
@@ -27,6 +28,9 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { exportMappingService } from '../services/api';
 import { ExportMappingDialog } from '../components/ExportMappingDialog';
 import { ExportHistorySection } from '../components/ExportHistorySection';
+import { RunExportSection } from '../components/RunExportSection';
+import { DuesExportSection } from '../components/DuesExportSection';
+import { AdvanceExportSection } from '../components/AdvanceExportSection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -65,7 +69,11 @@ const AccountCell: React.FC<{ row: ExportReadinessCategory }> = ({ row }) =>
     <>
       {row.accountName}
       <span className="text-theme-text-secondary block text-xs">
-        {row.accountSource === 'category' ? 'Set on the category' : 'From its mapping'}
+        {row.accountSource === 'parent'
+          ? `From ${row.accountInheritedFrom ?? 'its parent category'}`
+          : row.accountSource === 'category'
+            ? 'Set on the category'
+            : 'From its mapping'}
       </span>
     </>
   ) : (
@@ -82,6 +90,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Remounts the history after an export, so the run just made is listed.
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -139,7 +149,11 @@ const QuickBooksExportSettingsPage: React.FC = () => {
             Give each budget category the QuickBooks account it posts to and the account it is paid from
           </p>
         </div>
-        <button type="button" onClick={() => setDialog({ mode: 'create' })} className="btn-primary">
+        <button
+          type="button"
+          onClick={() => setDialog({ mode: 'create' })}
+          className="btn-primary inline-flex items-center gap-2"
+        >
           <Plus className="h-4 w-4" />
           Add mapping
         </button>
@@ -244,6 +258,11 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                         </td>
                         <td data-label="Paid from" className={CELL}>
                           {row.offsetAccountName ?? <span className="text-theme-text-secondary">None</span>}
+                          {row.offsetAccountName && row.offsetInheritedFrom && (
+                            <span className="text-theme-text-secondary block text-xs">
+                              From {row.offsetInheritedFrom}
+                            </span>
+                          )}
                         </td>
                         <td data-label="Status" className={CELL}>
                           <span className={`badge ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</span>
@@ -258,7 +277,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setDialog({ mode: 'edit', mapping: onlyMapping })}
-                              className="btn-secondary"
+                              className="btn-secondary inline-flex items-center gap-2"
                               aria-label={`Edit the mapping for ${row.categoryName}`}
                             >
                               <Pencil className="h-4 w-4" />
@@ -268,7 +287,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setDialog({ mode: 'create', initialCategory: row.categoryName })}
-                              className="btn-secondary"
+                              className="btn-secondary inline-flex items-center gap-2"
                               aria-label={`Add a mapping for ${row.categoryName}`}
                             >
                               <Plus className="h-4 w-4" />
@@ -372,7 +391,23 @@ const QuickBooksExportSettingsPage: React.FC = () => {
         )}
       </section>
 
-      <ExportHistorySection />
+      {readiness?.dues && (
+        <DuesExportSection
+          dues={readiness.dues}
+          onSaved={(dues) => setReadiness((current) => (current ? { ...current, dues } : current))}
+        />
+      )}
+
+      {readiness?.advances && (
+        <AdvanceExportSection
+          advances={readiness.advances}
+          onSaved={(advances) => setReadiness((current) => (current ? { ...current, advances } : current))}
+        />
+      )}
+
+      <RunExportSection onExported={() => setHistoryVersion((v) => v + 1)} />
+
+      <ExportHistorySection key={historyVersion} />
 
       {/* What QuickBooks itself needs before an import (Intuit, "Import journal entries") */}
       <section aria-labelledby="import-checklist-heading" className="card space-y-2 p-6">

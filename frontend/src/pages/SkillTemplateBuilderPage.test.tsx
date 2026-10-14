@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillTemplateBuilderPage from './SkillTemplateBuilderPage';
@@ -644,6 +644,37 @@ describe('SkillTemplateBuilderPage', () => {
     });
   });
 
+  describe('validity period', () => {
+    it('loads the stored period into the field and sends a changed one', async () => {
+      mockRouteId = 'tpl-1';
+      currentMockTemplate = {
+        id: 'tpl-1',
+        name: 'SCBA Donning',
+        visibility: 'all_members',
+        passing_percentage: 80,
+        valid_for_months: 24,
+        require_all_critical: true,
+        tags: [],
+        sections: [
+          { name: 'Donning', sort_order: 0, criteria: [{ label: 'Mask seal', type: 'pass_fail', required: true }] },
+        ],
+      };
+      mockUpdateTemplate.mockResolvedValue(currentMockTemplate);
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      const field = await screen.findByLabelText(/Valid for/);
+      await waitFor(() => {
+        expect(field).toHaveValue(24);
+      });
+      await user.clear(field);
+      await user.type(field, '12');
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      expect(mockUpdateTemplate).toHaveBeenCalledWith('tpl-1', expect.objectContaining({ valid_for_months: 12 }));
+    });
+  });
+
   // An edit is a partial update on the server: an omitted key keeps the
   // stored value, so a cleared pass mark or requirement link must go out as
   // null or new tests keep being graded and credited against the old one.
@@ -658,6 +689,7 @@ describe('SkillTemplateBuilderPage', () => {
         visibility: 'all_members',
         time_limit_seconds: 120,
         passing_percentage: 80,
+        valid_for_months: 24,
         require_all_critical: true,
         requirement_id: 'req-1',
         tags: ['scba', 'ppe'],
@@ -672,7 +704,7 @@ describe('SkillTemplateBuilderPage', () => {
 
       await screen.findByRole('option', { name: 'SCBA Proficiency' });
       await user.clear(screen.getByDisplayValue('Don SCBA in under a minute'));
-      for (const label of ['Category', /Global Time Limit/, 'Passing Percentage (%)', /^Tags/]) {
+      for (const label of ['Category', /Global Time Limit/, 'Passing Percentage (%)', /Valid for/, /^Tags/]) {
         await user.clear(screen.getByLabelText(label));
       }
       await user.selectOptions(screen.getByLabelText(/Linked Training Requirement/), '');
@@ -685,6 +717,7 @@ describe('SkillTemplateBuilderPage', () => {
           category: null,
           time_limit_seconds: null,
           passing_percentage: null,
+          valid_for_months: null,
           requirement_id: null,
           tags: [],
         })

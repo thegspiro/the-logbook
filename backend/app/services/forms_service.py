@@ -17,6 +17,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Sequence,
     Set,
     Tuple,
 )
@@ -822,7 +823,7 @@ class FormsService:
         return forms, total
 
     async def get_submission_counts(
-        self, form_ids: List[UUID], organization_id: UUID | str
+        self, form_ids: Sequence[UUID | str], organization_id: UUID | str
     ) -> Dict[str, int]:
         """Count submissions for several forms in one query.
 

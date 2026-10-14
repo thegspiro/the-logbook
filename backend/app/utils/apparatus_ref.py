@@ -234,14 +234,14 @@ async def resolve_apparatus_display_map(
                 BasicApparatus.organization_id == organization_id,
             )
         )
-        for row in basic_result.scalars().all():
-            found[str(row.id)] = ApparatusDisplay(
-                id=str(row.id),
-                name=row.name,
-                unit_number=row.unit_number,
-                apparatus_type=row.apparatus_type,
-                min_staffing=row.min_staffing,
-                positions=row.positions,
+        for basic in basic_result.scalars().all():
+            found[str(basic.id)] = ApparatusDisplay(
+                id=str(basic.id),
+                name=basic.name,
+                unit_number=basic.unit_number,
+                apparatus_type=basic.apparatus_type,
+                min_staffing=basic.min_staffing,
+                positions=basic.positions,
             )
 
     return found

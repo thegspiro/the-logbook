@@ -90,7 +90,7 @@ const PledgesPage: React.FC = () => {
         <p className="text-theme-text-secondary mt-1 text-sm">Gifts promised and what has come in against them</p>
       </div>
       {canManage && (
-        <button type="button" onClick={() => setDialog({})} className="btn-primary">
+        <button type="button" onClick={() => setDialog({})} className="btn-primary inline-flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Record Pledge
         </button>

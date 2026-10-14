@@ -46,15 +46,15 @@ the organization.
 
 ### Related pages in Inventory
 
-| URL                                                 | Page                                       | Permission                                                                   |
-| --------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| `/inventory/checklists/my`                          | My Checklists (`?shift=<id>`)              | see [Inventory](Module-Inventory#equipment-checklists) |
-| `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory                        | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
-| `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist)    | any of `inventory.check_view`, `inventory.manage`                            |
-| `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder           | `inventory.check_manage`                                                     |
-| `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template              | `inventory.check_manage`                                                     |
-| `/inventory/admin/checklists/reports`               | Equipment Check Reports                    | `inventory.check_view`                                                       |
-| `/inventory/admin/checklists/settings`              | Checklist settings (incl. check-in timing) | see [Inventory](Module-Inventory#equipment-checklists) |
+| URL                                                 | Page                                       | Permission                                                                |
+| --------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------- |
+| `/inventory/checklists/my`                          | My Checklists (`?shift=<id>`)              | see [Inventory](Module-Inventory#equipment-checklists)                    |
+| `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory                        | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist)    | any of `inventory.check_view`, `inventory.manage`                         |
+| `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder           | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template              | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/reports`               | Equipment Check Reports                    | `inventory.check_view`                                                    |
+| `/inventory/admin/checklists/settings`              | Checklist settings (incl. check-in timing) | see [Inventory](Module-Inventory#equipment-checklists)                    |
 
 ---
 
@@ -85,6 +85,16 @@ GET    /summary                         # Counts, incl. active_templates / activ
 GET    /apparatus/{apparatus_id}/active-shift  # Shift currently on an apparatus
 ```
 
+`GET /shifts/open` takes `start_date` (default: the department's today),
+`end_date` (default: 30 days on) and `apparatus_id`. An inverted range or
+one longer than 366 days is a `400`. A member gets the seat-level answer: a
+shift is listed only when one of its unclaimed seats is a position the
+member is cleared for, and shifts the member already holds are left out. A
+holder of `scheduling.manage` gets the department-wide staffing-gap view,
+judged on required seats. Either way at most 500 candidate shifts in the
+window are examined. Every shift response carries its `roster` (seat
+occupants), so a month of shifts arrives with its occupants in one request.
+
 ### Signup, assignments and standing shifts
 
 ```
@@ -108,6 +118,15 @@ DELETE /standing-shifts/{claim_id}      # End a standing claim
 GET    /shifts/{id}/standing-claim      # Caller's claim covering this shift
 ```
 
+A standing shift is a stored recurring claim, not a batch of assignments,
+and it has two readers: creating a claim seats the member on matching
+shifts already on record, and creating a shift (directly or by pattern
+generation) seats every member whose active claim matches it. A claim may
+run at most 366 days. Its `apparatus_id` is verified in-org before it is
+stored, and claims go through the same self-service validation as any other
+signup — eligibility, seat capacity, shift mutability and past dates all
+apply.
+
 ### Eligibility
 
 ```
@@ -117,6 +136,10 @@ GET    /eligibility/roster              # Who Can Fill What (scheduling.manage)
 GET    /eligibility/settings            # Eligibility settings (scheduling.manage)
 PUT    /eligibility/settings            # Update them (scheduling.manage)
 ```
+
+`/eligibility/positions/bulk` answers once for many shifts (the board asks
+once per day rather than once per shift): the expensive half of the answer
+is about the member and is identical across the shifts.
 
 ### Attendance, check-in and pre-shift work
 
@@ -159,6 +182,33 @@ own officer. `POST …/finalize` accepts `reported_call_count`,
 `attach_call_ids` claims a call another unit already logged (listed as
 `attachable_calls` on the close-out GET).
 
+Each step writes real records as it advances, so an interrupted close-out
+resumes rather than restarting. `closeout_step` in the GET response is `0`
+(not started), `1` (attendance saved) or `2` (calls saved); a finalized
+shift reports `0`, and reopening a shift restarts the wizard.
+`attachable_calls` lists calls another unit logged while this shift was on;
+it is populated only for `count_only` call tracking on a shift that is not
+yet finalized.
+
+`PATCH …/closeout/calls` accepts `reported_call_count`,
+`reported_call_types`, `attach_call_ids` and `detach_call_ids` (withdraw an
+earlier claim). An explicit `null` count clears a previously reported
+figure and is distinguished from an omitted field, so a client that only
+attaches calls does not wipe a count it never mentioned.
+`reported_call_types` is keyed by the organization's own type slugs; a
+tally larger than the total is refused, and a shorter tally records the
+remainder as unclassified. `override_incomplete_checks` on finalize is
+audited as `shift_finalized_check_override` (with `override_reason`), and
+finalizing creates draft shift completion reports for trainees on the
+shift.
+
+The detailed call routes (`/shifts/{id}/calls`, `/calls/{id}`) are refused
+with a `400` unless the organization's call tracking is in `detailed` mode;
+a `count_only` department records volume through close-out instead (see
+[Module-Scheduling → Call Volume Without an RMS](Module-Scheduling#call-volume-without-an-rms)).
+`POST /shifts/{id}/calls` requires `scheduling.manage` or being the shift's
+officer, and `incident_type` is required.
+
 ### Templates, patterns and apparatus
 
 ```
@@ -200,6 +250,34 @@ POST   /time-off/{id}/review            # Approve/deny (scheduling.manage; not t
 POST   /time-off/{id}/cancel            # Requester cancels (scheduling.swap)
 ```
 
+Both list routes take `skip` (default 0) and `limit` (default 100,
+max 1000) and a `status` filter; `/swap-requests` also takes `mine=true`
+(only swaps the caller is a participant in) and `/time-off` takes
+`user_id`. Requests are visible to their participants; a requester cannot
+review their own swap or time-off request even holding
+`scheduling.manage`.
+
+`trade-candidates` returns only members who could actually accept: anyone
+already on the shift, on leave or approved time off, not cleared for the
+seat's position, or rostered on a shift that overlaps or abuts this one
+(within an hour) is excluded. Candidates carry the month's shift count and
+whether they owe the offerer a trade, and are ranked least-loaded first.
+Holding no seat on the shift is a `409`, not an empty list.
+
+`respond` is participant acceptance, distinct from manager review (which
+refuses participants). It completes a one-way targeted offer: accepting is
+the offerer withdrawing and the accepter signing up, in one step. Approved
+time off is rechecked at acceptance.
+
+**Two-way exchanges.** `GET /shifts/{id}/exchange-candidates` lists only pairs
+where both members are cleared for the seat they would take, and answers
+`409` when the caller holds no seat on the shift. `POST
+/swap-requests/{id}/review` accepts `override_qualification: true`, which
+waives only the position-qualification check on an exchange; it is noted on
+the request and audited (`shift_exchange_qualification_override`, with the
+reviewer's notes as the reason). Without it, a pair that is no longer
+qualified is refused `400` with code `LB-SCHED-002`.
+
 ### Reports, dashboard, settings, feed and platoons
 
 ```
@@ -219,6 +297,17 @@ POST   /calendar-feed/rotate            # Reset the URL
 GET    /platoons/overview               # Department platoon roster (scheduling.manage)
 POST   /platoons/bulk-assign            # Bulk platoon assignment (scheduling.manage; audited)
 ```
+
+`/dashboard/widgets` takes `start_date`, `end_date` and optional
+`station_id`, `platoon`, `shift_type` and `position`. An inverted window,
+or one whose end is 93 or more days after its start, is a `422`.
+`station_id` and `platoon` are validated against the organization's own
+lists, and an unknown value is a `422` rather than an empty result.
+Preferences are stored per member and per widget, one entry for each of the
+seven tiles (`today_staffing`, `future_coverage_gaps`, `open_slots`,
+`pending_staffing_changes`, `incomplete_closeouts`, `workload_balance`,
+`special_operations`); an unknown widget key on save is a `422`, and a
+saved station or platoon that no longer exists is dropped on read.
 
 ### Shifts with other departments — `/api/v1/scheduling/external-hours`
 
@@ -277,7 +366,7 @@ GET    /trainee/{trainee_id}/stats      # (training.manage)
 GET    /{report_id}                     # Trainee (approved only), filing officer, or training.manage; else 404
 PUT    /{report_id}                     # Update
 POST   /{report_id}/acknowledge         # Trainee acknowledges
-POST   /{report_id}/review              # Approve/flag (training.manage)
+POST   /{report_id}/review              # Approve/flag; redact_fields clears fields before the trainee sees it (training.manage)
 POST   /batch-review                    # Up to 100 reports → {reviewed, failed} (training.manage)
 ```
 
@@ -304,7 +393,37 @@ PUT    /items/{template_item_id}/deployed-lots/{lot_id}  # Correct one lot: coun
 
 GET    /templates/{template_id}/inventory-matches        # Propose a catalog item per unlinked position
 POST   /templates/{template_id}/inventory-links          # Apply a reviewed set of links
+GET    /inventory-link-report                            # Unlinked positions across all checklists, grouped by name
+POST   /inventory-links                                  # Apply links across checklists, all or nothing;
+                                                         #   the response lists skipped_positions
 ```
+
+| Route group                                                             | Accepted permissions                                                     |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `GET /supply/expiring-items`                                            | `inventory.check_view` or `inventory.manage`                             |
+| `GET /supply/item-deployments/…`                                        | `inventory.check_view` or `inventory.view`                               |
+| `GET /apparatus/…/inventory`, `GET …/deployed-lots`                     | `inventory.check_view`, `inventory.check_submit` or `inventory.view`     |
+| `POST …/used`, `PUT …/quantity`, `PUT …/deployed-lots/…`, `POST …/swap` | `inventory.check_submit`, `inventory.check_manage` or `inventory.manage` |
+| `DELETE …/used`                                                         | `inventory.check_manage` or `inventory.manage`                           |
+| Catalog matching and linking                                            | `inventory.check_manage`                                                 |
+
+Submitters (holding neither `inventory.check_manage` nor `inventory.manage`)
+are narrowed rather than shut out: on `PUT …/deployed-lots/{lot_id}` a
+change to a lot's `lot_number` or `expiration_date` is a `403` (a
+quantity-only save, including one that round-trips unchanged values,
+passes); on `POST …/swap` they may deploy only enough stock to fill the
+position's shortfall or replace the expired units aboard, and may not make
+a position's first catalog link.
+
+| Behaviour               | Detail                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derived values**      | A position's count is the sum of its deployed lots; its expiration is the earliest of them                                                                              |
+| **Consumption order**   | First-expiring-first-out; undated lots sort last                                                                                                                        |
+| **Expiry**              | Recomputed server-side from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag force-fails a safety-critical item                           |
+| **Expired shelf stock** | Excluded from ready stock, flagged in the payload, and refused by `POST …/swap` with a `400`                                                                            |
+| **Lot corrections**     | `PUT …/deployed-lots/{lot_id}` requires `quantity`; `lot_number` and `expiration_date` are partial (omitted leaves alone, `null` clears). `quantity: 0` removes the lot |
+| **Match confidence**    | `inventory-matches` returns a `score` and a `confidence` of `exact`, `strong` or `weak`. Only `exact` (identical normalized names) is pre-selected client-side          |
+| **404 vs 400**          | An unknown template, item or lot is a `404`; a business-rule refusal (expired lot, over-draw, cross-org reference) is a `400` via `safe_error_detail()`                 |
 
 The rest of the equipment-check API is documented in the
 [Inventory module](Module-Inventory#equipment-checklists).

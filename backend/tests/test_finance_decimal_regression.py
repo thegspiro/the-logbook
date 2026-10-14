@@ -120,10 +120,11 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     empty.scalars.return_value = []
     db = AsyncMock()
     db.add = MagicMock()
-    # Four counts (purchase requests, check requests, expense lines, voided
-    # checks) precede the stream; the stream then resolves the org's
-    # timezone and pages the one purchase.
-    db.scalar.side_effect = [1, 0, 0, 0]
+    # Seven counts (purchase requests, check requests, expense lines, voided
+    # checks, advance returns, reports settling an advance, new advances)
+    # precede the stream; the stream then resolves the org's timezone and
+    # pages the one purchase.
+    db.scalar.side_effect = [1, 0, 0, 0, 0, 0, 0]
     org = MagicMock()
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
     db.execute.side_effect = [org, purchases]
@@ -132,6 +133,17 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     # Account resolution has its own database-backed tests.
     service._resolve_export_accounts = AsyncMock(
         return_value={"b": ("Supplies", "Checking")}
+    )
+    # Dues are off until the department names a dues account; the dues
+    # export has its own database tests.
+    service._dues_accounts = AsyncMock(return_value={"enabled": False, "schedules": []})
+    # No advances in the period, so their accounts are never needed.
+    service._advance_accounts = AsyncMock(
+        return_value={
+            "status": "no_advances_account",
+            "advances_account": None,
+            "cash_account": None,
+        }
     )
     # The in-progress guard and the stamping have their own database tests.
     log = ExportLog(id="log", status="pending", record_count=0)

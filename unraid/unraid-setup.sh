@@ -214,8 +214,27 @@ setup_repository() {
         # Directory exists and is a git repo - update it
         print_info "Updating existing repository..."
         cd "$INSTALL_DIR"
+        # setup_docker_compose copies the tracked Unraid template over the
+        # tracked docker-compose.yml, so every earlier install leaves that file
+        # modified and `git pull` would refuse to overwrite it. A copy that
+        # still matches the template is our own artifact (and is copied again
+        # after the pull), so restore it; anything else is left for the
+        # operator, and the pull below reports it.
+        if [ -f unraid/docker-compose-unraid.yml ] \
+            && ! git diff --quiet -- docker-compose.yml 2>/dev/null \
+            && cmp -s docker-compose.yml unraid/docker-compose-unraid.yml; then
+            git checkout -- docker-compose.yml
+        fi
         git fetch origin
-        git pull origin main || git pull origin master || print_warning "Could not update from git"
+        # Continuing on a failed pull would rebuild the old code and report it
+        # as updated, after cleanup_containers has already stopped the app.
+        if ! git pull origin main && ! git pull origin master; then
+            print_error "Could not update the repository in $INSTALL_DIR from git."
+            print_error "Nothing was rebuilt. Run 'git status' there to see what is in the way"
+            print_error "(usually local changes to a tracked file), fix it, and run this script again."
+            print_error "To restart the version you had, run: cd $INSTALL_DIR && $COMPOSE up -d"
+            exit 1
+        fi
         print_success "Repository updated"
     else
         # Directory exists but is NOT a git repo - back it up and clone fresh

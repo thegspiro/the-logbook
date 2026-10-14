@@ -10,10 +10,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
+from app.core.error_codes import CodedValueError, ErrorCode
 from app.models.document import DocumentFolder, FolderVisibility, system_folder_fields
-from app.models.user import Organization, Position
+from app.models.user import Organization, Position, user_roles
 from app.services.documents_service import DocumentsService
 
 pytestmark = pytest.mark.integration
@@ -263,3 +264,174 @@ class TestNobodyShutsThemselvesOut:
         # own check.
         renamed = await _update(db_session, org, folder, name="Stores")
         assert renamed.name == "Stores"
+
+
+async def _active_member(db_session, org, *permissions, position_id=None):
+    """A real active member whose permissions come from a position they hold."""
+    if position_id is None:
+        position = Position(
+            organization_id=org.id,
+            name=f"Holder {uuid4().hex[:6]}",
+            slug=f"holder-{uuid4().hex[:8]}",
+            permissions=list(permissions),
+        )
+        db_session.add(position)
+        await db_session.flush()
+        position_id = position.id
+    user_id = str(uuid4())
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, "
+            "last_name, email, password_hash, status) VALUES (:id, :org, :un, "
+            "'Test', 'Member', :em, 'hashed', 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": str(org.id),
+            "un": f"m-{user_id[:8]}",
+            "em": f"m-{user_id[:8]}@example.org",
+        },
+    )
+    await db_session.execute(
+        user_roles.insert().values(user_id=user_id, position_id=position_id)
+    )
+    await db_session.flush()
+    return user_id
+
+
+class TestAFolderNobodyButAdministratorsCanOpen:
+    """Decision 29: such a folder needs confirming; it is not refused outright."""
+
+    async def test_a_permission_nobody_holds_asks_for_confirmation(
+        self, db_session, org
+    ):
+        await _active_member(db_session, org, "documents.view", "inventory.view")
+
+        with pytest.raises(CodedValueError) as refused:
+            await _create(
+                db_session, org, user=ADMIN, required_permissions=["training.manage"]
+            )
+        assert refused.value.error_code == ErrorCode.DOC_FOLDER_ADMIN_ONLY
+
+        folder = await DocumentsService(db_session).create_folder(
+            org.id,
+            {"name": "Admins only", "required_permissions": ["training.manage"]},
+            None,
+            acting_user=ADMIN,
+            confirm_admin_only=True,
+        )
+        assert folder.required_permissions == ["training.manage"]
+
+    async def test_a_permission_someone_holds_saves_without_asking(
+        self, db_session, org
+    ):
+        await _active_member(db_session, org, "documents.view", "inventory.view")
+        folder = await _create(
+            db_session, org, user=ADMIN, required_permissions=["inventory.view"]
+        )
+        assert folder.required_permissions == ["inventory.view"]
+
+    async def test_a_module_wildcard_counts_as_holding(self, db_session, org):
+        await _active_member(db_session, org, "inventory.*")
+        await _create(
+            db_session, org, user=ADMIN, required_permissions=["inventory.manage"]
+        )
+
+    async def test_a_vacant_position_asks_for_confirmation(self, db_session, org):
+        await _active_member(db_session, org, "documents.view")
+        with pytest.raises(CodedValueError):
+            await _create(db_session, org, user=ADMIN, allowed_roles=[QUARTERMASTER])
+
+        await _active_member(db_session, org, position_id=QUARTERMASTER)
+        await _create(db_session, org, user=ADMIN, allowed_roles=[QUARTERMASTER])
+
+    async def test_a_parent_nobody_opens_counts(self, db_session, org):
+        await _active_member(db_session, org, "documents.view")
+        parent = await DocumentsService(db_session).create_folder(
+            org.id,
+            {"name": "Locked", "required_permissions": ["training.manage"]},
+            None,
+            acting_user=ADMIN,
+            confirm_admin_only=True,
+        )
+        with pytest.raises(CodedValueError):
+            await _create(db_session, org, user=ADMIN, parent_id=parent.id)
+
+    async def test_an_update_that_shuts_everyone_out_is_rolled_back(
+        self, db_session, org
+    ):
+        await _active_member(db_session, org, "documents.view", "inventory.view")
+        folder = await _create(
+            db_session, org, user=ADMIN, required_permissions=["inventory.view"]
+        )
+        folder_id = folder.id
+
+        with pytest.raises(CodedValueError):
+            await _update(
+                db_session,
+                org,
+                folder,
+                user=ADMIN,
+                required_permissions=["training.manage"],
+            )
+        stored = (
+            await db_session.execute(
+                select(DocumentFolder).where(DocumentFolder.id == folder_id)
+            )
+        ).scalar_one()
+        assert stored.required_permissions == ["inventory.view"]
+
+    async def test_a_rename_of_an_admin_only_folder_does_not_ask(self, db_session, org):
+        await _active_member(db_session, org, "documents.view")
+        folder = await DocumentsService(db_session).create_folder(
+            org.id,
+            {"name": "Admins", "required_permissions": ["training.manage"]},
+            None,
+            acting_user=ADMIN,
+            confirm_admin_only=True,
+        )
+        renamed = await _update(db_session, org, folder, user=ADMIN, name="Command")
+        assert renamed.name == "Command"
+
+    async def test_a_department_of_administrators_alone_is_not_asked(
+        self, db_session, org
+    ):
+        # A fresh install: the system owner is the only account.
+        await _active_member(db_session, org, "*")
+        await _create(
+            db_session, org, user=ADMIN, required_permissions=["training.manage"]
+        )
+
+    async def test_the_endpoint_returns_the_code_and_honours_the_confirmation(
+        self, db_session, org
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.documents import create_folder
+        from app.schemas.documents import DocumentFolderCreate
+
+        await _active_member(db_session, org, "documents.view")
+        # A real row: the folder records who created it.
+        chief_id = await _active_member(db_session, org, "*")
+        caller = SimpleNamespace(
+            id=chief_id,
+            organization_id=org.id,
+            username="chief",
+            roles=ADMIN.roles,
+            rank=None,
+        )
+        payload = {"name": "Admins", "required_permissions": ["training.manage"]}
+
+        with pytest.raises(HTTPException) as refused:
+            await create_folder(
+                DocumentFolderCreate(**payload), db=db_session, current_user=caller
+            )
+        assert refused.value.status_code == 400
+        assert refused.value.error_code == ErrorCode.DOC_FOLDER_ADMIN_ONLY
+
+        created = await create_folder(
+            DocumentFolderCreate(**payload, confirm_admin_only=True),
+            db=db_session,
+            current_user=caller,
+        )
+        assert created.required_permissions == ["training.manage"]

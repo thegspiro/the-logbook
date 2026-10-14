@@ -127,6 +127,7 @@ from app.models.facilities import (
     FacilityUtilityReading,
 )
 from app.models.finance import (
+    AdvanceReturn,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -138,6 +139,7 @@ from app.models.finance import (
     BudgetAmendment,
     BudgetAmendmentStatus,
     BudgetCategory,
+    BudgetCategoryChargePosition,
     BudgetRequest,
     BudgetRequestStatus,
     CheckRequest,
@@ -738,6 +740,7 @@ __all__ = [
     "FiscalYear",
     "FiscalYearStatus",
     "BudgetCategory",
+    "BudgetCategoryChargePosition",
     "Budget",
     "BudgetAmendment",
     "BudgetAmendmentStatus",
@@ -758,6 +761,7 @@ __all__ = [
     "ExpenseLineItem",
     "ExpenseType",
     "CheckRequest",
+    "AdvanceReturn",
     "CheckRequestStatus",
     "DuesSchedule",
     "DuesFrequency",
