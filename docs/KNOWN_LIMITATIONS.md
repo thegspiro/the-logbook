@@ -1616,6 +1616,33 @@ purpose:
   and functional expense classification (program / management / fundraising)
   have reports of their own (Restricted funds, Functional expenses).
 
+## Finance — Cash Advances: What They Do Not Cover (2026-10-14)
+
+Described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#cash-advances-2026-10-14). Left out
+on purpose, or needing a decision first:
+
+- **Only the requester's own advance.** An advance is paid to the member who
+  asks for it; the finance office cannot raise one on another member's behalf,
+  since the member who owes it, the overdue block and the separation of duties
+  all key on the requester.
+- **Fixed-date method only.** The 120 days run from the check. The IRS's other
+  safe harbor, the periodic statement method (quarterly statements, 120 days
+  from each), is not modelled.
+- **Overdue is flagged, not reported to payroll.** The advances report lists
+  what is overdue; turning it into wages on a W-2 is the treasurer's job, as for
+  late reimbursements on _Outside the accountable plan_.
+- **Not part of the year-end close.** An advance still outstanding at year end
+  is not listed among the year's open items; the advances report is where to
+  look before closing. Returned cash can still be recorded against an advance
+  whose year is locked, since a return moves no budget figure.
+- **Cash from petty cash is still a "check".** Issuing asks for a check number;
+  an advance paid in cash is issued with a reference such as `CASH` in that
+  field.
+- **The advance a report accounts for is fixed on submission.** If a report is
+  later denied, its share is owed again; it is not re-allocated to another
+  report automatically.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import

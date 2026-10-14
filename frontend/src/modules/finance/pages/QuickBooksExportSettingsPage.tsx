@@ -30,6 +30,7 @@ import { ExportMappingDialog } from '../components/ExportMappingDialog';
 import { ExportHistorySection } from '../components/ExportHistorySection';
 import { RunExportSection } from '../components/RunExportSection';
 import { DuesExportSection } from '../components/DuesExportSection';
+import { AdvanceExportSection } from '../components/AdvanceExportSection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -390,6 +391,13 @@ const QuickBooksExportSettingsPage: React.FC = () => {
         <DuesExportSection
           dues={readiness.dues}
           onSaved={(dues) => setReadiness((current) => (current ? { ...current, dues } : current))}
+        />
+      )}
+
+      {readiness?.advances && (
+        <AdvanceExportSection
+          advances={readiness.advances}
+          onSaved={(advances) => setReadiness((current) => (current ? { ...current, advances } : current))}
         />
       )}
 

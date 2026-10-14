@@ -36,6 +36,7 @@ from sqlalchemy.orm import aliased
 
 from app.models.facilities import Facility
 from app.models.finance import (
+    AdvanceReturn,
     Budget,
     BudgetAmendment,
     BudgetAmendmentStatus,
@@ -500,7 +501,7 @@ class FinanceReportService:
                 rows.append(
                     {
                         "paid_on": local_day(cr.check_date),
-                        "kind": "check_request",
+                        "kind": "cash_advance" if cr.is_advance else "check_request",
                         "entity_id": cr.id,
                         "number": cr.request_number,
                         "payee": cr.payee_name,
@@ -554,6 +555,9 @@ class FinanceReportService:
         )
         report_rows = reports.all()
         line_items = await self._line_items([r[0].id for r in report_rows])
+        advance_numbers = await self._request_numbers(
+            org_id, [r[0].advance_id for r in report_rows if r[0].advance_applied]
+        )
         for er, first, last, preferred, username in report_rows:
             if er.paid_at is None:  # excluded by the query; narrows the type
                 continue
@@ -561,6 +565,14 @@ class FinanceReportService:
             line_names = sorted(
                 {labels[i.budget_id] for i in items if i.budget_id in labels}
             )
+            total = _money(sum((i.amount for i in items), ZERO))
+            description = er.title
+            # The cash advance this report accounts for went out when its
+            # check did; only what the member is paid beyond it moves now.
+            covered = _money(er.advance_applied) if er.advance_id else ZERO
+            if covered:
+                number = advance_numbers.get(er.advance_id or "", "")
+                description = f"{er.title} ({covered:,.2f} from advance {number})"
             rows.append(
                 {
                     "paid_on": local_day(er.paid_at),
@@ -568,10 +580,40 @@ class FinanceReportService:
                     "entity_id": er.id,
                     "number": er.report_number,
                     "payee": _name(first, last, preferred, username),
-                    "description": er.title,
+                    "description": description,
                     "budget_line": ", ".join(line_names) or None,
                     "check_number": None,
-                    "amount": _money(sum((i.amount for i in items), ZERO)),
+                    "amount": total - covered,
+                }
+            )
+
+        returns = await self.db.execute(
+            select(AdvanceReturn, CheckRequest.request_number, CheckRequest.payee_name)
+            .join(
+                CheckRequest,
+                and_(
+                    CheckRequest.id == AdvanceReturn.advance_id,
+                    CheckRequest.organization_id == org_id,
+                ),
+            )
+            .where(
+                AdvanceReturn.organization_id == org_id,
+                AdvanceReturn.returned_at >= window.start,
+                AdvanceReturn.returned_at < window.end,
+            )
+        )
+        for entry, number, payee_name in returns.all():
+            rows.append(
+                {
+                    "paid_on": local_day(entry.returned_at),
+                    "kind": "advance_return",
+                    "entity_id": entry.id,
+                    "number": number,
+                    "payee": payee_name,
+                    "description": "Unspent advance returned",
+                    "budget_line": None,
+                    "check_number": None,
+                    "amount": -_money(entry.amount),
                 }
             )
 
@@ -698,9 +740,14 @@ class FinanceReportService:
 
         The same payments as the payments register for the period — paid
         purchase requests, issued checks less the checks voided in it, and
-        paid expense reports line by line — so the two total alike. Each is
-        classified by ``FunctionalClassifier``; one with no class is reported
-        as unclassified, and one with no budget line under no category.
+        paid expense reports line by line — so the two total alike, except
+        for cash advances. An advance is not an expense: it is money the
+        member owes back until a report accounts for it, so its check and any
+        cash returned are left out here, and the report's lines are counted
+        whole when it is paid. The two then differ by the advances paid in the
+        period and not yet accounted for. Each payment is classified by
+        ``FunctionalClassifier``; one with no class is reported as
+        unclassified, and one with no budget line under no category.
         """
         if end < start:
             raise ValueError("The period's end must be on or after its start.")
@@ -757,6 +804,8 @@ class FinanceReportService:
             )
         )
         for cr in checks.scalars():
+            if cr.is_advance:
+                continue
             if (
                 cr.check_date is not None
                 and window.start <= _aware(cr.check_date) < window.end
@@ -892,6 +941,20 @@ class FinanceReportService:
             label = f"{category} ({station_name})" if station_name else category
             labels[budget_id] = f"{label}, {year_name}"
         return labels
+
+    async def _request_numbers(
+        self, org_id: str, check_ids: list[Optional[str]]
+    ) -> dict[str, str]:
+        wanted = sorted({i for i in check_ids if i})
+        if not wanted:
+            return {}
+        result = await self.db.execute(
+            select(CheckRequest.id, CheckRequest.request_number).where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.id.in_(wanted),
+            )
+        )
+        return {cid: number for cid, number in result.all()}
 
     async def _line_items(self, report_ids: list[str]) -> dict[str, list]:
         if not report_ids:

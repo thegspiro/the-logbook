@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**304 tables · 5039 columns · 1018 foreign keys**
+**305 tables · 5054 columns · 1023 foreign keys**
 
 ---
 
@@ -251,6 +251,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`advance_returns`](#advance_returns) | `AdvanceReturn` | 12 | Unspent cash a member handed back against a cash advance. |
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
@@ -258,11 +259,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 12 | Budget category (hierarchical) |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 31 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 32 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 13 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 24 | Expense report submitted by a member for reimbursement |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 26 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
@@ -3672,6 +3673,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Finance
 
+### `advance_returns`
+
+**AdvanceReturn** · `app/models/finance.py`
+
+> Unspent cash a member handed back against a cash advance. Append-only once exported; one recorded by mistake may be deleted until a QuickBooks export has carried it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `advance_id` | VARCHAR(36) | no | FK, IDX |  | → `check_requests.id` ON DELETE CASCADE |
+| `amount` | NUMERIC(12, 2) | no |  |  |  |
+| `returned_at` | DATETIME | no |  |  |  |
+| `payment_method` | VARCHAR(50) | yes |  |  |  |
+| `reference` | VARCHAR(200) | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `qb_exported_at` | DATETIME | yes |  |  |  |
+| `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_advance_returns_advance` (`advance_id`)
+- `ix_advance_returns_org_returned` (`organization_id`, `returned_at`)
+
 ### `approval_chain_steps`
 
 **ApprovalChainStep** · `app/models/finance.py`
@@ -3894,6 +3921,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `budget_id` | VARCHAR(36) | yes | FK |  | → `budgets.id` ON DELETE SET NULL |
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
+| `is_advance` | BOOL | no |  | `0` |  |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
 | `payee_address` | TEXT | yes |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
@@ -4039,6 +4067,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_approved_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
+| `advance_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_requests.id` ON DELETE SET NULL |
+| `advance_applied` | NUMERIC(12, 2) | yes |  |  |  |
 | `submitted_at` | DATETIME | yes |  |  |  |
 | `late_acknowledged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `late_acknowledged_at` | DATETIME | yes |  |  |  |
@@ -4051,6 +4081,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_expense_reports_advance_id` (`advance_id`)
 - `ix_expense_reports_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -10611,7 +10642,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (375 references)
+### → `users` (376 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10620,6 +10651,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `admin_hours_entries` | `approved_by` | RESTRICT | yes |
 | `admin_hours_entries` | `user_id` | CASCADE | no |
 | `admin_hub_metric_preferences` | `user_id` | CASCADE | yes |
+| `advance_returns` | `recorded_by` | SET NULL | yes |
 | `apparatus` | `archived_by` | SET NULL | yes |
 | `apparatus` | `created_by` | SET NULL | yes |
 | `apparatus` | `status_changed_by` | SET NULL | yes |
@@ -10991,13 +11023,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (247 references)
+### → `organizations` (248 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_categories` | `organization_id` | CASCADE | no |
 | `admin_hours_entries` | `organization_id` | CASCADE | no |
 | `admin_hub_metric_preferences` | `organization_id` | CASCADE | no |
+| `advance_returns` | `organization_id` | CASCADE | no |
 | `apparatus` | `organization_id` | CASCADE | no |
 | `apparatus_component_notes` | `organization_id` | CASCADE | no |
 | `apparatus_components` | `organization_id` | CASCADE | no |
@@ -11538,6 +11571,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `election_id` | CASCADE | no |
 | `voting_tokens` | `election_id` | CASCADE | no |
 
+### → `finance_export_logs` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `advance_returns` | `qb_export_log_id` | SET NULL | yes |
+| `check_requests` | `qb_export_log_id` | SET NULL | yes |
+| `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
+| `dues_payments` | `qb_export_log_id` | SET NULL | yes |
+| `expense_reports` | `qb_export_log_id` | SET NULL | yes |
+| `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
+
 ### → `fiscal_years` (6 references)
 
 | From table | Column | On delete | Nullable |
@@ -11579,16 +11623,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `email_template_backups` | `template_id` | SET NULL | yes |
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
-
-### → `finance_export_logs` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_requests` | `qb_export_log_id` | SET NULL | yes |
-| `check_requests` | `qb_void_export_log_id` | SET NULL | yes |
-| `dues_payments` | `qb_export_log_id` | SET NULL | yes |
-| `expense_reports` | `qb_export_log_id` | SET NULL | yes |
-| `purchase_requests` | `qb_export_log_id` | SET NULL | yes |
 
 ### → `membership_pipeline_steps` (5 references)
 
@@ -11807,6 +11841,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
+
+### → `check_requests` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `advance_returns` | `advance_id` | CASCADE | no |
+| `expense_reports` | `advance_id` | SET NULL | yes |
 
 ### → `check_template_items` (2 references)
 

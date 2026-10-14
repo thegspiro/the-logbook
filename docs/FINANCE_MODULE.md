@@ -872,6 +872,83 @@ report's page and the manual panel alike; the emailed-link page needs a tick.
 lists every late line on a report paid in the period — member, incurred and
 submitted dates, days taken, who confirmed it, amount — with a CSV, for payroll.
 
+## Cash advances _(2026-10-14)_
+
+Money handed to a member before an expense — a conference, a supply run — under
+the same accountable plan as reimbursements. The IRS's fixed-date safe harbor
+(Treas. Reg. 1.62-2(g)(2)) gives the member 60 days after the expense to
+substantiate it (the department's existing deadline, above) and **120 days
+after the advance** to return what was not spent; past that the excess is the
+member's wages. `app/services/cash_advances.py` holds the rules.
+
+**An advance is a check request** (owner decision, 2026-10-14) with
+`check_requests.is_advance` set at creation (migration `a39a1999776f`). It goes
+through the same approval chain, dual-approval threshold and **Issue Check**
+step as any check, paid to the member who requested it, and the requester
+separation of duties applies (the requester cannot issue it). It **charges no
+budget line or restricted fund** — nothing has been spent yet — so create and
+edit refuse a `budget_id` or `fund_campaign_id` (400), the functional-class
+endpoint refuses it, and approval and issue move no budget total.
+
+**Accounting for it.** An expense report names the advance it accounts for
+(`expense_reports.advance_id`, `SET NULL`), which must be the submitter's own
+issued advance in the same department (`assert_settleable`, pitfall #14c); it
+can be changed only while the report is a draft. On submission
+`_apply_advance` locks the advance's row, reads its balance through locking
+reads (pitfall #27) and fixes `advance_applied`: the report's total, up to what
+the advance still has outstanding. A report against an advance already fully
+accounted for is refused. The report's lines charge their budget lines when it
+is paid, as any report's do; `advance_applied` of it was already paid to the
+member, and only the rest is reimbursed.
+
+`outstanding = amount − accounted − returned`, where **accounted** is
+`advance_applied` over the linked reports that are submitted, awaiting
+approval, approved or paid — submitting is what substantiates the expense, so
+a report waiting on an approver counts, and a denied or cancelled one stops
+counting and its share is owed again. **Returned** is the `advance_returns`
+the finance office records: `POST /finance/advances/{id}/returns`
+(`finance.manage`; amount, date — not in the future or before the advance —
+method, reference, notes), refused over what is outstanding and for the member
+who owes it, audit-logged `finance.advance_return_recorded`. A return recorded
+by mistake can be removed (`DELETE …/returns/{return_id}`, audit-logged) until
+an export carries it. An advance with a report or return against it cannot be
+voided.
+
+**Overdue.** An issued advance still outstanding 120 days after its check
+(`ADVANCE_RETURN_DAYS`, fixed at the safe harbor, not configurable) is
+**overdue**. While a member has one, submitting another advance is refused
+(400, naming it); ordinary check requests, purchases and reimbursements are
+not blocked (owner decision, 2026-10-14).
+
+**Endpoints.**
+
+| Endpoint                                      | Permission                                            | What                                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /finance/advances?mine&outstanding_only` | `finance.request`, `finance.view` or `finance.manage` | issued advances with amount, accounted, returned, outstanding, `dueAt`, `overdue`; a requester sees only their own                  |
+| `GET /finance/advances/{id}`                  | same                                                  | one advance with its reports (`advanceApplied` of each) and returns; another member's is a 404 to a requester                       |
+| `POST /finance/advances/{id}/returns`         | `finance.manage`                                      | record returned cash                                                                                                                |
+| `DELETE /finance/advances/{id}/returns/{rid}` | `finance.manage`                                      | remove an unexported return                                                                                                         |
+| `GET /finance/reports/advances?format`        | `finance.view`                                        | every advance not yet fully accounted for, oldest first, with the total outstanding and the part overdue; `format=csv` downloads it |
+| `PUT /finance/export/advance-accounts`        | `finance.manage`                                      | the QuickBooks accounts (see QuickBooks Export below)                                                                               |
+
+**Screens.** The check request form has **This is a cash advance to me**,
+which hides the budget and fund, fills the payee with the member's legal name
+and warns while one of their advances is overdue. An issued advance's page
+shows **Accounting for this advance** — the balance, due date, the reports and
+the returns — with **Record returned cash** for the finance office. The expense
+report form offers **Accounts for a cash advance** when the member has an open
+one, and the report's page links back to it. **Finance › Reports › Cash
+advances** lists what is still owed.
+
+**Board reports.** The payments register shows cash as it moved: an advance's
+check as **Cash advance**, a report accounting for one at only what was paid
+beyond it (its description says how much came from which advance), and
+returned cash as a negative **Advance returned** row. Functional expenses
+leave the advance and its returns out and count the report's lines in full
+when it is paid, so the two reports differ by the advances paid and not yet
+accounted for, and for a period with advances in it the register no longer
+totals exactly to the change in budget-vs-actual **Spent**.
+
 ## Board reports _(2026-10-12)_
 
 **Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
@@ -1419,6 +1496,7 @@ Export format:
 - **CSV — QuickBooks Online journal-entry import** _(2026-10-08)_. Columns `Journal No, Journal Date, Memo, Account Name, Debits, Credits, Description`, the names the QuickBooks Online **Journal Entries** importer maps by. Every transaction is a balanced entry: a debit to its budget category's account and an equal credit to the offset account it was paid from, both under the transaction's request number (`PR-…`, `CR-…`, `ER-…`, unique across types). An expense report is one entry with a pair of lines per line item, each charged to its own budget line. Paid purchase requests, issued check requests, paid expense reports and, _(2026-10-14)_, dues payments are exported.
   - **Accounts.** The debit account is the category's `qb_account_name`, or else the account on the export mapping whose `internal_category` matches the category name (trimmed, case-insensitive). The credit account is that mapping's `qb_offset_account_name`. Subaccounts are written `Parent:Child`, the way QuickBooks expects them.
   - **Dues payments** _(2026-10-14, migration `0d32069fea4d`)_. Each `DuesPayment` received in the period is one entry, Journal No `DUES-<first 8 of its id>`, dated the day it was received, memo `Dues: <schedule>`, description the member's name with the payment method and reference: a debit to the **deposit** account and a credit to the **income** account. `dues_schedules.qb_income_account` / `qb_deposit_account` name a schedule's own; a blank one takes the department's default, kept in the organization settings' `finance` section (`qb_dues_income_account`, `qb_dues_deposit_account`) and set by `PUT /finance/export/dues-accounts` (`finance.manage`, audit-logged `finance.dues_export_accounts_set`; the write deep-copies the settings, pitfall #12). **Off until set up**: while the department has no dues account anywhere (no default and no schedule naming one), dues payments are left out of the export as they were before this change, so an upgrade does not refuse every export of a department that books its dues another way (readiness `dues.enabled`). Once one is set, a schedule with payments in the period but no usable account adds "dues '<name>' has no income account" (or deposit, or payable/receivable) to the export's refusal; a schedule with none in the period does not block it. Payments are append-only, so there is nothing to reverse. `dues_payments.qb_exported_at` / `qb_export_log_id` mark what a complete export carried, as for the other payments, and `includeExported` resends them. Readiness carries `dues` — the defaults and each schedule's accounts, their source (`schedule` or `default`) and status.
+  - **Cash advances** _(2026-10-14, migration `a39a1999776f`)_. Two department accounts in the `finance` settings section, `qb_advances_account` (the asset account an advance is owed on, e.g. _Employee Advances_) and `qb_advances_cash_account` (the bank it is paid from and returned to), set by `PUT /finance/export/advance-accounts` (`finance.manage`, audit-logged `finance.advance_export_accounts_set`, deep-copied). An advance's check debits the advances account and credits the bank, and those accounts are stored on it like any exported check's, so a void reverses exactly that. A report accounting for an advance debits each line's expense account as usual, but its lines are credited to the **advances account** up to `advance_applied`, in line order, and the rest to the line's offset as before; the line the advance runs out on is split, so the entry has one extra row (counted against the 1,000-row limit). Returned cash is its own entry, Journal No `ADVR-<first 8 of its id>`, memo `Advance returned: <advance number>`: a debit to the bank and a credit to the advances account; `advance_returns.qb_exported_at` / `qb_export_log_id` send it once. An export carrying any of these with either account blank (or on A/P or A/R) is refused, in the same message as missing category or dues accounts; a department with no advances never needs them. Readiness carries `advances` (`status`, `advancesAccount`, `cashAccount`).
   - **A subcategory inherits** _(2026-10-14)_. Whichever of the two accounts a category lacks comes from its nearest ancestor that has it (`_resolve_category_accounts`), so mapping Operations covers Turnout gear under it unless Turnout gear says otherwise; each account is inherited separately, so a subcategory naming its own expense account still takes its parent's paid-from account. A category with more than one mapping inherits nothing (it is `duplicate_mappings` until the treasurer picks one), and the walk stops after 20 levels, so a hand-written cycle cannot loop. Readiness and the export run the same resolver.
   - **Refusal.** If any transaction in the range has no budget line, or its category has no account, no offset account, more than one matching mapping, or an account the import cannot post to (below), the export is refused with a 400 naming the problems. Nothing is logged and no file is produced. A partial file would leave the books silently short, which is worse than no file.
   - **Intuit's import rules** _(checked against Intuit's "Import journal entries" help, 2026-10-09)_:

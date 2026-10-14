@@ -48,6 +48,14 @@ of these defaults.
     rules above these are bookkeeping, not a control, so the finance office
     sets them (``PUT /finance/export/dues-accounts``, ``finance.manage``) beside
     the rest of the QuickBooks accounts. Absent or blank is no default.
+
+``qb_advances_account`` and ``qb_advances_cash_account``
+    Where cash advances post (``app/services/cash_advances.py``): the asset
+    account an advance is owed to the department on until it is accounted
+    for, and the bank account it is paid from and returned to. Set the same
+    way as the dues accounts (``PUT /finance/export/advance-accounts``). An
+    export carrying an advance, a report that settles one or a return is
+    refused while either is blank.
 """
 
 from dataclasses import dataclass
@@ -76,6 +84,8 @@ FUND_OVERSPEND_MODES = (FUND_OVERSPEND_OFF, FUND_OVERSPEND_WARN, FUND_OVERSPEND_
 
 QB_DUES_INCOME_KEY = "qb_dues_income_account"
 QB_DUES_DEPOSIT_KEY = "qb_dues_deposit_account"
+QB_ADVANCES_KEY = "qb_advances_account"
+QB_ADVANCES_CASH_KEY = "qb_advances_cash_account"
 
 # The IRS safe harbor for substantiating an expense "within a reasonable time"
 # under an accountable plan (Treas. Reg. 1.62-2(g)(2)).
@@ -140,15 +150,27 @@ async def load_finance_settings(
     return finance_settings_in(result.scalar_one_or_none())
 
 
-def dues_default_accounts(settings: Any) -> tuple[str, str]:
-    """The department's default ``(income, deposit)`` QuickBooks accounts for
-    dues, blank where unset."""
+def _qb_accounts(settings: Any, *keys: str) -> tuple[str, ...]:
     section = settings.get(FINANCE_SETTINGS_KEY) if isinstance(settings, dict) else None
     if not isinstance(section, dict):
-        return "", ""
+        return tuple("" for _ in keys)
 
     def read(key: str) -> str:
         value = section.get(key)
         return value.strip() if isinstance(value, str) else ""
 
-    return read(QB_DUES_INCOME_KEY), read(QB_DUES_DEPOSIT_KEY)
+    return tuple(read(key) for key in keys)
+
+
+def dues_default_accounts(settings: Any) -> tuple[str, str]:
+    """The department's default ``(income, deposit)`` QuickBooks accounts for
+    dues, blank where unset."""
+    income, deposit = _qb_accounts(settings, QB_DUES_INCOME_KEY, QB_DUES_DEPOSIT_KEY)
+    return income, deposit
+
+
+def advance_accounts(settings: Any) -> tuple[str, str]:
+    """The department's ``(advances, cash)`` QuickBooks accounts for cash
+    advances, blank where unset."""
+    advances, cash = _qb_accounts(settings, QB_ADVANCES_KEY, QB_ADVANCES_CASH_KEY)
+    return advances, cash

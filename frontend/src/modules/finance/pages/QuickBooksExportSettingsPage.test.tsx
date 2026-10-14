@@ -31,6 +31,7 @@ const deleteMapping = vi.fn();
 const listLogs = vi.fn();
 const runExport = vi.fn();
 const setDuesDefaults = vi.fn();
+const setAdvanceAccounts = vi.fn();
 const mockSaveFile = vi.fn();
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 vi.mock('@/utils/dateFormatting', async (importOriginal) => ({
@@ -51,6 +52,7 @@ vi.mock('../services/api', () => ({
     logs: (...args: unknown[]) => listLogs(...args) as unknown,
     run: (...args: unknown[]) => runExport(...args) as unknown,
     setDuesDefaults: (...args: unknown[]) => setDuesDefaults(...args) as unknown,
+    setAdvanceAccounts: (...args: unknown[]) => setAdvanceAccounts(...args) as unknown,
   },
 }));
 
@@ -145,6 +147,7 @@ const report: ExportReadiness = {
       },
     ],
   },
+  advances: { status: 'no_cash_account', advancesAccount: 'Employee Advances', cashAccount: null },
 };
 
 const renderPage = () =>
@@ -177,6 +180,7 @@ beforeEach(() => {
     runExport,
     mockSaveFile,
     setDuesDefaults,
+    setAdvanceAccounts,
   ]) {
     mock.mockReset();
   }
@@ -573,5 +577,54 @@ describe('QuickBooksExportSettingsPage dues', () => {
 
     expect(await within(dues).findByRole('alert')).toHaveTextContent("can't be used");
     expect(setDuesDefaults).toHaveBeenCalledWith({ incomeAccount: null, depositAccount: null });
+  });
+});
+
+describe('QuickBooksExportSettingsPage cash advances', () => {
+  const section = () => screen.findByRole('region', { name: /Cash advances/ });
+
+  it("shows the server's reading of the accounts", async () => {
+    renderPage();
+    const advances = await section();
+
+    expect(within(advances).getByText('No bank account')).toBeInTheDocument();
+    expect(within(advances).getByLabelText('Advances account')).toHaveValue('Employee Advances');
+    expect(within(advances).getByLabelText('Paid from and returned to')).toHaveValue('');
+  });
+
+  it('saves both accounts, a blank one as null, and shows the new reading', async () => {
+    setAdvanceAccounts.mockResolvedValue({
+      status: 'ready',
+      advancesAccount: 'Employee Advances',
+      cashAccount: 'Operating Checking',
+    });
+    const user = userEvent.setup();
+    renderPage();
+    const advances = await section();
+
+    await user.type(within(advances).getByLabelText('Paid from and returned to'), ' Operating Checking ');
+    await user.click(within(advances).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setAdvanceAccounts).toHaveBeenCalledWith({
+        advancesAccount: 'Employee Advances',
+        cashAccount: 'Operating Checking',
+      })
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('Cash advance accounts saved');
+    expect(await within(advances).findByText('Ready')).toBeInTheDocument();
+  });
+
+  it("shows the server's refusal", async () => {
+    setAdvanceAccounts.mockRejectedValue(new Error("Accounts Payable and Accounts Receivable can't be used"));
+    const user = userEvent.setup();
+    renderPage();
+    const advances = await section();
+
+    await user.clear(within(advances).getByLabelText('Advances account'));
+    await user.click(within(advances).getByRole('button', { name: 'Save' }));
+
+    expect(await within(advances).findByRole('alert')).toHaveTextContent("can't be used");
+    expect(setAdvanceAccounts).toHaveBeenCalledWith({ advancesAccount: null, cashAccount: null });
   });
 });
