@@ -94,7 +94,7 @@ screenshots that still show the old ones.
 | Topic                                                                       | Now in                                                                                                         |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | "Today" and printed times follow the department's timezone                  | [08 — Admin & Reports](./08-admin-reports.md) (The Department's Timezone Is the Clock)                         |
-| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md) (Choose your own bottom-bar tabs)                                      |
+| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md#choosing-your-bottom-bar-tabs)                                          |
 | Seven password rules; sign-in countdown; "My Account"                       | [00 — Getting Started](./00-getting-started.md)                                                                |
 | Member numbers: one field, patterns, never reissued; Rank in the directory  | [01 — Membership](./01-membership.md)                                                                          |
 | Anonymizing a former member; length of service across a break               | [01 — Membership](./01-membership.md)                                                                          |

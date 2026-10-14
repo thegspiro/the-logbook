@@ -3804,7 +3804,7 @@ _[Administrator holding security.manage at `/ip-security`: the Pending Requests 
   (migration `8464e9962f76`; members who never choose keep the defaults). The
   **Settings** tab opens the member's own **My Account**, not Organization
   Settings, which most members cannot open. See
-  [Mobile & PWA](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
+  [Mobile & PWA](./10-mobile-pwa.md#choosing-your-bottom-bar-tabs).
 - **Settings screens on phones** _(2026-10-04)_ lose a layer of side padding,
   so long setting labels no longer wrap one word per line.
 - **Selected toggle buttons are primary red** _(2026-10-04)_ on the eight

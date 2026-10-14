@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Moved out of 10-mobile-pwa.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `10-13-mobile-header-menu.png` | **REPLACE** | The phone top bar has no menu button: it shows the department logo and name only, and **More** on the bottom bar opens the menu. The alt text still describes a menu button at the left edge |
+| `10-12-mobile-bottom-nav.png` | **CHECK** | If the frame shows an administrator's bar with a **Settings** tab, that tab opens My Account; the frame itself is unchanged unless it predates the centre **Add** button |
+| `10-15-mobile-menu-notifications.png` | **CHECK** | The menu is opened from **More** on the bottom bar, not a header button; replace if the frame shows a ☰ in the top bar |
+| Any phone capture of a settings screen | **REPLACE** | Settings screens show their sections as a sideways-scrolling row across the top; the sidebar idiom they show no longer exists |
+| Any Administration hub frame taken before 2026-10-05 (including `10-06-mobile-inventory-admin.png`) | **REPLACE** | Shows the doubled side margin; on a phone a hub's sections are now a chip row with an edge fade and arrow |
+| Phone and tablet shots of Settings, Training Setup, compliance rules, event roster and the Members Admin / Admin Hours / Eligibility Roster / Supply Expiring / My Checklists / Check Log / Compliance Requirements / Elections filters | **CHECK** | Taken before the 2026-10-03/04 layout pass (16px gutter, 44px roster controls, red selected state, shared card border) |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of
