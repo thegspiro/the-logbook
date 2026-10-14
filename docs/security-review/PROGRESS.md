@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None currently open.** PR #3204 (Feature 00, Cross-cutting baseline, pass 9) merged 2026-10-14T08:39:59Z — a docs-only merge (that PR's own review
+file plus the rotation-table reset below), nothing else to record. Verified
+directly against GitHub (listed open PRs and searched
+`head:claude/security-review-`, both empty) rather than trusted from this
+row, per Step 0. This row is updated with this iteration's own PR (Feature
+01, Auth & session lifecycle) as a second commit once that PR is opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 9, PR #3204, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3204](https://github.com/thegspiro/the-logbook/pull/3204)**: branch
 `claude/security-review-cross-cutting-baseline`, Feature 00 (Cross-cutting
 baseline), pass 9. PR #3195 (Feature 14, Equipment check & shifts, pass 8)
@@ -29,6 +39,8 @@ merge, every class re-verified clean; the standing outbound-URL
 DNS-rebinding TOCTOU item re-confirmed open, unchanged. See
 `SEC-00-cross-cutting-baseline.md`'s **Pass 9** section. Row 00 stays ✅
 (pending this PR's merge); next is Feature 01 (Auth & session lifecycle).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 8, PR #3195, merged 2026-10-14), preserved for history</summary>
@@ -18969,7 +18981,7 @@ here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -19010,6 +19022,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — PR #3204 merge recorded (docs-only); Feature 01 (Auth & session lifecycle, pass 9, watchdog pickup) — 0 fixed, 0 new findings
+
+**Step 0.** Watchdog pickup — the `/security-review` loop appeared stalled
+(no activity for over an hour). Verified directly against GitHub (listed
+open PRs and searched `head:claude/security-review-`, both empty) that no
+`claude/security-review-*` PR was open. PR #3204 (Feature 00, Cross-cutting
+baseline, pass 9) had merged 2026-10-14T08:39:59Z since the last iteration —
+a docs-only merge (its own review file plus the rotation-table reset to ⬜
+for pass 8, already reflected in the table above), so nothing further to
+record beyond clearing the Open PR row. That clear rides along in this
+iteration's own commit rather than getting a PR of its own, per the
+"docs-only PR is not a recordable event" rule.
+
+**Step 1.** Row 01 (Auth & session lifecycle) was the next `⬜`.
+
+**Review.** Loaded `CHECKLIST.md` and `AUTH-01-auth-session.md`'s existing
+8 passes before reading any code. Baseline `89ea4d6a` (PR #3096's merge,
+pass 8) to head `7837b780` — 357 commits, 198 non-merge. Of the twelve
+files this feature tracks, only three had any diff — `auth.py` (+5/-2),
+`auth_service.py` (+4/-3), `apiClient.ts` (+19/-2) — all three from
+unrelated mypy/UX fixes already merged via other tracks, each reviewed
+directly and confirmed benign (one is a fail-closed hardening of
+`_verify_and_consume_totp` against a `None` MFA secret; one narrows a
+concurrency guard's failure mode from silent-zero to raise; one scopes an
+existing 503-retry to transient codes only). Route inventory
+re-enumerated in full: 28 routes, 16 public / 12 private, unchanged from
+pass 8, every gate and permission string re-read fresh. The three standing
+items (AUTH-15, AUTH-17, AUTH-21) were already closed at pass 8 and remain
+closed — re-confirmed, not re-derived. 0 fixed, 0 flagged. Full detail:
+`AUTH-01-auth-session.md`'s **Pass 9** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/` (CI's pinned 7.3.0/26.5.1/9.0.1);
+`validate_migrations.py --strict` passed (591 revisions, single head
+`a17a47c5a871`); `check_route_permissions.py --strict` passed (269 routes,
+0 errors/warnings); scoped backend tests 997 passed, 2 skipped
+(environment-only); the 10-file standing-guard suite 118 passed;
+`npm run typecheck` 0 errors; `npm run lint` 0 errors, 0 warnings.
+
+Row 01 → ✅ (pending PR merge). Next: Feature 02 (Permissions & roles).
 
 ### 2026-10-14 — Pass 7 complete; rotation reset to ⬜ for pass 8; PR #3195 merge recorded; Feature 00 (Cross-cutting baseline, pass 9) — 0 fixed, 0 new findings
 
