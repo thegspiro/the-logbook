@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Moved out of 04-events-meetings.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged. The notes it carried are kept here, unchanged in substance.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `04-02-event-detail.png` | **REPLACE** | Taken as an administrator, the page changed twice: the details card gained an **Organized by** row with a **Transfer event** link (2026-10-03), and every card on the page now carries the shared bordered `card` treatment instead of the borderless surface (2026-10-04). Re-shoot an upcoming event with RSVP open so the RSVP controls, the Organized by row and the bordered cards are in frame |
+| `04-04-event-qr-code.png` | **REPLACE** | The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame |
+| `04-05-create-event.png` | **REPLACE** | The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form |
+| `04-35-recurring-event-form.png` | **REPLACE** | The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date |
+| `04-08-event-analytics.png` | **REPLACE** | The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range. The page title is **Attendance Trends** and it has four summary cards |
+| `04-09-event-templates.png` | **REPLACE** | The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list |
+| `04-14-meeting-minutes.png` | **REPLACE** | The `/minutes` page changed on 2026-09-29 and 2026-10-03: the subtitle reads "Record meetings, write up their minutes, and track action items", the first tile is **Total Meetings**, the search box reads "Search by title, agenda, or notes...", dates read "Thu, Oct 1, 2026 at 7:00 PM", and each meeting card lists its minutes as links with their state. Re-shoot with at least one meeting that has approved minutes and one awaiting approval |
+| `04-38-rolling-recurrence.png` | **REPLACE** | The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block |
+| `04-39-delete-event-series.png` | **REPLACE** | The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of
