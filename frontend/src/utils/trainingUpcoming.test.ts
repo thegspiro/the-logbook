@@ -139,6 +139,65 @@ describe('buildUpcomingItems', () => {
     expect(items[0]).toMatchObject({ urgency: 'overdue', detail: 'Certification expired' });
   });
 
+  describe('skills tests', () => {
+    const skill = (overrides: Partial<NonNullable<MyTrainingSummary['skill_test_expirations']>[number]> = {}) => ({
+      id: 'st-1',
+      template_id: 'tpl-1',
+      template_name: 'SCBA Donning',
+      passed_on: '2025-12-01',
+      expiration_date: '2026-12-01',
+      days_until_expiry: 49,
+      ...overrides,
+    });
+
+    it('lists a pass that lapses inside the look-ahead, as due soon', () => {
+      const items = buildUpcomingItems(summary({ skill_test_expirations: [skill()] }), TODAY);
+      expect(items).toEqual([
+        expect.objectContaining({
+          key: 'skill-st-1',
+          kind: 'skill',
+          title: 'SCBA Donning',
+          detail: 'Skills test expires',
+          date: '2026-12-01',
+          days: 49,
+          urgency: 'soon',
+        }),
+      ]);
+    });
+
+    it('leaves out a pass that lapses beyond the look-ahead', () => {
+      const far = skill({ days_until_expiry: UPCOMING_WINDOW_DAYS + 1 });
+      expect(buildUpcomingItems(summary({ skill_test_expirations: [far] }), TODAY)).toEqual([]);
+    });
+
+    it('shows a lapsed pass as overdue', () => {
+      const lapsed = skill({ expiration_date: '2026-09-01', days_until_expiry: -42 });
+      const items = buildUpcomingItems(summary({ skill_test_expirations: [lapsed] }), TODAY);
+      expect(items[0]).toMatchObject({ urgency: 'overdue', detail: 'Skills test expired' });
+    });
+
+    it('sorts among certifications and requirements by days', () => {
+      const items = buildUpcomingItems(
+        summary({
+          certifications: [
+            { id: 'c', course_name: 'EMT-B', expiration_date: '2026-12-20', is_expired: false, days_until_expiry: 68 },
+          ],
+          skill_test_expirations: [skill({ days_until_expiry: 49 })],
+        }),
+        TODAY
+      );
+      expect(items.map((i) => i.kind)).toEqual(['skill', 'certification']);
+    });
+
+    it('is left out when the department does not offer skills testing', () => {
+      expect(buildUpcomingItems(summary({ skill_test_expirations: [skill()] }), TODAY, false)).toEqual([]);
+    });
+
+    it('copes with a server that does not send the list', () => {
+      expect(buildUpcomingItems(summary(), TODAY)).toEqual([]);
+    });
+  });
+
   it('folds a certification requirement into the certification row of the same name', () => {
     const items = buildUpcomingItems(
       summary({

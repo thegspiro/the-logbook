@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { AlertTriangle, Award, CalendarClock, CalendarPlus, CheckCircle2, Clock } from 'lucide-react';
+import { AlertTriangle, Award, CalendarClock, CalendarPlus, CheckCircle2, ClipboardCheck, Clock } from 'lucide-react';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { UPCOMING_WINDOW_DAYS, type UpcomingItem, type UpcomingUrgency } from '../../utils/trainingUpcoming';
 
@@ -24,6 +24,7 @@ const BORDER: Record<UpcomingUrgency, string> = {
 const ICON_FOR = (item: UpcomingItem): React.ElementType => {
   if (item.urgency === 'overdue') return AlertTriangle;
   if (item.kind === 'certification') return Award;
+  if (item.kind === 'skill') return ClipboardCheck;
   if (item.kind === 'window') return CalendarPlus;
   return item.urgency === 'soon' ? Clock : CalendarClock;
 };
@@ -35,10 +36,11 @@ const describe = (item: UpcomingItem): string => {
   if (item.kind === 'window') {
     return days <= 0 ? `Open since ${date}` : `Opens ${date} · ${days} ${days === 1 ? 'day' : 'days'}`;
   }
-  const verb = item.kind === 'certification' ? 'Expires' : 'Due';
+  const lapses = item.kind === 'certification' || item.kind === 'skill';
+  const verb = lapses ? 'Expires' : 'Due';
   if (days < 0) {
     const late = Math.abs(days);
-    return `${item.kind === 'certification' ? 'Expired' : 'Overdue'} ${late} ${late === 1 ? 'day' : 'days'} ago`;
+    return `${lapses ? 'Expired' : 'Overdue'} ${late} ${late === 1 ? 'day' : 'days'} ago`;
   }
   if (days === 0) return `${verb} today`;
   return `${verb} ${date} · ${days} ${days === 1 ? 'day' : 'days'}`;
