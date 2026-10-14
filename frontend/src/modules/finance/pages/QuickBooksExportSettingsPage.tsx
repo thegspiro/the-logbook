@@ -10,7 +10,8 @@
  * is one the export accepts. This page does not decide readiness, which
  * account wins, or which mappings match a category (CLAUDE.md pitfall #29).
  *
- * Below the mappings, the export history (`GET /finance/export/logs`) lists
+ * Below the mappings, the Run an export panel produces the import file, and
+ * the export history (`GET /finance/export/logs`) lists
  * every export run, so a Treasurer can see what was exported and whether it
  * finished beside the settings that shaped it.
  */
@@ -27,6 +28,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { exportMappingService } from '../services/api';
 import { ExportMappingDialog } from '../components/ExportMappingDialog';
 import { ExportHistorySection } from '../components/ExportHistorySection';
+import { RunExportSection } from '../components/RunExportSection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -65,7 +67,11 @@ const AccountCell: React.FC<{ row: ExportReadinessCategory }> = ({ row }) =>
     <>
       {row.accountName}
       <span className="text-theme-text-secondary block text-xs">
-        {row.accountSource === 'category' ? 'Set on the category' : 'From its mapping'}
+        {row.accountSource === 'parent'
+          ? `From ${row.accountInheritedFrom ?? 'its parent category'}`
+          : row.accountSource === 'category'
+            ? 'Set on the category'
+            : 'From its mapping'}
       </span>
     </>
   ) : (
@@ -82,6 +88,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Remounts the history after an export, so the run just made is listed.
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -244,6 +252,11 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                         </td>
                         <td data-label="Paid from" className={CELL}>
                           {row.offsetAccountName ?? <span className="text-theme-text-secondary">None</span>}
+                          {row.offsetAccountName && row.offsetInheritedFrom && (
+                            <span className="text-theme-text-secondary block text-xs">
+                              From {row.offsetInheritedFrom}
+                            </span>
+                          )}
                         </td>
                         <td data-label="Status" className={CELL}>
                           <span className={`badge ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</span>
@@ -372,7 +385,9 @@ const QuickBooksExportSettingsPage: React.FC = () => {
         )}
       </section>
 
-      <ExportHistorySection />
+      <RunExportSection onExported={() => setHistoryVersion((v) => v + 1)} />
+
+      <ExportHistorySection key={historyVersion} />
 
       {/* What QuickBooks itself needs before an import (Intuit, "Import journal entries") */}
       <section aria-labelledby="import-checklist-heading" className="card space-y-2 p-6">

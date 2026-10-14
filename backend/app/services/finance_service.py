@@ -10,6 +10,7 @@ import html
 import io
 import secrets
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, NoReturn, Optional
@@ -359,32 +360,91 @@ def _mapping_key(name: str) -> str:
     return name.strip().casefold()
 
 
-def _classify_category_accounts(
-    category_account: Optional[str], matches: list[ExportMapping]
-) -> tuple[str, str, Optional[str]]:
-    """Resolve a budget category to ``(account, offset, problem)``.
+# A category tree deeper than this is a cycle written by hand, not a real
+# hierarchy; resolution stops rather than looping.
+_MAX_CATEGORY_DEPTH = 20
 
-    The one definition of how a category reaches QuickBooks: the export uses it
-    to post each transaction and the readiness report uses it to show what an
-    export would do, so the two cannot disagree. ``problem`` is
-    ``duplicate_mappings``, ``no_account``, ``no_offset`` or
-    ``payable_receivable`` (an account the import cannot post to without a
-    Name); ``None`` means the category exports.
+
+@dataclass(frozen=True)
+class _CategoryAccounts:
+    """What an export posts one budget category to, after inheritance."""
+
+    account: str
+    offset: str
+    problem: Optional[str]
+    # category (its own qb_account_name), mapping, or parent; None without one.
+    account_source: Optional[str]
+    # The ancestor each piece came from, when the category had none of its own.
+    account_inherited_from: Optional[str] = None
+    offset_inherited_from: Optional[str] = None
+
+
+def _resolve_category_accounts(
+    categories: list[BudgetCategory], mappings: dict[str, list[ExportMapping]]
+) -> dict[str, _CategoryAccounts]:
+    """Resolve every category's QuickBooks accounts, inheriting from ancestors.
+
+    The one definition of how a category reaches QuickBooks: the export posts
+    with it and the readiness report shows it, so the two cannot disagree. A
+    category takes its own account (its ``qb_account_name``, else its mapping's)
+    and its own mapping's offset; whichever it lacks comes from its nearest
+    ancestor that has one, so a subcategory such as Turnout gear under
+    Operations posts where Operations does unless it says otherwise. A
+    category with several mappings inherits nothing: which of them it meant
+    is a question for the treasurer, not a default.
     """
-    if len(matches) > 1:
-        return "", "", "duplicate_mappings"
-    mapping = matches[0] if matches else None
-    account = (category_account or "").strip() or (
-        mapping.qb_account_name.strip() if mapping else ""
-    )
-    offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
-    if not account:
-        return account, offset, "no_account"
-    if not offset:
-        return account, offset, "no_offset"
-    if _needs_qb_name(account) or _needs_qb_name(offset):
-        return account, offset, "payable_receivable"
-    return account, offset, None
+    by_id = {c.id: c for c in categories}
+    resolved: dict[str, _CategoryAccounts] = {}
+
+    def resolve(category_id: str, depth: int) -> Optional[_CategoryAccounts]:
+        if category_id in resolved:
+            return resolved[category_id]
+        category = by_id.get(category_id)
+        if category is None or depth > _MAX_CATEGORY_DEPTH:
+            return None
+        matches = mappings.get(_mapping_key(category.name), [])
+        if len(matches) > 1:
+            result = _CategoryAccounts("", "", "duplicate_mappings", None)
+            resolved[category_id] = result
+            return result
+        mapping = matches[0] if matches else None
+        own_account = (category.qb_account_name or "").strip()
+        source: Optional[str] = "category" if own_account else None
+        if not own_account and mapping:
+            own_account = mapping.qb_account_name.strip()
+            source = "mapping" if own_account else None
+        account = own_account
+        offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
+        account_from: Optional[str] = None
+        offset_from: Optional[str] = None
+        if (not account or not offset) and category.parent_category_id:
+            parent = resolve(category.parent_category_id, depth + 1)
+            parent_cat = by_id.get(category.parent_category_id)
+            if parent is not None and parent_cat is not None:
+                if not account and parent.account:
+                    account = parent.account
+                    source = "parent"
+                    account_from = parent.account_inherited_from or parent_cat.name
+                if not offset and parent.offset:
+                    offset = parent.offset
+                    offset_from = parent.offset_inherited_from or parent_cat.name
+        if not account:
+            problem: Optional[str] = "no_account"
+        elif not offset:
+            problem = "no_offset"
+        elif _needs_qb_name(account) or _needs_qb_name(offset):
+            problem = "payable_receivable"
+        else:
+            problem = None
+        result = _CategoryAccounts(
+            account, offset, problem, source, account_from, offset_from
+        )
+        resolved[category_id] = result
+        return result
+
+    for category in categories:
+        resolve(category.id, 0)
+    return resolved
 
 
 def _short_label(name: str, limit: int = 40) -> str:
@@ -5366,28 +5426,23 @@ class FinanceService:
         )
         categories = list(result.scalars())
         mappings = await self._export_mappings_by_category(org_id)
+        accounts = _resolve_category_accounts(categories, mappings)
 
         rows = []
         for category in categories:
+            resolved = accounts[category.id]
             matches = mappings.get(_mapping_key(category.name), [])
-            account, offset, problem = _classify_category_accounts(
-                category.qb_account_name, matches
-            )
-            if not account:
-                source = None
-            elif (category.qb_account_name or "").strip():
-                source = "category"
-            else:
-                source = "mapping"
             rows.append(
                 {
                     "category_id": category.id,
                     "category_name": category.name,
                     "is_active": category.is_active,
-                    "status": problem or "ready",
-                    "account_name": account or None,
-                    "account_source": source,
-                    "offset_account_name": offset or None,
+                    "status": resolved.problem or "ready",
+                    "account_name": resolved.account or None,
+                    "account_source": resolved.account_source,
+                    "account_inherited_from": resolved.account_inherited_from,
+                    "offset_account_name": resolved.offset or None,
+                    "offset_inherited_from": resolved.offset_inherited_from,
                     "mapping_ids": [m.id for m in matches],
                 }
             )
@@ -5420,10 +5475,10 @@ class FinanceService:
             return {}
 
         budget_ids = {budget_id for _, budget_id in rows if budget_id is not None}
-        categories: dict[str, tuple[str, Optional[str]]] = {}
+        line_categories: dict[str, str] = {}
         if budget_ids:
             result = await self.db.execute(
-                select(Budget.id, BudgetCategory.name, BudgetCategory.qb_account_name)
+                select(Budget.id, Budget.category_id)
                 .join(BudgetCategory, Budget.category_id == BudgetCategory.id)
                 .where(
                     Budget.id.in_(budget_ids),
@@ -5431,20 +5486,32 @@ class FinanceService:
                     BudgetCategory.organization_id == org_id,
                 )
             )
-            categories = {row[0]: (row[1], row[2]) for row in result.all()}
+            line_categories = {row[0]: row[1] for row in result.all()}
         unbudgeted = sorted(
-            {number for number, budget_id in rows if budget_id not in categories}
+            {number for number, budget_id in rows if budget_id not in line_categories}
         )
 
+        # Every category, not only the exported ones: a subcategory's accounts
+        # can come from an ancestor nothing was charged to.
+        category_rows = await self.db.execute(
+            select(BudgetCategory).where(BudgetCategory.organization_id == org_id)
+        )
+        all_categories = list(category_rows.scalars())
+        names = {c.id: c.name for c in all_categories}
         mappings = await self._export_mappings_by_category(org_id)
+        accounts = _resolve_category_accounts(all_categories, mappings)
 
         resolved: dict[str, tuple[str, str]] = {}
         problems: dict[str, str] = {}
-        for budget_id, (name, category_account) in categories.items():
+        for budget_id, category_id in line_categories.items():
+            name = names[category_id]
             label = _short_label(name)
             matches = mappings.get(_mapping_key(name), [])
-            account, offset, problem = _classify_category_accounts(
-                category_account, matches
+            category_accounts = accounts[category_id]
+            account, offset, problem = (
+                category_accounts.account,
+                category_accounts.offset,
+                category_accounts.problem,
             )
             if problem == "duplicate_mappings":
                 problems[name] = f"'{label}' has {len(matches)} mappings"
