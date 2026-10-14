@@ -26,6 +26,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
+from app.utils.rich_text import FORMAT_HTML, normalize_format
+
 # Filed after approval and so outside what approval covers; see the module
 # docstring. Shared with the attachment service so the two cannot disagree.
 POST_APPROVAL_CATEGORY = "signed_copy"
@@ -43,6 +45,24 @@ def _iso(value: Optional[datetime]) -> Optional[str]:
 
 def _val(value: Any) -> Any:
     return getattr(value, "value", value)
+
+
+def _section_snapshot(section: dict) -> dict:
+    """One section as hashed.
+
+    ``format`` is written only for rich text. Plain-text sections keep the shape
+    they were approved with, so a version approved before the editor existed
+    still verifies byte for byte.
+    """
+    entry = {
+        "order": section.get("order", 0),
+        "key": section.get("key", ""),
+        "title": section.get("title", ""),
+        "content": section.get("content", ""),
+    }
+    if normalize_format(section.get("format")) == FORMAT_HTML:
+        entry["format"] = FORMAT_HTML
+    return entry
 
 
 def build_snapshot(
@@ -85,15 +105,7 @@ def build_snapshot(
             if minutes.quorum_threshold is None
             else round(float(minutes.quorum_threshold), 4)
         ),
-        "sections": [
-            {
-                "order": s.get("order", 0),
-                "key": s.get("key", ""),
-                "title": s.get("title", ""),
-                "content": s.get("content", ""),
-            }
-            for s in sections
-        ],
+        "sections": [_section_snapshot(s) for s in sections],
         "motions": [
             {
                 "order": m.order,

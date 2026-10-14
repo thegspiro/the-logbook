@@ -30,6 +30,12 @@ from app.models.minute import (
 )
 from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status
+from app.utils.rich_text import (
+    FORMAT_HTML,
+    normalize_format,
+    sanitize_html,
+    section_is_blank,
+)
 
 
 class DocumentService:
@@ -572,8 +578,8 @@ class DocumentService:
         sections = minutes.get_sections()
         if sections:
             for section in sorted(sections, key=lambda s: s.get("order", 0)):
-                content = section.get("content", "")
-                if content and content.strip():
+                if not section_is_blank(section):
+                    content = section.get("content", "")
                     title = escape(section.get("title", section.get("key", "Section")))
                     parts.append(
                         '<div class="minutes-section" style="margin-bottom:20px;">'
@@ -581,9 +587,18 @@ class DocumentService:
                     parts.append(
                         f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>'
                     )
-                    parts.append(
-                        f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>'
-                    )
+                    if normalize_format(section.get("format")) == FORMAT_HTML:
+                        # Cleaned again on the way out: the stored value was
+                        # cleaned on write, and a published page is the last
+                        # place to rely on that having always happened.
+                        parts.append(
+                            '<div style="font-size:14px; color:#333;">'
+                            f"{sanitize_html(content)}</div>"
+                        )
+                    else:
+                        parts.append(
+                            f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>'
+                        )
                     parts.append("</div>")
 
         # Motions

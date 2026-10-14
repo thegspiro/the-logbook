@@ -8,6 +8,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { PromptDialog } from '../../../components/ux/PromptDialog';
+import { RichText } from '../../../components/ux/RichText';
+import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -21,6 +23,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { plainTextToHtml, sectionIsBlank } from '../../../utils/richText';
 import type {
   MeetingMinutes,
   MotionCreate,
@@ -260,7 +263,9 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !minutes) return;
     try {
       setSaving(true);
-      const updatedSections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, content: sectionValue } : s));
+      const updatedSections = minutes.sections.map((s) =>
+        s.key === sectionKey ? { ...s, content: sectionValue, format: 'html' as const } : s
+      );
       const updated = await minutesService.updateMinutes(minutesId, { sections: updatedSections });
       setMinutes(updated);
       setEditingSection(null);
@@ -1055,7 +1060,7 @@ export const MinutesDetailPage: React.FC = () => {
                         )}
                         <h3 className="text-md text-theme-text-primary font-semibold">
                           {section.title}
-                          {section.required && !section.content.trim() && isEditable && (
+                          {section.required && sectionIsBlank(section) && isEditable && (
                             <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
                               Required
                             </span>
@@ -1068,7 +1073,9 @@ export const MinutesDetailPage: React.FC = () => {
                             <button
                               onClick={() => {
                                 setEditingSection(section.key);
-                                setSectionValue(section.content || '');
+                                setSectionValue(
+                                  section.format === 'html' ? section.content : plainTextToHtml(section.content)
+                                );
                               }}
                               className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                               aria-label={`Edit ${section.title}`}
@@ -1091,16 +1098,12 @@ export const MinutesDetailPage: React.FC = () => {
 
                     {isEditing ? (
                       <div>
-                        <label htmlFor={`section-edit-${section.key}`} className="sr-only">
-                          Edit {section.title} content
-                        </label>
-                        <textarea
+                        <RichTextEditor
+                          key={section.key}
                           id={`section-edit-${section.key}`}
-                          rows={6}
                           value={sectionValue}
-                          onChange={(e) => setSectionValue(e.target.value)}
-                          className="form-input"
-                          aria-label={`${section.title} content`}
+                          onChange={setSectionValue}
+                          label={`${section.title} content`}
                         />
                         <div className="mt-2 flex gap-2">
                           <button
@@ -1120,8 +1123,12 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ) : section.content ? (
-                      <div className="text-theme-text-secondary text-sm whitespace-pre-wrap">{section.content}</div>
+                    ) : !sectionIsBlank(section) ? (
+                      <RichText
+                        content={section.content}
+                        format={section.format}
+                        className="text-theme-text-secondary text-sm"
+                      />
                     ) : (
                       <p className="text-theme-text-muted text-sm italic">
                         No content yet.{' '}

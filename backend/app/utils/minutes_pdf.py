@@ -30,6 +30,13 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.utils.rich_text import (
+    FORMAT_HTML,
+    html_to_pdf_blocks,
+    normalize_format,
+    section_is_blank,
+)
+
 _HEADER_BG = colors.HexColor("#1f2937")
 _ROW_ALT = colors.HexColor("#f3f4f6")
 _GRID = colors.HexColor("#d1d5db")
@@ -186,6 +193,37 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     body_style = ParagraphStyle(
         "MinBody", parent=styles["Normal"], fontSize=10, leading=13
     )
+    # Rich-text blocks. Sub-headings sit under the section heading, so they are
+    # smaller than it; a list item hangs its marker; a quote is indented.
+    block_styles = {
+        "p": body_style,
+        "h2": ParagraphStyle(
+            "MinH2",
+            parent=body_style,
+            fontName="Helvetica-Bold",
+            fontSize=11,
+            spaceBefore=6,
+            spaceAfter=2,
+        ),
+        "h3": ParagraphStyle(
+            "MinH3",
+            parent=body_style,
+            fontName="Helvetica-BoldOblique",
+            fontSize=10,
+            spaceBefore=4,
+            spaceAfter=2,
+        ),
+        "li": ParagraphStyle(
+            "MinItem", parent=body_style, leftIndent=18, firstLineIndent=-10
+        ),
+        "quote": ParagraphStyle(
+            "MinQuote",
+            parent=body_style,
+            leftIndent=18,
+            textColor=_MUTED,
+            fontName="Helvetica-Oblique",
+        ),
+    }
 
     org_name = header.get("org_name") or meta.get("org_name")
     story: List[Any] = []
@@ -250,11 +288,14 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
 
     # ── Content sections ─────────────────────────────────────────────
     for section in data.get("sections") or []:
-        content = (section.get("content") or "").strip()
-        if not content:
+        if section_is_blank(section):
             continue
         story.append(Paragraph(_esc(section.get("title")), section_style))
-        story.append(Paragraph(_text(content), body_style))
+        if normalize_format(section.get("format")) == FORMAT_HTML:
+            for kind, markup in html_to_pdf_blocks(section.get("content")):
+                story.append(Paragraph(markup, block_styles[kind]))
+        else:
+            story.append(Paragraph(_text(section["content"].strip()), body_style))
 
     # ── Motions ──────────────────────────────────────────────────────
     motions = data.get("motions") or []

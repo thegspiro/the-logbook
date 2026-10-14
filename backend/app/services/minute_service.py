@@ -51,6 +51,7 @@ from app.utils.minutes_attendance import normalize_attendee
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.rich_text import normalize_format, section_is_blank
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _DEFAULT_SECTIONS_BY_TYPE = {
@@ -154,6 +155,7 @@ class MinuteService:
                 "key": s["key"],
                 "title": s["title"],
                 "content": s.get("default_content") or s.get("content") or "",
+                "format": normalize_format(s.get("format")),
                 "required": bool(s.get("required", False)),
             }
             for index, s in enumerate(sections)
@@ -222,16 +224,18 @@ class MinuteService:
             have = existing.pop(wanted["key"], None)
             if have is not None:
                 wanted["content"] = have.get("content", "")
+                wanted["format"] = normalize_format(have.get("format"))
                 wanted["title"] = have.get("title") or wanted["title"]
             merged.append(wanted)
         for leftover in existing.values():
-            if (leftover.get("content") or "").strip():
+            if not section_is_blank(leftover):
                 merged.append(
                     {
                         "order": len(merged),
                         "key": leftover["key"],
                         "title": leftover.get("title", leftover["key"]),
                         "content": leftover["content"],
+                        "format": normalize_format(leftover.get("format")),
                         "required": False,
                     }
                 )
@@ -713,7 +717,7 @@ class MinuteService:
         for section in minutes.get_sections():
             if not section.get("required"):
                 continue
-            if (section.get("content") or "").strip():
+            if not section_is_blank(section):
                 continue
             if section.get("key") == "roll_call" and minutes.attendees:
                 continue

@@ -97,6 +97,41 @@ describe('OutlineEditorModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('saves every section’s starting text as rich text, turning old plain text into paragraphs', async () => {
+    const user = userEvent.setup();
+    const plain: MinutesTemplate = {
+      ...outline,
+      sections: [
+        {
+          order: 0,
+          key: 'call_to_order',
+          title: 'Call to Order',
+          default_content: 'The chair calls the meeting to order.\n\nNote the time <7pm',
+          required: true,
+        },
+        { order: 1, key: 'adjournment', title: 'Adjournment', default_content: '', required: false },
+      ],
+    };
+    open({ outline: plain });
+
+    await user.click(screen.getByRole('button', { name: 'Save outline' }));
+
+    const sent = mockUpdate.mock.calls[0]?.[1] as {
+      sections: Array<{ key: string; default_content: string; format?: string }>;
+    };
+    expect(sent.sections.map((x) => x.format)).toEqual(['html', 'html']);
+    expect(sent.sections[0]?.default_content).toBe(
+      '<p>The chair calls the meeting to order.</p><p>Note the time &lt;7pm</p>'
+    );
+    expect(sent.sections[1]?.default_content).toBe('');
+  });
+
+  it('gives each section a formatting toolbar for its starting text', async () => {
+    open({ outline });
+    expect(await screen.findAllByRole('toolbar')).toHaveLength(3);
+    expect(screen.getByRole('textbox', { name: 'Starting text for Roll Call' })).toBeInTheDocument();
+  });
+
   it('keeps a section’s key when it is renamed', async () => {
     const user = userEvent.setup();
     open({ outline });

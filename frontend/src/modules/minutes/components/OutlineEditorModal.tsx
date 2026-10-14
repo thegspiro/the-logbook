@@ -10,8 +10,10 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../../../components/Modal';
+import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { plainTextToHtml } from '../../../utils/richText';
 import { MEETING_TYPE_OPTIONS } from '../utils/meetingTypes';
 import { minutesService } from '../services/api';
 import type { MeetingType, MinutesTemplate, TemplateSectionEntry } from '../types/minutes';
@@ -35,7 +37,16 @@ interface OutlineEditorModalProps {
 let nextRowId = 1;
 
 const toRows = (sections: TemplateSectionEntry[]): Row[] =>
-  [...sections].sort((a, b) => a.order - b.order).map((s) => ({ ...s, rowId: nextRowId++ }));
+  [...sections]
+    .sort((a, b) => a.order - b.order)
+    .map((s) => ({
+      ...s,
+      // Starting text written before the editor existed is plain text; it opens
+      // as paragraphs and is saved as rich text with its words unchanged.
+      default_content: s.format === 'html' ? s.default_content : plainTextToHtml(s.default_content),
+      format: 'html' as const,
+      rowId: nextRowId++,
+    }));
 
 export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
   isOpen,
@@ -93,7 +104,15 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
   const addRow = () =>
     setRows((current) => [
       ...current,
-      { rowId: nextRowId++, order: current.length, key: '', title: '', default_content: '', required: false },
+      {
+        rowId: nextRowId++,
+        order: current.length,
+        key: '',
+        title: '',
+        default_content: '',
+        format: 'html',
+        required: false,
+      },
     ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,6 +140,7 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
         key,
         title: r.title.trim(),
         default_content: r.default_content,
+        format: 'html',
         required: r.required,
       };
     });
@@ -285,16 +305,11 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label htmlFor={`section-text-${row.rowId}`} className="sr-only">
-                      Starting text for {row.title || `section ${index + 1}`}
-                    </label>
-                    <textarea
+                    <RichTextEditor
                       id={`section-text-${row.rowId}`}
-                      rows={2}
                       value={row.default_content}
-                      onChange={(e) => setRow(row.rowId, { default_content: e.target.value })}
-                      placeholder="Starting text or prompts (optional)"
-                      className="form-input"
+                      onChange={(html) => setRow(row.rowId, { default_content: html })}
+                      label={`Starting text for ${row.title || `section ${index + 1}`}`}
                     />
                   </div>
                   <label className="flex items-center gap-2 text-sm">
