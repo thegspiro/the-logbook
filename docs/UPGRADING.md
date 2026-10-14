@@ -465,6 +465,42 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Installer and backup settings (2026-10-13)
+
+- **`BACKUP_ENABLED` and `BACKUP_SCHEDULE` did nothing** and are gone from the
+  example files and the Unraid template; a `.env` that still has them boots as
+  before. The backup service runs whenever it is started, once a day at
+  **`BACKUP_TIME`** (`HH:MM`, UTC, default `02:00`). There is no on/off switch;
+  stop the service to stop backups. `scripts/setup-env.py` now asks for the time
+  and re-asks until it is a valid 24-hour value, because anything else fails
+  every scheduled run.
+- **`install.sh --traditional` needs Python 3.13 or newer** and stops before
+  installing anything if it is not found (Debian 13 and Ubuntu 25.04+ have it;
+  otherwise install `python3.13` first or use `--docker`). It used to install
+  3.10 and fail at `pip install` after MySQL, Redis and nginx were on the server.
+- **`scripts/setup-ssl.sh` detects the install** (`--docker` or `--traditional`
+  overrides) and obtains the certificate before writing the HTTPS server block.
+  Re-run it on a server where the old script left a site that loaded but
+  answered no API calls.
+- **ClamAV starts with the stack.** There is no `with-clamav` profile; ignore
+  older instructions to pass one.
+- **The Unraid installer stops** when updating the repository fails, instead of
+  rebuilding the old code and reporting an update. Its Community Applications
+  template is a draft.
+
+### Budget categories can restrict who may charge their lines (2026-10-14)
+
+Migration `252c7517d80a` adds `budget_categories.charge_access` and the
+`budget_category_charge_positions` table. **Nothing changes until a category is
+restricted:** a top-level category with no setting is open, which is how every
+line behaved before, and a sub-category with no setting follows its parent.
+Once a category is restricted, other members stop seeing its lines in the
+purchase, check and expense request pickers, and the server refuses a request
+that names one (`finance.manage` is exempt). A request already on a line stays
+editable. A budget owner can set the rule on their own categories from
+**Finance > My Budgets** without `finance.manage`. Downgrading drops the column
+and the table: every restricted category reads as open again.
+
 ### Finance: cash advances (2026-10-14)
 
 Migration `a39a1999776f` adds `check_requests.is_advance`,

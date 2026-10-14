@@ -5,6 +5,164 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 13 – 14, 2026
+
+Net changes merged to `main` from the close of the
+[October 12 – 13 pass](#change-audit-october-12--13-2026) (2026-10-13 ~12:00 UTC)
+to 2026-10-14 12:00 UTC, written against `eee8be13`. About 64 non-merge commits
+(about 45 outside the security-review ledgers and mypy clean-ups). Four themes:
+**finance** (cash advances, who may charge a budget sub-line, dues and
+sub-category exports to QuickBooks, restricted funds on the request forms),
+**My Training** (a current-needs tab, a History tab, rolling-hours windows and
+skills-test expiry), **installation and operations** (SSL script, Python 3.13
+check, backup setting) and a **button layout fix** that reached 32 screens. The
+feature pull requests updated their own guides for cash advances, QuickBooks,
+My Training and the training prerequisites; this pass records them, fills the
+gaps that remained (budget charge access, the admin-only folder confirmation,
+facility dialogs, apparatus inventory on phones, suggestion-box editor order,
+history-import wording, installer settings) and queues screenshots and script
+beats.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-13--14-2026).
+
+**Migration route.** Six new revisions: `0d32069fea4d` (dues payments to
+QuickBooks), `a17a47c5a871` (skill-test `valid_for_months`), `252c7517d80a`
+(budget category charge access), `a39a1999776f` (cash advances), and two merge
+revisions that each join two heads, `05ec84735fcf` and `70070d86ff27`. Run
+`alembic heads`; it must report a single head. The four feature revisions are
+additive and reversible; downgrades drop the new columns.
+
+### Read this first
+
+1. **Cash advances exist.** A member can ask for an advance on the check request
+   form (**This is a cash advance to me**), account for it on an expense report
+   and hand back unspent cash; the IRS 60/120-day accountable-plan clock is
+   tracked, and **Finance > Reports > Cash advances** lists what is still open.
+   A QuickBooks export that contains an advance is refused until the **Advances
+   account** and **Paid from and returned to** are set. Nothing changes for a
+   department that never uses them.
+2. **A budget category can restrict who may charge its lines.** Restricted lines
+   vanish from other members' request pickers and the server refuses them
+   (`finance.manage` exempt). Nothing is restricted on upgrade. Budget owners
+   set the rule for their own categories from My Budgets.
+3. **Dues payments go to QuickBooks once a dues account is set.** Before that,
+   exports leave dues out. After, the first export covering a period carries
+   every dues payment in it, because none is marked as sent: a department that
+   keyed dues by hand should export only later periods.
+4. **A budget subcategory exports through its parent's accounts** instead of
+   refusing the export; the download is named
+   `quickbooks-journal_<from>_<to>.csv`.
+5. **Rolling hours requirements now count whole calendar months** and carry no
+   due date (12 months on 2026-10-13 starts 2025-11-01). A member's "due"
+   status on such a requirement changes; the monthly breakdown shows why.
+6. **My Training has two tabs.** The old page listed only the newest 100
+   records; the new History tab reads them all.
+7. **A folder only administrators could open is confirmed first**
+   (`LB-DOC-001` unless `confirm_admin_only` is sent).
+8. **Cohort roster sync honours prerequisite programs**: a member is added to the
+   roster but not enrolled in the pipeline, with a warning naming the missing
+   program.
+9. **Operators:** `BACKUP_ENABLED` and `BACKUP_SCHEDULE` never did anything (use
+   `BACKUP_TIME`); `install.sh --traditional` needs Python 3.13+; `setup-ssl.sh`
+   was rewritten and should be re-run on a server it left half-configured.
+   See `UPGRADING.md`.
+
+### User-visible changes, by area
+
+#### Finance
+
+| Change                                                                                                                                                                                                                          | Where documented                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Cash advances**: request, account for, return, overdue report, QuickBooks accounts                                                                                                                                            | training 11; `FINANCE_MODULE.md`; `UPGRADING.md` |
+| **Who can charge a category's lines** (open / restricted with named positions); parent picker and tree in category settings; sub-lines grouped with a subtotal on Budgets; owners set it from My Budgets; picker labels by path | training 11 (this pass); `FINANCE_MODULE.md`     |
+| **Run the QuickBooks export from its own page**; subcategories inherit accounts; dues payments exported and marked sent; dues accounts on the page and the schedule dialog                                                      | training 11; `FINANCE_MODULE.md`                 |
+| Restricted funds on the purchase, check and expense forms, approvals and reports                                                                                                                                                | training 11                                      |
+| Compliance doc counts the cash-advance return guard in separation-of-duties coverage                                                                                                                                            | `COMPLIANCE.md`                                  |
+
+#### Training and My Training
+
+| Change                                                                                                                                                                   | Where documented                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| **My Training tab split**: year-to-date tiles, **Upcoming Expirations & Due Dates** (six months), requirements, five recent records; **History** tab by year, searchable | training 02                         |
+| Rolling hours: whole calendar months, no due date, **Show monthly hours**, "N hrs to go" row                                                                             | training 02                         |
+| A class taken last winter reads as met until the next window **Opens**                                                                                                   | training 02                         |
+| Skills tests **Valid for (months)**; the member's list shows "Skills test expires"                                                                                       | training 02, 09                     |
+| Cohort roster sync honours prerequisite programs                                                                                                                         | training 02; `TRAINING_PROGRAMS.md` |
+| Evaluations card on Training Administration follows the practical-skills method (this pass)                                                                              | training 02                         |
+| Shift history import review wording (percent article, department seat labels, multi-day end, singular counts) (this pass)                                                | training 03                         |
+
+#### Documents, facilities, inventory, communications
+
+| Change                                                                                                                                                    | Where documented              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Folder create / access change / move asks first when only full administrators could open it (this pass)                                                   | training 07; `ERROR_CODES.md` |
+| Facility **New Record** and **New Inspection** dialogs centred; **Maintenance Type** required; maintenance rows say Overdue / Due / Completed (this pass) | training 06                   |
+| Apparatus Inventory on phones: stacked rows, filter chips, pinned location headings, a saved-status line instead of a Save button (this pass)             | training 03                   |
+| Suggestion-box editor: **Questions** directly after Name and Description (this pass)                                                                      | training 07                   |
+
+#### Layout and errors (all screens)
+
+- Thirty-two filled buttons that pair an icon with a label now lay out on one
+  line at desktop widths (the icon used to sit above the label with a mouse);
+  `buttonIconLayoutIntegrity.test.ts` guards the pattern.
+- A deliberate 503 (for example the malware scanner refusing an upload,
+  `LB-UPLD-005`) is shown at once instead of being retried for about five
+  minutes; only a database or proxy outage 503 is retried.
+- The Integrations mappings dialog's title was invisible on the light panel; fixed.
+
+#### Operations and installation
+
+- `setup-ssl.sh` detects Docker or traditional installs and gets the certificate
+  before writing the HTTPS block; `install.sh --traditional` requires Python
+  3.13+; `BACKUP_TIME` replaces two unread backup keys; ClamAV starts with the
+  stack (no profile); the Unraid installer stops on a failed update; the Unraid
+  Community Applications template is marked a draft; Compose Manager stacks have
+  their own section.
+- Wiki: `API-Reference` rewritten by topic with module endpoint detail moved onto
+  the Developer pages; encrypt-uploads manifests print their own finalize and
+  rollback commands.
+
+#### Engineering (no workflow change)
+
+mypy baseline 489 to 312; finance, API-layer, inventory, equipment-check and
+property-return type fixes; the training enrollment lookup skipped when no
+prerequisite resolves; the dues-accounts route added to export monitoring.
+Security-review passes recorded in `docs/security-review/PROGRESS.md`:
+equipment-check (1 fix), cross-cutting baseline, apparatus-nfc (1 fix),
+auth-session, permissions-roles (1 documentation correction).
+
+### Documentation changes in this pass
+
+| File                                                                              | Change                                                       |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `docs/training/11-finance.md`, `docs/FINANCE_MODULE.md`                           | Charge access section, nesting note, My Budgets card         |
+| `docs/training/07-documents-forms.md`                                             | Admin-only folder confirmation; Questions-first editor       |
+| `docs/training/06-apparatus-facilities.md`                                        | Facility record dialogs and due dates                        |
+| `docs/training/03-scheduling.md`                                                  | Apparatus Inventory on phones; history-import review wording |
+| `docs/training/02-training.md`                                                    | Evaluations card wording                                     |
+| `docs/UPGRADING.md`                                                               | Charge-access and installer / backup entries                 |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md` | Queue of new and stale screenshots; beats to rewrite         |
+| `wiki/Recent-Changes-2026-10.md`, `wiki/Home.md`                                  | Wiki handoff                                                 |
+
+### Screenshots
+
+Queued in [`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-13--14-documentation-pass).
+Nothing was captured by this pass. The two applicant-dialog images
+(`01-35-applicant-drawer-final-stage.png`, `20-13-applicant-drawer-not-elected.png`)
+were recaptured on 2026-10-14 by a feature commit and are current.
+
+### Scripts
+
+Flagged in [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+Nothing was re-recorded.
+
+### Open items found while writing this pass
+
+- `docs/training/SCREENSHOT_STATUS.md` is generated and was not regenerated.
+- `docs/KNOWN_LIMITATIONS.md` gained the Unraid template decision (combined image
+  versus two templates) and the cash-advance notes; both await the owner.
+
 ## Change audit: October 12 – 13, 2026
 
 Net changes merged to `main` from the close of the

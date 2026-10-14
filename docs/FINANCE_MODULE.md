@@ -872,6 +872,38 @@ report's page and the manual panel alike; the emailed-link page needs a tick.
 lists every late line on a report paid in the period — member, incurred and
 submitted dates, days taken, who confirmed it, amount — with a CSV, for payroll.
 
+## Who may charge a category's lines _(2026-10-14)_
+
+Migration `252c7517d80a` adds `budget_categories.charge_access` (`open` |
+`restricted`, nullable: null inherits the parent's, and a top-level null is
+open, so existing data is unchanged) and `budget_category_charge_positions`
+(the named positions). It guards on create_all-only tables and drops both on
+downgrade.
+
+`app/services/finance_budget_access.py` is the one definition of three
+questions: the rule in force for a category, whether a member may charge a
+line, and whether a member may change the rule. **Answerable** positions are
+the line's own owner and the owner of its category or of any category above
+it, so the owner of the parent keeps every restricted line beneath it. The
+walk is bounded at 20 levels so a cycle stored by hand cannot hang it. The
+request-form picker (`list_budget_options`, which also labels a line by its
+category path), the check on every purchase, check and expense request write,
+the category responses and the owner's screen all ask it. `finance.manage`
+is exempt (the endpoints pass no `charger_id` for a manager, as
+`_requester_scope` does for request ownership), and a request already on a
+line stays editable after the line is restricted.
+
+| Endpoint                                                | Permission                                                                      | Notes                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /finance/charge-access`                            | authenticated                                                                   | The categories the caller may set (their own and those below) with the rule on each; empty for a non-owner  |
+| `PUT /finance/budget-categories/{cat_id}/charge-access` | `finance.manage`, or a holder of an owner position on the category or one above | Audit event `finance.budget_category_charge_access_updated`; named positions are kept only while restricted |
+
+A category's parent can now be changed from the settings dialog; the server
+refuses a cycle (`_refuse_category_cycle`). Frontend: `ChargeAccessFields`
+(shared by the category dialog and `ChargeAccessSection`), `chargeAccess.ts`
+(wording only, no rule) and `budgetCategoryTree.ts` (tree order, path labels,
+subtotals).
+
 ## Cash advances _(2026-10-14)_
 
 Money handed to a member before an expense — a conference, a supply run — under

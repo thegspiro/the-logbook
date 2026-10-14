@@ -1,5 +1,27 @@
 # Script currency
 
+## Flagged by the 2026-10-13 → 10-14 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 04 (cash advances, charge access, QuickBooks), 06 and 05 (My Training), 03 (Apparatus Inventory on a phone).
+
+| Script                            | Beat                            | Was                                                                             | Now                                                                                                                                      |
+| --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **04** (finance)                  | Cash advances (new beat)        | None                                                                            | Ask on the check form, account on an expense report, return cash; 60/120-day clock; Reports > Cash advances; the two QuickBooks accounts |
+| **04**                            | Budget categories               | One level; every member could pick any line                                     | Parent picker, tree; **Who can charge these lines**; owners set it from My Budgets                                                       |
+| **04**                            | QuickBooks export (if shown)    | Settings page and a download elsewhere                                          | Run the export on its page; sub-categories inherit accounts; dues are exported once an account is set                                    |
+| **06** (member guide)             | My Training                     | One long page, date-range picker                                                | **My Training** and **History** tabs; Upcoming list; monthly hours strip; "N hrs to go"                                                  |
+| **05 / 09**                       | Rolling requirements            | Due date a year out for an hours requirement                                    | Whole calendar months, no due date; skills tests can expire (**Valid for (months)**)                                                     |
+| **05 / 14**                       | Cohorts (if shown)              | Roster sync enrolled the member regardless                                      | Added to the roster only, with a warning naming the missing prerequisite                                                                 |
+| **03**                            | Apparatus Inventory             | Save button, summary counts as text                                             | Stacked rows on a phone, filter chips, "All changes saved" line                                                                          |
+| **07**                            | Documents                       | Folders saved silently                                                          | Confirmation when only administrators could open the folder                                                                              |
+| **07**                            | Suggestion boxes                | Questions at the foot of the editor                                             | Questions right after the name                                                                                                           |
+| **06** (apparatus and facilities) | Facility maintenance (if shown) | Dialog inside the card; no due date on rows                                     | Centred dialog, **Maintenance Type** required, **Overdue · due …** rows                                                                  |
+| **03** (installing, IT)           | Install and backups             | `BACKUP_ENABLED` / `BACKUP_SCHEDULE`; Python 3.10; SSL script copied one config | `BACKUP_TIME` only; Python 3.13+ for `--traditional`; `setup-ssl.sh` detects Docker or traditional                                       |
+| **All**                           | Any button with an icon         | Icon above the label at desktop width                                           | Icon beside the label                                                                                                                    |
+
 ## Flagged by the 2026-10-12 → 10-13 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-12--13-2026).
