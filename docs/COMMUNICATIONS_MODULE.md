@@ -185,7 +185,7 @@ Full detail:
 
 Configurable, optionally anonymous suggestion boxes with per-box reviewers.
 Shipped in PR #2649. User-facing walkthrough:
-[`training/07-documents-forms.md`](./training/07-documents-forms.md#suggestion-boxes-2026-09-23).
+[`training/07-documents-forms.md`](./training/07-documents-forms.md#suggestion-boxes).
 
 ### Code map
 
