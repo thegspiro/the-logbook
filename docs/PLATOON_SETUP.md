@@ -2,7 +2,7 @@
 
 A task-oriented walkthrough for turning on and running **platoon-based
 scheduling**. For the design/reference detail (data model, migrations, offset
-math), see [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19).
+math), see [Scheduling Module → Platoon Rotations](../wiki/Module-Scheduling.md#platoon-rotations).
 
 Platoon scheduling is **opt-in** and **off by default**. When it's off, the
 Scheduling module works exactly as it always has — none of the steps below

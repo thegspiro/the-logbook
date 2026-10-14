@@ -162,7 +162,14 @@ Deploying departments own the management-system side of every framework:
 - **Key custody:** offline storage of `ENCRYPTION_KEY`/`ENCRYPTION_SALT` and
   friends — see [BACKUP.md](./BACKUP.md).
 - **Records retention schedules:** statutory retention for fire-service
-  records varies by state; keep your schedule in department SOPs until the
-  configurable retention engine ships.
+  records varies by state, so choosing the periods is the department's job.
+  The app enforces what you set: `GET /api/v1/organization/retention-policy`
+  lists each managed record class with its default, floor and effective
+  setting, `PUT /api/v1/organization/retention-policy/{record_class}?days=N`
+  changes one (`settings.manage` or `organization.update_settings`; omit
+  `days` to keep forever), and the daily `retention_enforcement` task applies
+  it. It is API-only — no settings screen offers it — and documents and
+  meeting minutes are deliberately never auto-deleted, so record their
+  schedule in your SOPs.
 - **Physical and personnel security** at the station and for any self-hosted
   hardware.

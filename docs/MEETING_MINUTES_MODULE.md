@@ -45,7 +45,7 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `backend/app/models/minute.py`                             | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets                             |
 | `backend/app/models/document.py`                           | Document and DocumentFolder models                                                                     |
 | `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                                             |
-| `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                                             |
+| `backend/app/schemas/documents.py`                         | Pydantic schemas for documents and folders                                                             |
 | `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                                               |
 | `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                                               |
 | `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target                                     |
@@ -59,7 +59,6 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `frontend/src/modules/minutes/store/minutesStore.ts`       | Zustand store for minutes CRUD                                                                         |
 | `frontend/src/modules/minutes/types/minutes.ts`            | TypeScript types and interfaces                                                                        |
 | `frontend/src/pages/MinutesPage.tsx`                       | Re-export from module (backward compatibility)                                                         |
-| `frontend/src/pages/MinutesDetailPage.tsx`                 | Re-export from module (backward compatibility)                                                         |
 | `frontend/src/pages/DocumentsPage.tsx`                     | Folder browsing, document viewer                                                                       |
 
 ---
@@ -188,7 +187,7 @@ These use the business meeting defaults or a subset tailored to the meeting scop
 Use the templates API to create custom templates:
 
 ```
-POST /api/v1/minutes/templates
+POST /api/v1/minutes-records/templates
 {
   "name": "Special Budget Meeting",
   "meeting_type": "special",
@@ -276,9 +275,8 @@ Users with `documents.manage` permission can:
 
 ### Minutes Endpoints
 
-_(Corrected 2026-10-04: the router is mounted at `/api/v1/minutes-records`, not
-`/api/v1/minutes`, and is gated on `minutes.view` / `minutes.manage`, not the
-`meetings.*` permissions this table used to name.)_
+The router is mounted at `/api/v1/minutes-records` and is gated on
+`minutes.view` / `minutes.manage`.
 
 | Method   | Path                                                | Permission       | Description                                                                                                   |
 | -------- | --------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -441,7 +439,7 @@ The minutes module was refactored to follow the standard module conventions used
 
 ### Changes
 
-- **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. Original files re-export from the module for backward compatibility with existing routes and deep links
+- **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. `frontend/src/pages/MinutesPage.tsx` re-exports the module page for backward compatibility; there is no top-level `MinutesDetailPage.tsx`
 - **Dedicated Zustand store**: `minutesStore.ts` manages loading/error states for all minutes CRUD operations, replacing ad-hoc state management in page components
 - **Module API service**: `services/api.ts` provides a dedicated axios instance with auth interceptors (CSRF, `withCredentials: true`), matching the pattern used by other modules
 - **TypeScript types**: All minutes-related interfaces and types extracted to `types/minutes.ts`
@@ -460,7 +458,7 @@ The minutes module was refactored to follow the standard module conventions used
 ### Edge Cases
 
 - Existing deployments must run `alembic upgrade head` for the table rename migration
-- Deep links to `/minutes/:id` continue to work via re-exported route definitions
+- Deep links to `/minutes/:id` work through the module's own route (`modules/minutes/routes.tsx`)
 - The old `meetingsServices.ts` API methods remain functional alongside the new module API service
 
 ---

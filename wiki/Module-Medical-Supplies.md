@@ -76,7 +76,7 @@ gained the `equipment_check.*` set its description had always promised.
 | Page                      | Route                          | Opens on                                                                                        |
 | ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
 | Medical Supplies          | `/medical-supplies`            | **What is expiring** — with an all-supplies tab, an add-supply form and a receive-delivery form |
-| Medical Supply Categories | `/medical-supplies/categories` | Category management                                                                             |
+| Medical Supply Categories | `/medical-supplies/categories` | Category management — add, edit, and delete (supplies in a deleted category are moved first)    |
 
 The page opens on the expiring tab rather than the catalog because, for a
 consumable with a shelf life, _"what am I about to lose"_ is the question that
