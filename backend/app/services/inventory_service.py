@@ -459,6 +459,23 @@ class ItemNameTakenOutsideDomainError(LookupError):
     """
 
 
+class CategoryHasItemsError(ValueError):
+    """A category still holds items and the caller named nowhere to move them.
+
+    A ValueError so a caller that does not care to tell it apart still gets a
+    400; the medical route catches it first to answer 409, because the request
+    is well-formed and the conflict is with stored data the caller can resolve.
+    """
+
+    def __init__(self, item_count: int) -> None:
+        self.item_count = item_count
+        noun = "supply uses" if item_count == 1 else "supplies use"
+        super().__init__(
+            f"{item_count} {noun} this category. "
+            "Choose a category to move them to before deleting it."
+        )
+
+
 def storage_area_paths(areas) -> Dict[str, str]:
     """Map each area id to "Parent > Child", walking ``parent_id``.
 
@@ -1056,6 +1073,126 @@ class InventoryService:
         except Exception as e:
             await self.db.rollback()
             return False, str(e)
+
+    async def delete_category_permanently(
+        self,
+        category_id: UUID | str,
+        organization_id: UUID | str,
+        item_types: Iterable[ItemType],
+        move_items_to: UUID | str | None = None,
+    ) -> Dict[str, Any]:
+        """Hard-delete a category, first moving its items to another one.
+
+        Distinct from ``delete_category``, which only deactivates. Both ids
+        must be categories of ``item_types`` in this organization: a medical
+        officer deleting through this path can neither remove a uniform
+        category nor move supplies into one.
+
+        Items are moved, never left to the foreign key. The FK is ``SET NULL``,
+        and a category-less item reads as gear, so deleting under it would
+        silently carry every supply off the medical page. That is why a
+        category that still holds items is refused unless ``move_items_to`` is
+        given, and why inactive items count: a retired supply keeps its history
+        under its category.
+
+        Both category rows are locked, in id order so two deletes naming each
+        other cannot deadlock, and the counts are locking reads (Pitfall #27).
+        The row lock is what stops a new item or subcategory being filed under
+        the category between the check and the DELETE — an INSERT must take a
+        shared lock on its parent row — and the counts must be locking reads
+        because the caller's preflight already opened this transaction's
+        snapshot.
+
+        Raises ``LookupError`` when either category is gone or outside the
+        domain, ``CategoryHasItemsError`` when items remain with nowhere to go,
+        and ``ValueError`` for any other refusal.
+        """
+        org_id = str(organization_id)
+        source_id = str(category_id)
+        target_id = str(move_items_to) if move_items_to else None
+        if target_id == source_id:
+            raise ValueError("Choose a different category to move the supplies to")
+
+        domain = list(item_types)
+        try:
+            names: Dict[str, str] = {}
+            for locked_id in sorted(i for i in (source_id, target_id) if i):
+                row = (
+                    await self.db.execute(
+                        select(InventoryCategory.id, InventoryCategory.name)
+                        .where(
+                            InventoryCategory.id == locked_id,
+                            InventoryCategory.organization_id == org_id,
+                            InventoryCategory.item_type.in_(domain),
+                        )
+                        .with_for_update()
+                    )
+                ).first()
+                if row is None:
+                    raise LookupError("Category not found")
+                names[locked_id] = row.name
+
+            child_count = (
+                await self.db.execute(
+                    select(func.count(InventoryCategory.id))
+                    .where(
+                        InventoryCategory.parent_category_id == source_id,
+                        InventoryCategory.organization_id == org_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+            if child_count:
+                raise ValueError(
+                    "This category has subcategories. "
+                    "Move or delete them before deleting it."
+                )
+
+            item_count = (
+                await self.db.execute(
+                    select(func.count(InventoryItem.id))
+                    .where(
+                        InventoryItem.category_id == source_id,
+                        InventoryItem.organization_id == org_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+
+            items_moved = 0
+            if item_count:
+                if target_id is None:
+                    raise CategoryHasItemsError(item_count)
+                move_result = await self.db.execute(
+                    update(InventoryItem)
+                    .where(
+                        InventoryItem.category_id == source_id,
+                        InventoryItem.organization_id == org_id,
+                    )
+                    .values(category_id=target_id)
+                )
+                items_moved = rows_affected(move_result)
+
+            await self.db.execute(
+                delete(InventoryCategory).where(
+                    InventoryCategory.id == source_id,
+                    InventoryCategory.organization_id == org_id,
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        logger.info(
+            f"Deleted category {source_id} in organization {org_id}; "
+            f"moved {items_moved} item(s) to {target_id}"
+        )
+        return {
+            "category_name": names[source_id],
+            "items_moved": items_moved,
+            "moved_to_name": names[target_id] if target_id else None,
+        }
 
     # ============================================
     # Vendor Management

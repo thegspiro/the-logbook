@@ -1,6 +1,27 @@
 # Elections & Voting
 
-The Elections module manages department elections, officer nominations, anonymous voting, proxy authorization, ballot distribution, runoff chains, and forensic audit trails. It supports both in-person meeting votes and remote ballot distribution via email.
+The Elections part of The Logbook runs department votes from start to finish.
+It handles nominations, secret ballots, proxies, emailed ballots, paper
+ballots counted in the room, runoffs and a record that proves the result. A
+vote can happen at a meeting, by email, or both.
+
+## Lesson at a Glance
+
+|                     |                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| **Who this is for** | Every member, for voting. The secretary and other officers who run elections, for everything else |
+| **What you need**   | The Elections module turned on. Running elections needs a role that can manage elections          |
+| **Essential path**  | Members: about 10 minutes. Election officers: about 90 minutes                                    |
+| **Full guide**      | About 2 hours                                                                                     |
+| **Last verified**   | 2026-10-14                                                                                        |
+| **Owner**           | Your department's secretary                                                                       |
+
+**Members:** read [Elections Overview](#elections-overview),
+[The Nomination Phase](#the-nomination-phase) and
+[Casting Votes](#casting-votes). If you hold someone's proxy, read
+[Proxy Voting](#proxy-voting).
+
+**Election officers:** read the whole guide.
 
 ---
 
@@ -29,260 +50,300 @@ The Elections module manages department elections, officer nominations, anonymou
 21. [Cloning an Election](#cloning-an-election)
 22. [Meeting Attendance Integration](#meeting-attendance-integration)
 23. [Prospective Member Election Packages](#prospective-member-election-packages)
-24. [What Changed After the W50 Review](#what-changed-after-the-w50-review-2026-09-30)
-25. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
-26. [Troubleshooting](#troubleshooting)
+24. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
+25. [Troubleshooting](#troubleshooting)
+26. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Elections Overview
 
-Navigate to **Elections** in the sidebar or from **Events & Meetings > Elections** to view all department elections.
+**Where to find it:** **Governance → Elections**.
 
-The elections module supports:
+**Turning it on:** Elections is an opt-in module. An administrator turns it on
+under **Organization Settings → Modules → Additional Modules**.
 
-- **Officer elections** — Annual or special elections for department leadership positions
-- **Board elections** — Board of directors or governance body elections
-- **General votes** — Membership approval, bylaw amendments, budget approvals
-- **Membership approval** — Voting on prospective member applications (integrated with the Prospective Members pipeline)
+You can use elections for:
 
-Key pages:
+- **Officer elections** — annual or special elections for department leaders.
+- **Board elections** — a board of directors or other governing body.
+- **General votes** — motions, bylaw amendments, budget approvals.
+- **Membership approval** — voting on applicants from the prospective-member
+  pipeline.
 
-| URL                      | Page                        | Permission            |
-| ------------------------ | --------------------------- | --------------------- |
-| `/elections`             | Elections List              | `elections.view`      |
-| `/elections/:electionId` | Election Detail             | `elections.view`      |
-| `/elections/settings`    | Election Settings           | `elections.manage`    |
-| `/ballot`                | Public Ballot (token-based) | Public (rate-limited) |
+Two permissions control the module. Role Management lists them under Elections
+as **View elections** and **Manage elections**.
+
+| Page                    | What it is for                                   | Who can open it                    |
+| ----------------------- | ------------------------------------------------ | ---------------------------------- |
+| **Elections** list      | Every election in the department                 | Roles that can view elections      |
+| An election's page      | Details, ballot, voting and results              | Roles that can view elections      |
+| **Election Settings**   | Proxy voting, optional features and test ballots | Roles that can manage elections    |
+| The emailed ballot page | Voting from the link in a ballot email           | Anyone holding a valid ballot link |
+
+To reach **Election Settings**, select the gear button at the top of the
+Elections list.
 
 ![Elections list showing elections with status badges](./images/14-01-elections-list.png)
 
-**[SCREENSHOT — REPLACE `14-01-elections-list.png`.** The subtitle under **Elections** now reads "Create elections, send ballots and publish results" for an elections manager ("See elections and their results" for a member); it read "Manage elections and view results" (2026-09-29). Re-shoot the same list as an administrator.**]**
+### Tabs on an election's page
+
+Each tab on an election's page has its own web address. You can send a fellow
+officer a link straight to a tab, and the browser's Back button steps back
+through tab changes.
+
+| Tab              | What it shows                                   | Who sees it                                                                  |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Ballot**       | The ballot items, in order                      | Officers                                                                     |
+| **Nominations**  | The nomination form and nominations so far      | Everyone while nominations are open; officers on a draft                     |
+| **Candidates**   | Every candidate, including pending nominations  | Officers                                                                     |
+| **Eligibility**  | Who will and will not get a ballot, and why     | Officers                                                                     |
+| **Attendance**   | Who is checked in at the linked meeting         | Officers, until the election closes                                          |
+| **Overrides**    | Members let in to vote despite the normal rules | Officers                                                                     |
+| **Proxy Voting** | Proxy authorizations                            | Officers                                                                     |
+| **Cast Vote**    | Your ballot                                     | Everyone, while voting is open                                               |
+| **Results**      | The results                                     | Everyone, once the election closes (or during voting if live results are on) |
+
+"Officers" here means roles that can manage elections.
+
+You can move between the tabs with the arrow keys, Home and End.
 
 ---
 
 ## Creating an Election
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-1. Navigate to **Elections** and click **Create Election**
-2. Fill in the election details:
-   - **Title** — e.g., "2026 Annual Officer Election"
-   - **Description** — Purpose and scope of the election
-   - **Election Type** — Officer Election, Board Election, or General
-   - **Start Date** — When voting opens
-   - **End Date** — When voting closes
-   - **How is the Winner Determined?** — The voting method and victory condition, chosen together as one option (see below)
-   - **Seats per Race** — How many people each race elects (1 to 50). A two-seat board race elects its top two, and each voter may choose up to two. The victory condition decides who qualifies and the seats go to the highest qualifiers; a tie on the last seat is settled by the tie policy. Ranked choice elects one per race, so choosing it sets this back to 1
-   - **Anonymous Voting** — Whether votes are anonymous (recommended for officer elections)
-   - **Allow Write-Ins** — Whether voters can write in candidates not on the ballot
-3. Click **Create** — the election is created in **Draft** status
+1. Open **Elections** and select **Create Election**.
+2. Fill in the form:
 
-### Voting Methods
+| Field                                | What to enter                                                                                                           |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                             |
+| **Description**                      | What the election is for                                                                                                |
+| **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**                                                      |
+| **Start Date & Time** (required)     | When voting opens                                                                                                       |
+| **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**             |
+| **Positions**                        | The offices being filled. Pick from the list or type one, then select **Add**                                           |
+| **How is the Winner Determined?**    | The voting method and winning rule together (see below)                                                                 |
+| **Enable Automatic Runoffs**         | Create a runoff when nobody meets the winning rule. Then choose **Runoff Type** and **Maximum Runoff Rounds** (1 to 10) |
+| **Anonymous Voting**                 | Votes are saved without the voter's name or address. On unless you untick it                                            |
+| **Allow Write-in Candidates**        | Voters may type in someone not on the ballot. Off unless you tick it                                                    |
+| **Show Results Immediately**         | Members see the running tally while voting is open. Cannot be changed once voting opens                                 |
+| **Open Automatically at Start Time** | Voting opens by itself at the start time, and the ballots are emailed. Shown only when scheduled opening is on          |
+| **Auto-Remind Non-Voters**           | One reminder email 2 hours to 3 days before close, or none. Shown only when reminders are on                            |
+| **If the Top Candidates Tie**        | The tie rule. See [Tie Handling](#tie-handling)                                                                         |
+| **Seats per Race**                   | How many people each race elects, from 1 to 50                                                                          |
 
-| Method              | Description                                                                                                                                                                                                                        | Use Case                               |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| **Simple Majority** | Each voter selects one candidate per position                                                                                                                                                                                      | Officer elections, single-choice races |
-| **Ranked Choice**   | Voters rank candidates; lowest eliminated in instant-runoff rounds                                                                                                                                                                 | Contested multi-candidate races        |
-| **Approval**        | Voters may approve any number of candidates; most approvals wins                                                                                                                                                                   | Board seats, membership approval votes |
-| **Supermajority**   | Single-choice voting counted against a higher victory threshold. The create form does not offer it as a method; its **Supermajority Required (2/3)** option uses Simple Majority counting with the Supermajority victory condition | Bylaw amendments                       |
+3. Select **Create Election**. The election starts as a **Draft**.
 
-> **Note:** Approval and ranked-choice ballots are submitted atomically — all of a voter's approvals (or rankings) for a position are recorded together, or none are.
+**Things to know about the form:**
 
-### Victory Conditions
+- The quick durations and **End of Day** use your department's time zone,
+  not your computer's.
+- **Seats per Race:** a two-seat board race elects the top two, and each voter
+  may choose up to two. The winning rule decides who qualifies, and the seats
+  go to the highest who qualify. A tie for the last seat follows the tie rule.
+  Ranked choice elects one per race, so choosing it sets this back to 1.
+- **Quorum:** an election's page and ballot preview show a quorum if one is
+  set, but no screen in The Logbook sets one.
 
-| Condition         | Description                                                             |
-| ----------------- | ----------------------------------------------------------------------- |
-| **Most Votes**    | Whoever gets the most votes wins (ties: all tied candidates flagged)    |
-| **Majority**      | Must receive >50% of total votes cast                                   |
-| **Supermajority** | Must reach the configured percentage (`victory_percentage`, default 67) |
-| **Threshold**     | Must reach a configured absolute vote count (`victory_threshold`)       |
+> **What if the hint says ballots are sent separately?** The hint under **Open
+> Automatically at Start Time** says ballot emails are still sent separately.
+> In fact, a scheduled opening does email the ballots. See
+> [Opening an Election](#opening-an-election).
+
+### How is the Winner Determined?
+
+This one menu sets both the **voting method** (how people vote) and the
+**winning rule** (what it takes to win).
+
+| Option                                     | How people vote                  | What it takes to win                                                  |
+| ------------------------------------------ | -------------------------------- | --------------------------------------------------------------------- |
+| **Most Votes Wins (Plurality)**            | One choice each                  | The most votes, even without a majority                               |
+| **Majority Required (>50%)**               | One choice each                  | More than half of the votes                                           |
+| **Supermajority Required (2/3)**           | One choice each                  | The **Supermajority Percentage** (67 unless you change it, 51 to 100) |
+| **Ranked Choice Voting**                   | Rank candidates in order         | A majority, with the lowest dropped round by round                    |
+| **Approval Voting (Yes/No per candidate)** | Approve any number of candidates | The most approvals                                                    |
+| **Custom Threshold**                       | One choice each                  | A **Numerical Threshold** of votes or a **Percentage Threshold**      |
+
+> **Tip.** For a bylaw amendment that needs two-thirds, choose
+> **Supermajority Required (2/3)**.
+
+On approval and ranked-choice ballots, all of a voter's choices for a race are
+saved together, or none are.
+
+The election's details card shows what you chose:
+
+- **Voting Method** reads **One choice per voter**, **Ranked choice** or
+  **Approval**.
+- **Winner** gives the rule: "Most Votes (Plurality)", "Majority (>50% of
+  votes)", "Supermajority (67% of votes)" or the threshold.
 
 ![Create Election form with title, dates, and voting method](./images/14-02-create-election.png)
-
-> **Hint:** For bylaw amendments requiring a 2/3 supermajority, choose **Supermajority Required (2/3)**. That one option sets both halves — Simple Majority counting and the **Supermajority** victory condition — and adds a **Supermajority Percentage** field that defaults to 67.
-
-**The election page now says which rule you picked** _(2026-09-30)_. Every
-one-choice option on the create form is stored as Simple Majority counting with
-the real rule in the victory condition, and the election page used to show
-only the first half — an election created as **Most Votes Wins (Plurality)**
-read "Voting Method: Simple Majority". The details card now reads **Voting
-Method** as **One choice per voter**, **Ranked choice** or **Approval**, and a
-**Winner** row gives the rule: "Most Votes (Plurality)", "Majority (>50% of
-votes)", "Supermajority (67% of votes)" or the threshold.
-
-Also on the create form _(2026-09-30)_: typing a position and clicking **Add**
-adds it on the first click (an invisible layer used to swallow it); the quick
-durations and **End of Day** are computed in the department's timezone, not the
-browser's — in a browser set to UTC, "End of Day" for a 9:00 AM Chicago start
-was 6:59 PM and "1 Hour" landed before the start; and the start and end time
-pickers are announced as "Start time" and "End time".
 
 ---
 
 ## Configuring Ballot Items
 
-After creating an election, add ballot items — the individual questions or positions voters will decide:
+A ballot item is one question or race on the ballot. You build them on the
+**Ballot** tab of a draft election.
 
-1. Open the election detail page
-2. Navigate to the **Ballot Items** section
-3. Click **Add Ballot Item**
-4. Configure:
-   - **Position** — The position being filled (e.g., "President", "Vice President")
-   - **Candidates** — Add nominated candidates
-   - **Write-in allowed** — Whether voters can write in a name
-   - **Approval/Denial** — For membership votes, voters approve or deny each applicant
+1. Open the election and the **Ballot** tab.
+2. Choose how to add an item:
+   - **Use Template** — pick a ready-made item, such as a probationary member's
+     move to regular membership, or one of your saved ballots.
+   - **Custom Item** (or **Add Item** once the ballot has items) — build your
+     own.
+3. For a custom item, fill in:
+
+| Field                                  | What it means                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Title** (required)                   | The question or race, as voters will see it                                                |
+| **Description**                        | More detail for voters                                                                     |
+| **Item Type**                          | **General Vote**, **Membership Approval** or **Officer Election**                          |
+| **Vote Type**                          | **Approval (Yes/No)** or **Candidate Selection**                                           |
+| **Position**                           | For candidate selection: the position whose candidates appear on this item                 |
+| **Who Can Vote**                       | All members, or a membership group. See [Voter Eligibility](#voter-eligibility--overrides) |
+| **Require meeting attendance to vote** | Only members checked in at the linked meeting may vote on this item                        |
+
+4. Select **Add to Ballot**.
+
+You can drag items to change their order. Select **Preview Ballot** to see the
+ballot as a voter will.
 
 ![Ballot item configuration with its position and candidate settings](./images/14-04-ballot-configuration.png)
 
-> **Hint:** Use **ballot item templates** (`GET /elections/templates/ballot-items`) for common configurations like officer positions or membership approval votes.
+> **Tip.** The ready-made templates cover common meeting items, such as
+> membership approvals. Most of them require meeting attendance.
 
 ---
 
 ## Saved Ballot Templates
 
-_(2026-08-12)_ **Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-If your department runs the same officer slate every year, you no longer have
-to rebuild the ballot each time. Save this year's ballot as a named template
-and apply it to next year's election:
+If your department runs the same officer slate every year, save this year's
+ballot as a template and apply it next year.
 
 ### Saving a ballot
 
-1. Build the ballot as usual on a draft election
-2. In the Ballot Builder, click **Save as Template** (visible once the ballot
-   has at least one item, and not on a closed election)
-3. Name it — e.g. "Annual officer election" — and click **Save Template**
+1. Build the ballot as usual on a draft election.
+2. On the **Ballot** tab, select **Save as Template**. It shows once the ballot
+   has at least one item, and not on a closed election.
+3. Type a **Template name**, such as "Annual officer election", and select
+   **Save Template**.
 
-A department can keep up to **200** saved templates _(2026-10-05)_. Saving a
-201st is refused with "This organization has reached the maximum of 200 saved
-ballot templates" — delete one you no longer use from the template picker
-first.
+A department can keep up to **200** saved templates. Saving a 201st is refused
+with "This organization has reached the maximum of 200 saved ballot
+templates". Delete one you no longer use first.
 
-> **What is saved — and what deliberately is not.** A template snapshots the
-> ballot **structure only**: items, positions, voting methods, victory
-> conditions, write-in settings, eligibility types. It never carries
-> candidates, voters, votes, tokens, or attendance — the builder says exactly
-> this under the name field, and the stored shape has nowhere to put them.
-> Since 2026-10-05 a save request that tries to send one anyway — a
-> `candidates` list inside an item, say — is refused outright rather than
-> accepted with the extra quietly dropped.
-> Applying last year's template gives you last year's _questions_, with nobody
-> pre-nominated.
+> **What is saved — and what is not.** A template saves the ballot's
+> **structure only**: items, positions, voting method, winning rules,
+> write-in setting and who can vote. It never saves candidates, voters, votes,
+> ballot links or attendance. The form says so under the name field.
+> Applying last year's template gives you last year's _questions_, with
+> nobody nominated.
 
 ![The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons](./images/14-21-save-ballot-template.png)
 
 ### Applying one
 
-1. On a draft election, open the ballot **template picker**
-2. Your department's templates appear under **"Your saved ballots"**, above
-   the built-in item templates, each showing its item count and the note
-   "replaces current ballot"
-3. Click one, then confirm **Replace** — this replaces the whole current
-   ballot, which is why it asks twice
-4. Add this year's candidates to the applied items
+1. On a draft election, select **Use Template**.
+2. Your department's templates appear under **Your saved ballots**, above the
+   built-in templates. Each shows its item count and the note "replaces
+   current ballot".
+3. Select one, then confirm with **Replace**. This replaces the whole current
+   ballot, which is why it asks twice.
+4. Add this year's candidates to the items.
 
 ![The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates](./images/14-22-ballot-template-picker.png)
 
-> **It replaces two things, and warns about one.** A template carries the
-> **voting method** and **write-in setting** of the election it was saved from,
-> and applying it writes both over the election you applied it to. The
-> confirmation is about the ballot; nothing on screen mentions the settings.
-> The details card above the builder shows the method and, since 2026-09-30,
-> the **Winner** rule, but not the write-in setting. Click **Preview
-> Ballot** afterwards — its Election Details strip is where the method, the
-> victory condition and its percentage, Anonymous, Write-ins allowed and the
-> quorum appear together.
+> **Important — a template changes two settings without warning.** A template
+> carries the **voting method** and the **write-in setting** of the election it
+> was saved from. Applying it writes both over your election. The confirmation
+> only mentions the ballot. Afterwards, select **Preview Ballot** and check its
+> Election Details strip: it shows the method, the winning rule and
+> percentage, Anonymous, Write-ins allowed and the quorum together.
 
 Below is one draft before and after applying "Annual officer election", a
-template saved from a ranked-choice officer ballot. One item becomes four, which
-the confirmation warned about — and the voting method changes from one choice
+template saved from a ranked-choice officer ballot. One item becomes four,
+which the confirmation warned about. The voting method changes from one choice
 per voter to ranked choice, which nothing warned about.
 
 ![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
 
 ![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
 
-**[SCREENSHOT — REPLACE `19-25-ballot-template-settings-before.png` and `19-26-ballot-template-settings-after.png`.** The details card changed on 2026-09-30: **Voting Method** reads "One choice per voter" (before) and "Ranked choice" (after) instead of "Simple Majority" / "Ranked Choice", and a new **Winner** row shows the victory condition — in this example "Supermajority (67% of votes)" on both frames, which is the hazard the paragraph below describes. Re-shoot the same draft before and after applying the template.**]**
+The risk is in what does _not_ change. This draft was created as
+**Supermajority Required (2/3)**. Applying the template overwrote the method
+but left the winning rule alone. So a bylaw amendment that must carry
+two-thirds is now decided by ranked choice, with its 67% rule still recorded
+underneath. **Positions** still shows the draft's old value, and write-ins
+went off because the officer template had them off.
 
-The hazard is the part that did _not_ change. This draft was created as
-**Supermajority Required (2/3)** — Simple Majority counting with the
-Supermajority victory condition. The apply overwrote the method and left the
-condition alone, so a bylaw amendment that must carry two-thirds is now decided
-by ranked choice with its 67% threshold still recorded underneath.
-**Positions** still reads the draft's old value over a ballot of four officer
-seats, and the write-in setting is overwritten along with the method: the
-officer template had write-ins off, so they went off. Treat a saved ballot as a
-starting point for a _new_ election rather than a change to a configured one.
+**Treat a saved ballot as a starting point for a new election**, not a change
+to one you have already set up.
 
-### Edge Cases
+### What if …?
 
-| Scenario                                                                               | Behavior                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Two templates named "Annual Officers" and "annual officers"                            | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing                                                                                                                                                                                                                             |
-| Applying a template over a ballot you were editing                                     | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                                                                                                                                                                                                                                                     |
-| The member who saved a template leaves the department                                  | The template survives — it belongs to the organization, not its author                                                                                                                                                                                                                                                                                                                           |
-| Deleting a template used by past elections                                             | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                                                                                                                                                                                                                                                        |
-| Applying the same template to two elections                                            | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                                                                                                                                                                                                                                                         |
-| Applying a template to an election configured for a supermajority                      | The **method** is overwritten and the **victory condition is not**, leaving a 2/3 threshold recorded under whatever method the template brought. Applying a template is the only control that changes an election's voting method once the election exists — **Edit Dates** and **Clone Election** do not touch it — so to get a different method/condition pairing back, re-create the election |
-| Results                                                                                | Never in a template — the stored shape is the ballot items, the voting method and the write-in setting                                                                                                                                                                                                                                                                                           |
-| Deleting a saved template                                                              | Asks for confirmation — the picker's delete button arms a **Delete** / **Cancel** pair                                                                                                                                                                                                                                                                                                           |
-| A template or ballot with an invalid or duplicate item ID, or an unknown voting method | Rejected. Item IDs may use only letters, numbers, `_` and `-`, and must be unique within the ballot                                                                                                                                                                                                                                                                                              |
-| Voter type `all` alongside another voter type on one item                              | Rejected — "'all' cannot be combined with other voter types"                                                                                                                                                                                                                                                                                                                                     |
-| A ballot item overriding its victory condition to supermajority without a percentage   | Rejected — a supermajority item needs its `victory_percentage`                                                                                                                                                                                                                                                                                                                                   |
-| Quorum values on the election                                                          | A **count** quorum may exceed 100; a **percentage** quorum may not ("Percentage quorum cannot exceed 100")                                                                                                                                                                                                                                                                                       |
-| A template from another department                                                     | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                                                                                                                                                                                                                                                         |
+| What happened                                                  | What it means                                                                                                                                                                                               |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You save "Annual Officers" when "annual officers" exists       | Refused: "A ballot template with this name already exists". Names are unique regardless of capitals                                                                                                         |
+| You apply a template over a ballot you were editing            | The ballot is **replaced**, not merged                                                                                                                                                                      |
+| The member who saved a template leaves                         | The template stays. It belongs to the department                                                                                                                                                            |
+| You delete a template used by past elections                   | Safe. Each election keeps its own copy of its ballot                                                                                                                                                        |
+| You apply a template to an election set up for a supermajority | The method is overwritten; the winning rule is not. Applying a template is the only thing that changes an election's method after it is created. To get a different pairing back, create the election again |
+| You delete a saved template                                    | The picker asks you to confirm with **Delete** or **Cancel**                                                                                                                                                |
+| An item says **All Members** plus another group                | Refused: "'all' cannot be combined with other voter types"                                                                                                                                                  |
+| A template from another department                             | You cannot see it                                                                                                                                                                                           |
 
 ---
 
 ## The Nomination Phase
 
-> Requires the **Nominations** feature toggle (on by default) in Election
-> Settings → Features.
+> **Note.** This needs the **Nomination phase** feature, which is on unless an
+> officer turns it off in Election Settings.
 
-Instead of the secretary entering every candidate by hand, a positional
-election can run a formal **nomination phase** where the membership proposes
-candidates:
+Instead of the secretary entering every candidate, members can propose
+candidates during a **nomination phase**.
 
-1. On a **draft** election with positions, click **Open Nominations** — the
-   election enters the `nominations` status
-2. Optionally set a **nomination deadline**; when it passes, the phase closes
-   automatically (the election returns to draft for ballot finalization)
+1. On a **draft** election with positions, select **Open Nominations**.
+2. Optionally set a **nomination deadline**. When it passes, nominations close
+   by themselves.
 3. While nominations are open, **any member** can:
-   - **Nominate themselves** for a position (accepted immediately)
-   - **Nominate another member**, with an optional supporting statement — the
-     nominee is emailed and must **accept** before they appear on the ballot;
-     declining removes the entry (the audit log keeps the record)
-4. Click **Close Nominations** (or let the deadline do it) — the election
-   returns to Draft, where you order the ballot and open voting as usual.
-   **Closing freezes the slate** _(2026-10-08, W50-38)_: a nomination still
-   pending stays off the ballot (the Candidates tab marks it _"Not accepted
-   before nominations closed"_), and neither the nominee nor a manager can
-   accept or decline any more. To change the slate, open nominations again.
+   - **Nominate themselves** for a position. This is accepted at once.
+   - **Nominate another member**, with an optional supporting statement. The
+     nominee is emailed and must **accept** before they reach the ballot.
+     Declining removes the nomination (the audit log keeps a record).
+4. Select **Close Nominations**, or let the deadline do it. The election goes
+   back to **Draft**, where you order the ballot and open voting as usual.
 
-**Accepting on a nominee's behalf** _(2026-10-08, W50-38)_. While nominations
-are open, an election manager can accept a pending nomination for the nominee
-(**Accept on their behalf** on the Candidates tab) — for a member who agreed in
-person or by phone. The candidate is labelled **Accepted by manager** wherever
-the list is shown, and the nominee is emailed that their nomination was
-accepted for them, with how to decline before nominations close. If the
-nominee later accepts themselves, the label is removed.
+**Closing freezes the slate.** A nomination still pending stays off the
+ballot. The **Candidates** tab marks it _"Not accepted before nominations
+closed"_. After closing, neither the nominee nor an officer can accept or
+decline. To change the slate, open nominations again.
 
-Safeguards:
+**Accepting for a nominee.** While nominations are open, an officer can select
+**Accept on their behalf** on the **Candidates** tab. Use it for a member who
+agreed in person or by phone. The candidate is labelled **Accepted by
+manager**. The nominee is emailed that their nomination was accepted for them,
+with how to decline before nominations close. If the nominee later accepts
+themselves, the label goes away.
 
-- Nominee must be an active member of your organization; duplicates rejected
-- A nominator may have at most **10 pending third-party nominations**
-  outstanding per election (anti-spam)
-- Opening the phase emails an announcement to all active members (BCC);
-  email failures never block the phase change
-- Only candidates who **accepted** reach the ballot — `open_election` still
-  validates this
-- **Pending nominations are member-visible only while nominations are open**
-  _(2026-08-16)_ — that window exists so nominees can see and respond to their
-  nomination. Once the phase closes, the member-facing candidate list shows
-  accepted candidates only; a nomination that was never accepted simply
-  disappears from members' view. Election managers (`elections.manage`)
-  always see the full list, pending entries included.
+**Safeguards:**
+
+- The nominee must be an active member of your department. Duplicates are
+  refused.
+- One member may have at most **10** pending nominations of other people in
+  one election.
+- Opening nominations emails an announcement to all active members, with
+  addresses hidden from each other. A failed email never stops nominations
+  opening.
+- Only candidates who **accepted** reach the ballot.
+- **Members see pending nominations only while nominations are open**, so
+  nominees can find and answer theirs. After closing, members see accepted
+  candidates only. Officers always see the full list.
 
 ![Nominations tab with the nominate form and current nominations](./images/14-05-nominations-tab.png)
 
@@ -290,1020 +351,956 @@ Safeguards:
 
 ![The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld once nominations have closed](./images/14-26-candidates-as-member.png)
 
-**Above: an elections manager. Below: an ordinary member, on the same
-election.** The manager's Candidates tab lists Sofia Marchetti as **Pending**
-with an Accept action beside her; the member's ballot offers Amara Osei alone.
-A member has no Candidates tab at all — their view of who is standing _is_ the
-ballot, which is why the withheld nomination shows up as a shorter list of
-options rather than as a hidden row.
-
-While nominations are still open a member **does** see pending nominations, so
-that a nominee can find and answer their own. It is only after nominations close
-that they become management records.
+**Above: an officer. Below: an ordinary member, on the same election.** The
+officer's **Candidates** tab lists Sofia Marchetti as **Pending**, with an
+accept button. The member's ballot offers Amara Osei alone. A member has no
+Candidates tab; the ballot _is_ their view of who is standing.
 
 ---
 
 ## Nominating Candidates
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-1. Open the election detail page
-2. Click **Add Candidate** on a ballot item
-3. Select the member from the dropdown or enter details for an external candidate
-4. Optionally add a **candidate statement** or bio
-5. Save — the candidate appears on the ballot item
+1. Open the election and the **Candidates** tab.
+2. Select **+ Add Candidate**.
+3. Fill in:
 
-### Candidate Fields
+| Field                  | What it means                                                         |
+| ---------------------- | --------------------------------------------------------------------- |
+| **Position**           | The position they are running for                                     |
+| **Select Member**      | Search by name or membership number                                   |
+| Name                   | Or type a name, for someone who is not a member                       |
+| **Statement**          | Their statement or platform, shown to voters (up to 5,000 characters) |
+| **Write-in candidate** | Adds them as a write-in rather than from the official slate           |
 
-| Field             | Description                                       |
-| ----------------- | ------------------------------------------------- |
-| **Name**          | Candidate's full name                             |
-| **Position**      | Which position they're running for                |
-| **Statement**     | Candidate statement or bio (shown to voters)      |
-| **Display Order** | Sort order on the ballot                          |
-| **Accepted**      | Whether the candidate has accepted the nomination |
+4. Select **Add Candidate**.
 
 ![Candidate nomination form with member, position and statement fields](./images/14-06-candidate-form.png)
 
-### Edge Cases
+### What if …?
 
-| Scenario                          | Behavior                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------ |
-| Candidate with existing votes     | Cannot be deleted (preserves audit trail)                                      |
-| Candidate declines nomination     | The nomination is removed from the election; the member can be nominated again |
-| Write-in candidate receives votes | Recorded as-is; counted in results                                             |
+| What happened                                                     | What it means                                                                                                               |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| You try to delete a candidate who has votes                       | Refused, to keep the record                                                                                                 |
+| You change a candidate's name, position or acceptance after votes | Refused: "Cannot change a candidate's name, position or acceptance once votes have been cast". A statement edit still saves |
+| You clear a candidate's statement                                 | It is cleared                                                                                                               |
+| A candidate declines                                              | The nomination is removed. They can be nominated again                                                                      |
+| A write-in name gets votes                                        | Saved exactly as typed and counted                                                                                          |
 
 ---
 
 ## Voter Eligibility & Overrides
 
-By default, all active members in the organization are eligible to vote. Eligibility can be restricted by:
+By default, every active member may vote. You can narrow that:
 
-- **Membership standing** — Only certain standings can vote (e.g. operational members, or life members only)
-- **Meeting attendance** — Must be present at the associated meeting
-- **Specific voter list** — Manually defined list of eligible voter IDs
-- **Membership tier attendance rule** — A tier can require a minimum
-  percentage of meetings attended over a period of months before its members
-  may vote. Since 2026-09-29 the period runs from the later of that cutoff and
-  the start of the member's current service (their latest service period,
-  otherwise their hire date) up to the department's today — so a recent hire
-  is no longer charged with meetings held before they joined, a reinstated
-  member with meetings held while they were away, or anyone with meetings
-  scheduled for next week. Waived meetings and meetings during a leave of
-  absence are left out of the count. The secretary's attendance calculation
-  uses the same rule
+- **By membership group**, on each ballot item, with **Who Can Vote**.
+- **By meeting attendance**, on each ballot item, with **Require meeting
+  attendance to vote**.
+- **By a specific list of voters.** An empty list means everyone.
+- **By membership tier.** A tier can require a minimum share of meetings
+  attended over a number of months. The count starts at whichever is later:
+  that cut-off, or the start of the member's current service (their latest
+  service period, otherwise their hire date). It runs to today. So a recent
+  hire is not charged with meetings held before they joined. Excused meetings
+  and meetings during a leave of absence are left out. The secretary's
+  attendance figures use the same rule.
 
-> **Standing is two fields now** _(2026-08-26)_. A member's standing used to be
-> one field carrying two independent facts. It is now a **class** (operational,
-> administrative, social) and a **status** (prospective, probationary, regular,
-> life, retired).
->
-> **The built-in voter categories keep the meaning they always had**, so your
-> existing ballots behave as before:
->
-> | Category         | Requires                                        |
-> | ---------------- | ----------------------------------------------- |
-> | `operational`    | operational class **and** regular status        |
-> | `regular`        | operational class **and** (regular **or** life) |
-> | `life`           | operational class **and** life status           |
-> | `probationary`   | operational class **and** probationary status   |
-> | `administrative` | administrative class                            |
-> | `social`         | social class                                    |
->
-> Two things did change, and one of them **narrows** eligibility rather than
-> widening it:
->
-> - **A life member now receives a `regular` ballot.** Under the old single
->   field, "life" and "regular" were competing values, so a life member could
->   not satisfy a `regular` restriction. Now they can.
-> - **An administrative member with regular standing no longer receives ballots
->   restricted to active or life members.** Every status category now also
->   requires the operational class. If your bylaws intend administrative members
->   to vote on those items, use an override or an explicit voter list.
->
-> Members whose records predate the change are evaluated correctly — the pair is
-> derived from the old field when it has not been set. **A member on an
-> org-configured membership tier (the shipped `senior` tier, for example)
-> resolves to no class and no status**, deliberately: that is exactly what the
-> tier matched before, and guessing would widen the electorate. **A member with
-> nothing recorded at all is different** — an empty value resolves to the
-> defaults, operational and regular, so they do receive both those ballots.
+### Membership groups
+
+A member's standing has two parts: a **class** (operational, administrative or
+social) and a **status** (prospective, probationary, regular, life or retired).
+The **Who Can Vote** groups combine them like this:
+
+| Who Can Vote                                  | Who qualifies                                    |
+| --------------------------------------------- | ------------------------------------------------ |
+| **All Members**                               | Everyone eligible to vote                        |
+| **Operational Members (Regular status only)** | Operational class **and** regular status         |
+| **Regular Members (status)**                  | Operational class **and** regular or life status |
+| **Life Members (status)**                     | Operational class **and** life status            |
+| **Regular + Life Members (status)**           | Either of the two rows above                     |
+| **Probationary Members (status)**             | Operational class **and** probationary status    |
+| **Administrative Members — any status**       | Administrative class                             |
+| **Social / Associate Members — any status**   | Social class                                     |
+
+**What if …?**
+
+| Member                                                           | Result                                                                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Life member, on an **Operational** item                          | **Not** eligible — that group needs regular status. They get Regular and Life items              |
+| Life member, on a **Regular** item                               | **Eligible**                                                                                     |
+| Probationary member, on an **Operational** item                  | **Not** eligible. They get Probationary items                                                    |
+| Administrative member with regular status, on a **Regular** item | **Not** eligible — the status groups also need the operational class                             |
+| Administrative member holding an operational role                | **Not** eligible for operational items. The class decides, not the role                          |
+| Member on a department-made tier (for example "senior")          | Matches no class or status, so eligible for **All Members** items only                           |
+| Member with **nothing** recorded                                 | Treated as operational and regular, so they get both those groups. Not the same as the row above |
+
+If your bylaws mean administrative members to vote on regular-member items,
+use an override or a specific voter list.
 
 ### Voter Overrides
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-When a member is excluded from voting but should be allowed (e.g., absent member with proxy authorization, or a member whose tier was incorrectly set):
+Use an override to let in a member the rules leave out. For example, a member
+whose tier was set wrongly, or one who arrived after voting opened.
 
-1. Open the election detail page
-2. Open the **Overrides** tab and click **+ Add Override**
-3. Choose the **Member** from the list of active and probationary members
-   (members who already have an override are left out). Until 2026-09-30 this
-   field asked for the member's user ID, which no screen shows
-4. Enter a **Reason** (at least 10 characters) and click **Add Override**
-5. The member is now eligible regardless of membership type, attendance or
-   role restrictions, and the override is listed by name
+1. Open the election and the **Overrides** tab.
+2. Select **+ Add Override**.
+3. Choose the **Member** from the list of active and probationary members.
+   Members who already have an override are not listed.
+4. Enter a **Reason** of at least 10 characters, and select **Add Override**.
 
-The **Eligibility Roster** tab is where you find who needs one: a member who
-will not receive a ballot is explained there, row by row, and the panel points
-you to the **Overrides** tab.
+The member may now vote whatever their membership type, attendance or group.
+The override is listed by name.
 
-> **An override extends a specific voter list** _(2026-10-05)_. On an election
-> restricted to a named list of voters, an override for someone not on the
-> list admits them as though they were on it: they can vote in the app, they
-> receive a ballot email, and they count in the eligible total and turnout
-> exactly as the roster shows.
+The **Eligibility** tab shows who needs one. Each member who will not get a
+ballot is explained row by row, and the panel points you to **Overrides**.
 
-> **Linkable tabs** _(2026-08-12)_: every tab on the election detail page can
-> now be sent as a URL — the eligibility roster is
-> `/elections/<id>?tab=eligibility`, and the browser Back button steps back
-> through tab changes. Useful for pointing a fellow officer at exactly the
-> roster (or `?tab=overrides`, `?tab=proxies`, `?tab=attendance`) instead of
-> giving directions.
+**An override extends a specific voter list.** On an election limited to a
+named list, an override for someone not on it lets them in as if they were.
+They can vote in the app, they get a ballot email, and they count in the
+eligible total and turnout.
 
 ![Eligibility roster listing members with their eligibility status](./images/14-07-eligibility-roster.png)
 
-### Edge Cases
-
-| Scenario                                                               | Behavior                                                                                                                                                         |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member not on attendance list                                          | Ineligible unless override granted                                                                                                                               |
-| Override granted, then member's standing changes                       | Override persists regardless                                                                                                                                     |
-| Bulk override for remote voters                                        | Use bulk override endpoint to add multiple members                                                                                                               |
-| Life member, on an **operational** item                                | **Not** eligible — `operational` requires regular standing. They receive `regular` and `life` items                                                              |
-| Life member, on a **regular** item                                     | **Eligible** _(changed 2026-08-26)_ — the old fused field could not put them in both                                                                             |
-| Probationary member, on an **operational** item                        | **Not** eligible; they receive `probationary` items                                                                                                              |
-| Administrative member with regular standing, on a **regular** item     | **Not** eligible _(tightened 2026-08-26)_ — status categories now also require the operational class                                                             |
-| Administrative member holding an operational role                      | **Not** eligible for operational items — the class decides, not the role                                                                                         |
-| Member on an org-configured tier (e.g. `senior`)                       | Matches no class and no status; eligible for `all` only — deliberate, since the tier satisfied neither category before the split                                 |
-| Member with **nothing** recorded (no class, status or membership type) | **Treated as operational + regular** — an empty value resolves to the defaults, so they do receive both those ballots. Not the same as the custom-tier row above |
+> **What if a member's standing changes after the override?** The override
+> still applies.
 
 ---
 
 ## The Pre-Meeting Package
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-Before an annual or special meeting, generate a **pre-meeting package** — a
-print-ready PDF the membership or leadership can review ahead of time. From
-the election detail page (draft or open elections), open **Pre-Meeting
-Package** in the Communication section.
+Before an annual or special meeting, you can send a **pre-meeting package**: a
+printable PDF the membership or leadership can review ahead of time. On a
+draft or open election, select **Pre-Meeting Package** in the
+**Communication** section.
 
 The package contains:
 
-- The linked meeting's details and **agenda** (when the election is linked to
-  a meeting record)
-- The election configuration: voting window, voting method, victory
-  condition, quorum requirement, proxy-voting availability, runoff settings
-- A **ballot preview**: every ballot item in order with its eligibility
-  restrictions, plus the nominated candidates and their statements
-- The **voter-eligibility roster**: summary counts and the eligible-voter
-  name list
+- The linked meeting's details and **agenda**, when the election is linked to
+  a meeting.
+- The election setup: voting window, voting method, winning rule, quorum,
+  whether proxy voting is available, and runoff settings.
+- A **ballot preview**: every item in order with who may vote on it, plus the
+  candidates and their statements.
+- The **voter roster**: for each ballot item, how many may vote and why (for
+  example "3 eligible (checked in / override), 17 not checked in"), and the
+  list of eligible names.
 
-### Two privacy variants
+### Two versions
 
-| Variant    | Contents                                                    | Intended audience          |
-| ---------- | ----------------------------------------------------------- | -------------------------- |
-| **Member** | Eligible-voter names + counts only                          | General membership mailing |
-| **Full**   | Adds per-member ineligibility reasons and granted overrides | Leadership / board prep    |
+| Version               | Contents                                                        | For                    |
+| --------------------- | --------------------------------------------------------------- | ---------------------- |
+| **Member version**    | Eligible voters' names and counts only                          | The general membership |
+| **Full (leadership)** | Adds each member's reason for not being eligible, and overrides | Leadership and board   |
 
-> **Privacy note:** ineligibility reasons expose individual members'
-> membership tier and attendance shortfalls. Keep the full variant to
-> leadership; the member variant exists precisely so those details aren't
-> broadcast department-wide.
+> **Important — keep the full version to leadership.** The reasons show
+> individual members' tiers and attendance shortfalls. The member version
+> exists so those details are not sent to everyone.
 
 ### Sending it
 
-1. Click **Pre-Meeting Package**
-2. Prefill the recipient list from **Leadership** or **All eligible voters** —
-   then edit it freely: remove anyone, or add outside addresses (board
-   counsel, the district office, a member's personal email)
-3. Choose the variant (the full-roster checkbox defaults on for leadership
-   prefills), add an optional message, and send — recipients are **BCC'd**
-   so addresses aren't exposed to each other
+1. Select **Pre-Meeting Package**. The **Email Pre-Meeting Package** window
+   opens.
+2. Fill the recipient list with **Leadership** or **All eligible voters**, then
+   change it freely. Remove anyone, or add outside addresses (board counsel, a
+   member's personal email). **Clear list** empties it.
+3. Tick **Include full roster detail (ineligibility reasons)** for the full
+   version. It is ticked for you when you fill the list from Leadership.
+4. Add an optional **Message**, and select **Send to _n_ recipients**.
+   Recipients cannot see each other's addresses.
 
 ### Or just download it
 
-Use the **Preview PDF** links (or `GET /elections/{id}/package-pdf`) to
-download either variant without sending anything — attach it to your own
-email, print it for the meeting, or file it with the minutes. Sends and
-downloads are both audit-logged.
+Under **Preview the PDF**, select **Full (leadership)** or **Member version**
+to download it without sending anything. Attach it to your own email, print it
+for the meeting, or file it with the minutes. Sends and downloads are both
+recorded in the audit log.
 
 ---
 
 ## Opening an Election
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
 When the election is ready:
 
-1. Review all ballot items and candidates
-2. Click **Open Election** — status changes from Draft to Open, and the voter roll is frozen (see below)
-3. Opening by hand sends no ballots. Send them yourself with **Send Ballot Emails** (see Ballot Distribution). A scheduled opening (**Open Automatically at Start Time**) does send them _(2026-10-08, W50-72)_: as the election's creator (replies go to them), with links on the department's configured app address. If that send fails or reaches nobody, the election still opens, and every member who can manage elections is emailed _"Action needed: ballots for <election> were not sent"_ — open the election and use **Send Ballot Emails**
-4. Once the ballots are out, voters can cast their votes via the in-app interface or the email ballot link
+1. Check every ballot item and candidate. **Preview Ballot** shows the ballot
+   as voters will see it.
+2. Select **Open Election**. The status changes from Draft to Open, and the
+   voter roll is frozen (see below). Voting starts at once, even if the
+   scheduled start has not arrived.
+3. **Opening by hand sends no ballots.** Members can vote on the **Cast Vote**
+   tab straight away. The page reminds you: "Ballots have not been emailed
+   yet." Select **Send Ballot Emails** to tell members voting is open and
+   give each a ballot link.
+4. **A scheduled opening does send them.** With **Open Automatically at Start
+   Time**, the ballots go out as the election's creator, so replies go to
+   them. If that send fails or reaches nobody, the election still opens. Every
+   officer who can manage elections is then emailed _"Action needed: ballots
+   for (election) were not sent"_. Open the election and select **Send Ballot
+   Emails**.
 
-> **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
->
-> **Previewing a draft** _(2026-10-05)_: Election Settings offers test ballots for **draft** elections, and the emailed test link now opens the draft's ballot — you can vote through it, see the **TEST BALLOT** banner and get a receipt that says the vote is not counted. A real (non-test) link still opens only once the election is open.
+> **Tip — send yourself a test ballot first.** In **Election Settings → Test
+> Ballot**, choose a draft election and select **Send Test Ballot**. The test
+> link opens the draft's ballot. You can vote through it, see the **TEST
+> BALLOT** banner and get a receipt saying the vote is not counted. Test votes
+> are left out of results, figures and rosters, and never use up your real
+> vote.
 
 ### Ballot Distribution
 
-When you click **Send Ballots**, the system:
+When you select **Send Ballot Emails**, The Logbook:
 
-1. Identifies all eligible voters (respecting tier, attendance, and override rules)
-2. Generates a unique voting token per voter — the token records which ballot items (and, for positional elections, which positions) that voter is eligible for, and this is enforced again when the ballot is submitted (a voter cannot vote on restricted items or positions even by crafting the request manually)
-3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
-4. Reports how many ballots were sent and which members were skipped (with reasons)
+1. Works out who may vote, using the groups, attendance and override rules.
+2. Creates a personal ballot link for each voter. The link only shows the
+   items and positions that voter may vote on. This is checked again when the
+   ballot is submitted.
+3. Emails each voter their link.
+4. Reports how many ballots were sent and which members were skipped, and why.
+
+The ballot link is private. It does not reach the department's server logs,
+and the ballot page removes it from the address bar once loaded.
 
 ![The banner after a ballot send, naming each member who was skipped and why](./images/14-24-ballot-send-skipped.png)
 
-**Changing the ballot after ballots went out** _(2026-10-08, W50-47)_. A
-ballot link shows the ballot as it was when the link was sent. So when you
-change the ballot items, the positions or who may vote on which (for example
-after rolling an open election back to draft), every link already sent that
-has not been used is retired. The detail page then shows **"Every ballot link
-already sent was invalidated because the ballot changed"** until ballots go
-out again — with **Resend Ballot Emails** on an open election, or a reminder to
-send once voting is open on a draft. A member who opens an old link reads that
-the ballot changed and a new email is coming. Saving the ballot without
-changing it retires nothing.
+Two things report the result:
 
-Two things report the result. A **toast** gives the counts — "Ballots sent to N
-voter(s)", plus "M failed" and "M skipped (see banner below)" when either
-applies — and it disappears. A **banner** stays on the page and names each
-skipped member with the reason, which is the part you act on.
+- A short message gives the counts — "Ballots sent to N voter(s)", plus "M
+  failed" and "M skipped (see banner below)" when either applies. It
+  disappears.
+- A **banner** stays on the page and names each skipped member with the
+  reason. That is the part you act on.
 
-**What the ballot email needs, and when it says so** _(2026-09-30)_:
+After a send, the button reads **Resend Ballot Emails** and the page shows
+**Ballots sent** with the time.
 
-- **Ballot emails carry every race** _(2026-10-05)_. The emailed ballot
-  page shows ballot items **and** plain positions — a race created from the
-  create form's positions is served to it as a ballot item — so an election
-  built from positions and candidates alone can be emailed. **Send Ballot
-  Emails** is disabled only for an election with neither ballot items nor
-  positions, and the page then says why in text beside it. A member eligible
-  only for a plain position now gets that race on the link, where the page
-  used to open empty.
-- **A draft cannot be mailed.** Sending ballots is refused for a Draft or
-  Nominations election ("Ballot emails cannot be sent for a draft election")
-  except as a test ballot; it was already refused once closed or cancelled.
-- **The send summary tells the truth about its own email.** The line about the
-  eligibility summary emailed to you now reports whether that email actually
-  went ("The eligibility summary email could not be sent"), where it used to
-  claim it was sent with email switched off.
-- **A test ballot looks like one.** Its subject starts **[TEST]**, the mail
+**Things to know:**
+
+- **Ballot emails carry every race.** The emailed ballot shows ballot items
+  and plain positions. An election built from positions and candidates alone
+  can be emailed. **Send Ballot Emails** is unavailable only when an election
+  has neither, and the page says why.
+- **A draft cannot be emailed**, except as a test ballot. Neither can a closed
+  or cancelled election.
+- **The summary emailed to you is reported truthfully.** If it could not be
+  sent, the page says "The eligibility summary email could not be sent".
+- **A test ballot looks like one.** Its subject starts **[TEST]**, the email
   carries a test stamp, and its receipt says _"This was a test vote. It was
   recorded but is not counted toward the election results."_ Sending a test
   ballot does not mark the election's ballots as sent.
 
-> **Hint:** Ballot links are built from the server-configured `FRONTEND_URL`, not the address of the request that triggers the send. Your administrator should set `FRONTEND_URL` to the department's real public site URL (e.g. `https://app.yourdept.org`) so members receive working ballot links — if it is misconfigured, the emailed link points to the wrong host even though the send still reports success. _(2026-09-24)_ In production, a `FRONTEND_URL` still pointing at `localhost` logged a warning at backend startup. _(2026-09-25)_ It now stops a production backend from starting at all (`CRITICAL: FRONTEND_URL ...`), so a server that is up is not using a `localhost` value — but ask your administrator to confirm it is the address members actually use before election night.
+**Changing the ballot after ballots went out.** A ballot link shows the ballot
+as it was when the link was sent. So if you change the ballot items, the
+positions or who may vote on which, every unused link already sent stops
+working. This can happen after rolling an open election back to draft. The
+page then shows **"Every ballot link already sent was invalidated because the
+ballot changed"** until ballots go out again. A member who opens an old link
+reads that the ballot changed and a new email is coming. Saving the ballot
+without changing it stops nothing.
 
-### Edge Cases
+> **Important — check the link address before election night.** Ballot links
+> use the web address your administrator set up for The Logbook, not the
+> address you happen to be using. If it is wrong, members get links to the
+> wrong place even though the send reports success. Ask your administrator to
+> confirm it is the address members actually use.
 
-| Scenario                                                     | Behavior                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member without email address                                 | Skipped during send; reason logged                                                                                                                                                                                                       |
-| Ballot sent to member who already voted                      | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level)                                                                                                                   |
-| Member with zero eligible ballot items                       | Skipped during send (no empty ballot); reason shown in the send summary                                                                                                                                                                  |
-| Election opened without ballot items or candidates           | Cannot open — at least one accepted candidate or one ballot item is required                                                                                                                                                             |
-| Election opened with candidates but no ballot items          | Since 2026-10-05 its positions are on the emailed ballot, so ballots can be emailed. Only an election with neither positions nor ballot items cannot email ballots, and the **Open election** dialog warns about that before you confirm |
-| A member checked in at the meeting after the election opened | Recorded as present, but **cannot vote**: the roll froze at opening. The Attendance tab says so while voting is open; add a voter override to admit them                                                                                 |
+### What if …?
+
+| What happened                                               | What it means                                                                                                                                       |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A member has no email address                               | Skipped, with the reason shown                                                                                                                      |
+| A member who already voted uses their link                  | The second vote is refused. Votes are never overwritten                                                                                             |
+| A member may vote on no items                               | Skipped, so nobody gets an empty ballot                                                                                                             |
+| The election has no ballot items and no accepted candidates | It cannot be opened                                                                                                                                 |
+| The election has neither ballot items nor positions         | Ballots cannot be emailed. The **Open election** dialog warns you before you confirm                                                                |
+| A member checks in at the meeting after voting opened       | They are recorded as present but **cannot vote**, because the roll froze at opening. The **Attendance** tab says so. Add an override to let them in |
 
 ### Voter-Roll Freeze
 
-Opening an election **snapshots the eligible voter roster**. From that moment,
-mid-election membership changes (status flips, tier edits) can no longer change
-who may vote or the turnout denominator — the roll is fixed, like a printed
-sign-in sheet. Secretary **overrides still admit** members after open (that's
-their purpose). Elections opened before this feature (no snapshot) evaluate
-eligibility live, as before.
+Opening an election **fixes the list of eligible voters**, like a printed
+sign-in sheet. After that, changes to a member's status or tier do not change
+who may vote or the turnout figures. **Overrides still let members in** after
+opening — that is their purpose. The **Eligibility** tab reads the frozen
+list, so a member added after opening is not shown as getting a ballot.
 
 ### Printable Ballot PDF
 
-Running a paper vote in the room? **Download Printable Ballot**
-(`GET /elections/{id}/printable-ballot`) generates the official blank paper
-ballot straight from the election setup: positions in ballot order, accepted
-candidates, write-in lines where allowed, and method-specific voter
-instructions. Print it, hand it out, then enter the tallies via
+Running a paper vote in the room? Select **Print Blank Ballots**. It makes the
+official blank paper ballot from the election setup:
+
+- Positions in ballot order, with accepted candidates.
+- Write-in lines where allowed.
+- Instructions for the voting method.
+- Every approval item as "☐ Approve ☐ Deny" under its title.
+
+The button shows on elections that have positions and are not closed. Print
+the ballots, hand them out, then enter the totals under
 [Paper Ballots & Attestation](#paper-ballots--attestation).
 
 ---
 
 ## Reminders & Lifecycle Automation
 
-> Reminders require the **Reminders** feature toggle; scheduled opening
-> requires the **Auto-Open** toggle (both on by default).
+> **Note.** Reminders need the **Non-voter reminders** feature. Scheduled
+> opening needs the **Scheduled opening** feature. Both are on unless an
+> officer turns them off.
 
-The `election_lifecycle` background task runs every 15 minutes and automates
-the routine timing work:
+Every 15 minutes, The Logbook does the routine timing work:
 
-| Automation                | Trigger                                                                                                                                    | Opt-in?                                                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auto-close**            | An open election passes its end date                                                                                                       | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
-| **Auto-open**             | A draft election with **Open Automatically at Start Time** enabled reaches its start date — and the ballots are emailed (since 2026-10-08) | Yes (`auto_open` on the election)                                                                                                                        |
-| **Nomination auto-close** | The nomination deadline passes                                                                                                             | Automatic when a deadline is set                                                                                                                         |
-| **Automatic reminder**    | The configured **Auto-Remind Non-Voters** window before close opens                                                                        | Yes (`reminder_hours_before_close`)                                                                                                                      |
+| What happens            | When                                                                                         | Can you turn it off?                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Closing**             | An open election passes its end date                                                         | No. Closing works out the results, starts any runoff and erases private voting data on anonymous elections, so an election is never left open |
+| **Opening**             | A draft with **Open Automatically at Start Time** reaches its start; the ballots are emailed | Yes — leave that box unticked on the election                                                                                                 |
+| **Closing nominations** | The nomination deadline passes                                                               | Only by not setting a deadline                                                                                                                |
+| **Reminder**            | The **Auto-Remind Non-Voters** time before close arrives                                     | Yes — choose **No automatic reminder** on the election                                                                                        |
+
+So it can take up to 15 minutes after the set time for an election to open or
+close by itself.
 
 ### Reminding Non-Voters Manually
 
-From the election detail page, **Remind Non-Voters** sends a reminder ballot
-email — with a fresh voting link — to eligible voters who have **not** voted.
-The list is recomputed server-side at send time, so members who already voted
-are never contacted.
+On an open election whose ballots have been emailed, select **Remind
+Non-Voters**. It sends a reminder email with a new ballot link to eligible
+voters who have **not** voted. The list is worked out at the moment of
+sending.
 
-- **One-hour cooldown** per election (manual or automatic) — a double-click
-  can't spam the membership
-- A reminder **replaces the earlier ballot link**: the mail is titled
-  "Reminder: vote in <election>", and an older link opened afterwards says it
-  was replaced by a newer ballot email
-- Each reminded member's **older unused links are expired only once the new
-  email is confirmed handed to the mail server** — a bounce leaves the old
-  link working, so nobody is stranded with zero live ballots
-- Exactly **one automatic reminder** is ever sent; any manual reminder
-  suppresses it (both stamp `reminder_sent_at`)
-- Double-vote prevention is unaffected: no matter how many live links a
-  member holds, the vote dedup rules allow only one ballot
+- **Paper voters are included.** Paper ballots are not matched to members, so
+  anyone who voted on paper gets a reminder too.
+- **One reminder an hour** per election, manual or automatic, so a double
+  select cannot flood members' inboxes.
+- **A reminder replaces the earlier link.** The email is titled "Reminder:
+  vote in (election)". An older link opened afterwards says it was replaced by
+  a newer ballot email.
+- **Old links stop only once the new email is handed over for delivery.** If
+  the new one bounces, the old link keeps working, so nobody is left without a
+  ballot.
+- **Only one automatic reminder** is ever sent, and a manual reminder cancels
+  it.
+- However many links a member holds, they can still vote only once.
+
+The page shows **Reminder sent** with the time.
 
 ---
 
 ## Casting Votes
 
-### In-App Voting (Authenticated)
+### In the App
 
-_(2026-10-05)_ The **Cast Vote** tab is the same ballot as the emailed link:
-every ballot item and every position race, answered the same way (Approve /
-Deny, one candidate, "Select up to N", or a ranking).
+The **Cast Vote** tab is the same ballot as the emailed link: every ballot
+item and race, answered the same way (Approve or Deny, one candidate, "Select
+up to N", or a ranking).
 
-1. Navigate to **Elections** and open the active election, then **Cast Vote**
+1. Open **Governance → Elections**, open the election, then **Cast Vote**.
 2. Make a selection — or choose **Abstain** — on every open item. Nothing is
-   pre-selected _(2026-10-08, W50-25)_, and **Cast Ballot** stays disabled
-   until each item has one, with a line naming the items still waiting. An
-   item you abstain on stays open — unlike the emailed link, the in-app
-   ballot is not single-use — and an item you have already voted on is shown
-   as done
-3. Click **Cast Ballot**, check the summary in the confirmation and confirm.
-   Everything you selected is recorded together: if any selection is refused
-   (say, you are not eligible for that item), nothing is recorded and the
-   message names the item
-4. The tab shows a **receipt** for each vote — _"Save this receipt to verify
-   your vote was counted. It cannot reveal how you voted."_ — and the verify
-   form under the ballot checks a receipt later (see
-   [Vote Receipt Verification](#vote-receipt-verification)). _(Fixed
-   2026-10-05: the receipt was recorded but the page redrew itself after the
-   vote and wiped it before you could see it.)_
+   chosen for you. **Cast Ballot** stays greyed out until each item has an
+   answer, and a line names the items still waiting.
+3. Select **Cast Ballot**, check the summary and confirm. Everything you chose
+   is saved together. If any choice is refused (for example, you may not vote
+   on that item), nothing is saved and the message names the item.
+4. The tab shows a **receipt** for each vote: _"Save this receipt to verify
+   your vote was counted. It cannot reveal how you voted."_ The check form
+   under the ballot verifies a receipt later. See
+   [Vote Receipt Verification](#vote-receipt-verification).
 
-### Email Ballot Voting (Token-Based)
+**An item you abstain on stays open** in the app, so you can vote on it later.
+An item you have already voted on is shown as done.
 
-1. Open the ballot email from your department
-2. Click the voting link
-3. The public ballot page loads with your ballot items — you only see the items (and positions/candidates) you are eligible to vote on
-4. Select your choices. The ballot adapts to the election's voting method: radio buttons for single-choice, **checkboxes** for approval and multi-vote elections (select every candidate you support, up to any cap), and **rank dropdowns** for ranked choice (1 = first preference; each rank can be used once)
-5. Click **Submit** — no login required; the token authenticates you. The confirmation screen shows your vote receipts — save them if you want to verify your votes later
+<!-- Screenshot needed:
+_[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
+-->
 
-> **No screenshot of this page _(2026-08-12)_.** Not because it is unfinished —
-> the page works — but because reaching it needs a live voting token, and the
-> system deliberately keeps those out of reach. A token is generated once,
-> handed straight to the outgoing email, and stored only as a hash, so nobody
-> with database access (including our screenshot tooling) can recover a working
-> link. That is the property that makes an emailed ballot safe to send. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#elections--the-public-ballot-cannot-be-screenshotted-by-design-2026-08-12).
+### From the Ballot Email
 
-### Bulk Voting
+1. Open the ballot email from your department.
+2. Select the voting link.
+3. The ballot page shows only the items and candidates you may vote on.
+4. Make your choices. The ballot follows the voting method:
+   - one choice: round buttons;
+   - approval or several seats: tick boxes — tick every candidate you support,
+     up to any limit;
+   - ranked choice: a rank menu for each candidate (1 = first choice; each rank
+     once).
+5. Choose an answer or **Abstain** on every item, then select **Submit
+   Ballot**. You do not need to sign in; the link identifies you.
+6. The confirmation shows your receipts. Save them if you want to check your
+   votes later.
 
-For elections with multiple ballot items, votes can be submitted atomically using bulk vote — all positions submitted in a single request.
+**The emailed link works once.** After you submit, it cannot be used again,
+even for items you abstained on.
 
-### Edge Cases
+> **Why there is no picture of the emailed ballot.** Reaching it needs a live
+> ballot link, and The Logbook keeps those out of everyone's reach — including
+> the team that takes screenshots. That is what makes an emailed ballot safe
+> to send.
 
-| Scenario                                                  | Behavior                                                                                                                                                  |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Voter tries to vote twice for the same candidate/position | Rejected (enforced at the database level); approval voters may still add approvals for _different_ candidates, and ranked-choice voters one vote per rank |
-| Voter tries to vote on a restricted ballot item           | Rejected at submission — eligibility is enforced server-side, not just hidden in the UI                                                                   |
-| Token expired                                             | Tokens expire at the election end date (or after 30 days, whichever is sooner); the secretary can re-send the ballot                                      |
-| Write-in candidate name matches existing candidate        | Recorded as separate write-in entry                                                                                                                       |
-| Ranked choice with incomplete ranking                     | Only ranked candidates counted; unranked treated as not preferred                                                                                         |
-| One vote in a bulk submission fails                       | The entire submission is rolled back — no partial ballots                                                                                                 |
+### What if …?
+
+| What happened                                         | What it means                                                                                                   |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| You try to vote twice in the same race                | Refused. On approval ballots you can still approve _different_ candidates; on ranked ballots, one vote per rank |
+| You try to vote on an item you may not vote on        | Refused when you submit, not just hidden                                                                        |
+| Your link has expired                                 | Links expire at the election's end, or after 30 days, whichever is sooner. Ask the secretary to resend          |
+| An old link says it was replaced                      | A reminder sent you a newer link. Use the newest email                                                          |
+| An old link says voting has closed                    | The election is closed                                                                                          |
+| An old link says the election was closed and reopened | Ask the secretary for a new link                                                                                |
+| A write-in matches an existing candidate's name       | Saved as a separate write-in. The secretary can merge them                                                      |
+| You rank only some candidates                         | Only the ranked candidates count                                                                                |
+| One choice in your ballot is refused                  | Nothing is saved — no partial ballots                                                                           |
 
 ---
 
 ## Paper Ballots & Attestation
 
-> Requires the **Paper Ballots** feature toggle (on by default).
+> **Note.** This needs the **Paper-ballot entry** feature, which is on unless
+> an officer turns it off.
 
-For in-room votes counted by hand, officers enter the paper tally directly —
-and a configurable number of _other_ officers must confirm the counts before
-they count toward results.
+For votes counted by hand in the room, an officer enters the paper totals.
+Then a set number of _other_ officers confirm the counts before they count
+toward results.
 
 ### Recording a Paper Tally
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-1. Print ballots with **Download Printable Ballot**, run the room vote, and
-   count the papers
-2. On the open election, click **Record Paper Ballots**
-3. Enter the per-candidate counts (and optional notes — e.g., "counted by
-   Lt. Reyes and FF Park, 2 spoiled ballots discarded")
-4. Submit — one vote row is stored per paper ballot, flagged as manual and
-   attributed to you as the recording officer
+1. Print ballots with **Print Blank Ballots**, run the vote and count the
+   papers.
+2. On the open election, select **Record Paper Ballots**.
+3. Enter the count for each candidate, and for **Approve** and **Deny** on
+   each approval item. Optionally add **Physical ballots in this stack** and
+   notes, such as "counted by Lt. Reyes and FF Park, 2 spoiled ballots
+   discarded".
+4. Submit. Each paper ballot is saved as a vote, marked as paper and
+   credited to you as the recording officer.
 
-**Motions and membership votes on paper** _(2026-10-05)_: opening an election
-now creates an **Approve** and a **Deny** row for every approval item, so
-Record Paper Ballots lists them beside the candidates, labelled with the
-item's title, and the "Approve / Deny" boxes on the printed ballot can be
-keyed in. A Board-style race built in the Ballot Builder (one that is not a
-plain position) is printed on the paper ballot too. An election already open
-before this release gets an item's rows only once someone votes on the item
-electronically.
+Paper votes go into the ordinary counts, so the results show no separate
+"paper" figure. The **Paper-Ballot Batches** panel (below) keeps the itemized
+record: who recorded each batch, when, and who confirmed it.
 
-Because paper votes are ordinary vote rows, a closed election's results carry
-no separate "paper" figure — the paper votes are simply in the counts. What
-stays itemized after the close is the **Paper-Ballot Batches** panel (below):
-who recorded each batch, when, and which officers attested it.
+Paper votes carry no voter's name, but they are sealed into the same
+tamper-evident chain as electronic votes. The integrity check therefore covers
+the whole ballot box, and a paper vote cannot be quietly relabelled as
+electronic.
 
-Manual votes carry no voter identity and no dedup hash — the recording
-officer's attested count is the source of truth — but they **are** signed and
-chained exactly like electronic votes, so the integrity check covers the full
-mixed ballot box. The vote signature also covers the manual flag, so a stored
-paper vote can't be silently re-labeled as electronic (or vice versa).
+**The "too many votes" check.** A batch that would push a race past _eligible
+voters × votes each voter may cast_ is refused before anything is saved. The
+message spells out the total, the eligible count and the limit.
 
-**Plausibility guard:** a batch that would push a position past _eligible
-voters × allowed votes_ is rejected before a single vote row is written, with
-the projected total, the eligible count and the cap spelled out. The multiplier
-is the number of votes one member may legitimately cast: under approval voting
-it is the number of accepted candidates for the position, otherwise the
-election's votes-per-position setting. The optional **Physical ballots in this
-stack** field has no multiplier — one member hands in one sheet — so it is
-checked against the eligible count directly. If the count really is correct
-(e.g., overrides admitted extra voters), the override checkbox — **The tally
-is correct — override the eligible-voter count check** — records it anyway,
-audited at warning severity and naming who overrode it.
+- Under approval voting, "votes each voter may cast" is the number of accepted
+  candidates for the position. Otherwise it is the election's votes-per-race
+  setting.
+- **Physical ballots in this stack** is checked against the eligible count
+  directly, because one member hands in one sheet.
+- If the count really is right (for example, overrides let in extra voters),
+  tick **The tally is correct — override the eligible-voter count check**.
+  This is recorded in the audit log as a warning, naming who did it.
+- The tick box only appears after the check has refused a batch. You cannot
+  switch the check off in advance.
 
 ![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
-The override checkbox is not on the form until the guard has fired — there is
-no way to switch the check off in advance, and nothing is written when a batch
-is refused.
-
 ### Officer Attestation
 
-By default, **2 officers other than the recorder** (configurable 0–3 in
-Election Settings → Features) must attest each batch before its votes count:
+Unless you change it, **2 officers other than the recorder** must confirm each
+batch before its votes count. You can set 0 to 3 in **Election Settings →
+Features**.
 
-1. A recorded batch starts **Pending** — its votes are stored, signed, and
-   chained immediately, but excluded from results, statistics and the vote
-   count on the elections list
-2. Officers with `elections.manage` open the **Paper-Ballot Batches** panel and
-   click **Attest** after checking the entered counts against the physical tally
-3. The recorder can never attest their own batch, and each officer counts
-   once (enforced at the database level)
-4. When the requirement is met, the batch flips to **Confirmed** and its
-   ballots count
+1. A recorded batch starts as **Pending**. Its votes are saved but left out of
+   results, figures and the vote count on the Elections list.
+2. Officers who can manage elections open the **Paper-Ballot Batches** panel.
+   They check the entered counts against the papers, then select **Attest
+   Count**.
+3. The recorder can never confirm their own batch, and each officer counts
+   once.
+4. When enough officers have confirmed, the batch becomes **Confirmed** and its
+   ballots count.
 
-Each batch snapshots the requirement at record time, so changing the setting
-later never silently confirms or un-confirms old batches. A disputed batch is
-**voided** with a reason (soft delete — the record remains). Attestation is
-only possible while voting is open: a batch still pending at close stays out
-of the certified results, and the close writes a warning
-`election_manual_ballots_unattested_at_close` audit event.
+Things to know:
 
-The panel is on the election page itself, above the tab strip — not inside a
-tab — and appears as soon as one batch exists.
+- Each batch keeps the number required **when it was recorded**. Changing the
+  setting later never confirms or un-confirms old batches.
+- A disputed batch can be **voided** with a reason. It stays on record, and
+  the card shows who voided it, when and why.
+- Confirming and voiding work only while voting is open. A batch still pending
+  at close stays out of the certified results, and the close records a
+  warning in the audit log.
+- The panel sits on the election page above the tabs, and appears once one
+  batch exists.
 
 ![The Paper-Ballot Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it](./images/14-18-paper-batches.png)
 
-**Attest and Void are only offered while voting is open**, so a batch
-photographed after the close carries its trail and no buttons.
+After the close, a batch shows its record but no buttons.
 
-### Edge Cases
+### What if …?
 
-| Scenario                                           | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires                                                                                                                                                                                                                                                                                                                                    |
-| Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                                                                                                                                                                                                                                                                                                                                                         |
-| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                                                                                                                                                                                                                                                                                                                                                       |
-| Election closed with a batch still pending         | Batch excluded from certified results; warning audit event written. _(2026-08-12)_ The exclusion now also covers the close path's own arithmetic: a pending batch's votes cannot decide which candidates advance to a **runoff** and cannot flip a **membership-approval** package to elected/not elected. Before this fix an unattested batch was invisible in the published results yet still counted in those two outcomes |
-| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided)                                                                                                                                                                                                                                                    |
-| Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                                                                                                                                                                                                                                                                                                                                                                |
-| Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                                                                                                                                                                                                                                                                                                                                                    |
+| What happened                                        | What it means                                                                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 40 votes typed for a 4-voter race                    | Refused by the "too many votes" check. The override tick box appears only then                                                       |
+| The recorder selects Attest Count on their own batch | Refused. A _different_ officer must confirm                                                                                          |
+| The setting changes from 2 to 0 after batches exist  | Pending batches still need the 2 confirmations they started with                                                                     |
+| The election closes with a batch still pending       | The batch is left out of the results, of who goes to a **runoff**, and of any **membership-approval** outcome. A warning is recorded |
+| A batch is confirmed before close                    | Its votes count everywhere: results, runoffs and membership outcomes                                                                 |
+| A pending over-count batch exists                    | It does not count toward the "too many votes" limit for later batches                                                                |
+| A confirmed batch was mistyped                       | Void it (reason required) and record it again                                                                                        |
+| Confirmations required is set to 0                   | Batches count as soon as they are recorded (not recommended)                                                                         |
 
 ---
 
 ## Proxy Voting
 
-When enabled for the organization, proxy voting allows one member to vote on behalf of another who cannot attend.
-
-**Required Permission:** `elections.manage` (to authorize)
+A proxy lets one member vote for another who cannot attend. An officer turns
+it on in **Election Settings → Proxy Voting** first.
 
 ### Authorizing a Proxy
 
-1. Open the election detail page
-2. Navigate to **Proxy Authorizations**
-3. Click **Authorize Proxy**
-4. Select the **delegating member** (who can't attend)
-5. Select the **proxy holder** (who will vote for them)
-6. Save — nothing is sent at this point. When ballots go out, the proxy holder is **Cc'd on the delegating member's ballot email** (their own ballot email is separate)
-   _(2026-10-05)_ That copied email says so: its card under the ballot reads
-   _"<holder> holds <member>'s proxy"_ and explains that the link opens the
-   delegating member's ballot and works once, whichever of the two submits
-   it — where it used to tell the holder the link was theirs alone. A
-   department that edited its ballot email template before this change gets
-   the same sentence at the top of the message instead.
+**Who can do this:** roles that can manage elections.
+
+1. Open the election and the **Proxy Voting** tab.
+2. Select **+ Add Authorization**.
+3. Fill in the **New Proxy Authorization** form:
+
+| Field                               | What to enter                                    |
+| ----------------------------------- | ------------------------------------------------ |
+| **Delegating Member (Absent)**      | The absent member's user ID                      |
+| **Proxy Member (Voting on behalf)** | The user ID of the member who will vote for them |
+| **Type**                            | **Single Election** or **Regular (Ongoing)**     |
+| **Reason**                          | Why, for example medical leave or out of town    |
+
+4. Select **Add Authorization**.
+
+> **What if I do not know a member's user ID?** These two boxes ask for the
+> member's user ID rather than offering a list, and no screen shows user IDs.
+> Ask your administrator to look them up.
+
+Nothing is sent to the proxy holder at this point. When ballots go out, the
+proxy holder is copied on the absent member's ballot email (their own ballot
+email is separate). The copied email says _"(holder) holds (member)'s
+proxy"_. It explains that the link opens the absent member's ballot and works
+once, whichever of the two submits it.
 
 ### Casting a Proxy Vote
 
-_(2026-10-05)_ A member who holds someone's proxy votes it from the **Cast
-Vote** tab:
+A member who holds a proxy votes it from the **Cast Vote** tab:
 
-1. Open the election's **Cast Vote** tab
-2. In **Voting for**, choose _"<member> (as their proxy)"_ instead of
-   **Myself** — the list shows only the proxies you hold, live
-3. The ballot reloads as that member's: a **"Voting as proxy for: <member>"**
-   banner, their eligibility, and the items they have already voted on shown
-   as done
-4. Make the selections and click **Cast <member>'s Ballot**. The votes are
-   recorded as theirs (double-vote prevention applies to them, not you) and
-   marked as cast by you as their proxy
+1. Open the election's **Cast Vote** tab.
+2. In **Voting for**, choose _"(member) (as their proxy)"_ instead of
+   **Myself**. The list shows only proxies you hold.
+3. The ballot reloads as that member's. A **"Voting as proxy for: (member)"**
+   banner shows, with their eligibility and the items they have already voted
+   on.
+4. Make the choices and select **Cast (member)'s Ballot**. The votes count as
+   theirs (the one-vote rule applies to them, not you), marked as cast by you
+   as their proxy.
 
-**A proxy ballot is not anonymous** _(2026-10-08, ELEC-43 / W50-2)_. A
-proxy vote records whom it was cast for, and the proxy holder sees every
-choice. On a named election that changes nothing. On an **anonymous**
-election it is allowed only with the delegating member's acknowledgement:
+The holder can also use the absent member's emailed link they were copied on.
 
-- **Authorizing** on an anonymous election shows the warning _"a proxy
-  ballot is not anonymous: the proxy holder will see how the member votes,
-  and the ballot cast for them is stored linked to their name"_ and a
-  checkbox — _"The delegating member has been told this and accepts it"_.
-  **Add Authorization** stays disabled until it is ticked, and the server
-  refuses the authorization without it. Tick it only after the member has
-  agreed.
-- On every authorization the **delegating member is emailed** _"Proxy
-  authorized — <election>"_, naming the holder; on an anonymous election the
+### Proxies on anonymous elections
+
+**A proxy ballot is not anonymous.** It records whom it was cast for, and the
+proxy holder sees every choice. On a named election that changes nothing. On
+an **anonymous** election it is allowed only if the absent member agrees:
+
+- When authorizing on an anonymous election, the form warns: _"This is an
+  anonymous election, but a proxy ballot is not anonymous: the proxy holder
+  will see how the member votes, and the ballot cast for them is stored linked
+  to their name."_ Tick _"The delegating member has been told this and accepts
+  it. They will also be emailed this warning."_ **Add Authorization** stays
+  greyed out until you do. Tick it only after the member has agreed.
+- For every authorization, the **absent member is emailed** _"Proxy
+  authorized — (election)"_, naming the holder. On an anonymous election the
   email carries the same warning.
-- An authorization created on an anonymous election **before** this rule
-  carries no acknowledgement, and its ballot is refused with _"Ask the
-  secretary to revoke it and authorize the proxy again"_. Revoke it and
-  authorize it again with the checkbox.
-- The **certified PDF** of an anonymous election that received proxy votes
-  says the salt was destroyed _"except for N proxy vote(s), which are
+- The **certified results PDF** of an anonymous election with proxy votes says
+  the anonymity key was destroyed _"except for N proxy vote(s), which are
   recorded against the member they were cast for"_.
 
-Proxy voting must also be enabled in Election Settings. The holder can still
-use the delegating member's emailed link they are copied on.
+### What if …?
 
-### Edge Cases
-
-| Scenario                                    | Behavior                                                                                                                                                                                 |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Max proxies per person exceeded             | Refused. The default limit is 1 proxy per holder, configurable from 1 to 10 in Election Settings — enforced since 2026-09-30; before that the cap was stored and shown but never checked |
-| Delegating member also votes directly       | Whichever vote is cast first stands; the second attempt (proxy or direct) is blocked by double-vote prevention                                                                           |
-| Proxy authorization revoked after vote cast | Vote stands; revocation prevents future proxy votes only                                                                                                                                 |
+| What happened                                                               | What it means                                                                                                                                  |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| A holder would exceed the limit                                             | Refused. The limit is 1 proxy per holder unless changed (1 to 10) in Election Settings                                                         |
+| The absent member also votes directly                                       | Whichever vote comes first stands. The second is refused                                                                                       |
+| A proxy is revoked after the vote was cast                                  | The vote stands. Revoking stops future proxy votes only                                                                                        |
+| A proxy on an anonymous election was authorized without the acknowledgement | Its ballot is refused with _"Ask the secretary to revoke it and authorize the proxy again"_. Revoke it and authorize again with the box ticked |
 
 ---
 
 ## Monitoring & Results
 
-### During Voting (Election Open)
+### While Voting Is Open
 
-If **results_visible_immediately** is enabled:
-
-- Real-time vote counts displayed on the election detail page
-- Non-voters list shows who hasn't voted yet
-
-If results are hidden until close:
-
-- Only total votes cast is shown (not per-candidate counts)
-
-### After Closing (Election Closed)
-
-**Required Permission:** `elections.manage` (to close)
-
-1. Click **Close Election** and confirm in the dialog — the buttons read **Close election** / **Keep it open**, and it warns that voting ends immediately and cannot be undone _(2026-08-11: this is now an in-app dialog rather than a browser popup, so it cannot be silently suppressed by the browser)_. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline. The close records **who closed the election and when**; the certified results PDF and the report print that instant and officer, and an automatic close at the scheduled end is shown as such
-2. Results are calculated and displayed:
-   - Per-position winner (or "No winner" if the victory condition wasn't met)
-   - Vote counts per candidate
-   - Write-in tally
-   - Turnout statistics (turnout counts only voting-eligible members — tiers marked not voting-eligible are excluded from the denominator)
-
-> **Note on early closes** _(2026-10-05)_: closing releases the results. An election closed early at the meeting shows them on the **Results** tab straight away — to the officer who closed it and to every member who can view elections — exactly as it would have at the scheduled end. **Publish Results** is only needed to show results _before_ voting closes, which the app does not allow while voting is open.
-
-**What members see while voting is open** _(2026-10-08, W50-70)_. Only
-election managers see how many votes have been cast and who was sent a ballot
-while an election is open; for everyone else the vote count is left off the
-election list and the detail page until the election closes (or, if **results
-visible immediately** was set, the count shows but the recipient list still
-does not). Ballots — the emailed link and the Cast Vote tab — show each
-candidate's name and statement only, never which member account they are or
-who nominated them.
-
-**The Results & Publishing panel** _(changed 2026-10-05)_ appears once the
-election is open. It no longer carries a **Publish Results** / **Hide
-Results** switch: closing the election is what releases the results, so a
-closed election's panel reads _"Results are visible to members"_ and an open
-one _"Results are hidden while voting is open"_. (A live tally while voting is
-open is still possible only if **results visible immediately** was set on the
-election before it opened.) **Email Results Report** (_"Email the results report to the election
-secretary"_, button **Send Report**) appears only once closed; the server now
-refuses the report while the election is open, where it used to mail a
-mid-vote tally headed "has been closed … official report".
-
-**Corrections after close are marked** _(2026-10-05)_. **Merge Write-Ins**,
-**Void a Vote** and voiding a paper-ballot batch still work once an election
-has closed — they are how a certified result is corrected — but each one now
-leaves a mark: the **Results** tab shows _"These results were revised after
-the election closed"_ with a line per correction (_"Revised <when> by <who>: a
-vote was voided (<reason>)"_), and the certified PDF prints the same lines
-under its "Election closed …" line. Rolling the election back to open clears
-the marks; the re-close certifies afresh.
-
-**What the results, the report and the certified PDF now show** _(2026-09-30)_:
-
-- **Every ballot item's outcome.** A motion's or membership vote's Approve/Deny
-  tally and result were reported nowhere — the Results tab, the report email
-  and the certified PDF showed position races only. Each item is now reported
-  with its own label and percentages.
-- **Nothing is pooled across items** _(2026-10-08, W50-7)_. A ballot of
-  motions with no position races used to be shown as one combined list, where
-  one motion's Approve competed with another motion's Deny for a single
-  "winner". The Results tab now reads **Results by Ballot Item** with one
-  table per item, the certified PDF prints one table per item, and a tied
-  race on such a ballot gets its runoff (a motion never does).
-- **Ties are named.** A tied race's report printed two 50% rows and never said
-  "tie"; it now prints "Tie — co-winners per policy" or "Tie — runoff round
-  created".
-- **"Quorum Met" only where there is a quorum.** An election with no quorum
-  requirement now reads "No quorum requirement" on the report and PDF, and the
-  Results tab no longer asserts quorum for it.
-- **Who closed it, and when.** The close is recorded with the officer and the
-  exact time; the certified PDF reads, for example, "Election closed
-  2026-09-30 06:53 CDT by Sam Ortiz", and a scheduled close reads as automatic.
-  Elections closed before this change show the scheduled end and "Automatic
-  close".
-- **Recipient facts from the real send.** The report's ballot-recipient count
-  and list come from the last send or reminder, and "Ballots were not emailed
-  for this election" when none went.
-
-![A closed election's results — vote counts per candidate, the winner, and turnout against the eligible roster](./images/14-17-election-results.png)
+- **Officers** who can manage elections see how many votes have been cast and
+  who was sent a ballot.
+- **Everyone else** sees no vote count until the election closes — unless
+  **Show Results Immediately** was set. Then the count and running tally
+  show, but the list of who was sent a ballot still does not.
+- Ballots — the emailed link and the **Cast Vote** tab — show each candidate's
+  name and statement only. They never show which member account a candidate
+  is or who nominated them.
 
 ### Live Turnout Dashboard
 
-On meeting night, open the **Live Turnout** panel on an open election — a
-fullscreen-capable display designed to project in the room:
+On meeting night, select **Live Turnout** on an open election. It is a display
+you can make full screen and project in the room:
 
-- Ballots received vs. eligible voters, with quorum progress when configured
-- Auto-refreshes on its own — no reloading between agenda items
-- **Never shows candidate tallies** before close — participation only, so
-  projecting it can't influence the vote
+- Ballots received against eligible voters, with quorum progress when the
+  election has a quorum.
+- It refreshes by itself.
+- It **never shows candidate totals** before close — participation only, so
+  projecting it cannot sway the vote.
 
-### Non-Voters Report
+### Closing an Election
 
-Navigate to the **Non-Voters** section to see eligible voters who did not participate. Use this for:
+**Who can do this:** roles that can manage elections.
 
-- Follow-up reminders (if election is still open) — or use **Remind
-  Non-Voters** to email them a fresh ballot link directly (see
-  [Reminders & Lifecycle Automation](#reminders--lifecycle-automation))
-- Turnout analysis (after close)
+1. Select **Close Election** and confirm. The buttons read **Close election**
+   and **Keep it open**. The dialog warns that voting ends at once, and says
+   what undoing it would take:
+   - **Anonymous election:** closing is final once any vote is recorded; a
+     recount needs a new election.
+   - **Named election:** reopening takes a **Roll Back**, which stops every
+     ballot link already sent.
+2. The results are worked out and shown on the **Results** tab:
+   - each race's winner, or "No winner" if nobody met the winning rule;
+   - the votes for each candidate;
+   - write-in totals;
+   - turnout. Turnout counts only members who may vote — tiers marked as not
+     voting are left out.
 
-**Members who voted by emailed link are counted as voters** _(2026-09-30)_.
-On a named (non-anonymous) election, a member who voted by link used to stay
-on the non-voters list and receive "you have not yet voted" reminders, and
-turnout undercounted them.
+Things to know:
 
-**…and named after the election closes** _(2026-10-08, W50-3)_. A link vote
-on a named election now records which member cast it — the ballot link is
-tied to its recipient when it is sent — so the **who-voted** roster still
-names link voters after close, when the election's salt is destroyed. A link
-sent before this change is matched to its member when the ballot is
-submitted. On an **anonymous** election nothing is recorded: link votes stay
-unattributable.
+- **Closing early is fine.** Runoffs are still worked out, and membership
+  approval results still go back to the pipeline.
+- **Closing releases the results.** An election closed early at the meeting
+  shows its results straight away, to the officer who closed it and every
+  member who can view elections.
+- **The close is recorded** with the officer and the exact time. The certified
+  PDF reads, for example, "Election closed 2026-09-30 06:53 CDT by Sam Ortiz".
+  A close at the scheduled end reads as automatic. The Elections list shows
+  the real close time.
+- **Extend Time** on an open election moves its end time later instead.
+
+### The Results & Publishing panel
+
+This panel appears once the election is open:
+
+- On an open election it reads _"Results are hidden while voting is open"_ (or
+  _"Live results are visible to members"_ if **Show Results Immediately** was
+  set).
+- On a closed election it reads _"Results are visible to members"_. There is
+  no publish or hide switch; closing is what releases the results.
+- **Email Results Report** (_"Email the results report to the election
+  secretary"_), with its **Send Report** button, appears only once the
+  election is closed. The report is also emailed to the election's creator
+  automatically at close.
+
+### What the results, the report and the certified PDF show
+
+- **Every ballot item's outcome**, with its own label and percentages,
+  including each motion's or membership vote's Approve and Deny totals.
+- **One table per item.** On a ballot of several items, the **Results** tab
+  reads **Results by Ballot Item**. One motion's votes never compete with
+  another's.
+- **Ties are named**: "Tie — co-winners per policy" or "Tie — runoff round
+  created".
+- **Quorum** is reported only where there is one. Otherwise it reads "No
+  quorum requirement".
+- **Who closed it and when** — see above.
+- **Who was sent ballots**, from the last send or reminder, or "Ballots were
+  not emailed for this election" when none went.
+
+![A closed election's results — vote counts per candidate, the winner, and turnout against the eligible roster](./images/14-17-election-results.png)
+
+**Corrections after close are marked.** **Merge Write-Ins**, **Void this
+vote** and voiding a paper batch still work after close — they are how a
+result is corrected. Each leaves a mark. The **Results** tab shows _"These
+results were revised after the election closed"_ with a line per correction,
+for example _"Revised (when) by (who): a vote was voided (reason)"_. The
+certified PDF prints the same lines. Rolling the election back to open clears
+the marks, and the next close certifies afresh.
+
+### Who voted
+
+The **Eligibility** tab marks each member who has voted with **Voted**. Its
+filters are **All Members**, **Eligible**, **Ineligible**, **Already Voted**
+and **Has Override**. **Remind Non-Voters** tells you how many eligible members
+have not voted yet. Use them to follow up while the election is open.
+
+On a **named** election, members who voted by emailed link count as voters,
+and the record of who voted still names them after close. On an **anonymous**
+election, nothing links a vote to a member.
 
 ---
 
 ## Tie Handling
 
-Each election has a **tie policy** that controls what happens when candidates
-tie under the victory condition:
+Each election has a **tie rule**, set under **If the Top Candidates Tie** when
+you create it:
 
-| Policy                          | On a tie                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| **Co-winners** (legacy default) | All tied candidates are flagged as winners                               |
-| **Runoff**                      | No winner declared; the tie is flagged for a runoff round                |
-| **Revote**                      | No winner declared; the position is flagged for a fresh vote             |
-| **Chair decides**               | No winner declared; the presiding officer breaks the tie per your bylaws |
+| Option                                  | On a tie                                                          |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| **Declare all tied candidates winners** | All tied candidates are marked as winners. This is the default    |
+| **Hold a runoff round**                 | No winner; the tie is flagged for a runoff round                  |
+| **Revote at the meeting**               | No winner; the race is flagged for a fresh vote                   |
+| **Chair decides per bylaws**            | No winner; the presiding officer breaks the tie under your bylaws |
 
-For every policy except co-winners, the results clearly flag the tie, no
-winner is declared for the position, and an `election_tie_detected` audit
-event is written at close. Set the policy on the election form to match what
-your bylaws prescribe _before_ opening — deciding a tie-breaking rule after
-seeing the tally is exactly the argument this feature prevents.
+With any option except co-winners, the results flag the tie clearly, no
+winner is declared, and the close records the tie in the audit log.
+
+> **Important.** Set the tie rule to match your bylaws **before** opening.
+> Choosing a tie-breaking rule after seeing the totals is exactly the argument
+> this setting prevents.
 
 ---
 
 ## Write-In Consolidation
 
-Write-in votes arrive with whatever spelling the voter typed — "J. Smith",
-"John Smith", and "Jon Smith" tally as three candidates. After voting (and
-before certifying), consolidate them:
+Write-in votes arrive spelled however the voter typed them. "J. Smith", "John
+Smith" and "Jon Smith" count as three people. After voting, and before you
+certify, combine them:
 
-1. On the election detail page, open **Merge Write-Ins**
-2. Select the variant entries and the candidate they should count under
-3. Confirm — results now tally all variants under the target candidate
+1. On the election's page, select **Merge Write-Ins**.
+2. In **Merge Write-In Variants**, select the misspelled entries, then the
+   candidate under **Count their votes for**.
+3. Select **Merge _n_ Variants**. The results now count all of them for that
+   candidate.
 
-The merge is **alias-based**: signed vote rows are never modified (each vote's
-signature covers its original candidate), so the integrity check still passes.
-The merge itself is audited, and results simply re-map the merged candidates
-at tally time.
+The merge never edits the votes themselves, so the integrity check still
+passes. The merge is recorded in the audit log.
 
 ---
 
 ## Runoff Elections
 
-When **Enable Runoffs** is on and no candidate meets the victory condition at close (including early closes):
+When **Enable Automatic Runoffs** is on and nobody meets the winning rule at
+close (including an early close):
 
-1. The system automatically identifies candidates for the runoff — **top two** advance, or **eliminate lowest** drops the last-place candidate, depending on the configured runoff type
-2. A **runoff election** is created as a child of the original, in Draft status, with write-ins disabled. It inherits the original's quorum, position eligibility rules, meeting/event link, attendees, and voter overrides — and gets a fresh anonymity salt of its own
-3. The **Runoff Chain** view shows the progression: Original → Runoff 1 → Runoff 2 (if needed), up to the configured maximum rounds
-4. Each runoff follows the same voting workflow. To run it on the spot, just open it — **opening an election starts voting immediately**, even if the scheduled start (default: one hour out) hasn't arrived. To set a defined window first (e.g. a 15-minute floor vote), use **Edit Dates** on the draft
+1. The Logbook picks who goes through, by the **Runoff Type**: **Top Two (top
+   2 candidates advance)** or **Eliminate Lowest (remove lowest, others
+   continue)**.
+2. It creates a **runoff election** linked to the original, as a Draft, with
+   write-ins off. The runoff keeps the original's tie rule, quorum, voter
+   groups, meeting link, attendees and overrides, and copies its
+   candidate-selection items so ballots can be emailed. Its description names
+   the tie or shortfall that caused it. It gets its own anonymity key.
+3. The election chain shows the order: Original → Runoff 1 → Runoff 2, up to
+   **Maximum Runoff Rounds**.
+4. Each runoff is run like any election. To vote on the spot, just open it —
+   **opening starts voting at once**, even before the scheduled start (an hour
+   ahead unless changed). To set a window first, such as a 15-minute floor
+   vote, use **Edit Dates** on the draft.
 
-> **Hint:** Draft elections — runoffs included — have an **Edit Dates** button with Start Now and 15-min/30-min/1-hour quick durations. And an election whose end date has already passed can't be opened until its dates are updated.
+> **Tip.** Every draft has **Edit Dates**, which opens **Edit Voting Window**
+> with **Start Now** and **15 Min**, **30 Min** and **1 Hour** quick buttons.
+> An election whose end date has passed cannot be opened until you change its
+> dates.
 
 ![The Multi-Stage Election Chain on a Fire Chief election — Original, Runoff 1 and Runoff 2 as linked nodes with their status and vote counts, the current round ringed](./images/14-20-runoff-chain.png)
 
-### Edge Cases
+### What if …?
 
-| Scenario                       | Behavior                                                                                                                                                                                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tie in runoff                  | Another runoff created; continues until resolved                                                                                                                                                                                                       |
-| Runoff's own settings          | Since 2026-09-30 a runoff keeps the original's **tie policy** (it used to reset to co-winners), its description names the tie or shortfall that caused it, and it copies the original's candidate-selection ballot items so its ballots can be emailed |
-| All candidates below threshold | Runoff with all candidates                                                                                                                                                                                                                             |
-| Runoffs disabled               | Election closes without a winner; secretary handles manually                                                                                                                                                                                           |
+| What happened                     | What it means                                                |
+| --------------------------------- | ------------------------------------------------------------ |
+| The runoff ties too               | Another runoff is created, up to the maximum rounds          |
+| Every candidate is below the rule | The runoff includes every candidate                          |
+| Runoffs are off                   | The election closes with no winner. The secretary handles it |
 
 ---
 
 ## Vote Integrity & Forensics
 
-The elections module includes cryptographic integrity features for audit compliance.
+Elections include safeguards that let you prove the result was not tampered
+with.
 
 ### Vote Receipt Verification
 
-Each vote generates a cryptographic **receipt hash** that:
+Each vote gets a **receipt**, shown when the voter submits. A receipt:
 
-- Is returned to the voter when they submit their ballot (shown on the confirmation screen — voters should save it)
-- Proves the vote was recorded
-- Does NOT reveal which candidate was selected
-- Can be verified by anyone holding the receipt via `POST /elections/{id}/verify-receipt` with `{"receipt": …}` in the body (public, rate-limited; the older `GET …?receipt=` form still works but is deprecated — returns only the vote's timestamp and position)
+- proves the vote was recorded;
+- does **not** show which candidate was chosen;
+- can be checked later by anyone holding it, with the check form under the
+  ballot. The check shows only when the vote was cast and for which position.
 
-### Forensics Report
+If an officer voided the vote, the receipt reads "This vote was voided by an
+officer".
 
-**Required Permission:** `elections.manage`
+### Forensics & Integrity
 
-Access the **Forensics** tab on the election detail page for:
+**Who can do this:** roles that can manage elections.
 
-- **Integrity Check** — Verifies HMAC-SHA256 signatures on all votes (detects tampering)
-- **Soft-Deleted Votes** — Shows any votes that were manually removed with reason and who removed them. On an anonymous election the removed vote's choice is not shown _(since 2026-09-30)_ — together with the audit trail it named the voter's candidate
-- **Rollback History** — If the election status was ever rolled back (e.g., reopened after closing)
-- **Anomaly Detection** — Flags unusual patterns: a thresholded list of IPs with suspiciously many votes (a full per-IP vote map is deliberately not exposed — it could de-anonymize voters in a small department), a distinct-IP count, and rapid-fire voting via the timeline
+At the bottom of the election's page, open the **Forensics & Integrity**
+section:
 
-> **Privacy note:** for anonymous elections, per-vote IP and user-agent data is **erased when the election closes** (at the same moment the anonymity salt is destroyed). Run any IP-based investigation while voting is open — after close that data no longer exists, by design. Voting tokens are also stored only as SHA-256 hashes, so database access never reveals usable ballot links.
+- **Run Check** checks every vote's tamper-evident seal and reports PASS or a
+  problem. It runs only when you select it.
+- **Voided votes** — any votes an officer removed, with the reason and who did
+  it. On an anonymous election the removed vote's choice is not shown.
+- **Rollback history** — if the election was ever rolled back, for example
+  reopened after closing.
+- **Unusual patterns** — internet addresses with suspiciously many votes, the
+  number of different addresses, and a voting timeline that shows rapid-fire
+  voting. A full list of every address's votes is deliberately not shown,
+  because in a small department it could reveal who voted how.
 
-The panel is a collapsed accordion at the bottom of the election page, and the
-integrity check inside it runs only when you press **Run Check** — it is a
-deliberate act, not something computed on every page load.
+> **Important — investigate during voting.** On anonymous elections, each
+> vote's internet address and browser details are **erased at close**, along
+> with the anonymity key. Run any address-based investigation while voting is
+> open.
 
 ![The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath](./images/14-19-forensics-report.png)
 
-> **Fixed 2026-08-12.** Neither half of this panel worked. `GET /forensics`
-> and `GET /integrity` both returned 500s from response validation — the
-> forensics report because `AuditLog.id` is an integer where the schema
-> declared a string, so any election with an audit trail (that is, any
-> election) failed; the integrity check because its response model described
-> an entirely different set of fields from the ones the service returns and
-> the UI reads.
+### What if …?
 
-### Edge Cases
-
-| Scenario                      | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Vote signature mismatch       | Flagged in forensics report; does not auto-delete vote                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Secretary deletes a vote      | Soft-delete with reason required; audit trail preserved. The member may then vote again (since 2026-09-30 — both voting routes used to fail with a server error), and their old receipt reads "This vote was voided by an officer". Since 2026-10-08 (W50-31) the void stays in the vote chain: **Run Check** reads PASS and lists _"N vote(s) voided by <officer>: <reason>"_, and the certified PDF prints the same line under its integrity verdict |
-| Election reopened after close | Rollback logged in forensics; leadership notification sent. **Not allowed** for anonymous elections that already have votes — the anonymity salt is destroyed at close, so reopening would let prior voters vote again. Create a new election instead                                                                                                                                                                                                  |
+| What happened                       | What it means                                                                                                                                                                                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A vote's seal does not match        | Flagged in the report. The vote is not deleted                                                                                                                                                                                                     |
+| An officer voids a vote             | A reason is required and the record is kept. The member may vote again. **Run Check** still reads PASS and lists _"N vote(s) voided by (officer): (reason)"_; the certified PDF prints the same line                                               |
+| An election is reopened after close | Recorded in the rollback history, and leadership is notified. **Not allowed** for an anonymous election that already has votes — its anonymity key was destroyed at close, so reopening would let people vote twice. Create a new election instead |
 
 ---
 
 ## The Certified Results Package
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-Once an election is **closed**, download the **Certified Results package**
-(`GET /elections/{id}/certified-results`) — a formal PDF built for the minutes
-book and for anyone who asks "prove it":
+Once an election is **closed**, select **Certified Results (PDF)**. It is a
+formal document for the minutes book and for anyone who asks you to prove the
+result. It includes:
 
-- Final tallies per position with winners (or flagged ties, per the tie policy)
-- Turnout and quorum figures against the frozen voter roll
-- The **paper-batch attestation trail** — every batch with its recorder,
-  attesting officers, and status
-- The **integrity verification result** run at generation time
-- Officer **signature lines** for wet-ink certification
+- final totals for each race and item, with winners or flagged ties;
+- turnout and quorum against the frozen voter list;
+- the **paper-batch record** — every batch, its recorder, the officers who
+  confirmed it, and its status;
+- the **integrity check** result, run when the PDF is made;
+- any corrections made after close;
+- **signature lines** for officers to sign by hand.
 
-File the signed copy with the meeting minutes; the PDF plus the forensics
-report is your complete dispute-defense package.
+File the signed copy with the meeting minutes. Together with the forensics
+report, it is your full defence if the result is disputed.
 
 ---
 
 ## Election Settings
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-Navigate to **Elections > Settings** to configure proxy voting, optional
-features, and test ballots:
+Open **Elections** and select the gear button. Election Settings has four
+sections.
 
-| Setting                | Default | Description                                                                                                 |
-| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| Proxy Voting Enabled   | Off     | Whether proxy voting is available                                                                           |
-| Max Proxies Per Person | 1       | How many members one person can represent — 1 to 10, enforced when a proxy is authorized (since 2026-09-30) |
+### Proxy Voting
 
-There are no organization-wide election defaults: voting method, victory
-condition, quorum, anonymity and write-ins are chosen on each election's own
-form when it is created.
+| Setting                    | Default | What it does                                                |
+| -------------------------- | ------- | ----------------------------------------------------------- |
+| **Allow proxy voting**     | Off     | Lets the secretary authorize one member to vote for another |
+| **Max Proxies Per Person** | 1       | How many members one person can vote for, from 1 to 10      |
 
-### Feature Toggles
+### Features
 
-The **Features** section lets each department turn the optional workflows on
-or off (all on by default; enforced server-side, not just hidden in the UI):
+Each department can turn the optional parts on or off. All are on unless you
+turn them off, and turning one off blocks it, not just hides it.
 
-| Toggle                             | Default | Controls                                                                |
-| ---------------------------------- | ------- | ----------------------------------------------------------------------- |
-| Nominations                        | On      | The nomination phase and member nominations                             |
-| Paper Ballots                      | On      | Officer paper-tally entry                                               |
-| Reminders                          | On      | Manual **and** automatic non-voter reminders                            |
-| Auto-Open                          | On      | Scheduled opening of flagged draft elections                            |
-| Paper-Ballot Attestations Required | 2       | Officers (besides the recorder) who must confirm each paper batch (0–3) |
+| Setting                                                                                | Default | Controls                                                                  |
+| -------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| **Nomination phase**                                                                   | On      | The nomination phase and member nominations                               |
+| **Paper-ballot entry**                                                                 | On      | Officers entering paper totals                                            |
+| **Officers who must confirm each paper batch before it counts (besides the recorder)** | 2       | 0 to 3. **None — counts immediately** skips confirmation                  |
+| **Non-voter reminders**                                                                | On      | Manual **and** automatic reminders                                        |
+| **Scheduled opening**                                                                  | On      | Elections opening themselves at their start time and emailing the ballots |
 
-Deliberately **not** toggleable: automatic closing at the end date and the
-nomination-deadline auto-close. Closing finalizes results and runs the
-anonymous-election privacy purge — a privacy guarantee, not a convenience —
-and an in-flight nomination phase must always be closeable.
+**Closing at the end date and closing nominations at the deadline cannot be
+turned off.** Closing works out results and erases private voting data on
+anonymous elections — a privacy promise, not a convenience.
+
+### Test Ballot
+
+Choose a draft election and select **Send Test Ballot** to preview voting. See
+[Opening an Election](#opening-an-election).
+
+### Security
+
+Shows the integrity safeguards in force, such as vote seals and the one-vote
+rule.
+
+There are no department-wide election defaults. The voting method, winning
+rule, anonymity and write-ins are chosen on each election's own form.
 
 ![Election settings page with the default rule toggles](./images/14-16-election-settings.png)
-
-**[SCREENSHOT — REPLACE `14-16-election-settings.png`.** The **Defaults** section (default voting method, victory condition, anonymity, write-ins) was removed on 2026-09-29 because the create form never read it; its sections are now **Proxy Voting**, **Features**, **Test Ballot** and **Security**. Re-shoot the settings page so its section list no longer shows Defaults, and update the caption, which still says "default rule toggles".**]**
 
 ---
 
 ## Cloning an Election
 
-**Required Permission:** `elections.manage`
+**Who can do this:** roles that can manage elections.
 
-Annual elections rarely change shape. **Clone** creates a fresh draft from an
-existing election's configuration:
+Annual elections rarely change shape. **Clone Election** creates a new draft
+with the same positions, voting method, quorum, voter rules and reminder
+settings.
 
-1. On any election, click **Clone**
-2. Set the new title and dates
-3. Optionally copy the accepted candidates (useful for a re-run; skip it for
-   next year's election where nominations start over)
-4. The clone is created in **Draft** — review, then run it like any election
+1. On any election, select **Clone Election**.
+2. Set the **Title** and when **Voting opens** and **Voting closes**.
+3. Optionally tick the box to copy the accepted candidates. This is useful for
+   a re-run; leave it off for next year's election, where nominations start
+   again.
+4. The clone opens as a **Draft** on its **Ballot** tab. Check it, then run it
+   like any election.
 
-What is **never** copied: votes, voting tokens, attendees, voter overrides,
-and the anonymity salt (a fresh salt is generated — clones can never be
-correlated with the original's voter hashes). Since 2026-09-30 the clone also
-starts with results **hidden** — it used to copy a published parent's "results
-visible" flag — and opens on its **Ballot** tab rather than an empty Results
-tab.
+**Never copied:** votes, ballot links, attendance, voter overrides and the
+anonymity key. A clone gets a new key, so it can never be matched against the
+original's voters. A clone starts with results **hidden**.
 
 ---
 
 ## Meeting Attendance Integration
 
-Elections can be linked to meetings or events. When linked:
+You can link an election to a meeting or event. When it is linked:
 
-1. **Check-in attendance** at the meeting feeds into voter eligibility
-2. Members who are present are marked eligible; absent members are excluded (unless overridden)
-3. Import attendees directly from the linked meeting or event using **Import Attendees**
+1. Check-ins at the meeting are recorded on the **Attendance** tab.
+2. On ballot items with **Require meeting attendance to vote**, only members
+   who are checked in may vote, unless they have an override. Other items are
+   not affected.
+3. **Import Attendees from Meeting** (or **from Event**) copies the check-ins
+   from the linked meeting or event.
 
 ### How to Link an Election to a Meeting
 
-1. When creating the election, select a **Meeting** or **Event** from the dropdown
-2. Or link after creation from the election detail page
+1. When creating the election, choose it under **Linked Meeting**.
+2. Or link one later from the election's page with **Link a meeting**.
 
-> **Hint:** For annual business meetings, create the meeting first, take attendance via QR check-in, then open the election. All checked-in members automatically become eligible voters.
+> **Tip.** For an annual business meeting: create the meeting first, take
+> attendance with the QR check-in, then open the election. Checked-in members
+> can vote on items that require attendance. Check in latecomers **before**
+> opening, because the voter list freezes at opening.
 
 ---
 
 ## Prospective Member Election Packages
 
-When a prospective member reaches the **Election Vote** stage of their pipeline, an **election package** is automatically created. This package contains:
+When an applicant reaches the **Election Vote** stage of the prospective-member
+pipeline, an **election package** is created automatically. It contains:
 
-- Applicant snapshot (name, email, phone, address, documents)
-- Coordinator notes
-- Supporting statement (shown to voters)
-- Stage history summary
+- the applicant's details (name, email, phone, address, documents);
+- the coordinator's notes;
+- a supporting statement, shown to voters;
+- a summary of their stage history.
 
 ### Workflow
 
-1. Applicant advances to Election Vote stage → package auto-created
-2. Coordinator reviews and marks package as **Ready for Ballot**
-3. Secretary opens the election and adds the applicant as a ballot item
-4. Members vote to approve or deny
-5. Results flow back: package status → `elected` or `not_elected`
+1. The applicant reaches the Election Vote stage, and the package is created.
+2. The coordinator reviews it and marks it **Ready for Ballot**.
+3. The secretary adds the applicant to an election as a ballot item.
+4. Members vote to approve or deny.
+5. The result goes back to the pipeline as elected or not elected.
 
 ![The ballot preview's membership approval item — the applicant named in the title, the coordinator's supporting statement, and the Approve and Deny options](./images/14-23-membership-ballot-item.png)
 
-The election detail page lists the item; **Preview Ballot** is what shows it as a
-voter will see it — Approve, Deny, and **Abstain (Do not vote on this item)**,
-which every approval item carries. The options are inert in the preview: it is a
-rendering of the ballot, not a ballot.
+**Preview Ballot** shows the item as a voter will see it: Approve, Deny, and
+**Abstain (Do not vote on this item)**, which every approval item has. The
+choices in the preview do nothing; it is a picture of the ballot.
 
-See [Membership Management > Prospective Members](./01-membership.md#prospective-members-pipeline) for the full pipeline workflow.
-
----
-
-## What Changed After the W50 Review _(2026-09-30)_
-
-Two browser-driven reviews ran the module end to end on 30 September 2026, one
-with email switched on so every notice could be read. Most of what they fixed
-is described in its own section above; this is the rest, and the list of what
-is still open.
-
-> **⚠️ Before upgrading to this release: close any election that is Open.**
-> How a vote on a ballot-item election is stored and matched as a duplicate
-> changed. A member who voted in the app before the upgrade could vote once
-> more on the same item afterwards, and both votes would count. Draft and
-> Nominations elections are unaffected; closed elections are not rewritten.
-> See `docs/UPGRADING.md`.
-
-**Fixed:**
-
-- **Deleting an election that had sent ballots works.** It failed with a
-  server error — after leadership had already been emailed "CRITICAL: Election
-  Deleted". The delete now completes first and the alert goes out afterwards.
-- **Anonymous elections stay anonymous to managers.** The audit trail recorded
-  the voter beside the vote id on in-app votes, and the forensics list of
-  voided votes named the candidate, so two reads joined a member to their
-  choice. New audit rows no longer name the voter on an anonymous election, and
-  voided votes no longer show the choice. Rows written before the fix still
-  name the voter (`docs/KNOWN_LIMITATIONS.md`).
-- **One member, one vote, whichever door they use.** On a named election a
-  member could vote in the app and again from their emailed link, and both
-  counted; a vote naming a ballot item could skip the item's attendance rule;
-  and a vote sent without a position could be a second vote in the same race.
-  All three are refused ("You have already voted for Chief", "You must be
-  checked in as present at the meeting to vote on this item").
-- **Print Blank Ballots** prints every approval item as "☐ Approve ☐ Deny"
-  under its title, not only the position races. Paper votes on those items
-  still cannot be keyed in (see Still open).
-- **Results cannot be quietly rewritten by renaming.** Once a candidate has
-  votes, changing their name, position or acceptance is refused ("Cannot change
-  a candidate's name, position or acceptance once votes have been cast"); a
-  statement edit still saves.
-- **Clearing a candidate's statement** actually clears it — the old statement
-  used to survive behind "Candidate updated". Statements are capped at 5,000
-  characters, and a write-in name is stored exactly as typed (punctuation used
-  to fail, and names rendered double-escaped).
-- **Ballot and reminder emails:** a reminder is titled "Reminder: vote in …"
-  and does not re-stamp the ballots as sent; the old link then says it was
-  replaced by a newer ballot email. After close, an old link says "Voting has
-  closed" instead of blaming the voter roll; after a reopen it tells the voter
-  to ask the secretary for a new link. The ballot email no longer prints an
-  empty "Meeting Date:" line, prints the timezone, and no longer says it will
-  "automatically log you in".
-- **Rollback alerts say what happened** to votes and links for that
-  transition, instead of claiming that votes recorded after the earlier stage
-  are no longer counted (they are).
-- **The Pre-Meeting Package** reports eligibility per ballot item ("3 eligible
-  (checked in / override), 17 not checked in") instead of "every active member
-  is eligible".
-- **The Eligibility Roster** reads the voter roll frozen at opening, so a
-  member added after the election opened is no longer listed as "will receive
-  ballot".
-- **Paper-ballot batches:** a voided batch card shows who voided it, when and
-  why; a pending over-count batch no longer counts toward the plausibility cap
-  and blocks every later batch.
-- **An empty specific-voter list means everyone**, consistently. Saving an
-  election with an empty list used to refuse every in-app vote while ballot
-  mails treated it as everyone. Elections saved that way before the fix keep
-  the old behaviour until re-saved (`docs/KNOWN_LIMITATIONS.md`).
-- **The audit log page names the officer** for each row instead of "system".
-- **Using the page:** the election tabs (Ballot, Nominations, Candidates,
-  Eligibility, Attendance, Overrides, Proxy Voting, Cast Vote, Results) can be
-  moved between with the arrow keys, Home and End; the lifecycle stepper is
-  read as "Election progress" with the current step marked, and keeps its
-  labels for screen readers on a phone; a `?tab=` link no longer traps a member
-  on the page (Back leaves it); clearing the linked meeting actually clears it,
-  and no "Meeting link updated" toast appears when nothing changed; candidate,
-  ballot-item and attendance fields are labelled, and each attendance row's
-  button is named "Check in Alex Brooks".
-
-**Still open** (each is an owner decision, recorded in
-`docs/KNOWN_LIMITATIONS.md` under "Elections — Owner Decisions From the W50
-Drive"):
-
-- ~~The emailed ballot pre-selects **Abstain** on every item~~ — fixed
-  2026-10-08 (W50-25): nothing is pre-selected on either ballot, and
-  **Submit Ballot** stays disabled until every item has a choice or an
-  explicit Abstain.
-- ~~Scheduled opening (**Open Automatically at Start Time**) sends no
-  ballots~~ — fixed 2026-10-08 (W50-72): it sends them, and alerts managers
-  if the send fails.
-- Several screen fixes found in the same review — the delete and close dialog
-  wording, a close stamp on the election cards, a test-ballot banner on the
-  ballot page, labels in Election Settings — were not yet merged on 4 October 2026.
+See [Membership Management > Prospective Members](./01-membership.md#prospective-members-pipeline)
+for the full pipeline.
 
 ---
 
@@ -1311,35 +1308,38 @@ Drive"):
 
 ### Background
 
-**Oakville Fire Department** holds its annual officer election at the December business meeting. Secretary **Sarah Kim** manages the process.
+**Oakville Fire Department** holds its annual officer election at the December
+business meeting. Secretary **Sarah Kim** runs it.
 
 ### Part 1: Setup (December 1)
 
 Sarah creates the election:
 
 - **Title:** "2026 Annual Officer Election"
-- **Type:** Officer Election
-- **Start Date:** December 15 (meeting night)
-- **End Date:** December 15 (same-day vote)
-- **Voting Method:** Simple Majority
-- **Victory Condition:** Majority
-- **Anonymous Voting:** On
-- **Enable Runoffs:** On
+- **Linked Meeting:** the December 15 business meeting
+- **Start and end:** December 15, meeting night (same-day vote)
+- **Positions:** Fire Chief, Assistant Chief, Secretary
+- **How is the Winner Determined?:** Majority Required (>50%)
+- **Anonymous Voting:** on
+- **Allow Write-in Candidates:** on
+- **Enable Automatic Runoffs:** on, Top Two
 
-She adds three ballot items:
+She adds the candidates:
 
-- **Fire Chief** — Candidates: Lt. Morrison, Capt. Davis
-- **Assistant Chief** — Candidates: Lt. Hernandez, FF Brooks, FF Kim
-- **Secretary** — Candidates: FF Nguyen (unopposed), Write-ins allowed
+- **Fire Chief** — Lt. Morrison, Capt. Davis
+- **Assistant Chief** — Lt. Hernandez, FF Brooks, FF Kim
+- **Secretary** — FF Nguyen (unopposed)
+
+Each race requires meeting attendance.
 
 ### Part 2: Meeting Night (December 15)
 
-1. Members arrive and check in via QR code → attendance recorded
-2. Sarah links the election to tonight's meeting → 38 of 42 members present
-3. She opens the election and sends ballots:
-   - 38 ballots sent to present members
-   - 4 skipped (absent without proxy)
-4. Members vote on their phones via the ballot link in their email
+1. Members arrive and check in with the QR code. 38 of 42 members are present.
+2. Sarah selects **Import Attendees from Meeting**, then **Open Election**,
+   then **Send Ballot Emails**:
+   - 38 ballots go to members who are present.
+   - 4 are skipped, because they are not checked in and hold no proxy.
+3. Members vote on their phones from the ballot link in their email.
 
 ### Part 3: Results
 
@@ -1355,66 +1355,84 @@ After 30 minutes, Sarah closes the election:
 | Secretary       | FF Nguyen          | 36 (95%) | **Elected** |
 | Secretary       | Write-in: FF Walsh | 2 (5%)   | Not elected |
 
-**Fire Chief:** Lt. Morrison wins with simple majority (58% > 50%).
+- **Fire Chief:** Lt. Morrison wins with a majority (58%).
+- **Assistant Chief:** nobody reached a majority, so a runoff between Lt.
+  Hernandez and FF Brooks is created. Sarah opens it at once. After a second
+  vote, Lt. Hernandez wins 21 to 17.
+- **Secretary:** FF Nguyen wins with 95%.
 
-**Assistant Chief:** No candidate reached majority → automatic runoff between Lt. Hernandez and FF Brooks. Sarah opens the runoff immediately. After a second vote, Lt. Hernandez wins 21-17.
-
-**Secretary:** FF Nguyen wins unopposed with 95%.
-
-The election report is emailed to Sarah — the election secretary who created it — when the election closes (**Send Report** under **Email Results Report** on the Results & Publishing panel sends it again). She forwards it to the department herself.
-
----
-
-## Fixes From the On-Screen Re-Drive _(2026-10-05)_
-
-The fixes above were driven again in a real browser; these are what that found.
-
-- **A closed election card shows when it was actually closed.** The election list
-  dated an election closed early to its _scheduled_ end; it now shows the real
-  close time, as the detail page does.
-- **A ballot link retired by a rollback says so.** A link made void when an
-  election with no votes was rolled back and reopened read _"Voting token has
-  expired"_ days before the end. It now says the election was closed and
-  reopened, so the voter asks the secretary for a new link. A link replaced by a
-  reminder still says _"This link was replaced by a newer ballot email"_.
-- **Focus stays put after you nominate someone**, the Results & Publishing hints
-  wrap at phone width, the delete dialog no longer prints a stray "0" bullet on
-  an election with no votes, and the inline candidate edit's controls are named
-  for screen readers.
-- **The help pop-up on the Elections page** is as wide as its text rather than a
-  word or two a line.
-
-<!-- Screenshot needed:
-_[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
--->
+The results report is emailed to Sarah, as the election's creator, when the
+election closes. **Send Report** on the Results & Publishing panel sends it
+again. She forwards it to the department herself.
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                    | Solution                                                                                                                                                                                                                                                                                     |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Member says they didn't receive ballot email             | Check the send report for skipped members. Verify email address is on file. Re-send ballot to individual member.                                                                                                                                                                             |
-| Ballot email link points to the wrong site or won't load | The emailed link is built from the server's `FRONTEND_URL` setting, not the request URL. Have your administrator set `FRONTEND_URL` to the real public site URL (_(2026-09-25)_ a `localhost` value stops a production server from starting) and re-send the ballots.                        |
-| Voter gets "Token expired" error                         | Tokens expire at the election end date (or after 30 days, whichever comes first). Secretary can re-send the ballot email.                                                                                                                                                                    |
-| Voter gets "not eligible to vote on" an item             | Per-item eligibility is enforced at submission. Check the Eligibility Roster; if the member should vote, grant an override and re-send their ballot (the new token picks up their updated eligibility).                                                                                      |
-| Election closed accidentally                             | Use **Rollback** to reopen (requires `elections.manage`); leadership receives notification. **Exception:** an anonymous election that already has votes cannot be reopened after closing — its anonymity salt was destroyed, so reopening would permit double voting. Create a new election. |
-| Candidate wants to withdraw                              | Remove candidate from ballot (only if no votes cast). If votes exist, mark as "declined" instead.                                                                                                                                                                                            |
-| Proxy holder can't find proxy vote button                | Verify proxy authorization was created. Check that the election is still open.                                                                                                                                                                                                               |
-| Results don't show after closing                         | Since 2026-10-05 a closed election shows its results whether it closed early or at the scheduled end. If the tab still refuses, reload the page — the election may have been rolled back to open by another officer.                                                                         |
-| Vote count doesn't match attendance                      | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list).                                                                                                                                                                                      |
-| Forensics shows integrity warning                        | Run full forensics report. Contact system administrator if vote signatures are invalid.                                                                                                                                                                                                      |
-| Runoff not auto-created                                  | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly.                                                                                                                                                                                    |
-| Paper batch recorded but results don't change            | The batch is likely **Pending** attestation — check the Paper-Ballot Batches panel. It needs the configured number of other officers to attest before its votes count.                                                                                                                       |
-| "Attest" button missing or rejected                      | The recorder cannot attest their own batch, each officer attests once, and attestation only works while voting is open.                                                                                                                                                                      |
-| Paper tally rejected as implausible                      | The count exceeds eligible voters × allowed votes for the position. Re-check the count; if it's genuinely correct (e.g., overrides admitted extra voters), tick **The tally is correct — override the eligible-voter count check** — the override is audited.                                |
-| Nominate button missing                                  | Check the **Nominations** feature toggle in Election Settings, and that the election is in the nomination phase (managers open it from a draft election).                                                                                                                                    |
-| Member nominated but not on the ballot                   | Third-party nominees must **accept** the nomination first. Check the Nominations tab for pending entries; the nominee was emailed an accept/decline link.                                                                                                                                    |
-| Reminder button greyed out / "sent recently"             | Reminders have a one-hour cooldown per election. Wait, or verify the **Reminders** feature toggle is on.                                                                                                                                                                                     |
-| Election didn't open at its start time                   | Auto-open is opt-in: **Open Automatically at Start Time** must be enabled on the election and the **Auto-Open** feature toggle must be on. Invalid drafts (e.g., no accepted candidates) are skipped and retried — check the election for validation problems.                               |
-| Member became active mid-election but can't vote         | The voter roll is frozen at open. Grant a secretary override to admit them — that's the sanctioned path onto a frozen roll.                                                                                                                                                                  |
-| Tie shown with no winner declared                        | Working as configured: any tie policy other than co-winners flags the tie for your bylaws process (runoff, revote, or chair decision) instead of declaring winners.                                                                                                                          |
-| Write-in variants splitting the vote count               | Use **Merge Write-Ins** to consolidate spelling variants under one candidate before certifying. The merge is audited and never edits vote rows.                                                                                                                                              |
+| Problem                                              | What to do                                                                                                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Elections is not in the menu                         | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Look under **Governance**                                                                             |
+| A member did not get a ballot email                  | Check the banner for skipped members. Check their email address. Select **Resend Ballot Emails**                                                                                                       |
+| The ballot link goes to the wrong site               | Ask your administrator to check the web address The Logbook uses for links, then resend the ballots                                                                                                    |
+| A voter's link has expired                           | Links expire at the election's end, or after 30 days. Resend the ballots                                                                                                                               |
+| A voter is told they may not vote on an item         | Check the **Eligibility** tab. If they should vote, add an override and resend their ballot; the new link includes the change                                                                          |
+| The election was closed by mistake                   | Select **Roll Back** and give a reason (leadership is told). An anonymous election that already has votes cannot be reopened — create a new one                                                        |
+| A candidate wants to withdraw                        | Remove them if nobody has voted for them. Once there are votes, they cannot be removed or renamed                                                                                                      |
+| A proxy holder cannot vote for the other member      | Check the authorization exists on **Proxy Voting** and the election is open. Then use **Voting for** on **Cast Vote**                                                                                  |
+| Results do not show after closing                    | Reload the page. Another officer may have rolled the election back to open                                                                                                                             |
+| The vote count does not match attendance             | Check for proxy votes and overrides (members not on the attendance list)                                                                                                                               |
+| **Run Check** shows a problem                        | Open the full **Forensics & Integrity** section, and contact your system administrator                                                                                                                 |
+| No runoff was created                                | Check **Enable Automatic Runoffs** was on and the winning rule was right                                                                                                                               |
+| A paper batch does not change the results            | It is probably **Pending**. It needs the set number of other officers to select **Attest Count**                                                                                                       |
+| **Attest Count** is missing or refused               | The recorder cannot confirm their own batch, each officer confirms once, and it works only while voting is open                                                                                        |
+| A paper tally is refused as too high                 | Recount. If it is right (for example, overrides let in extra voters), tick **The tally is correct — override the eligible-voter count check**                                                          |
+| There is no way to nominate                          | Check the **Nomination phase** feature is on, and that nominations are open                                                                                                                            |
+| A nominated member is not on the ballot              | They must **accept** first. Check the **Candidates** tab for pending nominations                                                                                                                       |
+| **Remind Non-Voters** is missing or refused          | It shows only after ballots are emailed, needs the **Non-voter reminders** feature, and works once an hour                                                                                             |
+| The election did not open at its start time          | **Open Automatically at Start Time** must be ticked and **Scheduled opening** on. It can take up to 15 minutes. A draft with problems (for example, no accepted candidates) is skipped and tried again |
+| A member became active during voting but cannot vote | The voter list froze at opening. Add an override                                                                                                                                                       |
+| A tie shows with no winner                           | Expected for any tie rule except co-winners. Follow your bylaws                                                                                                                                        |
+| Write-in spellings split the vote                    | Use **Merge Write-Ins** before certifying                                                                                                                                                              |
+| You need a quorum                                    | No screen sets one. Track it yourself, for example with **Live Turnout**'s ballot count                                                                                                                |
+
+---
+
+## If You Learned an Older Version
+
+If you are following older notes or an SOP, these things have moved or work
+differently.
+
+- **Elections is under Governance.** It is **Governance → Elections**, not
+  under Events & Meetings.
+- **There is no Election Type field** on the create form.
+- **Election Settings has no Defaults section.** Its sections are **Proxy
+  Voting**, **Features**, **Test Ballot** and **Security**. Everything else is
+  set on each election.
+- **There is no Publish Results or Hide Results switch.** Closing releases the
+  results.
+- **The details card reads One choice per voter** where it once read Simple
+  Majority, and has a **Winner** row.
+- **Nothing is pre-selected on a ballot.** Older emailed ballots chose Abstain
+  for you; now every item needs an answer or an explicit Abstain.
+- **Scheduled opening emails the ballots.** It once opened voting without
+  sending them.
+- **Closing nominations freezes the slate**, and officers can accept a
+  nomination on a nominee's behalf.
+- **Overrides pick a member from a list.** They once asked for a user ID.
+- **Life members get Regular ballots, and administrative members do not.**
+  When standing became a class plus a status, a life member started
+  qualifying for Regular items, and an administrative member with regular
+  status stopped qualifying for Regular, Life and Operational items.
+- **Proxies on anonymous elections need the member's agreement.** A proxy
+  authorized on an anonymous election before that rule is refused at the
+  ballot. Revoke it and authorize it again with the box ticked.
+- **The proxy limit is enforced.** **Max Proxies Per Person** was once shown
+  but not checked.
+- **Elections saved with an empty specific-voter list** before that list
+  meant "everyone" may still refuse in-app votes until someone saves the
+  election again.
+- **On older anonymous elections**, the audit log may still name in-app voters
+  beside their vote.
 
 ---
 

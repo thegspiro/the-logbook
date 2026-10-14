@@ -162,9 +162,9 @@ def _resolve_public_address(endpoint: str) -> tuple[str, str]:
 
 
 class _NoRedirectSession(requests.Session):
-    def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+    def request(self, *args: Any, **kwargs: Any) -> requests.Response:
         kwargs["allow_redirects"] = False
-        return super().request(method, url, **kwargs)
+        return super().request(*args, **kwargs)
 
 
 class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
@@ -186,7 +186,7 @@ class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
         super().init_poolmanager(connections, maxsize, block=block, **kwargs)
 
     def send(
-        self, request: requests.PreparedRequest, **kwargs: Any
+        self, request: requests.PreparedRequest, *args: Any, **kwargs: Any
     ) -> requests.Response:
         # A request that reached an adapter has been prepared, so it has a URL.
         if request.url is None:
@@ -195,7 +195,7 @@ class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
         address = f"[{self.address}]" if ":" in self.address else self.address
         request.url = urlunsplit(("https", address, parsed.path, parsed.query, ""))
         request.headers["Host"] = self.hostname
-        return super().send(request, **kwargs)
+        return super().send(request, *args, **kwargs)
 
 
 # Test-only bypass of the send-time pin (MSG-15). Every send is pinned unless

@@ -6,10 +6,10 @@
  * picker here for that reason: everything created on this page is medical.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Pencil, Plus, RefreshCw, Tag } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { InventoryCategory } from '../../../services/eventServices';
 import { useAuthStore } from '../../../stores/authStore';
@@ -37,6 +37,14 @@ const MedicalCategoriesPage: React.FC = () => {
   const [editing, setEditing] = useState<InventoryCategory | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [deleting, setDeleting] = useState<InventoryCategory | null>(null);
+  const [deleteItemCount, setDeleteItemCount] = useState<number | null>(null);
+  const [moveTarget, setMoveTarget] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  // The dialog opens before the supply count arrives; this is what lets a late
+  // answer for a category the user has since moved on from be ignored.
+  const deletingIdRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -106,6 +114,73 @@ const MedicalCategoriesPage: React.FC = () => {
     }
   };
 
+  const loadItemCount = async (category: InventoryCategory) => {
+    try {
+      // Retired supplies count: they keep their category, and the server moves
+      // them with the rest, so the dialog has to ask about them too.
+      const page = await medicalSuppliesService.getItems({
+        category_id: category.id,
+        active_only: false,
+        limit: 1,
+      });
+      if (deletingIdRef.current === category.id) setDeleteItemCount(page.total);
+    } catch (err: unknown) {
+      if (deletingIdRef.current !== category.id) return;
+      deletingIdRef.current = null;
+      setDeleting(null);
+      toast.error(getErrorMessage(err, 'Could not check whether this category is in use'));
+    }
+  };
+
+  const openDelete = (category: InventoryCategory) => {
+    deletingIdRef.current = category.id;
+    setDeleting(category);
+    setDeleteItemCount(null);
+    setMoveTarget('');
+    void loadItemCount(category);
+  };
+
+  const closeDelete = () => {
+    deletingIdRef.current = null;
+    setDeleting(null);
+  };
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deleting || deleteItemCount === null) return;
+    if (deleteItemCount > 0 && !moveTarget) {
+      toast.error('Choose a category to move the supplies to');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const result = await medicalSuppliesService.deleteCategory(
+        deleting.id,
+        deleteItemCount > 0 ? moveTarget : undefined
+      );
+      toast.success(
+        result.items_moved > 0
+          ? `Deleted "${result.category_name}" and moved ${result.items_moved} ${
+              result.items_moved === 1 ? 'supply' : 'supplies'
+            } to "${result.moved_to_name ?? ''}"`
+          : `Deleted "${result.category_name}"`
+      );
+      closeDelete();
+      void load();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete the category'));
+      // The count can have changed since the dialog opened (a supply filed
+      // here meanwhile); ask again so the picker matches what the server sees.
+      void loadItemCount(deleting);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const moveTargets = deleting ? categories.filter((category) => category.id !== deleting.id) : [];
+  const mustMove = deleteItemCount !== null && deleteItemCount > 0;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       <Link
@@ -167,14 +242,24 @@ const MedicalCategoriesPage: React.FC = () => {
                 )}
               </div>
               {canManage && (
-                <button
-                  type="button"
-                  onClick={() => openEdit(category)}
-                  className="btn-icon shrink-0"
-                  aria-label={`Edit ${category.name}`}
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(category)}
+                    className="btn-icon"
+                    aria-label={`Edit ${category.name}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDelete(category)}
+                    className="btn-icon"
+                    aria-label={`Delete ${category.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               )}
             </li>
           ))}
@@ -242,6 +327,78 @@ const MedicalCategoriesPage: React.FC = () => {
               onChange={(e) => setForm((f) => ({ ...f, low_stock_threshold: e.target.value }))}
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={deleting !== null}
+        onClose={closeDelete}
+        title="Delete category"
+        onSubmit={(e) => void handleDelete(e)}
+        footer={
+          <>
+            <button
+              type="submit"
+              className="mobile-touch-target rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
+              disabled={
+                isDeleting || deleteItemCount === null || (mustMove && (moveTarget === '' || moveTargets.length === 0))
+              }
+            >
+              {isDeleting ? 'Deleting…' : 'Delete category'}
+            </button>
+            <button
+              type="button"
+              onClick={closeDelete}
+              className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-theme-text-primary text-sm">
+            Delete <strong>{deleting?.name}</strong>? This cannot be undone.
+          </p>
+
+          {deleteItemCount === null && <p className="text-theme-text-muted text-sm">Checking for supplies…</p>}
+
+          {deleteItemCount === 0 && <p className="text-theme-text-muted text-sm">No supplies use this category.</p>}
+
+          {mustMove && (
+            <>
+              <p className="text-theme-text-muted text-sm">
+                {deleteItemCount} {deleteItemCount === 1 ? 'supply uses' : 'supplies use'} this category, retired ones
+                included. They need a category to move to, or they would drop out of Medical Supplies. Their low stock
+                threshold will follow the new category.
+              </p>
+              {moveTargets.length === 0 ? (
+                <p role="alert" className="alert-warning text-sm">
+                  There is no other category to move them to. Create one first, then delete this one.
+                </p>
+              ) : (
+                <div>
+                  <label htmlFor="mc-move-target" className="form-label">
+                    Move supplies to <span aria-hidden="true">*</span>
+                  </label>
+                  <select
+                    id="mc-move-target"
+                    className="form-input w-full"
+                    value={moveTarget}
+                    onChange={(e) => setMoveTarget(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose a category…</option>
+                    {moveTargets.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
     </div>

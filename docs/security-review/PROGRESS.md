@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3248](https://github.com/thegspiro/the-logbook/pull/3248)**: branch
+`claude/security-review-elections-ballots-p9`, Feature 06 (Elections &
+ballots), pass 9. 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected
+to RESOLVED (pass 7/8 had re-cited pre-fix code — see the Log). ELEC-12,
+ELEC-16 and ELEC-40 re-confirmed open/flagged, unchanged. See
+`ELEC-06-elections-ballots.md`'s **Pass 9** section. Row 06 → ✅ (pending
+this PR's merge); next is Feature 07 (Users & organizations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 9, PR #3225, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3225](https://github.com/thegspiro/the-logbook/pull/3225)**:
 branch `claude/security-review-finance-approvals-p9`, Feature 05 (Finance &
 approvals), pass 9. PR #3223 (Feature 04, pass 9) had merged touching only
@@ -28,6 +39,8 @@ was read route by route and found sound. FIN8-05-1 (MED) and FIN-30 (LOW)
 re-confirmed open, unchanged. See `FIN-05-finance-approvals.md`'s **Pass 9**
 section. Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections
 & ballots).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 9, PR #3223, merged 2026-10-14, docs-only), preserved for history</summary>
@@ -19085,7 +19098,7 @@ here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -19121,6 +19134,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — Feature 06 (Elections & ballots, pass 9) — 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected to RESOLVED (watchdog pickup)
+
+**Step 0.** Scheduled watchdog check-in. Verified directly against GitHub
+(`list_pull_requests`/`search_pull_requests`, both state=open) that no
+`claude/security-review-*` PR or branch existed. PR #3225 (Feature 05,
+Finance & approvals, pass 9) had merged (`pull_request_read`: `merged: true`,
+2026-10-14T19:27:15Z); rotation row 05 was already ✅, so only the Open PR row
+needed clearing. Proceeded to Feature 06, the next `⬜` row.
+
+**Review.** Baseline `66c7ceb9` (PR #3142's merge, pass 8) to `origin/main`.
+The real delta in this feature's domain is small and entirely mechanical:
+PR #3247's mypy cleanup (`elections.py`, `election_service.py` — type
+annotations and threading an already-computed value instead of re-reading
+it, functionally inert) plus one piece of new, already-tested hardening
+(`schemas/election.py`'s `_refuse_cleared`, rejecting an explicit `null` on
+a NOT NULL `elections`/`candidates` column with a 422 instead of a 500 —
+Pitfall #1's corollary applied to this feature). No new route, no new
+election-table migration. `quorum_service.py`'s one-line change in this
+window is Feature 24's own MM-17 fix, unrelated to elections (confirmed by
+grep: nothing in this feature calls `QuorumService`).
+
+**ELEC-28/W50-10/W50-11 corrected to RESOLVED.** Pass 7 and pass 8 both
+re-cited `ElectionBallot.tsx`'s pre-fix `getPositions()`/
+`getCandidatesForPosition()` as unchanged ("still iterates only
+election.positions"). Reading the file directly this pass: those functions
+do not exist, and the component's own docstring records the fix in the past
+tense. It renders `ballot_items` from `GET /elections/{id}/ballot` through
+the shared `BallotItemCard`, which caps a multi-select at
+`max_votes_per_position` and names the seat count when
+`seats_per_position > 1` — exactly what W50-10/W50-11 and ELEC-28 described
+as missing. This fix was already landed, and already correctly recorded as
+fixed in `ELEC-06-elections-ballots.md`'s own **Owner decisions applied
+(2026-10-05)** section — the same date pass 7 ran; pass 7 and pass 8 simply
+never re-read the file to notice their own standing finding had already been
+closed by that decision. Corrected both passes' findings blocks with an
+inline note rather than rewriting history, per CLAUDE.md. ELEC-12 (unbounded
+saved-template list, bounded in practice by the existing 200/org cap) and
+ELEC-16 (unbounded manual-ballot-batch list, accepted as-is) and ELEC-40
+(pre-ELEC-34 dedup edge case) all re-confirmed unchanged, outside every hunk
+this window's diff touches.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/`; `validate_migrations.py --strict` passed (594
+revisions, single head `252c7517d80a`); `check_route_permissions.py
+--strict` passed (269 routes, 0 errors/warnings, unchanged elections share);
+scoped backend tests (`-k "election or ballot or quorum or candidate or
+proxy"`) 976 passed, 1 skipped (pre-existing, `py_vapid`). No application
+code changed this pass, and the frontend elections surface has zero diff
+since pass 8, so `npm run typecheck`/`npm run lint` were not re-run (per
+CLAUDE.md's verification-scaling rule).
+
+Findings doc:
+[`ELEC-06-elections-ballots.md`](./ELEC-06-elections-ballots.md)'s **Pass 9**
+section. No new `KNOWN_LIMITATIONS.md` change — ELEC-28/W50-10/W50-11 was
+never listed there as a standing item (consistent with it already being
+resolved). Rotation row 06 → ✅ (pending this PR's merge). Next: Feature 07
+(Users & organizations).
+
+---
 
 ### 2026-10-14 — Feature 05 (Finance & approvals, pass 9) — 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
 
