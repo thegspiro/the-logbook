@@ -969,6 +969,15 @@ class TestAssignmentEmail:
         )
         return sender
 
+    @staticmethod
+    def assignment_mails(mailer):
+        """The assignment emails; circulation sends its own on the way."""
+        return [
+            c
+            for c in mailer.send_email.await_args_list
+            if c.kwargs["template_type"] == "minutes_action_items"
+        ]
+
     async def test_assignees_are_emailed_when_the_minutes_are_approved(
         self, world: _World, mailer
     ):
@@ -981,8 +990,8 @@ class TestAssignmentEmail:
         )
         mailer.send_email.assert_not_called()
         await _approve(world, minutes["id"])
-        assert mailer.send_email.await_count == 1
-        kwargs = mailer.send_email.await_args.kwargs
+        assert len(self.assignment_mails(mailer)) == 1
+        kwargs = self.assignment_mails(mailer)[0].kwargs
         assert kwargs["to_emails"] == [world.assignee.email]
         assert "Order hose" in kwargs["html_body"]
         assert "Fix door" in kwargs["html_body"]
@@ -1002,7 +1011,7 @@ class TestAssignmentEmail:
             items=[{"description": "Quietly", "assignee_id": str(quiet.id)}],
         )
         await _approve(world, minutes["id"])
-        mailer.send_email.assert_not_called()
+        assert self.assignment_mails(mailer) == []
         async with _client(world.db, quiet) as c:
             mine = (await c.get("/minutes/action-items/mine")).json()
         assert [i["description"] for i in mine] == ["Quietly"]
@@ -1031,7 +1040,7 @@ class TestAssignmentEmail:
             ],
         )
         await _approve(world, minutes["id"])
-        html_body = mailer.send_email.await_args.kwargs["html_body"]
+        html_body = self.assignment_mails(mailer)[0].kwargs["html_body"]
         assert "<script>alert(1)</script>" not in html_body
         assert "&lt;script&gt;" in html_body
 

@@ -1,4 +1,9 @@
-"""Email to the members an approved set of minutes assigns work to.
+"""Email about meeting minutes: circulation for review and assigned work.
+
+``notify_minutes_circulated`` tells the department that minutes are ready to
+read and comment on. ``notify_action_item_assignees`` is described below.
+
+Email to the members an approved set of minutes assigns work to.
 
 Email is the channel of record (CLAUDE.md pitfall #18), and an action item is
 a commitment the member is held to, so each assignee is emailed once per set
@@ -19,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.minute import ActionItem, MeetingMinutes
+from app.models.minute import ActionItem, MeetingMinutes, MinutesMeetingType
 from app.models.user import Organization, User
 from app.services.email_policy import (
     EmailKind,
@@ -105,6 +110,75 @@ async def notify_action_item_assignees(
         except Exception as exc:
             logger.warning(
                 "Action item email to member {} for minutes {} failed: {}",
+                member.id,
+                minutes.id,
+                exc,
+            )
+    return sent_total
+
+
+async def notify_minutes_circulated(db: AsyncSession, minutes: MeetingMinutes) -> int:
+    """Email the department that *minutes* are circulated for review.
+
+    Sent to every active member with an address except the officer who
+    circulated them, who needs no telling. Executive-session minutes are never
+    announced: members cannot read them, so the email would point at a page
+    that answers 404. Members may opt out under
+    ``EmailKind.MINUTES_CIRCULATED``; the minutes remain visible in the app
+    either way.
+    """
+    meeting_type = getattr(minutes.meeting_type, "value", minutes.meeting_type)
+    if meeting_type == MinutesMeetingType.EXECUTIVE.value:
+        return 0
+
+    organization = (
+        await db.execute(
+            select(Organization).where(Organization.id == str(minutes.organization_id))
+        )
+    ).scalar_one_or_none()
+    conditions = [
+        User.organization_id == str(minutes.organization_id),
+        User.is_active,
+    ]
+    if minutes.submitted_by:
+        conditions.append(User.id != str(minutes.submitted_by))
+    members = (await db.execute(select(User).where(*conditions))).scalars().all()
+    recipients = recipients_for(
+        [m for m in members if m.email],
+        EmailKind.MINUTES_CIRCULATED,
+        department_required_kinds(organization),
+    )
+
+    link = f"{settings.FRONTEND_URL.rstrip('/')}/minutes/{minutes.id}"
+    body = (
+        f"<p>The minutes of <strong>{html.escape(minutes.title)}</strong> are "
+        "ready for your review.</p>"
+        "<p>Read them in Minutes and use <em>Suggest a change</em> if "
+        "something is wrong or missing. The secretary will work in what is "
+        "accepted before the minutes are adopted.</p>"
+        + action(html.escape(link), "Review the minutes")
+    )
+    html_body = wrap_email_body(
+        organization,
+        "Minutes ready for review",
+        body,
+        header_color=ACCENT_INDIGO,
+        chip="Meeting minutes",
+    )
+    sent_total = 0
+    for member in recipients:
+        try:
+            sent, _failed = await EmailService().send_email(
+                to_emails=[member.email],
+                subject=f"Minutes for review — {minutes.title}",
+                html_body=html_body,
+                db=db,
+                template_type="minutes_circulated",
+            )
+            sent_total += sent
+        except Exception as exc:
+            logger.warning(
+                "Circulation email to member {} for minutes {} failed: {}",
                 member.id,
                 minutes.id,
                 exc,

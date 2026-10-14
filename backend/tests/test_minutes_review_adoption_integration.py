@@ -8,6 +8,7 @@ change what at which status, and a mocked session evaluates none of them.
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Optional
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import text
@@ -20,6 +21,7 @@ from tests.minutes_support import (
     _closed_election,
     _create,
     _fill_required_sections,
+    _user,
     _World,
     build_world,
 )
@@ -50,6 +52,89 @@ async def _adopt(
         )
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+# ── Circulation email ────────────────────────────────────────────────
+
+
+class TestCirculationEmail:
+    @pytest.fixture
+    def mailer(self, monkeypatch):
+        sender = MagicMock()
+        sender.send_email = AsyncMock(return_value=(1, 0))
+        monkeypatch.setattr(
+            "app.services.minutes_notifications.EmailService", lambda: sender
+        )
+        return sender
+
+    @staticmethod
+    def circulation_mails(mailer):
+        return [
+            c
+            for c in mailer.send_email.await_args_list
+            if c.kwargs["template_type"] == "minutes_circulated"
+        ]
+
+    async def test_members_are_told_but_the_circulating_officer_is_not(
+        self, world: _World, mailer
+    ):
+        minutes = await _create(world)
+        await _circulate(world, minutes["id"])
+
+        recipients = {c.kwargs["to_emails"][0] for c in self.circulation_mails(mailer)}
+        assert world.member.email in recipients
+        assert world.approver.email in recipients
+        assert world.secretary.email not in recipients
+        assert world.outsider.email not in recipients
+        body = self.circulation_mails(mailer)[0].kwargs["html_body"]
+        assert f"/minutes/{minutes['id']}" in body
+
+    async def test_a_draft_sends_nothing(self, world: _World, mailer):
+        await _create(world)
+        assert self.circulation_mails(mailer) == []
+
+    async def test_a_member_who_opted_out_is_not_emailed_and_can_still_read_them(
+        self, world: _World, mailer
+    ):
+        quiet = await _user(
+            world.db,
+            world.org_id,
+            "Quiet",
+            ["minutes.view"],
+            preferences='{"email_kinds": {"minutes_circulated": false}}',
+        )
+        minutes = await _create(world)
+        await _circulate(world, minutes["id"])
+
+        recipients = {c.kwargs["to_emails"][0] for c in self.circulation_mails(mailer)}
+        assert quiet.email not in recipients
+        async with _client(world.db, quiet) as c:
+            assert (await c.get(f"/minutes/{minutes['id']}")).status_code == 200
+
+    async def test_executive_session_minutes_are_never_announced(
+        self, world: _World, mailer
+    ):
+        minutes = await _create(world, meeting_type="executive")
+        await _circulate(world, minutes["id"])
+        assert self.circulation_mails(mailer) == []
+
+    async def test_a_mail_failure_does_not_fail_circulation(
+        self, world: _World, mailer
+    ):
+        mailer.send_email.side_effect = RuntimeError("smtp down")
+        minutes = await _create(world)
+        await _circulate(world, minutes["id"])
+        async with _client(world.db, world.secretary) as c:
+            assert (await c.get(f"/minutes/{minutes['id']}")).json()[
+                "status"
+            ] == "submitted"
+
+    async def test_the_title_is_escaped_in_the_email(self, world: _World, mailer):
+        minutes = await _create(world, title="<script>x</script>")
+        await _circulate(world, minutes["id"])
+        body = self.circulation_mails(mailer)[0].kwargs["html_body"]
+        assert "<script>x</script>" not in body
+        assert "&lt;script&gt;" in body
 
 
 # ── Review: what members see, and suggestions ────────────────────────

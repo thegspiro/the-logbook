@@ -93,6 +93,10 @@ def records(monkeypatch):
         "app.services.minutes_notifications.notify_action_item_assignees",
         AsyncMock(return_value=0),
     )
+    monkeypatch.setattr(
+        "app.services.minutes_notifications.notify_minutes_circulated",
+        AsyncMock(return_value=0),
+    )
     # No outline of the department's own: the built-in order of business.
     outlines = MagicMock()
     outlines.resolve_outline = AsyncMock(return_value=None)

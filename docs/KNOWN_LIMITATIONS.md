@@ -823,9 +823,10 @@ made these choices where nothing had been decided. Each is easy to reverse.
   record with participants and times; a motion can name the ballot that decided
   it; and the departments' standard order of business is an editable outline.
   This is a new install, so no earlier minutes needed converting.
-- **Circulating minutes does not email members.** They are visible in the
-  Minutes screen, and the secretary announces them as the department usually
-  does. Emailing on circulation would be a new `EmailKind`; say if it is wanted.
+- **Circulating minutes emails members (owner decision 2026-10-14).** Each
+  active member except the circulating officer gets one email linking to the
+  minutes; it is an optional kind members can switch off, and circulating again
+  after a recall or return sends it again. Executive minutes are not announced.
 - **A suggestion changes nothing by itself.** Accepting one marks it and makes
   the adoption default to "as amended"; the secretary recalls the minutes to
   draft to work the change in and circulates again.

@@ -680,7 +680,27 @@ class MinuteService:
         minutes.rejection_reason = None
 
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        circulated = await self.get_minutes(minutes_id, organization_id)
+        if circulated is not None:
+            await self._notify_circulated(circulated)
+        return circulated
+
+    async def _notify_circulated(self, minutes: MeetingMinutes) -> None:
+        """Tell the members the minutes are out for review; never raises.
+
+        The status change has already committed, so a mail problem must not
+        turn a successful circulation into an error the secretary retries.
+        """
+        from app.services.minutes_notifications import notify_minutes_circulated
+
+        try:
+            await notify_minutes_circulated(self.db, minutes)
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning(
+                "Circulation notification for minutes {} failed: {}", minutes.id, exc
+            )
 
     @staticmethod
     def missing_required_sections(minutes: MeetingMinutes) -> List[str]:

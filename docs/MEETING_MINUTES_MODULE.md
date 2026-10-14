@@ -559,8 +559,7 @@ without `minutes.manage`, drafts and executive-session minutes answer 404.
 ### Not built
 
 Recorded in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-record-keeping-does-not-do-2026-10-14):
-automatic filing of results at certification, and emailing members when minutes
-are circulated.
+automatic filing of results at certification.
 
 ---
 
@@ -587,6 +586,13 @@ Draft ──Circulate──> Circulated ──Adopt──> Adopted ──Reopen�
 - **Required sections.** A section marked `required` in its outline must have
   text before the minutes can be circulated (`missing_required_sections`); the
   roll-call section is satisfied by a recorded roll.
+- **Circulation email.** Circulating minutes emails every active member with
+  an address except the officer who circulated them, linking to the minutes
+  (`EmailKind.MINUTES_CIRCULATED`, in `minutes_notifications.py`). It is
+  optional and on by default: a member can switch it off, and a department can
+  make it required. Executive-session minutes are never announced, and a failed
+  send is logged without failing the circulation. Circulating again after a
+  return or recall emails again.
 - **Suggestions.** While the minutes circulate, anyone who can view them may
   suggest a change: an optional section, a comment, and optional proposed
   wording. A member sees only their own; `minutes.manage` sees all. A manager
