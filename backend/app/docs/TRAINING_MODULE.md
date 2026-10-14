@@ -759,6 +759,12 @@ POST   /api/v1/training/reports/export                      # Officer export (tr
   `waived` marks months covered by leave (the same months the target is prorated by).
   `window_start`, `window_end` and `window_months` describe the window. Null for
   requirement types other than hours.
+- **Skills-test expirations** (`GET .../my-training`, `skill_test_expirations`):
+  one entry per skill template carrying `valid_for_months`, from the member's
+  newest official, validated, passing, non-voided test; `expiration_date` is the
+  pass date plus that many months (month end clamped). Entries honour the same
+  result-disclosure gate as the test screen. `valid_for_months` is nullable on
+  `skill_templates` (1–120); NULL never lapses.
 - **Member self-export** (`GET .../my-training/export`): `format=csv|pdf`,
   optional `start_date`/`end_date` (no `start_date` = lifetime). Gated by the org
   `allow_member_report_export` setting → **403** when disabled.

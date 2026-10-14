@@ -159,6 +159,12 @@ class SkillTemplate(Base):
         index=True,
     )
 
+    # How long a passing official test stays valid, in months from the day it
+    # was taken. NULL is a skill that does not lapse, which is every template
+    # that existed before the setting did. A pass that has lapsed is listed on
+    # the member's My Training page ahead of time, in the upcoming list.
+    valid_for_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Result disclosure — NULL inherits the organization's default from
     # TrainingModuleConfig. Set here when one skill needs different handling
     # from the department norm: a promotional evaluation may withhold results
