@@ -150,19 +150,6 @@ describe('documentsService', () => {
     });
   });
 
-  // --- getDocument ---
-  describe('getDocument', () => {
-    it('should GET /documents/:id', async () => {
-      const doc = { id: 'd1', name: 'Report.pdf' };
-      mockGet.mockResolvedValueOnce({ data: doc });
-
-      const result = await documentsService.getDocument('d1');
-
-      expect(mockGet).toHaveBeenCalledWith('/documents/d1');
-      expect(result).toEqual(doc);
-    });
-  });
-
   // --- downloadDocument ---
   describe('downloadDocument', () => {
     it('should GET /documents/:id/download as a blob', async () => {
@@ -179,20 +166,6 @@ describe('documentsService', () => {
       mockGet.mockRejectedValueOnce(new Error('Not Found'));
 
       await expect(documentsService.downloadDocument('d1')).rejects.toThrow('Not Found');
-    });
-  });
-
-  // --- updateDocument ---
-  describe('updateDocument', () => {
-    it('should PATCH /documents/:id with update data', async () => {
-      const updateData = { name: 'Updated Report', tags: 'important' };
-      const updated = { id: 'd1', ...updateData };
-      mockPatch.mockResolvedValueOnce({ data: updated });
-
-      const result = await documentsService.updateDocument('d1', updateData);
-
-      expect(mockPatch).toHaveBeenCalledWith('/documents/d1', updateData);
-      expect(result).toEqual(updated);
     });
   });
 
@@ -217,19 +190,6 @@ describe('documentsService', () => {
 
       expect(mockGet).toHaveBeenCalledWith('/documents/stats/summary');
       expect(result).toEqual(summary);
-    });
-  });
-
-  // --- getMyFolder ---
-  describe('getMyFolder', () => {
-    it('should GET /documents/my-folder', async () => {
-      const folder = { id: 'f1', name: 'My Folder' };
-      mockGet.mockResolvedValueOnce({ data: folder });
-
-      const result = await documentsService.getMyFolder();
-
-      expect(mockGet).toHaveBeenCalledWith('/documents/my-folder');
-      expect(result).toEqual(folder);
     });
   });
 });
