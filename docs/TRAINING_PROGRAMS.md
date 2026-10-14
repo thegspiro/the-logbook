@@ -237,9 +237,10 @@ create wizard's first step and in **Edit pipeline details** — and stored in
   first complete: …") and is skipped by bulk enrollment with an error. Cohort
   roster sync still adds such a member to the roster but does not enroll them in
   the pipeline, and reports the reason as a warning (see the cohort table
-  below). All three read one rule, `TrainingProgramService.missing_prerequisites`.
-  The single-member `POST /training/programs/enrollments` endpoint does not check
-  prerequisites; no screen calls it.
+  below). The single-member `POST /training/programs/enrollments` endpoint
+  refuses with 400 and the same "Must first complete: …" reason. All of them read
+  one rule, `TrainingProgramService.missing_prerequisites`, and the gate also sits
+  inside `enroll_member` itself, which every enrollment path goes through.
 - **Templates are not offered** as prerequisites in the UI: nobody is enrolled
   in a template, so nobody could complete one. The API does not refuse one.
 - **Deleting a program** removes it from every other program's prerequisite

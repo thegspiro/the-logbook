@@ -2499,6 +2499,18 @@ class TrainingProgramService:
         if not user:
             return None, "User not found"
 
+        # Every enrollment path ends here, so the prerequisite gate lives here
+        # too: the single-member endpoint used to skip it, while the picker,
+        # bulk enrollment and cohort roster sync applied it on their own.
+        missing = await self.missing_prerequisites(
+            getattr(program, "prerequisite_program_ids", None),
+            [enrollment_data.user_id],
+            organization_id,
+        )
+        if missing:
+            names = ", ".join(next(iter(missing.values())))
+            return None, f"Must first complete: {names}"
+
         # Check for existing active enrollment. A read-then-insert: two
         # concurrent enrollments of one member both passed a plain SELECT and
         # left two ACTIVE rows. The department's enrollment lock serializes
