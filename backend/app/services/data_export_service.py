@@ -17,7 +17,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Result, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_hours import AdminHoursEntry
@@ -147,7 +147,7 @@ class DataExportService:
         }
 
         for section, model, fk_attr in _EXPORT_SECTIONS:
-            result = await self.db.execute(
+            result: Result[Any] = await self.db.execute(
                 select(model).where(getattr(model, fk_attr) == user.id)
             )
             export[section] = [_row_to_dict(row) for row in result.scalars().all()]
