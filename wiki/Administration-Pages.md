@@ -87,7 +87,7 @@ second look, a stated unknown does not — and an empty queue.
 
 ## API
 
-See [API Reference → Administration Page Frame](API-Reference#administration-page-frame-2026-08-23).
+See [API Reference → Administration Page Frame](API-Reference#administration-page-frame).
 
 ## Data
 
