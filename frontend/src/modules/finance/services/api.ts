@@ -7,6 +7,13 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import { fetchFile, filenameFromContentDisposition, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
+  AdvanceAccountsPayload,
+  AdvanceDetail,
+  AdvanceExportReadiness,
+  AdvanceReturn,
+  AdvanceReturnPayload,
+  AdvancesReport,
+  AdvanceSummary,
   ApprovalChain,
   ApprovalChainCreatePayload,
   ApprovalChainStep,
@@ -81,6 +88,8 @@ import type {
   FundBalancesReport,
   FundOption,
   ExportRunPayload,
+  DuesDefaultAccountsPayload,
+  DuesExportReadiness,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -575,6 +584,15 @@ export const financeReportService = {
     return fetchFile(api, '/finance/reports/fund-balances?format=csv', 'fund-balances.csv');
   },
 
+  async advances(): Promise<AdvancesReport> {
+    const response = await api.get<AdvancesReport>('/finance/reports/advances');
+    return response.data;
+  },
+
+  async advancesCsv(): Promise<DownloadedFile> {
+    return fetchFile(api, '/finance/reports/advances?format=csv', 'cash-advances.csv');
+  },
+
   async lateSubstantiation(start: string, end: string): Promise<LateSubstantiationReport> {
     const response = await api.get<LateSubstantiationReport>('/finance/reports/late-substantiation', {
       params: { start, end },
@@ -797,6 +815,36 @@ export const expenseReportService = {
 // Check Requests
 // =============================================================================
 
+export const advanceService = {
+  /**
+   * Issued cash advances, oldest first. *mine* narrows a finance officer to
+   * their own; *outstandingOnly* leaves out the ones fully accounted for.
+   */
+  async list(params?: { mine?: boolean; outstandingOnly?: boolean }): Promise<AdvanceSummary[]> {
+    const response = await api.get<AdvanceSummary[]>('/finance/advances', {
+      params: {
+        mine: params?.mine || undefined,
+        outstanding_only: params?.outstandingOnly || undefined,
+      },
+    });
+    return asArray(response.data);
+  },
+
+  async get(id: string): Promise<AdvanceDetail> {
+    const response = await api.get<AdvanceDetail>(`/finance/advances/${id}`);
+    return response.data;
+  },
+
+  async recordReturn(id: string, data: AdvanceReturnPayload): Promise<AdvanceReturn> {
+    const response = await api.post<AdvanceReturn>(`/finance/advances/${id}/returns`, data);
+    return response.data;
+  },
+
+  async deleteReturn(id: string, returnId: string): Promise<void> {
+    await api.delete(`/finance/advances/${id}/returns/${returnId}`);
+  },
+};
+
 export const checkRequestService = {
   async list(params?: { status?: string }): Promise<CheckRequest[]> {
     const response = await api.get<CheckRequest[]>('/finance/check-requests', { params: { status: params?.status } });
@@ -947,6 +995,17 @@ export const exportMappingService = {
   async logs(params?: { skip?: number; limit?: number }): Promise<ExportLog[]> {
     const response = await api.get<ExportLog[]>('/finance/export/logs', { params });
     return asArray(response.data);
+  },
+
+  /** Set the department's default QuickBooks accounts for dues payments. */
+  async setDuesDefaults(data: DuesDefaultAccountsPayload): Promise<DuesExportReadiness> {
+    const response = await api.put<DuesExportReadiness>('/finance/export/dues-accounts', data);
+    return response.data;
+  },
+
+  async setAdvanceAccounts(data: AdvanceAccountsPayload): Promise<AdvanceExportReadiness> {
+    const response = await api.put<AdvanceExportReadiness>('/finance/export/advance-accounts', data);
+    return response.data;
   },
 
   /** Run the QuickBooks export for a period, as the file the server names. */

@@ -127,6 +127,7 @@ from app.models.facilities import (
     FacilityUtilityReading,
 )
 from app.models.finance import (
+    AdvanceReturn,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -760,6 +761,7 @@ __all__ = [
     "ExpenseLineItem",
     "ExpenseType",
     "CheckRequest",
+    "AdvanceReturn",
     "CheckRequestStatus",
     "DuesSchedule",
     "DuesFrequency",

@@ -60,8 +60,9 @@ class TestBulkEnrollNameLookupScoping:
             prerequisite_program_ids=[str(uuid4())],
         )
         # 1) org-scoped user batch fetch -> nothing (the foreign id isn't
-        #    in this org, so it must not resolve). 2) completed-prereqs
-        #    fetch -> nobody has completed it.
+        #    in this org, so it must not resolve). 2) prerequisite-name
+        #    lookup -> no program, which nobody can have completed, so no
+        #    completed-enrollment fetch follows.
         db.execute = AsyncMock(side_effect=[_scalars([]), _rows([])])
 
         service = TrainingProgramService(db)

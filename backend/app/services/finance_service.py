@@ -6,6 +6,7 @@ expense reports, check requests, dues, approval chains,
 and QuickBooks export.
 """
 
+import copy
 import html
 import io
 import secrets
@@ -40,6 +41,7 @@ from app.models.apparatus import Apparatus
 from app.models.email_template import EmailTemplate
 from app.models.facilities import Facility
 from app.models.finance import (
+    AdvanceReturn,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -70,7 +72,15 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
 )
-from app.models.user import Position, User
+from app.models.user import Organization, Position, User
+from app.services.cash_advances import (
+    AdvanceNotSettleableError,
+    advance_balances,
+    assert_no_overdue,
+    assert_settleable,
+    is_accounted_for,
+    lock_advance,
+)
 from app.services.expense_substantiation import describe_late, late_items
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
@@ -105,9 +115,16 @@ from app.services.separation_of_duties import (
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import (
+    FINANCE_SETTINGS_KEY,
     FUND_OVERSPEND_BLOCK,
+    QB_ADVANCES_CASH_KEY,
+    QB_ADVANCES_KEY,
+    QB_DUES_DEPOSIT_KEY,
+    QB_DUES_INCOME_KEY,
     SUBSTANTIATION_BLOCK,
     SUBSTANTIATION_OFF,
+    advance_accounts,
+    dues_default_accounts,
     load_finance_settings,
 )
 from app.utils.member_names import format_display_name
@@ -457,6 +474,20 @@ def _resolve_category_accounts(
     for category in categories:
         resolve(category.id, 0)
     return resolved
+
+
+def _refuse_advance_charges(data: dict) -> None:
+    """A cash advance charges no budget line or restricted fund: the expense
+    report that accounts for it does (app/services/cash_advances.py)."""
+    if data.get("budget_id") or data.get("fund_campaign_id"):
+        raise ValueError(
+            "A cash advance is not charged to a budget line or fund; the "
+            "expense report that accounts for it is"
+        )
+
+
+def _aware_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _short_label(name: str, limit: int = 40) -> str:
@@ -4717,6 +4748,8 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, charger_id, item_data.get("budget_id")
             )
+        if kwargs.get("advance_id"):
+            await assert_settleable(self.db, org_id, kwargs["advance_id"], submitted_by)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
@@ -4763,6 +4796,17 @@ class FinanceService:
             ExpenseReportStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit an expense report in this status")
+        if "advance_id" in kwargs:
+            # How much of the report the advance covers is fixed on submit.
+            if er.status != ExpenseReportStatus.DRAFT:
+                raise ValueError(
+                    "The cash advance a report accounts for can only be "
+                    "changed while it is a draft"
+                )
+            if kwargs["advance_id"]:
+                await assert_settleable(
+                    self.db, org_id, kwargs["advance_id"], er.submitted_by
+                )
         await self._validate_finance_fks(org_id, kwargs)
         apply_updates(er, kwargs)
         await self.db.flush()
@@ -4874,6 +4918,8 @@ class FinanceService:
         late_ids = {item.id for item in late}
         for item in er.line_items:
             item.substantiated_late = item.id in late_ids
+        if er.advance_id:
+            er.advance_applied = await self._apply_advance(er, org_id)
         er.submitted_at = now
 
         er.status = ExpenseReportStatus.SUBMITTED
@@ -4906,6 +4952,33 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
         return er
+
+    async def _apply_advance(self, er: ExpenseReport, org_id: str) -> Decimal:
+        """How much of this report its cash advance covers: the report's
+        total, up to what the advance still has outstanding.
+
+        The advance's row is locked first and the balance read through locking
+        reads, so two reports submitted against one advance at once cannot
+        both claim its last dollars (CLAUDE.md pitfall #27).
+        """
+        advance_id = er.advance_id or ""
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if (
+            advance is None
+            or advance.status != CheckRequestStatus.ISSUED
+            or advance.requested_by != er.submitted_by
+        ):
+            raise AdvanceNotSettleableError()
+        balance = (
+            await advance_balances(self.db, org_id, advance_ids=[advance_id], lock=True)
+        )[advance_id]
+        if balance.outstanding <= 0:
+            raise ValueError(
+                f"Cash advance {advance.request_number} is already fully "
+                "accounted for. Remove it from this report to claim these "
+                "expenses as a reimbursement."
+            )
+        return min(_qb_amount(er.total_amount), balance.outstanding)
 
     async def mark_expense_paid(
         self,
@@ -5012,6 +5085,8 @@ class FinanceService:
         charger_id: Optional[str] = None,
         **kwargs,
     ) -> CheckRequest:
+        if kwargs.get("is_advance"):
+            _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
@@ -5045,6 +5120,8 @@ class FinanceService:
             CheckRequestStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit a check request in this status")
+        if cr.is_advance:
+            _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
         # As update_purchase_request: only a change of line is checked.
         if kwargs.get("budget_id") != cr.budget_id:
@@ -5067,6 +5144,8 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        if cr.is_advance:
+            await assert_no_overdue(self.db, org_id, cr.requested_by)
 
         cr.status = CheckRequestStatus.SUBMITTED
 
@@ -5165,6 +5244,11 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
         if cr.status != CheckRequestStatus.ISSUED:
             raise ValueError("Only issued checks can be voided")
+        if cr.is_advance and await is_accounted_for(self.db, org_id, cr.id):
+            raise ValueError(
+                "This cash advance has expense reports or returns recorded "
+                "against it and cannot be voided"
+            )
 
         cr.status = CheckRequestStatus.VOIDED
         # The date a check exported to QuickBooks is reversed on.
@@ -5182,6 +5266,212 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
         return cr
+
+    # ========================================
+    # Cash Advances
+    # ========================================
+
+    async def _advance_rows(
+        self, org_id: str, advance_ids: list[str]
+    ) -> dict[str, tuple[CheckRequest, str]]:
+        """Each advance with its member's display name."""
+        if not advance_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                CheckRequest,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(
+                User,
+                and_(
+                    User.id == CheckRequest.requested_by,
+                    User.organization_id == org_id,
+                ),
+            )
+            .where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.id.in_(advance_ids),
+            )
+        )
+        return {
+            cr.id: (
+                cr,
+                format_display_name(first, last, preferred) or username or "",
+            )
+            for cr, first, last, preferred, username in result.all()
+        }
+
+    @staticmethod
+    def _advance_summary(cr: CheckRequest, member: str, balance) -> dict:
+        return {
+            "id": cr.id,
+            "request_number": cr.request_number,
+            "member_id": cr.requested_by,
+            "member_name": member,
+            "amount": balance.amount,
+            "purpose": cr.purpose or cr.memo,
+            "check_number": cr.check_number,
+            "issued_at": cr.check_date,
+            "due_at": balance.due_at,
+            "accounted": balance.accounted,
+            "returned": balance.returned,
+            "outstanding": balance.outstanding,
+            "overdue": balance.overdue,
+        }
+
+    async def list_advances(
+        self,
+        org_id: str,
+        restrict_to_user: Optional[str] = None,
+        outstanding_only: bool = False,
+    ) -> list[dict]:
+        """Every issued cash advance with its balance, oldest first."""
+        balances = await advance_balances(self.db, org_id, member_id=restrict_to_user)
+        if outstanding_only:
+            balances = {k: b for k, b in balances.items() if b.outstanding > 0}
+        rows = await self._advance_rows(org_id, list(balances))
+        return [
+            self._advance_summary(*rows[advance_id], balance)
+            for advance_id, balance in balances.items()
+            if advance_id in rows
+        ]
+
+    async def get_advance(
+        self, org_id: str, advance_id: str, restrict_to_user: Optional[str] = None
+    ) -> dict:
+        """An issued advance's balance, the reports that account for it and
+        the cash returned against it."""
+        balances = await advance_balances(
+            self.db, org_id, advance_ids=[advance_id], member_id=restrict_to_user
+        )
+        balance = balances.get(advance_id)
+        if balance is None:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        cr, member = (await self._advance_rows(org_id, [advance_id]))[advance_id]
+        reports = await self.db.execute(
+            select(ExpenseReport)
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.advance_id == advance_id,
+            )
+            .order_by(ExpenseReport.created_at, ExpenseReport.id)
+        )
+        returns = await self.db.execute(
+            select(AdvanceReturn)
+            .where(
+                AdvanceReturn.organization_id == org_id,
+                AdvanceReturn.advance_id == advance_id,
+            )
+            .order_by(AdvanceReturn.returned_at, AdvanceReturn.id)
+        )
+        return {
+            **self._advance_summary(cr, member, balance),
+            "reports": [
+                {
+                    "id": er.id,
+                    "report_number": er.report_number,
+                    "title": er.title,
+                    "status": er.status.value,
+                    "total_amount": er.total_amount,
+                    "advance_applied": er.advance_applied,
+                    "submitted_at": er.submitted_at,
+                }
+                for er in reports.scalars()
+            ],
+            "returns": list(returns.scalars()),
+        }
+
+    async def record_advance_return(
+        self,
+        org_id: str,
+        advance_id: str,
+        recorded_by: str,
+        amount: Decimal,
+        returned_at: Optional[datetime] = None,
+        payment_method: Optional[str] = None,
+        reference: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> AdvanceReturn:
+        """Record unspent cash the member handed back.
+
+        The advance's row is locked and its balance read through locking
+        reads before the return is checked against it, so two entries of one
+        return cannot together take the advance below zero (pitfall #27).
+        """
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if advance is None or advance.status != CheckRequestStatus.ISSUED:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        # SoD (FIN-4): the member who owes the money does not record that it
+        # came back.
+        assert_different_person(
+            recorded_by,
+            advance.requested_by,
+            action="record a return on",
+            record="cash advance",
+        )
+        # No fiscal-year check: a return moves no budget figure, and an advance
+        # still owed when its year is locked must still be able to come back.
+        now = datetime.now(timezone.utc)
+        when = returned_at or now
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when > now:
+            raise ValueError("A return cannot be dated in the future")
+        if advance.check_date is not None and when < _aware_utc(advance.check_date):
+            raise ValueError("A return cannot be dated before the advance was issued")
+        balance = (
+            await advance_balances(self.db, org_id, advance_ids=[advance_id], lock=True)
+        )[advance_id]
+        value = _qb_amount(amount)
+        if value > balance.outstanding:
+            raise ValueError(
+                f"Only {balance.outstanding:,.2f} of this advance is outstanding"
+            )
+        entry = AdvanceReturn(
+            organization_id=org_id,
+            advance_id=advance_id,
+            amount=value,
+            returned_at=when,
+            payment_method=payment_method,
+            reference=reference,
+            notes=notes,
+            recorded_by=recorded_by,
+        )
+        self.db.add(entry)
+        await self.db.flush()
+        await self.db.refresh(entry, ["created_at"])
+        return entry
+
+    async def delete_advance_return(
+        self, org_id: str, advance_id: str, return_id: str
+    ) -> AdvanceReturn:
+        """Remove a return recorded by mistake, until an export carries it."""
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if advance is None:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        result = await self.db.execute(
+            select(AdvanceReturn)
+            .where(
+                AdvanceReturn.id == return_id,
+                AdvanceReturn.advance_id == advance_id,
+                AdvanceReturn.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        entry = result.scalar_one_or_none()
+        if entry is None:
+            raise FinanceEntityNotFoundError("Return not found")
+        if entry.qb_exported_at is not None:
+            raise ValueError(
+                "This return has been exported to QuickBooks and cannot be removed"
+            )
+        await self.db.delete(entry)
+        await self.db.flush()
+        return entry
 
     # ========================================
     # Dues & Assessments
@@ -5217,6 +5507,9 @@ class FinanceService:
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(schedule)
         await self.db.flush()
@@ -5230,6 +5523,9 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         apply_updates(schedule, kwargs)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
@@ -5659,10 +5955,15 @@ class FinanceService:
             if key not in category_keys
             for mapping in group
         ]
-        return {"categories": rows, "unmatched_mapping_ids": unmatched}
+        return {
+            "categories": rows,
+            "unmatched_mapping_ids": unmatched,
+            "dues": await self._dues_accounts(org_id),
+            "advances": await self._advance_accounts(org_id),
+        }
 
     async def _resolve_export_accounts(
-        self, org_id: str, sources: list
+        self, org_id: str, sources: list, extra_issues: Optional[list[str]] = None
     ) -> dict[str, tuple[str, str]]:
         """Map each exported budget line to its (account, offset) QuickBooks pair.
 
@@ -5676,7 +5977,11 @@ class FinanceService:
         rows: list = []
         for statement in sources:
             rows.extend((await self.db.execute(statement)).all())
-        if not rows:
+        # Problems found elsewhere (dues schedules, cash-advance accounts)
+        # refuse the export in the same message, so the treasurer sees
+        # everything to fix at once.
+        extra_issues = list(extra_issues or [])
+        if not rows and not extra_issues:
             return {}
 
         budget_ids = {budget_id for _, budget_id in rows if budget_id is not None}
@@ -5729,7 +6034,7 @@ class FinanceService:
             else:
                 resolved[budget_id] = (account, offset)
 
-        issues = [problems[name] for name in sorted(problems)]
+        issues = [problems[name] for name in sorted(problems)] + extra_issues
         if unbudgeted:
             shown = ", ".join(unbudgeted[:3]) + (", ..." if len(unbudgeted) > 3 else "")
             issues.insert(
@@ -5746,8 +6051,10 @@ class FinanceService:
             if len(message) > 300:
                 message = (
                     f"Set QuickBooks accounts before exporting: {len(problems)} "
-                    f"budget categories and {len(unbudgeted)} transactions "
-                    "without a budget line need accounts"
+                    f"budget categories, {len(extra_issues)} dues or advance "
+                    "settings and "
+                    f"{len(unbudgeted)} transactions without a budget line need "
+                    "accounts"
                 )
             raise ValueError(message)
         return resolved
@@ -5793,6 +6100,13 @@ class FinanceService:
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
         ]
+        # Dues received in the period: money in, debited to the deposit
+        # account and credited to the schedule's income account.
+        dues_filters = [
+            DuesPayment.organization_id == org_id,
+            DuesPayment.received_at >= date_start,
+            DuesPayment.received_at <= date_end,
+        ]
         # Reversals of checks voided after QuickBooks received them. A check
         # voided before it was ever exported needs nothing: it is in neither
         # file, so the books never saw it.
@@ -5802,6 +6116,13 @@ class FinanceService:
             CheckRequest.qb_exported_at.is_not(None),
             CheckRequest.voided_at >= date_start,
             CheckRequest.voided_at <= date_end,
+        ]
+        # Unspent cash handed back against a cash advance: debited to the bank
+        # and credited to the advances account.
+        return_filters = [
+            AdvanceReturn.organization_id == org_id,
+            AdvanceReturn.returned_at >= date_start,
+            AdvanceReturn.returned_at <= date_end,
         ]
         if include_exported:
             # Sending a period again reproduces what was sent for it: a check
@@ -5825,6 +6146,8 @@ class FinanceService:
             )
             er_filters.append(ExpenseReport.qb_exported_at.is_(None))
             void_filters.append(CheckRequest.qb_void_exported_at.is_(None))
+            dues_filters.append(DuesPayment.qb_exported_at.is_(None))
+            return_filters.append(AdvanceReturn.qb_exported_at.is_(None))
 
         pr_count = await self.db.scalar(
             select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
@@ -5841,16 +6164,47 @@ class FinanceService:
         void_count = await self.db.scalar(
             select(func.count()).select_from(CheckRequest).where(*void_filters)
         )
+        dues_setup = await self._dues_accounts(org_id)
+        dues_count = (
+            await self.db.scalar(
+                select(func.count()).select_from(DuesPayment).where(*dues_filters)
+            )
+            if dues_setup["enabled"]
+            else 0
+        )
+        return_count = await self.db.scalar(
+            select(func.count()).select_from(AdvanceReturn).where(*return_filters)
+        )
+        # Reports that account for a cash advance, and advances not yet given
+        # the accounts they were exported to.
+        settling_count = await self.db.scalar(
+            select(func.count())
+            .select_from(ExpenseReport)
+            .where(*er_filters, ExpenseReport.advance_applied > 0)
+        )
+        new_advance_count = await self.db.scalar(
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(
+                *cr_filters,
+                CheckRequest.is_advance.is_(True),
+                CheckRequest.qb_export_account.is_(None),
+            )
+        )
         total = (
             int(pr_count or 0)
             + int(cr_count or 0)
             + int(line_count or 0)
             + int(void_count or 0)
+            + int(dues_count or 0)
+            + int(return_count or 0)
         )
-        # Two rows per transaction (or expense line) plus the header. A file
+        # Two rows per transaction (or expense line) plus the header, and one
+        # more per report settling an advance: the line the advance runs out
+        # on is paid partly from it and partly from the bank. A file
         # QuickBooks will not import is no use, and splitting one would let an
         # expense report's entry straddle two files, so refuse instead.
-        rows = 2 * total + 1
+        rows = 2 * total + int(settling_count or 0) + 1
         if rows > max_rows:
             raise ValueError(
                 f"QuickBooks Online imports files of fewer than {max_rows + 1:,} "
@@ -5860,6 +6214,53 @@ class FinanceService:
         # Resolved before the log row so a refusal leaves no pending export.
         # A check that carries the accounts it was exported to is posted (or
         # reversed) against those, and needs no resolving.
+        dues_accounts: dict[str, tuple[str, str]] = {}
+        other_issues: list[str] = []
+        if dues_count:
+            exported_schedules = set(
+                (
+                    await self.db.execute(
+                        select(MemberDues.dues_schedule_id)
+                        .join(DuesPayment, DuesPayment.member_dues_id == MemberDues.id)
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .distinct()
+                    )
+                ).scalars()
+            )
+            for row in dues_setup["schedules"]:
+                if row["schedule_id"] not in exported_schedules:
+                    continue
+                label = _short_label(row["name"])
+                if row["status"] == "ready":
+                    dues_accounts[row["schedule_id"]] = (
+                        row["deposit_account"],
+                        row["income_account"],
+                    )
+                elif row["status"] == "no_income":
+                    other_issues.append(f"dues '{label}' has no income account")
+                elif row["status"] == "no_deposit":
+                    other_issues.append(f"dues '{label}' has no deposit account")
+                else:
+                    other_issues.append(
+                        f"dues '{label}' posts to Accounts Payable or Receivable"
+                    )
+        advance_setup = await self._advance_accounts(org_id)
+        if (
+            int(new_advance_count or 0)
+            or int(settling_count or 0)
+            or int(return_count or 0)
+        ) and advance_setup["status"] != "ready":
+            other_issues.append(
+                {
+                    "no_advances_account": "cash advances have no advances account",
+                    "no_cash_account": "cash advances have no bank account",
+                }.get(
+                    advance_setup["status"],
+                    "cash advances post to Accounts Payable or Receivable",
+                )
+            )
+        advance_account = advance_setup["advances_account"] or ""
+        advance_cash = advance_setup["cash_account"] or ""
         accounts = await self._resolve_export_accounts(
             org_id,
             [
@@ -5867,16 +6268,21 @@ class FinanceService:
                     *pr_filters
                 ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *cr_filters, CheckRequest.qb_export_account.is_(None)
+                    *cr_filters,
+                    CheckRequest.qb_export_account.is_(None),
+                    CheckRequest.is_advance.is_(False),
                 ),
                 select(ExpenseReport.report_number, ExpenseLineItem.budget_id)
                 .select_from(ExpenseLineItem)
                 .join(ExpenseReport)
                 .where(*er_filters),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *void_filters, CheckRequest.qb_export_account.is_(None)
+                    *void_filters,
+                    CheckRequest.qb_export_account.is_(None),
+                    CheckRequest.is_advance.is_(False),
                 ),
             ],
+            extra_issues=other_issues,
         )
 
         log = await self._begin_export(
@@ -5893,6 +6299,9 @@ class FinanceService:
         def check_accounts(cr: CheckRequest) -> tuple[str, str]:
             if cr.qb_export_account and cr.qb_export_offset_account:
                 return cr.qb_export_account, cr.qb_export_offset_account
+            if cr.is_advance:
+                # Money owed back to the department until it is accounted for.
+                return advance_account, advance_cash
             return line_accounts(cr.budget_id)
 
         def journal_lines(
@@ -5926,6 +6335,11 @@ class FinanceService:
         sent_reports: set[str] = set()
         sent_checks: dict[tuple[str, str], list[str]] = {}
         sent_voids: list[str] = []
+        sent_dues: list[str] = []
+        sent_returns: list[str] = []
+        # What each report's cash advance has left to cover, as its lines go
+        # out; carried across batch boundaries, which can split a report.
+        advance_left: dict[str, Decimal] = {}
 
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
@@ -6033,21 +6447,183 @@ class FinanceService:
                     lines = []
                     for item, er in records:
                         account, paid_from = line_accounts(item.budget_id)
-                        lines += journal_lines(
-                            er.report_number,
-                            local_day(er.paid_at),
-                            er.title,
-                            account,
-                            paid_from,
-                            item.amount,
-                            (
-                                f"{item.merchant}: {item.description}"
-                                if item.merchant
-                                else item.description
-                            ),
+                        description = (
+                            f"{item.merchant}: {item.description}"
+                            if item.merchant
+                            else item.description
                         )
+                        if er.id not in advance_left:
+                            advance_left[er.id] = _qb_amount(
+                                er.advance_applied or Decimal("0")
+                            )
+                        covered = min(_qb_amount(item.amount), advance_left[er.id])
+                        if covered > 0:
+                            # Paid from the cash advance, not the bank: the
+                            # expense clears what the member owed instead.
+                            advance_left[er.id] -= covered
+                            value = _qb_amount(item.amount)
+                            day = local_day(er.paid_at)
+                            lines.append(
+                                [
+                                    er.report_number,
+                                    day,
+                                    er.title,
+                                    account,
+                                    value,
+                                    "",
+                                    description,
+                                ]
+                            )
+                            lines.append(
+                                [
+                                    er.report_number,
+                                    day,
+                                    er.title,
+                                    advance_account,
+                                    "",
+                                    covered,
+                                    description,
+                                ]
+                            )
+                            if value > covered:
+                                lines.append(
+                                    [
+                                        er.report_number,
+                                        day,
+                                        er.title,
+                                        paid_from,
+                                        "",
+                                        value - covered,
+                                        description,
+                                    ]
+                                )
+                        else:
+                            lines += journal_lines(
+                                er.report_number,
+                                local_day(er.paid_at),
+                                er.title,
+                                account,
+                                paid_from,
+                                item.amount,
+                                description,
+                            )
                         sent_reports.add(er.id)
                     delivered += len(records)
+                    yield csv_chunk(lines)
+
+                for offset in range(0, int(dues_count or 0), batch_size):
+                    dues_result = await self.db.execute(
+                        select(
+                            DuesPayment,
+                            MemberDues.dues_schedule_id,
+                            DuesSchedule.name,
+                            User.first_name,
+                            User.last_name,
+                            User.preferred_name,
+                            User.username,
+                        )
+                        .join(MemberDues, MemberDues.id == DuesPayment.member_dues_id)
+                        .join(
+                            DuesSchedule,
+                            DuesSchedule.id == MemberDues.dues_schedule_id,
+                        )
+                        .outerjoin(
+                            User,
+                            and_(
+                                User.id == MemberDues.user_id,
+                                User.organization_id == org_id,
+                            ),
+                        )
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .order_by(DuesPayment.received_at, DuesPayment.id)
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    dues_records = list(dues_result.all())
+                    if not dues_records:
+                        break
+                    lines = []
+                    for (
+                        payment,
+                        schedule_id,
+                        schedule_name,
+                        first,
+                        last,
+                        preferred,
+                        username,
+                    ) in dues_records:
+                        deposit, income = dues_accounts[schedule_id]
+                        member = (
+                            format_display_name(first, last, preferred)
+                            or username
+                            or "Member"
+                        )
+                        how = ", ".join(
+                            part
+                            for part in (
+                                payment.payment_method,
+                                payment.transaction_reference,
+                            )
+                            if part
+                        )
+                        # A dues payment has no request number; its own id
+                        # keeps the Journal No unique, and the prefix keeps it
+                        # from ever matching a PR-, CR- or ER- number.
+                        lines += journal_lines(
+                            f"DUES-{payment.id[:8]}",
+                            local_day(payment.received_at),
+                            f"Dues: {schedule_name}",
+                            deposit,
+                            income,
+                            payment.amount,
+                            f"{member} ({how})" if how else member,
+                        )
+                        sent_dues.append(payment.id)
+                    delivered += len(dues_records)
+                    yield csv_chunk(lines)
+
+                for offset in range(0, int(return_count or 0), batch_size):
+                    return_result = await self.db.execute(
+                        select(
+                            AdvanceReturn,
+                            CheckRequest.request_number,
+                            CheckRequest.payee_name,
+                        )
+                        .join(
+                            CheckRequest,
+                            and_(
+                                CheckRequest.id == AdvanceReturn.advance_id,
+                                CheckRequest.organization_id == org_id,
+                            ),
+                        )
+                        .where(*return_filters)
+                        .order_by(AdvanceReturn.returned_at, AdvanceReturn.id)
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    return_records = list(return_result.all())
+                    if not return_records:
+                        break
+                    lines = []
+                    for entry, number, payee_name in return_records:
+                        how = ", ".join(
+                            part
+                            for part in (entry.payment_method, entry.reference)
+                            if part
+                        )
+                        # The prefix keeps the Journal No from ever matching a
+                        # request number or another kind of entry.
+                        lines += journal_lines(
+                            f"ADVR-{entry.id[:8]}",
+                            local_day(entry.returned_at),
+                            f"Advance returned: {number}",
+                            advance_cash,
+                            advance_account,
+                            entry.amount,
+                            f"{payee_name} ({how})" if how else payee_name,
+                        )
+                        sent_returns.append(entry.id)
+                    delivered += len(return_records)
                     yield csv_chunk(lines)
 
                 # Last, so a check exported and voided within one period is
@@ -6085,6 +6661,8 @@ class FinanceService:
                     reports=sent_reports,
                     checks=sent_checks,
                     voids=sent_voids,
+                    dues=sent_dues,
+                    returns=sent_returns,
                 )
                 log.status = "successful"
                 log.record_count = delivered
@@ -6146,6 +6724,155 @@ class FinanceService:
         await self.db.commit()  # Persist pending before any bytes reach the client.
         return log
 
+    async def set_dues_default_accounts(
+        self, org_id: str, income: Optional[str], deposit: Optional[str]
+    ) -> tuple[str, str]:
+        """Set the QuickBooks accounts a dues payment posts to when its
+        schedule names none. Blank or None clears one."""
+        income = (income or "").strip()
+        deposit = (deposit or "").strip()
+        _refuse_name_required(income, deposit)
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        org = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+        # A deep copy: the finance section is a nested dict, and mutating it in
+        # place on a shallow copy is never written (CLAUDE.md pitfall #12).
+        settings = copy.deepcopy(org.settings or {})
+        section = settings.get(FINANCE_SETTINGS_KEY)
+        if not isinstance(section, dict):
+            section = {}
+        for key, value in (
+            (QB_DUES_INCOME_KEY, income),
+            (QB_DUES_DEPOSIT_KEY, deposit),
+        ):
+            if value:
+                section[key] = value
+            else:
+                section.pop(key, None)
+        settings[FINANCE_SETTINGS_KEY] = section
+        org.settings = settings
+        await self.db.flush()
+        return income, deposit
+
+    async def _dues_accounts(self, org_id: str) -> dict:
+        """Every dues schedule's QuickBooks accounts, its own or the
+        department's default, and whether its payments can be exported."""
+        org_settings = (
+            await self.db.execute(
+                select(Organization.settings).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        default_income, default_deposit = dues_default_accounts(org_settings)
+        rows = await self.db.execute(
+            select(DuesSchedule)
+            .where(DuesSchedule.organization_id == org_id)
+            .order_by(DuesSchedule.name, DuesSchedule.id)
+        )
+        schedules = []
+        for schedule in rows.scalars():
+            own_income = (schedule.qb_income_account or "").strip()
+            own_deposit = (schedule.qb_deposit_account or "").strip()
+            income = own_income or default_income
+            deposit = own_deposit or default_deposit
+            if not income:
+                status = "no_income"
+            elif not deposit:
+                status = "no_deposit"
+            elif _needs_qb_name(income) or _needs_qb_name(deposit):
+                status = "payable_receivable"
+            else:
+                status = "ready"
+            schedules.append(
+                {
+                    "schedule_id": schedule.id,
+                    "name": schedule.name,
+                    "is_active": schedule.is_active,
+                    "status": status,
+                    "income_account": income or None,
+                    "income_source": (
+                        "schedule" if own_income else "default" if income else None
+                    ),
+                    "deposit_account": deposit or None,
+                    "deposit_source": (
+                        "schedule" if own_deposit else "default" if deposit else None
+                    ),
+                }
+            )
+        # Dues go to QuickBooks once the department names an account for
+        # them anywhere. Until then they stay out of the export, as they did
+        # before dues could be exported, rather than refusing every export of
+        # a department that keeps its dues in QuickBooks by other means.
+        enabled = bool(
+            default_income
+            or default_deposit
+            or any(
+                row["income_source"] == "schedule"
+                or row["deposit_source"] == "schedule"
+                for row in schedules
+            )
+        )
+        return {
+            "enabled": enabled,
+            "default_income_account": default_income or None,
+            "default_deposit_account": default_deposit or None,
+            "schedules": schedules,
+        }
+
+    async def set_advance_accounts(
+        self, org_id: str, advances: Optional[str], cash: Optional[str]
+    ) -> tuple[str, str]:
+        """Set the QuickBooks accounts cash advances post to. Blank or None
+        clears one."""
+        advances = (advances or "").strip()
+        cash = (cash or "").strip()
+        _refuse_name_required(advances, cash)
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        org = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+        # A deep copy, as for the dues accounts (CLAUDE.md pitfall #12).
+        settings = copy.deepcopy(org.settings or {})
+        section = settings.get(FINANCE_SETTINGS_KEY)
+        if not isinstance(section, dict):
+            section = {}
+        for key, value in ((QB_ADVANCES_KEY, advances), (QB_ADVANCES_CASH_KEY, cash)):
+            if value:
+                section[key] = value
+            else:
+                section.pop(key, None)
+        settings[FINANCE_SETTINGS_KEY] = section
+        org.settings = settings
+        await self.db.flush()
+        return advances, cash
+
+    async def _advance_accounts(self, org_id: str) -> dict:
+        """The department's cash-advance accounts and whether an advance can
+        be exported with them."""
+        org_settings = (
+            await self.db.execute(
+                select(Organization.settings).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        advances, cash = advance_accounts(org_settings)
+        if not advances:
+            status = "no_advances_account"
+        elif not cash:
+            status = "no_cash_account"
+        elif _needs_qb_name(advances) or _needs_qb_name(cash):
+            status = "payable_receivable"
+        else:
+            status = "ready"
+        return {
+            "status": status,
+            "advances_account": advances or None,
+            "cash_account": cash or None,
+        }
+
     async def _stamp_exported(
         self,
         org_id: str,
@@ -6156,6 +6883,8 @@ class FinanceService:
         reports: set[str],
         checks: dict[tuple[str, str], list[str]],
         voids: list[str],
+        dues: Optional[list[str]] = None,
+        returns: Optional[list[str]] = None,
     ) -> None:
         """Mark what a completed export carried, and the accounts it used."""
         stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
@@ -6195,6 +6924,24 @@ class FinanceService:
                     CheckRequest.id.in_(voids),
                 )
                 .values(qb_void_exported_at=stamped_at, qb_void_export_log_id=log_id)
+            )
+        if dues:
+            await self.db.execute(
+                update(DuesPayment)
+                .where(
+                    DuesPayment.organization_id == org_id,
+                    DuesPayment.id.in_(dues),
+                )
+                .values(**stamp)
+            )
+        if returns:
+            await self.db.execute(
+                update(AdvanceReturn)
+                .where(
+                    AdvanceReturn.organization_id == org_id,
+                    AdvanceReturn.id.in_(returns),
+                )
+                .values(**stamp)
             )
 
     async def list_export_logs(

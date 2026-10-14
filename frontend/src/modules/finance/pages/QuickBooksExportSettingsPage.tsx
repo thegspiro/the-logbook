@@ -29,6 +29,8 @@ import { exportMappingService } from '../services/api';
 import { ExportMappingDialog } from '../components/ExportMappingDialog';
 import { ExportHistorySection } from '../components/ExportHistorySection';
 import { RunExportSection } from '../components/RunExportSection';
+import { DuesExportSection } from '../components/DuesExportSection';
+import { AdvanceExportSection } from '../components/AdvanceExportSection';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -147,7 +149,11 @@ const QuickBooksExportSettingsPage: React.FC = () => {
             Give each budget category the QuickBooks account it posts to and the account it is paid from
           </p>
         </div>
-        <button type="button" onClick={() => setDialog({ mode: 'create' })} className="btn-primary">
+        <button
+          type="button"
+          onClick={() => setDialog({ mode: 'create' })}
+          className="btn-primary inline-flex items-center gap-2"
+        >
           <Plus className="h-4 w-4" />
           Add mapping
         </button>
@@ -271,7 +277,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setDialog({ mode: 'edit', mapping: onlyMapping })}
-                              className="btn-secondary"
+                              className="btn-secondary inline-flex items-center gap-2"
                               aria-label={`Edit the mapping for ${row.categoryName}`}
                             >
                               <Pencil className="h-4 w-4" />
@@ -281,7 +287,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setDialog({ mode: 'create', initialCategory: row.categoryName })}
-                              className="btn-secondary"
+                              className="btn-secondary inline-flex items-center gap-2"
                               aria-label={`Add a mapping for ${row.categoryName}`}
                             >
                               <Plus className="h-4 w-4" />
@@ -384,6 +390,20 @@ const QuickBooksExportSettingsPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {readiness?.dues && (
+        <DuesExportSection
+          dues={readiness.dues}
+          onSaved={(dues) => setReadiness((current) => (current ? { ...current, dues } : current))}
+        />
+      )}
+
+      {readiness?.advances && (
+        <AdvanceExportSection
+          advances={readiness.advances}
+          onSaved={(advances) => setReadiness((current) => (current ? { ...current, advances } : current))}
+        />
+      )}
 
       <RunExportSection onExported={() => setHistoryVersion((v) => v + 1)} />
 

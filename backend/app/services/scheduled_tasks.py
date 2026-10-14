@@ -1170,7 +1170,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         )
     )
     for item in minutes_items.scalars().all():
-        if item.assignee_id:
+        if item.assignee_id and item.due_date is not None:
             due_d = (
                 item.due_date.date()
                 if hasattr(item.due_date, "date")
@@ -5682,7 +5682,11 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             for event in events:
                 custom = event.custom_fields or {}
-                if custom.get("series_end_reminder_sent"):
+                # The query selects only series with an end date.
+                if (
+                    custom.get("series_end_reminder_sent")
+                    or event.recurrence_end_date is None
+                ):
                     continue
 
                 # The organizer and alternate run the series now; whoever
@@ -6555,6 +6559,11 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 if event_request is None:
                     continue
                 event_date = event_request.event_date
+                # Re-read under the lock: the date may have been cleared since
+                # the candidate query, and an undated request has nothing to
+                # count down to.
+                if event_date is None:
+                    continue
                 if event_date.tzinfo is None:
                     event_date = event_date.replace(tzinfo=dt_timezone.utc)
 

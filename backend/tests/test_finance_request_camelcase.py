@@ -21,6 +21,8 @@ from pydantic.alias_generators import to_camel
 from app.models.finance import ExpenseType
 from app.schemas import finance as finance_schemas
 from app.schemas.finance import (
+    AdvanceAccountsUpdate,
+    AdvanceReturnCreate,
     ApprovalActionRequest,
     ApprovalChainCreate,
     ApprovalChainStepCreate,
@@ -40,6 +42,7 @@ from app.schemas.finance import (
     BudgetUpdate,
     CheckRequestCreate,
     CheckRequestUpdate,
+    DuesDefaultAccountsUpdate,
     DuesScheduleCreate,
     DuesScheduleUpdate,
     ExpenseLineItemCreate,
@@ -232,12 +235,19 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "title": "Conference",
         "description": "d",
         "notes": "n",
+        "advance_id": "advance-1",
         "line_items": [dict(_LINE_ITEM)],
     },
-    ExpenseReportUpdate: {"title": "Conference", "description": "d", "notes": "n"},
+    ExpenseReportUpdate: {
+        "title": "Conference",
+        "description": "d",
+        "notes": "n",
+        "advance_id": "advance-1",
+    },
     CheckRequestCreate: {
         "fiscal_year_id": "fy-1",
         "budget_id": "budget-1",
+        "is_advance": True,
         "payee_name": "Vendor Inc",
         "payee_address": "1 Main St",
         "amount": "99.99",
@@ -293,6 +303,21 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "qb_account_number": "6100",
         "qb_offset_account_name": "1000 Operating Checking",
         "mapping_type": "expense",
+    },
+    DuesDefaultAccountsUpdate: {
+        "income_account": "Dues Income",
+        "deposit_account": "Operating Checking",
+    },
+    AdvanceAccountsUpdate: {
+        "advances_account": "Employee Advances",
+        "cash_account": "Operating Checking",
+    },
+    AdvanceReturnCreate: {
+        "amount": "25.00",
+        "returned_at": "2026-03-15T12:00:00Z",
+        "payment_method": "cash",
+        "reference": "r",
+        "notes": "n",
     },
     ExportMappingUpdate: {
         "internal_category": "Apparatus",

@@ -1,7 +1,7 @@
 """Let a budget category restrict who may charge its lines.
 
 Revision ID: 252c7517d80a
-Revises: a17a47c5a871
+Revises: a39a1999776f
 Create Date: 2026-10-14 10:05:14.682136
 
 Budget categories already nest (``parent_category_id``); a Quartermaster
@@ -35,7 +35,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "252c7517d80a"
-down_revision: Union[str, None] = "a17a47c5a871"
+down_revision: Union[str, None] = "a39a1999776f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
