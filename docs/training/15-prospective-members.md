@@ -1198,7 +1198,7 @@ only manage used to get Access Denied from their own pipeline's button)_:
 
 Each badge carries a short id for the applicant, not their status-page token.
 
-See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-module-barcode-label-printing-2026-06-10) for label format options.
+See [Inventory > Labels in other parts of The Logbook](./05-inventory.md#labels-in-other-parts-of-the-logbook) for label format options.
 
 ---
 
