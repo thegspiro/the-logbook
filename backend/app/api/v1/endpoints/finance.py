@@ -609,8 +609,9 @@ async def start_fiscal_year_from(
     notes, and starts at the source line's current budget, which the
     Treasurer then edits. Spent and committed start at zero; amendments are
     not copied. A category and station that already have a line in the draft
-    are skipped, so a second run copies nothing. Only into a draft year that
-    is not locked; either year in another department is 404.
+    are skipped, so a second run copies nothing. A line whose category has
+    been retired is not copied. Only into a draft year that is not locked;
+    either year in another department is 404.
     """
     service = FinanceBudgetRequestService(db)
     org_id = str(current_user.organization_id)
@@ -628,12 +629,17 @@ async def start_fiscal_year_from(
                 "source_fiscal_year_id": source_id,
                 "created": result["created"],
                 "skipped": result["skipped"],
+                "retired": result["retired"],
             },
             user_id=str(current_user.id),
             username=current_user.username,
             organization_id=org_id,
         )
-        return {"created": result["created"], "skipped": result["skipped"]}
+        return {
+            "created": result["created"],
+            "skipped": result["skipped"],
+            "retired": result["retired"],
+        }
     except FinanceEntityNotFoundError:
         raise HTTPException(status_code=404, detail="Fiscal year not found")
     except ValueError as e:
