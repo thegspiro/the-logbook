@@ -121,7 +121,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ---------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------- | ------ |
 | W61 | Budgets                                                                | treasurer                 | `/finance/budgets`                                               | ✅     |
 | W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ✅     |
-| W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ⬜     |
+| W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ✅     |
 | W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ⬜     |
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ⬜     |
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ⬜     |
@@ -175,10 +175,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W63** — straight after "Submit for Approval" the purchase request's
-  Approval Timeline reads "This request has no approval steps" until a reload,
-  which then shows all three. The New Purchase Request form's seven fields
-  are not tied to their labels (W62).
+- **W64 / W65** — an expense report's or check request's detail page may
+  carry the same 20–36px back link and action buttons the purchase request
+  screens had (W63-4); W63-1's fix to their submit responses should be seen
+  in the browser there.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -208,6 +208,47 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W63 — A purchase request through its approval chain — 2026-10-14
+
+Driven as:
+
+- `member` raising, submitting and following two requests;
+- `treasurer` adding a two-step "Large purchases" chain, approving, denying,
+  and marking a request ordered, received and paid;
+- `chief` as the named second approver;
+- `admin` overriding the Chief's step;
+- 390×844 for the list, form, detail page and queue.
+
+Held:
+
+- validation;
+- the more specific chain wins;
+- every double-click records once;
+- override and deny require a reason, and the member sees it;
+- the budget line commits on approval and spends on payment;
+- no overflow on a phone.
+
+Fixed:
+
+- W63-1 (MED — straight after submitting, the request said it had no
+  approval steps; purchase, expense and check submit responses now carry
+  them).
+- W63-2 (MED — the coverage report called a step covered when its approver
+  lacked `finance.approve`; new problem `no_approve_permission`).
+- W63-3 (LOW — seven unlabelled form fields).
+- W63-4 (LOW — 20–38px controls on four screens).
+
+Flagged:
+
+- W63-5 (MED — the approver a chain names may be unable to approve).
+- W63-6 (MED — nobody is told a request waits on them, or was decided).
+- W63-7 (MED — "Mark Paid" always records the estimate).
+
+Gate: typecheck and lint are clean; 560 frontend and 970 finance backend
+tests pass (7 new).
+
+Next: W64.
 
 ### W62 — Approval chains, finance settings and the emailed approval — 2026-10-14
 

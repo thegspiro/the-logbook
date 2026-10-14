@@ -5577,6 +5577,34 @@ W62-6 and W62-7).
     and amount are needed to make the decision; the requester's name and the
     description are more sensitive.
 
+## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
+
+Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
+W63-5, W63-6 and W63-7).
+
+- **A chain can name an approver who cannot approve.** Approve, deny and the
+  Approvals queue require `finance.approve`. A chain step naming a position
+  (the Chief, here) whose holders lack it leaves them a 403 on the queue and
+  a 404 on the request. Only an approvals admin's override moves it on.
+  - The chain screen now says so ("Nobody on this step has the finance
+    approval permission", W63-2).
+  - Decision: either naming a position or member in a chain lets them act on
+    that step, or saving such a step is refused.
+- **Nobody is told.** No email, bell entry or text goes to:
+  - an approver whose step a request has reached;
+  - the requester when it is approved or denied.
+
+  The existing entries record this for dual approval's second approval and
+  for amendments. It holds for every ordinary step and for the decision too.
+  Decision: which events notify whom (email first, pitfall 18).
+
+- **The paid amount is always the estimate.** "Mark Paid" sends no amount,
+  though `POST /finance/purchase-requests/{id}/mark-paid` takes
+  `actual_amount` and the service records it. An invoice that differs from
+  the quote leaves the budget line's spent and committed figures wrong, with
+  no way to correct them on screen. Decision: whether "Mark Paid" asks for
+  the amount, and how a difference from the commitment is shown.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

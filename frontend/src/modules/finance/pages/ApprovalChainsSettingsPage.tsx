@@ -110,6 +110,8 @@ function coverageProblemText(row: ApproverCoverageRow): string {
       return (type && NOT_FOUND_TEXT[type]) || 'That position, member or permission no longer exists';
     case ApproverCoverageProblem.INVALID_EMAIL:
       return 'Not a valid email address';
+    case ApproverCoverageProblem.NO_APPROVE_PERMISSION:
+      return 'Nobody on this step has the finance approval permission, so they cannot approve or deny';
     case ApproverCoverageProblem.NO_ACTIVE_MEMBERS:
     default:
       return 'No active member can act on this step';

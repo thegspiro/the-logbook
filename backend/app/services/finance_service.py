@@ -3416,10 +3416,22 @@ class FinanceService:
                     continue
                 approver_type = normalize_approver_type(step.approver_type)
                 value = (step.approver_value or "").strip()
+                # Approve and deny need finance.approve as well as a match
+                # (step_actor_flags, and the endpoints' gate). Counting the
+                # match alone reported a Chief step as covered while the Chief,
+                # holding no finance.approve, got 403 on the queue and 404 on
+                # the request. An email approver acts from the emailed link, so
+                # the grant does not apply to them.
+                needs_grant = approver_type != ApproverType.EMAIL
+                matched = 0
                 eligible = 0
                 for member in members:
                     if await user_matches_step(self.db, member, step, org_id):
-                        eligible += 1
+                        matched += 1
+                        if not needs_grant or user_has_permission(
+                            member, FINANCE_APPROVE
+                        ):
+                            eligible += 1
                 rows.append(
                     {
                         "chain_id": chain.id,
@@ -3435,7 +3447,7 @@ class FinanceService:
                         "assignee_label": await describe_assignee(step, directory),
                         "eligible_active_count": eligible,
                         "problem": await self._coverage_problem(
-                            approver_type, value, eligible, directory
+                            approver_type, value, eligible, directory, matched
                         ),
                         "pending_request_count": pending_by_step.get(step.id, 0),
                     }
@@ -3448,6 +3460,7 @@ class FinanceService:
         value: str,
         eligible: int,
         directory: ApproverDirectory,
+        matched: int = 0,
     ) -> Optional[str]:
         if approver_type is None:
             return None if eligible else "no_active_members"
@@ -3466,7 +3479,11 @@ class FinanceService:
         elif approver_type == ApproverType.PERMISSION:
             if not is_known_permission(value):
                 return "not_found"
-        return None if eligible else "no_active_members"
+        if eligible:
+            return None
+        # Somebody fills the step, but none of them may approve: distinct from
+        # an empty position, because the fix is a grant, not a person.
+        return "no_approve_permission" if matched else "no_active_members"
 
     # ========================================
     # Manual approval (no approval chain applies)

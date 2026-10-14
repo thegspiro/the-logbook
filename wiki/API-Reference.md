@@ -1091,14 +1091,14 @@ deadline).
 chains, so an administrator can find steps nobody can act on before requests
 pile up behind them:
 
-| Field                                            | Notes                                                                   |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                           |
-| `stepId`, `stepName`, `stepOrder`                | The step                                                                |
-| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                      |
-| `eligibleActiveCount`                            | Active members who match the step                                       |
-| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members` or `invalid_email` |
-| `pendingRequestCount`                            | Requests waiting on this step now                                       |
+| Field                                            | Notes                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                                                    |
+| `stepId`, `stepName`, `stepOrder`                | The step                                                                                         |
+| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                                               |
+| `eligibleActiveCount`                            | Active members who match the step and may approve (`finance.approve`, except on an email step)   |
+| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members`, `no_approve_permission` or `invalid_email` |
+| `pendingRequestCount`                            | Requests waiting on this step now                                                                |
 
 ---
 

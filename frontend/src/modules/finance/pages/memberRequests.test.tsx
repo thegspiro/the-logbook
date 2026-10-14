@@ -152,6 +152,22 @@ describe.each(listCases)('$name list', (c) => {
   });
 });
 
+// W63: the status filters were 32px and New was 36px at 390px wide.
+describe('purchase request list on a phone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    granted = new Set(['finance.request']);
+    storeState = { ...emptyLists };
+  });
+
+  it('gives the status filters and New a touch-sized target', () => {
+    renderAt('/finance/purchase-requests', '/finance/purchase-requests', PurchaseRequestsPage);
+
+    expect(screen.getByRole('button', { name: 'Draft' })).toHaveClass('touch:min-h-11');
+    expect(screen.getByRole('link', { name: 'New Purchase Request' })).toHaveClass('touch:min-h-11');
+  });
+});
+
 describe('request forms pick a budget line by name and amount left', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -179,6 +195,24 @@ describe('request forms pick a budget line by name and amount left', () => {
     expect(screen.getByRole('option', { name: 'Apparatus (Station 2) — $80.50 remaining' })).toBeInTheDocument();
     // The active year is chosen for them, and its lines are what was asked for.
     expect(budgetOptions).toHaveBeenCalledWith('fy-1');
+  });
+
+  // W63: none of the seven fields was tied to its label.
+  it('names every purchase request field by its label', async () => {
+    renderAt('/finance/purchase-requests/new', '/finance/purchase-requests/new', PurchaseRequestFormPage);
+
+    await screen.findByRole('option', { name: 'Training — $1,250.00 remaining' });
+    for (const label of [
+      'Title *',
+      'Description',
+      'Vendor',
+      'Estimated Amount *',
+      'Priority *',
+      'Fiscal Year *',
+      'Budget',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
   });
 
   it('on the check request form', async () => {

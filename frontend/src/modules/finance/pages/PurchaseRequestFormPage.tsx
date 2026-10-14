@@ -200,7 +200,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         <button
           type="button"
           onClick={() => void navigate('/finance/purchase-requests')}
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -217,7 +217,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/purchase-requests')}
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Purchase Requests
@@ -240,11 +240,14 @@ const PurchaseRequestFormPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {/* Title */}
           <div className="sm:col-span-2">
-            <label className={labelClass}>Title *</label>
+            <label htmlFor="pr-title" className={labelClass}>
+              Title *
+            </label>
             <input
               type="text"
               className={inputClass}
               placeholder="Brief title for the purchase"
+              id="pr-title"
               {...register('title')}
             />
             {errors.title && <p className={errorClass}>{errors.title.message}</p>}
@@ -252,11 +255,14 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Description */}
           <div className="sm:col-span-2">
-            <label className={labelClass}>Description</label>
+            <label htmlFor="pr-description" className={labelClass}>
+              Description
+            </label>
             <textarea
               className={inputClass}
               rows={3}
               placeholder="What you're buying and why"
+              id="pr-description"
               {...register('description')}
             />
             {errors.description && <p className={errorClass}>{errors.description.message}</p>}
@@ -264,20 +270,31 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Vendor */}
           <div>
-            <label className={labelClass}>Vendor</label>
-            <input type="text" className={inputClass} placeholder="Vendor or supplier name" {...register('vendor')} />
+            <label htmlFor="pr-vendor" className={labelClass}>
+              Vendor
+            </label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="Vendor or supplier name"
+              id="pr-vendor"
+              {...register('vendor')}
+            />
             {errors.vendor && <p className={errorClass}>{errors.vendor.message}</p>}
           </div>
 
           {/* Estimated Amount */}
           <div>
-            <label className={labelClass}>Estimated Amount *</label>
+            <label htmlFor="pr-estimatedAmount" className={labelClass}>
+              Estimated Amount *
+            </label>
             <input
               type="number"
               step="0.01"
               min="0"
               className={inputClass}
               placeholder="0.00"
+              id="pr-estimatedAmount"
               {...register('estimatedAmount', { valueAsNumber: true })}
             />
             {errors.estimatedAmount && <p className={errorClass}>{errors.estimatedAmount.message}</p>}
@@ -285,8 +302,10 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Priority */}
           <div>
-            <label className={labelClass}>Priority *</label>
-            <select className={selectClass} {...register('priority')}>
+            <label htmlFor="pr-priority" className={labelClass}>
+              Priority *
+            </label>
+            <select className={selectClass} id="pr-priority" {...register('priority')}>
               {PRIORITY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -298,8 +317,10 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Fiscal Year */}
           <div>
-            <label className={labelClass}>Fiscal Year *</label>
-            <select className={selectClass} {...register('fiscalYearId')}>
+            <label htmlFor="pr-fiscalYearId" className={labelClass}>
+              Fiscal Year *
+            </label>
+            <select className={selectClass} id="pr-fiscalYearId" {...register('fiscalYearId')}>
               <option value="">Select fiscal year</option>
               {fiscalYears.map((fy) => (
                 <option key={fy.id} value={fy.id}>
@@ -312,8 +333,10 @@ const PurchaseRequestFormPage: React.FC = () => {
 
           {/* Budget Category */}
           <div className="sm:col-span-2">
-            <label className={labelClass}>Budget</label>
-            <select className={selectClass} {...register('budgetId')}>
+            <label htmlFor="pr-budgetId" className={labelClass}>
+              Budget
+            </label>
+            <select className={selectClass} id="pr-budgetId" {...register('budgetId')}>
               <option value="">No budget linked</option>
               {budgetOptions.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -340,14 +363,14 @@ const PurchaseRequestFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/finance/purchase-requests')}
-            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
+            className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Request'}
