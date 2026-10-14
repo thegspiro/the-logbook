@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Moved out of 18-storefront.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its image file
+names and alt text are unchanged. The notes it carried are kept here.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `18-01-member-storefront.png` | **CHECK** | A window with no description reads "Open for orders.", and the cart button **Review order** (was Review); replace if either is in frame |
+| `18-02-store-admin.png` | **REPLACE** | The header reads **Department Store** and the address is `/inventory/admin/store`; the existing capture shows the old title and URL. Capture from the Overview tab. If the frame reaches the notification settings, the fields read **Last call reminder (hours before close)** and **Extra recipients for new order alerts (comma-separated)** |
+| `18-03-order-windows.png` | **REPLACE** | The window row's buttons read **Open ordering** / **Close ordering** and **Record vendor order** (or **Update vendor order** once recorded); counts read "1 order" / "3 orders" rather than "order(s)" |
+| `18-04-my-orders-unpaid.png` | **REPLACE** | The payment line reads "Include **ORD-…** as the reference on your payment." (was "Reference ORD-… on your payment"), and item counts read "1 item" / "3 items" |
+| `19-08-store-admin-activity.png` | **CHECK** | The recent-updates panel reads "Newest first" and its empty state "No order updates in the last 7 days."; replace if visible |
+| `19-06-store-admin-orders.png` | **REPLACE** | The export button reads **Export CSV** (was Export), the bulk control **New status for selected orders** (was Bulk status), and rows read "1 item" / "2 items" |
+| Every storefront capture (catalog, cart, checkout, My Orders) | **REPLACE** | The member storefront was redesigned around the cart, with checkout on its own page. _Demo data:_ a cart holding two different products, at least one with a size or variant selected, so the cart lines and the order stepper are both populated |
+| Store item detail and sizing request captures | **REPLACE** | Capture an embroidered item **and** an engraved one — only embroidered items offer a thread colour, and a single capture cannot show the difference |
+| Inventory Administration hub, Department Store section | **NEW** | The four cards (Store Overview, Store Catalog, Store Orders, Store Payments), the entry point the guide names; nothing in the set shows it |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of
