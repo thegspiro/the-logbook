@@ -16,12 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None, as of this commit.** PR #3210 (Feature 01, Auth & session lifecycle,
-pass 9) merged 2026-10-14T11:12:59Z — a docs-only merge (its own review file
-plus the Open PR row-clear it carried), nothing else to record. Row 01 stays
-✅. This commit records Feature 02 (Permissions & roles), pass 9 — see the
-Log below and `PERM-02-permissions-roles.md`'s **Pass 9** section; its own PR
-number is added as a second commit on this branch once opened.
+**PR [#3212](https://github.com/thegspiro/the-logbook/pull/3212)**: branch
+`claude/security-review-permissions-roles`, Feature 02 (Permissions &
+roles), pass 9 (watchdog pickup). PR #3210 (Feature 01, Auth & session
+lifecycle, pass 9) merged 2026-10-14T11:12:59Z — a docs-only merge (its own
+review file plus the Open PR row-clear it carried), nothing else to
+record; this PR carries that row-clear alongside its own review. 0 fixed
+in source, 1 doc correction (PERM-9), 0 flagged — of the 12 files this
+feature tracks, only 2 had changed since pass 8 (PR #3097), both reviewed
+and confirmed benign. See `PERM-02-permissions-roles.md`'s **Pass 9**
+section. Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 9, PR #3210, merged 2026-10-14), preserved for history</summary>
