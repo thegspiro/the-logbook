@@ -1161,8 +1161,8 @@ class StorefrontService:
         self,
         product: StoreProduct,
         offering: Optional[StoreWindowProduct],
-        window_totals: Dict[Tuple[str, Optional[str]], int],
-        member_totals: Dict[Tuple[str, Optional[str]], int],
+        window_totals: Dict[Tuple[Optional[str], Optional[str]], int],
+        member_totals: Dict[Tuple[Optional[str], Optional[str]], int],
         max_per_member: Optional[int],
     ) -> Optional[int]:
         """Tightest of stock / window cap / per-member cap; None means unlimited."""
@@ -1186,7 +1186,7 @@ class StorefrontService:
     def _variant_remaining(
         self,
         variant: StoreProductVariant,
-        window_totals: Dict[Tuple[str, Optional[str]], int],
+        window_totals: Dict[Tuple[Optional[str], Optional[str]], int],
         product_remaining: Optional[int],
     ) -> Optional[int]:
         if variant.stock_quantity is None:
@@ -1205,7 +1205,7 @@ class StorefrontService:
         organization_id: str,
         user_id: Optional[str] = None,
         for_update: bool = False,
-    ) -> Dict[Tuple[str, Optional[str]], int]:
+    ) -> Dict[Tuple[Optional[str], Optional[str]], int]:
         """Units already claimed in a window, keyed by (product_id, variant_id).
 
         ``for_update`` makes the tally a locking read, and only the order-placing

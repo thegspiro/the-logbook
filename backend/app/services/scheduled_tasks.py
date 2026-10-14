@@ -1879,10 +1879,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftCompletionReport.trainee_id,
                     ).where(ShiftCompletionReport.shift_id.in_(shift_ids))
                 )
-                for rep_sid, rep_oid, rep_tid in rres.all():
-                    report_map.setdefault((str(rep_sid), str(rep_oid)), set()).add(
-                        str(rep_tid)
-                    )
+                for report_sid, officer_id, trainee_id in rres.all():
+                    report_map.setdefault(
+                        (str(report_sid), str(officer_id)), set()
+                    ).add(str(trainee_id))
 
                 cres = await db.execute(
                     select(
@@ -1890,9 +1890,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftEquipmentCheck.template_id,
                     ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
                 )
-                for chk_sid, chk_tid in cres.all():
-                    if chk_tid is not None:
-                        checks_done_map.setdefault(str(chk_sid), set()).add(chk_tid)
+                # An ad-hoc check has no template, so it cannot satisfy one.
+                for check_sid, tid in cres.all():
+                    if tid is not None:
+                        checks_done_map.setdefault(str(check_sid), set()).add(tid)
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
@@ -2694,9 +2695,10 @@ async def run_end_of_shift_checklist_reminders(
                     ShiftEquipmentCheck.template_id,
                 ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
             )
-            for chk_sid, chk_tid in cres.all():
-                if chk_tid is not None:
-                    checks_done_map.setdefault(str(chk_sid), set()).add(chk_tid)
+            # An ad-hoc check has no template, so it cannot satisfy one.
+            for sid, tid in cres.all():
+                if tid is not None:
+                    checks_done_map.setdefault(str(sid), set()).add(tid)
             asres = await db_session.execute(
                 select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
                 .join(User, User.id == ShiftAssignment.user_id)

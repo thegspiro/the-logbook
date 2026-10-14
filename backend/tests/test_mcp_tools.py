@@ -2662,13 +2662,22 @@ class TestTwentiethRoundFindings:
         )
         db_session.add(event)
         await db_session.flush()
-        result = await run_event_reminders(db_session)
-        assert result["total_in_app_reminders"] == 0
+
+        # The scheduler walks every organization, so its totals also count
+        # whatever else the database holds. What this event was sent is
+        # recorded on the event itself, which is what the assertions read.
+        def reminders_sent() -> list:
+            return list((event.custom_fields or {}).get("reminders_sent") or [])
+
+        await run_event_reminders(db_session)
+        await db_session.refresh(event)
+        assert reminders_sent() == []
         # The same event, published, is what the scheduler exists to send.
         event.is_draft = False
         await db_session.flush()
-        result = await run_event_reminders(db_session)
-        assert result["total_in_app_reminders"] > 0
+        await run_event_reminders(db_session)
+        await db_session.refresh(event)
+        assert reminders_sent()
 
 
 class TestTwentySecondRoundFindings:

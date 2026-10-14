@@ -241,7 +241,7 @@ class PreShiftWorkService:
         ).all()
 
         seen: set[str] = set()
-        shifts: List[Tuple[Shift, Optional[str]]] = []
+        shifts: List[Tuple[Shift, str]] = []
         for shift, position in rows:
             if shift.id in seen:
                 continue
