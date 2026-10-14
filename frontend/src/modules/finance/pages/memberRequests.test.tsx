@@ -169,6 +169,19 @@ describe('purchase request list on a phone', () => {
     expect(screen.getByRole('button', { name: 'Draft' })).toHaveClass('touch:min-h-11');
     expect(screen.getByRole('link', { name: 'New Purchase Request' })).toHaveClass('touch:min-h-11');
   });
+
+  // W64 / W65: the same 32px filters and 36px New on the other two lists.
+  // New is a link on one and a button on the other; the header's comes first.
+  it.each([
+    ['/finance/expenses', ExpenseReportsPage, 'link', 'New Expense Report'],
+    ['/finance/check-requests', CheckRequestsPage, 'button', 'New Check Request'],
+  ] as const)('sizes %s for touch too', (path, Page, role, newLabel) => {
+    renderAt(path, path, Page);
+
+    expect(screen.getByRole('button', { name: 'Draft' })).toHaveClass('touch:min-h-11');
+    const [headerNew] = screen.getAllByRole(role, { name: newLabel });
+    expect(headerNew).toHaveClass('touch:min-h-11');
+  });
 });
 
 describe('request forms pick a budget line by name and amount left', () => {

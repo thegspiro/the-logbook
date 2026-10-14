@@ -5226,7 +5226,7 @@ class FinanceService:
             raise ValueError("Check request not found")
         # SoD (FIN-4): the person who issues the check must not be the requester.
         assert_different_person(
-            acted_by, cr.requested_by, action="issue check", record="check request"
+            acted_by, cr.requested_by, action="issue", record="check request"
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")

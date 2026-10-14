@@ -123,7 +123,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ✅     |
 | W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ✅     |
 | W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ✅     |
-| W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ⬜     |
+| W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ✅     |
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ⬜     |
 | W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ⬜     |
 | W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ⬜     |
@@ -175,10 +175,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W65** — a check request's screens may carry the same 20–36px back link,
-  buttons and filters that W63-4 and W64-3 sized on the purchase and expense
-  screens; W63-1's fix to the submit response should be seen there. A check
-  request is routed by purchase-request chains too (W64-4).
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -208,6 +204,39 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W65 — Check requests — 2026-10-14
+
+Driven as:
+
+- `treasurer` raising and submitting a check, then trying to approve and issue
+  their own;
+- `admin` approving, issuing and voiding it;
+- `member` probing;
+- 390×844 for the list, form and detail page.
+
+Held:
+
+- labelled form, with each missing field named;
+- every double-click records once;
+- separation of duties refuses the requester at approval and at issue;
+- issue and void move the budget line's spending and back;
+- a member gets 404 and 403.
+
+Fixed:
+
+- W65-1 (MED — a refused issue or void showed only "Failed to …").
+- W65-2 (MED — voiding, which is final and reverses spending, took one tap).
+- W65-3 (LOW — "You cannot issue check your own check request").
+- W65-4 (LOW — "Valley Fuel Co.." in the issue dialog).
+- W65-5 (LOW — small controls on the list and form).
+
+Flagged: none new. The check took a purchase-request chain, confirming W64-4.
+
+Gate: typecheck and lint are clean; the finance tests pass (6 new); the
+separation-of-duties backend tests pass.
+
+Next: W66.
 
 ### W64 — An expense report, from receipt to reimbursement — 2026-10-14
 

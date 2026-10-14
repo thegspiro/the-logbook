@@ -120,7 +120,7 @@ const CheckRequestFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/check-requests')}
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Check Requests
@@ -140,7 +140,10 @@ const CheckRequestFormPage: React.FC = () => {
               aria-describedby="isAdvance-hint"
             />
             <div>
-              <label htmlFor="isAdvance" className="text-theme-text-primary text-sm font-medium">
+              <label
+                htmlFor="isAdvance"
+                className="text-theme-text-primary touch:flex touch:min-h-11 touch:items-center text-sm font-medium"
+              >
                 This is a cash advance to me
               </label>
               <p id="isAdvance-hint" className="text-theme-text-secondary text-xs">
@@ -252,14 +255,14 @@ const CheckRequestFormPage: React.FC = () => {
             <button
               type="button"
               onClick={() => void navigate('/finance/check-requests')}
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
+              className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
               {isSubmitting ? 'Creating...' : 'Create Check Request'}
