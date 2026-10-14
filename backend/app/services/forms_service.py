@@ -729,9 +729,7 @@ class FormsService:
         for field in fields:
             if str(field.id) in field_mappings:
                 continue
-            ft = field.field_type
-            if hasattr(ft, "value"):
-                ft = ft.value
+            ft = getattr(field.field_type, "value", field.field_type)
             target = ft_map.get(ft)
             if target and target not in used_targets:
                 field_mappings[str(field.id)] = target
@@ -813,12 +811,12 @@ class FormsService:
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Get paginated results
         query = query.order_by(Form.updated_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        forms = result.scalars().all()
+        forms = list(result.scalars().all())
 
         return forms, total
 
@@ -1043,9 +1041,9 @@ class FormsService:
             if not integration.is_active:
                 continue
 
-            int_type = integration.integration_type
-            if hasattr(int_type, "value"):
-                int_type = int_type.value
+            int_type = getattr(
+                integration.integration_type, "value", integration.integration_type
+            )
 
             # Pick the right label + field-type maps.
             if int_type == IntegrationType.MEMBERSHIP_INTEREST:
@@ -1071,9 +1069,7 @@ class FormsService:
             for field in fields:
                 if str(field.id) in new_mappings:
                     continue
-                ft = field.field_type
-                if hasattr(ft, "value"):
-                    ft = ft.value
+                ft = getattr(field.field_type, "value", field.field_type)
                 target = ft_map.get(ft)
                 if target and target not in used_targets:
                     new_mappings[str(field.id)] = target
@@ -1605,14 +1601,14 @@ class FormsService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results
         query = (
             query.order_by(FormSubmission.submitted_at.desc()).offset(skip).limit(limit)
         )
         result = await self.db.execute(query)
-        submissions = result.scalars().all()
+        submissions = list(result.scalars().all())
 
         return submissions, total
 
@@ -1833,9 +1829,9 @@ class FormsService:
             if not integration:
                 return False, "Integration not found"
 
-            int_type = integration.integration_type
-            if hasattr(int_type, "value"):
-                int_type = int_type.value
+            int_type = getattr(
+                integration.integration_type, "value", integration.integration_type
+            )
 
             await self.db.delete(integration)
             await self.db.flush()
@@ -1997,9 +1993,9 @@ class FormsService:
         for integration in form.integrations or []:
             if not integration.is_active:
                 continue
-            it = integration.integration_type
-            if hasattr(it, "value"):
-                it = it.value
+            it = getattr(
+                integration.integration_type, "value", integration.integration_type
+            )
             if it in handled_types:
                 continue  # Already processed via direct path
 
@@ -2236,9 +2232,7 @@ class FormsService:
             normalised_label = field_def.label.strip().lower()
             target = label_map.get(normalised_label)
             if not target and ft_map:
-                ft = field_def.field_type
-                if hasattr(ft, "value"):
-                    ft = ft.value
+                ft = getattr(field_def.field_type, "value", field_def.field_type)
                 target = ft_map.get(ft)
             if target and target not in used_targets:
                 mapped_data[target] = value
@@ -2314,9 +2308,7 @@ class FormsService:
                 normalised_label = field_def.label.strip().lower()
                 target = MembershipPipelineService._LABEL_MAP.get(normalised_label)
                 if not target:
-                    ft = field_def.field_type
-                    if hasattr(ft, "value"):
-                        ft = ft.value
+                    ft = getattr(field_def.field_type, "value", field_def.field_type)
                     target = MembershipPipelineService._FIELD_TYPE_MAP.get(ft)
                 if target and target not in used_targets:
                     mapped_data[target] = value

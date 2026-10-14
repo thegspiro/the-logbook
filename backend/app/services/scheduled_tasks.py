@@ -1169,15 +1169,19 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
             ),
         )
     )
-    for item in minutes_items.scalars().all():
-        if item.assignee_id and item.due_date is not None:
+    for minutes_item in minutes_items.scalars().all():
+        if minutes_item.assignee_id and minutes_item.due_date is not None:
             due_d = (
-                item.due_date.date()
-                if hasattr(item.due_date, "date")
-                else item.due_date
+                minutes_item.due_date.date()
+                if hasattr(minutes_item.due_date, "date")
+                else minutes_item.due_date
             )
             today = todays.get(
-                str(item.minutes.organization_id) if item.minutes else "",
+                (
+                    str(minutes_item.minutes.organization_id)
+                    if minutes_item.minutes
+                    else ""
+                ),
                 fallback_today,
             )
             days_until = (due_d - today).days if due_d else None
@@ -1192,13 +1196,15 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     log = NotificationLog(
                         id=generate_uuid(),
                         organization_id=(
-                            item.minutes.organization_id if item.minutes else None
+                            minutes_item.minutes.organization_id
+                            if minutes_item.minutes
+                            else None
                         ),
-                        recipient_id=item.assignee_id,
+                        recipient_id=minutes_item.assignee_id,
                         channel="in_app",
                         category="action_items",
-                        subject=f"Action item {urgency}: {item.description[:80]}",
-                        message=f"Your action item is {urgency}. Description: {item.description}",
+                        subject=f"Action item {urgency}: {minutes_item.description[:80]}",
+                        message=f"Your action item is {urgency}. Description: {minutes_item.description}",
                         action_url="/action-items",
                         delivered=True,
                     )
@@ -1873,8 +1879,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftCompletionReport.trainee_id,
                     ).where(ShiftCompletionReport.shift_id.in_(shift_ids))
                 )
-                for sid, oid, tid in rres.all():
-                    report_map.setdefault((str(sid), str(oid)), set()).add(str(tid))
+                for rep_sid, rep_oid, rep_tid in rres.all():
+                    report_map.setdefault((str(rep_sid), str(rep_oid)), set()).add(
+                        str(rep_tid)
+                    )
 
                 cres = await db.execute(
                     select(
@@ -1882,8 +1890,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftEquipmentCheck.template_id,
                     ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
                 )
-                for sid, tid in cres.all():
-                    checks_done_map.setdefault(str(sid), set()).add(tid)
+                for chk_sid, chk_tid in cres.all():
+                    if chk_tid is not None:
+                        checks_done_map.setdefault(str(chk_sid), set()).add(chk_tid)
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
@@ -2685,8 +2694,9 @@ async def run_end_of_shift_checklist_reminders(
                     ShiftEquipmentCheck.template_id,
                 ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
             )
-            for sid, tid in cres.all():
-                checks_done_map.setdefault(str(sid), set()).add(tid)
+            for chk_sid, chk_tid in cres.all():
+                if chk_tid is not None:
+                    checks_done_map.setdefault(str(chk_sid), set()).add(chk_tid)
             asres = await db_session.execute(
                 select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
                 .join(User, User.id == ShiftAssignment.user_id)
@@ -5696,12 +5706,14 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                     continue
 
                 # Count remaining future occurrences
-                remaining = sum(
-                    1
-                    for child in (event.recurrence_children or [])
-                    if not child.is_cancelled
-                    and child.start_datetime
-                    and child.start_datetime > now
+                remaining = len(
+                    [
+                        child
+                        for child in (event.recurrence_children or [])
+                        if not child.is_cancelled
+                        and child.start_datetime
+                        and child.start_datetime > now
+                    ]
                 )
                 # Include parent if it's in the future
                 if (
@@ -6543,7 +6555,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 .all()
             )
 
-            for event_request in requests:
+            for listed_request in requests:
                 # FOR UPDATE: the ledger check below is an ordinary read, and
                 # the marker is only written after the send. The in-process
                 # runner and a manual /scheduled/run-task call can overlap, and
@@ -6553,7 +6565,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # marker the first one wrote.
                 event_request = await db.scalar(
                     select(EventRequest)
-                    .where(EventRequest.id == event_request.id)
+                    .where(EventRequest.id == listed_request.id)
                     .with_for_update()
                 )
                 if event_request is None:

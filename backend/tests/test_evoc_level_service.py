@@ -152,6 +152,17 @@ class TestDriverEligibility:
         assert "ap-gone" in logged
         assert "not found" in logged
 
+    async def test_dangling_required_level_fails_closed(self):
+        """An apparatus whose required level row is gone is refused, not passed."""
+        apparatus = SimpleNamespace(
+            id="ap1", required_evoc_level_id="lvl-gone", required_evoc_level=None
+        )
+        db = _db([_one(apparatus)])
+        out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
+        assert out["eligible"] is False
+        assert "no longer exists" in out["warning"]
+        assert out["required_level"] is None
+
     async def test_no_certification_not_eligible(self):
         required = _level(2, name="EVOC II")
         db = _db([_one(_apparatus(required)), _scalars([])])

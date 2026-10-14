@@ -1613,7 +1613,7 @@ class ShiftCompletionService:
             organization_id=org_id,
             trainee_id=report.trainee_id,
             hours_on_shift=report.hours_on_shift,
-            calls_responded=report.calls_responded,
+            calls_responded=report.calls_responded or 0,
             call_types=report.call_types,
             enrollment_id=report.enrollment_id,
             officer_id=UUID(officer_id),
