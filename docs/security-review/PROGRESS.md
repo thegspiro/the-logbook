@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3215](https://github.com/thegspiro/the-logbook/pull/3215)**: branch
+`claude/security-review-public-webhooks`, Feature 03 (Public surface &
+webhooks), pass 9 (watchdog pickup). PR #3212 (Feature 02, Permissions &
+roles, pass 9) merged 2026-10-14 — a docs-only merge, nothing else to
+record; this PR carries that row-clear alongside its own review. 0 fixed,
+0 flagged — delta re-verify of the 4 files changed since pass 8 (PR #3105),
+all confirmed benign (PUB-8's unknown-key 401 half landing as already
+described, plus unrelated finance/typing changes traced and confirmed
+org-scoped). See `PUB-03-public-surface-webhooks.md`'s **Pass 9** section.
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3212's merge, Feature 03, Public surface & webhooks, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3212 (Feature 02, Permissions & roles,
+pass 9) merged 2026-10-14 — docs-only (`PERM-02-permissions-roles.md` +
+`PROGRESS.md` only, confirmed via `git show --stat`), already fully
+recorded in the Log entry below, so there is nothing further to add here.
+Rotation row 02 stays ✅. This watchdog iteration (no other
+`claude/security-review-*` PR open, confirmed via `list_pull_requests`)
+picks up Feature 03 (Public surface & webhooks), the state PR #3212
+opened from.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 9, PR #3212, before it merged), preserved for history</summary>
+
 **PR [#3212](https://github.com/thegspiro/the-logbook/pull/3212)**: branch
 `claude/security-review-permissions-roles`, Feature 02 (Permissions &
 roles), pass 9 (watchdog pickup). PR #3210 (Feature 01, Auth & session
@@ -27,6 +56,8 @@ feature tracks, only 2 had changed since pass 8 (PR #3097), both reviewed
 and confirmed benign. See `PERM-02-permissions-roles.md`'s **Pass 9**
 section. Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
 surface & webhooks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 9, PR #3210, merged 2026-10-14), preserved for history</summary>
@@ -19045,6 +19076,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — PR #3212 merge recorded (docs-only); Feature 03 (Public surface & webhooks, pass 9, watchdog pickup) — 0 fixed, 0 new findings
+
+**Step 0.** Scheduled watchdog check-in. Verified directly against GitHub
+(`list_pull_requests`, state=open) that no `claude/security-review-*` PR was
+open. PR #3212 (Feature 02, Permissions & roles, pass 9) had merged (confirmed
+docs-only via `git show --stat`: `PERM-02-permissions-roles.md` +
+`PROGRESS.md` only), so nothing further to record beyond clearing the Open PR
+row. That clear rides along in this iteration's own commit.
+
+**Step 1.** Row 03 (Public surface & webhooks) was the next `⬜`.
+
+**Review.** Loaded `CHECKLIST.md` and `PUB-03-public-surface-webhooks.md`'s
+existing 8 passes before reading any code. Baseline `b4a1f2ba` (PR #3105's
+merge, pass 8) to head — 4 files changed under `app/api/public/` and
+`app/core/public_portal_security.py`, no new file. `public_portal_security.py`
+(+72/-36) is PUB-8's own unknown-key 401 half landing exactly as this
+feature's **Resolved 2026-10-11** entry already describes — re-derived nothing,
+confirmed the diff matches and the backing migration (`e6d21e605d99`) is in
+place. `finance_approvals.py` (+18/-1) adds an unrelated
+`acknowledge_late_substantiation` field; traced the full path
+(`finance_service.py:3001-3079`) and confirmed the target record is resolved
+only by its signed token (`with_for_update()`-locked, org id taken from the
+resolved chain), and that `late_line_count`'s unscoped count query is only
+ever called with an id already resolved through that token lookup — the
+"resolves through an already-org-scoped parent" shape, not a bare
+client-supplied id. `portal.py` and `responses.py` changes are a variable
+rename and type annotations only, no behavior change. Nothing to fix, nothing
+to flag.
+
+**Completion gate.** `flake8`/`black`/`isort` (CI's exact pins) clean against
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — single head
+`252c7517d80a`, 594 revisions; scoped backend tests (`-k "public_portal or
+finance_approval"`) — 171 passed, 1 skipped (environment-only — `pywebpush`).
+Frontend `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings
+(ran in background during this pass; the reviewed diff touches no frontend
+file).
+
+Row 03 → ✅. Next: Feature 04 (Storefront & payments).
+
+---
 
 ### 2026-10-14 — PR #3210 merge recorded (docs-only); Feature 02 (Permissions & roles, pass 9, watchdog pickup) — 0 fixed in source, 1 doc correction, 0 new findings
 
