@@ -37,7 +37,7 @@ const filed = {
   election_title: 'Officer election',
   election_closed_at: '2026-10-01T20:00:00Z',
   captured_by_name: 'Sam Secretary',
-  captured_at: '2026-10-02T12:00:00Z',
+  created_at: '2026-10-02T12:00:00Z',
   snapshot: {
     total_eligible_voters: 12,
     total_votes: 9,

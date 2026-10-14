@@ -192,7 +192,7 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({ minu
                   <h3 className="text-theme-text-primary font-medium">{result.election_title}</h3>
                   <p className="text-theme-text-muted text-xs">
                     {result.election_closed_at ? `Closed ${formatDateTime(result.election_closed_at, tz)} · ` : ''}
-                    Filed {formatDateTime(result.captured_at, tz)}
+                    Filed {formatDateTime(result.created_at, tz)}
                     {result.captured_by_name ? ` by ${result.captured_by_name}` : ''}
                   </p>
                 </div>

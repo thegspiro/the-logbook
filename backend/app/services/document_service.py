@@ -214,7 +214,7 @@ class DocumentService:
                         MinutesElectionResult.organization_id == str(organization_id),
                     )
                     .order_by(
-                        MinutesElectionResult.captured_at, MinutesElectionResult.id
+                        MinutesElectionResult.created_at, MinutesElectionResult.id
                     )
                 )
             )

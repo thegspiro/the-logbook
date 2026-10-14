@@ -353,7 +353,7 @@ export interface MinutesElectionResult {
   snapshot: ElectionResultSnapshot;
   captured_by?: string | null;
   captured_by_name?: string | null;
-  captured_at: string;
+  created_at: string;
 }
 
 // ── Attachments ──

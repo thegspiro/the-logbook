@@ -231,7 +231,7 @@ def upgrade() -> None:
             sa.Column("snapshot", sa.JSON(), nullable=False),
             _user_fk("captured_by"),
             sa.Column(
-                "captured_at",
+                "created_at",
                 sa.DateTime(timezone=True),
                 nullable=False,
                 server_default=sa.func.now(),

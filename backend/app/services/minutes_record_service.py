@@ -311,7 +311,7 @@ class MinutesRecordService:
         result = await self.db.execute(
             select(MinutesElectionResult)
             .where(MinutesElectionResult.minutes_id == str(minutes_id))
-            .order_by(MinutesElectionResult.captured_at, MinutesElectionResult.id)
+            .order_by(MinutesElectionResult.created_at, MinutesElectionResult.id)
         )
         return list(result.scalars().all())
 

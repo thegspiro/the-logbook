@@ -6647,7 +6647,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `election_closed_at` | DATETIME | yes |  |  |  |
 | `snapshot` | JSON | no |  |  |  |
 | `captured_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `captured_at` | DATETIME | no |  | `now()` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 

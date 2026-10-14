@@ -611,7 +611,7 @@ class MinutesElectionResultResponse(UTCResponseBase):
     snapshot: Dict[str, Any]
     captured_by: Optional[str] = None
     captured_by_name: Optional[str] = None
-    captured_at: datetime
+    created_at: datetime
 
     model_config = _response_config
 
