@@ -1931,14 +1931,15 @@ class CourseCohortService:
         queries for the whole roster rather than several per member, since it
         runs on every load of the cohort page.
         """
-        active = [
-            m
+        joined_at: Dict[str, datetime] = {
+            m.id: _as_utc(m.added_at)
             for m in members
             if m.status == CohortMemberStatus.ACTIVE and m.added_at is not None
-        ]
-        if not active:
+        }
+        if not joined_at:
             return {}
-        latest_join = max(_as_utc(m.added_at) for m in active)
+        active = [m for m in members if m.id in joined_at]
+        latest_join = max(joined_at.values())
         class_result = await self.db.execute(
             select(CourseCohortClass).where(
                 CourseCohortClass.cohort_id == active[0].cohort_id,
@@ -1987,7 +1988,7 @@ class CourseCohortService:
 
         counts: Dict[str, int] = {}
         for member in active:
-            joined = _as_utc(member.added_at)
+            joined = joined_at[member.id]
             pending = 0
             for cohort_class in classes:
                 if _as_utc(cohort_class.scheduled_start) >= joined:

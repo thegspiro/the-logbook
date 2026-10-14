@@ -188,6 +188,19 @@ def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[s
     return "\n".join(parts) or None
 
 
+def _first_iso(*values: Optional[date]) -> str:
+    """ISO form of the first value that is set, for an item-history row.
+
+    The last candidate is always the row's ``created_at``, which the database
+    fills by default; a row with none of them set is corrupt, and the
+    timeline cannot place it.
+    """
+    for value in values:
+        if value is not None:
+            return value.isoformat()
+    raise ValueError("Item history row has no timestamp")
+
+
 def _enum_member(value):
     """An ItemCondition however the caller spelled it, or None.
 
@@ -6661,11 +6674,7 @@ class InventoryService:
                 {
                     "type": "assignment",
                     "id": a.id,
-                    "date": (
-                        a.assigned_date.isoformat()
-                        if a.assigned_date
-                        else a.created_at.isoformat()
-                    ),
+                    "date": _first_iso(a.assigned_date, a.created_at),
                     "summary": (
                         f"Assigned to {user_name}"
                         if a.is_active
@@ -6716,11 +6725,7 @@ class InventoryService:
                 {
                     "type": "checkout",
                     "id": c.id,
-                    "date": (
-                        c.checked_out_at.isoformat()
-                        if c.checked_out_at
-                        else c.created_at.isoformat()
-                    ),
+                    "date": _first_iso(c.checked_out_at, c.created_at),
                     "summary": f"Checked out by {user_name}",
                     "details": {
                         "user_name": user_name,
@@ -6766,11 +6771,7 @@ class InventoryService:
                 {
                     "type": "issuance",
                     "id": i.id,
-                    "date": (
-                        i.issued_at.isoformat()
-                        if i.issued_at
-                        else i.created_at.isoformat()
-                    ),
+                    "date": _first_iso(i.issued_at, i.created_at),
                     "summary": f"Issued {i.quantity_issued} to {user_name}",
                     "details": {
                         "user_name": user_name,
@@ -6811,12 +6812,8 @@ class InventoryService:
                 {
                     "type": "maintenance",
                     "id": m.id,
-                    "date": (
-                        (
-                            m.completed_date or m.scheduled_date or m.created_at
-                        ).isoformat()
-                        if (m.completed_date or m.scheduled_date)
-                        else m.created_at.isoformat()
+                    "date": _first_iso(
+                        m.completed_date, m.scheduled_date, m.created_at
                     ),
                     "summary": (
                         f"{mtype.replace('_', ' ').title()}"
@@ -8979,15 +8976,17 @@ class InventoryService:
                 select(InventoryItem).where(InventoryItem.id == rec.item_id)
             )
             item = item_result.scalar_one_or_none()
-            if item and item.active:
-                days_until = (rec.expected_retirement_date - today).days
+            # The query selects only records with a retirement date.
+            retirement_date = rec.expected_retirement_date
+            if item and item.active and retirement_date is not None:
+                days_until = (retirement_date - today).days
                 items_due.append(
                     {
                         "item_id": item.id,
                         "item_name": item.name,
                         "serial_number": item.serial_number,
                         "asset_tag": item.asset_tag,
-                        "retirement_date": rec.expected_retirement_date.isoformat(),
+                        "retirement_date": retirement_date.isoformat(),
                         "days_until_retirement": days_until,
                         "assigned_to": item.assigned_to_user_id,
                     }

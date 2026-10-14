@@ -13,9 +13,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.models.user import UserStatus
 from app.services.property_return_reminder_service import (
     PropertyReturnReminderService,
+    dropped_at,
     latest_due_threshold,
 )
 
@@ -212,6 +215,22 @@ class TestLatestDueThreshold:
         assert latest_due_threshold(4000)["type"] == "90_day"
 
 
+class TestDroppedAt:
+    def test_naive_value_is_read_as_utc(self):
+        member = SimpleNamespace(id="m-1", status_changed_at=datetime(2026, 1, 2, 3))
+        assert dropped_at(member) == datetime(2026, 1, 2, 3, tzinfo=timezone.utc)
+
+    def test_aware_value_is_kept(self):
+        eastern = datetime(2026, 1, 2, 3, tzinfo=ZoneInfo("America/New_York"))
+        member = SimpleNamespace(id="m-1", status_changed_at=eastern)
+        assert dropped_at(member) is eastern
+
+    def test_missing_drop_date_fails_loudly(self):
+        member = SimpleNamespace(id="m-1", status_changed_at=None)
+        with pytest.raises(ValueError, match="m-1"):
+            dropped_at(member)
+
+
 class TestOverdueReturns:
     async def test_lists_members_with_items(self, monkeypatch):
         member = _member(days_ago=40)
@@ -253,6 +272,4 @@ class TestOverdueReturns:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    import pytest
-
     raise SystemExit(pytest.main([__file__, "-v"]))

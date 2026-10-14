@@ -1,4 +1,4 @@
 # mypy error count for `python -m mypy app`, enforced by
 # scripts/mypy_ratchet.py. Lower it when you fix errors
 # (`python scripts/mypy_ratchet.py --update`); never raise it.
-353
+312
