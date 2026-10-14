@@ -11453,7 +11453,7 @@ class InventoryService:
                     "membership_number": u.membership_number,
                     "rank": u.rank,
                     "station": u.station,
-                    "status": u.status.value if u.status else None,
+                    "status": getattr(u.status, "value", u.status),
                     "membership_type": u.membership_type,
                     "email": u.email if show_email else None,
                     "phone": (
