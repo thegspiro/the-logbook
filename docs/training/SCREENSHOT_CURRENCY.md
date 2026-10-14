@@ -1,5 +1,18 @@
 # Screenshot currency
 
+## Moved out of 13-medical-screening.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `13-01-medical-landing.png` | **REPLACE** | The page subtitle reads "Set screening requirements, record screenings, and see which ones expire soon." |
+| `13-02-requirements-tab.png` | **CHECK** | Alt text says "with frequency and grace period"; the requirement rows show type, frequency, roles and description, never the grace period |
+| `13-03-records-tab.png` | **CHECK** | A record with no member or prospect reads **Not linked to a member or prospect** in the name line, where it read Unknown; replace if the frame shows one |
+| `13-05-add-requirement.png` | **REPLACE** | The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here." The Grace Period field carries its own "Not enforced yet" note |
+| `13-07-add-record-linkage-notice.png` | **REPLACE** | The frame still shows the retired amber "Not linked" notice. The dialog opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of
