@@ -291,7 +291,7 @@ const SkillEvaluationsTab: React.FC = () => {
             only when its name matches a skill here (capitals don&apos;t matter).
           </p>
         </div>
-        <button type="button" className="btn-primary" onClick={openNew}>
+        <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={openNew}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add skill
         </button>

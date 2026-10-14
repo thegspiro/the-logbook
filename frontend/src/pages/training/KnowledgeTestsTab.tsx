@@ -251,7 +251,11 @@ const TestEditor: React.FC<{ testId: string; onBack: () => void }> = ({ testId, 
           <h3 id="kt-questions" className="text-theme-text-primary font-semibold">
             Questions
           </h3>
-          <button type="button" className="btn-primary" onClick={() => openQuestion('new')}>
+          <button
+            type="button"
+            className="btn-primary inline-flex items-center gap-2"
+            onClick={() => openQuestion('new')}
+          >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add question
           </button>
@@ -599,7 +603,11 @@ const KnowledgeTestsTab: React.FC = () => {
             knowledge-test requirement, the same as a score you enter by hand.
           </p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => openSettings('new')}>
+        <button
+          type="button"
+          className="btn-primary inline-flex items-center gap-2"
+          onClick={() => openSettings('new')}
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
           New test
         </button>
