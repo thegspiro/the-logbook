@@ -667,7 +667,7 @@ class SuggestionService:
     async def _reviewer_names(
         self, boxes: Sequence[SuggestionBox]
     ) -> Tuple[Dict[str, str], Dict[str, str]]:
-        grants = [g for b in boxes for g in (*b.reviewers, *b.watchers)]
+        grants: list[Any] = [g for b in boxes for g in (*b.reviewers, *b.watchers)]
         position_ids = {g.position_id for g in grants if g.position_id}
         member_ids = {g.user_id for g in grants if g.user_id}
         position_names: Dict[str, str] = {}
@@ -1673,7 +1673,7 @@ class SuggestionService:
             .where(*filters)
         )
         votes = self._vote_count_column()
-        order = (
+        order: list[Any] = (
             [votes.desc(), Suggestion.published_at.desc(), Suggestion.id.desc()]
             if sort == "top"
             else [Suggestion.published_at.desc(), Suggestion.id.desc()]

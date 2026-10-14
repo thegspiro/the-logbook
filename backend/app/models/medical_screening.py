@@ -243,6 +243,15 @@ class ScreeningRecord(Base):
         "User", foreign_keys=[reviewed_by]
     )
 
+    if TYPE_CHECKING:
+        # Not columns. MedicalScreeningService stamps display names on loaded records
+        # for the list response. Declared only for the type checker: an annotation
+        # SQLAlchemy sees would have to be mapped.
+        user_name: Optional[str]
+        prospect_name: Optional[str]
+        reviewer_name: Optional[str]
+        requirement_name: Optional[str]
+
     __table_args__ = (
         Index("idx_screening_rec_user", "user_id"),
         Index("idx_screening_rec_prospect", "prospect_id"),

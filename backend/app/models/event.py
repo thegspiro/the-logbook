@@ -494,6 +494,12 @@ class EventRSVP(Base):
     event: Mapped["Event"] = relationship("Event", back_populates="rsvps")
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
+    if TYPE_CHECKING:
+        # Not a column. EventService flags an RSVP that overwrote an earlier one so the
+        # endpoint can audit it. Declared only for the type checker: an annotation
+        # SQLAlchemy sees would have to be mapped.
+        was_update: bool
+
     __table_args__ = (
         Index("ix_event_rsvps_user_id", "user_id"),
         Index("ix_event_rsvps_organization_id", "organization_id"),
