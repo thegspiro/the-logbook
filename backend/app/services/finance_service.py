@@ -5562,6 +5562,19 @@ class FinanceService:
         result = await self.db.execute(query)
         users = list(result.scalars().all())
 
+        # A schedule entered with a due date already past bills its members as
+        # overdue straight away. Left PENDING, they read "Pending" until the
+        # daily run_mark_overdue_dues, so a treasurer generating last spring's
+        # dues saw nobody behind and the Overdue filter came back empty (W66).
+        due = schedule.due_date
+        if due is not None and due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        initial_status = (
+            DuesStatus.OVERDUE
+            if due is not None and due < datetime.now(timezone.utc)
+            else DuesStatus.PENDING
+        )
+
         count = 0
         for user in users:
             # Check if dues already exist for this user + schedule
@@ -5580,6 +5593,7 @@ class FinanceService:
                 user_id=user.id,
                 amount_due=schedule.amount,
                 due_date=schedule.due_date,
+                status=initial_status,
             )
             self.db.add(dues)
             count += 1

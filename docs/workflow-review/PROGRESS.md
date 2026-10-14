@@ -124,7 +124,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ✅     |
 | W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ✅     |
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ✅     |
-| W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ⬜     |
+| W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ✅     |
 | W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ⬜     |
 | W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ⬜     |
 | W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ⬜     |
@@ -175,6 +175,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
+- **Any run touching Finance Reports or the QuickBooks export settings** —
+  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
+  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
+  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
+  Check those tables at 390×844.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -204,6 +209,42 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W66 — Dues: set them, record a payment, who is behind — 2026-10-14
+
+Driven as:
+
+- `treasurer` creating two schedules, generating dues, recording payments,
+  waiving, and reading the history;
+- `member` probing for their own dues;
+- 390×844 for the dues page and the payment dialog.
+
+Held:
+
+- labelled dialogs with clear validation;
+- generation confirms and skips members already billed;
+- every double-click records once;
+- a waiver needs a reason, and the treasurer cannot waive their own;
+- a member gets 403.
+
+Fixed:
+
+- W66-1 (MED — dues generated after their due date read "Pending", so the
+  Overdue filter found nobody behind).
+- W66-2 (MED — on a phone the reflowed table hid every row's actions, so no
+  payment could be recorded).
+
+Flagged:
+
+- W66-3 (MED — an overpayment is accepted silently and counted as
+  collected).
+- W66-4 (MED — a member has no way to see their own dues, and is never told
+  they are due).
+
+Gate: typecheck and lint are clean; 565 finance frontend tests and 45 dues
+backend tests pass (4 new).
+
+Next: W67.
 
 ### W65 — Check requests — 2026-10-14
 

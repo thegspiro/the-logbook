@@ -5634,6 +5634,24 @@ W64-5).
   picks the line (the member, or the Treasurer on approval), and whether
   approval commits it.
 
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14)
+
+Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
+
+- **An overpayment is accepted silently.** `record_dues_payment` has no check
+  against the balance. In the review, $75 recorded against a $70 balance left
+  "$125.00 paid of $120.00", and the extra $5 counted as collected.
+  Decision: refuse, warn and allow, or carry the excess as a credit to the
+  member's next dues.
+- **A member cannot see their own dues.**
+  - No screen shows a member what they owe; `/finance/dues` needs
+    `finance.view`.
+  - `GET /finance/dues` already confines a non-manager to their own records,
+    but its `finance.view` gate refuses a plain member first.
+  - Nothing tells a member their dues are due or overdue.
+  - Decision: whether members get a "My dues" view (and on what gate), and
+    which dues reminders go out (email first, pitfall 18).
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
