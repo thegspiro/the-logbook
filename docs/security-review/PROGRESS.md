@@ -16,13 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #3195 (Feature 14, Equipment check & shifts, pass 8) merged 2026-10-14
-04:45 UTC**, closing out rotation lap "pass 7" — every one of the 35 rows
-below was ✅ at the same time for the first time this lap. This iteration
-found no `claude/security-review-*` PR open (Step 0), reset the table to ⬜
-for pass 8, and picked Feature 00 (Cross-cutting baseline), continuing to
-Step 1 per CLAUDE.md's rotation rules. _(This row is updated below once this
-iteration's PR is opened.)_
+**PR [#3204](https://github.com/thegspiro/the-logbook/pull/3204)**: branch
+`claude/security-review-cross-cutting-baseline`, Feature 00 (Cross-cutting
+baseline), pass 9. PR #3195 (Feature 14, Equipment check & shifts, pass 8)
+merged 2026-10-14 04:45 UTC, recorded in the Log below — that merge brought
+every row of the rotation table to ✅ at once, so rotation lap "pass 7"
+(2026-10-04 → 2026-10-14, PRs #2917–#3195) is complete. This PR carries that
+reset (table back to ⬜ for pass 8) together with its own review. 0 fixed,
+0 flagged, 0 tooling findings — delta re-sweep of all 13 established sweep
+classes against 364 commits (216 non-merge) since baseline PR #3093's
+merge, every class re-verified clean; the standing outbound-URL
+DNS-rebinding TOCTOU item re-confirmed open, unchanged. See
+`SEC-00-cross-cutting-baseline.md`'s **Pass 9** section. Row 00 stays ✅
+(pending this PR's merge); next is Feature 01 (Auth & session lifecycle).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 8, PR #3195, merged 2026-10-14), preserved for history</summary>
