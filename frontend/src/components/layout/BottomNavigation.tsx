@@ -131,7 +131,9 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent(OPEN_MOBILE_NAV_EVENT))}
                 aria-current={moreIsActive ? 'page' : undefined}
-                aria-label="Open full navigation menu"
+                // The name must begin with the visible "More": WCAG 2.5.3 (label in
+                // name) is what a voice-control user relies on to say "click More".
+                aria-label="More: open full navigation menu"
                 className={`focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
                   moreIsActive
                     ? 'text-red-800 dark:text-red-300'

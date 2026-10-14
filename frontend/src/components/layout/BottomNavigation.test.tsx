@@ -281,7 +281,10 @@ describe('BottomNavigation', () => {
 
   it('marks More active when the current route is not a visible tab', () => {
     renderBar({}, '/inventory');
-    expect(screen.getByRole('button', { name: 'Open full navigation menu' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'More: open full navigation menu' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
   });
 
   it('keeps every enabled destination reachable through a tab or More', async () => {
@@ -291,7 +294,10 @@ describe('BottomNavigation', () => {
     mockEnabled = new Set(['storefront', 'training', 'scheduling']);
     renderBar({}, '/training/courses');
 
-    expect(screen.getByRole('button', { name: 'Open full navigation menu' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'More: open full navigation menu' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     await user.click(screen.getByText('More'));
     expect(listener).toHaveBeenCalledOnce();
     window.removeEventListener(OPEN_MOBILE_NAV_EVENT, listener);
