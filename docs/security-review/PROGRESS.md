@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (opened by this iteration; the follow-up commit names it):
+**PR [#3195](https://github.com/thegspiro/the-logbook/pull/3195)**:
 branch `claude/security-review-equipment-check`, Feature 14 (Equipment check
 & shifts), pass 8. PR #3185 (Feature 13, Apparatus & NFC, pass 15) merged
 2026-10-13 23:41 UTC with application code, recorded in the Log below. 1 fixed
