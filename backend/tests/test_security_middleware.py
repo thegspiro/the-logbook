@@ -2308,7 +2308,7 @@ class TestVerifyCSRFTokenDependency:
         """GET, HEAD, OPTIONS requests should skip CSRF validation."""
         for method in ["GET", "HEAD", "OPTIONS"]:
             request = MagicMock()
-            request.method = method
+            request.scope = {"type": "http", "method": method}
             # Should not raise
             await verify_csrf_token(request)
 
@@ -2317,7 +2317,7 @@ class TestVerifyCSRFTokenDependency:
     async def test_no_csrf_cookie_allows_request(self):
         """POST without a csrf_token cookie should be allowed (first request after login)."""
         request = MagicMock()
-        request.method = "POST"
+        request.scope = {"type": "http", "method": "POST"}
         request.headers = {}
         request.cookies = {}
         # Should not raise
@@ -2329,7 +2329,7 @@ class TestVerifyCSRFTokenDependency:
         """POST with matching X-CSRF-Token header and csrf_token cookie should pass."""
         token = secrets.token_urlsafe(32)
         request = MagicMock()
-        request.method = "POST"
+        request.scope = {"type": "http", "method": "POST"}
         request.headers = {"X-CSRF-Token": token}
         request.cookies = {"csrf_token": token}
         # Should not raise
@@ -2342,8 +2342,7 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "POST"
-        request.scope = {"type": "http", "path": "/api/v1/test"}
+        request.scope = {"type": "http", "method": "POST", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "wrong-token"}
         request.cookies = {"csrf_token": "correct-token"}
 
@@ -2358,9 +2357,9 @@ class TestVerifyCSRFTokenDependency:
         global double-submit check must not apply there even with no
         matching token pair at all."""
         request = MagicMock()
-        request.method = "POST"
         request.scope = {
             "type": "http",
+            "method": "POST",
             "path": "/api/v1/onboarding/organization",
         }
         request.headers = {}
@@ -2378,9 +2377,9 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "POST"
         request.scope = {
             "type": "http",
+            "method": "POST",
             "path": "/api/v1/events/onboarding-checklist",
         }
         request.headers = {"X-CSRF-Token": "wrong-token"}
@@ -2397,8 +2396,7 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "POST"
-        request.scope = {"type": "http", "path": "/api/v1/test"}
+        request.scope = {"type": "http", "method": "POST", "path": "/api/v1/test"}
         request.headers = {}  # no X-CSRF-Token
         request.cookies = {"csrf_token": "some-token"}
 
@@ -2413,8 +2411,7 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "PUT"
-        request.scope = {"type": "http", "path": "/api/v1/test"}
+        request.scope = {"type": "http", "method": "PUT", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 
@@ -2429,8 +2426,7 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "DELETE"
-        request.scope = {"type": "http", "path": "/api/v1/test"}
+        request.scope = {"type": "http", "method": "DELETE", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 
@@ -2445,8 +2441,7 @@ class TestVerifyCSRFTokenDependency:
         from fastapi import HTTPException
 
         request = MagicMock()
-        request.method = "PATCH"
-        request.scope = {"type": "http", "path": "/api/v1/test"}
+        request.scope = {"type": "http", "method": "PATCH", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 

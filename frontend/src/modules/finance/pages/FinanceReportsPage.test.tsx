@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
 import type {
+  AdvancesReport,
   AmendmentLogReport,
   BudgetVsActualReport,
   FiscalYear,
@@ -25,6 +26,8 @@ const mockFunctionalCsv = vi.fn();
 const mockLateCsv = vi.fn();
 const mockFunds = vi.fn();
 const mockFundsCsv = vi.fn();
+const mockAdvances = vi.fn();
+const mockAdvancesCsv = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -42,6 +45,8 @@ vi.mock('../services/api', async (importOriginal) => ({
     lateSubstantiationCsv: (...args: unknown[]) => mockLateCsv(...args) as unknown,
     fundBalances: (...args: unknown[]) => mockFunds(...args) as unknown,
     fundBalancesCsv: (...args: unknown[]) => mockFundsCsv(...args) as unknown,
+    advances: (...args: unknown[]) => mockAdvances(...args) as unknown,
+    advancesCsv: (...args: unknown[]) => mockAdvancesCsv(...args) as unknown,
   },
 }));
 
@@ -243,6 +248,43 @@ const openAt = (search = '') => {
   return renderWithRouter(<FinanceReportsPage />);
 };
 
+const advancesReport: AdvancesReport = {
+  advances: [
+    {
+      id: 'adv-1',
+      requestNumber: 'CK-2026-0001',
+      memberId: 'u-1',
+      memberName: 'Alice Member',
+      amount: '300.00',
+      purpose: 'State fire conference',
+      checkNumber: '2001',
+      issuedAt: '2026-03-10T15:00:00Z',
+      dueAt: '2026-07-08T15:00:00Z',
+      accounted: '200.00',
+      returned: '25.00',
+      outstanding: '75.00',
+      overdue: true,
+    },
+    {
+      id: 'adv-2',
+      requestNumber: 'CK-2026-0009',
+      memberId: 'u-2',
+      memberName: 'Bo Captain',
+      amount: '150.00',
+      purpose: null,
+      checkNumber: '2010',
+      issuedAt: '2026-09-20T15:00:00Z',
+      dueAt: '2027-01-18T15:00:00Z',
+      accounted: '0.00',
+      returned: '0.00',
+      outstanding: '150.00',
+      overdue: false,
+    },
+  ],
+  outstanding: '225.00',
+  overdueOutstanding: '75.00',
+};
+
 describe('FinanceReportsPage', () => {
   beforeEach(() => {
     for (const mock of [
@@ -259,6 +301,8 @@ describe('FinanceReportsPage', () => {
       mockLateCsv,
       mockFunds,
       mockFundsCsv,
+      mockAdvances,
+      mockAdvancesCsv,
       mockSaveFile,
     ]) {
       mock.mockReset();
@@ -272,6 +316,7 @@ describe('FinanceReportsPage', () => {
     mockLate.mockResolvedValue(lateReport);
     mockFunctional.mockResolvedValue(functionalReport);
     mockFunds.mockResolvedValue(fundBalances);
+    mockAdvances.mockResolvedValue(advancesReport);
   });
 
   afterEach(() => {
@@ -466,6 +511,40 @@ describe('FinanceReportsPage', () => {
       const user = userEvent.setup();
       openAt('?report=fund-balances');
       await screen.findByRole('row', { name: /Engine fund/ });
+
+      await user.click(screen.getByRole('button', { name: /Download CSV/ }));
+
+      await waitFor(() => expect(mockSaveFile).toHaveBeenCalledWith(file));
+    });
+  });
+
+  describe('cash advances', () => {
+    it("lists what each member still owes, and the server's totals", async () => {
+      openAt('?report=advances');
+
+      const alice = await screen.findByRole('row', { name: /CK-2026-0001/ });
+      expect(alice).toHaveTextContent('Alice Member');
+      expect(alice).toHaveTextContent('$75.00');
+      expect(within(alice).getByText('Overdue')).toBeInTheDocument();
+      const bo = screen.getByRole('row', { name: /CK-2026-0009/ });
+      expect(within(bo).queryByText('Overdue')).not.toBeInTheDocument();
+      expect(screen.getByRole('row', { name: /^Outstanding/ })).toHaveTextContent('$225.00');
+      expect(screen.getByRole('row', { name: /Of which overdue/ })).toHaveTextContent('$75.00');
+    });
+
+    it('says so when nothing is outstanding', async () => {
+      mockAdvances.mockResolvedValue({ advances: [], outstanding: '0.00', overdueOutstanding: '0.00' });
+      openAt('?report=advances');
+
+      expect(await screen.findByText('Nothing outstanding')).toBeInTheDocument();
+    });
+
+    it('downloads the CSV', async () => {
+      const file = { blob: new Blob(['x']), filename: 'cash-advances.csv' };
+      mockAdvancesCsv.mockResolvedValue(file);
+      const user = userEvent.setup();
+      openAt('?report=advances');
+      await screen.findByRole('row', { name: /CK-2026-0001/ });
 
       await user.click(screen.getByRole('button', { name: /Download CSV/ }));
 

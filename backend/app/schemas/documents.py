@@ -35,6 +35,9 @@ class DocumentFolderCreate(BaseModel):
     #: Permission names, any one of which admits (see
     #: DocumentsService._folder_admits_user).
     required_permissions: Optional[List[str]] = Field(None, max_length=50)
+    #: Not stored. True confirms a folder only full administrators could
+    #: open (error LB-DOC-001 asks for it).
+    confirm_admin_only: bool = False
 
 
 class DocumentFolderUpdate(BaseModel):
@@ -49,6 +52,7 @@ class DocumentFolderUpdate(BaseModel):
     owner_user_id: Optional[UUID] = None
     allowed_roles: Optional[List[str]] = Field(None, max_length=100)
     required_permissions: Optional[List[str]] = Field(None, max_length=50)
+    confirm_admin_only: bool = False
 
 
 class DocumentFolderResponse(UTCResponseBase):

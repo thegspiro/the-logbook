@@ -97,7 +97,7 @@ export const MyKnowledgeTestsPage: React.FC = () => {
                 <div className="mt-auto pt-2">
                   <button
                     type="button"
-                    className="btn-primary"
+                    className="btn-primary inline-flex items-center gap-2"
                     disabled={starting !== null}
                     onClick={() => void start(test)}
                   >

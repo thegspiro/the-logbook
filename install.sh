@@ -15,7 +15,8 @@
 #   ./install.sh --help          # Show help
 #
 # Requirements:
-#   - Ubuntu 20.04+ or Debian 11+
+#   - Ubuntu 20.04+ or Debian 11+ (--traditional also needs Python 3.13+:
+#     Debian 13 / Ubuntu 25.04+ ship it; older releases must install it first)
 #   - Sudo privileges
 #   - Internet connection
 # ============================================
@@ -524,15 +525,53 @@ docker_deployment() {
     print_info "4. Review security settings in .env"
 }
 
+# The backend is tested on Python 3.13 (CI) and its image runs 3.14; an older
+# interpreter fails partway through `pip install -r requirements.txt`, after
+# MySQL, Redis and nginx are already installed. Prints the first interpreter
+# on PATH that is new enough.
+BACKEND_PYTHON_MIN="3.13"
+
+find_backend_python() {
+    local candidate
+    for candidate in python3 python3.14 python3.13; do
+        if command -v "$candidate" >/dev/null 2>&1 \
+            && "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)' 2>/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 traditional_deployment() {
     print_header "Traditional Server Deployment"
+
+    # Checked before anything is installed, so a refusal leaves the server
+    # untouched. The script does not add package sources on its own.
+    local python_bin venv_pkg
+    if ! python_bin="$(find_backend_python)"; then
+        local found="none"
+        command -v python3 >/dev/null 2>&1 && found="$(python3 --version 2>&1)"
+        print_error "The backend needs Python $BACKEND_PYTHON_MIN or newer (found: $found)."
+        print_error "Debian 13 and Ubuntu 25.04 or later include it. On an older release,"
+        print_error "install python$BACKEND_PYTHON_MIN and its venv package (for example from the"
+        print_error "deadsnakes PPA on Ubuntu) and run this again, or use: ./install.sh --docker"
+        exit 1
+    fi
+    print_success "Using $python_bin ($("$python_bin" --version 2>&1))"
+    # The system python3 gets its venv module from python3-venv; a versioned
+    # interpreter such as python3.13 needs python3.13-venv.
+    if [[ "$python_bin" == "python3" ]]; then
+        venv_pkg="python3-venv"
+    else
+        venv_pkg="${python_bin}-venv"
+    fi
 
     print_info "Installing system dependencies..."
     sudo apt-get update
     sudo apt-get install -y \
-        python3.10 \
         python3-pip \
-        python3-venv \
+        "$venv_pkg" \
         mysql-server \
         redis-server \
         nginx \
@@ -547,7 +586,7 @@ traditional_deployment() {
     # Setup Python virtual environment
     print_info "Setting up Python virtual environment..."
     cd "$SCRIPT_DIR/backend"
-    python3 -m venv venv
+    "$python_bin" -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
     pip install -r requirements.txt
@@ -599,10 +638,9 @@ EOF
 
     print_success "Installation complete!"
     print_warning "\nNext steps:"
-    print_info "1. Configure Nginx (see docs/DEPLOYMENT.md)"
-    print_info "2. Set up SSL with: sudo certbot --nginx -d yourdomain.com"
-    print_info "3. Configure firewall"
-    print_info "4. Set up automated backups"
+    print_info "1. Configure Nginx and HTTPS: sudo ./scripts/setup-ssl.sh yourdomain.com you@example.org --traditional"
+    print_info "2. Configure firewall"
+    print_info "3. Set up automated backups"
 }
 
 show_help() {

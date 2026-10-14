@@ -6,10 +6,12 @@ expense reports, check requests, dues, approval chains,
 and QuickBooks export.
 """
 
+import copy
 import html
 import io
 import secrets
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, NoReturn, Optional
@@ -39,6 +41,7 @@ from app.models.apparatus import Apparatus
 from app.models.email_template import EmailTemplate
 from app.models.facilities import Facility
 from app.models.finance import (
+    AdvanceReturn,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -50,7 +53,9 @@ from app.models.finance import (
     BudgetAmendment,
     BudgetAmendmentStatus,
     BudgetCategory,
+    BudgetCategoryChargePosition,
     BudgetPlanningStage,
+    ChargeAccess,
     CheckRequest,
     CheckRequestStatus,
     DuesPayment,
@@ -67,7 +72,15 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
 )
-from app.models.user import Position, User
+from app.models.user import Organization, Position, User
+from app.services.cash_advances import (
+    AdvanceNotSettleableError,
+    advance_balances,
+    assert_no_overdue,
+    assert_settleable,
+    is_accounted_for,
+    lock_advance,
+)
 from app.services.expense_substantiation import describe_late, late_items
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
@@ -80,6 +93,12 @@ from app.services.finance_approver_matching import (
     is_valid_single_email,
     normalize_approver_type,
     user_matches_step,
+)
+from app.services.finance_budget_access import (
+    CategoryTree,
+    assert_may_charge,
+    held_position_ids,
+    load_category_tree,
 )
 from app.services.finance_budget_ownership import owned_budgets_query, resolve_owner
 from app.services.restricted_funds import (
@@ -96,9 +115,16 @@ from app.services.separation_of_duties import (
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.finance_settings import (
+    FINANCE_SETTINGS_KEY,
     FUND_OVERSPEND_BLOCK,
+    QB_ADVANCES_CASH_KEY,
+    QB_ADVANCES_KEY,
+    QB_DUES_DEPOSIT_KEY,
+    QB_DUES_INCOME_KEY,
     SUBSTANTIATION_BLOCK,
     SUBSTANTIATION_OFF,
+    advance_accounts,
+    dues_default_accounts,
     load_finance_settings,
 )
 from app.utils.member_names import format_display_name
@@ -119,6 +145,10 @@ _PRIOR_STEP_SATISFIED = frozenset(
         ApprovalStepStatus.SENT,
     }
 )
+
+
+# The three payment documents, where a helper picks one by kind.
+_FinanceDocument = type[PurchaseRequest] | type[ExpenseReport] | type[CheckRequest]
 
 
 class BudgetLimitExceededError(Exception):
@@ -359,32 +389,105 @@ def _mapping_key(name: str) -> str:
     return name.strip().casefold()
 
 
-def _classify_category_accounts(
-    category_account: Optional[str], matches: list[ExportMapping]
-) -> tuple[str, str, Optional[str]]:
-    """Resolve a budget category to ``(account, offset, problem)``.
+# A category tree deeper than this is a cycle written by hand, not a real
+# hierarchy; resolution stops rather than looping.
+_MAX_CATEGORY_DEPTH = 20
 
-    The one definition of how a category reaches QuickBooks: the export uses it
-    to post each transaction and the readiness report uses it to show what an
-    export would do, so the two cannot disagree. ``problem`` is
-    ``duplicate_mappings``, ``no_account``, ``no_offset`` or
-    ``payable_receivable`` (an account the import cannot post to without a
-    Name); ``None`` means the category exports.
+
+@dataclass(frozen=True)
+class _CategoryAccounts:
+    """What an export posts one budget category to, after inheritance."""
+
+    account: str
+    offset: str
+    problem: Optional[str]
+    # category (its own qb_account_name), mapping, or parent; None without one.
+    account_source: Optional[str]
+    # The ancestor each piece came from, when the category had none of its own.
+    account_inherited_from: Optional[str] = None
+    offset_inherited_from: Optional[str] = None
+
+
+def _resolve_category_accounts(
+    categories: list[BudgetCategory], mappings: dict[str, list[ExportMapping]]
+) -> dict[str, _CategoryAccounts]:
+    """Resolve every category's QuickBooks accounts, inheriting from ancestors.
+
+    The one definition of how a category reaches QuickBooks: the export posts
+    with it and the readiness report shows it, so the two cannot disagree. A
+    category takes its own account (its ``qb_account_name``, else its mapping's)
+    and its own mapping's offset; whichever it lacks comes from its nearest
+    ancestor that has one, so a subcategory such as Turnout gear under
+    Operations posts where Operations does unless it says otherwise. A
+    category with several mappings inherits nothing: which of them it meant
+    is a question for the treasurer, not a default.
     """
-    if len(matches) > 1:
-        return "", "", "duplicate_mappings"
-    mapping = matches[0] if matches else None
-    account = (category_account or "").strip() or (
-        mapping.qb_account_name.strip() if mapping else ""
-    )
-    offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
-    if not account:
-        return account, offset, "no_account"
-    if not offset:
-        return account, offset, "no_offset"
-    if _needs_qb_name(account) or _needs_qb_name(offset):
-        return account, offset, "payable_receivable"
-    return account, offset, None
+    by_id = {c.id: c for c in categories}
+    resolved: dict[str, _CategoryAccounts] = {}
+
+    def resolve(category_id: str, depth: int) -> Optional[_CategoryAccounts]:
+        if category_id in resolved:
+            return resolved[category_id]
+        category = by_id.get(category_id)
+        if category is None or depth > _MAX_CATEGORY_DEPTH:
+            return None
+        matches = mappings.get(_mapping_key(category.name), [])
+        if len(matches) > 1:
+            result = _CategoryAccounts("", "", "duplicate_mappings", None)
+            resolved[category_id] = result
+            return result
+        mapping = matches[0] if matches else None
+        own_account = (category.qb_account_name or "").strip()
+        source: Optional[str] = "category" if own_account else None
+        if not own_account and mapping:
+            own_account = mapping.qb_account_name.strip()
+            source = "mapping" if own_account else None
+        account = own_account
+        offset = (mapping.qb_offset_account_name or "").strip() if mapping else ""
+        account_from: Optional[str] = None
+        offset_from: Optional[str] = None
+        if (not account or not offset) and category.parent_category_id:
+            parent = resolve(category.parent_category_id, depth + 1)
+            parent_cat = by_id.get(category.parent_category_id)
+            if parent is not None and parent_cat is not None:
+                if not account and parent.account:
+                    account = parent.account
+                    source = "parent"
+                    account_from = parent.account_inherited_from or parent_cat.name
+                if not offset and parent.offset:
+                    offset = parent.offset
+                    offset_from = parent.offset_inherited_from or parent_cat.name
+        if not account:
+            problem: Optional[str] = "no_account"
+        elif not offset:
+            problem = "no_offset"
+        elif _needs_qb_name(account) or _needs_qb_name(offset):
+            problem = "payable_receivable"
+        else:
+            problem = None
+        result = _CategoryAccounts(
+            account, offset, problem, source, account_from, offset_from
+        )
+        resolved[category_id] = result
+        return result
+
+    for category in categories:
+        resolve(category.id, 0)
+    return resolved
+
+
+def _refuse_advance_charges(data: dict) -> None:
+    """A cash advance charges no budget line or restricted fund: the expense
+    report that accounts for it does (app/services/cash_advances.py)."""
+    if data.get("budget_id") or data.get("fund_campaign_id"):
+        raise ValueError(
+            "A cash advance is not charged to a budget line or fund; the "
+            "expense report that accounts for it is"
+        )
+
+
+def _aware_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _short_label(name: str, limit: int = 40) -> str:
@@ -690,7 +793,7 @@ class FinanceService:
             )
             .order_by(BudgetAmendment.created_at, BudgetAmendment.id)
         )
-        for budget_id, category, reason, amount in pending.all():
+        for budget_id, category, reason, amendment_amount in pending.all():
             items.append(
                 {
                     "kind": "budget_amendment",
@@ -698,7 +801,7 @@ class FinanceService:
                     "number": f"Amendment to {category or 'a budget line'}",
                     "description": reason,
                     "status": BudgetAmendmentStatus.PENDING.value,
-                    "amount": amount,
+                    "amount": amendment_amount,
                 }
             )
         return items
@@ -839,25 +942,42 @@ class FinanceService:
         )
 
     @staticmethod
-    def _category_row(category: BudgetCategory, owner_position_name) -> dict:
+    def _category_row(
+        category: BudgetCategory, owner_position_name, tree: CategoryTree
+    ) -> dict:
         row = {
             column.key: getattr(category, column.key)
             for column in BudgetCategory.__table__.columns
         }
         row["owner_position_name"] = owner_position_name
+        # What the category's lines are actually subject to, so a screen
+        # reports the inherited rule rather than re-deriving it (pitfall #29).
+        rule = tree.rule(str(category.id))
+        row["effective_charge_access"] = rule.access.value
+        row["charge_access_inherited_from"] = (
+            tree.by_id[rule.source_category_id].name
+            if rule.source_category_id and rule.source_category_id != str(category.id)
+            else None
+        )
+        row["charge_position_ids"] = sorted(
+            tree.named_positions.get(str(category.id), set())
+        )
+        row["path"] = tree.path(str(category.id))
         return row
 
     async def list_budget_category_details(
         self, org_id: str, pagination: PaginationParams
     ) -> list[dict]:
-        """``list_budget_categories`` plus each category's owner position name."""
+        """``list_budget_categories`` plus each category's owner and charge rule."""
         result = await self.db.execute(
             self._category_detail_query(org_id)
             .order_by(BudgetCategory.sort_order, BudgetCategory.id)
             .offset(pagination.skip)
             .limit(pagination.limit)
         )
-        return [self._category_row(cat, name) for cat, name in result.all()]
+        rows = result.all()
+        tree = await load_category_tree(self.db, org_id)
+        return [self._category_row(cat, name, tree) for cat, name in rows]
 
     async def get_budget_category_detail(
         self, cat_id: str, org_id: str
@@ -866,7 +986,10 @@ class FinanceService:
             self._category_detail_query(org_id).where(BudgetCategory.id == cat_id)
         )
         row = result.first()
-        return self._category_row(row[0], row[1]) if row else None
+        if not row:
+            return None
+        tree = await load_category_tree(self.db, org_id)
+        return self._category_row(row[0], row[1], tree)
 
     async def get_budget_category(
         self, cat_id: str, org_id: str
@@ -881,26 +1004,142 @@ class FinanceService:
         return budget_category
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
+        charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
+        await self._validate_charge_positions(org_id, charge_position_ids)
         _refuse_name_required(kwargs.get("qb_account_name"))
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
+        if charge_position_ids is not None:
+            await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
         await self.db.refresh(cat, ["created_at", "updated_at"])
         return cat
 
     async def update_budget_category(
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
+        charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
+        await self._validate_charge_positions(org_id, charge_position_ids)
         _refuse_name_required(kwargs.get("qb_account_name"))
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
+        if kwargs.get("parent_category_id"):
+            await self._refuse_category_cycle(
+                org_id, cat.id, kwargs["parent_category_id"]
+            )
         apply_updates(cat, kwargs)
         await self.db.flush()
+        if charge_position_ids is not None:
+            await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
         await self.db.refresh(cat, ["updated_at"])
         return cat
+
+    async def set_category_charge_access(
+        self,
+        cat_id: str,
+        org_id: str,
+        manager_id: Optional[str],
+        charge_access: Optional[ChargeAccess],
+        charge_position_ids: list[str],
+    ) -> BudgetCategory:
+        """Set who may charge a category's lines.
+
+        ``manager_id`` None is ``finance.manage``; otherwise the caller must
+        hold an owner position on the category or one above it
+        (``CategoryTree.manageable_by``). A category the caller may not manage
+        reads as not found, so the endpoint does not confirm it exists.
+        """
+        cat = await self.get_budget_category(cat_id, org_id)
+        if not cat:
+            raise FinanceEntityNotFoundError("Budget category not found")
+        if manager_id is not None:
+            tree = await load_category_tree(self.db, org_id)
+            held = await held_position_ids(self.db, org_id, manager_id)
+            if not tree.manageable_by(str(cat.id), held):
+                raise FinanceEntityNotFoundError("Budget category not found")
+        await self._validate_charge_positions(org_id, charge_position_ids)
+        cat.charge_access = charge_access
+        await self.db.flush()
+        await self._replace_charge_positions(org_id, cat.id, charge_position_ids)
+        await self.db.refresh(cat, ["updated_at"])
+        return cat
+
+    async def list_charge_access_categories(
+        self, org_id: str, user_id: str
+    ) -> list[dict]:
+        """The active categories ``user_id`` owns or that sit beneath one they
+        own, with the charge rule each is under — the owner's own settings.
+
+        Ordered as a tree, parents before their children.
+        """
+        tree = await load_category_tree(self.db, org_id)
+        held = await held_position_ids(self.db, org_id, user_id)
+        if not held:
+            return []
+        result = await self.db.execute(
+            self._category_detail_query(org_id).where(BudgetCategory.is_active)
+        )
+        rows = [
+            self._category_row(cat, name, tree)
+            for cat, name in result.all()
+            if tree.manageable_by(str(cat.id), held)
+        ]
+        rows.sort(key=lambda row: [part.casefold() for part in row["path"]])
+        return rows
+
+    async def _refuse_category_cycle(
+        self, org_id: str, cat_id: str, parent_id: str
+    ) -> None:
+        """Refuse a parent that is the category itself or one of its children.
+
+        Every walk up the tree (QuickBooks account, functional class, charge
+        rule) would otherwise loop, and the category would vanish from the
+        tree the settings screen draws.
+        """
+        if str(parent_id) == str(cat_id):
+            raise ValueError("A category cannot be its own parent")
+        tree = await load_category_tree(self.db, org_id)
+        if str(parent_id) in tree.descendant_ids(str(cat_id)):
+            raise ValueError(
+                "A category cannot be placed under one of its own sub-categories"
+            )
+
+    async def _validate_charge_positions(
+        self, org_id: str, position_ids: Optional[list[str]]
+    ) -> None:
+        """Pitfall 14c: every named position must be one of the org's."""
+        for position_id in position_ids or []:
+            await assert_in_org(
+                self.db, Position, position_id, org_id, label="Position"
+            )
+
+    async def _replace_charge_positions(
+        self, org_id: str, cat_id: str, position_ids: list[str]
+    ) -> None:
+        existing = await self.db.execute(
+            select(BudgetCategoryChargePosition).where(
+                BudgetCategoryChargePosition.organization_id == org_id,
+                BudgetCategoryChargePosition.category_id == cat_id,
+            )
+        )
+        wanted = {str(p) for p in position_ids}
+        for row in existing.scalars().all():
+            if row.position_id in wanted:
+                wanted.discard(row.position_id)
+            else:
+                await self.db.delete(row)
+        for position_id in sorted(wanted):
+            self.db.add(
+                BudgetCategoryChargePosition(
+                    organization_id=org_id,
+                    category_id=cat_id,
+                    position_id=position_id,
+                )
+            )
+        await self.db.flush()
 
     async def _validate_budget_category_fks(self, org_id: str, data: dict) -> None:
         """Reject a client-supplied ``parent_category_id`` outside the org.
@@ -1596,7 +1835,7 @@ class FinanceService:
         budget = result.scalar_one_or_none()
         if not budget:
             raise FinanceEntityNotFoundError("Budget not found")
-        result = await self.db.execute(
+        amendment_result = await self.db.execute(
             select(BudgetAmendment)
             .where(
                 BudgetAmendment.id == amendment_id,
@@ -1605,7 +1844,7 @@ class FinanceService:
             )
             .with_for_update()
         )
-        target = result.scalar_one_or_none()
+        target = amendment_result.scalar_one_or_none()
         if not target:
             raise FinanceEntityNotFoundError("Amendment not found")
         # A reversal is final: money it took back is restored by recording a
@@ -1932,7 +2171,9 @@ class FinanceService:
             "category_breakdown": [],
         }
 
-    async def list_budget_options(self, org_id: str, fiscal_year_id: str) -> list[dict]:
+    async def list_budget_options(
+        self, org_id: str, fiscal_year_id: str, charger_id: Optional[str] = None
+    ) -> list[dict]:
         """The budget lines a requester may charge, as a label and what is left.
 
         The narrow read behind the request forms' budget picker. A member who
@@ -1940,13 +2181,27 @@ class FinanceService:
         remaining amount, nothing else: the budgeted, spent and encumbered
         figures, notes and the summary stay behind ``finance.view``.
 
-        The label is the category name, plus the station when the line has
-        one. Two lines that would still read the same are numbered, so a
-        member never has to pick between identical entries.
+        ``charger_id`` leaves out the restricted lines that member may not
+        charge (app/services/finance_budget_access.py); None, for
+        ``finance.manage``, lists every line. The request writes enforce the
+        same rule, so a line hidden here is also refused there.
+
+        The label is the category's path — ``Quartermaster › Officer brass``
+        for a sub-category — plus the station when the line has one. Two lines
+        that would still read the same are numbered, so a member never has to
+        pick between identical entries.
         """
+        tree = await load_category_tree(self.db, org_id)
+        held = (
+            await held_position_ids(self.db, org_id, charger_id)
+            if charger_id
+            else set()
+        )
         result = await self.db.execute(
             select(
                 Budget.id,
+                Budget.category_id,
+                Budget.owner_position_id,
                 Budget.amount_budgeted,
                 Budget.amount_spent,
                 Budget.amount_encumbered,
@@ -1973,10 +2228,23 @@ class FinanceService:
             )
             .order_by(BudgetCategory.name, Facility.name, Budget.id)
         )
+        rows = [
+            row
+            for row in result.all()
+            if not charger_id
+            or tree.rule(str(row.category_id)).allows(held, row.owner_position_id)
+        ]
+        rows.sort(
+            key=lambda row: (
+                [part.casefold() for part in tree.path(str(row.category_id))],
+                (row.station_name or "").casefold(),
+                row.id,
+            )
+        )
         options = []
         seen: dict[str, int] = {}
-        for row in result.all():
-            label = row.category_name
+        for row in rows:
+            label = " › ".join(tree.path(str(row.category_id))) or row.category_name
             if row.station_name:
                 label = f"{label} ({row.station_name})"
             seen[label] = seen.get(label, 0) + 1
@@ -3620,7 +3888,7 @@ class FinanceService:
         # The three models name the requester differently — `requested_by` on
         # purchases and checks, `submitted_by` on expense reports — so the
         # column is part of the mapping, not assumed.
-        mapping = {
+        mappings: dict[ApprovalEntityType, tuple[_FinanceDocument, Any]] = {
             ApprovalEntityType.PURCHASE_REQUEST: (
                 PurchaseRequest,
                 PurchaseRequest.requested_by,
@@ -3633,7 +3901,8 @@ class FinanceService:
                 CheckRequest,
                 CheckRequest.requested_by,
             ),
-        }.get(entity_type)
+        }
+        mapping = mappings.get(entity_type)
         if mapping is None:
             return None
 
@@ -3922,29 +4191,29 @@ class FinanceService:
                 # anyway subtracted from the budget's shared amount_encumbered
                 # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
+            report_result = await self.db.execute(
                 select(ExpenseReport).where(
                     ExpenseReport.id == entity_id,
                     ExpenseReport.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = ExpenseReportStatus.DENIED
-                entity.approved_by = denier_id
-                entity.denial_reason = reason
+            report = report_result.scalar_one_or_none()
+            if report:
+                report.status = ExpenseReportStatus.DENIED
+                report.approved_by = denier_id
+                report.denial_reason = reason
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
+            check_result = await self.db.execute(
                 select(CheckRequest).where(
                     CheckRequest.id == entity_id,
                     CheckRequest.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
-                entity.status = CheckRequestStatus.DENIED
-                entity.approved_by = denier_id
-                entity.denial_reason = reason
+            check = check_result.scalar_one_or_none()
+            if check:
+                check.status = CheckRequestStatus.DENIED
+                check.approved_by = denier_id
+                check.denial_reason = reason
 
         await self.db.flush()
 
@@ -3971,34 +4240,34 @@ class FinanceService:
                     "submitted_at": entity.created_at,
                 }
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
-            result = await self.db.execute(
+            report_result = await self.db.execute(
                 select(ExpenseReport).where(
                     ExpenseReport.id == entity_id,
                     ExpenseReport.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
+            report = report_result.scalar_one_or_none()
+            if report:
                 return {
-                    "title": entity.title,
-                    "amount": entity.total_amount,
+                    "title": report.title,
+                    "amount": report.total_amount,
                     "requester_name": "",
-                    "submitted_at": entity.created_at,
+                    "submitted_at": report.created_at,
                 }
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
-            result = await self.db.execute(
+            check_result = await self.db.execute(
                 select(CheckRequest).where(
                     CheckRequest.id == entity_id,
                     CheckRequest.organization_id == org_id,
                 )
             )
-            entity = result.scalar_one_or_none()
-            if entity:
+            check = check_result.scalar_one_or_none()
+            if check:
                 return {
-                    "title": f"Check to {entity.payee_name}",
-                    "amount": entity.amount,
+                    "title": f"Check to {check.payee_name}",
+                    "amount": check.amount,
                     "requester_name": "",
-                    "submitted_at": entity.created_at,
+                    "submitted_at": check.created_at,
                 }
         return None
 
@@ -4025,20 +4294,17 @@ class FinanceService:
             # year on a US department's New Year's Eve.
             year = str((await resolve_org_today(self.db, org_id)).year)
 
-        table_map = {
-            "PR": PurchaseRequest,
-            "ER": ExpenseReport,
-            "CK": CheckRequest,
+        # Expense reports name the column report_number; the others,
+        # request_number.
+        table_map: dict[str, tuple[_FinanceDocument, Any]] = {
+            "PR": (PurchaseRequest, PurchaseRequest.request_number),
+            "ER": (ExpenseReport, ExpenseReport.report_number),
+            "CK": (CheckRequest, CheckRequest.request_number),
         }
-        model = table_map.get(prefix)
-        if not model:
+        entry = table_map.get(prefix)
+        if not entry:
             raise ValueError(f"Unknown prefix: {prefix}")
-
-        number_col = (
-            model.request_number
-            if hasattr(model, "request_number")
-            else model.report_number
-        )
+        model, number_col = entry
         # System-generated prefix, so the trailing % is a deliberate wildcard.
         # Renamed off `like_pattern` so it cannot shadow the shared helper.
         number_prefix = f"{prefix}-{year}-%"
@@ -4148,9 +4414,15 @@ class FinanceService:
         return purchase_request
 
     async def create_purchase_request(
-        self, org_id: str, requested_by: str, **kwargs
+        self,
+        org_id: str,
+        requested_by: str,
+        *,
+        charger_id: Optional[str] = None,
+        **kwargs,
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
@@ -4184,6 +4456,13 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a purchase request in this status")
         await self._validate_finance_fks(org_id, kwargs)
+        # The requester scope doubles as the charger: None is finance.manage.
+        # Only a change of line is checked, so a request filed before its line
+        # was restricted can still be edited.
+        if kwargs.get("budget_id") != pr.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
         apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -4459,11 +4738,18 @@ class FinanceService:
         org_id: str,
         submitted_by: str,
         line_items: Optional[list] = None,
+        *,
+        charger_id: Optional[str] = None,
         **kwargs,
     ) -> ExpenseReport:
         await self._validate_finance_fks(org_id, kwargs)
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
+            await assert_may_charge(
+                self.db, org_id, charger_id, item_data.get("budget_id")
+            )
+        if kwargs.get("advance_id"):
+            await assert_settleable(self.db, org_id, kwargs["advance_id"], submitted_by)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         er = ExpenseReport(
@@ -4510,6 +4796,17 @@ class FinanceService:
             ExpenseReportStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit an expense report in this status")
+        if "advance_id" in kwargs:
+            # How much of the report the advance covers is fixed on submit.
+            if er.status != ExpenseReportStatus.DRAFT:
+                raise ValueError(
+                    "The cash advance a report accounts for can only be "
+                    "changed while it is a draft"
+                )
+            if kwargs["advance_id"]:
+                await assert_settleable(
+                    self.db, org_id, kwargs["advance_id"], er.submitted_by
+                )
         await self._validate_finance_fks(org_id, kwargs)
         apply_updates(er, kwargs)
         await self.db.flush()
@@ -4526,6 +4823,7 @@ class FinanceService:
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, requester_id, kwargs.get("budget_id"))
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -4620,6 +4918,8 @@ class FinanceService:
         late_ids = {item.id for item in late}
         for item in er.line_items:
             item.substantiated_late = item.id in late_ids
+        if er.advance_id:
+            er.advance_applied = await self._apply_advance(er, org_id)
         er.submitted_at = now
 
         er.status = ExpenseReportStatus.SUBMITTED
@@ -4652,6 +4952,33 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
         return er
+
+    async def _apply_advance(self, er: ExpenseReport, org_id: str) -> Decimal:
+        """How much of this report its cash advance covers: the report's
+        total, up to what the advance still has outstanding.
+
+        The advance's row is locked first and the balance read through locking
+        reads, so two reports submitted against one advance at once cannot
+        both claim its last dollars (CLAUDE.md pitfall #27).
+        """
+        advance_id = er.advance_id or ""
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if (
+            advance is None
+            or advance.status != CheckRequestStatus.ISSUED
+            or advance.requested_by != er.submitted_by
+        ):
+            raise AdvanceNotSettleableError()
+        balance = (
+            await advance_balances(self.db, org_id, advance_ids=[advance_id], lock=True)
+        )[advance_id]
+        if balance.outstanding <= 0:
+            raise ValueError(
+                f"Cash advance {advance.request_number} is already fully "
+                "accounted for. Remove it from this report to claim these "
+                "expenses as a reimbursement."
+            )
+        return min(_qb_amount(er.total_amount), balance.outstanding)
 
     async def mark_expense_paid(
         self,
@@ -4751,9 +5078,17 @@ class FinanceService:
         return check_request
 
     async def create_check_request(
-        self, org_id: str, requested_by: str, **kwargs
+        self,
+        org_id: str,
+        requested_by: str,
+        *,
+        charger_id: Optional[str] = None,
+        **kwargs,
     ) -> CheckRequest:
+        if kwargs.get("is_advance"):
+            _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
+        await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
@@ -4785,7 +5120,14 @@ class FinanceService:
             CheckRequestStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit a check request in this status")
+        if cr.is_advance:
+            _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
+        # As update_purchase_request: only a change of line is checked.
+        if kwargs.get("budget_id") != cr.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
         apply_updates(cr, kwargs)
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -4802,6 +5144,8 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        if cr.is_advance:
+            await assert_no_overdue(self.db, org_id, cr.requested_by)
 
         cr.status = CheckRequestStatus.SUBMITTED
 
@@ -4900,6 +5244,11 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
         if cr.status != CheckRequestStatus.ISSUED:
             raise ValueError("Only issued checks can be voided")
+        if cr.is_advance and await is_accounted_for(self.db, org_id, cr.id):
+            raise ValueError(
+                "This cash advance has expense reports or returns recorded "
+                "against it and cannot be voided"
+            )
 
         cr.status = CheckRequestStatus.VOIDED
         # The date a check exported to QuickBooks is reversed on.
@@ -4917,6 +5266,212 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
         return cr
+
+    # ========================================
+    # Cash Advances
+    # ========================================
+
+    async def _advance_rows(
+        self, org_id: str, advance_ids: list[str]
+    ) -> dict[str, tuple[CheckRequest, str]]:
+        """Each advance with its member's display name."""
+        if not advance_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                CheckRequest,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .outerjoin(
+                User,
+                and_(
+                    User.id == CheckRequest.requested_by,
+                    User.organization_id == org_id,
+                ),
+            )
+            .where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.id.in_(advance_ids),
+            )
+        )
+        return {
+            cr.id: (
+                cr,
+                format_display_name(first, last, preferred) or username or "",
+            )
+            for cr, first, last, preferred, username in result.all()
+        }
+
+    @staticmethod
+    def _advance_summary(cr: CheckRequest, member: str, balance) -> dict:
+        return {
+            "id": cr.id,
+            "request_number": cr.request_number,
+            "member_id": cr.requested_by,
+            "member_name": member,
+            "amount": balance.amount,
+            "purpose": cr.purpose or cr.memo,
+            "check_number": cr.check_number,
+            "issued_at": cr.check_date,
+            "due_at": balance.due_at,
+            "accounted": balance.accounted,
+            "returned": balance.returned,
+            "outstanding": balance.outstanding,
+            "overdue": balance.overdue,
+        }
+
+    async def list_advances(
+        self,
+        org_id: str,
+        restrict_to_user: Optional[str] = None,
+        outstanding_only: bool = False,
+    ) -> list[dict]:
+        """Every issued cash advance with its balance, oldest first."""
+        balances = await advance_balances(self.db, org_id, member_id=restrict_to_user)
+        if outstanding_only:
+            balances = {k: b for k, b in balances.items() if b.outstanding > 0}
+        rows = await self._advance_rows(org_id, list(balances))
+        return [
+            self._advance_summary(*rows[advance_id], balance)
+            for advance_id, balance in balances.items()
+            if advance_id in rows
+        ]
+
+    async def get_advance(
+        self, org_id: str, advance_id: str, restrict_to_user: Optional[str] = None
+    ) -> dict:
+        """An issued advance's balance, the reports that account for it and
+        the cash returned against it."""
+        balances = await advance_balances(
+            self.db, org_id, advance_ids=[advance_id], member_id=restrict_to_user
+        )
+        balance = balances.get(advance_id)
+        if balance is None:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        cr, member = (await self._advance_rows(org_id, [advance_id]))[advance_id]
+        reports = await self.db.execute(
+            select(ExpenseReport)
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.advance_id == advance_id,
+            )
+            .order_by(ExpenseReport.created_at, ExpenseReport.id)
+        )
+        returns = await self.db.execute(
+            select(AdvanceReturn)
+            .where(
+                AdvanceReturn.organization_id == org_id,
+                AdvanceReturn.advance_id == advance_id,
+            )
+            .order_by(AdvanceReturn.returned_at, AdvanceReturn.id)
+        )
+        return {
+            **self._advance_summary(cr, member, balance),
+            "reports": [
+                {
+                    "id": er.id,
+                    "report_number": er.report_number,
+                    "title": er.title,
+                    "status": er.status.value,
+                    "total_amount": er.total_amount,
+                    "advance_applied": er.advance_applied,
+                    "submitted_at": er.submitted_at,
+                }
+                for er in reports.scalars()
+            ],
+            "returns": list(returns.scalars()),
+        }
+
+    async def record_advance_return(
+        self,
+        org_id: str,
+        advance_id: str,
+        recorded_by: str,
+        amount: Decimal,
+        returned_at: Optional[datetime] = None,
+        payment_method: Optional[str] = None,
+        reference: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> AdvanceReturn:
+        """Record unspent cash the member handed back.
+
+        The advance's row is locked and its balance read through locking
+        reads before the return is checked against it, so two entries of one
+        return cannot together take the advance below zero (pitfall #27).
+        """
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if advance is None or advance.status != CheckRequestStatus.ISSUED:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        # SoD (FIN-4): the member who owes the money does not record that it
+        # came back.
+        assert_different_person(
+            recorded_by,
+            advance.requested_by,
+            action="record a return on",
+            record="cash advance",
+        )
+        # No fiscal-year check: a return moves no budget figure, and an advance
+        # still owed when its year is locked must still be able to come back.
+        now = datetime.now(timezone.utc)
+        when = returned_at or now
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when > now:
+            raise ValueError("A return cannot be dated in the future")
+        if advance.check_date is not None and when < _aware_utc(advance.check_date):
+            raise ValueError("A return cannot be dated before the advance was issued")
+        balance = (
+            await advance_balances(self.db, org_id, advance_ids=[advance_id], lock=True)
+        )[advance_id]
+        value = _qb_amount(amount)
+        if value > balance.outstanding:
+            raise ValueError(
+                f"Only {balance.outstanding:,.2f} of this advance is outstanding"
+            )
+        entry = AdvanceReturn(
+            organization_id=org_id,
+            advance_id=advance_id,
+            amount=value,
+            returned_at=when,
+            payment_method=payment_method,
+            reference=reference,
+            notes=notes,
+            recorded_by=recorded_by,
+        )
+        self.db.add(entry)
+        await self.db.flush()
+        await self.db.refresh(entry, ["created_at"])
+        return entry
+
+    async def delete_advance_return(
+        self, org_id: str, advance_id: str, return_id: str
+    ) -> AdvanceReturn:
+        """Remove a return recorded by mistake, until an export carries it."""
+        advance = await lock_advance(self.db, org_id, advance_id)
+        if advance is None:
+            raise FinanceEntityNotFoundError("Cash advance not found")
+        result = await self.db.execute(
+            select(AdvanceReturn)
+            .where(
+                AdvanceReturn.id == return_id,
+                AdvanceReturn.advance_id == advance_id,
+                AdvanceReturn.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        entry = result.scalar_one_or_none()
+        if entry is None:
+            raise FinanceEntityNotFoundError("Return not found")
+        if entry.qb_exported_at is not None:
+            raise ValueError(
+                "This return has been exported to QuickBooks and cannot be removed"
+            )
+        await self.db.delete(entry)
+        await self.db.flush()
+        return entry
 
     # ========================================
     # Dues & Assessments
@@ -4952,6 +5507,9 @@ class FinanceService:
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(schedule)
         await self.db.flush()
@@ -4965,6 +5523,9 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
+        _refuse_name_required(
+            kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
+        )
         apply_updates(schedule, kwargs)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
@@ -5366,28 +5927,23 @@ class FinanceService:
         )
         categories = list(result.scalars())
         mappings = await self._export_mappings_by_category(org_id)
+        accounts = _resolve_category_accounts(categories, mappings)
 
         rows = []
         for category in categories:
+            resolved = accounts[category.id]
             matches = mappings.get(_mapping_key(category.name), [])
-            account, offset, problem = _classify_category_accounts(
-                category.qb_account_name, matches
-            )
-            if not account:
-                source = None
-            elif (category.qb_account_name or "").strip():
-                source = "category"
-            else:
-                source = "mapping"
             rows.append(
                 {
                     "category_id": category.id,
                     "category_name": category.name,
                     "is_active": category.is_active,
-                    "status": problem or "ready",
-                    "account_name": account or None,
-                    "account_source": source,
-                    "offset_account_name": offset or None,
+                    "status": resolved.problem or "ready",
+                    "account_name": resolved.account or None,
+                    "account_source": resolved.account_source,
+                    "account_inherited_from": resolved.account_inherited_from,
+                    "offset_account_name": resolved.offset or None,
+                    "offset_inherited_from": resolved.offset_inherited_from,
                     "mapping_ids": [m.id for m in matches],
                 }
             )
@@ -5399,10 +5955,15 @@ class FinanceService:
             if key not in category_keys
             for mapping in group
         ]
-        return {"categories": rows, "unmatched_mapping_ids": unmatched}
+        return {
+            "categories": rows,
+            "unmatched_mapping_ids": unmatched,
+            "dues": await self._dues_accounts(org_id),
+            "advances": await self._advance_accounts(org_id),
+        }
 
     async def _resolve_export_accounts(
-        self, org_id: str, sources: list
+        self, org_id: str, sources: list, extra_issues: Optional[list[str]] = None
     ) -> dict[str, tuple[str, str]]:
         """Map each exported budget line to its (account, offset) QuickBooks pair.
 
@@ -5416,14 +5977,18 @@ class FinanceService:
         rows: list = []
         for statement in sources:
             rows.extend((await self.db.execute(statement)).all())
-        if not rows:
+        # Problems found elsewhere (dues schedules, cash-advance accounts)
+        # refuse the export in the same message, so the treasurer sees
+        # everything to fix at once.
+        extra_issues = list(extra_issues or [])
+        if not rows and not extra_issues:
             return {}
 
         budget_ids = {budget_id for _, budget_id in rows if budget_id is not None}
-        categories: dict[str, tuple[str, Optional[str]]] = {}
+        line_categories: dict[str, str] = {}
         if budget_ids:
             result = await self.db.execute(
-                select(Budget.id, BudgetCategory.name, BudgetCategory.qb_account_name)
+                select(Budget.id, Budget.category_id)
                 .join(BudgetCategory, Budget.category_id == BudgetCategory.id)
                 .where(
                     Budget.id.in_(budget_ids),
@@ -5431,20 +5996,32 @@ class FinanceService:
                     BudgetCategory.organization_id == org_id,
                 )
             )
-            categories = {row[0]: (row[1], row[2]) for row in result.all()}
+            line_categories = {row[0]: row[1] for row in result.all()}
         unbudgeted = sorted(
-            {number for number, budget_id in rows if budget_id not in categories}
+            {number for number, budget_id in rows if budget_id not in line_categories}
         )
 
+        # Every category, not only the exported ones: a subcategory's accounts
+        # can come from an ancestor nothing was charged to.
+        category_rows = await self.db.execute(
+            select(BudgetCategory).where(BudgetCategory.organization_id == org_id)
+        )
+        all_categories = list(category_rows.scalars())
+        names = {c.id: c.name for c in all_categories}
         mappings = await self._export_mappings_by_category(org_id)
+        accounts = _resolve_category_accounts(all_categories, mappings)
 
         resolved: dict[str, tuple[str, str]] = {}
         problems: dict[str, str] = {}
-        for budget_id, (name, category_account) in categories.items():
+        for budget_id, category_id in line_categories.items():
+            name = names[category_id]
             label = _short_label(name)
             matches = mappings.get(_mapping_key(name), [])
-            account, offset, problem = _classify_category_accounts(
-                category_account, matches
+            category_accounts = accounts[category_id]
+            account, offset, problem = (
+                category_accounts.account,
+                category_accounts.offset,
+                category_accounts.problem,
             )
             if problem == "duplicate_mappings":
                 problems[name] = f"'{label}' has {len(matches)} mappings"
@@ -5457,7 +6034,7 @@ class FinanceService:
             else:
                 resolved[budget_id] = (account, offset)
 
-        issues = [problems[name] for name in sorted(problems)]
+        issues = [problems[name] for name in sorted(problems)] + extra_issues
         if unbudgeted:
             shown = ", ".join(unbudgeted[:3]) + (", ..." if len(unbudgeted) > 3 else "")
             issues.insert(
@@ -5474,8 +6051,10 @@ class FinanceService:
             if len(message) > 300:
                 message = (
                     f"Set QuickBooks accounts before exporting: {len(problems)} "
-                    f"budget categories and {len(unbudgeted)} transactions "
-                    "without a budget line need accounts"
+                    f"budget categories, {len(extra_issues)} dues or advance "
+                    "settings and "
+                    f"{len(unbudgeted)} transactions without a budget line need "
+                    "accounts"
                 )
             raise ValueError(message)
         return resolved
@@ -5521,6 +6100,13 @@ class FinanceService:
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
         ]
+        # Dues received in the period: money in, debited to the deposit
+        # account and credited to the schedule's income account.
+        dues_filters = [
+            DuesPayment.organization_id == org_id,
+            DuesPayment.received_at >= date_start,
+            DuesPayment.received_at <= date_end,
+        ]
         # Reversals of checks voided after QuickBooks received them. A check
         # voided before it was ever exported needs nothing: it is in neither
         # file, so the books never saw it.
@@ -5530,6 +6116,13 @@ class FinanceService:
             CheckRequest.qb_exported_at.is_not(None),
             CheckRequest.voided_at >= date_start,
             CheckRequest.voided_at <= date_end,
+        ]
+        # Unspent cash handed back against a cash advance: debited to the bank
+        # and credited to the advances account.
+        return_filters = [
+            AdvanceReturn.organization_id == org_id,
+            AdvanceReturn.returned_at >= date_start,
+            AdvanceReturn.returned_at <= date_end,
         ]
         if include_exported:
             # Sending a period again reproduces what was sent for it: a check
@@ -5553,6 +6146,8 @@ class FinanceService:
             )
             er_filters.append(ExpenseReport.qb_exported_at.is_(None))
             void_filters.append(CheckRequest.qb_void_exported_at.is_(None))
+            dues_filters.append(DuesPayment.qb_exported_at.is_(None))
+            return_filters.append(AdvanceReturn.qb_exported_at.is_(None))
 
         pr_count = await self.db.scalar(
             select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
@@ -5569,16 +6164,47 @@ class FinanceService:
         void_count = await self.db.scalar(
             select(func.count()).select_from(CheckRequest).where(*void_filters)
         )
+        dues_setup = await self._dues_accounts(org_id)
+        dues_count = (
+            await self.db.scalar(
+                select(func.count()).select_from(DuesPayment).where(*dues_filters)
+            )
+            if dues_setup["enabled"]
+            else 0
+        )
+        return_count = await self.db.scalar(
+            select(func.count()).select_from(AdvanceReturn).where(*return_filters)
+        )
+        # Reports that account for a cash advance, and advances not yet given
+        # the accounts they were exported to.
+        settling_count = await self.db.scalar(
+            select(func.count())
+            .select_from(ExpenseReport)
+            .where(*er_filters, ExpenseReport.advance_applied > 0)
+        )
+        new_advance_count = await self.db.scalar(
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(
+                *cr_filters,
+                CheckRequest.is_advance.is_(True),
+                CheckRequest.qb_export_account.is_(None),
+            )
+        )
         total = (
             int(pr_count or 0)
             + int(cr_count or 0)
             + int(line_count or 0)
             + int(void_count or 0)
+            + int(dues_count or 0)
+            + int(return_count or 0)
         )
-        # Two rows per transaction (or expense line) plus the header. A file
+        # Two rows per transaction (or expense line) plus the header, and one
+        # more per report settling an advance: the line the advance runs out
+        # on is paid partly from it and partly from the bank. A file
         # QuickBooks will not import is no use, and splitting one would let an
         # expense report's entry straddle two files, so refuse instead.
-        rows = 2 * total + 1
+        rows = 2 * total + int(settling_count or 0) + 1
         if rows > max_rows:
             raise ValueError(
                 f"QuickBooks Online imports files of fewer than {max_rows + 1:,} "
@@ -5588,6 +6214,53 @@ class FinanceService:
         # Resolved before the log row so a refusal leaves no pending export.
         # A check that carries the accounts it was exported to is posted (or
         # reversed) against those, and needs no resolving.
+        dues_accounts: dict[str, tuple[str, str]] = {}
+        other_issues: list[str] = []
+        if dues_count:
+            exported_schedules = set(
+                (
+                    await self.db.execute(
+                        select(MemberDues.dues_schedule_id)
+                        .join(DuesPayment, DuesPayment.member_dues_id == MemberDues.id)
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .distinct()
+                    )
+                ).scalars()
+            )
+            for row in dues_setup["schedules"]:
+                if row["schedule_id"] not in exported_schedules:
+                    continue
+                label = _short_label(row["name"])
+                if row["status"] == "ready":
+                    dues_accounts[row["schedule_id"]] = (
+                        row["deposit_account"],
+                        row["income_account"],
+                    )
+                elif row["status"] == "no_income":
+                    other_issues.append(f"dues '{label}' has no income account")
+                elif row["status"] == "no_deposit":
+                    other_issues.append(f"dues '{label}' has no deposit account")
+                else:
+                    other_issues.append(
+                        f"dues '{label}' posts to Accounts Payable or Receivable"
+                    )
+        advance_setup = await self._advance_accounts(org_id)
+        if (
+            int(new_advance_count or 0)
+            or int(settling_count or 0)
+            or int(return_count or 0)
+        ) and advance_setup["status"] != "ready":
+            other_issues.append(
+                {
+                    "no_advances_account": "cash advances have no advances account",
+                    "no_cash_account": "cash advances have no bank account",
+                }.get(
+                    advance_setup["status"],
+                    "cash advances post to Accounts Payable or Receivable",
+                )
+            )
+        advance_account = advance_setup["advances_account"] or ""
+        advance_cash = advance_setup["cash_account"] or ""
         accounts = await self._resolve_export_accounts(
             org_id,
             [
@@ -5595,26 +6268,41 @@ class FinanceService:
                     *pr_filters
                 ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *cr_filters, CheckRequest.qb_export_account.is_(None)
+                    *cr_filters,
+                    CheckRequest.qb_export_account.is_(None),
+                    CheckRequest.is_advance.is_(False),
                 ),
                 select(ExpenseReport.report_number, ExpenseLineItem.budget_id)
                 .select_from(ExpenseLineItem)
                 .join(ExpenseReport)
                 .where(*er_filters),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
-                    *void_filters, CheckRequest.qb_export_account.is_(None)
+                    *void_filters,
+                    CheckRequest.qb_export_account.is_(None),
+                    CheckRequest.is_advance.is_(False),
                 ),
             ],
+            extra_issues=other_issues,
         )
 
         log = await self._begin_export(
             org_id, exported_by, date_start, date_end, file_format
         )
 
+        def line_accounts(budget_id: Optional[str]) -> tuple[str, str]:
+            # _resolve_export_accounts refused the export if any payment had
+            # no budget line, or one it could not map, so every id is a key.
+            if budget_id is None:
+                raise KeyError(budget_id)
+            return accounts[budget_id]
+
         def check_accounts(cr: CheckRequest) -> tuple[str, str]:
             if cr.qb_export_account and cr.qb_export_offset_account:
                 return cr.qb_export_account, cr.qb_export_offset_account
-            return accounts[cr.budget_id]
+            if cr.is_advance:
+                # Money owed back to the department until it is accounted for.
+                return advance_account, advance_cash
+            return line_accounts(cr.budget_id)
 
         def journal_lines(
             number: str,
@@ -5647,6 +6335,11 @@ class FinanceService:
         sent_reports: set[str] = set()
         sent_checks: dict[tuple[str, str], list[str]] = {}
         sent_voids: list[str] = []
+        sent_dues: list[str] = []
+        sent_returns: list[str] = []
+        # What each report's cash advance has left to cover, as its lines go
+        # out; carried across batch boundaries, which can split a report.
+        advance_left: dict[str, Decimal] = {}
 
         async def stream() -> AsyncIterator[str]:
             output = io.StringIO()
@@ -5677,7 +6370,12 @@ class FinanceService:
                 # recorded on the export log like any other interruption.
                 org_tz = await resolve_scheduling_timezone(self.db, org_id)
 
-                def local_day(value: datetime) -> str:
+                def local_day(value: Optional[datetime]) -> str:
+                    # Every exported payment is selected by its date, so a
+                    # missing one is a row that lost it since; refuse rather
+                    # than date the entry wrongly.
+                    if value is None:
+                        raise ValueError("An exported payment has no date")
                     aware = (
                         value if value.tzinfo else value.replace(tzinfo=timezone.utc)
                     )
@@ -5691,7 +6389,7 @@ class FinanceService:
                 ):
                     lines = []
                     for pr in purchases:
-                        account, paid_from = accounts[pr.budget_id]
+                        account, paid_from = line_accounts(pr.budget_id)
                         lines += journal_lines(
                             pr.request_number,
                             local_day(pr.paid_at),
@@ -5748,22 +6446,184 @@ class FinanceService:
                         break
                     lines = []
                     for item, er in records:
-                        account, paid_from = accounts[item.budget_id]
-                        lines += journal_lines(
-                            er.report_number,
-                            local_day(er.paid_at),
-                            er.title,
-                            account,
-                            paid_from,
-                            item.amount,
-                            (
-                                f"{item.merchant}: {item.description}"
-                                if item.merchant
-                                else item.description
-                            ),
+                        account, paid_from = line_accounts(item.budget_id)
+                        description = (
+                            f"{item.merchant}: {item.description}"
+                            if item.merchant
+                            else item.description
                         )
+                        if er.id not in advance_left:
+                            advance_left[er.id] = _qb_amount(
+                                er.advance_applied or Decimal("0")
+                            )
+                        covered = min(_qb_amount(item.amount), advance_left[er.id])
+                        if covered > 0:
+                            # Paid from the cash advance, not the bank: the
+                            # expense clears what the member owed instead.
+                            advance_left[er.id] -= covered
+                            value = _qb_amount(item.amount)
+                            day = local_day(er.paid_at)
+                            lines.append(
+                                [
+                                    er.report_number,
+                                    day,
+                                    er.title,
+                                    account,
+                                    value,
+                                    "",
+                                    description,
+                                ]
+                            )
+                            lines.append(
+                                [
+                                    er.report_number,
+                                    day,
+                                    er.title,
+                                    advance_account,
+                                    "",
+                                    covered,
+                                    description,
+                                ]
+                            )
+                            if value > covered:
+                                lines.append(
+                                    [
+                                        er.report_number,
+                                        day,
+                                        er.title,
+                                        paid_from,
+                                        "",
+                                        value - covered,
+                                        description,
+                                    ]
+                                )
+                        else:
+                            lines += journal_lines(
+                                er.report_number,
+                                local_day(er.paid_at),
+                                er.title,
+                                account,
+                                paid_from,
+                                item.amount,
+                                description,
+                            )
                         sent_reports.add(er.id)
                     delivered += len(records)
+                    yield csv_chunk(lines)
+
+                for offset in range(0, int(dues_count or 0), batch_size):
+                    dues_result = await self.db.execute(
+                        select(
+                            DuesPayment,
+                            MemberDues.dues_schedule_id,
+                            DuesSchedule.name,
+                            User.first_name,
+                            User.last_name,
+                            User.preferred_name,
+                            User.username,
+                        )
+                        .join(MemberDues, MemberDues.id == DuesPayment.member_dues_id)
+                        .join(
+                            DuesSchedule,
+                            DuesSchedule.id == MemberDues.dues_schedule_id,
+                        )
+                        .outerjoin(
+                            User,
+                            and_(
+                                User.id == MemberDues.user_id,
+                                User.organization_id == org_id,
+                            ),
+                        )
+                        .where(*dues_filters, MemberDues.organization_id == org_id)
+                        .order_by(DuesPayment.received_at, DuesPayment.id)
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    dues_records = list(dues_result.all())
+                    if not dues_records:
+                        break
+                    lines = []
+                    for (
+                        payment,
+                        schedule_id,
+                        schedule_name,
+                        first,
+                        last,
+                        preferred,
+                        username,
+                    ) in dues_records:
+                        deposit, income = dues_accounts[schedule_id]
+                        member = (
+                            format_display_name(first, last, preferred)
+                            or username
+                            or "Member"
+                        )
+                        how = ", ".join(
+                            part
+                            for part in (
+                                payment.payment_method,
+                                payment.transaction_reference,
+                            )
+                            if part
+                        )
+                        # A dues payment has no request number; its own id
+                        # keeps the Journal No unique, and the prefix keeps it
+                        # from ever matching a PR-, CR- or ER- number.
+                        lines += journal_lines(
+                            f"DUES-{payment.id[:8]}",
+                            local_day(payment.received_at),
+                            f"Dues: {schedule_name}",
+                            deposit,
+                            income,
+                            payment.amount,
+                            f"{member} ({how})" if how else member,
+                        )
+                        sent_dues.append(payment.id)
+                    delivered += len(dues_records)
+                    yield csv_chunk(lines)
+
+                for offset in range(0, int(return_count or 0), batch_size):
+                    return_result = await self.db.execute(
+                        select(
+                            AdvanceReturn,
+                            CheckRequest.request_number,
+                            CheckRequest.payee_name,
+                        )
+                        .join(
+                            CheckRequest,
+                            and_(
+                                CheckRequest.id == AdvanceReturn.advance_id,
+                                CheckRequest.organization_id == org_id,
+                            ),
+                        )
+                        .where(*return_filters)
+                        .order_by(AdvanceReturn.returned_at, AdvanceReturn.id)
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    return_records = list(return_result.all())
+                    if not return_records:
+                        break
+                    lines = []
+                    for entry, number, payee_name in return_records:
+                        how = ", ".join(
+                            part
+                            for part in (entry.payment_method, entry.reference)
+                            if part
+                        )
+                        # The prefix keeps the Journal No from ever matching a
+                        # request number or another kind of entry.
+                        lines += journal_lines(
+                            f"ADVR-{entry.id[:8]}",
+                            local_day(entry.returned_at),
+                            f"Advance returned: {number}",
+                            advance_cash,
+                            advance_account,
+                            entry.amount,
+                            f"{payee_name} ({how})" if how else payee_name,
+                        )
+                        sent_returns.append(entry.id)
+                    delivered += len(return_records)
                     yield csv_chunk(lines)
 
                 # Last, so a check exported and voided within one period is
@@ -5801,6 +6661,8 @@ class FinanceService:
                     reports=sent_reports,
                     checks=sent_checks,
                     voids=sent_voids,
+                    dues=sent_dues,
+                    returns=sent_returns,
                 )
                 log.status = "successful"
                 log.record_count = delivered
@@ -5862,6 +6724,155 @@ class FinanceService:
         await self.db.commit()  # Persist pending before any bytes reach the client.
         return log
 
+    async def set_dues_default_accounts(
+        self, org_id: str, income: Optional[str], deposit: Optional[str]
+    ) -> tuple[str, str]:
+        """Set the QuickBooks accounts a dues payment posts to when its
+        schedule names none. Blank or None clears one."""
+        income = (income or "").strip()
+        deposit = (deposit or "").strip()
+        _refuse_name_required(income, deposit)
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        org = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+        # A deep copy: the finance section is a nested dict, and mutating it in
+        # place on a shallow copy is never written (CLAUDE.md pitfall #12).
+        settings = copy.deepcopy(org.settings or {})
+        section = settings.get(FINANCE_SETTINGS_KEY)
+        if not isinstance(section, dict):
+            section = {}
+        for key, value in (
+            (QB_DUES_INCOME_KEY, income),
+            (QB_DUES_DEPOSIT_KEY, deposit),
+        ):
+            if value:
+                section[key] = value
+            else:
+                section.pop(key, None)
+        settings[FINANCE_SETTINGS_KEY] = section
+        org.settings = settings
+        await self.db.flush()
+        return income, deposit
+
+    async def _dues_accounts(self, org_id: str) -> dict:
+        """Every dues schedule's QuickBooks accounts, its own or the
+        department's default, and whether its payments can be exported."""
+        org_settings = (
+            await self.db.execute(
+                select(Organization.settings).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        default_income, default_deposit = dues_default_accounts(org_settings)
+        rows = await self.db.execute(
+            select(DuesSchedule)
+            .where(DuesSchedule.organization_id == org_id)
+            .order_by(DuesSchedule.name, DuesSchedule.id)
+        )
+        schedules = []
+        for schedule in rows.scalars():
+            own_income = (schedule.qb_income_account or "").strip()
+            own_deposit = (schedule.qb_deposit_account or "").strip()
+            income = own_income or default_income
+            deposit = own_deposit or default_deposit
+            if not income:
+                status = "no_income"
+            elif not deposit:
+                status = "no_deposit"
+            elif _needs_qb_name(income) or _needs_qb_name(deposit):
+                status = "payable_receivable"
+            else:
+                status = "ready"
+            schedules.append(
+                {
+                    "schedule_id": schedule.id,
+                    "name": schedule.name,
+                    "is_active": schedule.is_active,
+                    "status": status,
+                    "income_account": income or None,
+                    "income_source": (
+                        "schedule" if own_income else "default" if income else None
+                    ),
+                    "deposit_account": deposit or None,
+                    "deposit_source": (
+                        "schedule" if own_deposit else "default" if deposit else None
+                    ),
+                }
+            )
+        # Dues go to QuickBooks once the department names an account for
+        # them anywhere. Until then they stay out of the export, as they did
+        # before dues could be exported, rather than refusing every export of
+        # a department that keeps its dues in QuickBooks by other means.
+        enabled = bool(
+            default_income
+            or default_deposit
+            or any(
+                row["income_source"] == "schedule"
+                or row["deposit_source"] == "schedule"
+                for row in schedules
+            )
+        )
+        return {
+            "enabled": enabled,
+            "default_income_account": default_income or None,
+            "default_deposit_account": default_deposit or None,
+            "schedules": schedules,
+        }
+
+    async def set_advance_accounts(
+        self, org_id: str, advances: Optional[str], cash: Optional[str]
+    ) -> tuple[str, str]:
+        """Set the QuickBooks accounts cash advances post to. Blank or None
+        clears one."""
+        advances = (advances or "").strip()
+        cash = (cash or "").strip()
+        _refuse_name_required(advances, cash)
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        org = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+        # A deep copy, as for the dues accounts (CLAUDE.md pitfall #12).
+        settings = copy.deepcopy(org.settings or {})
+        section = settings.get(FINANCE_SETTINGS_KEY)
+        if not isinstance(section, dict):
+            section = {}
+        for key, value in ((QB_ADVANCES_KEY, advances), (QB_ADVANCES_CASH_KEY, cash)):
+            if value:
+                section[key] = value
+            else:
+                section.pop(key, None)
+        settings[FINANCE_SETTINGS_KEY] = section
+        org.settings = settings
+        await self.db.flush()
+        return advances, cash
+
+    async def _advance_accounts(self, org_id: str) -> dict:
+        """The department's cash-advance accounts and whether an advance can
+        be exported with them."""
+        org_settings = (
+            await self.db.execute(
+                select(Organization.settings).where(Organization.id == org_id)
+            )
+        ).scalar_one_or_none()
+        advances, cash = advance_accounts(org_settings)
+        if not advances:
+            status = "no_advances_account"
+        elif not cash:
+            status = "no_cash_account"
+        elif _needs_qb_name(advances) or _needs_qb_name(cash):
+            status = "payable_receivable"
+        else:
+            status = "ready"
+        return {
+            "status": status,
+            "advances_account": advances or None,
+            "cash_account": cash or None,
+        }
+
     async def _stamp_exported(
         self,
         org_id: str,
@@ -5872,6 +6883,8 @@ class FinanceService:
         reports: set[str],
         checks: dict[tuple[str, str], list[str]],
         voids: list[str],
+        dues: Optional[list[str]] = None,
+        returns: Optional[list[str]] = None,
     ) -> None:
         """Mark what a completed export carried, and the accounts it used."""
         stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
@@ -5911,6 +6924,24 @@ class FinanceService:
                     CheckRequest.id.in_(voids),
                 )
                 .values(qb_void_exported_at=stamped_at, qb_void_export_log_id=log_id)
+            )
+        if dues:
+            await self.db.execute(
+                update(DuesPayment)
+                .where(
+                    DuesPayment.organization_id == org_id,
+                    DuesPayment.id.in_(dues),
+                )
+                .values(**stamp)
+            )
+        if returns:
+            await self.db.execute(
+                update(AdvanceReturn)
+                .where(
+                    AdvanceReturn.organization_id == org_id,
+                    AdvanceReturn.id.in_(returns),
+                )
+                .values(**stamp)
             )
 
     async def list_export_logs(

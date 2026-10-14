@@ -207,7 +207,7 @@ def _compose(
     # thumbnail() only shrinks, so a logo smaller than the box is enlarged
     # explicitly rather than being left as a postage stamp in the corner.
     if max(scaled.size) > box:
-        scaled.thumbnail((box, box), Image.LANCZOS)
+        scaled.thumbnail((box, box), Image.Resampling.LANCZOS)
     else:
         ratio = box / max(scaled.size)
         scaled = scaled.resize(
@@ -215,7 +215,7 @@ def _compose(
                 max(1, int(round(scaled.width * ratio))),
                 max(1, int(round(scaled.height * ratio))),
             ),
-            Image.LANCZOS,
+            Image.Resampling.LANCZOS,
         )
 
     canvas = Image.new("RGBA", canvas_size, background)

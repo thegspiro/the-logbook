@@ -151,7 +151,7 @@ export const InventoryNotSeenPage: React.FC = () => {
         </div>
         <button
           type="button"
-          className="btn-secondary"
+          className="btn-secondary inline-flex items-center gap-2"
           onClick={() => void exportCsv()}
           disabled={exporting || loading || !report || report.total === 0}
         >

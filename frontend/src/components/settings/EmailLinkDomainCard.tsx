@@ -155,7 +155,12 @@ const LinkDomainEditor: React.FC<LinkDomainEditorProps> = ({ domain, viewingOrig
             setError(null);
           }}
         />
-        <button type="button" className="btn-primary" disabled={saving} onClick={() => void handleSave()}>
+        <button
+          type="button"
+          className="btn-primary inline-flex items-center gap-2"
+          disabled={saving}
+          onClick={() => void handleSave()}
+        >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           Save
         </button>

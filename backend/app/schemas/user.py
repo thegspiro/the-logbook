@@ -177,11 +177,17 @@ class EmergencyContact(BaseModel):
     is_primary: bool = False
 
 
-class UserBase(BaseModel):
-    """Base user schema with common fields"""
+class _UserBaseFields(BaseModel):
+    """Every `UserBase` field except `email`.
+
+    Split out because the request and response schemas disagree about `email`:
+    a create requires it, while a response withholds it (`null`) from a caller
+    the organization's contact-visibility rules do not allow to see it. A
+    response that inherited the required `email` from `UserBase` declared a
+    contract the endpoint already broke.
+    """
 
     username: str = Field(..., min_length=3, max_length=100)
-    email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -201,6 +207,12 @@ class UserBase(BaseModel):
     @classmethod
     def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
         return _clean_preferred_name(v)
+
+
+class UserBase(_UserBaseFields):
+    """Base user schema with common fields"""
+
+    email: EmailStr
 
 
 class UserCreate(UserBase):
@@ -438,7 +450,7 @@ class UserUpdate(MembershipClassificationFields):
         return _clean_preferred_name(v)
 
 
-class _UserResponseFields(UserBase, UTCResponseBase):
+class _UserResponseFields(_UserBaseFields, UTCResponseBase):
     """The fields every user response shares.
 
     The record timestamps are optional here because ``UserProfileResponse``
@@ -449,6 +461,9 @@ class _UserResponseFields(UserBase, UTCResponseBase):
 
     id: UUID
     organization_id: UUID
+    # Optional because it is withheld from a caller the contact-visibility
+    # rules exclude (see `_clear_hidden_contact_fields` in the users endpoint).
+    email: Optional[EmailStr] = None
     photo_url: Optional[str] = None
     personal_email: Optional[str] = None
     status: str

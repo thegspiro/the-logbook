@@ -465,6 +465,42 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance: cash advances (2026-10-14)
+
+Migration `a39a1999776f` adds `check_requests.is_advance`,
+`expense_reports.advance_id` / `advance_applied` and a new `advance_returns`
+table. Nothing existing changes: no check is an advance until a member asks for
+one, and an export needs the new **Cash advances** accounts on **Finance ›
+QuickBooks Export** only once an advance, a report accounting for one or
+returned cash falls in its period — it is refused, naming them, until then.
+Downgrading drops the table and the columns: every advance reads as an ordinary
+check with no budget line, and the reports and returns recorded against it are
+lost.
+
+### QuickBooks: dues payments are exported (2026-10-14)
+
+Migration `0d32069fea4d` adds QuickBooks accounts to dues schedules and an
+exported mark to dues payments. **Nothing changes until a dues account is set**
+(**Finance › QuickBooks Export › Dues**, or on a schedule): until then exports
+leave dues out, as before. Once one is set, no dues payment has been marked as
+sent, so the next export covering a period carries every dues payment received
+in it; a department that already entered those in QuickBooks by hand should
+export only later periods, or delete the duplicates after import. From then on,
+an export with dues from a schedule lacking an account is refused, naming the
+schedule. Downgrading drops the columns: the schedules'
+accounts and which payments were sent are lost.
+
+### QuickBooks: subcategories export through their parent's accounts (2026-10-14)
+
+A budget subcategory with no QuickBooks account or mapping of its own used to
+refuse the export ("'Diesel' has no account"). It now posts to its nearest
+ancestor's accounts, and **Finance › QuickBooks Export** shows **From …** beside
+them. Check the Budget categories table after upgrading: a subcategory that
+should post somewhere other than its parent needs its own account or mapping.
+Nothing in the database changes. The export can now be run from that page, and
+its download is named `quickbooks-journal_<first day>_<last day>.csv` instead
+of `finance_export.csv`.
+
 ### The maintenance commands now run in production images (2026-10-12)
 
 Commands this guide and `docs/KEY_ROTATION.md` tell you to run —
@@ -705,6 +741,20 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### A folder only administrators could open is confirmed first (2026-10-14)
+
+Nothing here stops the stack from starting. Some folder saves now ask first:
+
+- creating a folder;
+- changing who can open it;
+- moving it.
+
+The save is refused with `LB-DOC-001` (400) when no active member except a
+full administrator could open the folder afterwards. The Documents dialogs ask
+for confirmation and save again with `confirm_admin_only: true`. A script
+calling `POST` / `PATCH /documents/folders` must send that flag to create such
+a folder on purpose. There is no migration.
+
 ### Folders name positions by id; deleting a position can be refused (2026-10-13)
 
 Nothing here stops the stack from starting. Migration `5b2e9c7d4a18` rewrites
@@ -759,16 +809,33 @@ adds one table, `encryption_key_custody`. Three things to do:
    anyone holding a backup can read them.
 2. **Encrypt the files already on disk.** They keep working as they are, and
    administrators see a "not yet encrypted" notice until this is done:
+
    ```bash
    docker exec -it intranet-backend python scripts/encrypt_uploads.py            # dry run
    docker exec -it intranet-backend python scripts/encrypt_uploads.py --apply    # encrypt; originals kept
-   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
-       --finalize /app/uploads/.encryption/encryption-<stamp>.json              # delete the originals
    ```
-   `--rollback <manifest>` undoes an `--apply` until it is finalized. The
-   originals sit beside each file as `.<name>.plaintext` until finalize, and
-   the backup sidecar archives them, so finalize once you have checked a few
-   downloads.
+
+   `--apply` ends by printing the exact `--finalize` and `--rollback`
+   commands for its run, with the manifest's real path filled in, for
+   example:
+
+   ```bash
+   docker exec -it intranet-backend python scripts/encrypt_uploads.py \
+       --finalize /app/uploads/.encryption/encryption-20261013T224204Z.json     # delete the originals
+   ```
+
+   Paste the printed path rather than typing a placeholder: a name written as
+   `encryption-<stamp>.json` is read by the shell as a redirect and fails
+   with `stamp: No such file or directory` before the script starts.
+   `--rollback` with the same path undoes an `--apply` until it is finalized.
+   The originals sit beside each file as `.<name>.plaintext` until finalize,
+   and the backup sidecar archives them, so finalize once you have checked a
+   few downloads. The notice clears as soon as a finalize leaves nothing
+   unencrypted.
+
+   On Unraid the backend container is `logbook-backend`, not
+   `intranet-backend`; substitute it in every command above.
+
 3. **Treat older `uploads.tar.gz` archives as plaintext.** They were made
    before encryption.
 
@@ -1046,12 +1113,15 @@ Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
   docker exec -it intranet-backend python scripts/relocate_uploads.py --apply
   # check the app, then delete the old copies:
   docker exec -it intranet-backend python scripts/relocate_uploads.py \
-      --finalize /app/uploads/.relocation/relocation-<stamp>.json
+      --finalize /app/uploads/.relocation/relocation-20261013T224204Z.json
   ```
 
-  `--apply` copies and checksum-verifies every file and keeps the originals;
-  `--rollback <manifest>` undoes it until you finalize. Disk use doubles for
-  the moved files until `--finalize`.
+  Use the path the `--apply` run printed under `"manifest"`; the name above
+  is an example. Do not type a `<stamp>` placeholder, which the shell reads as
+  a redirect. `--apply` copies and checksum-verifies every file and keeps the
+  originals; `--rollback` with the same path undoes it until you finalize.
+  Disk use doubles for the moved files until `--finalize`. On Unraid the
+  container is `logbook-backend`.
 
 - **Downloads have descriptive names**, built from the record:
   `2026-10-08_Smith-John_EMT-Recertification.pdf` for a training certificate

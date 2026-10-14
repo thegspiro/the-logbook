@@ -158,6 +158,7 @@ async def create_folder(
     """Create a new document folder"""
     service = DocumentsService(db)
     folder_data = folder.model_dump(exclude_none=True)
+    confirm_admin_only = folder_data.pop("confirm_admin_only", False)
     # create_folder's DOC-6 FK validation (in the service, below) only
     # confirms a supplied parent_id belongs to the caller's organization --
     # not that the caller can access that parent, and not that they can
@@ -183,6 +184,7 @@ async def create_folder(
             folder_data,
             current_user.id,
             acting_user=current_user,
+            confirm_admin_only=confirm_admin_only,
         )
     await log_audit_event(
         db=db,
@@ -257,6 +259,7 @@ async def update_folder(
     # service as "clear this field", not be dropped as if never sent
     # (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = folder.model_dump(exclude_unset=True)
+    confirm_admin_only = bool(update_data.pop("confirm_admin_only", False))
     # The check above authorizes only the folder's *current* ancestry.
     # DocumentsService.update_folder's DOC-6 FK validation on a reassigned
     # parent_id only confirms the new parent is in the caller's organization,
@@ -288,6 +291,7 @@ async def update_folder(
             current_user.organization_id,
             update_data,
             acting_user=current_user,
+            confirm_admin_only=confirm_admin_only,
         )
     result = ensure_found(updated, "Folder")
     await log_audit_event(
@@ -541,11 +545,11 @@ async def get_my_member_folder(
         .where(Document.folder_id == folder.id)
         .where(Document.status == DocumentStatus.ACTIVE)
     )
-    folder.document_count = count_result.scalar() or 0
+    document_count = count_result.scalar() or 0
 
     return {
         **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
-        "document_count": folder.document_count,
+        "document_count": document_count,
     }
 
 

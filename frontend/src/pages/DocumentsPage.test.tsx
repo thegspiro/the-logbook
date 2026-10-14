@@ -382,6 +382,22 @@ describe('DocumentsPage', () => {
     await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['pos-qm'] }));
   });
 
+  it('confirms a folder only full administrators could open, then creates it', async () => {
+    const user = userEvent.setup();
+    mockCreateFolder.mockRejectedValueOnce({
+      response: { status: 400, data: { detail: 'No active member could open this folder', code: 'LB-DOC-001' } },
+    });
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    await user.type(screen.getByLabelText(/folder name/i), 'Command staff');
+    await user.click(screen.getByRole('button', { name: /^create folder$/i }));
+    await user.click(await screen.findByRole('button', { name: 'Save for administrators only' }));
+
+    await waitFor(() =>
+      expect(mockCreateFolder).toHaveBeenLastCalledWith({ name: 'Command staff', confirm_admin_only: true })
+    );
+  });
+
   it('keeps the create dialog open with the server’s reason when it is refused', async () => {
     const user = userEvent.setup();
     mockCreateFolder.mockRejectedValueOnce(new Error('These settings would shut you out of this folder.'));

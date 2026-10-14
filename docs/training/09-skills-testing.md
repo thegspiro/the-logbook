@@ -92,6 +92,13 @@ Fill in the basic information:
 | **Require All Critical**        | If enabled, failing any required criterion = automatic fail                               | Enabled                                                |
 | **Time Limit**                  | Optional time limit in minutes                                                            | 10                                                     |
 | **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment"         |
+| **Valid for (months)**          | Optional. How long a passing official test stays valid, counted from the day it was taken. Blank means it never expires | 24                                                     |
+
+A skill with a validity period shows up in the member's **Upcoming Expirations & Due Dates** list on My Training
+(_Skills test expires <date> · N days_) once it is within six months of lapsing, and as expired afterwards. Only a
+passing, validated, non-practice test counts, the newest pass per skill is the one that is read, and a result the
+department withholds from the member (see [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08)) is not
+listed. Taking and passing the skill again moves the expiry. Changing the period applies to tests already passed.
 
 ![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 

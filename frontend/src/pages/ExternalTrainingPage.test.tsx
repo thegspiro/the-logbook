@@ -107,6 +107,16 @@ const openMappings = async () => {
 };
 
 describe('ExternalTrainingPage — category mappings', () => {
+  // The title was hard-coded white on the modal's light panel, so the dialog
+  // opened with a blank header and no way to tell which provider it was for.
+  it('names the provider in a title that uses the theme text colour', async () => {
+    await openMappings();
+
+    const title = await screen.findByRole('heading', { name: 'Mappings - Vector Solutions' });
+    expect(title).toHaveClass('text-theme-text-primary');
+    expect(title).not.toHaveClass('text-white');
+  });
+
   // The Map Category button carried no handler at all: an officer clicked it,
   // nothing happened, and the only way to map a category was the API.
   it('offers the internal categories an external one can be pointed at', async () => {

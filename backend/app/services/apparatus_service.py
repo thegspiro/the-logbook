@@ -2406,8 +2406,10 @@ class ApparatusService:
 
         update_data = config_data.model_dump(exclude_unset=True)
         await self._validate_report_config_fks(update_data, organization_id)
-        for field, value in update_data.items():
-            setattr(config, field, value)
+        # An explicit null clears a field; a null against a required one
+        # (name, report_type, is_scheduled) is a ValueError, so a 400,
+        # rather than an integrity error at flush (CLAUDE.md pitfall 1).
+        apply_updates(config, update_data)
 
         await self.db.commit()
         await self.db.refresh(config)

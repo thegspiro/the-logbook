@@ -525,7 +525,11 @@ const MedicalSuppliesPage: React.FC = () => {
                   <PackagePlus className="h-4 w-4" />
                   Receive delivery
                 </button>
-                <button type="button" onClick={() => setShowItemModal(true)} className="btn-primary">
+                <button
+                  type="button"
+                  onClick={() => setShowItemModal(true)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
                   <Plus className="h-4 w-4" />
                   Add supply
                 </button>

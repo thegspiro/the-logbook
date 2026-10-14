@@ -821,9 +821,12 @@ module folder on that module's rights.
 
 - **Resolved 2026-10-12: custom folder rights now have a screen.** The Create
   Folder and Manage folder dialogs set positions and required permissions
-  (decision 27). One narrower gap remains:
-  - A folder restricted to a permission that nobody holds can still be made by
-    a full administrator. Only the editor's own access is checked.
+  (decision 27).
+- **Resolved 2026-10-14: a folder nobody but full administrators can open is
+  confirmed, not made by accident** (decision 29). The check runs when the
+  folder is saved. A member who later loses the permission, or leaves the
+  position, is not re-checked, so a folder can still become
+  administrators-only over time without anyone being asked.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.
@@ -964,6 +967,42 @@ What remains for the owner:
 | -------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Scanner outage fails closed**              | Owner's decision 2026-10-08 | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`) — on every upload path. The owner confirmed it for the on-by-default rollout: a host that upgrades without a running scanner refuses uploads until it has one. |
 | **Files stored before scanning was enabled** | Open                        | Not rescanned. Scanning covers new uploads only; files already on disk (and logos, photos and images already in the database) were never scanned.                                                                                                                                                                     |
+
+## Unraid Community Apps Template — Not Installable Yet (2026-10-13)
+
+**Open decision.** `unraid/the-logbook.xml` is a Community Applications
+template for a single container, `ghcr.io/thegspiro/the-logbook:latest`,
+answering on 3000 (web) and 3001 (API). Two things stand between it and a
+working install:
+
+- **Nothing builds or publishes that image.** No workflow pushes to ghcr.io,
+  and there is no root `Dockerfile`; `UNRAID-INSTALLATION.md` already warns
+  that a pull fails with "manifest unknown".
+- **The project has no combined image to publish.** It ships two:
+  `backend/Dockerfile` (uvicorn on 3001, fixed uid 1000) and
+  `frontend/Dockerfile` (nginx on port 80, forwarding `/api` to a host named
+  `backend`). Publishing either one under the template's name would not
+  give it a container that answers on both ports.
+
+The template is marked as a draft in its own header, its overview and its
+`Status:Beta` category, so nobody submits it as it stands. The settings no
+image reads were removed: `/app/data`, `PUID`/`PGID` (the backend runs as uid
+1000 whatever they say) and a placeholder donate link. The Docker Compose path
+(`unraid/QUICK-START.md`) remains the supported Unraid install.
+
+**To make it installable, choose one:**
+
+1. **A combined image**: nginx and the backend under one process supervisor,
+   plus a workflow that publishes it to ghcr.io on each release. That needs
+   package-write permission on the repository and someone owning releases.
+   MySQL, Redis and ClamAV stay separate containers the user installs (the
+   template already asks for their hosts).
+2. **Two templates**: publish the existing backend and frontend images and
+   split the template in two. The frontend's nginx would need the backend
+   address made configurable instead of the fixed `backend` hostname.
+
+Related and not changed here: `unraid/docker-compose-unraid.yml` also passes
+`PUID`/`PGID` to the backend and frontend, where nothing reads them either.
 
 ## Scheduling Module
 
@@ -1577,25 +1616,43 @@ purpose:
   and functional expense classification (program / management / fundraising)
   have reports of their own (Restricted funds, Functional expenses).
 
+## Finance — Cash Advances: What They Do Not Cover (2026-10-14)
+
+Described in
+[FINANCE_MODULE.md](./FINANCE_MODULE.md#cash-advances-2026-10-14). Left out
+on purpose, or needing a decision first:
+
+- **Only the requester's own advance.** An advance is paid to the member who
+  asks for it; the finance office cannot raise one on another member's behalf,
+  since the member who owes it, the overdue block and the separation of duties
+  all key on the requester.
+- **Fixed-date method only.** The 120 days run from the check. The IRS's other
+  safe harbor, the periodic statement method (quarterly statements, 120 days
+  from each), is not modelled.
+- **Overdue is flagged, not reported to payroll.** The advances report lists
+  what is overdue; turning it into wages on a W-2 is the treasurer's job, as for
+  late reimbursements on _Outside the accountable plan_.
+- **Not part of the year-end close.** An advance still outstanding at year end
+  is not listed among the year's open items; the advances report is where to
+  look before closing. Returned cash can still be recorded against an advance
+  whose year is locked, since a return moves no budget figure.
+- **Cash from petty cash is still a "check".** Issuing asks for a check number;
+  an advance paid in cash is issued with a reference such as `CASH` in that
+  field.
+- **The advance a report accounts for is fixed on submission.** If a report is
+  later denied, its share is owed again; it is not re-allocated to another
+  report automatically.
+
 ## Finance — QuickBooks Export Gaps (2026-10-08)
 
 The transactions export is now a valid QuickBooks Online journal-entry import
 (see `docs/FINANCE_MODULE.md`, "QuickBooks Export"). Its accounts are set on
 **Finance › QuickBooks Export** _(2026-10-09)_, which also shows each budget
-category's export readiness, and in the budget category dialog. Five gaps
+category's export readiness, and in the budget category dialog. Running the
+export, subcategory inheritance and exporting dues were closed on 2026-10-14. These gaps
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
-- **Running the export has no screen.** `POST /finance/export/transactions`
-  is still API only. Its history is not: **Export history** on the same screen
-  lists every run with its period, transaction count, outcome and who ran it
-  _(2026-10-11, the "Export logs" row above)_.
-- **Dues payments are not exported.** `DuesSchedule` and `DuesPayment` carry no
-  budget category, so the export has nothing to resolve an income account or a
-  deposit account from. Adding them needs a decision about where those two
-  accounts are configured.
-- **A subcategory does not inherit its parent's account.** Each category with
-  spending against it needs its own account or mapping.
 - **There is no live QuickBooks connection.** Posting entries and reading back
   the chart of accounts, budgets and actuals needs the QuickBooks Online
   Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted
@@ -5396,6 +5453,21 @@ facility grid: total metadata plus pages, with filters and search applied by the
 server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
+
+- **MM5-4 — Two people editing one set of minutes silently overwrite each
+  other's sections.** _(app-review B6, 2026-10-13)_ The minutes page saves,
+  reorders, adds and deletes a section by sending the **entire** `sections` list
+  built from its local copy, and `MinuteService.update_minutes` replaces the stored
+  list wholesale. There is no version or precondition, so if two secretaries have
+  the same draft open, the second save writes back the first one's stale text for
+  every section the second did not touch, behind a success toast. **Why not
+  fixed.** The cure is an API change — a per-section update endpoint, or an
+  `If-Match` / `updated_at` precondition on `PUT /minutes-records/{id}` — plus a
+  decision on how a conflict is shown ("reload and re-apply" versus a merge).
+  **Owner decision:** whether concurrent editing of one draft is a supported
+  workflow (the per-section endpoint) or is to be refused with a conflict message
+  (the precondition). Same lost-update class as SF-9. See
+  `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 

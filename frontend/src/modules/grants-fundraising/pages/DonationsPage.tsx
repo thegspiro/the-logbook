@@ -60,7 +60,7 @@ const DonationsPage: React.FC = () => {
         </div>
         {/* The create route and POST /grants/donations both need fundraising.manage. */}
         {canManage && (
-          <Link to="/grants/donations/new" className="btn-primary">
+          <Link to="/grants/donations/new" className="btn-primary inline-flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Record Donation
           </Link>

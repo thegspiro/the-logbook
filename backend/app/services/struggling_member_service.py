@@ -234,7 +234,11 @@ class StrugglingMemberService:
         # sweep runs in the UTC morning, still the previous evening out west.
         today = await resolve_org_today(self.db, organization_id)
         for enrollment in enrollments:
-            days_left = (enrollment.target_completion_date - today).days
+            # The query selects only enrollments with a target date.
+            target_date = enrollment.target_completion_date
+            if target_date is None:
+                continue
+            days_left = (target_date - today).days
             program = getattr(enrollment, "program", None)
             conditions = normalize_reminder_conditions(
                 getattr(program, "reminder_conditions", None),
