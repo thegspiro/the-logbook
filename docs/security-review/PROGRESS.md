@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None, as of this commit.** PR #3248 (Feature 06, Elections & ballots, pass 9) merged 2026-10-14T20:55:44Z — docs-only (`ELEC-06-elections-ballots.md` +
+`PROGRESS.md` only; confirmed via the PR's own file list, no application
+code changed), already fully recorded in that PR's own Open PR note below,
+so there is nothing further to add here. Rotation row 06 stays ✅. This
+iteration (no `claude/security-review-*` PR open, confirmed via
+`search_pull_requests`) picks up Feature 07 (Users & organizations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 9, PR #3248, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3248](https://github.com/thegspiro/the-logbook/pull/3248)**: branch
 `claude/security-review-elections-ballots-p9`, Feature 06 (Elections &
 ballots), pass 9. 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected
@@ -23,6 +33,8 @@ to RESOLVED (pass 7/8 had re-cited pre-fix code — see the Log). ELEC-12,
 ELEC-16 and ELEC-40 re-confirmed open/flagged, unchanged. See
 `ELEC-06-elections-ballots.md`'s **Pass 9** section. Row 06 → ✅ (pending
 this PR's merge); next is Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 9, PR #3225, merged 2026-10-14), preserved for history</summary>
@@ -19099,7 +19111,7 @@ here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | 🔄     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
