@@ -16,25 +16,25 @@
 
 # August 31 – September 6, 2026 changes
 
-| Topic                                                                  | Now in                                                                                                                                        |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Equipment checklists live in Inventory; My Checklists, Fleet Readiness | [05 — Inventory](./05-inventory.md) (Equipment Checklists) and [00 — Getting Started](./00-getting-started.md) (What moved in the navigation) |
-| Scheduling administration, Shift Planning, the close-out queue         | [03 — Scheduling](./03-scheduling.md) (Scheduling Administration)                                                                             |
-| Inventory Administration and the store console                         | [05 — Inventory](./05-inventory.md)                                                                                                           |
-| Permissions removed on upgrade; `apparatus.view`                       | [UPGRADING](../UPGRADING.md), [06 — Apparatus & Facilities](./06-apparatus-facilities.md), [08 — Admin & Reports](./08-admin-reports.md)      |
-| Gmail and Microsoft 365 email, Test Connection                         | [08 — Admin & Reports](./08-admin-reports.md) (Email)                                                                                         |
-| Call types your department names                                       | [03 — Scheduling](./03-scheduling.md) (Name your own call types)                                                                              |
-| Compliance Matrix                                                      | [02 — Training](./02-training.md) (Compliance Matrix)                                                                                         |
-| Gear requests, My Issued Gear                                          | [05 — Inventory](./05-inventory.md)                                                                                                           |
-| Shift Details, My Shifts hours, past shifts, crew seat labels          | [03 — Scheduling](./03-scheduling.md)                                                                                                         |
-| Quick Add, settings screens and offline drafts on a phone              | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                                                                       |
-| Who's going, RSVP, the waitlist, the check-in QR window                | [04 — Events & Meetings](./04-events-meetings.md)                                                                                             |
-| Member directory, what colleagues see                                  | [01 — Membership](./01-membership.md)                                                                                                         |
-| Send Log, public-form submission limits                                | [07 — Documents & Forms](./07-documents-forms.md)                                                                                             |
-| Dashboard figures                                                      | [08 — Admin & Reports](./08-admin-reports.md)                                                                                                 |
-| Claude (MCP) integration                                               | [16 — Integrations](./16-integrations.md)                                                                                                     |
-| Crew "Sweep" and the check lap — not available to crews                | [03 — Scheduling](./03-scheduling.md) (What is not here yet)                                                                                  |
-| Direct qualification entry — not available                             | [01 — Membership](./01-membership.md) and [Known Limitations](../KNOWN_LIMITATIONS.md)                                                        |
+| Topic                                                                  | Now in                                                                                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Equipment checklists live in Inventory; My Checklists, Fleet Readiness | [05 — Inventory](./05-inventory.md) (Equipment Checklists) and [00 — Getting Started](./00-getting-started.md) (If You Learned an Older Version) |
+| Scheduling administration, Shift Planning, the close-out queue         | [03 — Scheduling](./03-scheduling.md) (Scheduling Administration)                                                                                |
+| Inventory Administration and the store console                         | [05 — Inventory](./05-inventory.md)                                                                                                              |
+| Permissions removed on upgrade; `apparatus.view`                       | [UPGRADING](../UPGRADING.md), [06 — Apparatus & Facilities](./06-apparatus-facilities.md), [08 — Admin & Reports](./08-admin-reports.md)         |
+| Gmail and Microsoft 365 email, Test Connection                         | [08 — Admin & Reports](./08-admin-reports.md) (Email)                                                                                            |
+| Call types your department names                                       | [03 — Scheduling](./03-scheduling.md) (Name your own call types)                                                                                 |
+| Compliance Matrix                                                      | [02 — Training](./02-training.md) (Compliance Matrix)                                                                                            |
+| Gear requests, My Issued Gear                                          | [05 — Inventory](./05-inventory.md)                                                                                                              |
+| Shift Details, My Shifts hours, past shifts, crew seat labels          | [03 — Scheduling](./03-scheduling.md)                                                                                                            |
+| Quick Add, settings screens and offline drafts on a phone              | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                                                                          |
+| Who's going, RSVP, the waitlist, the check-in QR window                | [04 — Events & Meetings](./04-events-meetings.md)                                                                                                |
+| Member directory, what colleagues see                                  | [01 — Membership](./01-membership.md)                                                                                                            |
+| Send Log, public-form submission limits                                | [07 — Documents & Forms](./07-documents-forms.md)                                                                                                |
+| Dashboard figures                                                      | [08 — Admin & Reports](./08-admin-reports.md)                                                                                                    |
+| Claude (MCP) integration                                               | [16 — Integrations](./16-integrations.md)                                                                                                        |
+| Crew "Sweep" and the check lap — not available to crews                | Not in any guide: neither is switched on for crews. Equipment checks: [05 — Inventory](./05-inventory.md) (Equipment Checklists)                 |
+| Direct qualification entry — not available                             | [01 — Membership](./01-membership.md) and [Known Limitations](../KNOWN_LIMITATIONS.md)                                                           |
 
 # September 6–12, 2026 changes
 
@@ -91,36 +91,36 @@ wording. Expect button and heading names to differ from what you learned. The
 module guides now quote the current labels, and each guide marks the
 screenshots that still show the old ones.
 
-| Topic                                                                       | Now in                                                                                                         |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| "Today" and printed times follow the department's timezone                  | [08 — Admin & Reports](./08-admin-reports.md) (The Department's Timezone Is the Clock)                         |
-| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md) (Choose your own bottom-bar tabs)                                      |
-| Seven password rules; sign-in countdown; "My Account"                       | [00 — Getting Started](./00-getting-started.md)                                                                |
-| Member numbers: one field, patterns, never reissued; Rank in the directory  | [01 — Membership](./01-membership.md)                                                                          |
-| Anonymizing a former member; length of service across a break               | [01 — Membership](./01-membership.md)                                                                          |
-| Another member's ID card; re-registering a lost card                        | [01 — Membership](./01-membership.md) (Member ID Cards and the Check-In Station)                               |
-| Probationary and junior members can sign in and be scheduled                | [01 — Membership](./01-membership.md), [03 — Scheduling](./03-scheduling.md), [UPGRADING](../UPGRADING.md)     |
-| Exempting members who joined before a requirement                           | [02 — Training](./02-training.md) (Existing Members)                                                           |
-| Training credit from finalized events; Target Solutions sync                | [02 — Training](./02-training.md), [16 — Integrations](./16-integrations.md)                                   |
-| Shifts worked for other departments; Outside Apparatus                      | [03 — Scheduling](./03-scheduling.md) (Shifts with other departments)                                          |
-| Shift Reports tab; swaps; re-signing up after declining                     | [03 — Scheduling](./03-scheduling.md) (The Shift Reports tab; Late September 2026: what else changed)          |
-| Editing, withdrawing and resubmitting your own administrative hours         | [08 — Admin & Reports](./08-admin-reports.md) and the wiki's Module-Admin-Hours page                           |
-| "I was there"; organizer, alternate and Transfer Event; RSVP after an event | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
-| Room NFC tags and ID-card check-in at a room kiosk                          | [04 — Events & Meetings](./04-events-meetings.md), [06 — Apparatus & Facilities](./06-apparatus-facilities.md) |
-| Recurring series keep their local time                                      | [04 — Events & Meetings](./04-events-meetings.md), [UPGRADING](../UPGRADING.md)                                |
-| Meeting minutes: Record Minutes, approval by another officer                | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
-| Elections: W50 fixes, voter overrides, Publish Results                      | [14 — Elections](./14-elections.md) (What Changed After the W50 Review)                                        |
-| NFC tags for inventory: shelves, put-away, audits, self-service kiosk       | [05 — Inventory](./05-inventory.md) (NFC Tags)                                                                 |
-| Labels: network printing, shared setups, print history, Start at label      | [05 — Inventory](./05-inventory.md) (Label Printing)                                                           |
-| Equipment requests: Decline, notes and notices to the member                | [05 — Inventory](./05-inventory.md) (Equipment Request Fulfillment)                                            |
-| Equipment checklists: a failed item needs a note; Quartermaster builds them | [05 — Inventory](./05-inventory.md)                                                                            |
-| Emails: solid-tab design, Previous version, test sends, Reply-To            | [08 — Admin & Reports](./08-admin-reports.md)                                                                  |
-| Member emails: per-email switches, required emails, Member Emails & Texts   | [07 — Documents & Forms](./07-documents-forms.md)                                                              |
-| Notification stacks; Equipment Request Update rule                          | [07 — Documents & Forms](./07-documents-forms.md)                                                              |
-| Suggestion boxes: the Compliance box, idea board, deleting a box            | [07 — Documents & Forms](./07-documents-forms.md)                                                              |
-| Public forms without sign-in, and the sign-in notice                        | [07 — Documents & Forms](./07-documents-forms.md) (Public Forms)                                               |
-| Finance: the Approvals screen, editing chain steps, requests with no chain  | [11 — Finance](./11-finance.md) (Approving and Denying Requests)                                               |
-| Applicants: Sign-offs, conversion held on required stages, withdraw, purge  | [15 — Prospective Members](./15-prospective-members.md)                                                        |
-| Election packages created by the server; Create Package                     | [15 — Prospective Members](./15-prospective-members.md)                                                        |
-| Grants, store and medical-screening wording                                 | [12](./12-grants-fundraising.md), [18](./18-storefront.md), [13](./13-medical-screening.md)                    |
-| What to do when you upgrade                                                 | [UPGRADING](../UPGRADING.md) — every entry dated 2026-09-24 to 2026-10-04                                      |
+| Topic                                                                       | Now in                                                                                                          |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| "Today" and printed times follow the department's timezone                  | [08 — Admin & Reports](./08-admin-reports.md) (The Department's Timezone Is the Clock)                          |
+| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md) (Choose your own bottom-bar tabs)                                       |
+| Seven password rules; sign-in countdown; "My Account"                       | [00 — Getting Started](./00-getting-started.md)                                                                 |
+| Member numbers: one field, patterns, never reissued; Rank in the directory  | [01 — Membership](./01-membership.md)                                                                           |
+| Anonymizing a former member; length of service across a break               | [01 — Membership](./01-membership.md)                                                                           |
+| Another member's ID card; re-registering a lost card                        | [01 — Membership](./01-membership.md) (Member ID Cards and the Check-In Station)                                |
+| Probationary and junior members can sign in and be scheduled                | [01 — Membership](./01-membership.md), [03 — Scheduling](./03-scheduling.md), [UPGRADING](../UPGRADING.md)      |
+| Exempting members who joined before a requirement                           | [02 — Training](./02-training.md) (Existing Members)                                                            |
+| Training credit from finalized events; Target Solutions sync                | [02 — Training](./02-training.md), [16 — Integrations](./16-integrations.md)                                    |
+| Shifts worked for other departments; Outside Apparatus                      | [03 — Scheduling](./03-scheduling.md) (Shifts with other departments)                                           |
+| Shift Reports tab; swaps; re-signing up after declining                     | [03 — Scheduling](./03-scheduling.md) (The Shift Reports tab; Shift Swap Requests; Assigning members to shifts) |
+| Editing, withdrawing and resubmitting your own administrative hours         | [08 — Admin & Reports](./08-admin-reports.md) and the wiki's Module-Admin-Hours page                            |
+| "I was there"; organizer, alternate and Transfer Event; RSVP after an event | [04 — Events & Meetings](./04-events-meetings.md)                                                               |
+| Room NFC tags and ID-card check-in at a room kiosk                          | [04 — Events & Meetings](./04-events-meetings.md), [06 — Apparatus & Facilities](./06-apparatus-facilities.md)  |
+| Recurring series keep their local time                                      | [04 — Events & Meetings](./04-events-meetings.md), [UPGRADING](../UPGRADING.md)                                 |
+| Meeting minutes: Record Minutes, approval by another officer                | [04 — Events & Meetings](./04-events-meetings.md)                                                               |
+| Elections: W50 fixes, voter overrides, Publish Results                      | [14 — Elections](./14-elections.md) (What Changed After the W50 Review)                                         |
+| NFC tags for inventory: shelves, put-away, audits, self-service kiosk       | [05 — Inventory](./05-inventory.md) (NFC Tags)                                                                  |
+| Labels: network printing, shared setups, print history, Start at label      | [05 — Inventory](./05-inventory.md) (Label Printing)                                                            |
+| Equipment requests: Decline, notes and notices to the member                | [05 — Inventory](./05-inventory.md) (Equipment Request Fulfillment)                                             |
+| Equipment checklists: a failed item needs a note; Quartermaster builds them | [05 — Inventory](./05-inventory.md)                                                                             |
+| Emails: solid-tab design, Previous version, test sends, Reply-To            | [08 — Admin & Reports](./08-admin-reports.md)                                                                   |
+| Member emails: per-email switches, required emails, Member Emails & Texts   | [07 — Documents & Forms](./07-documents-forms.md)                                                               |
+| Notification stacks; Equipment Request Update rule                          | [07 — Documents & Forms](./07-documents-forms.md)                                                               |
+| Suggestion boxes: the Compliance box, idea board, deleting a box            | [07 — Documents & Forms](./07-documents-forms.md)                                                               |
+| Public forms without sign-in, and the sign-in notice                        | [07 — Documents & Forms](./07-documents-forms.md) (Public Forms)                                                |
+| Finance: the Approvals screen, editing chain steps, requests with no chain  | [11 — Finance](./11-finance.md) (Approving and Denying Requests)                                                |
+| Applicants: Sign-offs, conversion held on required stages, withdraw, purge  | [15 — Prospective Members](./15-prospective-members.md)                                                         |
+| Election packages created by the server; Create Package                     | [15 — Prospective Members](./15-prospective-members.md)                                                         |
+| Grants, store and medical-screening wording                                 | [12](./12-grants-fundraising.md), [18](./18-storefront.md), [13](./13-medical-screening.md)                     |
+| What to do when you upgrade                                                 | [UPGRADING](../UPGRADING.md) — every entry dated 2026-09-24 to 2026-10-04                                       |
