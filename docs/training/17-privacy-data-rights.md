@@ -361,7 +361,7 @@ are still inactive, **with their uploaded documents removed from disk**, and
 records the purge (a count and the ids, no applicant details) in the audit log.
 Before 2026-09-30 the button deleted nothing while reporting success, so a
 department that purged earlier should check the tab again. See
-[Prospective Members → Purging inactive applications](./15-prospective-members.md#purging-inactive-applications-fixed-2026-09-30).
+[Prospective Members → Purging inactive applications](./15-prospective-members.md#purging-inactive-applications).
 
 An applicant can also close their own application from their status-page link
 (**Withdraw Application**, since 2026-09-24). Withdrawing stops the process; it

@@ -1,5 +1,18 @@
 # Screenshot currency
 
+## Moved out of 15-prospective-members.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `15-04-kanban-board.png` | **REPLACE** (low priority) | Each card's status badge shows the label (**Active**, **On Hold**), not the raw value ("active", "on hold"). The same applies to `15-01`, `15-02-board-truncated` and guide 01's `01-10`; re-shoot them in the same pass |
+| `15-09-convert-modal.png` | **REPLACE** | The frame still shows the Regular Member / Administrative cards and a **Send welcome email with login credentials** checkbox. Step 2 opens with **Member class** and **Starting status** dropdowns (pre-filled, with the "Pre-filled from this pipeline's conversion settings…" line under them), and the checkbox is replaced by the **How will they get their password?** group of three radio buttons. Re-shoot step 2 for a Regular applicant on a department with email set up, scrolled so the class/status pair and the password group are both in frame |
+| `15-10-pipeline-settings.png` | **REPLACE** | Below the Inactivity Timeout card sits the **When an Applicant Becomes a Member** card (Operational applicants / Administrative applicants, each with **Member class** and **Starting status**, and **Save Conversion Settings**), then the **Automatic Transfer to Membership** card; the status-page card reads "Let applicants check their application status through a public link", with help text naming the "Show this stage on the public status page" checkbox and the Enable Status Page stage. Re-shoot the same full page |
+| `15-11-table-bulk-actions.png` | **REPLACE** | The bar's buttons read **Advance Selected**, **Hold Selected** and **Reject Selected**. Re-shoot the same selection in Table view |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of
