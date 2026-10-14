@@ -1,5 +1,13 @@
 # Screenshot currency
 
+## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
+
+The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.
+Its image file names and alt text are unchanged. The rewrite corrected the
+guide's navigation to **Training Admin > Evaluations > Skills Test Templates**
+and **Skills Test Records**; any image showing a "Skills Testing" section with
+**Templates / Tests / Summary** tabs is stale and should be re-shot when found.
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of

@@ -116,7 +116,7 @@ The **My Training** tab is tailored to your current needs:
   results, each opening a read-only scorecard. Previously these lived on the
   examiner's device and had to be read over their shoulder. What appears here —
   and how much of each result you see — is set by your department; see
-  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings-2026-08-08).
+  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings).
 
 ![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
 
