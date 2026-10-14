@@ -1303,7 +1303,7 @@ class SchedulingService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results. The id breaks ties between shifts sharing a
         # date and start time, so a page boundary never repeats or skips one.
@@ -1315,7 +1315,7 @@ class SchedulingService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        shifts = result.scalars().all()
+        shifts = list(result.scalars().all())
 
         return shifts, total
 
@@ -3971,6 +3971,8 @@ class SchedulingService:
                     )
                 )
                 for uid, platoon_name in live_result.all():
+                    if platoon_name is None:
+                        continue
                     live_platoon_members.setdefault(platoon_name, []).append(
                         {
                             "user_id": uid,
@@ -6054,7 +6056,7 @@ class SchedulingService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results
         query = (
@@ -6069,7 +6071,7 @@ class SchedulingService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        swap_requests = result.scalars().all()
+        swap_requests = list(result.scalars().all())
 
         return swap_requests, total
 
@@ -6385,7 +6387,7 @@ class SchedulingService:
                     if error:
                         return await reject(error)
 
-                if target_assign:
+                if target_assign and swap_request.target_user_id:
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
                     vacated = [
@@ -6398,7 +6400,7 @@ class SchedulingService:
                             swap_request.target_user_id,
                         ),
                     ]
-                elif is_handover:
+                elif is_handover and swap_request.target_user_id:
                     req_assignment.user_id = swap_request.target_user_id
                     vacated = [
                         (
@@ -6406,7 +6408,7 @@ class SchedulingService:
                             swap_request.requesting_user_id,
                         )
                     ]
-                elif requested_shift:
+                elif requested_shift and swap_request.requesting_shift_id:
                     req_assignment.shift_id = swap_request.requesting_shift_id
                     vacated = [
                         (
@@ -7401,7 +7403,7 @@ class SchedulingService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results
         query = (
@@ -7414,7 +7416,7 @@ class SchedulingService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        time_off_requests = result.scalars().all()
+        time_off_requests = list(result.scalars().all())
 
         return time_off_requests, total
 
@@ -8727,7 +8729,7 @@ class SchedulingService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results. The id breaks ties between shifts sharing a
         # date and start time, so a page boundary never repeats or skips one.
@@ -8759,8 +8761,8 @@ class SchedulingService:
                 .where(ShiftAttendance.shift_id.in_(shift_id_list))
                 .where(ShiftAttendance.user_id == str(user_id))
             )
-            for a in att_result.scalars().all():
-                user_attendances[a.shift_id] = a
+            for att_row in att_result.scalars().all():
+                user_attendances[att_row.shift_id] = att_row
 
         # Batch-load apparatus and officer enrichment data
         apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
@@ -9048,7 +9050,7 @@ class SchedulingService:
             waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # 3. For each requirement, compute compliance
-        compliance_data = []
+        compliance_data: List[Dict[str, Any]] = []
 
         for req in requirements:
             graded_by_shared_grader = counts_shift_attendance(req)
@@ -9067,6 +9069,7 @@ class SchedulingService:
             period_end = open_end or date.max
 
             # Determine required value
+            required_value: float
             if req.requirement_type == RequirementType.SHIFTS.value:
                 required_value = req.required_shifts or 0
             else:

@@ -1649,6 +1649,12 @@ class TrainingProgram(Base):
         "ProgramEnrollment", back_populates="program", cascade="all, delete-orphan"
     )
 
+    if TYPE_CHECKING:
+        # Not a column. TrainingProgramService stamps the live enrollment
+        # count on loaded programs for the list response. Declared only for the
+        # type checker: an annotation SQLAlchemy sees would have to be mapped.
+        enrolled_count: int
+
     __table_args__ = (
         Index("idx_program_org_active", "organization_id", "active"),
         Index("idx_program_position", "target_position"),
@@ -2088,6 +2094,12 @@ class RequirementProgress(Base):
     # update_requirement_progress() eager-loads this to compute the
     # type-aware completion percentage, so the relationship must exist.
     requirement: Mapped["TrainingRequirement"] = relationship("TrainingRequirement")
+
+    if TYPE_CHECKING:
+        # Not a column. TrainingProgramService flags rows whose requirement is
+        # read from compliance rather than hand-entered. Declared only for the
+        # type checker: an annotation SQLAlchemy sees would have to be mapped.
+        reads_compliance: bool
 
     __table_args__ = (
         Index(
