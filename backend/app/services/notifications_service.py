@@ -208,7 +208,7 @@ class NotificationsService:
         self,
         organization_id: UUID | str,
         channel: Optional[str] = None,
-        recipient_id: Optional[UUID] = None,
+        recipient_id: Optional[UUID | str] = None,
         skip: int = 0,
         limit: int = 100,
         cursor: Optional[str] = None,
@@ -511,7 +511,9 @@ class NotificationsService:
         return len(logs)
 
     async def mark_all_logs_read(
-        self, organization_id: UUID | str, recipient_id: Optional[UUID] = None
+        self,
+        organization_id: UUID | str,
+        recipient_id: Optional[UUID | str] = None,
     ) -> int:
         """Mark unread notification logs as read.
 

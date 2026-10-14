@@ -191,18 +191,23 @@ def register(server: Any) -> None:
                 )
             )
             requirements = {row.id: row.name for row in found.all()}
-        items = [
-            {
-                "record_id": r.id,
-                "member_id": r.user_id,
-                "member_name": names.get(r.user_id),
-                "screening_type": iso(r.screening_type),
-                "requirement_name": requirements.get(r.requirement_id or ""),
-                "expiration_date": r.expiration_date.isoformat(),
-                "days_until_expiration": (r.expiration_date - today).days,
-            }
-            for r in records
-        ]
+        items = []
+        for r in records:
+            # The criteria above already exclude a record with no member or no
+            # expiration date; this narrows the type for what follows.
+            if r.user_id is None or r.expiration_date is None:
+                continue
+            items.append(
+                {
+                    "record_id": r.id,
+                    "member_id": r.user_id,
+                    "member_name": names.get(r.user_id),
+                    "screening_type": iso(r.screening_type),
+                    "requirement_name": requirements.get(r.requirement_id or ""),
+                    "expiration_date": r.expiration_date.isoformat(),
+                    "days_until_expiration": (r.expiration_date - today).days,
+                }
+            )
         body = page(items, total, limit, offset)
         body["days"] = days
         return body

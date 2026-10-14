@@ -265,7 +265,11 @@ async def get_my_training_summary(
                     else str(r.training_type)
                 ),
                 "status": (
-                    r.status.value if hasattr(r.status, "value") else str(r.status)
+                    None
+                    if r.status is None
+                    else (
+                        r.status.value if hasattr(r.status, "value") else str(r.status)
+                    )
                 ),
                 "completion_date": (
                     str(r.completion_date) if r.completion_date else None
@@ -534,9 +538,13 @@ async def get_my_training_summary(
                 "program_id": str(enrollment.program_id),
                 "program_name": program_names.get(str(enrollment.program_id), ""),
                 "status": (
-                    enrollment.status.value
-                    if hasattr(enrollment.status, "value")
-                    else str(enrollment.status)
+                    None
+                    if enrollment.status is None
+                    else (
+                        enrollment.status.value
+                        if hasattr(enrollment.status, "value")
+                        else str(enrollment.status)
+                    )
                 ),
                 "progress_percentage": float(enrollment.progress_percentage or 0),
                 "enrolled_at": (
@@ -582,9 +590,13 @@ async def get_my_training_summary(
                         "requirement_id": str(rp.requirement_id),
                         "requirement_name": name_map.get(str(rp.requirement_id), ""),
                         "status": (
-                            rp.status.value
-                            if hasattr(rp.status, "value")
-                            else str(rp.status)
+                            None
+                            if rp.status is None
+                            else (
+                                rp.status.value
+                                if hasattr(rp.status, "value")
+                                else str(rp.status)
+                            )
                         ),
                         "progress_value": float(rp.progress_value or 0),
                         "progress_percentage": float(rp.progress_percentage or 0),

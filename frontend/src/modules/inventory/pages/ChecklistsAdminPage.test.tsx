@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockCheckPermission = vi.fn();
@@ -108,5 +108,17 @@ describe('ChecklistsAdminPage related links', () => {
 
     expect(screen.getByRole('link', { name: /Fleet readiness/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Check log/i })).toBeInTheDocument();
+  });
+
+  // The row's name is announced once: the scrolling row is the landmark, not a
+  // second element wrapped around it carrying the same label.
+  it('names the related-screens row once, as the navigation landmark', () => {
+    grant('inventory.check_manage', 'inventory.check_view');
+    renderWithRouter(<ChecklistsAdminPage />);
+
+    const row = screen.getByRole('navigation', { name: 'Related checklist screens' });
+    expect(screen.getAllByLabelText('Related checklist screens')).toEqual([row]);
+    expect(row).toHaveAttribute('data-mobile-scroll-region');
+    expect(within(row).getByRole('link', { name: /Check reports/i })).toBeInTheDocument();
   });
 });

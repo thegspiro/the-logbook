@@ -16,7 +16,14 @@ Only codes a router can genuinely emit are listed: over-declaring is its own
 form of wrong documentation.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+# The shape FastAPI's `responses=` parameter takes. Annotated explicitly because
+# a bare `{404: ...}` literal infers `dict[int, ...]`, and dict is invariant, so
+# it is not accepted where `dict[int | str, ...]` is expected.
+ResponseMap = dict[int | str, dict[str, Any]]
 
 
 class PublicErrorResponse(BaseModel):
@@ -25,46 +32,46 @@ class PublicErrorResponse(BaseModel):
     detail: str = Field(..., description="Human-readable reason for the failure.")
 
 
-def _response(description: str) -> dict:
+def _response(description: str) -> dict[str, Any]:
     return {"model": PublicErrorResponse, "description": description}
 
 
 # Every public router is rate limited.
-RATE_LIMITED = {
+RATE_LIMITED: ResponseMap = {
     429: _response("Rate limit exceeded for this caller."),
 }
 
-NOT_FOUND = {
+NOT_FOUND: ResponseMap = {
     404: _response("The referenced record does not exist, or is not public."),
 }
 
-BAD_REQUEST = {
+BAD_REQUEST: ResponseMap = {
     400: _response("The request was malformed, expired, or already acted on."),
 }
 
-CONFLICT = {
+CONFLICT: ResponseMap = {
     409: _response("The record is no longer in a state that allows this action."),
 }
 
-UNAUTHORIZED = {
+UNAUTHORIZED: ResponseMap = {
     401: _response("Missing or invalid API key."),
 }
 
 # Form submission: a form whose policy requires a signed-in member, or a
 # caller who supplied credentials that failed validation (optional auth
 # rejects bad credentials rather than downgrading to anonymous).
-FORM_AUTH = {
+FORM_AUTH: ResponseMap = {
     401: _response(
         "This form requires authentication, or the supplied credentials are invalid."
     ),
 }
 
 # Token-addressed routes: an unknown or expired token is the normal failure.
-TOKEN_ADDRESSED = {**RATE_LIMITED, **NOT_FOUND}
+TOKEN_ADDRESSED: ResponseMap = {**RATE_LIMITED, **NOT_FOUND}
 
 # Webhook receivers: an unknown integration id, a bad signature, or an
 # unparseable payload.
-WEBHOOK = {**RATE_LIMITED, **NOT_FOUND, **BAD_REQUEST, **UNAUTHORIZED}
+WEBHOOK: ResponseMap = {**RATE_LIMITED, **NOT_FOUND, **BAD_REQUEST, **UNAUTHORIZED}
 
 # API-key authenticated portal routes.
-PORTAL = {**RATE_LIMITED, **NOT_FOUND, **BAD_REQUEST, **UNAUTHORIZED}
+PORTAL: ResponseMap = {**RATE_LIMITED, **NOT_FOUND, **BAD_REQUEST, **UNAUTHORIZED}

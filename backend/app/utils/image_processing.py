@@ -29,22 +29,24 @@ def optimize_image(
     - Resizes to fit within max_size while preserving aspect ratio
     - Rejects the upload if processing fails
     """
-    img = Image.open(BytesIO(file_bytes))
-    if img.width * img.height > MAX_INPUT_PIXELS:
+    probe = Image.open(BytesIO(file_bytes))
+    if probe.width * probe.height > MAX_INPUT_PIXELS:
         raise Image.DecompressionBombError(
-            f"Image contains {img.width * img.height} pixels; "
+            f"Image contains {probe.width * probe.height} pixels; "
             f"limit is {MAX_INPUT_PIXELS}"
         )
-    img.verify()
-    img = Image.open(BytesIO(file_bytes))
-    img.load()
+    probe.verify()
+    # verify() leaves the file object unusable, so decode from a fresh open.
+    opened = Image.open(BytesIO(file_bytes))
+    opened.load()
+    img: Image.Image = opened
 
     # Convert RGBA to RGB for JPEG/WebP compatibility
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
 
     # Resize if larger than max dimensions (preserve aspect ratio)
-    img.thumbnail(max_size, Image.LANCZOS)
+    img.thumbnail(max_size, Image.Resampling.LANCZOS)
 
     # Save optimized
     output = BytesIO()

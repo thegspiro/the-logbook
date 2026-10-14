@@ -1,13 +1,180 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings)
 
-**Backend:** `api/v1/endpoints/apparatus.py` (90 routes), `services/apparatus_service.py`,
+**Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
-`api/v1/endpoints/nfc_tags.py` (5 routes), `services/nfc_tag_service.py`,
-`mcp/tools/apparatus.py`
+`external_apparatus_service.py`, `api/v1/endpoints/nfc_tags.py` (5 routes),
+`services/nfc_tag_service.py`, `mcp/tools/apparatus.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 15 (2026-10-13, watchdog pickup) — real delta (20 commits after unshallowing a truncated clone), 1 fixed (AP-19), 0 new findings, route count +4 (apparatus photo/document upload+download)
+
+**Watchdog pickup.** PR #3169 (Feature 12, Facilities, pass 8) had merged;
+no `claude/security-review-*` PR was open on GitHub (checked directly, per
+Step 0 — `PROGRESS.md`'s own Open PR row still named #3169, a step behind
+because that update rides on the PR's own branch and never reached `main`).
+Row 13 (Apparatus & NFC) was the next `⬜`.
+
+**Shallow-clone truncation caught before trusting it, not after.** The first
+`git log --since <pass-14-merge> -- <scope>` returned an 18-commit list whose
+oldest entry's diff was the _entire_ module from nothing — the shallow-clone
+boundary pass 14 explicitly warned about re-happening to a later pass.
+`git rev-parse --is-shallow-repository` confirmed `true`; `git fetch
+--unshallow` fixed it, and the same query then returned the correct 20-commit
+list with that bogus entry gone.
+
+### Scope
+
+Real delta since pass 14's merge (PR #2969, `46e650f27` → now): **20
+non-merge commits** touching this feature's declared files. 15 are a repo-wide
+mypy-typing sweep (each hunk read via `git show`, confirmed mechanical —
+`Optional[X] = result.scalar_one_or_none(); return x`-shape narrowing, no
+logic change) or pure frontend/docs changes (modal clear-on-blank fixes,
+touch-target sizing, a newcomer-onboarding pass, a status-reason field). 5 are
+real behavior changes, each read in full:
+
+- `80fa67e75` — `update_maintenance_record` moved off a bare `setattr` loop
+  onto `apply_updates`, so an explicit null against `maintenance_type_id`/
+  `is_completed` (NOT NULL) is now a 400 instead of an IntegrityError 500.
+  Already fixed before this pass; re-verified intact.
+- `bb2dddcd4` — XC-1: `create_equipment`/`update_equipment`'s
+  `inventory_item_id` and `create_report_config`/`update_report_config`'s
+  `include_apparatus_ids`/`include_type_ids`/`include_status_ids` are now
+  validated in-org via `assert_in_org`/`assert_all_in_org`. Already fixed
+  before this pass; re-verified intact at `apparatus_service.py:1759-1762`
+  (equipment), `:1824-1828` (equipment update), `:2340-2374`
+  (`_validate_report_config_fks`).
+- `be7348a8b` — re-filing an unfiled document into a vehicle's folder (via
+  `_referenced_document_id`) now requires `documents.manage`, not just read
+  access to the document — closes a read-to-write escalation on the
+  library's unfiled tier. Already fixed before this pass; re-verified intact
+  at `apparatus.py:1660-1664`.
+- `d959af0ca` — new feature: apparatus photos/documents are now uploaded as
+  real, malware-scanned `Document` rows filed into the vehicle's folder
+  (4 new routes: `POST .../photos/upload`, `GET .../photos/{id}/file`,
+  `POST .../documents/upload`, `GET .../documents/{id}/file`), replacing a
+  typed-URL field. Reviewed fresh — see Verified good.
+- `3bdd20ccb` — 25 apparatus sub-resource request schemas gained a camelCase
+  alias (`_REQUEST_CONFIG`) so the frontend modals' camelCase bodies stop
+  422'ing / silently dropping fields; nested request-only subclasses
+  (`FileAttachmentInput`, `OperatorRestrictionInput`) keep the response
+  models' own serialization unchanged. Reviewed fresh — no XC-1/XC-3 impact
+  (field _names_ only; validation runs after parsing either way).
+
+### Route inventory
+
+**`apparatus.py`: 94 routes, up from pass 14's 90** (`grep -c "^@router\."`).
+The four new routes are the photo/document upload+download pair above, all
+four gated `apparatus.edit`/`apparatus.manage` (upload) or
+`apparatus.view`/`apparatus.manage` (download) and org-scoped via
+`_apparatus_in_org`. **`nfc_tags.py`: 5 routes, unchanged.**
+
+### Verified good ✅ (pass 15)
+
+- `d959af0ca`'s new upload/download pair: `_apparatus_in_org` org-scopes the
+  parent on every call; `_filing_folder` enforces `can_access_folder(...,
+require_write=True)` before a file lands in the vehicle's sub-folder;
+  download re-queries the photo/document row scoped by both `apparatus_id`
+  _and_ `organization_id` before serving, so a cross-org photo/document id
+  cannot be downloaded through the right apparatus_id guess. The legacy
+  typed-URL field (pre-dates uploads) is rendered through
+  `safe_external_url()`, which rejects anything but an absolute `http(s)://`
+  URL with a hostname — confirmed a stored `javascript:` value raises inside
+  `validate_external_http_url` and is withheld (`None`) rather than ever
+  reaching an `href`/`src`.
+- `_referenced_document_id`'s privilege-escalation guard (`be7348a8b`):
+  confirmed a document with `folder_id is None` cannot be re-filed into the
+  (write-gated) vehicle folder by a caller who only holds `documents.view` —
+  `_has_permission("documents.manage", ...)` is checked before the folder
+  write, not merely before the apparatus link.
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new `ondelete="SET NULL"` column missing `nullable=True`, no new
+  cache-exclusion-list gap, no seeded-grant change shipped without a
+  migration, no new JSON-column shallow-copy mutation.
+- All 15 mypy-typing commits confirmed mechanical (annotate-the-assignment or
+  widen-the-parameter shape only) by reading every hunk, not sampling.
+
+### Standing flagged item (app-review rotation, cross-referenced, unchanged)
+
+**AP2-4 (MED, `docs/app-review/apparatus.md`)** — the EVOC driver-eligibility
+gate answers `eligible: True` identically for "no EVOC requirement" and "the
+referenced apparatus can't be resolved" (a dangling `shifts.apparatus_id`,
+which carries no FK). Flagged for an owner decision (fail closed vs. give the
+column a real FK), mirrored in `KNOWN_LIMITATIONS.md`. Re-confirmed unchanged
+this pass — still only logged, verdict untouched, per that doc's own
+deliberate choice not to change a safety-gate's answer without a decision.
+
+## Findings
+
+### AP-19 — LOW — `update_report_config` could 500 instead of 400 on an explicit null against a required field — ✅ FIXED
+
+**What:** `ApparatusService.update_report_config` applied its partial-update
+payload with a raw `for field, value in update_data.items(): setattr(config,
+field, value)` loop — no NOT NULL guard, unlike every sibling update path in
+this file (`update_maintenance_record`, `update_nfpa_compliance`), both of
+which already use the shared `apply_updates` helper for exactly this reason.
+**Where:** `backend/app/services/apparatus_service.py` (`update_report_config`,
+pre-fix).
+**Failure scenario:** `PATCH /apparatus/report-configs/{id}` with
+`{"name": null}` (or `report_type`/`is_scheduled` null) passes Pydantic
+validation (`Optional[str] = None` on the Update schema) and reaches
+`db.commit()`, which raises `IntegrityError` (MySQL 1048, `name` is
+`nullable=False`) — an unhandled 500 (only `ValueError` is caught by the
+endpoint) instead of the 400 a client clearing a required field should get.
+Reproduced against real SQL first: both new tests failed on the unmodified
+service with exactly that IntegrityError.
+**Impact:** low severity — no data exposure or cross-tenant reach, just a
+confusing 500 (and, since the exception surfaces after the row is already
+mutated in the session, a partially-applied update depending on dict
+ordering) for any `apparatus.manage` holder who PATCHes a report config with
+an explicit null on a required field. Same bug shape CLAUDE.md Pitfall #1's
+corollary describes, and the one `80fa67e75` had already fixed for
+maintenance records in this same file one commit over — this path was missed.
+**Fix:** replaced the raw loop with `apply_updates(config, update_data)`,
+matching the pattern already used two methods away. A null against
+`name`/`report_type`/`is_scheduled` now raises `ValueError("Field '...' cannot
+be cleared")`, which the endpoint already maps to a 400. A null against a
+genuinely nullable field (e.g. `description`) still clears it.
+
+## Schema & migration notes
+
+No schema change of this feature's own this pass. `main` briefly carried two
+Alembic heads again (`cc91959dbaff`, `05ec84735fcf` — PR #3094's crew-training
+migration and PR #3169/#3175's facilities migration each independently
+joined the same prior pair), which turned CI red on this PR's first push with
+"Multiple head revisions" — not a defect in this pass's own diff. A different
+session's PR (#3176) merged the two with a no-op merge revision
+(`70070d86ff27`) while this PR was already open; rather than wait on it, this
+branch merged `main` in once it landed and picked that revision up for real
+(not duplicated — no merge revision of this pass's own).
+
+## Guard tests added
+
+`backend/tests/test_xc1_operations_finance.py::TestApparatusReportConfigRequiredFieldClear`
+— three tests: an explicit null on `name` and on `report_type`/`is_scheduled`
+each raise `ValueError` rather than reaching the database (AP-19), and a null
+on a genuinely nullable field (`description`) still clears it (so the fix
+can't regress into refusing every null).
+
+## Completion gate
+
+| Check                                                             | Result                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations (whole tree)                      |
+| `black --check app/ tests/ alembic/`                              | ✅ clean                                          |
+| `isort --check-only app/ tests/ alembic/`                         | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ single head, 590 revisions (see note above)    |
+| `python3 scripts/check_route_permissions.py --strict`             | ✅ 269 routes, 0 errors, 0 warnings (whole app)   |
+| `pytest tests/ -k "apparatus or nfc or evoc or driver_exception"` | ✅ 1118 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck` (frontend)                                    | ✅ clean                                          |
+| `npm run lint` (frontend)                                         | ✅ clean, 0 errors/warnings                       |
+
+Rotation row 13 → ✅ (pending PR merge). Next: Feature 14 (Equipment check
+& shifts).
 
 ---
 

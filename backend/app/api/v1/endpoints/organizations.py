@@ -1707,8 +1707,9 @@ async def get_retention_policy(
     from app.models.user import Organization
     from app.services.retention_service import RetentionService
 
-    org = await db.get(Organization, str(current_user.organization_id))
-    ensure_found(org, "Organization")
+    org = ensure_found(
+        await db.get(Organization, str(current_user.organization_id)), "Organization"
+    )
     return RetentionService(db).get_policy(org)
 
 
@@ -1734,8 +1735,9 @@ async def set_retention_policy(
     from app.models.user import Organization
     from app.services.retention_service import RetentionService
 
-    org = await db.get(Organization, str(current_user.organization_id))
-    ensure_found(org, "Organization")
+    org = ensure_found(
+        await db.get(Organization, str(current_user.organization_id)), "Organization"
+    )
 
     try:
         result = await RetentionService(db).set_policy(org, record_class, days)

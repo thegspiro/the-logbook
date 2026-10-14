@@ -259,6 +259,22 @@ export function performSharedRefresh(): Promise<void> {
   return refreshPromise;
 }
 
+// A 503 worth retrying is one that says "a dependency is briefly down": the
+// database restarting (LB-SYS-002), the generic fallback code, or no code at
+// all (a proxy's error page). Any other coded 503 is the server deliberately
+// refusing this request — e.g. LB-UPLD-005, the malware scanner not running,
+// which sends Retry-After: 60. Retrying that waited 60s + 90s + 135s with the
+// caller's spinner still turning and no message, so a request that failed
+// instantly looked like it was working. Surface those at once.
+const TRANSIENT_503_CODES: ReadonlySet<string> = new Set(['LB-SYS-002', 'LB-API-503']);
+
+function isTransientServiceUnavailable(error: AxiosError): boolean {
+  const data: unknown = error.response?.data;
+  const code =
+    typeof data === 'object' && data !== null && 'code' in data ? (data as { code?: unknown }).code : undefined;
+  return typeof code !== 'string' || TRANSIENT_503_CODES.has(code);
+}
+
 // Grace period (ms) after login during which 401s are retried directly
 // instead of attempting a cookie-based refresh.  This covers the rare
 // case where the browser hasn't finished processing Set-Cookie headers.
@@ -304,8 +320,9 @@ api.interceptors.response.use(
     // 503 Service Unavailable — the backend is up but a dependency (MySQL)
     // is temporarily unreachable.  Retry with exponential backoff instead
     // of failing immediately, which prevents unnecessary logouts during
-    // brief database restarts.
-    if (error.response?.status === 503) {
+    // brief database restarts. A 503 the server sent on purpose (see
+    // isTransientServiceUnavailable) is not retried.
+    if (error.response?.status === 503 && isTransientServiceUnavailable(error)) {
       const retryCount = originalRequest._503retries ?? 0;
       const MAX_503_RETRIES = 3;
 

@@ -110,6 +110,77 @@ def next_window_opens(req, today: date) -> Optional[date]:
     return opens if today < opens else None
 
 
+def rolling_window(as_of: date, months: int) -> tuple[date, date]:
+    """The whole calendar months a rolling requirement counts, as of ``as_of``.
+
+    The ``months`` calendar months ending with the one ``as_of`` falls in, so a
+    12-month window on 2026-10-13 starts on 2025-11-01, not 2025-10-13. A
+    department reads "the last 12 months" as November through this October; a
+    window cut on the day-of-month leaves a member's October hours counted on
+    some screens and a month that is mostly gone on others, and no month
+    breakdown can add up to it. This is the one definition: grading, due dates
+    and the monthly breakdown all call it.
+    """
+    from dateutil.relativedelta import relativedelta
+
+    return as_of.replace(day=1) - relativedelta(months=months - 1), as_of
+
+
+def rolling_hours_has_no_deadline(req) -> bool:
+    """Whether HOURS requirement ``req`` is a continuous rolling count.
+
+    "72 hours in any 12 months" has no date it comes due: it is met or short on
+    every day, and "last class plus 12 months" is a recertification interval
+    that moves forward with every class logged. Rolling requirements of other
+    types (a certification, a course) keep their anchored due date.
+    """
+    req_type = getattr(req, "requirement_type", None)
+    req_type = getattr(req_type, "value", req_type)
+    return req_type == RequirementType.HOURS.value and bool(
+        get_rolling_period_months(req)
+    )
+
+
+def monthly_hours(
+    records: Iterable,
+    start: date,
+    end: date,
+    waived: Optional[set] = None,
+) -> List[Dict]:
+    """Hours per calendar month from ``start`` through ``end``, zeros included.
+
+    ``records`` are the records already counted toward the requirement, so the
+    months add up to the figure the requirement reports. A month with nothing
+    in it is listed, not skipped: the gap is what a member is checking for.
+
+    ``waived`` is the set of ``(year, month)`` covered by leave
+    (``waived_month_keys``). Those months are flagged, so a month a member was
+    excused from is not read as a month they fell short, and the requirement's
+    prorated target is the same one these rows are measured against.
+    """
+    totals: Dict[Tuple[int, int], float] = {}
+    for record in records:
+        when = getattr(record, "completion_date", None)
+        if when is None or not start <= when <= end:
+            continue
+        key = (when.year, when.month)
+        totals[key] = totals.get(key, 0.0) + float(record.hours_completed or 0)
+    months: List[Dict] = []
+    year, month = start.year, start.month
+    while (year, month) <= (end.year, end.month):
+        months.append(
+            {
+                "month": f"{year:04d}-{month:02d}",
+                "hours": totals.get((year, month), 0.0),
+                "waived": (year, month) in (waived or set()),
+            }
+        )
+        month += 1
+        if month > 12:
+            year, month = year + 1, 1
+    return months
+
+
 def biannual_window(req, today: date) -> tuple[date, date]:
     """The window a BIANNUAL ("Every 2 Years") requirement is graded over.
 
@@ -128,8 +199,8 @@ def get_requirement_date_window(req, today: date):
     """Return (start_date, end_date) for evaluating a requirement's compliance window.
 
     Handles rolling periods: when ``due_date_type`` is ``rolling`` and
-    ``rolling_period_months`` is set, the window spans from
-    ``today - rolling_period_months`` to ``today``.
+    ``rolling_period_months`` is set, the window is the whole calendar months
+    from :func:`rolling_window` through ``today``.
 
     For annual requirements with ``period_end_month`` set, supports custom
     completion windows — including cross-year windows where
@@ -146,9 +217,7 @@ def get_requirement_date_window(req, today: date):
     rolling_months = getattr(req, "rolling_period_months", None)
 
     if due_date_type == "rolling" and rolling_months:
-        from dateutil.relativedelta import relativedelta
-
-        return today - relativedelta(months=rolling_months), today
+        return rolling_window(today, rolling_months)
 
     freq = (
         req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
