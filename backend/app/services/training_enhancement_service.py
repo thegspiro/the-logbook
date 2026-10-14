@@ -688,7 +688,7 @@ class TrainingEffectivenessService:
                 model.organization_id == organization_id,
             ]
             if self_owned:
-                conditions.append(model.user_id == data["user_id"])
+                conditions.append(TrainingRecord.user_id == data["user_id"])
             result = await self.db.execute(select(model.id).where(*conditions))
             if result.scalar_one_or_none() is None:
                 raise ValueError(f"Invalid {field}")
@@ -1379,7 +1379,7 @@ class ReportExportService:
             # Current compliance
             statuses: List[str] = []
             at_risk = []
-            expiring = []
+            expiring: List[Dict[str, Any]] = []
 
             for req in requirements:
                 from app.services.training_service import TrainingService
