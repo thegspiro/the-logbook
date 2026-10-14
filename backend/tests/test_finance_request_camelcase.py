@@ -31,6 +31,7 @@ from app.schemas.finance import (
     BudgetAmendmentCreate,
     BudgetAmendmentReject,
     BudgetAmendmentReverse,
+    BudgetCategoryChargeAccessUpdate,
     BudgetCategoryCreate,
     BudgetCategoryUpdate,
     BudgetCreate,
@@ -109,6 +110,8 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "sort_order": 3,
         "qb_account_name": "6100 Apparatus",
         "owner_position_id": "pos-1",
+        "charge_access": "restricted",
+        "charge_position_ids": ["pos-2"],
     },
     BudgetCategoryUpdate: {
         "name": "Apparatus",
@@ -118,6 +121,8 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "is_active": False,
         "qb_account_name": "6100 Apparatus",
         "owner_position_id": "pos-1",
+        "charge_access": "open",
+        "charge_position_ids": [],
     },
     BudgetCreate: {
         "fiscal_year_id": "fy-1",
@@ -195,6 +200,10 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
     },
     ApprovalActionRequest: {"notes": "Looks fine"},
     FunctionalClassUpdate: {"functional_class": "fundraising"},
+    BudgetCategoryChargeAccessUpdate: {
+        "charge_access": "restricted",
+        "charge_position_ids": ["pos-1", "pos-2"],
+    },
     ManualDenyRequest: {"reason": "No budget left this quarter"},
     PurchaseRequestCreate: {
         "fiscal_year_id": "fy-1",

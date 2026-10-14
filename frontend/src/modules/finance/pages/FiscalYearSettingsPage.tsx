@@ -39,6 +39,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
 import {
+  ChargeAccess,
   FUNCTIONAL_CLASS_LABELS,
   FunctionalClass,
   isFunctionalClass,
@@ -47,6 +48,14 @@ import {
   type FiscalYear,
 } from '../types';
 import { BudgetAdoptionDialog } from '../components/BudgetAdoptionDialog';
+import { ChargeAccessFields } from '../components/ChargeAccessFields';
+import {
+  chargeAccessPayloadOf,
+  chargeAccessValueOf,
+  inheritedChargeHint,
+  type ChargeAccessValue,
+} from '../utils/chargeAccess';
+import { descendantIds, orderCategoryTree } from '../utils/budgetCategoryTree';
 import { FiscalYearLockDialog } from '../components/FiscalYearLockDialog';
 import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
 import { blankToNull } from '@/utils/formValues';
@@ -191,9 +200,11 @@ interface CategoryModalProps {
   onSaved: () => void;
   /** The category being edited; absent to create one. */
   category?: BudgetCategory | undefined;
+  /** Every category, for the parent picker. */
+  categories: BudgetCategory[];
 }
 
-const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, category }) => {
+const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, category, categories }) => {
   // Before the `if (!open) return null` below — hooks may not sit after it.
   useOverlaySurface(open);
   const { positions } = useBudgetFormOptions(open);
@@ -203,9 +214,15 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
   const [ownerPositionId, setOwnerPositionId] = useState(category?.ownerPositionId ?? '');
   const [qbAccountName, setQbAccountName] = useState(category?.qbAccountName ?? '');
   const [functionalClass, setFunctionalClass] = useState<string>(category?.functionalClass ?? '');
+  const [parentCategoryId, setParentCategoryId] = useState(category?.parentCategoryId ?? '');
+  const [charge, setCharge] = useState<ChargeAccessValue>(chargeAccessValueOf(category));
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(category);
   const positionOptions = withCurrent(positions, category?.ownerPositionId, category?.ownerPositionName);
+  // A category cannot sit beneath itself or one of its own sub-categories.
+  const excluded = category ? descendantIds(categories, category.id).add(category.id) : new Set<string>();
+  const parentOptions = orderCategoryTree(categories).filter(({ category: c }) => !excluded.has(c.id));
+  const parent = categories.find((c) => c.id === parentCategoryId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +241,8 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
           ownerPositionId: blankToNull(ownerPositionId),
           qbAccountName: blankToNull(qbAccountName),
           functionalClass: isFunctionalClass(functionalClass) ? functionalClass : null,
+          parentCategoryId: blankToNull(parentCategoryId),
+          ...chargeAccessPayloadOf(charge),
         });
         toast.success('Category saved');
       } else {
@@ -242,6 +261,14 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
         if (isFunctionalClass(functionalClass)) {
           createData.functionalClass = functionalClass;
         }
+        if (parentCategoryId) {
+          createData.parentCategoryId = parentCategoryId;
+        }
+        if (charge.access) {
+          const { chargeAccess, chargePositionIds } = chargeAccessPayloadOf(charge);
+          if (chargeAccess) createData.chargeAccess = chargeAccess;
+          createData.chargePositionIds = chargePositionIds;
+        }
         await budgetCategoryService.create(createData);
         toast.success('Category created');
         setName('');
@@ -249,6 +276,8 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
         setOwnerPositionId('');
         setQbAccountName('');
         setFunctionalClass('');
+        setParentCategoryId('');
+        setCharge(chargeAccessValueOf(undefined));
       }
       onSaved();
       onClose();
@@ -293,6 +322,38 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What this category covers"
             />
+          </div>
+          <div>
+            <label htmlFor="category-parent" className={labelClass}>
+              Parent category (optional)
+            </label>
+            <select
+              id="category-parent"
+              className={inputClass}
+              value={parentCategoryId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setParentCategoryId(next);
+                // A new sub-line starts with its parent's owner, so the
+                // Quartermaster sees it under My Budgets without a second edit.
+                const nextParent = categories.find((c) => c.id === next);
+                if (!isEdit && !ownerPositionId && nextParent?.ownerPositionId) {
+                  setOwnerPositionId(nextParent.ownerPositionId);
+                }
+              }}
+              aria-describedby="category-parent-hint"
+            >
+              <option value="">None (a top-level category)</option>
+              {parentOptions.map(({ category: c, depth }) => (
+                <option key={c.id} value={c.id}>
+                  {`${'\u00a0\u00a0'.repeat(depth)}${c.name}`}
+                </option>
+              ))}
+            </select>
+            <p id="category-parent-hint" className="text-theme-text-secondary mt-1 text-xs">
+              Make this a sub-line of another category, such as Officer brass under Quartermaster. It uses the
+              parent&apos;s QuickBooks account and expense classification unless it sets its own.
+            </p>
           </div>
           <div>
             <label htmlFor="category-owner" className={labelClass}>
@@ -340,6 +401,14 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
               office can change it on a single payment.
             </p>
           </div>
+          <ChargeAccessFields
+            idPrefix="category-charge"
+            value={charge}
+            onChange={setCharge}
+            positions={positions}
+            isTopLevel={!parentCategoryId}
+            inheritedHint={inheritedChargeHint(parent?.name, parent?.effectiveChargeAccess)}
+          />
           <div>
             <label htmlFor="category-qb-account" className={labelClass}>
               QuickBooks account (optional)
@@ -1006,12 +1075,19 @@ const FiscalYearSettingsPage: React.FC = () => {
           />
         ) : (
           <div className="divide-theme-surface-border divide-y">
-            {budgetCategories.map((cat) => (
+            {orderCategoryTree(budgetCategories).map(({ category: cat, depth }) => (
               <div key={cat.id} className="flex items-center justify-between py-3">
-                <div>
+                {/* Indented by depth, capped so a deep tree still fits a phone. */}
+                <div style={{ paddingLeft: `${Math.min(depth, 4) * 1.25}rem` }} className="min-w-0">
                   <p className="text-theme-text-primary text-sm font-medium">{cat.name}</p>
                   {cat.description && <p className="text-theme-text-secondary text-xs">{cat.description}</p>}
                   <p className="text-theme-text-secondary text-xs">Owner: {cat.ownerPositionName || 'No owner'}</p>
+                  <p className="text-theme-text-secondary text-xs">
+                    {cat.effectiveChargeAccess === ChargeAccess.RESTRICTED
+                      ? 'Restricted to the owner and chosen positions'
+                      : 'Anyone can charge'}
+                    {cat.chargeAccessInheritedFrom ? ` (from ${cat.chargeAccessInheritedFrom})` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -1040,6 +1116,7 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Modals */}
       <CreateFYModal open={showCreateFY} onClose={() => setShowCreateFY(false)} />
       <CategoryModal
+        categories={budgetCategories}
         open={showCreateCategory}
         onClose={() => setShowCreateCategory(false)}
         onSaved={() => void fetchBudgetCategories()}
@@ -1047,6 +1124,7 @@ const FiscalYearSettingsPage: React.FC = () => {
       {editingCategory && (
         <CategoryModal
           key={editingCategory.id}
+          categories={budgetCategories}
           open
           category={editingCategory}
           onClose={() => setEditingCategory(null)}

@@ -44,6 +44,9 @@ import type {
   BudgetSummary,
   BudgetTransactionPage,
   BudgetUpdatePayload,
+  ChargeAccess,
+  ChargeAccessPayload,
+  ChargeAccessSettings,
   CheckRequest,
   DuesPayment,
   DuesPaymentPayload,
@@ -188,6 +191,8 @@ export const budgetCategoryService = {
     qbAccountName?: string;
     ownerPositionId?: string;
     functionalClass?: FunctionalClass;
+    chargeAccess?: ChargeAccess;
+    chargePositionIds?: string[];
   }): Promise<BudgetCategory> {
     const response = await api.post<BudgetCategory>('/finance/budget-categories', data);
     return response.data;
@@ -200,6 +205,20 @@ export const budgetCategoryService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/finance/budget-categories/${id}`);
+  },
+
+  /** The categories the caller may set a charge rule on (as owner or Treasurer). */
+  async chargeAccessSettings(): Promise<ChargeAccessSettings> {
+    const response = await api.get<ChargeAccessSettings>('/finance/charge-access');
+    return {
+      categories: asArray(response.data.categories),
+      positions: asArray(response.data.positions),
+    };
+  },
+
+  async setChargeAccess(id: string, data: ChargeAccessPayload): Promise<BudgetCategory> {
+    const response = await api.put<BudgetCategory>(`/finance/budget-categories/${id}/charge-access`, data);
+    return response.data;
   },
 };
 

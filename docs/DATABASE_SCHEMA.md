@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**305 tables · 5054 columns · 1023 foreign keys**
+**306 tables · 5060 columns · 1026 foreign keys**
 
 ---
 
@@ -256,7 +256,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
 | [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
-| [`budget_categories`](#budget_categories) | `BudgetCategory` | 12 | Budget category (hierarchical) |
+| [`budget_categories`](#budget_categories) | `BudgetCategory` | 13 | Budget category (hierarchical) |
+| [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
 | [`check_requests`](#check_requests) | `CheckRequest` | 32 | Request to cut a check for payment |
@@ -3832,6 +3833,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `qb_account_name` | VARCHAR(200) | yes |  |  |  |
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
+| `charge_access` | ENUM(`open`, `restricted`) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -3839,6 +3841,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_budget_categories_org_id` (`organization_id`)
 - `ix_budget_categories_owner_position_id` (`owner_position_id`)
+
+### `budget_category_charge_positions`
+
+**BudgetCategoryChargePosition** · `app/models/finance.py`
+
+> A position named as able to charge a restricted category's lines. Only read while the category's own ``charge_access`` is ``restricted``: a category that inherits its rule inherits the parent's list with it, so the positions always belong to the category that set the restriction.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `category_id` | VARCHAR(36) | no | FK |  | → `budget_categories.id` ON DELETE CASCADE |
+| `position_id` | VARCHAR(36) | no | FK, IDX |  | → `positions.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_budget_category_charge_positions_organization_id` (`organization_id`)
+- `ix_budget_category_charge_positions_position_id` (`position_id`)
+
+**Constraints**
+
+- UNIQUE `uq_budget_category_charge_positions_category_position` (`category_id`, `position_id`)
 
 ### `budget_requests`
 
@@ -11023,7 +11048,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (248 references)
+### → `organizations` (249 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11053,6 +11078,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `basic_apparatus` | `organization_id` | CASCADE | no |
 | `budget_amendments` | `organization_id` | CASCADE | no |
 | `budget_categories` | `organization_id` | CASCADE | no |
+| `budget_category_charge_positions` | `organization_id` | CASCADE | no |
 | `budget_requests` | `organization_id` | CASCADE | no |
 | `budgets` | `organization_id` | CASCADE | no |
 | `check_item_deployed_lots` | `organization_id` | CASCADE | no |
@@ -11386,6 +11412,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `positions` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `budget_categories` | `owner_position_id` | SET NULL | yes |
+| `budget_category_charge_positions` | `position_id` | CASCADE | no |
+| `budget_requests` | `owner_position_id` | SET NULL | yes |
+| `budgets` | `owner_position_id` | SET NULL | yes |
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `prospective_members` | `target_role_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `shifts` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -11401,21 +11443,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 | `training_submissions` | `shift_id` | SET NULL | yes |
-
-### → `positions` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `budget_categories` | `owner_position_id` | SET NULL | yes |
-| `budget_requests` | `owner_position_id` | SET NULL | yes |
-| `budgets` | `owner_position_id` | SET NULL | yes |
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `prospective_members` | `target_role_id` | SET NULL | yes |
-| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
-| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
-| `suggestion_forwards` | `position_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
 
 ### → `training_courses` (10 references)
 
@@ -11604,6 +11631,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `program_requirements` | `phase_id` | CASCADE | yes |
 | `training_sessions` | `phase_id` | SET NULL | yes |
 
+### → `budget_categories` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `approval_chains` | `budget_category_id` | SET NULL | yes |
+| `budget_categories` | `parent_category_id` | SET NULL | yes |
+| `budget_category_charge_positions` | `category_id` | CASCADE | no |
+| `budget_requests` | `category_id` | SET NULL | yes |
+| `budgets` | `category_id` | CASCADE | no |
+
 ### → `budgets` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -11653,15 +11690,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_checkoffs` | `session_id` | SET NULL | yes |
 | `training_approvals` | `training_session_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
-
-### → `budget_categories` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `approval_chains` | `budget_category_id` | SET NULL | yes |
-| `budget_categories` | `parent_category_id` | SET NULL | yes |
-| `budget_requests` | `category_id` | SET NULL | yes |
-| `budgets` | `category_id` | CASCADE | no |
 
 ### → `department_messages` (4 references)
 
