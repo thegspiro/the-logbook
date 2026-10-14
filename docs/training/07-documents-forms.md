@@ -128,6 +128,18 @@ folder's settings:
   directly in it and how many subfolders, with everything inside them. The files
   are deleted too and it cannot be undone. **Keep it** backs out.
 
+**A folder only administrators could open is confirmed first** _(2026-10-14)_.
+Creating a folder, changing **Who can open it** or moving it can leave a folder
+that no active member except a full administrator could open (for example a
+**Specific roles** folder whose only ticked position nobody holds, or a move
+under a leadership-only folder). The dialog then stops and says so, naming what
+would happen, with **Go back** and a confirm button; confirming saves it. A
+department made up of administrators alone, such as a fresh installation, is not
+asked. A script calling the folders API must send `confirm_admin_only: true` to
+do this on purpose; without it the server answers `LB-DOC-001` (400).
+
+_[Screenshot needed: the confirmation shown after choosing Specific roles with a position nobody holds, in Manage folder.]_
+
 **System folders** (the list above) keep their name and place and cannot be
 deleted: the module that made each one files into it. Their description and who
 can open them can still be changed. The server refuses a rename, move or delete
@@ -846,6 +858,13 @@ that position as the reviewer. If no position carries that slug, the box is
 created closed, because an open box needs a reviewer.
 
 ### Submitting to a box with questions _(2026-10-12)_
+
+_(2026-10-14)_ In the box editor, **Questions** now sits right after **Name** and
+**Description**, above anonymity, follow-up, the idea board, reviewers and
+**Also notify**; it used to be at the foot of a long dialog. Nothing about how
+questions behave changed.
+
+_[Screenshot needed: the Suggestion Box editor with Questions directly under Description; REPLACE the box-dialog Questions shot.]_
 
 A box with intake questions shows them first, on a step of their own, with a
 **Continue** button. Title, details and screenshots follow on a second step with a

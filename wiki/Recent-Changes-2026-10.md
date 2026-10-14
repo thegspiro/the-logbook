@@ -5,6 +5,62 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 13 – 14, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).
+Predecessor: [October 12 – 13](#recent-changes-october-12--13-2026).
+
+**The headline:** **cash advances** under the IRS accountable plan, **budget
+sub-lines that only chosen positions may charge**, dues and sub-categories in the
+**QuickBooks export**, a **My Training** page split into what to do now and your
+full history, and a **button layout fix** across 32 screens.
+
+### Read this first
+
+**If you run the server:** four new migrations (cash advances, dues export,
+budget charge access, skill-test validity) and two merge revisions; check
+`alembic heads` reports one head. `BACKUP_ENABLED` and `BACKUP_SCHEDULE` never did
+anything: backups run daily at `BACKUP_TIME` (UTC). `install.sh --traditional`
+now needs Python 3.13 or newer. Re-run `scripts/setup-ssl.sh` on a server the old
+version left loading pages but failing API calls.
+
+**If you administer a department:**
+
+- **Finance.** Members can request a cash advance and account for it; set the two
+  QuickBooks accounts under Finance > QuickBooks Export before exporting one. A
+  budget category can keep its lines for the owner and chosen positions
+  (nothing is restricted until you do it). Once a dues account is set, the next
+  export carries every dues payment in its period, so export only later periods
+  if you entered earlier dues by hand.
+- **Training.** Rolling hours requirements count whole calendar months and show
+  no due date. A skill can be given a validity period in months.
+- **Documents.** Creating, opening up or moving a folder that only full
+  administrators could open now asks you to confirm.
+
+**If you are a member:** My Training now leads with what is due; **History**
+lists everything on your record, with no 100-record cap. An hours requirement
+shows **Show monthly hours**. The apparatus inventory on a phone has filter chips
+and saves each tap, with no Save button.
+
+### What changed, by area
+
+| Area           | Change                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Finance        | Cash advances, overdue advances report, QuickBooks advance accounts; who can charge a category's lines; export from its own page |
+| Finance        | Dues payments exported to QuickBooks; subcategories export through their parent's accounts; restricted funds on request forms    |
+| Training       | My Training tabs, upcoming list with rolling hours and skills-test expiry; cohort roster sync honours prerequisites              |
+| Documents      | Admin-only folder confirmation                                                                                                   |
+| Facilities     | Record dialogs centred, Maintenance Type required, due dates in words                                                            |
+| Inventory      | Apparatus inventory restacked for phones                                                                                         |
+| Communications | Suggestion-box editor puts Questions after the name                                                                              |
+| All screens    | Icon-and-label buttons on one line at desktop width; a deliberate 503 shows its message instead of retrying for minutes          |
+| Operations     | SSL script, Python check, backup time, Unraid update stop, ClamAV note                                                           |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 12 – 13, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

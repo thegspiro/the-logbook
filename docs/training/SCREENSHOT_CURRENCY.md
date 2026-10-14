@@ -22,6 +22,32 @@ screens are unreachable.
 claude.ai's own connector screens are deliberately not pictured: they belong to
 Anthropic and change independently of this repository.
 
+## Queued by the October 13 – 14 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).
+Nothing was captured; every row is open. Each guide carries a
+`_[Screenshot needed: …]_` placeholder where marked. The two applicant-dialog
+images (`01-35`, `20-13`) were recaptured on 2026-10-14 and are current.
+
+| Guide / image                                                           | Disposition       | Why                                                                                                                                   |
+| ----------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 11 Finance, category settings                                           | **NEW + REPLACE** | Parent picker, tree list and **Who can charge these lines** with positions ticked; re-shoot `11-03-budget-categories.png` as a tree     |
+| 11 Finance, My Budgets                                                  | **NEW**           | **Who can charge your lines** card and its dialog (needs a user who owns a category)                                                  |
+| 11 Finance, Budgets page                                                | **CHECK**         | Sub-lines grouped under a top-level category with a subtotal                                                                          |
+| 11 Finance, request forms                                               | **CHECK**         | Budget picker labels lines by category path and hides restricted ones                                                                  |
+| 11 Finance, Cash Advances (check form, expense form, Return dialog, Reports) | **NEW**      | Placeholders are in the section; confirm each has a file                                                                              |
+| 11 Finance, QuickBooks Export                                           | **REPLACE**       | The page now has a Run export section, **From …** labels, a **Dues** section and **Cash advances** accounts                           |
+| 07 Documents, Manage folder                                             | **NEW**           | The administrators-only confirmation                                                                                                  |
+| 07 Documents, suggestion box editor                                     | **REPLACE**       | **Questions** is directly under Description                                                                                           |
+| 06 Facilities, New Record / New Inspection                              | **REPLACE**       | Dialogs are centred, **Maintenance Type** marked required                                                                             |
+| 06 Facilities, maintenance list                                         | **REPLACE**       | Rows read **Overdue · due …**, **Due …**, **Completed …**                                                                             |
+| 03 Scheduling, `03-95-apparatus-inventory.png`                          | **REPLACE**       | Phone layout: stacked rows, filter chips, pinned heading, no Save button, status line                                                |
+| 03 Scheduling, history import review                                    | **CHECK**         | Any shot of the Shifts or Positions tabs showing `ems` or "a 85% match"                                                               |
+| 02 Training, My Training                                                | **REPLACE**       | Two tabs, year-to-date tiles, **Upcoming Expirations & Due Dates**, **Show monthly hours** strip; add the **History** tab (new)       |
+| 02 / 09 Skills, skill sheet editor                                      | **NEW**           | **Valid for (months)** field                                                                                                          |
+| 02 Training Administration home                                         | **CHECK**         | Evaluations card description under each practical-skills method                                                                      |
+| All guides, buttons with an icon (QuickBooks, dues, grants, inventory kiosk and NFC, knowledge tests, skill evaluations, history import) | **CHECK** | At desktop width the icon now sits beside the label; any shot taken with a mouse that showed it above is stale |
+
 ## Queued by the October 12 – 13 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-12--13-2026).
