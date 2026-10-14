@@ -210,12 +210,14 @@ class FiscalYearOpenItemResponse(UTCResponseBase):
 
 
 class StartFromLastYearResponse(BaseModel):
-    """What "Start from last year" did: lines copied, and lines already there."""
+    """What "Start from last year" did: lines copied, lines already there, and
+    lines left behind because their category is retired."""
 
     model_config = _RESPONSE_CONFIG
 
     created: int
     skipped: int
+    retired: int = 0
 
 
 # ============================================
