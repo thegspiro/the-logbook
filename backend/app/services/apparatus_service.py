@@ -5,7 +5,7 @@ Business logic for apparatus/vehicle management.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from sqlalchemy import and_, desc, func, or_, select
@@ -269,7 +269,7 @@ class ApparatusService:
             .where(Apparatus.apparatus_type_id == str(type_id))
             .where(Apparatus.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(f"Cannot delete type. {count} apparatus use this type.")
 
@@ -418,7 +418,7 @@ class ApparatusService:
             .where(Apparatus.status_id == str(status_id))
             .where(Apparatus.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(
                 f"Cannot delete status. {count} apparatus use this status."
@@ -618,7 +618,7 @@ class ApparatusService:
         # Count query
         count_query = select(func.count(Apparatus.id)).where(and_(*conditions))
         count_result = await self.db.execute(count_query)
-        total = count_result.scalar()
+        total = count_result.scalar() or 0
 
         # Main query
         # The id breaks ties between apparatus sharing a unit number, so an
@@ -743,14 +743,14 @@ class ApparatusService:
             and apparatus_data.primary_station_id != apparatus.primary_station_id
         ):
             # Close previous location history
-            result = await self.db.execute(
+            location_result = await self.db.execute(
                 select(ApparatusLocationHistory)
                 .where(ApparatusLocationHistory.apparatus_id == str(apparatus_id))
                 .where(ApparatusLocationHistory.unassigned_date.is_(None))
             )
-            current_location = result.scalar_one_or_none()
-            if current_location:
-                current_location.unassigned_date = datetime.now(timezone.utc)
+            open_location = location_result.scalar_one_or_none()
+            if open_location:
+                open_location.unassigned_date = datetime.now(timezone.utc)
 
             # Create new location history
             location_history = ApparatusLocationHistory(
@@ -913,14 +913,14 @@ class ApparatusService:
         self.db.add(status_history)
 
         # Close location history
-        result = await self.db.execute(
+        location_result = await self.db.execute(
             select(ApparatusLocationHistory)
             .where(ApparatusLocationHistory.apparatus_id == str(apparatus_id))
             .where(ApparatusLocationHistory.unassigned_date.is_(None))
         )
-        current_location = result.scalar_one_or_none()
-        if current_location:
-            current_location.unassigned_date = datetime.now(timezone.utc)
+        open_location = location_result.scalar_one_or_none()
+        if open_location:
+            open_location.unassigned_date = datetime.now(timezone.utc)
 
         await self.db.commit()
         await self.db.refresh(apparatus)
@@ -1202,7 +1202,7 @@ class ApparatusService:
             .where(ApparatusMaintenance.maintenance_type_id == str(type_id))
             .where(ApparatusMaintenance.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(
                 f"Cannot delete type. {count} maintenance records use this type."
@@ -2115,7 +2115,7 @@ class ApparatusService:
 
         query = query.order_by(ApparatusNFPACompliance.next_due_date.asc())
         result = await self.db.execute(query)
-        items: List[ApparatusNFPACompliance] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     async def get_nfpa_compliance(
@@ -2322,7 +2322,7 @@ class ApparatusService:
 
         query = query.order_by(ApparatusReportConfig.name)
         result = await self.db.execute(query)
-        items: List[ApparatusReportConfig] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     async def get_report_config(
@@ -2458,7 +2458,7 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        items: List[ApparatusServiceProvider] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     async def get_service_provider(
@@ -2576,7 +2576,7 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        items: List[ApparatusComponent] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     async def get_component(
@@ -2698,7 +2698,7 @@ class ApparatusService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        items: List[ApparatusComponentNote] = result.scalars().all()
+        items = list(result.scalars().all())
         return items
 
     async def get_component_note(
@@ -2889,7 +2889,7 @@ class ApparatusService:
             if n.service_provider_id:
                 provider_ids.add(n.service_provider_id)
 
-        providers = []
+        providers: Sequence[ApparatusServiceProvider] = []
         if provider_ids:
             providers_result = await self.db.execute(
                 select(ApparatusServiceProvider).where(
