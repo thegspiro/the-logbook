@@ -1313,7 +1313,9 @@ class CourseCohortService:
         A member who cannot be enrolled (unmet prerequisite, for example) is
         still added to the roster and reported as a warning — the officer knows
         their department better than the eligibility rules do, and losing the
-        whole generation over one member would be worse.
+        whole generation over one member would be worse. They are not enrolled
+        in the pipeline, though: a prerequisite holds here exactly as it does in
+        the enroll picker and bulk enrollment.
         """
         if not user_ids:
             return []
@@ -1335,6 +1337,14 @@ class CourseCohortService:
         )
         existing = set(existing_result.scalars().all())
 
+        missing_prereqs: Dict[str, List[str]] = {}
+        if enroll_in_program and cohort.program_id:
+            missing_prereqs = await self._missing_prerequisites(
+                program_id=cohort.program_id,
+                user_ids=[uid for uid in valid_users if uid not in existing],
+                organization_id=organization_id,
+            )
+
         added: List[str] = []
         for user_id in user_ids:
             key = str(user_id)
@@ -1351,6 +1361,7 @@ class CourseCohortService:
                     program_id=cohort.program_id,
                     organization_id=organization_id,
                     actor_id=actor_id,
+                    missing_prerequisites=missing_prereqs.get(key),
                 )
                 if enroll_error:
                     name = valid_users[key].username or key
@@ -1395,18 +1406,43 @@ class CourseCohortService:
 
         return warnings
 
+    async def _missing_prerequisites(
+        self,
+        program_id: str,
+        user_ids: Sequence[str],
+        organization_id: UUID | str,
+    ) -> Dict[str, List[str]]:
+        """``{user_id: [unfinished prerequisite names]}`` for the cohort's
+        pipeline, from the same rule the enroll picker and bulk enrollment use."""
+        from app.services.training_program_service import TrainingProgramService
+
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(TrainingProgram.prerequisite_program_ids).where(
+                TrainingProgram.id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        prerequisite_ids = result.scalar_one_or_none()
+        return await TrainingProgramService(self.db).missing_prerequisites(
+            prerequisite_ids, user_ids, organization_id
+        )
+
     async def _enroll_member(
         self,
         user_id: UUID,
         program_id: str,
         organization_id: UUID | str,
         actor_id: UUID | str,
+        missing_prerequisites: Optional[List[str]] = None,
     ) -> Tuple[Optional[str], Optional[str]]:
         """Enrol one member, reusing the existing enrollment rules.
 
         An existing active enrollment is reused rather than duplicated, so a
         member added to a second cohort of the same course keeps one progress
-        record.
+        record. Otherwise a member with ``missing_prerequisites`` is not
+        enrolled, and the names come back as the reason.
         """
         from app.services.training_program_service import TrainingProgramService
 
@@ -1419,6 +1455,12 @@ class CourseCohortService:
         found = existing.scalars().first()
         if found:
             return found.id, None
+
+        if missing_prerequisites:
+            return None, (
+                "added to the roster but not enrolled in the pipeline — must "
+                f"first complete: {', '.join(missing_prerequisites)}"
+            )
 
         service = TrainingProgramService(self.db)
         try:
