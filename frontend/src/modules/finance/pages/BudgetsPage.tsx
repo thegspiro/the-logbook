@@ -13,6 +13,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { BudgetFormDialog } from '../components/BudgetFormDialog';
 import { budgetOwnerLabel } from '../utils/budgetOwnership';
+import { groupBudgetsByCategoryTree } from '../utils/budgetCategoryTree';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -171,6 +172,12 @@ const BudgetsPage: React.FC = () => {
     if (stationFilter === DEPARTMENT_WIDE) return budgets.filter((b) => !b.stationId);
     return budgets.filter((b) => b.stationId === stationFilter);
   }, [budgets, stationFilter]);
+
+  // Sub-lines read beneath their top-level category, with its subtotal.
+  const groups = useMemo(
+    () => groupBudgetsByCategoryTree(visibleBudgets, budgetCategories),
+    [visibleBudgets, budgetCategories]
+  );
 
   const handleSaved = (saved: Budget) => {
     setShowAddDialog(false);
@@ -356,60 +363,88 @@ const BudgetsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
-                {visibleBudgets.map((budget) => {
-                  const remaining = getRemaining(budget);
+                {groups.flatMap((group) => [
+                  ...group.rows.map(({ budget, depth }) => {
+                    const remaining = getRemaining(budget);
 
-                  return (
-                    <tr key={budget.id} className="hover:bg-theme-surface-hover transition-colors">
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/finance/budgets/${budget.id}`}
-                          className="text-theme-text-primary text-sm font-medium hover:text-red-600"
+                    return (
+                      <tr key={budget.id} className="hover:bg-theme-surface-hover transition-colors">
+                        <td className="px-4 py-3" style={{ paddingLeft: `${1 + Math.min(depth, 4) * 1.25}rem` }}>
+                          <Link
+                            to={`/finance/budgets/${budget.id}`}
+                            className="text-theme-text-primary text-sm font-medium hover:text-red-600"
+                          >
+                            {categoryMap.get(budget.categoryId) ?? 'Unknown'}
+                          </Link>
+                        </td>
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                          {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
+                        </td>
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                          {budgetOwnerLabel(budget)}
+                        </td>
+                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                          {formatCurrencyWhole(Number(budget.amountBudgeted))}
+                          {budget.amendmentCount ? (
+                            <span className="text-theme-text-secondary ml-1 text-xs font-normal">(amended)</span>
+                          ) : null}
+                        </td>
+                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                          {formatCurrencyWhole(Number(budget.amountSpent))}
+                        </td>
+                        <td className="text-theme-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap">
+                          {formatCurrencyWhole(Number(budget.amountEncumbered))}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
                         >
-                          {categoryMap.get(budget.categoryId) ?? 'Unknown'}
-                        </Link>
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {budgetOwnerLabel(budget)}
-                      </td>
-                      <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
-                        {formatCurrencyWhole(Number(budget.amountBudgeted))}
-                        {budget.amendmentCount ? (
-                          <span className="text-theme-text-secondary ml-1 text-xs font-normal">(amended)</span>
-                        ) : null}
-                      </td>
-                      <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
-                        {formatCurrencyWhole(Number(budget.amountSpent))}
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap">
-                        {formatCurrencyWhole(Number(budget.amountEncumbered))}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
-                      >
-                        {formatCurrencyWhole(remaining)}
-                      </td>
-                      <td className="px-4 py-3" style={{ minWidth: 160 }}>
-                        <BudgetProgress
-                          spent={Number(budget.amountSpent)}
-                          encumbered={Number(budget.amountEncumbered)}
-                          budgeted={Number(budget.amountBudgeted)}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/finance/budgets/${budget.id}`}
-                          className="text-theme-text-secondary hover:text-red-600"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          {formatCurrencyWhole(remaining)}
+                        </td>
+                        <td className="px-4 py-3" style={{ minWidth: 160 }}>
+                          <BudgetProgress
+                            spent={Number(budget.amountSpent)}
+                            encumbered={Number(budget.amountEncumbered)}
+                            budgeted={Number(budget.amountBudgeted)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            to={`/finance/budgets/${budget.id}`}
+                            className="text-theme-text-secondary hover:text-red-600"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  }),
+                  ...(group.hasSubLines
+                    ? [
+                        <tr key={`subtotal-${group.rootId}`} className="bg-theme-surface-secondary">
+                          <th
+                            scope="row"
+                            colSpan={3}
+                            className="text-theme-text-primary px-4 py-2 text-left text-sm font-semibold"
+                          >
+                            {group.rootName} total
+                          </th>
+                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                            {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountBudgeted), 0))}
+                          </td>
+                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                            {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountSpent), 0))}
+                          </td>
+                          <td className="text-theme-text-secondary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                            {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountEncumbered), 0))}
+                          </td>
+                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                            {formatCurrencyWhole(group.rows.reduce((s, r) => s + getRemaining(r.budget), 0))}
+                          </td>
+                          <td colSpan={2} />
+                        </tr>,
+                      ]
+                    : []),
+                ])}
               </tbody>
               {/* Totals row */}
               <tfoot>

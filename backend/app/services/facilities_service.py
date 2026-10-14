@@ -2168,7 +2168,7 @@ class FacilitiesService:
         organization_id: str,
         facility_id: Optional[str] = None,
         room_type: Optional[str] = None,
-        floor: Optional[str] = None,
+        floor: Optional[int] = None,
         is_active: Optional[bool] = None,
         parent_room_id: Optional[str] = None,
         top_level_only: bool = False,

@@ -34,6 +34,8 @@ from app.services.training_waiver_service import (
     adjust_required,
     fetch_user_waivers,
     get_rolling_period_months,
+    total_months_in_period,
+    waived_month_keys,
 )
 from app.utils.org_timezone import resolve_org_today
 
@@ -355,9 +357,9 @@ class TrainingService:
         rolling_months = getattr(requirement, "rolling_period_months", None)
 
         if due_date_type == "rolling" and rolling_months:
-            from dateutil.relativedelta import relativedelta
+            from app.services.training_compliance import rolling_window
 
-            return today - relativedelta(months=rolling_months), today
+            return rolling_window(today, rolling_months)
 
         freq = (
             requirement.frequency.value
@@ -610,7 +612,10 @@ class TrainingService:
             counts_shift_attendance,
             credited_shifts_in_window,
             hours_record_counts,
+            monthly_hours,
+            next_window_opens,
             recency_cutoff,
+            rolling_hours_has_no_deadline,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -663,12 +668,22 @@ class TrainingService:
         active_months = 0
         cert_expired = False
         blocks_activity = False
+        month_breakdown: Optional[List[Dict]] = None
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
             type_matched = [r for r in windowed if hours_record_counts(req, r)]
 
             completed_value = sum(r.hours_completed or 0 for r in type_matched)
+            if start_date and end_date:
+                # The records counted above, month by month, so the rows add up
+                # to the figure shown and a member can check it.
+                month_breakdown = monthly_hours(
+                    type_matched,
+                    start_date,
+                    min(end_date, today),
+                    waived_month_keys(_waivers, start_date, end_date, str(req.id)),
+                )
             base_required = req.required_hours or 0
             adjusted_required = base_required
 
@@ -888,6 +903,8 @@ class TrainingService:
                     effective_due_date = latest.expiration_date if latest else None
             else:
                 effective_due_date = end_date if end_date else None
+        if rolling_hours_has_no_deadline(req):
+            effective_due_date = None
         # This legacy BIANNUAL override predates due_date_type awareness and
         # is skipped for rolling/certification-period requirements: it
         # selects the newest expiration across *any* record with a bare
@@ -943,6 +960,17 @@ class TrainingService:
             "cert_expired": cert_expired,
             "blocks_activity": blocks_activity,
             "catch_up_deadline": str(deadline) if deadline else None,
+            "next_window_opens": (
+                str(opens) if (opens := next_window_opens(req, real_today)) else None
+            ),
+            "window_start": str(start_date) if start_date else None,
+            "window_end": str(end_date) if end_date else None,
+            "window_months": (
+                total_months_in_period(start_date, end_date)
+                if start_date and end_date
+                else None
+            ),
+            "monthly_hours": month_breakdown,
         }
 
     async def check_requirement_progress(
@@ -993,6 +1021,7 @@ class TrainingService:
             hours_record_counts,
             load_credited_shift_dates,
             recency_cutoff,
+            rolling_hours_has_no_deadline,
         )
 
         if requirement is None or str(requirement.id) != str(requirement_id):
@@ -1086,6 +1115,8 @@ class TrainingService:
             # due_date of its own -- the window's end_date IS its deadline,
             # the same fallback evaluate_requirement_detail() uses.
             effective_due_date = end_date
+        if rolling_hours_has_no_deadline(requirement):
+            effective_due_date = None
         days_until_due = (
             (effective_due_date - today).days if effective_due_date else None
         )

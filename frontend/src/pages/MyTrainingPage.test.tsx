@@ -9,6 +9,7 @@ const mockGetMyTraining = vi.fn();
 const mockGetConfig = vi.fn();
 const mockGetVisibility = vi.fn();
 const mockExportMyTraining = vi.fn();
+const mockGetMyTrainingRecords = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
@@ -16,6 +17,7 @@ vi.mock('../services/api', () => ({
     getConfig: (...args: unknown[]) => mockGetConfig(...args) as unknown,
     getVisibility: (...args: unknown[]) => mockGetVisibility(...args) as unknown,
     exportMyTraining: (...args: unknown[]) => mockExportMyTraining(...args) as unknown,
+    getMyTrainingRecords: (...args: unknown[]) => mockGetMyTrainingRecords(...args) as unknown,
   },
 }));
 
@@ -23,10 +25,10 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
-vi.mock('../utils/dateFormatting', () => ({
+vi.mock('../utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/dateFormatting')>()),
   formatDate: (date: string) => date || 'N/A',
   getTodayLocalDate: () => '2026-05-24',
-  toLocalDateString: () => '2025-05-24',
 }));
 
 // Mock auth store. `permissions` is mutable so a test can put the caller in a
@@ -127,6 +129,7 @@ describe('MyTrainingPage', () => {
     mockGetConfig.mockResolvedValue({});
     mockGetVisibility.mockResolvedValue(mockTrainingData.visibility);
     mockExportMyTraining.mockResolvedValue(new Blob(['csv'], { type: 'text/csv' }));
+    mockGetMyTrainingRecords.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 25, years: [] });
   });
 
   it('renders the page heading', async () => {
@@ -317,7 +320,7 @@ describe('MyTrainingPage', () => {
 
       // The overview loaded; an editor-only outage must not replace it with a
       // full-page error.
-      expect(await screen.findByText('Completed Courses')).toBeInTheDocument();
+      expect(await screen.findByText(/Completed Courses/)).toBeInTheDocument();
       expect(screen.queryByText(/config unavailable/)).not.toBeInTheDocument();
 
       const user = userEvent.setup();
@@ -342,13 +345,13 @@ describe('MyTrainingPage', () => {
       renderWithRouter(<MyTrainingPage />);
 
       // The course count is history, not hours, and stays.
-      expect(await screen.findByText('Completed Courses')).toBeInTheDocument();
-      expect(screen.queryByText('Completed Hours')).not.toBeInTheDocument();
+      expect(await screen.findByText(/Completed Courses/)).toBeInTheDocument();
+      expect(screen.queryByText(/Completed Hours/)).not.toBeInTheDocument();
     });
 
     it('shows the completed-hours stat when show_training_hours is on', async () => {
       renderWithRouter(<MyTrainingPage />);
-      expect(await screen.findByText('Completed Hours')).toBeInTheDocument();
+      expect(await screen.findByText(/Completed Hours/)).toBeInTheDocument();
     });
 
     it('hides the requirements breakdown when show_requirement_details is off', async () => {
@@ -400,15 +403,147 @@ describe('MyTrainingPage', () => {
     const user = userEvent.setup();
     renderWithRouter(<MyTrainingPage />);
 
+    await user.click(await screen.findByRole('button', { name: /^history$/i }));
     const exportBtn = await screen.findByRole('button', { name: /export csv/i });
     await user.click(exportBtn);
 
     await waitFor(() => {
-      expect(mockExportMyTraining).toHaveBeenCalledWith('csv', expect.any(String), expect.any(String));
+      expect(mockExportMyTraining).toHaveBeenCalledWith('csv');
     });
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
 
     vi.unstubAllGlobals();
+  });
+
+  describe('landing view and history tab', () => {
+    const user = userEvent.setup();
+
+    it('reports the calendar year to date rather than lifetime totals', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        hours_summary: {
+          total_records: 169,
+          total_hours: 144.5,
+          completed_courses: 169,
+          year_to_date_courses: 18,
+          year_to_date_hours: 21.5,
+          year: 2026,
+        },
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Completed Courses · 2026')).toBeInTheDocument();
+      expect(screen.getByText('Completed Hours · 2026')).toBeInTheDocument();
+      expect(screen.getByText('18')).toBeInTheDocument();
+      expect(screen.getByText('21.5')).toBeInTheDocument();
+    });
+
+    it('lists upcoming deadlines and expirations in one place', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Upcoming Expirations & Due Dates')).toBeInTheDocument();
+      expect(screen.getAllByText('Annual Training Hours').length).toBeGreaterThan(0);
+    });
+
+    it('announces the next early-credit window of a requirement that is already met', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        requirements_detail: [
+          {
+            id: 'hipaa',
+            name: 'HIPAA Privacy',
+            frequency: 'annual',
+            required_hours: 1,
+            completed_hours: 1,
+            progress_percentage: 100,
+            is_met: true,
+            due_date: '2026-10-31',
+            days_until_due: 160,
+            next_window_opens: '2026-11-01',
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Next completion window opens')).toBeInTheDocument();
+    });
+
+    it('shows the counting window instead of a due date for a rolling hours requirement, with its months on request', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        requirements_detail: [
+          {
+            id: 'hours',
+            name: 'Annual Training Hours',
+            frequency: 'annual',
+            required_hours: 72,
+            completed_hours: 3,
+            progress_percentage: 4,
+            is_met: false,
+            due_date: null,
+            days_until_due: null,
+            window_months: 12,
+            monthly_hours: [
+              { month: '2025-11', hours: 2 },
+              { month: '2025-12', hours: 1 },
+            ],
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Counting Nov 2025 – Dec 2025')).toBeInTheDocument();
+      expect(screen.queryByText(/Due:/)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /show monthly hours/i }));
+      expect(screen.getByLabelText('Nov 2025: 2 hours')).toBeInTheDocument();
+    });
+
+    it('lists an unmet rolling hours requirement in the upcoming list by what is left to earn', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        requirements_detail: [
+          {
+            id: 'hours',
+            name: 'Annual Training Hours',
+            frequency: 'annual',
+            required_hours: 72,
+            completed_hours: 19.5,
+            progress_percentage: 27,
+            is_met: false,
+            due_date: null,
+            days_until_due: null,
+            window_months: 12,
+            monthly_hours: [{ month: '2025-11', hours: 19.5 }],
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('52.5 hrs to go')).toBeInTheDocument();
+    });
+
+    it('moves the full history to its own tab and shows only recent records on the landing view', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Recent Training')).toBeInTheDocument();
+      expect(screen.queryByText('Training records date range')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^history$/i }));
+      expect(await screen.findByText('All-time courses completed')).toBeInTheDocument();
+      expect(mockGetMyTrainingRecords).toHaveBeenCalled();
+    });
+
+    it('opens the history tab from the recent-training link', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      await user.click(await screen.findByRole('button', { name: /view full history/i }));
+      expect(await screen.findByText('All-time courses completed')).toBeInTheDocument();
+    });
+
+    it('draws no History tab when the department hides training history', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        visibility: { ...mockTrainingData.visibility, show_training_history: false },
+      });
+      renderWithRouter(<MyTrainingPage />);
+      await screen.findByText('Upcoming Expirations & Due Dates');
+      expect(screen.queryByRole('button', { name: /^history$/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Recent Training')).not.toBeInTheDocument();
+    });
   });
 
   describe('first-time member guidance', () => {

@@ -1137,7 +1137,7 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
         return
 
     # Skip CSRF for safe methods
-    if request.method in {"GET", "HEAD", "OPTIONS"}:
+    if request.scope["method"] in {"GET", "HEAD", "OPTIONS"}:
         return
 
     # Skip for onboarding endpoints — they implement their own session-based
@@ -1695,6 +1695,8 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/csv",
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
+        "/api/v1/finance/export/advance-accounts",
+        "/api/v1/finance/export/dues-accounts",
         "/api/v1/finance/export/logs",
         "/api/v1/finance/export/mappings",
         "/api/v1/finance/export/readiness",

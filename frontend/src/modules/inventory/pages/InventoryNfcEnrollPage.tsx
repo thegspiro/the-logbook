@@ -221,7 +221,7 @@ export const InventoryNfcEnrollPage: React.FC = () => {
                 placeholder="Name, serial or asset tag (blank for all)"
               />
             </div>
-            <button type="submit" className="btn-secondary" disabled={loadingItems}>
+            <button type="submit" className="btn-secondary inline-flex items-center gap-2" disabled={loadingItems}>
               <Search className="h-4 w-4" aria-hidden="true" /> Find items
             </button>
           </form>

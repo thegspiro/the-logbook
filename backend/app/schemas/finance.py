@@ -17,6 +17,7 @@ from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepType,
     ApproverType,
+    ChargeAccess,
     DuesFrequency,
     ExpenseType,
     ExportMappingType,
@@ -235,6 +236,11 @@ class BudgetCategoryCreate(BaseModel):
     owner_position_id: Optional[str] = None
     # Null inherits the parent category's (app/services/functional_expenses.py).
     functional_class: Optional[FunctionalClass] = None
+    # Null inherits the parent's rule (app/services/finance_budget_access.py).
+    charge_access: Optional[ChargeAccess] = None
+    # Positions beyond the answerable owners that may charge a restricted
+    # category's lines. Omitted names none.
+    charge_position_ids: Optional[list[str]] = None
 
 
 class BudgetCategoryUpdate(BaseModel):
@@ -252,6 +258,10 @@ class BudgetCategoryUpdate(BaseModel):
     owner_position_id: Optional[str] = None
     # Omitted leaves it alone; an explicit null inherits the parent's again.
     functional_class: Optional[FunctionalClass] = None
+    # Omitted leaves it alone; an explicit null inherits the parent's rule.
+    charge_access: Optional[ChargeAccess] = None
+    # Omitted leaves the named positions alone; a list replaces them.
+    charge_position_ids: Optional[list[str]] = None
 
 
 class BudgetCategoryResponse(UTCResponseBase):
@@ -270,8 +280,30 @@ class BudgetCategoryResponse(UTCResponseBase):
     owner_position_id: Optional[str] = None
     owner_position_name: Optional[str] = None
     functional_class: Optional[str] = None
+    # The category's own setting; null inherits.
+    charge_access: Optional[str] = None
+    # The rule its lines are actually under, and the ancestor it came from
+    # when it is inherited (null when the category set it, or nothing did).
+    effective_charge_access: str = "open"
+    charge_access_inherited_from: Optional[str] = None
+    charge_position_ids: list[str] = Field(default_factory=list)
+    # Names from the top-level category down to this one.
+    path: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class BudgetCategoryChargeAccessUpdate(BaseModel):
+    """Who may charge a category's lines, as its owner or the Treasurer sets it.
+
+    The whole setting at once: ``charge_access`` null inherits the parent's
+    rule, and ``charge_position_ids`` replaces the named positions.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    charge_access: Optional[ChargeAccess] = None
+    charge_position_ids: list[str] = Field(default_factory=list, max_length=200)
 
 
 # ============================================
@@ -527,6 +559,17 @@ class FinanceNamedOptionResponse(BaseModel):
 
     id: str
     name: str
+
+
+class ChargeAccessSettingsResponse(BaseModel):
+    """The categories whose charge rule the caller may set, and the positions
+    they may name — an id and a name each, as the owner may hold no
+    position-administration grant."""
+
+    model_config = _RESPONSE_CONFIG
+
+    categories: list[BudgetCategoryResponse]
+    positions: list[FinanceNamedOptionResponse]
 
 
 class BudgetRequestProposalOptionsResponse(BaseModel):
@@ -1120,7 +1163,8 @@ class PaymentsRegisterRowResponse(BaseModel):
 
     # The department's calendar day the money moved.
     paid_on: date
-    # purchase_request, check_request, check_void or expense_report
+    # purchase_request, check_request, check_void, expense_report,
+    # cash_advance or advance_return
     kind: str
     entity_id: str
     number: str
@@ -1128,7 +1172,9 @@ class PaymentsRegisterRowResponse(BaseModel):
     description: str
     budget_line: Optional[str] = None
     check_number: Optional[str] = None
-    # A void is negative: it puts back what the check took out.
+    # A void, and cash returned against an advance, are negative: they put
+    # back what a check took out. A report accounting for a cash advance shows
+    # only what was paid to the member beyond it.
     amount: Decimal
 
 
@@ -1489,6 +1535,9 @@ class ExpenseReportCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     notes: Optional[str] = None
+    # The member's own issued cash advance this report accounts for
+    # (app/services/cash_advances.py).
+    advance_id: Optional[str] = None
     line_items: Optional[list[ExpenseLineItemCreate]] = None
 
 
@@ -1500,6 +1549,8 @@ class ExpenseReportUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     notes: Optional[str] = None
+    # Null clears it; only while the report is a draft.
+    advance_id: Optional[str] = None
 
 
 class ExpenseReportResponse(UTCResponseBase):
@@ -1529,6 +1580,10 @@ class ExpenseReportResponse(UTCResponseBase):
     payment_method: Optional[str] = None
     qb_exported_at: Optional[datetime] = None
     notes: Optional[str] = None
+    # The cash advance this report accounts for, and how much of the report
+    # it covers (set on submission); the rest is reimbursed.
+    advance_id: Optional[str] = None
+    advance_applied: Optional[Decimal] = None
     # When the member submitted it; null on reports submitted before this was
     # recorded.
     submitted_at: Optional[datetime] = None
@@ -1571,6 +1626,9 @@ class CheckRequestCreate(BaseModel):
     # A restricted fund (a fundraising campaign marked restricted) this
     # payment spends; app/services/restricted_funds.py.
     fund_campaign_id: Optional[str] = None
+    # Cash advanced to the requester ahead of an expense; charges no budget
+    # line or fund (app/services/cash_advances.py). Fixed at creation.
+    is_advance: bool = False
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
     amount: Decimal = Field(..., gt=0, decimal_places=2)
@@ -1621,6 +1679,7 @@ class CheckRequestResponse(UTCResponseBase):
     # have left, while it is not yet approved; null when it fits or charges
     # no fund (detail responses).
     fund_shortfall: Optional[Decimal] = None
+    is_advance: bool = False
     payee_name: str
     payee_address: Optional[str] = None
     amount: Decimal
@@ -1671,6 +1730,14 @@ class DuesScheduleCreate(BaseModel):
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
+    # QuickBooks accounts for this schedule's payments; blank takes the
+    # department's default.
+    qb_income_account: Optional[str] = Field(None, max_length=200)
+    qb_deposit_account: Optional[str] = Field(None, max_length=200)
+
+    _blank_accounts = field_validator(
+        "qb_income_account", "qb_deposit_account", mode="before"
+    )(_strip_or_none)
 
 
 class DuesScheduleUpdate(BaseModel):
@@ -1692,6 +1759,14 @@ class DuesScheduleUpdate(BaseModel):
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    # QuickBooks accounts for this schedule's payments; blank takes the
+    # department's default.
+    qb_income_account: Optional[str] = Field(None, max_length=200)
+    qb_deposit_account: Optional[str] = Field(None, max_length=200)
+
+    _blank_accounts = field_validator(
+        "qb_income_account", "qb_deposit_account", mode="before"
+    )(_strip_or_none)
 
 
 class DuesScheduleResponse(UTCResponseBase):
@@ -1711,6 +1786,8 @@ class DuesScheduleResponse(UTCResponseBase):
     applies_to_membership_types: Optional[list[str]] = None
     is_active: bool
     notes: Optional[str] = None
+    qb_income_account: Optional[str] = None
+    qb_deposit_account: Optional[str] = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -1755,6 +1832,8 @@ class DuesPaymentResponse(UTCResponseBase):
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
+    # When a complete QuickBooks export carried this payment.
+    qb_exported_at: Optional[datetime] = None
     received_at: datetime
     recorded_by: Optional[str] = None
     created_at: datetime
@@ -1870,10 +1949,55 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     # ready, no_account, no_offset, duplicate_mappings or payable_receivable
     status: str
     account_name: Optional[str] = None
-    # category (its own qb_account_name) or mapping
+    # category (its own qb_account_name), mapping, or parent (inherited)
     account_source: Optional[str] = None
     offset_account_name: Optional[str] = None
+    # The ancestor category each account came from, when this one has none of
+    # its own.
+    account_inherited_from: Optional[str] = None
+    offset_inherited_from: Optional[str] = None
     mapping_ids: list[str]
+
+
+class DuesScheduleExportResponse(UTCResponseBase):
+    """What an export would post one dues schedule's payments to."""
+
+    model_config = _RESPONSE_CONFIG
+
+    schedule_id: str
+    name: str
+    is_active: bool
+    # ready, no_income, no_deposit or payable_receivable
+    status: str
+    income_account: Optional[str] = None
+    # schedule (its own) or default (the department's)
+    income_source: Optional[str] = None
+    deposit_account: Optional[str] = None
+    deposit_source: Optional[str] = None
+
+
+class DuesExportReadinessResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    # False until the department names a dues account anywhere; until then
+    # dues payments are left out of the export.
+    enabled: bool = False
+    default_income_account: Optional[str] = None
+    default_deposit_account: Optional[str] = None
+    schedules: list[DuesScheduleExportResponse] = []
+
+
+class AdvanceExportReadinessResponse(UTCResponseBase):
+    """Where cash advances post, and whether they can be exported."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # ready, no_advances_account, no_cash_account or payable_receivable
+    status: str = "no_advances_account"
+    # The asset account an advance is owed on, and the bank account it is
+    # paid from and returned to.
+    advances_account: Optional[str] = None
+    cash_account: Optional[str] = None
 
 
 class ExportReadinessResponse(UTCResponseBase):
@@ -1883,6 +2007,116 @@ class ExportReadinessResponse(UTCResponseBase):
 
     categories: list[ExportReadinessCategoryResponse]
     unmatched_mapping_ids: list[str]
+    dues: DuesExportReadinessResponse = DuesExportReadinessResponse()
+    advances: AdvanceExportReadinessResponse = AdvanceExportReadinessResponse()
+
+
+class DuesDefaultAccountsUpdate(BaseModel):
+    """The department's default QuickBooks accounts for dues payments; null or
+    blank clears one."""
+
+    model_config = _REQUEST_CONFIG
+
+    income_account: Optional[str] = Field(..., max_length=200)
+    deposit_account: Optional[str] = Field(..., max_length=200)
+
+
+class AdvanceAccountsUpdate(BaseModel):
+    """The QuickBooks accounts cash advances post to; null or blank clears
+    one."""
+
+    model_config = _REQUEST_CONFIG
+
+    advances_account: Optional[str] = Field(..., max_length=200)
+    cash_account: Optional[str] = Field(..., max_length=200)
+
+
+# ============================================
+# Cash Advance Schemas
+# ============================================
+
+
+class AdvanceSummaryResponse(UTCResponseBase):
+    """An issued cash advance and what is left of it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    request_number: str
+    member_id: str
+    member_name: str
+    amount: Decimal
+    purpose: Optional[str] = None
+    check_number: Optional[str] = None
+    issued_at: Optional[datetime] = None
+    # 120 days after the check: the IRS safe harbor for returning what was
+    # not accounted for.
+    due_at: Optional[datetime] = None
+    # Covered by the member's submitted expense reports, and handed back.
+    accounted: Decimal
+    returned: Decimal
+    outstanding: Decimal
+    overdue: bool
+
+
+class AdvancesReportResponse(UTCResponseBase):
+    """Every cash advance not yet fully accounted for, oldest first."""
+
+    model_config = _RESPONSE_CONFIG
+
+    advances: list[AdvanceSummaryResponse]
+    outstanding: Decimal
+    overdue_outstanding: Decimal
+
+
+class AdvanceReportResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    report_number: str
+    title: str
+    status: str
+    total_amount: Decimal
+    # How much of the report the advance covers; null until submitted.
+    advance_applied: Optional[Decimal] = None
+    submitted_at: Optional[datetime] = None
+
+
+class AdvanceReturnResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    amount: Decimal
+    returned_at: datetime
+    payment_method: Optional[str] = None
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+    recorded_by: Optional[str] = None
+    qb_exported_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class AdvanceDetailResponse(AdvanceSummaryResponse):
+    reports: list[AdvanceReportResponse] = []
+    returns: list[AdvanceReturnResponse] = []
+
+
+class AdvanceReturnCreate(BaseModel):
+    """Unspent cash a member handed back against an advance."""
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    # Defaults to now.
+    returned_at: Optional[datetime] = None
+    payment_method: Optional[str] = Field(None, max_length=50)
+    reference: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = Field(None, max_length=5000)
+
+    @field_validator("payment_method", "reference", "notes")
+    @classmethod
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
 
 
 MAX_SYNCHRONOUS_EXPORT_DAYS = 366

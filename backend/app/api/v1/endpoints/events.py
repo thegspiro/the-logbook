@@ -2628,7 +2628,11 @@ async def end_event(
 
     return EndEventResponse(
         checked_out_count=checked_out_count,
-        actual_end_time=event.actual_end_time.isoformat() if event else None,
+        actual_end_time=(
+            event.actual_end_time.isoformat()
+            if event and event.actual_end_time
+            else None
+        ),
         **_training_credit_fields(service.last_finalize_outcome),
     )
 
@@ -3259,11 +3263,11 @@ async def get_event_folder(
         .where(Document.folder_id == folder.id)
         .where(Document.status == DocumentStatus.ACTIVE)
     )
-    folder.document_count = count_result.scalar() or 0
+    document_count = count_result.scalar() or 0
 
     return {
         **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
-        "document_count": folder.document_count,
+        "document_count": document_count,
     }
 
 

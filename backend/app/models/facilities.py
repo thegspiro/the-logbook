@@ -9,7 +9,7 @@ and custom facility types.
 import enum
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import (
@@ -1448,6 +1448,13 @@ class FacilityRoom(Base):
         back_populates="parent_room",
         passive_deletes=True,
     )
+
+    if TYPE_CHECKING:
+        # Not a column. FacilitiesService._attach_display_codes sets it from the
+        # room's linked Location so FacilityRoomResponse can serialize it.
+        # Declared only for the type checker: an annotation SQLAlchemy sees
+        # would have to be mapped.
+        display_code: Optional[str]
 
     __table_args__ = (
         Index("idx_facility_rooms_type", "room_type"),

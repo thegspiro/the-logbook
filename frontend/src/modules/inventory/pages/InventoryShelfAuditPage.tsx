@@ -819,7 +819,7 @@ const AuditResult: React.FC<AuditResultProps> = ({ audit, tz, selected, onToggle
         {unexpected.some((line) => line.item_id !== null && !line.moved) && !shelfGone && (
           <button
             type="button"
-            className="btn-primary mt-2"
+            className="btn-primary mt-2 inline-flex items-center gap-2"
             onClick={onApply}
             disabled={selected.size === 0 || applying}
           >

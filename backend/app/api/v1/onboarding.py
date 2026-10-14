@@ -50,7 +50,7 @@ from app.models.onboarding import (
     OnboardingSessionModel,
     OnboardingStatus,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.schemas.system_notices import KeyCustodyConfirm, KeyCustodyStatus
 from app.services import key_custody_service
@@ -1539,7 +1539,7 @@ async def create_system_owner(
             first_name=user.first_name,
             last_name=user.last_name,
             membership_number=user.membership_number,
-            status=user.status.value,
+            status=(user.status or UserStatus.ACTIVE).value,
         ).model_dump()
 
         response = JSONResponse(content=body)
@@ -2715,13 +2715,15 @@ async def save_session_roles(
 
     # Get existing system roles. Read before the delete below (which only
     # touches non-system rows) so the submission is checked before any write.
-    result = await db.execute(
+    system_role_result = await db.execute(
         select(Role).where(
             Role.organization_id == organization_id,
             Role.is_system.is_(True),
         )
     )
-    existing_system_roles = {role.slug: role for role in result.scalars().all()}
+    existing_system_roles = {
+        role.slug: role for role in system_role_result.scalars().all()
+    }
     _check_submitted_positions(data.roles, set(existing_system_roles))
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
@@ -3038,22 +3040,28 @@ async def reset_onboarding(
         )
 
     try:
+        from sqlalchemy import delete
+
         from app.core.audit import log_audit_event
 
         # Delete in order to respect foreign key constraints
         # 1. Delete onboarding sessions
-        await db.execute(OnboardingSessionModel.__table__.delete())
+        await db.execute(
+            delete(OnboardingSessionModel).execution_options(synchronize_session=False)
+        )
 
         # 2. Delete onboarding status
-        await db.execute(OnboardingStatus.__table__.delete())
+        await db.execute(
+            delete(OnboardingStatus).execution_options(synchronize_session=False)
+        )
 
         # 3. Delete the HQ location and facility created during org setup BEFORE
         #    users. Location.created_by -> users.id has no ON DELETE rule (i.e.
         #    RESTRICT), so deleting users while a Location references one would
         #    FK-fail and abort the whole reset. These are otherwise only removed
         #    via the organizations CASCADE (step 7), which runs too late.
-        await db.execute(Location.__table__.delete())
-        await db.execute(Facility.__table__.delete())
+        await db.execute(delete(Location).execution_options(synchronize_session=False))
+        await db.execute(delete(Facility).execution_options(synchronize_session=False))
 
         # 4. Delete user_positions associations (junction table for user-role/position mapping)
         try:
@@ -3069,13 +3077,15 @@ async def reset_onboarding(
             )
 
         # 5. Delete users
-        await db.execute(User.__table__.delete())
+        await db.execute(delete(User).execution_options(synchronize_session=False))
 
         # 6. Delete roles
-        await db.execute(Role.__table__.delete())
+        await db.execute(delete(Role).execution_options(synchronize_session=False))
 
         # 7. Delete organizations
-        await db.execute(Organization.__table__.delete())
+        await db.execute(
+            delete(Organization).execution_options(synchronize_session=False)
+        )
 
         # Commit all deletions
         await db.commit()

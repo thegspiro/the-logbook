@@ -486,9 +486,12 @@ async def _enrich_shifts(
             group_by=[ShiftPreWorkSession.shift_id],
         )
         prep_by_shift = {str(r[0]): float(r.minutes or 0) for r in prep_rows}
-        for row in hours_result.all():
-            total_min = float(row[1]) + prep_by_shift.pop(str(row[0]), 0.0)
-            hours_map[str(row[0])] = hours_from_minutes(total_min)
+        for hours_row in hours_result.all():
+            # coalesce(sum(...), 0) is never NULL; `or 0` narrows the column type.
+            total_min = float(hours_row[1] or 0) + prep_by_shift.pop(
+                str(hours_row[0]), 0.0
+            )
+            hours_map[str(hours_row[0])] = hours_from_minutes(total_min)
         for sid, prep_min in prep_by_shift.items():
             hours_map[sid] = hours_from_minutes(prep_min)
 

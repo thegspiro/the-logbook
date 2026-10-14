@@ -12,6 +12,7 @@ import type {
   HistoryImportAnalysis,
   HistoryImportMappingsUpdate,
 } from '../../../../modules/scheduling/types/historyImport';
+import { positionLabel } from '../../../../modules/scheduling/utils/positionLabels';
 import { isSettled, RESOLUTION_LABELS } from './historyImportLabels';
 import RememberedBadge from './RememberedBadge';
 
@@ -58,7 +59,7 @@ const ReviewPositions: React.FC<ReviewPositionsProps> = ({ analysis, busy, onMap
                   </div>
                   <p className="text-theme-text-secondary mt-1 text-sm">
                     {position.row_count} {position.row_count === 1 ? 'row' : 'rows'}
-                    {position.seat ? ` · seat: ${position.seat}` : ''}
+                    {position.seat ? ` · seat: ${positionLabel(position.seat)}` : ''}
                   </p>
                 </div>
                 <div className="sm:w-64">
@@ -79,7 +80,7 @@ const ReviewPositions: React.FC<ReviewPositionsProps> = ({ analysis, busy, onMap
                     <option value="">{position.status === 'matched' ? 'Matched automatically' : 'Choose…'}</option>
                     {analysis.options.seats.map((seat) => (
                       <option key={seat} value={seat}>
-                        {seat}
+                        {positionLabel(seat)}
                       </option>
                     ))}
                   </select>

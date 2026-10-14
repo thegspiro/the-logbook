@@ -160,15 +160,15 @@ def get_rolling_period_months(req) -> Optional[int]:
     return None
 
 
-def count_waived_months(
+def waived_month_keys(
     waivers: List[WaiverPeriod],
     period_start: date,
     period_end: date,
     req_id: Optional[str] = None,
-) -> int:
+) -> set:
     """
-    Count how many calendar months within ``[period_start, period_end]``
-    are covered by at least one waiver.
+    The ``(year, month)`` of every calendar month within
+    ``[period_start, period_end]`` covered by at least one waiver.
 
     A month is considered "waived" when the waiver covers >= 15 days of
     that month.  Overlapping waivers are deduplicated via a set of
@@ -186,7 +186,7 @@ def count_waived_months(
         always apply.
     """
     if not waivers or not period_start or not period_end:
-        return 0
+        return set()
 
     waived: set = set()
     for w in waivers:
@@ -218,7 +218,22 @@ def count_waived_months(
                 m = 1
                 y += 1
 
-    return len(waived)
+    return waived
+
+
+def count_waived_months(
+    waivers: List[WaiverPeriod],
+    period_start: date,
+    period_end: date,
+    req_id: Optional[str] = None,
+) -> int:
+    """How many calendar months of the window a waiver covers.
+
+    ``adjust_required`` prorates the target by this, and the monthly breakdown
+    marks the same months as leave (:func:`waived_month_keys`), so the card's
+    adjusted target and its month rows cannot disagree about what was waived.
+    """
+    return len(waived_month_keys(waivers, period_start, period_end, req_id))
 
 
 def total_months_in_period(period_start: date, period_end: date) -> int:

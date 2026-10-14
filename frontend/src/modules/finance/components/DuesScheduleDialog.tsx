@@ -44,6 +44,8 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
   const [dueDate, setDueDate] = useState(schedule ? toLocalISODate(schedule.dueDate, tz) : '');
   const [isActive, setIsActive] = useState(schedule?.isActive ?? true);
   const [notes, setNotes] = useState(schedule?.notes ?? '');
+  const [incomeAccount, setIncomeAccount] = useState(schedule?.qbIncomeAccount ?? '');
+  const [depositAccount, setDepositAccount] = useState(schedule?.qbDepositAccount ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -82,6 +84,8 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
           dueDate: dueInstant,
           isActive,
           notes: blankToNull(notes),
+          qbIncomeAccount: blankToNull(incomeAccount),
+          qbDepositAccount: blankToNull(depositAccount),
         };
         saved = await duesService.updateSchedule(schedule.id, payload);
         toast.success('Dues schedule saved');
@@ -92,6 +96,8 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
           frequency,
           dueDate: dueInstant,
           notes: notes.trim() || undefined,
+          qbIncomeAccount: incomeAccount.trim() || undefined,
+          qbDepositAccount: depositAccount.trim() || undefined,
         };
         saved = await duesService.createSchedule(payload);
         toast.success('Dues schedule created — generate dues to bill members');
@@ -220,6 +226,46 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        <fieldset className="space-y-3">
+          <legend className="form-label">QuickBooks</legend>
+          <p id="dues-schedule-qb-hint" className="text-theme-text-secondary text-xs">
+            Where this schedule&apos;s payments go when exported. Leave blank to use the department&apos;s defaults on
+            Finance › QuickBooks Export.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="dues-schedule-income-account" className="form-label">
+                Income account <span className="text-theme-text-secondary font-normal">(optional)</span>
+              </label>
+              <input
+                id="dues-schedule-income-account"
+                type="text"
+                maxLength={MAX_NAME}
+                className="form-input"
+                placeholder="Dues Income"
+                value={incomeAccount}
+                onChange={(e) => setIncomeAccount(e.target.value)}
+                aria-describedby="dues-schedule-qb-hint"
+              />
+            </div>
+            <div>
+              <label htmlFor="dues-schedule-deposit-account" className="form-label">
+                Deposited to <span className="text-theme-text-secondary font-normal">(optional)</span>
+              </label>
+              <input
+                id="dues-schedule-deposit-account"
+                type="text"
+                maxLength={MAX_NAME}
+                className="form-input"
+                placeholder="Operating Checking"
+                value={depositAccount}
+                onChange={(e) => setDepositAccount(e.target.value)}
+                aria-describedby="dues-schedule-qb-hint"
+              />
+            </div>
+          </div>
+        </fieldset>
 
         {isEdit && (
           <label className="flex items-center gap-2 text-sm">

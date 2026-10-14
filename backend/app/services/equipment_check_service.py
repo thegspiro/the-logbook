@@ -1354,7 +1354,11 @@ class EquipmentCheckService:
                     ShiftEquipmentCheck.organization_id == organization_id,
                 )
             )
-            existing_checks = {c.template_id: c for c in result.scalars().all()}
+            existing_checks = {
+                c.template_id: c
+                for c in result.scalars().all()
+                if c.template_id is not None
+            }
 
         checklists = []
         for tmpl in templates:
@@ -1375,13 +1379,13 @@ class EquipmentCheckService:
     ) -> List[Dict[str, Any]]:
         """Get summary of all checks for a shift (for shift detail view)."""
         # Get shift
-        result = await self.db.execute(
+        shift_result = await self.db.execute(
             select(Shift).where(
                 Shift.id == shift_id,
                 Shift.organization_id == organization_id,
             )
         )
-        shift = result.scalars().first()
+        shift = shift_result.scalars().first()
         if not shift:
             return []
 
@@ -1397,7 +1401,11 @@ class EquipmentCheckService:
                 ShiftEquipmentCheck.organization_id == organization_id,
             )
         )
-        checks = {c.template_id: c for c in result.scalars().all()}
+        checks = {
+            c.template_id: c
+            for c in result.scalars().all()
+            if c.template_id is not None
+        }
 
         # Build user name map
         user_ids = [c.checked_by for c in checks.values() if c.checked_by]
@@ -2732,7 +2740,8 @@ class EquipmentCheckService:
                 )
             )
             for c in checks_result.scalars().all():
-                checks_by_shift.setdefault(str(c.shift_id), {})[c.template_id] = c
+                if c.template_id is not None:
+                    checks_by_shift.setdefault(str(c.shift_id), {})[c.template_id] = c
 
         checklists = []
         for assignment, shift in rows:
@@ -2937,23 +2946,25 @@ class EquipmentCheckService:
         if not check_ids:
             return []
 
-        result = await self.db.execute(
+        check_result = await self.db.execute(
             select(ShiftEquipmentCheck).where(ShiftEquipmentCheck.id.in_(check_ids))
         )
-        checks = {c.id: c for c in result.scalars().all()}
+        checks = {c.id: c for c in check_result.scalars().all()}
 
         user_ids = [c.checked_by for c in checks.values() if c.checked_by]
         user_map = await self._get_user_name_map(user_ids)
 
         # Get shift dates
         shift_ids = [c.shift_id for c in checks.values()]
-        result = await self.db.execute(select(Shift).where(Shift.id.in_(shift_ids)))
-        shift_map = {s.id: s for s in result.scalars().all()}
+        shift_result = await self.db.execute(
+            select(Shift).where(Shift.id.in_(shift_ids))
+        )
+        shift_map = {s.id: s for s in shift_result.scalars().all()}
 
         history = []
         for item in items:
             check = checks.get(item.check_id)
-            shift = shift_map.get(check.shift_id) if check else None
+            shift = shift_map.get(check.shift_id) if check and check.shift_id else None
             history.append(
                 {
                     "check_id": item.check_id,
@@ -3064,7 +3075,9 @@ class EquipmentCheckService:
                     Apparatus.organization_id == organization_id,
                 )
             )
-            apparatus_names = {aid: name for aid, name in ares.all()}
+            apparatus_names = {
+                aid: name for aid, name in ares.all() if name is not None
+            }
 
         inv_ids = [i.inventory_item_id for (i, _, _) in rows if i.inventory_item_id]
         inventory_service = InventoryService(self.db)
@@ -3916,7 +3929,9 @@ class EquipmentCheckService:
                     Apparatus.organization_id == organization_id,
                 )
             )
-            apparatus_names = {aid: name for aid, name in ares.all()}
+            apparatus_names = {
+                aid: name for aid, name in ares.all() if name is not None
+            }
 
         deployments: List[Dict[str, Any]] = []
         for item, compartment_name, tmpl in rows:
@@ -5726,8 +5741,8 @@ class EquipmentCheckService:
         failed_items = [row[0] for row in rows]
 
         checks_map: Dict[str, ShiftEquipmentCheck] = {}
-        for _item, check in rows:
-            checks_map[str(check.id)] = check
+        for _item, loaded_check in rows:
+            checks_map[str(loaded_check.id)] = loaded_check
 
         user_ids_set: set[str] = set()
         for c in checks_map.values():
@@ -5810,8 +5825,8 @@ class EquipmentCheckService:
         rows = q.all()
         items = [row[0] for row in rows]
         checks_map: Dict[str, ShiftEquipmentCheck] = {}
-        for _item, check in rows:
-            checks_map[str(check.id)] = check
+        for _item, loaded_check in rows:
+            checks_map[str(loaded_check.id)] = loaded_check
 
         # Resolve each check's shift date in one query (avoids a per-item
         # Shift lookup when building the history records below).

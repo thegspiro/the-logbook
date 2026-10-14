@@ -18,6 +18,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { budgetService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
 import { inheritedOwnerHint } from '../utils/budgetOwnership';
+import { categoryPathLabel, orderCategoryTree } from '../utils/budgetCategoryTree';
 import type { Budget, BudgetCategory, BudgetCreatePayload, BudgetUpdatePayload, FiscalYear } from '../types';
 
 interface BudgetFormDialogProps {
@@ -61,8 +62,13 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // In tree order and named by path, so "Quartermaster › Officer brass" is
+  // told apart from an Officer brass anywhere else.
   const categoryOptions = useMemo(
-    () => categories.filter((c) => c.isActive || c.id === budget?.categoryId),
+    () =>
+      orderCategoryTree(categories.filter((c) => c.isActive || c.id === budget?.categoryId)).map(
+        ({ category }) => category
+      ),
     [categories, budget?.categoryId]
   );
   const stationOptions = withCurrent(stations, budget?.stationId, budget?.stationName);
@@ -203,7 +209,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
                 <option value="">Choose a category</option>
                 {categoryOptions.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {categoryPathLabel(c)}
                   </option>
                 ))}
               </select>

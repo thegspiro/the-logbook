@@ -883,7 +883,7 @@ async def push_org_to_salesforce(
     results: dict[str, Any] = {}
 
     if "members" in sync_types:
-        rows = (
+        member_rows = (
             (
                 await db.execute(
                     select(User).where(
@@ -896,11 +896,11 @@ async def push_org_to_salesforce(
             .all()
         )
         results["members"] = await sync_service.sync_all_members_to_salesforce(
-            [user_to_member_dict(u) for u in rows]
+            [user_to_member_dict(u) for u in member_rows]
         )
 
     if "training" in sync_types:
-        rows = (
+        training_rows = (
             (
                 await db.execute(
                     select(TrainingRecord).where(
@@ -912,11 +912,11 @@ async def push_org_to_salesforce(
             .all()
         )
         results["training"] = await sync_service.sync_all_training_to_salesforce(
-            [training_record_to_dict(r) for r in rows]
+            [training_record_to_dict(r) for r in training_rows]
         )
 
     if "events" in sync_types:
-        rows = (
+        event_rows = (
             (
                 await db.execute(
                     select(Event).where(
@@ -930,7 +930,7 @@ async def push_org_to_salesforce(
         )
         synced = 0
         failed = 0
-        for event in rows:
+        for event in event_rows:
             try:
                 if await sync_service.push_event(event_to_dict(event)):
                     synced += 1

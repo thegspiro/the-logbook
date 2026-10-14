@@ -474,6 +474,7 @@ async def create_template(
         require_all_critical=template_data.require_all_critical,
         score_pass_fail_criteria=template_data.score_pass_fail_criteria,
         requirement_id=requirement_id,
+        valid_for_months=template_data.valid_for_months,
         tags=template_data.tags,
         visibility=template_data.visibility,
         result_disclosure=template_data.result_disclosure,
@@ -919,6 +920,7 @@ async def duplicate_template(
         passing_percentage=source.passing_percentage,
         require_all_critical=source.require_all_critical,
         requirement_id=source.requirement_id,
+        valid_for_months=source.valid_for_months,
         score_pass_fail_criteria=source.score_pass_fail_criteria,
         tags=source.tags,
         visibility=source.visibility,
@@ -1785,7 +1787,7 @@ async def update_test(
     # officer's override and fall back to a broader template/org policy. Check
     # field presence before processing or writing any values.
     _guard_official_test_policy_fields(
-        set(update_data), is_practice=test.is_practice, user=current_user
+        set(update_data), is_practice=bool(test.is_practice), user=current_user
     )
 
     # Optimistic concurrency. Refuse rather than silently overwrite when the

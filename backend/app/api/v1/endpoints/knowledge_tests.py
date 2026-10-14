@@ -545,10 +545,9 @@ async def _load_attempt(
             .with_for_update()
         )
     ).scalar_one_or_none()
-    allowed = attempt is not None and (
+    if attempt is None or not (
         str(attempt.user_id) == str(user.id) or (not owner_only and _is_officer(user))
-    )
-    if not allowed:
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found"
         )

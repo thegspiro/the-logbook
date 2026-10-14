@@ -13,9 +13,9 @@ pure-scoring path stays import-light.
 from __future__ import annotations
 
 import copy
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 from uuid import UUID
 
 from loguru import logger
@@ -43,6 +43,20 @@ def build_template_snapshot(template: SkillTemplate) -> dict[str, Any]:
             getattr(template, "score_pass_fail_criteria", False)
         ),
     }
+
+
+@overload
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate
+) -> SimpleNamespace | SkillTemplate:
+    """With a live template in hand there is always something to score by."""
+
+
+@overload
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate | None
+) -> SimpleNamespace | SkillTemplate | None:
+    """Without one, a test that has no snapshot has no structure at all."""
 
 
 def resolve_test_template(
@@ -273,7 +287,9 @@ def _criterion_outcome(criterion: dict[str, Any], result: dict[str, Any] | None)
     return "passed" if passed else "failed"
 
 
-def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str, Any]:
+def build_score_breakdown(
+    test: SkillTest, template: SkillTemplate | SimpleNamespace
+) -> dict[str, Any]:
     """The arithmetic behind a test's percentage, section by section.
 
     Exists so a scorecard can show its own working. The overall percentage is
@@ -647,7 +663,7 @@ def waived_critical_criteria(test: SkillTest, template: Any) -> list[dict[str, A
 
 
 def calculate_test_result(
-    test: SkillTest, template: SkillTemplate
+    test: SkillTest, template: SkillTemplate | SimpleNamespace
 ) -> tuple[float | None, str]:
     """
     Calculate the overall score and pass/fail result for a completed test.
@@ -1482,3 +1498,110 @@ async def _log_candidate_notification(
     except Exception as e:  # pragma: no cover - defensive
         logger.error(f"Skills-test candidate notification failed: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# How long a passing official test stays valid
+# ---------------------------------------------------------------------------
+
+
+def skill_test_expiration(passed_on: date, valid_for_months: int) -> date:
+    """The day a pass taken on ``passed_on`` stops being valid.
+
+    Whole calendar months from the day it was taken, clamped to the end of a
+    shorter month: a pass on 2026-01-31 valid for one month lapses on
+    2026-02-28, not on a day that does not exist.
+    """
+    from dateutil.relativedelta import relativedelta
+
+    return passed_on + relativedelta(months=valid_for_months)
+
+
+async def member_skill_expirations(
+    db: AsyncSession,
+    organization_id: str,
+    user_id: str,
+    *,
+    is_officer: bool,
+    today: date,
+) -> list[dict[str, Any]]:
+    """The skills a member currently holds that lapse, with when.
+
+    One entry per skill template that declares ``valid_for_months``, from the
+    member's newest official pass: completed, passed, validated by an officer
+    and not voided. A practice attempt is never recorded, and an unvalidated
+    result has not been decided yet, so neither starts a clock.
+
+    A pass is listed only if the member may see it. Whether a department shows
+    a candidate their result is configurable (``resolve_result_view``, the same
+    gate the skills-test list applies), and an expiry date on a skill the
+    member was told nothing about would announce the outcome the policy
+    withholds.
+    """
+    from sqlalchemy import select
+
+    from app.models.skills_testing import (
+        ResultDisclosure,
+        SkillTemplate,
+        SkillTest,
+        SkillTestResult,
+        SkillTestStatus,
+    )
+    from app.services.training_module_config_service import (
+        TrainingModuleConfigService,
+    )
+    from app.utils.org_timezone import local_date, resolve_scheduling_timezone
+
+    rows = (
+        await db.execute(
+            select(SkillTest, SkillTemplate)
+            .join(SkillTemplate, SkillTemplate.id == SkillTest.template_id)
+            .where(
+                SkillTest.organization_id == organization_id,
+                SkillTemplate.organization_id == organization_id,
+                SkillTest.candidate_id == user_id,
+                SkillTemplate.valid_for_months.isnot(None),
+                SkillTest.is_practice.is_(False),
+                SkillTest.status == SkillTestStatus.COMPLETED.value,
+                SkillTest.result == SkillTestResult.PASS.value,
+                SkillTest.voided_at.is_(None),
+                SkillTest.validated_at.isnot(None),
+            )
+            .order_by(SkillTest.completed_at.desc())
+        )
+    ).all()
+    if not rows:
+        return []
+
+    org_config = await TrainingModuleConfigService(db).get_config(organization_id)
+    tz = await resolve_scheduling_timezone(db, organization_id)
+
+    newest_per_template: dict[str, tuple[Any, Any]] = {}
+    for test, template in rows:
+        newest_per_template.setdefault(str(template.id), (test, template))
+
+    entries: list[dict[str, Any]] = []
+    for test, template in newest_per_template.values():
+        view = resolve_result_view(
+            test, template, org_config, is_officer=is_officer, user_id=user_id
+        )
+        if view not in (ResultDisclosure.SCORES.value, ResultDisclosure.FULL.value):
+            continue
+        taken = test.completed_at or test.validated_at
+        if taken is None or template.valid_for_months is None:
+            continue
+        expires = skill_test_expiration(
+            local_date(taken, tz), template.valid_for_months
+        )
+        entries.append(
+            {
+                "id": str(test.id),
+                "template_id": str(template.id),
+                "template_name": template.name,
+                "passed_on": str(local_date(taken, tz)),
+                "expiration_date": str(expires),
+                "days_until_expiry": (expires - today).days,
+            }
+        )
+    entries.sort(key=lambda e: e["expiration_date"])
+    return entries

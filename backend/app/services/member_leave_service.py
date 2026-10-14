@@ -261,7 +261,7 @@ class MemberLeaveService:
             # exclude_unset dump, so clearing the end date (an open-ended
             # leave) has to propagate too, or the waiver keeps expiring on a
             # date the leave no longer has.
-            waiver_updates = {}
+            waiver_updates: Dict[str, Optional[date]] = {}
             if "start_date" in kwargs:
                 waiver_updates["start_date"] = leave.start_date
             if "end_date" in kwargs:
