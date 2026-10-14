@@ -103,6 +103,12 @@ const ADVISORY_BUDGET: Record<string, number> = {
  *     from the same utilities and theme tokens the two sweeps above measure.
  *   partially obscured / overlapping — axe cannot resolve a background it
  *     cannot see through. Thirteen nodes, all in overlay-heavy report screens.
+ *   no value — an empty text field has no text to measure; axe 4.14 began
+ *     filing these under `incomplete` instead of passing them silently. The
+ *     value a member types is painted by the same `form-input` utility on the
+ *     same surface as every filled field in this sweep — the member edit form
+ *     abstains only on its blank optional fields, and its filled ones are
+ *     measured and pass in every theme.
  *
  * A reason outside this list means axe hit something none of that covers, and
  * that is worth a person looking at it — which is the whole point of asserting
@@ -114,6 +120,7 @@ const ALLOWED_UNDECIDED = [
   /too short to determine/i,
   /partially obscured/i,
   /partially overlaps/i,
+  /has no value/i,
 ];
 
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
