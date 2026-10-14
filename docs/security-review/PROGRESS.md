@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (opened by this iteration; the follow-up commit names it):
+**PR [#3225](https://github.com/thegspiro/the-logbook/pull/3225)**:
 branch `claude/security-review-finance-approvals-p9`, Feature 05 (Finance &
 approvals), pass 9. PR #3223 (Feature 04, pass 9) had merged touching only
 review docs, so it is not a recordable event; rows 03 and 04 are set ✅ here
