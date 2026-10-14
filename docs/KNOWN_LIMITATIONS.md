@@ -783,6 +783,58 @@ honour it, so gating only this router would hide suggestion boxes on almost
 every installation. It is recorded in `DELIBERATELY_UNGATED` in
 `tests/test_module_api_gating.py`.
 
+## Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)
+
+**Open — owner decisions to confirm.** The 2026-10-14 record-keeping work
+(roll-call statuses, filed election results, attachments, approved versions,
+carry-forward; see [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#record-keeping-2026-10-14))
+made these choices where nothing had been decided. Each is easy to reverse.
+
+- **A signed copy is the one thing that can be filed on approved minutes.**
+  MM-17 locks approved minutes against every edit; the scanned signature page
+  cannot exist before approval, so `signed_copy` attachments are accepted after
+  it and can never be deleted from approved minutes. If the department would
+  rather file the signed copy as a Document and leave the minutes wholly
+  untouched, remove the `signed_copy` branch in `MinutesRecordService.store_minutes_attachment`.
+- **Election results are filed by hand.** A manager imports a closed election's
+  result into the minutes; nothing files it when the election is certified.
+  The copy is taken at that moment. In a draft it can be removed and filed again
+  if the election is revised (a voided ballot after certification, W50); once the
+  minutes are circulated or adopted it is filed as a permanent addendum and
+  cannot be removed, so a later correction is a second addendum, not a
+  replacement.
+- **Approved minutes from before this change have no approved version.**
+  `GET /{id}/verify` says so rather than inventing a hash for content nobody
+  hashed. Reopening and re-approving one creates version 1.
+- **Quorum counts present, late and left early; not guests, and there is no
+  proxy status.** The code does not know the department's bylaws on a member
+  who left before the vote, or on proxies. If either should change the count,
+  it is `COUNTS_TOWARD_QUORUM` in `app/utils/minutes_attendance.py`.
+- **Attachments are not searchable, are not in the published Documents copy,
+  and the PDF lists them without embedding them.**
+- **Assignees are emailed when minutes are approved.** An item added to
+  approved minutes emails its assignee then; a carried-forward item is not
+  re-announced. The due-date reminders in `run_action_item_reminders` still go
+  only to the in-app bell, not to email — at odds with the email-first rule
+  (CLAUDE.md pitfall #18), and unchanged by this work.
+- **Confirmed by the owner (2026-10-14).** Minutes are circulated for review
+  and adopted (the API statuses are unchanged); any member who can view minutes
+  may suggest changes; an election that runs past the meeting is attached to the
+  meeting's minutes afterwards as an addendum; a closed session is a structured
+  record with participants and times; a motion can name the ballot that decided
+  it; and the departments' standard order of business is an editable outline.
+  This is a new install, so no earlier minutes needed converting.
+- **Circulating minutes emails members (owner decision 2026-10-14).** Each
+  active member except the circulating officer gets one email linking to the
+  minutes; it is an optional kind members can switch off, and circulating again
+  after a recall or return sends it again. Executive minutes are not announced.
+- **A suggestion changes nothing by itself.** Accepting one marks it and makes
+  the adoption default to "as amended"; the secretary recalls the minutes to
+  draft to work the change in and circulates again.
+- **Outline changes do not reach minutes already written.** Deleting or editing
+  an outline affects only minutes started from it afterwards, or an outline
+  applied to a draft.
+
 ## File Storage — The Onboarding Platform Choice Has No Reader (2026-10-08)
 
 **Open (owner decision 2026-10-08: build the connections later).** Onboarding's
