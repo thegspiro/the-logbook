@@ -1,6 +1,84 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (this PR)
+
+---
+
+## Pass 9 (2026-10-14, watchdog pickup) — 0 fixed, 0 new findings; PUB-8 confirmed fully landed on this path
+
+Watchdog pickup: Step 0 confirmed via `list_pull_requests` that no
+`claude/security-review-*` PR was open anywhere on the repo (the last merge,
+PR #3212, Feature 02 Permissions & roles pass 9, was docs-only — nothing to
+record beyond clearing the **Open PR** row). Rotation row 03 was the next
+`⬜`.
+
+**Baseline:** `b4a1f2ba` (PR #3105's merge, pass 8). **Head:** current `main`.
+`git diff b4a1f2ba HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py` touches 4 files; no new file
+under `app/api/public/` (still the same 14 + `__init__.py` pass 8 counted).
+Frontend: none — Feature 03 declares no frontend files, confirmed still true.
+Migrations: none written against this feature's models this pass.
+
+**The four changed files, read in full:**
+
+- **`app/core/public_portal_security.py` (+72/-36)** — this is the
+  unknown-key 401 half of PUB-8 landing (`log_access`/`_log_refusal` taking
+  `organization_id`/`config_id`/`api_key_obj` as `Optional`, and
+  `authenticate_api_key` now calling `_log_refusal(request, None, ...)` for
+  the no-key and unknown-key branches). It matches, line for line, what this
+  file's own **Resolved 2026-10-11** entry below already describes — that
+  entry was written from the PR that landed this diff, so there is nothing
+  new to re-derive. Confirmed the migration it depends on
+  (`e6d21e605d99`, making both columns nullable) is present and still the
+  only migration touching `public_portal_access_log`'s nullability. **PUB-8
+  is fully resolved on all three fronts** (429, revoked/expired 401, unknown 401) and retained (90-day prune). No residual.
+- **`app/api/public/finance_approvals.py` (+18/-1)** — new
+  `acknowledge_late_substantiation` request field and `late_line_count`
+  response field, unrelated to PUB-8. Traced the full path:
+  `get_approval_detail` and `approve_via_token` resolve their target
+  `ApprovalStepRecord` **only** by `approval_token` (`finance_service.py:3015-3027`,
+  `with_for_update()`-locked, org id taken from the resolved `chain`, never
+  from a client-supplied id) — the XC-3 shape this feature's by-id routes are
+  held to. `late_line_count(er_id)` itself issues a bare
+  `expense_report_id == er_id` count with no explicit org filter, but `er_id`
+  here is always `record.entity_id` off that already-token-resolved,
+  already-org-scoped record, never a client-supplied value — the "resolves
+  through an already-org-scoped parent" shape the checklist's tenant-isolation
+  section calls out, not the bare-id-on-an-org-carrying-model shape
+  `test_org_scoping_ratchet.py` polices. `_take_late_acknowledgement` raises
+  `LateSubstantiationNotAcknowledgedError` (→ 400) when the approver hasn't
+  set the flag and the report has late lines, so the field cannot be used to
+  silently skip the review it exists to force. No new trust boundary: the
+  token is still the only credential, exactly as every other route in this
+  file.
+- **`app/api/public/portal.py` (+2/-2)**, **`app/api/public/responses.py`
+  (+15/-12)** — a local variable rename (`result` → `org_result`, avoiding
+  shadowing) and `ResponseMap = dict[int | str, dict[str, Any]]` type
+  annotations on the shared `responses=` dicts. No behavior change on either;
+  confirmed by reading both diffs in full rather than trusting the small line
+  count.
+
+**Nothing to fix, nothing to flag.** All four changes were already-landed
+work from other tracks (finance feature work and a typing cleanup), reviewed
+fresh against the checklist and found sound; PUB-8's own landing is this
+feature's own prior finding completing itself, not new.
+
+### Completion gate (pass 9)
+
+| Check                                                  | Result                                                                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                          | ✅ 0 violations                                                                                          |
+| `black --check app/ tests/ alembic/`                   | ✅ all files unchanged                                                                                   |
+| `isort --check-only app/ tests/ alembic/`              | ✅ clean                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`      | ✅ single head `252c7517d80a`, 594 revisions                                                             |
+| `pytest tests/ -k "public_portal or finance_approval"` | ✅ 171 passed, 1 skipped (environment-only — `pywebpush`)                                                |
+| `cd frontend && npm run typecheck`                     | ✅ 0 errors                                                                                              |
+| `cd frontend && npm run lint`                          | ✅ 0 errors, 0 warnings (ran in background during this pass; the reviewed diff touches no frontend file) |
+
+No `KNOWN_LIMITATIONS.md` change needed — PUB-8's row already reads fully
+resolved from the pass-8-era PRs that landed it; this pass only confirmed the
+diff on `main` matches what that row describes. Rotation row 03 → ✅ (pending
+this PR's merge); next is Feature 04 (Storefront & payments).
 
 ---
 
