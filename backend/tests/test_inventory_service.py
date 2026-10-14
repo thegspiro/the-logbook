@@ -1661,7 +1661,7 @@ class TestAssignItem:
             )
         assert err is None
         assert item.status == ItemStatus.ASSIGNED
-        assert item.assigned_to_user_id == user_id
+        assert item.assigned_to_user_id == str(user_id)
         mock_db.add.assert_called_once()
         mock_db.commit.assert_awaited_once()
 
@@ -1990,3 +1990,20 @@ class TestGetUserInventory:
         result = await service.get_user_inventory(user_id, org_id)
 
         assert result["issued_items"][0]["quantity_issued"] == 3
+
+
+@pytest.mark.unit
+class TestFirstIso:
+    """The timeline falls back to created_at, and never raises on a NULL."""
+
+    def test_uses_the_first_moment_that_is_set(self):
+        from datetime import date
+
+        from app.services.inventory_service import _first_iso
+
+        assert _first_iso(None, date(2026, 1, 2), date(2026, 3, 4)) == "2026-01-02"
+
+    def test_returns_empty_string_when_nothing_is_set(self):
+        from app.services.inventory_service import _first_iso
+
+        assert _first_iso(None, None) == ""

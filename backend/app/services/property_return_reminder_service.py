@@ -100,6 +100,9 @@ class PropertyReturnReminderService:
 
         for member in dropped_members:
             status_changed_utc = member.status_changed_at
+            # The query above keeps only members with a drop date.
+            if status_changed_utc is None:
+                continue
             if status_changed_utc.tzinfo is None:
                 status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
             days_since_drop = (now - status_changed_utc).days
@@ -194,6 +197,8 @@ class PropertyReturnReminderService:
                 continue
 
             status_changed_utc = member.status_changed_at
+            if status_changed_utc is None:
+                continue
             if status_changed_utc.tzinfo is None:
                 status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
             days_since_drop = (now - status_changed_utc).days
@@ -207,13 +212,13 @@ class PropertyReturnReminderService:
             )
             sent_reminders = [r.reminder_type for r in reminder_result.scalars().all()]
 
-            local_drop_date = self._to_local(member.status_changed_at, org_tz)
+            local_drop_date = self._to_local(status_changed_utc, org_tz)
             overdue_list.append(
                 {
                     "user_id": str(member.id),
                     "member_name": member.display_name,
                     "email": member.email,
-                    "status": member.status.value,
+                    "status": member.status.value if member.status else None,
                     "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
                     "days_since_drop": days_since_drop,
                     "items_outstanding": items_info["count"],
@@ -315,6 +320,8 @@ class PropertyReturnReminderService:
         reminder_label = threshold["label"]
         reminder_type = threshold["type"]
 
+        if member.status_changed_at is None:
+            raise ValueError("A property-return reminder needs the member's drop date")
         local_drop_date = self._to_local(member.status_changed_at, org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
         drop_type_display = (
