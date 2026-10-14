@@ -123,7 +123,8 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     # Four counts (purchase requests, check requests, expense lines, voided
     # checks) precede the stream; the stream then resolves the org's
     # timezone and pages the one purchase.
-    db.scalar.side_effect = [1, 0, 0, 0]
+    # Counts: purchases, checks, expense lines, voids, dues payments.
+    db.scalar.side_effect = [1, 0, 0, 0, 0]
     org = MagicMock()
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
     db.execute.side_effect = [org, purchases]

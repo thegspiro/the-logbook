@@ -39,6 +39,7 @@ from app.schemas.finance import (
     BudgetUpdate,
     CheckRequestCreate,
     CheckRequestUpdate,
+    DuesDefaultAccountsUpdate,
     DuesScheduleCreate,
     DuesScheduleUpdate,
     ExpenseLineItemCreate,
@@ -284,6 +285,10 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "qb_account_number": "6100",
         "qb_offset_account_name": "1000 Operating Checking",
         "mapping_type": "expense",
+    },
+    DuesDefaultAccountsUpdate: {
+        "income_account": "Dues Income",
+        "deposit_account": "Operating Checking",
     },
     ExportMappingUpdate: {
         "internal_category": "Apparatus",
