@@ -14,17 +14,22 @@ Three steps, each safe to interrupt and re-run:
 
     # 2. Encrypt each file in place, verifying it decrypts back to the
     #    original first. Originals are KEPT as hidden .<name>.plaintext copies;
-    #    a manifest is written to /app/uploads/.encryption/ and its path printed:
+    #    a manifest is written to /app/uploads/.encryption/, and the run ends
+    #    by printing the exact rollback and finalize commands for it:
     docker exec -it intranet-backend python scripts/encrypt_uploads.py --apply
 
-    #    Changed your mind? Put the originals back:
+    #    Changed your mind? Put the originals back, naming the manifest the
+    #    --apply run printed:
     docker exec -it intranet-backend python scripts/encrypt_uploads.py \\
-        --rollback /app/uploads/.encryption/encryption-<stamp>.json
+        --rollback /app/uploads/.encryption/encryption-20261013T224204Z.json
 
     # 3. Once satisfied, delete the kept originals (each file re-verified
     #    first). Until this runs, plaintext copies are still on disk:
     docker exec -it intranet-backend python scripts/encrypt_uploads.py \\
-        --finalize /app/uploads/.encryption/encryption-<stamp>.json
+        --finalize /app/uploads/.encryption/encryption-20261013T224204Z.json
+
+The container is ``intranet-backend`` in the standard compose file and
+``logbook-backend`` on Unraid.
 
 After rotating ENCRYPTION_KEY (docs/KEY_ROTATION.md), move files to the new
 key so the old one can leave ENCRYPTION_KEYS_LEGACY:
@@ -42,11 +47,35 @@ Exit codes:
 import argparse
 import json
 import os
+import shlex
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services import upload_encryption  # noqa: E402
+
+
+def next_steps(manifest_path: str) -> str:
+    """The rollback and finalize commands for one --apply run, ready to paste.
+
+    Printed rather than left to the docs because the docs can only show a
+    placeholder for the manifest's name, and the obvious one, ``<stamp>``, is
+    a shell redirect: pasted as written it fails before the script starts.
+    """
+    script = "python scripts/encrypt_uploads.py"
+    manifest = shlex.quote(manifest_path)
+    return "\n".join(
+        [
+            "Next: open a few stored files in the app to check they download.",
+            "Then delete the kept plaintext originals:",
+            f"  {script} --finalize {manifest}",
+            "Or, to undo this run instead:",
+            f"  {script} --rollback {manifest}",
+            "From the host, put 'docker exec -it <backend container>' in front:",
+            "intranet-backend in the standard compose file, logbook-backend on"
+            " Unraid.",
+        ]
+    )
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -73,6 +102,8 @@ def _run(args: argparse.Namespace) -> int:
         print(f"could not encrypt (left as it was): {path}")
     if not args.apply and report.survey.plain:
         print("Dry run: nothing was changed. Re-run with --apply.")
+    if report.manifest_path:
+        print(next_steps(report.manifest_path))
     return 1 if (report.survey.unreadable or report.failed) else 0
 
 
