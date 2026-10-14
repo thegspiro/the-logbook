@@ -74,7 +74,6 @@ async def setup(db_session: AsyncSession):
         name="Driver Operator",
         structure_type=ProgramStructureType.FLEXIBLE,
         active=True,
-        prerequisite_program_ids=[recruit.id],
     )
     db_session.add_all([recruit, driver])
     await db_session.flush()
@@ -93,9 +92,10 @@ async def setup(db_session: AsyncSession):
 
     finished = await enroll("finished", recruit)
     finished.status = EnrollmentStatus.COMPLETED
-    # Enrolled before the prerequisite existed, or by an officer override: an
-    # existing enrollment is kept, not torn up by a roster change.
+    # Enrolled before the prerequisite was added: an existing enrollment is
+    # kept, not torn up by a roster change.
     await enroll("already", driver)
+    driver.prerequisite_program_ids = [recruit.id]
     await db_session.flush()
 
     course = TrainingCourse(

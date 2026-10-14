@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.models.training import EnrollmentStatus, ProgramEnrollment, TrainingProgram
 from app.schemas.training_program import (
     ProgramBuildRequest,
+    ProgramEnrollmentCreate,
     TrainingProgramCreate,
     TrainingProgramResponse,
     TrainingProgramUpdate,
@@ -388,6 +389,72 @@ class TestEnforcementOfAPrerequisiteSetThroughTheApi:
         )
         assert errors == []
         assert len(enrollments) == 1
+
+
+class TestSingleMemberEnrollmentEndpoint:
+    """POST /training/programs/enrollments enrolled anyone, prerequisites or
+    not; the gate now sits in enroll_member, which every path goes through."""
+
+    async def test_refuses_a_member_who_has_not_finished_a_prerequisite(
+        self, db_session, setup_org_and_admin
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.training_programs import enroll_member_in_program
+        from app.models.user import User
+
+        org_id, member_id = setup_org_and_admin
+        svc = TrainingProgramService(db_session)
+        recruit = await _program(svc, org_id, member_id, "Recruit School")
+        driver = await _program(
+            svc,
+            org_id,
+            member_id,
+            "Driver Operator",
+            prerequisite_program_ids=[recruit.id],
+        )
+        officer = (
+            await db_session.execute(
+                select(User)
+                .where(User.id == member_id)
+                .options(selectinload(User.positions))
+            )
+        ).scalar_one()
+
+        def request():
+            return enroll_member_in_program(
+                enrollment_data=ProgramEnrollmentCreate(
+                    user_id=uuid.UUID(member_id), program_id=uuid.UUID(driver.id)
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+
+        with pytest.raises(HTTPException) as caught:
+            await request()
+        assert caught.value.status_code == 400
+        assert caught.value.detail == "Must first complete: Recruit School"
+        stored = await db_session.execute(
+            select(ProgramEnrollment).where(
+                ProgramEnrollment.user_id == member_id,
+                ProgramEnrollment.program_id == driver.id,
+            )
+        )
+        assert stored.scalars().first() is None
+
+        # Completing the prerequisite lifts the gate.
+        db_session.add(
+            ProgramEnrollment(
+                organization_id=org_id,
+                user_id=member_id,
+                program_id=recruit.id,
+                status=EnrollmentStatus.COMPLETED,
+            )
+        )
+        await db_session.flush()
+        enrollment = await request()
+        assert str(enrollment.program_id) == driver.id
+        assert enrollment.status == EnrollmentStatus.ACTIVE
 
 
 class TestDetailEndpointReportsTheProgramsOwnSettings:
