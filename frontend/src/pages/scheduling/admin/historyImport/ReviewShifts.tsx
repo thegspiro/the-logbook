@@ -19,7 +19,8 @@ import type {
   MatchDecision,
 } from '../../../../modules/scheduling/types/historyImport';
 import { ExistingShiftStatus } from '../../../../modules/scheduling/types/historyImport';
-import { formatShortDateTime, formatTime } from '../../../../utils/dateFormatting';
+import { positionLabel } from '../../../../modules/scheduling/utils/positionLabels';
+import { formatShortDateTime, formatTime, toLocalISODate } from '../../../../utils/dateFormatting';
 import { attendanceUnitLabel, hoursLabel, memberLabel, unitLabel } from './historyImportLabels';
 
 interface ReviewShiftsProps {
@@ -33,6 +34,14 @@ interface ReviewShiftsProps {
 }
 
 const PAGE_SIZE = 20;
+
+/**
+ * Whether a shift ends on the local day it started. An overnight or 24-hour
+ * shift that printed only the end's clock time read as a short one: a 25.5-hour
+ * attendance headed "Oct 9, 6:00 AM – 7:30 AM".
+ */
+const endsOnStartDay = (shift: HistoryImportShift, timezone: string): boolean =>
+  toLocalISODate(shift.start, timezone) === toLocalISODate(shift.end, timezone);
 
 const needsReview = (shift: HistoryImportShift): boolean =>
   shift.existing_status === ExistingShiftStatus.PENDING || shift.attendances.some((a) => a.needs_confirmation);
@@ -54,7 +63,7 @@ const AttendanceLine: React.FC<{
           <span className="text-theme-text-primary font-medium">{memberLabel(analysis, att.member_ref)}</span>
           <span className="text-theme-text-secondary">
             {showUnit ? ` · ${attendanceUnitLabel(analysis, att)}` : ''}
-            {att.seat ? ` · ${att.seat}` : att.role ? ` · ${att.role}` : ''} ·{' '}
+            {att.seat ? ` · ${positionLabel(att.seat)}` : att.role ? ` · ${att.role}` : ''} ·{' '}
             {formatShortDateTime(att.start, timezone)} – {formatShortDateTime(att.end, timezone)} ·{' '}
             {hoursLabel(att.minutes)}
             {att.call_count != null ? ` · ${att.call_count} calls` : ''} · line
@@ -140,7 +149,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
             Shifts
           </h2>
           <p className="text-theme-text-secondary text-sm">
-            {analysis.shifts.length} shifts on this department's units
+            {analysis.shifts.length} {analysis.shifts.length === 1 ? 'shift' : 'shifts'} on this department's units
             {pending > 0 ? `, ${pending} waiting on a decision` : ''}. Times are in {timezone.replace(/_/g, ' ')}.
           </p>
         </div>
@@ -172,7 +181,9 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
                 <div>
                   <h3 className="text-theme-text-primary font-semibold">
                     {unitLabel(analysis, 'own', shift.apparatus_id)} · {formatShortDateTime(shift.start, timezone)} –{' '}
-                    {formatTime(shift.end, timezone)}
+                    {endsOnStartDay(shift, timezone)
+                      ? formatTime(shift.end, timezone)
+                      : formatShortDateTime(shift.end, timezone)}
                   </h3>
                   <p className="text-theme-text-secondary text-sm">
                     {shift.attendances.length} {shift.attendances.length === 1 ? 'member' : 'members'} ·{' '}
@@ -234,7 +245,8 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
         <div className="card p-4">
           <h3 className="text-theme-text-primary font-semibold">Outside-agency hours</h3>
           <p className="text-theme-text-secondary text-sm">
-            {analysis.external.length} entries on other agencies' units, logged as outside-agency hours.
+            {analysis.external.length} {analysis.external.length === 1 ? 'entry' : 'entries'} on other agencies' units,
+            logged as outside-agency hours.
           </p>
           <ul className="divide-theme-surface-border mt-2 divide-y">
             {analysis.external.slice(0, 200).map((att) => (
