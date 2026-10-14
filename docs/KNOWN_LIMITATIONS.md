@@ -5550,6 +5550,33 @@ Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
   - whether SMS changes with the other two, or keeps its switch on the
     Notifications section.
 
+## Finance — Emailed Approvals Cannot Be Re-Sent, and Show the Approver Nothing to Decide On (2026-10-14)
+
+Found driving W62 (`docs/workflow-review/W62-approval-chains-and-finance-settings.md`,
+W62-6 and W62-7).
+
+- **A link that never arrives is invisible.** When a request reaches an
+  "Email" approver step, the link is minted once and emailed.
+  - If email is off or the send fails, `send_approval_request_email` returns
+    False and nothing records or shows it. The queue reads "waiting on
+    board-chair@example.org" either way.
+  - A link that expires after its 7 days is never replaced.
+  - The only way forward is an approvals admin's "Approve as admin", which
+    overrides the external approver rather than reaching them.
+- **The approver decides blind.** The emailed page shows the request's type
+  and the step's name, then Approve and Deny. No title, amount, vendor or
+  requester. The email itself carries only the step name. This is
+  deliberate, because the link is a bearer token, but it leaves the approver
+  nothing to judge.
+- **Decisions needed:**
+  - whether staff may re-send a link, and whether the screen should say when
+    one was not sent;
+  - whether staff may ever see or copy a link, since it is a bearer token for
+    someone else's approval;
+  - which details the emailed page and the email may show. At least the title
+    and amount are needed to make the decision; the requester's name and the
+    description are more sensitive.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

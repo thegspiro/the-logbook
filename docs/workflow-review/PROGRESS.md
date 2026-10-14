@@ -120,7 +120,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                               | Acts as                   | Starts at                                                        | Status |
 | --- | ---------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------- | ------ |
 | W61 | Budgets                                                                | treasurer                 | `/finance/budgets`                                               | ✅     |
-| W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ⬜     |
+| W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ✅     |
 | W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ⬜     |
 | W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ⬜     |
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ⬜     |
@@ -175,12 +175,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **W62** — Finance Settings shows a fiscal year a day early: FY2026,
-  entered 2026-01-01 to 2026-12-31 and stored as `2026-01-01T00:00:00Z` /
-  `2026-12-31T00:00:00Z`, lists as "12/31/2025 - 12/30/2026"
-  (`FiscalYearSettingsPage.tsx` formats a calendar date as an instant).
-  The Create Fiscal Year dialog's Name, Start Date and End Date inputs are
-  not tied to their labels (W61).
+- **W63** — straight after "Submit for Approval" the purchase request's
+  Approval Timeline reads "This request has no approval steps" until a reload,
+  which then shows all three. The New Purchase Request form's seven fields
+  are not tied to their labels (W62).
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -210,6 +208,44 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W62 — Approval chains, finance settings and the emailed approval — 2026-10-14
+
+Driven as:
+
+- `treasurer` configuring a three-step chain (position, email, notification)
+  and approving step 1;
+- `member` raising the request that ran through it;
+- a signed-out external approver on the emailed link, at 390×844;
+- five roles against the chain endpoints.
+
+Held:
+
+- chain create, reorder, rename and delete-with-confirm survive a reload;
+- configuration is finance-only;
+- each double-click recorded once;
+- the emailed link approves once and the member sees the result;
+- the notification step says it sends no email.
+
+Fixed:
+
+- W62-1 (MED — a used or cut-short approval link showed the API's raw
+  error to an outside approver).
+- W62-2 (MED — fiscal years displayed a day early).
+- W62-3 (LOW — the fiscal-year and category panels were not dialogs, ignored
+  Escape, and three fields were unlabelled).
+- W62-4 (LOW — six New Approval Chain fields were unlabelled).
+- W62-5 (LOW — two small tap targets).
+
+Flagged:
+
+- W62-6 (MED — an emailed approval that is never sent, or that expires, cannot
+  be re-sent, and nothing says it was not sent).
+- W62-7 (MED — the external approver is shown no title or amount).
+
+Gate: typecheck and lint are clean; 563 tests pass (6 new).
+
+Next: W63.
 
 ### W61 — Budgets — 2026-10-14
 

@@ -66,7 +66,7 @@ import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
 import { formatCalendarDate, formatDate } from '@/utils/dateFormatting';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
-import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { DialogPanel } from '@/components/ux/DialogPanel';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 // =============================================================================
@@ -89,6 +89,12 @@ const STATUS_LABELS: Record<string, string> = {
   closed: 'Closed',
 };
 
+// A fiscal year's start and end are calendar dates. They are stored at UTC
+// midnight and the backend reads them as dates (`fy.start_date.date()`), so
+// formatting them as instants showed FY2026 as "12/31/2025 - 12/30/2026" to
+// anyone west of UTC. The numeric style matches the rest of this screen.
+const FY_DATE: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'numeric', day: 'numeric' };
+
 const displayStatus = (fy: FiscalYear): string => (fy.status === 'closed' && !fy.isLocked ? 'closing' : fy.status);
 
 // =============================================================================
@@ -108,9 +114,6 @@ interface CreateFYModalProps {
 }
 
 const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
-  // Before the `if (!open) return null` below — hooks may not sit after it.
-  useOverlaySurface(open);
-
   const { createFiscalYear } = useFinanceStore();
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -142,12 +145,23 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
 
   return (
     <div className="modal-overlay z-50 flex items-center justify-center">
-      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Fiscal Year</h3>
+      <DialogPanel
+        onClose={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-fy-title"
+        className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl"
+      >
+        <h3 id="create-fy-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
+          Create Fiscal Year
+        </h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
-            <label className={labelClass}>Name</label>
+            <label htmlFor="create-fy-name" className={labelClass}>
+              Name
+            </label>
             <input
+              id="create-fy-name"
               type="text"
               className={inputClass}
               value={name}
@@ -156,8 +170,11 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
             />
           </div>
           <div>
-            <label className={labelClass}>Start Date</label>
+            <label htmlFor="create-fy-start" className={labelClass}>
+              Start Date
+            </label>
             <input
+              id="create-fy-start"
               type="date"
               className={inputClass}
               value={startDate}
@@ -165,8 +182,16 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
             />
           </div>
           <div>
-            <label className={labelClass}>End Date</label>
-            <input type="date" className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <label htmlFor="create-fy-end" className={labelClass}>
+              End Date
+            </label>
+            <input
+              id="create-fy-end"
+              type="date"
+              className={inputClass}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -185,7 +210,7 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -205,8 +230,6 @@ interface CategoryModalProps {
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, category, categories }) => {
-  // Before the `if (!open) return null` below — hooks may not sit after it.
-  useOverlaySurface(open);
   const { positions } = useBudgetFormOptions(open);
 
   const [name, setName] = useState(category?.name ?? '');
@@ -292,8 +315,14 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
 
   return (
     <div className="modal-overlay z-50 flex items-center justify-center">
-      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
-        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">
+      <DialogPanel
+        onClose={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="category-dialog-title"
+        className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl"
+      >
+        <h3 id="category-dialog-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
           {isEdit ? 'Edit Budget Category' : 'Create Budget Category'}
         </h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
@@ -449,7 +478,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
             </button>
           </div>
         </form>
-      </div>
+      </DialogPanel>
     </div>
   );
 };
@@ -897,7 +926,6 @@ const YearCloseControls: React.FC<YearCloseControlsProps> = ({ fy, onChanged }) 
 // =============================================================================
 
 const FiscalYearSettingsPage: React.FC = () => {
-  const tz = useTimezone();
   const { fiscalYears, budgetCategories, isLoading, error, fetchFiscalYears, fetchBudgetCategories } =
     useFinanceStore();
 
@@ -979,8 +1007,8 @@ const FiscalYearSettingsPage: React.FC = () => {
             <div key={`close-due-${fy.id}`} role="status" className="alert-warning mb-4 flex items-start gap-3 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                {fy.name} ended {formatDate(fy.endDate, tz)}. Begin its year-end close to stop new requests and start
-                reconciling.
+                {fy.name} ended {formatCalendarDate(fy.endDate, FY_DATE)}. Begin its year-end close to stop new requests
+                and start reconciling.
               </p>
             </div>
           ))}
@@ -1015,7 +1043,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                       {fy.isLocked && <Lock className="text-theme-text-secondary h-3.5 w-3.5" />}
                     </div>
                     <p className="text-theme-text-secondary mt-0.5 text-xs">
-                      {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
+                      {formatCalendarDate(fy.startDate, FY_DATE)} - {formatCalendarDate(fy.endDate, FY_DATE)}
                     </p>
                     {fy.status === 'draft' && <RequestWindow fy={fy} />}
                     <AdoptionRecord fy={fy} />
