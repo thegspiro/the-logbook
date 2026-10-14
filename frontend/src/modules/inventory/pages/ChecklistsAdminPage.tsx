@@ -120,9 +120,16 @@ export const ChecklistsAdminPage: React.FC = () => {
 
       {/* Five links do not fit across a 320px phone. The row scrolls, the cue
           shows that it does, and the marker tells the mobile reflow pass the
-          overflow is deliberate. */}
-      <nav aria-label="Related checklist screens" className="mb-6">
-        <ScrollCueRow className="flex gap-2" data-mobile-scroll-region aria-label="Related checklist screens">
+          overflow is deliberate. The scrolling row is itself the navigation
+          landmark: the reflow pass needs the label on the scroll region, and
+          a separate <nav> around it carried the same name a second time. */}
+      <div className="mb-6">
+        <ScrollCueRow
+          className="flex gap-2"
+          data-mobile-scroll-region
+          role="navigation"
+          aria-label="Related checklist screens"
+        >
           {related.map(({ label, description, path, icon: Icon }) => (
             <Link
               key={path}
@@ -135,7 +142,7 @@ export const ChecklistsAdminPage: React.FC = () => {
             </Link>
           ))}
         </ScrollCueRow>
-      </nav>
+      </div>
 
       <EquipmentCheckTemplateList />
     </div>

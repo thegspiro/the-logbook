@@ -129,6 +129,15 @@ describe('the practical-skills method', () => {
     expect(isHiddenByPracticalSkills('tests', null)).toBe(false);
   });
 
+  it('describes the Evaluations area by what it holds under each method', () => {
+    const description = (method: PracticalSkillsMethod | null) =>
+      trainingAdminAreasFor(method).find((area) => area.id === 'evaluations')?.description;
+
+    expect(description(PracticalSkillsMethod.SKILLS_TESTING)).toBe('Skills tests and knowledge tests');
+    expect(description(PracticalSkillsMethod.SHIFT_SIGNOFFS)).toBe('Skill sign-offs and knowledge tests');
+    expect(description(null)).toBe('Skill sign-offs, skills tests and knowledge tests');
+  });
+
   it('touches no destination outside the two systems', () => {
     const all = (areas: typeof TRAINING_ADMIN_AREAS) => areas.flatMap((area) => area.destinations).length;
     expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SKILLS_TESTING))).toBe(all(TRAINING_ADMIN_AREAS) - 1);

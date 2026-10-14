@@ -1,7 +1,10 @@
 /**
  * Check Request Form Page
  *
- * Form for creating new check requests.
+ * Form for creating new check requests, including a cash advance to the
+ * requester (app/services/cash_advances.py): a check to the member before an
+ * expense, which charges no budget line or fund until the member's expense
+ * report accounts for it.
  */
 
 import React from 'react';
@@ -17,7 +20,10 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
-import type { CheckRequest } from '../types';
+import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
+import { ADVANCE_RETURN_DAYS, type CheckRequest } from '../types';
+import { useAuthStore } from '@/stores/authStore';
+import { formatCurrency } from '@/utils/currencyFormatting';
 
 const checkRequestSchema = z.object({
   payeeName: z.string().min(1, 'Payee name is required').max(200),
@@ -28,6 +34,7 @@ const checkRequestSchema = z.object({
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
   budgetId: z.string().optional(),
   fundCampaignId: z.string().optional(),
+  isAdvance: z.boolean().optional(),
 });
 
 type CheckRequestFormData = z.infer<typeof checkRequestSchema>;
@@ -57,6 +64,22 @@ const CheckRequestFormPage: React.FC = () => {
   const { fiscalYears, budgetOptions, fiscalYearsLoaded } = useRequestFormOptions(fiscalYearId);
   const { funds, mode: fundMode } = useFundOptions();
 
+  const isAdvance = watch('isAdvance') ?? false;
+  const user = useAuthStore((s) => s.user);
+  // The check is made out to the member, so their legal name.
+  const memberName = user?.full_name || user?.display_name || user?.username || '';
+  // Advice only: the server refuses the submission while one is overdue.
+  const overdue = useMyOpenAdvances(isAdvance).filter((advance) => advance.overdue);
+
+  const toggleAdvance = (checked: boolean) => {
+    setValue('isAdvance', checked, { shouldDirty: true });
+    if (checked) {
+      setValue('budgetId', '', { shouldDirty: true });
+      setValue('fundCampaignId', '', { shouldDirty: true });
+      if (!watch('payeeName')) setValue('payeeName', memberName, { shouldDirty: true });
+    }
+  };
+
   const onSubmit = async (data: CheckRequestFormData) => {
     try {
       const payload: Partial<CheckRequest> = {
@@ -67,8 +90,12 @@ const CheckRequestFormPage: React.FC = () => {
       if (data.payeeAddress?.trim()) payload.payeeAddress = data.payeeAddress.trim();
       if (data.memo?.trim()) payload.memo = data.memo.trim();
       if (data.purpose?.trim()) payload.purpose = data.purpose.trim();
-      if (data.budgetId) payload.budgetId = data.budgetId;
-      if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
+      if (data.isAdvance) {
+        payload.isAdvance = true;
+      } else {
+        if (data.budgetId) payload.budgetId = data.budgetId;
+        if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
+      }
       const created = await createCheckRequest(payload);
       toast.success('Check request created');
       void navigate(`/finance/check-requests/${created.id}`);
@@ -103,6 +130,37 @@ const CheckRequestFormPage: React.FC = () => {
         <h1 className="text-theme-text-primary mb-6 text-xl font-bold">New Check Request</h1>
 
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
+          <div className="flex items-start gap-3">
+            <input
+              id="isAdvance"
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={isAdvance}
+              onChange={(e) => toggleAdvance(e.target.checked)}
+              aria-describedby="isAdvance-hint"
+            />
+            <div>
+              <label htmlFor="isAdvance" className="text-theme-text-primary text-sm font-medium">
+                This is a cash advance to me
+              </label>
+              <p id="isAdvance-hint" className="text-theme-text-secondary text-xs">
+                Money paid to you before an expense, such as for travel. Within {ADVANCE_RETURN_DAYS} days of the check,
+                submit an expense report against it and return anything not spent. Until you do, it may count as taxable
+                pay and you cannot request another advance.
+              </p>
+            </div>
+          </div>
+
+          {isAdvance && overdue.length > 0 && (
+            <div role="alert" className="alert-warning text-sm">
+              You have an advance more than {ADVANCE_RETURN_DAYS} days old that is not fully accounted for:{' '}
+              {overdue
+                .map((advance) => `${advance.requestNumber} (${formatCurrency(advance.outstanding)} outstanding)`)
+                .join(', ')}
+              . This request cannot be submitted until it is settled.
+            </div>
+          )}
+
           <div>
             <label htmlFor="payeeName" className={labelClass}>
               Payee Name *
@@ -147,28 +205,34 @@ const CheckRequestFormPage: React.FC = () => {
             {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
           </div>
 
-          <div>
-            <label htmlFor="budgetId" className={labelClass}>
-              Budget
-            </label>
-            <select id="budgetId" {...register('budgetId')} className={selectClass}>
-              <option value="">No budget linked</option>
-              {budgetOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {budgetOptionLabel(option)}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* An advance charges no budget line or fund: the expense report
+              that accounts for it does. */}
+          {!isAdvance && (
+            <>
+              <div>
+                <label htmlFor="budgetId" className={labelClass}>
+                  Budget
+                </label>
+                <select id="budgetId" {...register('budgetId')} className={selectClass}>
+                  <option value="">No budget linked</option>
+                  {budgetOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {budgetOptionLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <FundSelect
-            id="fundCampaignId"
-            value={watch('fundCampaignId') ?? ''}
-            onChange={(fundId) => setValue('fundCampaignId', fundId, { shouldDirty: true })}
-            amount={watch('amount') || 0}
-            funds={funds}
-            mode={fundMode}
-          />
+              <FundSelect
+                id="fundCampaignId"
+                value={watch('fundCampaignId') ?? ''}
+                onChange={(fundId) => setValue('fundCampaignId', fundId, { shouldDirty: true })}
+                amount={watch('amount') || 0}
+                funds={funds}
+                mode={fundMode}
+              />
+            </>
+          )}
 
           <div>
             <label htmlFor="purpose" className={labelClass}>

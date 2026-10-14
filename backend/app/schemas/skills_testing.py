@@ -69,6 +69,9 @@ def _validate_result_release_value(v: Optional[str]) -> Optional[str]:
 # criteria in a section and 5 checklist items. Result lists use the same caps
 # as the template lists they mirror, so a valid sheet always fits its results.
 MAX_TEMPLATE_SECTIONS = 100
+
+# Longest validity a skill template may declare: ten years, in months.
+MAX_VALID_FOR_MONTHS = 120
 MAX_SECTION_CRITERIA = 200
 MAX_CHECKLIST_ITEMS = 100
 MAX_RESULT_VIEWER_POSITIONS = 100
@@ -211,6 +214,9 @@ class SkillTemplateCreate(BaseModel):
     # Optional pipeline requirement this template's tests satisfy (hybrid link:
     # tests inherit it, overridable per test).
     requirement_id: Optional[UUID] = None
+    # Months a passing official test stays valid; omit for a skill that does not
+    # lapse. Upper bound is ten years, past which a typo is likelier than a rule.
+    valid_for_months: Optional[int] = Field(None, ge=1, le=MAX_VALID_FOR_MONTHS)
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
     result_disclosure: Optional[str] = Field(None, max_length=50)
@@ -270,6 +276,9 @@ class SkillTemplateUpdate(BaseModel):
     tags: Optional[List[str]] = None
     visibility: Optional[str] = None
     requirement_id: Optional[UUID] = None
+    # Months a passing official test stays valid; omit for a skill that does not
+    # lapse. Upper bound is ten years, past which a typo is likelier than a rule.
+    valid_for_months: Optional[int] = Field(None, ge=1, le=MAX_VALID_FOR_MONTHS)
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
     result_disclosure: Optional[str] = Field(None, max_length=50)
@@ -307,6 +316,7 @@ class SkillTemplateResponse(UTCResponseBase):
     require_all_critical: bool
     score_pass_fail_criteria: bool = False
     requirement_id: Optional[UUID] = None
+    valid_for_months: Optional[int] = None
     result_disclosure: Optional[str] = None
     result_release: Optional[str] = None
     result_viewer_positions: Optional[list] = None

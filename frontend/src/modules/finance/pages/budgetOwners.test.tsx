@@ -443,6 +443,9 @@ describe('FiscalYearSettingsPage category owner', () => {
         ownerPositionId: null,
         qbAccountName: null,
         functionalClass: null,
+        parentCategoryId: null,
+        chargeAccess: null,
+        chargePositionIds: [],
       })
     );
   });
@@ -523,6 +526,125 @@ describe('FiscalYearSettingsPage category expense classification', () => {
       expect(updateCategory).toHaveBeenCalledWith(
         'cat-training',
         expect.objectContaining({ name: 'Training', functionalClass: null })
+      )
+    );
+  });
+});
+
+// =============================================================================
+// Sub-lines and who may charge them
+// =============================================================================
+
+describe('FiscalYearSettingsPage sub-categories and charge access', () => {
+  const quartermaster: BudgetCategory = {
+    ...category('cat-qm', 'Quartermaster', 'Chief'),
+    ownerPositionId: 'pos-chief',
+    effectiveChargeAccess: 'open',
+    path: ['Quartermaster'],
+  };
+  const brass: BudgetCategory = {
+    ...category('cat-brass', 'Officer brass'),
+    parentCategoryId: 'cat-qm',
+    chargeAccess: 'restricted',
+    effectiveChargeAccess: 'restricted',
+    chargePositionIds: ['pos-Training Officer'],
+    path: ['Quartermaster', 'Officer brass'],
+  };
+  const boots: BudgetCategory = {
+    ...category('cat-boots', 'Boot reimbursement'),
+    parentCategoryId: 'cat-brass',
+    effectiveChargeAccess: 'restricted',
+    chargeAccessInheritedFrom: 'Officer brass',
+    path: ['Quartermaster', 'Officer brass', 'Boot reimbursement'],
+  };
+
+  beforeEach(() => {
+    storeState = { ...storeState, budgetCategories: [boots, brass, quartermaster] };
+  });
+
+  it('lists sub-categories beneath their parent with the rule they are under', () => {
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    const names = screen.getAllByRole('button', { name: /^Edit / }).map((button) => button.getAttribute('aria-label'));
+    expect(names).toEqual(['Edit Quartermaster', 'Edit Officer brass', 'Edit Boot reimbursement']);
+    expect(screen.getByText('Restricted to the owner and chosen positions (from Officer brass)')).toBeInTheDocument();
+  });
+
+  it('creates a restricted sub-line under a parent, starting with its owner', async () => {
+    const user = userEvent.setup();
+    createCategory.mockResolvedValue(category('cat-new', 'Dress uniforms'));
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: /new category/i }));
+    await user.type(screen.getByLabelText('Name'), 'Dress uniforms');
+    await screen.findByRole('option', { name: 'Chief' });
+    await user.selectOptions(screen.getByLabelText('Parent category (optional)'), 'cat-qm');
+    expect(screen.getByLabelText('Owner position (optional)')).toHaveValue('pos-chief');
+    await user.selectOptions(screen.getByLabelText('Who can charge these lines'), 'restricted');
+    await user.click(screen.getByLabelText('Training Officer'));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(createCategory).toHaveBeenCalledWith({
+        name: 'Dress uniforms',
+        ownerPositionId: 'pos-chief',
+        parentCategoryId: 'cat-qm',
+        chargeAccess: 'restricted',
+        chargePositionIds: ['pos-Training Officer'],
+      })
+    );
+  });
+
+  it('does not offer a category, or one beneath it, as its own parent', async () => {
+    const user = userEvent.setup();
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: 'Edit Officer brass' }));
+    const parent = screen.getByLabelText('Parent category (optional)');
+    const offered = within(parent)
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('value'));
+    expect(offered).toEqual(['', 'cat-qm']);
+    expect(parent).toHaveValue('cat-qm');
+  });
+
+  it('reads sub-lines beneath their parent on the budgets page, with its subtotal', () => {
+    storeState = {
+      ...storeState,
+      budgets: [
+        line({ id: 'b-brass', categoryId: 'cat-brass', amountBudgeted: '300.00', amountSpent: '100.00' }),
+        line({ id: 'b-qm', categoryId: 'cat-qm', amountBudgeted: '1000.00', amountSpent: '0.00' }),
+        line({ id: 'b-gear', categoryId: 'cat-gear', amountBudgeted: '800.00' }),
+      ],
+      budgetCategories: [brass, quartermaster, category('cat-gear', 'Gear')],
+    };
+    renderAt('/finance/budgets', '/finance/budgets', BudgetsPage);
+
+    const rows = screen.getAllByRole('row').map((row) => row.textContent ?? '');
+    expect(rows[1]).toContain('Gear');
+    expect(rows[2]).toContain('Quartermaster');
+    expect(rows[3]).toContain('Officer brass');
+    expect(rows[4]).toMatch(/^Quartermaster total\$1,300\$100/);
+    // Gear has no sub-lines, so it gets no subtotal of its own.
+    expect(screen.queryByText('Gear total')).not.toBeInTheDocument();
+  });
+
+  it('opens a restricted line to everyone, dropping its named positions', async () => {
+    const user = userEvent.setup();
+    updateCategory.mockResolvedValue(brass);
+    renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
+
+    await user.click(screen.getByRole('button', { name: 'Edit Officer brass' }));
+    const access = screen.getByLabelText('Who can charge these lines');
+    expect(access).toHaveValue('restricted');
+    expect(screen.getByLabelText('Training Officer')).toBeChecked();
+    await user.selectOptions(access, 'open');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(updateCategory).toHaveBeenCalledWith(
+        'cat-brass',
+        expect.objectContaining({ parentCategoryId: 'cat-qm', chargeAccess: 'open', chargePositionIds: [] })
       )
     );
   });

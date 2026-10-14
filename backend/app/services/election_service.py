@@ -7947,7 +7947,7 @@ class ElectionService:
         self,
         election_id: UUID,
         organization_id: UUID | str,
-        recipient_user_ids: Optional[List[UUID]] = None,
+        recipient_user_ids: Optional[Sequence[UUID | str]] = None,
         subject: Optional[str] = None,
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,

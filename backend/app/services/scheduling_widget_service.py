@@ -136,7 +136,7 @@ class SchedulingWidgetService:
         )
         incomplete = sum(
             not shift.is_finalized
-            and shift.end_time
+            and shift.end_time is not None
             and _as_utc(shift.end_time) < datetime.now(timezone.utc)
             for shift in shifts
         )

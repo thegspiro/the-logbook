@@ -7,7 +7,7 @@ Request and response schemas for apparatus-related endpoints.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import (
     BaseModel,
@@ -900,8 +900,9 @@ class ApparatusMaintenanceBase(BaseModel):
 
     notes: Optional[str] = None
 
-    # Attachments (photos, invoices, email chains, etc.)
-    attachments: Optional[List[FileAttachment]] = None
+    # Attachments (photos, invoices, email chains, etc.). A Sequence rather than
+    # a List so the Create schema can narrow it to FileAttachmentInput.
+    attachments: Optional[Sequence[FileAttachment]] = None
 
 
 class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
@@ -1240,7 +1241,7 @@ class ApparatusOperatorBase(BaseModel):
     license_verified_date: Optional[date] = None
 
     has_restrictions: bool = Field(default=False)
-    restrictions: Optional[List[OperatorRestriction]] = None
+    restrictions: Optional[Sequence[OperatorRestriction]] = None
     restriction_notes: Optional[str] = None
 
     is_active: bool = Field(default=True)
@@ -2101,7 +2102,7 @@ class ApparatusComponentNoteBase(BaseModel):
     actual_cost: Optional[Decimal] = Field(None, ge=0)
 
     resolution_notes: Optional[str] = None
-    attachments: Optional[List[NoteAttachment]] = None
+    attachments: Optional[Sequence[NoteAttachment]] = None
     tags: Optional[List[str]] = None
 
 

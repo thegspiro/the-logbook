@@ -210,7 +210,30 @@ describe('schedules', () => {
         dueDate: '2027-03-01T00:00:00.000Z',
         isActive: false,
         notes: null,
+        // Blank: the department's defaults apply.
+        qbIncomeAccount: null,
+        qbDepositAccount: null,
       })
+    );
+  });
+
+  it("sends a schedule's own QuickBooks accounts, trimmed", async () => {
+    createSchedule.mockResolvedValue(schedule({ id: 'sch-new' }));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /new schedule/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Name'), 'Fines');
+    await user.type(within(dialog).getByLabelText('Amount per member'), '10');
+    await user.type(within(dialog).getByLabelText('Due date'), '2028-03-01');
+    await user.type(within(dialog).getByLabelText(/Income account/), ' Fines Income ');
+    await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
+
+    await waitFor(() =>
+      expect(createSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({ qbIncomeAccount: 'Fines Income', qbDepositAccount: undefined })
+      )
     );
   });
 

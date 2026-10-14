@@ -2581,6 +2581,57 @@ class TrainingProgramService:
 
         return enrollment, None
 
+    async def missing_prerequisites(
+        self,
+        prerequisite_program_ids: Optional[Sequence[str]],
+        user_ids: Sequence[UUID | str],
+        organization_id: UUID | str,
+    ) -> Dict[str, List[str]]:
+        """Which members have not completed a program's prerequisites.
+
+        Returns ``{user_id: [names of the prerequisite programs not yet
+        completed]}``, with members who have finished all of them left out. A
+        prerequisite counts only once its enrollment is COMPLETED. An id that
+        names no program in this department (a stale clone or import) can never
+        be completed and is reported as "a prerequisite program".
+
+        The one definition behind the enroll picker, bulk enrollment and cohort
+        roster sync, so the three cannot disagree about who is eligible.
+        """
+        prereq_ids = [str(p) for p in (prerequisite_program_ids or [])]
+        user_id_strs = [str(u) for u in user_ids]
+        if not prereq_ids or not user_id_strs:
+            return {}
+
+        name_rows = await self.db.execute(
+            select(TrainingProgram.id, TrainingProgram.name).where(
+                TrainingProgram.id.in_(prereq_ids),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
+        completed_pairs: set[tuple[str, str]] = set()
+        if prereq_names:
+            completed_result = await self.db.execute(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.program_id.in_(list(prereq_names)),
+                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+                )
+            )
+            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
+
+        missing: Dict[str, List[str]] = {}
+        for uid in user_id_strs:
+            names = [
+                prereq_names.get(pid, "a prerequisite program")
+                for pid in prereq_ids
+                if (uid, pid) not in completed_pairs
+            ]
+            if names:
+                missing[uid] = names
+        return missing
+
     async def get_enrollment_eligibility(
         self,
         program_id: UUID,
@@ -2624,32 +2675,9 @@ class TrainingProgramService:
         enrolled_ids = {str(row[0]) for row in enrolled_result.all()}
 
         # Missing prerequisites — per user, the specific programs not yet done.
-        missing_prereqs: dict[str, List[str]] = {}
-        if program.prerequisite_program_ids and user_id_strs:
-            prereq_ids = [str(p) for p in program.prerequisite_program_ids]
-            name_rows = await self.db.execute(
-                select(TrainingProgram.id, TrainingProgram.name).where(
-                    TrainingProgram.id.in_(prereq_ids),
-                    TrainingProgram.organization_id == str(organization_id),
-                )
-            )
-            prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
-            completed_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
-                    ProgramEnrollment.user_id.in_(user_id_strs),
-                    ProgramEnrollment.program_id.in_(prereq_ids),
-                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
-                )
-            )
-            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
-            for uid in user_id_strs:
-                missing = [
-                    prereq_names.get(pid, "a prerequisite program")
-                    for pid in prereq_ids
-                    if (uid, pid) not in completed_pairs
-                ]
-                if missing:
-                    missing_prereqs[uid] = missing
+        missing_prereqs = await self.missing_prerequisites(
+            program.prerequisite_program_ids, user_id_strs, organization_id
+        )
 
         # Active in another program — a soft advisory, NOT a block. A member can
         # be in several programs at once (e.g. onboarding courses); we only note
@@ -6052,32 +6080,15 @@ class TrainingProgramService:
 
         # Check for prerequisite programs (batch query instead of O(U*P) queries)
         prerequisite_errors = []
-        if program.prerequisite_program_ids:
-            prereq_uuids = [UUID(pid) for pid in program.prerequisite_program_ids]
-            # Single query: fetch all completed prerequisite enrollments for these users
-            completed_prereqs_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, TrainingProgram.id)
-                .join(TrainingProgram)
-                .where(
-                    ProgramEnrollment.user_id.in_(user_id_strs),
-                    TrainingProgram.id.in_([str(p) for p in prereq_uuids]),
-                    TrainingProgram.organization_id == str(organization_id),
-                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+        missing_prereqs = await self.missing_prerequisites(
+            program.prerequisite_program_ids, user_id_strs, organization_id
+        )
+        for uid in user_ids:
+            if str(uid) in missing_prereqs:
+                prerequisite_errors.append(
+                    f"{_user_name(uid)} has not completed prerequisite program"
                 )
-            )
-            # Build a set of (user_id, program_id) pairs that are completed
-            completed_pairs = {
-                (str(row[0]), str(row[1])) for row in completed_prereqs_result.all()
-            }
-
-            for uid in user_ids:
-                for prereq_id in program.prerequisite_program_ids:
-                    if (str(uid), prereq_id) not in completed_pairs:
-                        prerequisite_errors.append(
-                            f"{_user_name(uid)} has not completed prerequisite program"
-                        )
-                        blocked_user_ids.add(str(uid))
-                        break  # One missing prereq is enough
+                blocked_user_ids.add(str(uid))
 
         # Concurrent enrollment is a soft advisory, not a block — a member can be
         # in several programs at once (onboarding courses, etc.). The picker

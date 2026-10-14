@@ -646,13 +646,13 @@ async def _ensure_catalogue_rows(db: AsyncSession, organization_id: str) -> None
         # configuration; until it exists there is nothing to attach rows to.
         return
 
-    result = await db.execute(
+    present_result = await db.execute(
         select(
             PublicPortalDataWhitelist.data_category,
             PublicPortalDataWhitelist.field_name,
         ).where(PublicPortalDataWhitelist.organization_id == organization_id)
     )
-    present = {(row[0], row[1]) for row in result.all()}
+    present = {(row[0], row[1]) for row in present_result.all()}
 
     missing = [
         field
@@ -834,7 +834,10 @@ async def bulk_update_whitelist(
         field = update_item.get("field")
         enabled = update_item.get("enabled")
 
-        if not all([category, field, enabled is not None]):
+        # `updates` is free-form JSON, so `enabled` can be any value. Only a real
+        # boolean is written to the boolean column; anything else is skipped like
+        # a missing key, instead of storing whatever string or number came in.
+        if not (category and field and isinstance(enabled, bool)):
             continue
 
         # Find and update entry

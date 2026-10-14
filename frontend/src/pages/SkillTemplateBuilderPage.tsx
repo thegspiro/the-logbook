@@ -576,6 +576,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [visibility, setVisibility] = useState<string>('all_members');
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>();
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
+  const [validForMonths, setValidForMonths] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
   // Off by default so a new template's percentage means the same thing as every
   // one already on record: points from scored steps only.
@@ -660,6 +661,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined
       );
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
+      setValidForMonths(currentTemplate.valid_for_months ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
       setScorePassFailCriteria(currentTemplate.score_pass_fail_criteria ?? false);
       setRequirementId(currentTemplate.requirement_id ?? '');
@@ -795,6 +797,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       visibility: visibility as 'all_members' | 'officers_only' | 'assigned_only',
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : null,
       passing_percentage: passingPercentage ?? null,
+      valid_for_months: validForMonths ?? null,
       require_all_critical: requireAllCritical,
       score_pass_fail_criteria: scorePassFailCriteria,
       requirement_id: requirementId || null,
@@ -839,6 +842,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     visibility,
     timeLimitMinutes,
     passingPercentage,
+    validForMonths,
     requireAllCritical,
     scorePassFailCriteria,
     requirementId,
@@ -1220,6 +1224,30 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 placeholder="e.g., 70"
                 className="form-input px-3"
               />
+            </div>
+            <div>
+              <label
+                htmlFor="template-valid-for-months"
+                className="text-theme-text-muted mb-1 block text-sm font-medium"
+              >
+                Valid for (months)
+              </label>
+              <input
+                id="template-valid-for-months"
+                type="number"
+                min="1"
+                max="120"
+                step="1"
+                value={validForMonths ?? ''}
+                onChange={(e) => setValidForMonths(e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="Leave blank if it never expires"
+                aria-describedby="template-valid-for-months-help"
+                className="form-input px-3"
+              />
+              <p id="template-valid-for-months-help" className="text-theme-text-muted mt-1 text-xs">
+                A passing official test expires this many months after it was taken and appears in the member&apos;s
+                upcoming list.
+              </p>
             </div>
             <div>
               <label

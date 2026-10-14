@@ -213,7 +213,7 @@ shown how early it was rather than having to compare timestamps by eye. See
 
 ## API
 
-See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-cards--station-check-in-2026-08-23) and, for badge codes and CR80 printing, [API Reference → Member badges and ID card printing](API-Reference#member-badges-and-id-card-printing-2026-10-05).
+See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-cards--station-check-in) and, for badge codes and CR80 printing, [API Reference → Member badges and ID card printing](API-Reference#member-badges-and-id-card-printing).
 
 ## Data
 

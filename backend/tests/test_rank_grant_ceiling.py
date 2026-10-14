@@ -172,7 +172,7 @@ class TestRankIsConfigured:
         assert update_src.index(canonicalize) < update_src.index(
             "_enforce_rank_grant_ceiling("
         )
-        assert 'perm_user, update_data["rank"],' in update_src
+        assert 'acting_member, update_data["rank"],' in update_src
 
     async def test_the_prospect_transfer_path_checks_too(self):
         """The third writer, and the one furthest from the users endpoints.

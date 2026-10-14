@@ -179,6 +179,21 @@ class FunctionalClass(str, enum.Enum):
     FUNDRAISING = "fundraising"
 
 
+class ChargeAccess(str, enum.Enum):
+    """Who may charge a budget category's lines on a request.
+
+    ``open`` lines are offered to every member who can raise a request (a
+    boot reimbursement); ``restricted`` lines only to the positions
+    answerable for them and the positions they name (officer brass, kept for
+    the Quartermaster). A category with no setting inherits its parent's,
+    and a top-level category with none is open — how every line behaved
+    before the setting existed (app/services/finance_budget_access.py).
+    """
+
+    OPEN = "open"
+    RESTRICTED = "restricted"
+
+
 class ExpenseType(str, enum.Enum):
     """Type of expense line item"""
 
@@ -378,6 +393,12 @@ class BudgetCategory(Base):
         nullable=True,
         index=True,
     )
+    # Who may charge this category's lines. Null inherits the parent's; see
+    # ChargeAccess and app/services/finance_budget_access.py.
+    charge_access: Mapped[Optional[ChargeAccess]] = mapped_column(
+        SQLEnum(ChargeAccess, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -408,6 +429,47 @@ class BudgetCategory(Base):
     )
 
     __table_args__ = (Index("ix_budget_categories_org_id", "organization_id"),)
+
+
+class BudgetCategoryChargePosition(Base):
+    """A position named as able to charge a restricted category's lines.
+
+    Only read while the category's own ``charge_access`` is ``restricted``:
+    a category that inherits its rule inherits the parent's list with it, so
+    the positions always belong to the category that set the restriction.
+    """
+
+    __tablename__ = "budget_category_charge_positions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("budget_categories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("positions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "category_id",
+            "position_id",
+            name="uq_budget_category_charge_positions_category_position",
+        ),
+    )
 
 
 class Budget(Base):
@@ -1131,6 +1193,19 @@ class ExpenseReport(Base):
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The cash advance (a check request marked ``is_advance``) this report
+    # accounts for, and how much of the report the advance covers, fixed when
+    # the report is submitted (app/services/cash_advances.py). The rest is
+    # reimbursed to the member as usual.
+    advance_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    advance_applied: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     # When the member submitted the report. Null on reports submitted before
     # this was recorded (2026-10-12).
     submitted_at: Mapped[Optional[datetime]] = mapped_column(
@@ -1311,6 +1386,12 @@ class CheckRequest(Base):
         nullable=True,
         index=True,
     )
+    # Cash advanced to the requesting member ahead of an expense, under the
+    # accountable plan (app/services/cash_advances.py). An advance charges no
+    # budget line or fund: the expense report that accounts for it does.
+    is_advance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
     payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -1415,6 +1496,56 @@ class CheckRequest(Base):
     )
 
 
+class AdvanceReturn(Base):
+    """Unspent cash a member handed back against a cash advance.
+
+    Append-only once exported; one recorded by mistake may be deleted until a
+    QuickBooks export has carried it.
+    """
+
+    __tablename__ = "advance_returns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    advance_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    returned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recorded_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_advance_returns_advance", "advance_id"),
+        Index("ix_advance_returns_org_returned", "organization_id", "returned_at"),
+    )
+
+
 # ============================================
 # Phase 4: Dues & Assessments
 # ============================================
@@ -1452,6 +1583,13 @@ class DuesSchedule(Base):
     )
     applies_to_membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
+    )
+    # The QuickBooks accounts this schedule's payments post to: the income
+    # account credited and the bank account debited. Null takes the
+    # department's default (organization settings, finance.qb_dues_*).
+    qb_income_account: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    qb_deposit_account: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1616,6 +1754,16 @@ class DuesPayment(Base):
     recorded_by: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # When a complete QuickBooks export last carried this payment, and which;
+    # the next export leaves it out.
+    qb_exported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    qb_export_log_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("finance_export_logs.id", ondelete="SET NULL"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

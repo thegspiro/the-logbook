@@ -334,7 +334,8 @@ class TestGetDateWindow:
         today = date(2026, 6, 15)
         start, end = TrainingService._get_date_window(req, today)
         assert end == today
-        assert start == date(2025, 12, 15)
+        # Six whole calendar months ending with June: January through now.
+        assert start == date(2026, 1, 1)
 
     def test_rolling_period_12_months(self):
         req = _make_requirement(
@@ -344,7 +345,8 @@ class TestGetDateWindow:
         )
         today = date(2026, 3, 1)
         start, end = TrainingService._get_date_window(req, today)
-        assert start == date(2025, 3, 1)
+        # Twelve whole calendar months ending with March: April 2025 onward.
+        assert start == date(2025, 4, 1)
         assert end == today
 
     def test_annual_custom_window_same_year(self):
@@ -1215,8 +1217,24 @@ class TestEvaluateRequirementDetailFields:
             "cert_expired",
             "blocks_activity",
             "catch_up_deadline",
+            "next_window_opens",
+            "window_start",
+            "window_end",
+            "window_months",
+            "monthly_hours",
         }
         assert set(result.keys()) == expected_fields
+
+    def test_early_credit_window_reports_when_the_next_one_opens(self):
+        """A Nov-Jan requirement taken last winter reads met until October."""
+        req = _make_requirement(period_start_month=11, period_end_month=1)
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["next_window_opens"] == "2026-11-01"
+
+    def test_no_next_window_without_a_year_crossing_window(self):
+        req = _make_requirement()
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["next_window_opens"] is None
 
     def test_days_until_due_calculated(self):
         req = _make_requirement(due_date=date(2026, 12, 31))
@@ -1248,7 +1266,10 @@ class TestEvaluateRequirementDetailFields:
         Caught by Codex reviewing this fix's own first draft.
         """
         req = _make_requirement(
-            due_date_type="rolling", rolling_period_months=24, due_date=None
+            requirement_type=SimpleNamespace(value="calls"),
+            due_date_type="rolling",
+            rolling_period_months=24,
+            due_date=None,
         )
         records = [_make_record(completion_date=date(2025, 1, 10))]
         result = TrainingService.evaluate_requirement_detail(
@@ -1281,7 +1302,10 @@ class TestEvaluateRequirementDetailFields:
         """
         stale_due = date(2020, 1, 1)
         req = _make_requirement(
-            due_date_type="rolling", rolling_period_months=24, due_date=stale_due
+            requirement_type=SimpleNamespace(value="calls"),
+            due_date_type="rolling",
+            rolling_period_months=24,
+            due_date=stale_due,
         )
         records = [_make_record(completion_date=date(2025, 1, 10))]
         result = TrainingService.evaluate_requirement_detail(
@@ -1301,6 +1325,7 @@ class TestEvaluateRequirementDetailFields:
         present -- a training_type-only filter would anchor on it instead.
         """
         req = _make_requirement(
+            requirement_type=SimpleNamespace(value="courses"),
             due_date_type="rolling",
             rolling_period_months=24,
             due_date=None,
@@ -1537,3 +1562,201 @@ class TestForecastPct:
         assert _forecast_pct(2, 4, 0) == 50.0
         assert _forecast_pct(2, 4, 1) == 25.0
         assert _forecast_pct(2, 4, 3) == 0
+
+
+# =====================================================
+# Rolling hours requirements: whole calendar months, no deadline, monthly rows
+# =====================================================
+
+
+def _rolling_hours_requirement(**kwargs):
+    from app.models.training import DueDateType
+
+    return _make_requirement(
+        due_date_type=DueDateType.ROLLING,
+        rolling_period_months=12,
+        required_hours=72.0,
+        training_type=None,
+        **kwargs,
+    )
+
+
+class TestRollingWindow:
+    """ "The last 12 months" is November through this October, not a cut on the day."""
+
+    def test_starts_on_the_first_of_the_month_eleven_months_back(self):
+        from app.services.training_compliance import rolling_window
+
+        assert rolling_window(date(2026, 10, 13), 12) == (
+            date(2025, 11, 1),
+            date(2026, 10, 13),
+        )
+
+    def test_covers_exactly_the_requested_number_of_calendar_months(self):
+        from app.services.training_compliance import rolling_window
+        from app.services.training_waiver_service import total_months_in_period
+
+        for as_of in (date(2026, 1, 31), date(2026, 3, 1), date(2026, 12, 31)):
+            start, end = rolling_window(as_of, 12)
+            assert start.day == 1
+            assert total_months_in_period(start, end) == 12
+
+    def test_a_one_month_window_is_the_current_month(self):
+        from app.services.training_compliance import rolling_window
+
+        assert rolling_window(date(2026, 10, 13), 1) == (
+            date(2026, 10, 1),
+            date(2026, 10, 13),
+        )
+
+    def test_grading_and_the_compliance_screens_share_the_window(self):
+        from app.services.training_compliance import get_requirement_date_window
+
+        req = _rolling_hours_requirement()
+        today = date(2026, 10, 13)
+        assert TrainingService._get_date_window(
+            req, today
+        ) == get_requirement_date_window(req, today)
+        assert get_requirement_date_window(req, today)[0] == date(2025, 11, 1)
+
+    def test_a_class_before_the_first_of_the_window_no_longer_counts(self):
+        req = _rolling_hours_requirement()
+        records = [
+            _make_record(completion_date=date(2025, 10, 20), hours_completed=5.0),
+            _make_record(completion_date=date(2025, 11, 2), hours_completed=2.0),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 10, 13)
+        )
+        assert result["completed_hours"] == 2.0
+
+
+class TestMonthlyHours:
+    def test_lists_every_month_including_empty_ones(self):
+        from app.services.training_compliance import monthly_hours
+
+        records = [
+            _make_record(completion_date=date(2025, 12, 31), hours_completed=1.0),
+            _make_record(completion_date=date(2025, 12, 2), hours_completed=1.5),
+            _make_record(completion_date=date(2026, 2, 27), hours_completed=1.0),
+        ]
+        months = monthly_hours(records, date(2025, 11, 1), date(2026, 2, 28))
+        assert months == [
+            {"month": "2025-11", "hours": 0.0, "waived": False},
+            {"month": "2025-12", "hours": 2.5, "waived": False},
+            {"month": "2026-01", "hours": 0.0, "waived": False},
+            {"month": "2026-02", "hours": 1.0, "waived": False},
+        ]
+
+    def test_ignores_undated_records_and_records_outside_the_range(self):
+        from app.services.training_compliance import monthly_hours
+
+        records = [
+            _make_record(completion_date=None, hours_completed=9.0),
+            _make_record(completion_date=date(2025, 10, 31), hours_completed=9.0),
+            _make_record(completion_date=date(2026, 1, 5), hours_completed=3.0),
+        ]
+        months = monthly_hours(records, date(2025, 11, 1), date(2026, 1, 31))
+        assert sum(m["hours"] for m in months) == 3.0
+
+
+class TestRollingHoursDetail:
+    TODAY = date(2026, 10, 13)
+
+    def _records(self):
+        return [
+            _make_record(completion_date=date(2025, 11, 19), hours_completed=2.0),
+            _make_record(completion_date=date(2025, 12, 2), hours_completed=3.0),
+            _make_record(completion_date=date(2026, 10, 9), hours_completed=1.0),
+        ]
+
+    def test_has_no_due_date(self):
+        result = TrainingService.evaluate_requirement_detail(
+            _rolling_hours_requirement(), self._records(), self.TODAY
+        )
+        assert result["due_date"] is None
+        assert result["days_until_due"] is None
+
+    def test_months_add_up_to_the_hours_shown(self):
+        result = TrainingService.evaluate_requirement_detail(
+            _rolling_hours_requirement(), self._records(), self.TODAY
+        )
+        months = result["monthly_hours"]
+        assert len(months) == 12
+        assert months[0] == {"month": "2025-11", "hours": 2.0, "waived": False}
+        assert months[-1] == {"month": "2026-10", "hours": 1.0, "waived": False}
+        assert sum(m["hours"] for m in months) == result["completed_hours"] == 6.0
+        assert result["window_start"] == "2025-11-01"
+        assert result["window_months"] == 12
+
+    def test_a_non_hours_rolling_requirement_keeps_its_anchored_due_date(self):
+        req = _rolling_hours_requirement(
+            requirement_type=SimpleNamespace(value="calls"),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, self._records(), self.TODAY
+        )
+        assert result["monthly_hours"] is None
+        assert result["due_date"] == "2027-10-09"
+
+    def test_a_calendar_year_hours_requirement_lists_january_to_now(self):
+        req = _make_requirement(training_type=None)
+        records = [_make_record(completion_date=date(2026, 3, 1), hours_completed=4.0)]
+        result = TrainingService.evaluate_requirement_detail(req, records, self.TODAY)
+        months = result["monthly_hours"]
+        assert [m["month"] for m in months][0] == "2026-01"
+        assert [m["month"] for m in months][-1] == "2026-10"
+        assert result["window_months"] == 12
+        assert result["due_date"] == "2026-12-31"
+
+
+class TestRollingHoursWaivers:
+    """Leave months are flagged, and the target is prorated by the same months."""
+
+    TODAY = date(2026, 10, 13)
+
+    def _waiver(self):
+        return WaiverPeriod(
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 5, 31),
+        )
+
+    def test_leave_months_are_flagged_in_the_breakdown(self):
+        result = TrainingService.evaluate_requirement_detail(
+            _rolling_hours_requirement(),
+            [_make_record(completion_date=date(2026, 1, 5), hours_completed=4.0)],
+            self.TODAY,
+            waivers=[self._waiver()],
+        )
+        flagged = [m["month"] for m in result["monthly_hours"] if m["waived"]]
+        assert flagged == ["2026-03", "2026-04", "2026-05"]
+
+    def test_the_flagged_months_are_the_ones_the_target_is_prorated_by(self):
+        result = TrainingService.evaluate_requirement_detail(
+            _rolling_hours_requirement(),
+            [],
+            self.TODAY,
+            waivers=[self._waiver()],
+        )
+        flagged = [m for m in result["monthly_hours"] if m["waived"]]
+        assert result["waived_months"] == len(flagged) == 3
+        assert result["active_months"] == result["window_months"] - 3 == 9
+        assert result["original_required_hours"] == 72.0
+        assert result["required_hours"] == 54.0
+
+    def test_no_leave_flags_nothing(self):
+        result = TrainingService.evaluate_requirement_detail(
+            _rolling_hours_requirement(), [], self.TODAY
+        )
+        assert not any(m["waived"] for m in result["monthly_hours"])
+
+    def test_waived_month_keys_and_count_agree(self):
+        from app.services.training_waiver_service import (
+            count_waived_months,
+            waived_month_keys,
+        )
+
+        start, end = date(2025, 11, 1), self.TODAY
+        keys = waived_month_keys([self._waiver()], start, end)
+        assert keys == {(2026, 3), (2026, 4), (2026, 5)}
+        assert count_waived_months([self._waiver()], start, end) == len(keys)

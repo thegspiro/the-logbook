@@ -19,9 +19,10 @@ from sqlalchemy import and_, case
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, defer
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
+from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.permissions import (
     get_all_permissions,
     get_rank_default_permissions,
@@ -41,7 +42,7 @@ from app.models.document import (
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
-from app.models.user import Organization, Position, User
+from app.models.user import Organization, Position, User, UserStatus
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
@@ -267,6 +268,12 @@ _ACCESS_FIELDS = (
     "owner_user_id",
 )
 
+_ADMIN_ONLY_MESSAGE = (
+    "No active member could open this folder except full administrators: "
+    "nobody holds what it now requires. Save again to confirm it is meant "
+    "for administrators only"
+)
+
 _SHUT_OUT_MESSAGE = (
     "These settings would shut you out of this folder. Include a position or "
     "permission you hold, or ask a full administrator to set them"
@@ -300,12 +307,17 @@ class DocumentsService:
         created_by: UUID | str,
         *,
         acting_user: Optional[User] = None,
+        confirm_admin_only: bool = False,
     ) -> DocumentFolder:
         """Create a new document folder. Raises on failure.
 
         ``acting_user``: when given, a folder whose access would not admit
         that user (for writing) is refused rather than created, so nobody
         makes a folder they cannot then manage (decision 27).
+
+        ``confirm_admin_only``: a folder that no active member but a full
+        administrator could open is refused with DOC_FOLDER_ADMIN_ONLY
+        unless this is set (decision 29).
         """
         # DOC-6 (XC-1): validate client-supplied FKs are in-org before storing.
         await assert_in_org(
@@ -332,6 +344,12 @@ class DocumentsService:
             folder, organization_id, acting_user, require_write=True
         ):
             raise ValueError(_SHUT_OUT_MESSAGE)
+        if not confirm_admin_only and not await self._someone_but_admins_opens(
+            folder, organization_id
+        ):
+            raise CodedValueError(
+                _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
+            )
         self.db.add(folder)
         await self.db.commit()
         await self.db.refresh(folder)
@@ -690,11 +708,13 @@ class DocumentsService:
         update_data: Dict[str, Any],
         *,
         acting_user: Optional[User] = None,
+        confirm_admin_only: bool = False,
     ) -> Optional[DocumentFolder]:
         """Update a folder. Returns None if not found.
 
-        ``acting_user``: as for ``create_folder`` — an access change that
-        would shut that user out of the folder is refused.
+        ``acting_user`` and ``confirm_admin_only``: as for ``create_folder``.
+        Both are checked only when the save changes who can open the folder:
+        an access field, or its place in the tree.
         """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
@@ -779,9 +799,68 @@ class DocumentsService:
             await self.db.rollback()
             raise ValueError(_SHUT_OUT_MESSAGE)
 
+        if (
+            (access_changed or "parent_id" in update_data)
+            and not confirm_admin_only
+            and not await self._someone_but_admins_opens(folder, organization_id)
+        ):
+            await self.db.rollback()
+            raise CodedValueError(
+                _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
+            )
+
         await self.db.commit()
         await self.db.refresh(folder)
         return folder
+
+    async def _someone_but_admins_opens(
+        self, folder: DocumentFolder, organization_id: UUID | str
+    ) -> bool:
+        """Whether an active member other than a full administrator could open
+        *folder* (read access), its ancestors' restrictions included.
+
+        Decision 29: a folder whose rule nobody satisfies opens to full
+        administrators alone, which can be deliberate but is usually a
+        permission or position nobody holds. Asked through can_access_folder,
+        so the answer is the access check's own, not a re-derivation of it.
+
+        A department with no active member but full administrators (a fresh
+        install, where the system owner is the only account) counts as
+        opened: every folder is administrators-only there, so warning would
+        only be noise. What this catches is a restriction that excludes
+        everyone who exists.
+        """
+        ancestors: Dict[str, DocumentFolder] = {}
+        parent_id = folder.parent_id
+        while parent_id is not None and str(parent_id) not in ancestors:
+            parent = await self.get_folder_by_id(parent_id, organization_id)
+            if parent is None:
+                break
+            ancestors[str(parent.id)] = parent
+            parent_id = parent.parent_id
+
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == str(organization_id),
+                        User.status == UserStatus.ACTIVE,
+                        User.deleted_at.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        others = [m for m in members if not _is_full_admin(_get_user_permissions(m))]
+        if not others:
+            return True
+        for member in others:
+            if await self.can_access_folder(folder, organization_id, member, ancestors):
+                return True
+        return False
 
     async def _settle_access_fields(
         self,

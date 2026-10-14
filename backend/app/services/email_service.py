@@ -1991,7 +1991,7 @@ class EmailService:
         context = {
             "first_name": first_name,
             "last_name": last_name,
-            "full_name": f"{first_name} {last_name}",
+            "full_name": f"{first_name} {last_name}".strip(),
             "username": username,
             "temp_password": temp_password,
             "organization_name": organization_name,

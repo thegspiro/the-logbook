@@ -991,7 +991,9 @@ async def add_comment(
         "notes": activity.notes,
         "performed_by": current_user.id,
         "performer_name": performer_name,
-        "created_at": activity.created_at.isoformat(),
+        "created_at": (
+            activity.created_at.isoformat() if activity.created_at else None
+        ),
     }
 
 

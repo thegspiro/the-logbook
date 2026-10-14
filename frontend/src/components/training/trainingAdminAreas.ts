@@ -123,7 +123,9 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
   {
     id: 'evaluations',
     label: 'Evaluations',
-    description: 'Skill sign-offs and knowledge tests',
+    // Names both practical-skills systems, which is what an unknown method
+    // shows; `trainingAdminAreasFor` narrows it once the method is known.
+    description: 'Skill sign-offs, skills tests and knowledge tests',
     icon: ClipboardCheck,
     destinations: [
       { id: 'skill-evaluations', label: 'Skill Evaluations', hint: 'Practical sign-off checklists', icon: Award },
@@ -204,10 +206,17 @@ export const isHiddenByPracticalSkills = (destinationId: string, method: Practic
   method !== null &&
   Object.entries(SYSTEM_DESTINATIONS).some(([owner, ids]) => owner !== method && ids.includes(destinationId));
 
+/** The Evaluations card's line under each method, so it names only what the area holds. */
+const EVALUATIONS_DESCRIPTION: Record<PracticalSkillsMethod, string> = {
+  [PracticalSkillsMethod.SKILLS_TESTING]: 'Skills tests and knowledge tests',
+  [PracticalSkillsMethod.SHIFT_SIGNOFFS]: 'Skill sign-offs and knowledge tests',
+};
+
 /** The hub as this department sees it. */
 export const trainingAdminAreasFor = (method: PracticalSkillsMethod | null): TrainingAdminArea[] =>
   TRAINING_ADMIN_AREAS.map((area) => ({
     ...area,
+    description: area.id === 'evaluations' && method !== null ? EVALUATIONS_DESCRIPTION[method] : area.description,
     destinations: area.destinations.filter((destination) => !isHiddenByPracticalSkills(destination.id, method)),
   }));
 
