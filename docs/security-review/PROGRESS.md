@@ -16,12 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None currently open.** PR #3204 (Feature 00, Cross-cutting baseline, pass 9) merged 2026-10-14T08:39:59Z — a docs-only merge (that PR's own review
-file plus the rotation-table reset below), nothing else to record. Verified
-directly against GitHub (listed open PRs and searched
-`head:claude/security-review-`, both empty) rather than trusted from this
-row, per Step 0. This row is updated with this iteration's own PR (Feature
-01, Auth & session lifecycle) as a second commit once that PR is opened.
+**PR [#3210](https://github.com/thegspiro/the-logbook/pull/3210)**: branch
+`claude/security-review-auth-session`, Feature 01 (Auth & session
+lifecycle), pass 9 (watchdog pickup). PR #3204 (Feature 00, Cross-cutting
+baseline, pass 9) merged 2026-10-14T08:39:59Z — a docs-only merge (that
+PR's own review file plus the rotation-table reset, both already reflected
+above), nothing else to record; this PR carries that row-clear alongside
+its own review. 0 fixed, 0 flagged — delta re-verify only: of the 12 files
+this feature tracks, 3 had changed since pass 8 (PR #3096), all via
+unrelated mypy/UX commits merged through other tracks and each confirmed
+benign on direct read. See `AUTH-01-auth-session.md`'s **Pass 9** section.
+Row 01 stays ✅ (pending this PR's merge); next is Feature 02 (Permissions
+& roles).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 9, PR #3204, merged 2026-10-14), preserved for history</summary>
