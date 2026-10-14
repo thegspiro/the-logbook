@@ -44,7 +44,7 @@ env_file_get() {
 }
 
 if [[ -f "$ENV_FILE" ]]; then
-    for _key in DB_HOST DB_USER DB_PASSWORD DB_NAME DB_CONTAINER \
+    for _key in DB_HOST DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKEND_CONTAINER \
         BACKUP_LOCATION BACKUP_RETENTION_DAYS VERSION ENVIRONMENT \
         AWS_S3_BUCKET AZURE_STORAGE_ACCOUNT AZURE_STORAGE_CONTAINER \
         GCS_BUCKET; do
@@ -63,6 +63,7 @@ DB_USER="${DB_USER:-}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-}"
 DB_CONTAINER="${DB_CONTAINER:-}"
+BACKEND_CONTAINER="${BACKEND_CONTAINER:-}"
 AWS_S3_BUCKET="${AWS_S3_BUCKET:-}"
 AZURE_STORAGE_ACCOUNT="${AZURE_STORAGE_ACCOUNT:-}"
 AZURE_STORAGE_CONTAINER="${AZURE_STORAGE_CONTAINER:-}"
@@ -173,15 +174,69 @@ backup_database() {
     print_success "Database backup completed ($(du -h "/tmp/$BACKUP_NAME/database.sql.gz" | cut -f1))"
 }
 
+# ============================================
+# Uploads Location Resolution
+# ============================================
+# Every upload writer uses a fixed path under /app/uploads inside the backend
+# container. The main compose stack keeps that in the named volume `uploads`
+# and the Unraid stacks bind it from /mnt/user/appdata/the-logbook/uploads;
+# neither puts anything at $PROJECT_DIR/uploads, so on a Docker install the
+# files are only reachable through the backend container. The traditional
+# (non-Docker) layout keeps them at $PROJECT_DIR/uploads.
+
+UPLOADS_CONTAINER_PATH="/app/uploads"
+
+detect_backend_container() {
+    docker ps --format '{{.Names}}' 2>/dev/null \
+        | grep -m1 -E '^(logbook-backend|intranet-backend)$' || true
+}
+
+# Sets UPLOADS_SOURCE to "container" (UPLOADS_CONTAINER names it), "host"
+# ($PROJECT_DIR/uploads), or "" when neither holds the uploads.
+resolve_uploads_source() {
+    UPLOADS_SOURCE=""
+    UPLOADS_CONTAINER="${BACKEND_CONTAINER:-}"
+    if [[ -z "$UPLOADS_CONTAINER" ]] && command -v docker >/dev/null 2>&1; then
+        UPLOADS_CONTAINER="$(detect_backend_container)"
+    fi
+    if [[ -n "$UPLOADS_CONTAINER" ]]; then
+        UPLOADS_SOURCE="container"
+    elif [[ -d "$PROJECT_DIR/uploads" ]]; then
+        UPLOADS_SOURCE="host"
+    fi
+}
+
 backup_uploads() {
     print_info "Backing up uploaded files..."
 
-    if [[ -d "$PROJECT_DIR/uploads" ]]; then
-        tar -czf "/tmp/$BACKUP_NAME/uploads.tar.gz" -C "$PROJECT_DIR" uploads
-        print_success "Uploads backup completed ($(du -h "/tmp/$BACKUP_NAME/uploads.tar.gz" | cut -f1))"
-    else
-        print_warning "Uploads directory not found, skipping"
-    fi
+    local archive="/tmp/$BACKUP_NAME/uploads.tar.gz"
+    resolve_uploads_source
+    case "$UPLOADS_SOURCE" in
+        container)
+            if ! docker exec "$UPLOADS_CONTAINER" test -d "$UPLOADS_CONTAINER_PATH"; then
+                print_warning "Uploaded files were NOT backed up: $UPLOADS_CONTAINER_PATH does not exist in container $UPLOADS_CONTAINER"
+                return 0
+            fi
+            print_info "Archiving $UPLOADS_CONTAINER_PATH from container: $UPLOADS_CONTAINER"
+            # The archive keeps a top-level uploads/ directory, the layout
+            # restore_backup and the backup sidecar both use.
+            if ! docker exec "$UPLOADS_CONTAINER" \
+                tar -czf - -C "$(dirname "$UPLOADS_CONTAINER_PATH")" "$(basename "$UPLOADS_CONTAINER_PATH")" \
+                > "$archive"; then
+                rm -f "$archive"
+                print_error "Archiving uploads from container $UPLOADS_CONTAINER failed"
+                return 1
+            fi
+            ;;
+        host)
+            tar -czf "$archive" -C "$PROJECT_DIR" uploads
+            ;;
+        *)
+            print_warning "Uploaded files were NOT backed up: no running backend container (logbook-backend or intranet-backend — start the stack, or set BACKEND_CONTAINER for another name) and no $PROJECT_DIR/uploads directory"
+            return 0
+            ;;
+    esac
+    print_success "Uploads backup completed ($(du -h "$archive" | cut -f1))"
 }
 
 backup_config() {
@@ -247,8 +302,8 @@ cleanup_temp() {
 cleanup_old_backups() {
     print_info "Cleaning up old backups (older than $RETENTION_DAYS days)..."
 
-    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz" -type f -mtime +$RETENTION_DAYS -delete
-    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz.sha256" -type f -mtime +$RETENTION_DAYS -delete
+    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz" -type f -mtime +"$RETENTION_DAYS" -delete
+    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz.sha256" -type f -mtime +"$RETENTION_DAYS" -delete
 
     print_success "Old backups removed"
 }
@@ -318,7 +373,7 @@ restore_backup() {
     fi
 
     print_warning "RESTORE OPERATION - This will overwrite existing data!"
-    read -p "Are you sure you want to restore from $backup_file? (yes/no): " confirm
+    read -r -p "Are you sure you want to restore from $backup_file? (yes/no): " confirm
 
     if [[ "$confirm" != "yes" ]]; then
         print_info "Restore cancelled"
@@ -374,16 +429,41 @@ restore_backup() {
 
     # Restore uploads
     if [[ -f "$BACKUP_EXTRACT_DIR/uploads.tar.gz" ]]; then
-        print_info "Restoring uploads..."
-        python3 "$SCRIPT_DIR/safe_extract_tar.py" \
-            "$BACKUP_EXTRACT_DIR/uploads.tar.gz" "$PROJECT_DIR"
-        print_success "Uploads restored"
+        restore_uploads "$BACKUP_EXTRACT_DIR/uploads.tar.gz" "$RESTORE_DIR"
     fi
 
     # Cleanup
     rm -rf "$RESTORE_DIR"
 
     print_success "Restore completed successfully!"
+}
+
+# Restores uploads.tar.gz (top-level uploads/ directory) to wherever
+# backup_uploads would have read it from.
+restore_uploads() {
+    local archive="$1" work_dir="$2"
+
+    print_info "Restoring uploads..."
+    resolve_uploads_source
+    if [[ "$UPLOADS_SOURCE" == "container" ]]; then
+        # Validate on the host first: safe_extract_tar.py rejects traversal,
+        # links and special files, and tar inside the container has no such
+        # guard. Only the vetted tree is streamed in.
+        local staged="$work_dir/uploads_staged"
+        python3 "$SCRIPT_DIR/safe_extract_tar.py" "$archive" "$staged"
+        if [[ ! -d "$staged/uploads" ]]; then
+            print_error "uploads.tar.gz has no top-level uploads/ directory"
+            return 1
+        fi
+        print_info "Restoring into $UPLOADS_CONTAINER_PATH in container: $UPLOADS_CONTAINER"
+        # --no-overwrite-dir leaves the mount point's own owner and mode alone;
+        # the app user cannot change them, and trying fails the extraction.
+        tar -cf - -C "$staged/uploads" . \
+            | docker exec -i "$UPLOADS_CONTAINER" tar -xf - --no-overwrite-dir -C "$UPLOADS_CONTAINER_PATH"
+    else
+        python3 "$SCRIPT_DIR/safe_extract_tar.py" "$archive" "$PROJECT_DIR"
+    fi
+    print_success "Uploads restored"
 }
 
 list_backups() {
@@ -395,7 +475,10 @@ list_backups() {
         return
     fi
 
-    ls -lh "$BACKUP_DIR"/*.tar.gz | awk '{printf "%-50s %10s %s %s %s\n", $9, $5, $6, $7, $8}'
+    local f
+    for f in "$BACKUP_DIR"/*.tar.gz; do
+        printf '%-50s %10s %s\n' "$f" "$(du -h "$f" | cut -f1)" "$(date -r "$f" '+%Y-%m-%d %H:%M')"
+    done
 }
 
 # ============================================
@@ -440,7 +523,7 @@ run_backup() {
 main() {
     case "${1:-}" in
         --restore)
-            if [[ -z "$2" ]]; then
+            if [[ -z "${2:-}" ]]; then
                 print_error "Backup file required"
                 echo "Usage: $0 --restore /path/to/backup.tar.gz"
                 exit 1
@@ -487,4 +570,7 @@ EOF
     esac
 }
 
-main "$@"
+# Run only when executed, so the tests can load the functions without a backup.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
