@@ -187,6 +187,8 @@ Amber means due within 90 days. Red means overdue or expired.
 | **Opens _date_ · N days**                 | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted)). |
 | **_N_ hrs to go**, with no date           | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any given day. It is listed last, with its window beneath.       |
 
+![The My Training upcoming list with a skills test row reading Skills test expires, its date and the days remaining](./images/02-89-my-training-upcoming-skills-test.png)
+
 Once a date passes, the row reads **Overdue N days ago** or **Expired N days
 ago**. When nothing is due, the list says so.
 

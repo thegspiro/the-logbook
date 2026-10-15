@@ -5,6 +5,7 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
+import re
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -206,6 +207,7 @@ from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import label_renderer
+from app.utils.item_aliases import normalize_aliases
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -1189,6 +1191,7 @@ _IMPORT_TEMPLATE_HEADER = [
     "Color",
     "Description",
     "Notes",
+    "Also Called",
 ]
 
 
@@ -1201,6 +1204,7 @@ def _medical_template_row(
     size: str = "",
     notes: str = "",
     storage: str = "Medical Cabinet",
+    also_called: str = "",
 ) -> Dict[str, str]:
     """A counted (pool) medical supply row, with the columns that never vary."""
     return {
@@ -1216,6 +1220,7 @@ def _medical_template_row(
         "Size": size,
         "Description": description,
         "Notes": notes,
+        "Also Called": also_called,
     }
 
 
@@ -1275,6 +1280,7 @@ _IMPORT_TEMPLATE_ROWS: List[Dict[str, str]] = [
         "Adult BVM with reservoir and mask",
         size="Adult",
         storage="Airway Bag",
+        also_called="BVM; Ambu bag",
     ),
     _medical_template_row(
         "Oropharyngeal Airway Set",
@@ -1283,6 +1289,7 @@ _IMPORT_TEMPLATE_ROWS: List[Dict[str, str]] = [
         "OPA, assorted sizes",
         size="Assorted",
         storage="Airway Bag",
+        also_called="OPA; Oral airway",
     ),
     _medical_template_row(
         "Nasopharyngeal Airway Set",
@@ -1291,6 +1298,7 @@ _IMPORT_TEMPLATE_ROWS: List[Dict[str, str]] = [
         "NPA, assorted sizes",
         size="Assorted",
         storage="Airway Bag",
+        also_called="NPA; Nasal trumpet",
     ),
     _medical_template_row(
         "Oxygen Mask, Non-Rebreather",
@@ -1298,6 +1306,7 @@ _IMPORT_TEMPLATE_ROWS: List[Dict[str, str]] = [
         "10",
         "Adult non-rebreather mask with tubing",
         size="Adult",
+        also_called="NRB; NRB mask",
     ),
     _medical_template_row(
         "Nasal Cannula",
@@ -1445,7 +1454,16 @@ _CSV_COLUMN_TO_FIELD = {
     "item_type": "item_type",
     "itemtype": "item_type",
     "type": "item_type",
+    "also called": "also_called",
+    "also_called": "also_called",
+    "alsocalled": "also_called",
+    "aliases": "also_called",
 }
+
+# Alternate names share one cell. Semicolons are the documented separator
+# because a spreadsheet user reaches for them first; commas also work, as in
+# the item form's "Also called" box, so a name cannot itself contain either.
+_ALIAS_SEPARATOR = re.compile(r"[;,]")
 
 _VALID_STATUSES = {
     "available",
@@ -1638,6 +1656,19 @@ def _coerce_csv_row(
             item_data[field] = val
             continue
 
+        if field == "also_called":
+            try:
+                # The item's own name is dropped by the settling pass below,
+                # once the whole row (and so its Name) has been read.
+                aliases = normalize_aliases(_ALIAS_SEPARATOR.split(value))
+                if aliases:
+                    item_data[field] = aliases
+            except ValueError as exc:
+                row_errors.append({"row": row_num, "error": f"Also Called: {exc}"})
+                fatal = True
+                break
+            continue
+
         if field == "item_type":
             val = value.lower().replace(" ", "_")
             if val not in _VALID_ITEM_TYPES:
@@ -1657,6 +1688,15 @@ def _coerce_csv_row(
             continue
 
         item_data[field] = value
+
+    # An alias that is the item's own name adds nothing, and Name may sit after
+    # Also Called in the header, so this waits until the row has been read.
+    if "also_called" in item_data:
+        aliases = normalize_aliases(item_data["also_called"], item_data.get("name"))
+        if aliases:
+            item_data["also_called"] = aliases
+        else:
+            del item_data["also_called"]
 
     return item_data, category_name_raw, row_errors, fatal
 
