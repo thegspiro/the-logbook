@@ -115,6 +115,12 @@ substances.
   gear rather than medical. Each such row is listed as a warning.
 - **"Item Type" is checked and then ignored** — an item's type comes from its
   category.
+- **"Also Called" carries alternate names.** Put them in one cell, separated by
+  semicolons or commas (`BVM; Ambu bag`); they become the item's "Also called"
+  names, which the checklist matcher looks through when linking a checklist
+  item to inventory. Blank and repeated names, and the item's own name, are
+  dropped. A row with more than 10 names, or a name over 100 characters, is
+  refused and reported rather than trimmed.
 - **The import carries no lots.** Add lot numbers and expiration dates afterwards
   (for example through **Receive delivery**); nothing is flagged as expiring
   until a supply has dated lots.
