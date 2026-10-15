@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blankToNull, numberOrNull, formCoercions } from './formValues';
+import { blankToNull, numberOrNull, formCoercions, parseNameList, formatNameList } from './formValues';
 
 describe('blankToNull', () => {
   it('returns null for an emptied field so the backend clears it', () => {
@@ -92,5 +92,40 @@ describe('formCoercions', () => {
     it('treats an unparseable number as a clear rather than sending NaN', () => {
       expect(num('abc')).toBeNull();
     });
+  });
+});
+
+describe('parseNameList', () => {
+  it('splits on commas and trims each name', () => {
+    expect(parseNameList('BVM, Ambu bag ,  Resuscitator')).toEqual(['BVM', 'Ambu bag', 'Resuscitator']);
+  });
+
+  it('drops blank entries, so a trailing comma is harmless', () => {
+    expect(parseNameList('BVM,, ,')).toEqual(['BVM']);
+  });
+
+  it('returns an empty list for a blank or missing box', () => {
+    // `[]`, not undefined: on an update it is how an emptied box clears.
+    expect(parseNameList('')).toEqual([]);
+    expect(parseNameList('   ')).toEqual([]);
+    expect(parseNameList(null)).toEqual([]);
+    expect(parseNameList(undefined)).toEqual([]);
+  });
+});
+
+describe('formatNameList', () => {
+  it('joins the stored list for the box', () => {
+    expect(formatNameList(['BVM', 'Ambu bag'])).toBe('BVM, Ambu bag');
+  });
+
+  it('is empty for no list at all', () => {
+    expect(formatNameList(null)).toBe('');
+    expect(formatNameList(undefined)).toBe('');
+    expect(formatNameList([])).toBe('');
+  });
+
+  it('round-trips with parseNameList', () => {
+    const names = ['BVM', 'Ambu bag'];
+    expect(parseNameList(formatNameList(names))).toEqual(names);
   });
 });

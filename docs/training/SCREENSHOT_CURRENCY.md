@@ -18,6 +18,24 @@ unchanged. The notes it carried are kept here, unchanged in substance.
 | `04-38-rolling-recurrence.png` | **REPLACE** | The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block |
 | `04-39-delete-event-series.png` | **REPLACE** | The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected |
 
+## Moved out of 02-training.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes or a "Screenshots:"
+callout. Its hidden `<!-- Screenshot needed … -->` placeholders, image file
+names and alt text are unchanged; where an image appeared twice in a row, the
+repeat was dropped.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `02-01-my-training.png` | **REPLACE** | The subtitle under **My Training** reads "Every class, certification and training hour the department has on record for you, and how you are doing against the training you are required to complete.", and the third stat card is **Required Training** (not **Requirements**) with a hint line beneath the percentage — "3 of 4 requirements met". Re-shoot the same member and state with those two visible |
+| `02-03-submit-training.png` | **REPLACE** | The Submit External Training screen is rebuilt; the certificate attaches inline |
+| `02-16-requirements.png` | **REPLACE** | Re-shoot once to show the **Existing Members** section on the requirement form |
+| (new) requirement save dialog | **NEW** | The **Who does this change apply to?** dialog shown when saving an existing requirement |
+| (new) program add-requirement question | **NEW** | The **Members already enrolled** choice under **Add requirement** on a program page |
+| `02-17-officer-dashboard.png` | **REPLACE** | The subtitle under **Training Officer Dashboard** reads "Compliance, expiring certifications, hours, and what needs your attention" (was "Aggregated compliance, training, validation, and capacity signals"). Re-shoot the same seeded department; the widgets are otherwise unchanged |
+| `02-65-print-compliance.png` | **REPLACE** | The summary tiles read **Compliant / At Risk / Non-Compliant / Requirements** (were 100% Complete / Partially Complete / Not Started), headers wrap to the full requirement name instead of "ANNUAL MINIM…", unmet cells print **✗** rather than "—", and a legend sits under the table. Re-shoot the same department |
+| `02-39-finalize-checklist.png` | **CHECK** | Its alt text names a "Finalize Shift" button; the button reads **Close out shift**. Guide 03's `03-45-finalize-checklist.png` shows the current checklist |
+
 ## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
 
 The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.

@@ -135,7 +135,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOp
   return (
     <div className="modal-overlay z-50 flex items-center justify-center p-4">
       <div
-        className="card relative max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain shadow-xl"
+        className="modal-panel relative max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scanner-modal-title"

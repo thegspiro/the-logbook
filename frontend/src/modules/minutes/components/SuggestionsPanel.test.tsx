@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -21,6 +22,7 @@ vi.mock('react-hot-toast', () => ({
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 
 import { SuggestionsPanel } from './SuggestionsPanel';
+import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
 import { renderWithRouter } from '../../../test/utils';
 import type { MinutesStatus, MinutesSuggestion, SectionEntry } from '../types/minutes';
 
@@ -51,39 +53,29 @@ describe('SuggestionsPanel', () => {
     mockResolve.mockResolvedValue({ ...open, status: 'accepted' });
   });
 
+  // The panel is handed its suggestions by the page; this stands in for the page.
+  const Harness: React.FC<{ status: MinutesStatus; canManage: boolean }> = ({ status, canManage }) => {
+    const shared = useMinutesSuggestions('m1', status);
+    return <SuggestionsPanel minutesId="m1" status={status} sections={sections} canManage={canManage} {...shared} />;
+  };
   const render = (status: MinutesStatus, canManage: boolean) =>
-    renderWithRouter(<SuggestionsPanel minutesId="m1" status={status} sections={sections} canManage={canManage} />);
+    renderWithRouter(<Harness status={status} canManage={canManage} />);
 
-  it('invites a member to suggest while the minutes circulate', async () => {
+  it('invites a member to suggest from a section, or about the minutes as a whole', async () => {
     render('submitted', false);
 
     expect(await screen.findByRole('heading', { name: 'Your suggestions' })).toBeInTheDocument();
-    expect(screen.getByText(/circulated for review/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeDisabled();
-  });
-
-  it('sends a suggestion about a section, with optional wording', async () => {
-    const user = userEvent.setup();
-    render('submitted', false);
-
-    await user.selectOptions(await screen.findByLabelText('What is it about?'), 'new_business');
-    await user.type(screen.getByLabelText('What should change?'), 'The vote was 5-1');
-    await user.type(screen.getByLabelText(/Suggested wording/), 'Motion carried 5-1.');
-    await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
-
-    expect(mockAdd).toHaveBeenCalledWith('m1', {
-      section_key: 'new_business',
-      comment: 'The vote was 5-1',
-      proposed_text: 'Motion carried 5-1.',
-    });
-    await waitFor(() => expect(screen.getByLabelText('What should change?')).toHaveValue(''));
+    expect(screen.getByText(/on the section you want/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suggest a change to the minutes as a whole' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument();
   });
 
   it('sends a whole-minutes suggestion with no section and no wording', async () => {
     const user = userEvent.setup();
     render('submitted', false);
 
-    await user.type(await screen.findByLabelText('What should change?'), 'Please add the guest list');
+    await user.click(await screen.findByRole('button', { name: 'Suggest a change to the minutes as a whole' }));
+    await user.type(screen.getByLabelText('What should change?'), 'Please add the guest list');
     await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
 
     expect(mockAdd).toHaveBeenCalledWith('m1', {
@@ -91,18 +83,17 @@ describe('SuggestionsPanel', () => {
       comment: 'Please add the guest list',
       proposed_text: undefined,
     });
+    await waitFor(() => expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument());
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
   });
 
-  it('reports a refusal and keeps what was typed', async () => {
-    mockAdd.mockRejectedValue(new Error('Changes can be suggested only while the minutes are circulated'));
-    const user = userEvent.setup();
-    render('submitted', false);
+  it('gives a secretary no form at all: they answer suggestions, they do not make them', async () => {
+    render('submitted', true);
 
-    await user.type(await screen.findByLabelText('What should change?'), 'Too late maybe');
-    await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
-
-    await waitFor(() => expect(toastError).toHaveBeenCalled());
-    expect(screen.getByLabelText('What should change?')).toHaveValue('Too late maybe');
+    expect(await screen.findByRole('heading', { name: 'Suggested changes (0)' })).toBeInTheDocument();
+    expect(screen.getByText('No suggestions yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Suggest a change/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument();
   });
 
   it('offers no form once the minutes are adopted, but still shows the member their own', async () => {

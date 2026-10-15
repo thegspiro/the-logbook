@@ -157,7 +157,9 @@ const GroupRow: React.FC<GroupRowProps> = ({
             <option value="">Don&rsquo;t link</option>
             {group.suggestions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({CONFIDENCE_LABEL[s.confidence] ?? s.confidence})
+                {s.name}
+                {s.matchedAlias ? ` · also called “${s.matchedAlias}”` : ''} (
+                {CONFIDENCE_LABEL[s.confidence] ?? s.confidence})
               </option>
             ))}
             <option value={SEARCH_OPTION}>Search the catalog…</option>
