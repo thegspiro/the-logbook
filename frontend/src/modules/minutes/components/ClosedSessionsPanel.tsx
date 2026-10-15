@@ -19,6 +19,7 @@ import { formatForDateTimeInput, formatDateTime, formatTime, localToUTC } from '
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import { minutesService } from '../services/api';
+import { PanelDisclosure } from './PanelDisclosure';
 import type { AttendeeEntry, ClosedSession, ClosedSessionParticipant, Motion } from '../types/minutes';
 import { statusOf } from '../utils/attendance';
 
@@ -55,9 +56,17 @@ interface ClosedSessionsPanelProps {
   canEdit: boolean;
   attendees: AttendeeEntry[];
   motions: Motion[];
+  /** Whether the panel starts unfolded. The minutes page folds it; the default keeps it open. */
+  defaultOpen?: boolean;
 }
 
-export const ClosedSessionsPanel: React.FC<ClosedSessionsPanelProps> = ({ minutesId, canEdit, attendees, motions }) => {
+export const ClosedSessionsPanel: React.FC<ClosedSessionsPanelProps> = ({
+  minutesId,
+  canEdit,
+  attendees,
+  motions,
+  defaultOpen = true,
+}) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [sessions, setSessions] = useState<ClosedSession[]>([]);
@@ -200,19 +209,14 @@ export const ClosedSessionsPanel: React.FC<ClosedSessionsPanelProps> = ({ minute
   if (!loaded || (sessions.length === 0 && !canEdit)) return null;
 
   return (
-    <section
-      className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs"
-      aria-labelledby="closed-sessions-heading"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h2
-          id="closed-sessions-heading"
-          className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold"
-        >
-          <DoorClosed className="h-5 w-5" aria-hidden="true" />
-          Closed sessions ({sessions.length})
-        </h2>
-        {canEdit && (
+    <PanelDisclosure
+      id="closed-sessions-heading"
+      icon={<DoorClosed className="h-5 w-5" aria-hidden="true" />}
+      title="Closed sessions"
+      count={sessions.length}
+      defaultOpen={defaultOpen}
+      actions={
+        canEdit && (
           <button
             type="button"
             onClick={openNew}
@@ -221,9 +225,9 @@ export const ClosedSessionsPanel: React.FC<ClosedSessionsPanelProps> = ({ minute
             <Plus className="h-4 w-4" aria-hidden="true" />
             Record a closed session
           </button>
-        )}
-      </div>
-
+        )
+      }
+    >
       {sessions.length === 0 && (
         <p className="text-theme-text-muted mt-2 text-xs italic">
           No closed session recorded. If the body met in closed session, record why, when, and who stayed.
@@ -485,7 +489,7 @@ export const ClosedSessionsPanel: React.FC<ClosedSessionsPanelProps> = ({ minute
           </div>
         </div>
       </Modal>
-    </section>
+    </PanelDisclosure>
   );
 };
 
