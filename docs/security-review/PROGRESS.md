@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3288](https://github.com/thegspiro/the-logbook/pull/3288)**: branch
+`claude/security-review-facilities-p9` (suffixed rather than the bare
+`claude/security-review-facilities`, since that name's own PR — most
+recently #3169 — has already merged 8 times over this feature's prior
+passes — CLAUDE.md Pitfall #24), Feature 12 (Facilities), pass 9. Watchdog
+pickup. 0 code fixes, 0 new findings. The real delta since pass 8
+(`8d2e4d7a`, 4 commits in the feature's own scope files plus 5 more in
+shared dependencies, all read in full): the only feature-shaped change was a
+new admin-only-confirm guard on the generic document-folder create/update
+path (decision 29), confirmed **not** to reach facility folders — their
+sub-folder creators build `DocumentFolder` rows directly and facility
+folders have no admin-editable access form for that guard to protect.
+Everything else was frontend-only UI (dialog portal, required-field
+marking, due-date display) or mypy-narrowing commits confirmed
+behavior-neutral. All 98 routes re-enumerated fresh by AST walk, 98/98
+carrying a permission dependency. FAC-30 re-verified still open/
+owner-accepted, unchanged; FAC-13 stays closed; FAC-41/FAC-44 stay fixed.
+See `FAC-12-facilities.md`'s **Pass 9** section. Row 12 → ✅ (pending this
+PR's merge); next is Feature 13 (Apparatus & NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3272, Feature 11, Inventory, pass 9, merged — the state this pass's PR opened from), preserved for history</summary>
+
 **PR [#3272](https://github.com/thegspiro/the-logbook/pull/3272)**: branch
 `claude/security-review-inventory-p9` (suffixed rather than the bare
 `claude/security-review-inventory` pass 8 used, since that branch's own PR
@@ -35,6 +58,8 @@ All 190 routes across the feature's five endpoint files enumerated for an
 auth dependency, not spot-checked. INV-22 re-verified still open/
 owner-accepted, unchanged. See `INV-11-inventory.md`'s **Pass 9** section.
 Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3262's merge, Feature 10, Documents & legal, pass 9 — the state this pass's PR opened from), preserved for history</summary>
@@ -19279,7 +19304,7 @@ here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -19309,6 +19334,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 12 (Facilities, pass 9) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (state=open) returned
+0 PRs with a head branch starting `claude/security-review-`. PR #3272
+(Feature 11, Inventory, pass 9) had already merged, confirmed via
+`pull_request_read` (`merged: true`, `merged_at: 2026-10-15T16:50:17Z`).
+Row 11 was already ✅ and row 12 (Facilities) the first `⬜`, matching the
+state recorded in that PR's own body. This session is a watchdog pickup: the
+last security-review PR merged about an hour before this session started
+with no new `claude/security-review-*` PR or branch opened since.
+
+**Review.** Baseline `8d2e4d7a` (pass 8's merge, PR #3169) to current `HEAD`
+— 343 commits landed repo-wide in the window, of which 4 touched this
+feature's own scope files and 5 more touched its shared dependencies, all
+read in full via `git show`. The only feature-shaped change was "Confirm a
+folder only full administrators could open" (decision 29, documents module):
+checked whether its new `confirm_admin_only` guard on
+`DocumentsService.create_folder`/`update_folder` reaches facility folders,
+and confirmed it does not — `ensure_facility_folder` and its sub-folder
+creators build `DocumentFolder` rows directly and never call either guarded
+method, and facility folders have no admin-editable access form for the
+guard to protect in the first place (their `required_permissions` come from
+fixed constants, the subject of FAC-13, already closed). Everything else in
+the delta was frontend-only UI (dialog portal fix, required-field marking,
+due-date display) or mypy-narrowing commits confirmed behavior-neutral
+(`result.scalar() or 0` on COUNT queries, `TYPE_CHECKING`-only field
+declarations, a `floor` type narrowing). All 98 routes re-enumerated fresh by
+AST walk, 98/98 carrying a permission dependency — unchanged from pass 8.
+LIKE escaping, schema casing (`to_camel` vs. the frontend's matching
+camelCase types), org-scoping FK validation, and the one locking read
+(`get_emergency_contact`) all re-checked and unchanged. FAC-30 (P2,
+owner-accepted "leave as is") re-confirmed as the only standing item; FAC-13
+stays closed; FAC-41/FAC-44 stay fixed and intact. See
+`FAC-12-facilities.md`'s **Pass 9** section for full detail.
+
+**Gate.** flake8/black/isort (7.3.0/26.5.1/9.0.1, CI's pinned versions)
+clean; `validate_migrations.py --strict` single head (`b90813f63e25`), 600
+revisions; `check_route_permissions.py --strict` 270 routes, 0 errors/
+warnings; `pytest tests/ -k "facilit"` 229 passed, 1 pre-existing skip
+(`pywebpush`); the six tenancy/security guard tests plus the two migration
+guard tests together 181 passed; frontend `typecheck`/`lint` clean;
+`vitest run src/modules/facilities` 130 passed (18 files, up from 124 at
+pass 8 — pass 9's own dialog/due-date tests). 0 application-security
+findings, 0 new FAC-N findings, 0 code fixes applied (nothing needed
+fixing). Row 12 → ✅ (pending this PR's merge); next is Feature 13
+(Apparatus & NFC).
 
 ### 2026-10-15 — Feature 11 (Inventory, pass 9) — watchdog pickup, 0 fixes, 0 new findings
 
