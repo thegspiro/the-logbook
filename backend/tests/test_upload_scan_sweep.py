@@ -32,6 +32,8 @@ SCANNING_CALLS = {
     "store_bytes",
     # app.services.module_documents: stores through store_upload.
     "store_as_document",
+    # app.services.minutes_record_service: stores through store_upload.
+    "store_minutes_attachment",
 }
 
 
