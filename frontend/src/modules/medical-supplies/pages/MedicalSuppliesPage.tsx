@@ -437,6 +437,15 @@ const MedicalSuppliesPage: React.FC = () => {
     return loading.categories ? '…' : '—';
   };
 
+  // The summary's total, not the items page: the items list is filtered and
+  // paged, so its length cannot say whether the catalog itself is empty.
+  const noSuppliesYet = loaded.summary && summary?.total_items === 0;
+  const emptyCatalogHint = !canManage
+    ? 'Nothing has been added to the medical catalog yet.'
+    : categories.length === 0
+      ? 'Add a category first, then the supplies that go in it.'
+      : 'Add the supplies you stock, then receive deliveries to record their lots and expiry dates.';
+
   const handleSaved = () => {
     setShowItemModal(false);
     setEditingItem(null);
@@ -510,12 +519,15 @@ const MedicalSuppliesPage: React.FC = () => {
             </button>
             {canManage && (
               <>
+                {/* Labelled, not an icon alone: a supply needs a category
+                    before it can exist, and a bare tag glyph was the only way
+                    to the page that makes one. */}
                 <Link
                   to="/medical-supplies/categories"
-                  className="btn-icon"
-                  aria-label="Manage medical supply categories"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
                 >
-                  <Tag className="h-4 w-4" />
+                  <Tag className="h-4 w-4" aria-hidden="true" />
+                  Categories
                 </Link>
                 <button
                   type="button"
@@ -652,7 +664,12 @@ const MedicalSuppliesPage: React.FC = () => {
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">
-          {loaded.expiring && expiring.length === 0 ? (
+          {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
+            // "Nothing expiring" over an empty catalog reads as an all-clear
+            // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
+            // is not a passing one).
+            <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
+          ) : loaded.expiring && expiring.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
               title="Nothing expiring"
@@ -765,15 +782,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 description="Try a different search or category."
               />
             ) : (
-              <EmptyState
-                icon={Stethoscope}
-                title="No medical supplies yet"
-                description={
-                  canManage
-                    ? 'Add a category first, then the supplies that go in it.'
-                    : 'Nothing has been added to the medical catalog yet.'
-                }
-              />
+              <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
             )
           ) : (
             <div className="card overflow-x-auto p-0">
@@ -817,10 +826,11 @@ const MedicalSuppliesPage: React.FC = () => {
                         <td
                           data-label="On hand"
                           className={`px-4 py-3 text-right tabular-nums ${
-                            isLow ? 'font-semibold text-orange-700 dark:text-orange-400' : 'text-theme-text-primary'
+                            isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
                           }`}
                         >
                           {formatNumber(onHandQuantity(item))}
+                          {isLow && <span className="ml-1 text-xs"> Low</span>}
                         </td>
                         <td data-label="Reorder at" className="text-theme-text-muted px-4 py-3 text-right tabular-nums">
                           {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}

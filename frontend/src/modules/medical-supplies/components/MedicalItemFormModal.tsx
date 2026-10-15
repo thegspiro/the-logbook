@@ -115,7 +115,10 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           category_id: form.category_id,
           description: form.description.trim() || undefined,
           manufacturer: form.manufacturer.trim() || undefined,
-          quantity: form.quantity === '' ? undefined : Number(form.quantity),
+          // 0, not omitted: the shared create schema defaults a missing
+          // quantity to 1, so a supply added with a blank box showed one unit
+          // on hand that nobody had received.
+          quantity: form.quantity === '' ? 0 : Number(form.quantity),
           unit_of_measure: form.unit_of_measure.trim() || undefined,
           reorder_point: form.reorder_point === '' ? undefined : Number(form.reorder_point),
           storage_location: form.storage_location.trim() || undefined,
