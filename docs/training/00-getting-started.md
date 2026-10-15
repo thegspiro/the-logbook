@@ -628,7 +628,7 @@ Other changes you may notice:
 - **On a phone, the middle of the bottom bar is an Add button** for the things
   members log most often. You choose the two other tabs on **My Account →
   Appearance**; see
-  [Mobile & PWA Usage](./10-mobile-pwa.md#choose-your-own-bottom-bar-tabs-2026-10-02).
+  [Mobile & PWA Usage](./10-mobile-pwa.md#choosing-your-bottom-bar-tabs).
 - **On a phone, the menu shows when there is more below it,** with a fade at
   the bottom and a **More** arrow you can tap.
 - **Times are your department's.** Emails, PDFs and spreadsheet downloads show

@@ -78,10 +78,10 @@
 Two passages in guide 04 still described screens that August releases had
 already replaced. Both now match the application.
 
-| Topic                                                              | Now in                                                                                                                                  |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| A ballot item has no voting method or number of winners of its own | [04 — Events & Meetings](./04-events-meetings.md#creating-elections-officers) and [14 — Elections](./14-elections.md)                   |
-| The dashboard has no Clear All; event notices land in My Updates   | [04 — Events & Meetings](./04-events-meetings.md#dashboard-notification-management) and [00 — Getting Started](./00-getting-started.md) |
+| Topic                                                              | Now in                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| A ballot item has no voting method or number of winners of its own | [14 — Elections → Configuring Ballot Items](./14-elections.md#configuring-ballot-items)                                   |
+| The dashboard has no Clear All; event notices land in My Updates   | [04 — Events & Meetings](./04-events-meetings.md#event-notifications) and [00 — Getting Started](./00-getting-started.md) |
 
 # September 24 – October 4, 2026 changes
 
@@ -94,7 +94,7 @@ screenshots that still show the old ones.
 | Topic                                                                       | Now in                                                                                                          |
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | "Today" and printed times follow the department's timezone                  | [08 — Admin & Reports](./08-admin-reports.md) (The Department's Timezone Is the Clock)                          |
-| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md) (Choose your own bottom-bar tabs)                                       |
+| Choosing your own phone bottom-bar tabs; Settings opens My Account          | [10 — Mobile & PWA](./10-mobile-pwa.md#choosing-your-bottom-bar-tabs)                                           |
 | Seven password rules; sign-in countdown; "My Account"                       | [00 — Getting Started](./00-getting-started.md)                                                                 |
 | Member numbers: one field, patterns, never reissued; Rank in the directory  | [01 — Membership](./01-membership.md)                                                                           |
 | Anonymizing a former member; length of service across a break               | [01 — Membership](./01-membership.md)                                                                           |

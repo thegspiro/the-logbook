@@ -46,6 +46,9 @@ import { CarryForwardDialog } from '../components/CarryForwardDialog';
 import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
 import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
+import { PersonPicker } from '../components/PersonPicker';
+import { SectionMotion } from '../components/SectionMotion';
 import { RevisionsPanel } from '../components/RevisionsPanel';
 import { SuggestChangeForm } from '../components/SuggestChangeForm';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
@@ -284,6 +287,15 @@ export const MinutesDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // A time is a field of its own on the minutes, not part of a section. Sent as
+  // an explicit null to clear it, since an omitted key means "leave it alone".
+  const handleSaveTime = async (field: 'called_to_order_at' | 'adjourned_at', iso: string | null) => {
+    if (!minutesId) return;
+    const updated = await minutesService.updateMinutes(minutesId, { [field]: iso });
+    setMinutes(updated);
+    toast.success(iso ? 'Time recorded' : 'Time cleared');
   };
 
   const handleReorderSection = async (index: number, direction: 'up' | 'down') => {
@@ -923,6 +935,7 @@ export const MinutesDetailPage: React.FC = () => {
           suggestions={suggestions.suggestions}
           loaded={suggestions.loaded}
           reload={suggestions.reload}
+          onMinutesChanged={fetchMinutes}
         />
 
         {/* Meeting Info */}
@@ -1175,11 +1188,35 @@ export const MinutesDetailPage: React.FC = () => {
                       </p>
                     )}
 
+                    {(section.key === 'call_to_order' || section.key === 'adjournment') && (
+                      <MeetingTimeCapture
+                        kind={section.key === 'call_to_order' ? 'start' : 'end'}
+                        value={section.key === 'call_to_order' ? minutes.called_to_order_at : minutes.adjourned_at}
+                        otherTime={section.key === 'call_to_order' ? minutes.adjourned_at : minutes.called_to_order_at}
+                        scheduled={section.key === 'call_to_order' ? minutes.meeting_date : undefined}
+                        timezone={tz}
+                        canEdit={Boolean(canManage && isEditable)}
+                        onSave={(iso) =>
+                          handleSaveTime(section.key === 'call_to_order' ? 'called_to_order_at' : 'adjourned_at', iso)
+                        }
+                      />
+                    )}
+
+                    <SectionMotion
+                      minutesId={minutes.id}
+                      section={section}
+                      motions={minutes.motions}
+                      attendees={minutes.attendees ?? []}
+                      canRecord={Boolean(canManage && isEditable)}
+                      onRecorded={fetchMinutes}
+                    />
+
                     {canSuggest && suggestingSection === section.key && (
                       <SuggestChangeForm
                         minutesId={minutes.id}
                         sectionKey={section.key}
                         subject={section.title}
+                        original={{ content: section.content, format: section.format }}
                         onSent={async () => {
                           setSuggestingSection(null);
                           await suggestions.reload();
@@ -1227,34 +1264,21 @@ export const MinutesDetailPage: React.FC = () => {
                 className="form-input"
               />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label htmlFor="moved-by" className="sr-only">
-                    Moved by
-                  </label>
-                  <input
-                    id="moved-by"
-                    type="text"
-                    value={motionForm.moved_by || ''}
-                    onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
-                    placeholder="Moved by"
-                    aria-label="Moved by"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="seconded-by" className="sr-only">
-                    Seconded by
-                  </label>
-                  <input
-                    id="seconded-by"
-                    type="text"
-                    value={motionForm.seconded_by || ''}
-                    onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
-                    placeholder="Seconded by"
-                    aria-label="Seconded by"
-                    className="form-input"
-                  />
-                </div>
+                <PersonPicker
+                  id="moved-by"
+                  label="Moved by"
+                  value={motionForm.moved_by || ''}
+                  onChange={(name) => setMotionForm({ ...motionForm, moved_by: name })}
+                  attendees={minutes.attendees ?? []}
+                />
+                <PersonPicker
+                  id="seconded-by"
+                  label="Seconded by"
+                  value={motionForm.seconded_by || ''}
+                  onChange={(name) => setMotionForm({ ...motionForm, seconded_by: name })}
+                  attendees={minutes.attendees ?? []}
+                  exclude={motionForm.moved_by || undefined}
+                />
                 <div>
                   <label htmlFor="motion-status" className="sr-only">
                     Motion status
@@ -1653,6 +1677,7 @@ export const MinutesDetailPage: React.FC = () => {
           isOpen={showAdopt}
           minutesId={minutes.id}
           hasAcceptedSuggestions={hasAcceptedSuggestions}
+          attendees={minutes.attendees ?? []}
           busy={adopting}
           onClose={() => setShowAdopt(false)}
           onAdopt={(details) => {
