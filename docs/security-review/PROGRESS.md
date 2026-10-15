@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**This PR** (number recorded in the follow-up commit): branch
+**PR [#3262](https://github.com/thegspiro/the-logbook/pull/3262)**: branch
 `claude/security-review-documents-legal-p9`, Feature 10 (Documents & legal),
 pass 9. 0 code fixes, 0 new findings. All 22 routes re-enumerated, unchanged
 from pass 8. The real delta since pass 8 (`bb6f0a7d`): folder
