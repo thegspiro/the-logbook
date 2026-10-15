@@ -18,6 +18,14 @@ repeat was dropped.
 | `02-65-print-compliance.png` | **REPLACE** | The summary tiles read **Compliant / At Risk / Non-Compliant / Requirements** (were 100% Complete / Partially Complete / Not Started), headers wrap to the full requirement name instead of "ANNUAL MINIM…", unmet cells print **✗** rather than "—", and a legend sits under the table. Re-shoot the same department |
 | `02-39-finalize-checklist.png` | **CHECK** | Its alt text names a "Finalize Shift" button; the button reads **Close out shift**. Guide 03's `03-45-finalize-checklist.png` shows the current checklist |
 
+## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
+
+The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.
+Its image file names and alt text are unchanged. The rewrite corrected the
+guide's navigation to **Training Admin > Evaluations > Skills Test Templates**
+and **Skills Test Records**; any image showing a "Skills Testing" section with
+**Templates / Tests / Summary** tabs is stale and should be re-shot when found.
+
 ## Moved out of 06-apparatus-facilities.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
