@@ -545,8 +545,30 @@ connection**.
 
 - **Everything that shows or changes information:** member lists, forms,
   check-ins, training records and so on.
-- The Logbook **never stores member information on the device** for offline
-  use. With no connection, a screen opens but shows nothing new.
+- **A form must be opened while you have signal.** Once it is open, you can
+  fill it in and submit it with no signal. A form you try to open with no
+  signal shows an error instead.
+- The Logbook does not keep member lists, profiles or records on the device
+  for browsing offline. With no connection, a screen opens but shows nothing
+  new.
+
+**Some work is kept on the device on purpose**, so that it is not lost when the
+signal drops. It can hold member names, results and remarks:
+
+- the seven kinds of offline item, while they wait to be sent;
+- shift-report drafts and equipment checks you started but did not finish;
+- for skills-test examiners: each evaluation you are examining that you have
+  opened on this device, the published score sheets, and the names of up to
+  50 members you have recently examined.
+
+Each of these belongs to the member who saved it. They are cleared when
+someone signs out (see
+[Signing Out Clears Queued Work](#signing-out-clears-queued-work)).
+
+> **What if I need to score a skills evaluation where there is no signal?**
+> Open it on that device once while you still have signal. An evaluation never
+> opened there cannot be opened offline; the app says so. See
+> [Scoring with no signal](./09-skills-testing.md#scoring-with-no-signal).
 
 Inside an open app or tab, The Logbook keeps what you just looked at for a
 minute or so, so moving between screens does not reload everything. Anything
@@ -569,22 +591,36 @@ problems.
   equipment check shows **"Connection lost — check queued for sync"**. A
   training submission shows its usual receipt.
 - **Open the menu to see what is waiting.** With no connection, the bottom of
-  the menu shows **Offline · 2 pending** (or however many). Once you are back
-  online with items still waiting, it shows **2 pending sync — retry**; select
-  it to send them now.
-- **Items send by themselves** when the device is back online. You then see
-  **"Synced 2 pending items"** (or **"Synced 1 pending item"**). Equipment checks
-  are sent from the equipment-check page and report **"Synced 2 queued
-  check(s)"**, and skills-test evaluations **"Synced 1 skills evaluation"**.
+  the menu shows **Offline · 2 pending** (or however many). The count covers
+  all seven kinds of item. Once you are back online with items still waiting,
+  it shows **2 pending sync — retry**.
+- **Items send by themselves** when the device is back online. Training
+  submissions, RSVPs, NFC put-aways and shelf audits then report **"Synced 2
+  pending items"** (or **"Synced 1 pending item"**). Skills-test evaluations
+  report **"Synced 1 skills evaluation"**.
+- **Equipment checks and shift reports send from their own page.** They go
+  when you open an equipment check, or the **Shift Reports** tab in
+  Scheduling, with a connection. Equipment checks report **"Synced 2 queued
+  check(s)"**; shift reports **"Synced 2 offline reports"**.
+- **What pending sync — retry does.** Selecting it sends training
+  submissions, RSVPs, NFC put-aways and shelf audits straight away. It does
+  not send equipment checks or shift reports: open their page instead.
+  Skills-test evaluations send by themselves.
 - **Only real connection failures are saved for later.** If The Logbook
   **rejects** an equipment check — a missing answer, a permission you no longer
   have, a shift already checked — you see the real error straight away.
-- **Something that keeps being rejected is not retried forever.** After five
-  rejections it is deleted, and the app says so: **"1 pending item failed
-  permanently and was discarded"**. For equipment checks it reads **"1 queued
-  check(s) were rejected repeatedly and have been discarded"**. Re-enter the
-  item by hand. Attempts that never reached The Logbook (a dropped signal) do not count
-  towards the five.
+
+**What happens to an item The Logbook keeps rejecting** depends on its kind:
+
+| Kind of item                                                     | What happens                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training submission, RSVP, NFC put-away, shelf audit             | After five rejections it is deleted, and the app says so: **"1 pending item failed permanently and was discarded"**. Re-enter it by hand.                                                                                                                                                         |
+| Equipment check                                                  | After five rejections it is deleted: **"1 queued check(s) were rejected repeatedly and have been discarded"**. Re-enter it by hand.                                                                                                                                                                 |
+| Shift report                                                     | It is never deleted. It stays waiting and is tried again each time you open the **Shift Reports** tab with a connection.                                                                                                                                                                          |
+| Skills-test evaluation                                           | It is never deleted. You see **"Not accepted:"** with the test and candidate, and the reason. A red banner on the test repeats it. The scoring stays on the device until **you** choose **Discard from this device**. See [Scoring with no signal](./09-skills-testing.md#scoring-with-no-signal). |
+
+Attempts that never reached The Logbook (a dropped signal) do not count
+towards the five.
 
 > **Hint:** At an event with poor coverage, check in or RSVP before you arrive,
 > while you still have signal. A QR code check-in reads the code on your phone,
@@ -599,22 +635,41 @@ problems.
 
 Station computers are shared. Whoever is on duty signs in on the same browser,
 and anything left on the device can be read by the next person. So **signing
-out erases everything stored on the device**:
+out clears the work stored on the device**:
 
 - queued equipment checks and their photos,
 - queued shift reports,
-- queued training submissions and RSVPs,
-- saved shift-report drafts, and
-- equipment checks you started but did not finish.
+- queued training submissions, RSVPs, NFC put-aways and shelf audits,
+- saved shift-report drafts,
+- equipment checks you started but did not finish, and
+- skills-test evaluations and the copies kept for scoring offline.
+
+The clean-up is **best effort**. If the device's storage does not respond
+within a few seconds, sign-out finishes anyway, so that nobody is left stuck
+signed in on a shared terminal. Something may then be left behind on that
+device.
 
 **If you have queued work, get back online and let it send before you sign
-out.** Anything still waiting is deleted. The app tells you: if signing out
-threw away unsent items, the sign-in page says how many, for example
-_"2 unsent items were cleared from this device at sign-out to protect your
-privacy on a shared computer. Re-enter them after signing back in."_
+out.** Anything still waiting is deleted. Unsent skills evaluations are the
+one exception that asks first: **Sign Out** tries to send them, and if it
+cannot, it warns you and offers **Stay signed in**. The app tells you what was
+lost: if signing out threw away unsent items, the sign-in page says how many,
+for example _"2 unsent items were cleared from this device at sign-out to
+protect your privacy on a shared computer. Re-enter them after signing back
+in."_
 
-Only a real sign-out clears the device. Two things that might look like a
-sign-out do **not**:
+The device is also cleared **without you selecting Sign Out**, and without
+that message, in two cases:
+
+- **Your session has expired** and The Logbook cannot renew it. The app
+  returns you to the sign-in page, and unsent work on the device is deleted.
+- **A different member signs in** on the same device. Whatever the previous
+  member left is deleted first.
+
+So do not leave unsent work on a device you are walking away from. Let it send
+first.
+
+Two things that might look like a sign-out do **not** clear the device:
 
 - **A weak or dropped connection** while the app loads your profile. Your
   drafts and queued work stay.
@@ -632,6 +687,10 @@ Every queued equipment check, shift report, training submission, RSVP, NFC
 put-away and shelf audit records **who saved it**. The app sends only the items
 that belong to the member signed in. Another member's items stay on the device
 and do not hold up yours. The pending count shows only your own.
+
+Skills-test evaluations follow the same rule. Each one, and each saved copy of
+a test, belongs to the member who saved it. Only that member's evaluations are
+sent, and a saved copy opens only for them.
 
 Some older items may have no recorded owner. They are held, not sent, and a
 yellow notice appears at the top of the app: _"3 offline items are on hold"_.
@@ -803,8 +862,8 @@ Member ID**. It opens the member's profile.
 
 ### Barcode Scanning (Inventory)
 
-Item barcodes are scanned inside the **Distribute Items** and **Return Items**
-dialogs, which officers open for a member:
+Item barcodes are scanned inside the **Distribute Items** dialog, which
+officers open for a member:
 
 1. In the dialog, select **Start Camera**.
 2. Point the camera at the item's barcode or QR code. The item is added to the
@@ -822,6 +881,13 @@ the webcam.
 
 If the camera does not work on any device, the search box always works. A
 failed camera slows the job down; it does not stop it.
+
+**Returns do not use the camera.** On the **Member Equipment** page, select
+**Return** on a member's row (it appears only when they hold items). The
+**Return Items** dialog lists everything the member holds. Select the items
+coming back, or use **Select All**. Set each item's **Condition**, and for
+items issued in a quantity, how many are coming back. Then select **Return**
+(for example **Return 2 Items**).
 
 > **Edge case:** On an iPhone or iPad, the camera only works on a secure
 > (HTTPS) address. If your department uses a plain `http://` address on its own
@@ -947,7 +1013,7 @@ had open.
 | Push stopped after reinstalling the app                          | Push belongs to that installation on that device. Switch it on again.                                                                                                                                                             |
 | Push is on but nothing ever arrives                              | Ask your IT manager to check the department's push keys. Keys made the wrong way are accepted by the phone but rejected by the push service, so nothing arrives and nothing looks wrong.                                         |
 | "Network error" on a page                                        | Everything that shows or changes information needs a connection. Check your Wi-Fi or mobile signal and try again.                                                                                                                |
-| Offline work did not send                                        | Get back online, open **More**, and select **pending sync — retry**. Then check the result in Training, Events or wherever it belongs. Only seven kinds of item are saved offline; anything else must be re-entered.               |
+| Offline work did not send | Get back online, open **More**, and select **pending sync — retry**. That sends training submissions, RSVPs, NFC put-aways and shelf audits. For equipment checks, open an equipment check; for shift reports, open **Scheduling → Shift Reports**. A skills evaluation that was not accepted shows a red banner on the test with the reason. Then check the result where it belongs. Only seven kinds of item are saved offline; anything else must be re-entered. |
 | App icon disappeared from the home screen                        | Some phones remove app icons after a system update or storage clean-up. Install it again.                                                                                                                                        |
 | Dark mode not as expected                                        | Choose **Light**, **Dark**, **System** or **High Contrast** in **My Account → Appearance**. **System** follows your phone's setting. The choice is stored on each device separately.                                            |
 | No "new version" bar appears                                     | Open **My Account → App → Check for updates**. It answers the question directly, and reloads onto the new version if there is one.                                                                                              |
@@ -1001,16 +1067,26 @@ manager) **Edit**. It has no checkout button: items go out through the
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
 
-The refresher ends at noon. Sarah drives to a rural training site for an
-afternoon exercise. Her phone loses all signal.
+The refresher ends at noon. Sarah is driving to a rural training site for an
+afternoon exercise, where she knows there is no signal. Before she leaves the
+station, while she still has signal, she opens **Training > Submit Training**
+and leaves the app on that screen. The form needs a connection to open, but
+once it is open it works with no signal.
 
-After the exercise, Sarah opens **Training > Submit Training** and fills in the
-form: course "Hazmat Refresher", 4 hours, today's date. She selects
-**Submit**. The form shows its usual receipt; the submission is saved on the
-phone, waiting to be sent.
+At the site her phone loses all signal. After the exercise, she fills in the
+form she left open: course "Hazmat Refresher", 4 hours, today's date. She
+selects **Submit**. The form shows its usual receipt; the submission is saved
+on the phone, waiting to be sent.
 
-Still offline, she opens **Events** and selects **Going** for next week's
-"Q3 Ladder Operations Drill". That RSVP is saved on the phone too.
+On the drive back, she passes through a patch of signal and opens **Events**.
+The event list loads just before the signal drops again. With no signal, she
+selects **Going** for next week's "Q3 Ladder Operations Drill". That RSVP is
+saved on the phone too.
+
+> **Edge case:** Had Sarah opened **Submit Training** or **Events** with no
+> signal, the screen would have shown an error instead of the form or the
+> event list. Open the screen you need while you still have signal, and do not
+> move away from it until you are done.
 
 She selects **More**. The bottom of the menu reads **Offline · 2 pending**.
 
