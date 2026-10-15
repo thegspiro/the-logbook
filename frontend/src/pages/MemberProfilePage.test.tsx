@@ -62,7 +62,7 @@ const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
 // No recorded change by default, so the reason control stays out of the way of
 // tests that are not about it.
-const getStatusChange = vi.fn(() =>
+const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
   Promise.resolve({ user_id: TARGET_ID, status: 'active', status_changed_at: null, status_change_reason: null })
 );
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
@@ -115,7 +115,7 @@ vi.mock('../services/api', () => ({
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
-    getStatusChange: (...args: unknown[]) => getStatusChange(...args) as unknown,
+    getStatusChange: (...args: Parameters<typeof getStatusChange>) => getStatusChange(...args),
     updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
   },
 }));
