@@ -156,15 +156,21 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
-## Google Workspace — Accounts Are Created, Never Retired (2026-10-15)
+## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant
-converted to a member (`wiki/Integration-Google-Workspace.md`). The owner
-scoped it to creation only; each of these is a deliberate follow-up:
+converted to a member and suspends it when the member is dropped or deleted
+(`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
+choice an owner may want to revisit:
 
-- **No suspension on departure.** Deactivating, separating or archiving a
-  member leaves their Google account active, holding a license and their
-  mail. An administrator suspends it in the Google Admin console.
+- **Retirement keeps the account.** Only a drop or a delete suspends it; a
+  department may let retirees keep their address. Retired, on-leave, inactive
+  and Logbook-suspended members keep a working Google account.
+- **Suspended, never deleted.** A departed member's account keeps its mailbox
+  and its Workspace license until an administrator deletes it in Google.
+- **A permanent delete cannot be retried.** The account record goes with the
+  member, so a Google failure while suspending is recorded only in the audit
+  log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
 - **Members added any other way get no account.** Only conversion from the
   prospective-members pipeline creates one; Add Member and roster import do

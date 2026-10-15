@@ -30,10 +30,11 @@ from app.models.google_workspace import (
     GoogleAccountStatus,
 )
 from app.models.integration import Integration
-from app.models.user import Organization, User
+from app.models.user import Organization, User, UserStatus
 from app.services.email_theme import callout, fact, facts
 from app.services.integration_services.google_workspace_service import (
     GoogleAccountExistsError,
+    GoogleAccountNotFoundError,
     GoogleWorkspaceError,
     directory_for,
 )
@@ -48,6 +49,32 @@ LINKED_EXISTING_MESSAGE = (
     "Logbook has linked the member to it and left it unchanged; manage it in "
     "the Google Admin console."
 )
+
+
+# A member in one of these has left: their account is suspended, and none is
+# created for them. Retired is deliberately absent -- a department may let
+# retirees keep their address (owner decision, 2026-10-15).
+DEPARTED_STATUSES = frozenset(
+    {UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY, UserStatus.ARCHIVED}
+)
+
+# Accounts that exist in Google, and so can be suspended. A linked existing
+# account is suspended too (owner decision, 2026-10-15); only a suspension
+# The Logbook applied is ever lifted.
+_SUSPENDABLE = frozenset(
+    {GoogleAccountStatus.CREATED.value, GoogleAccountStatus.LINKED_EXISTING.value}
+)
+
+
+def suspendable_address(row: Optional[GoogleAccountProvision]) -> Optional[str]:
+    """The address to suspend for *row*, when it names an account in Google."""
+    if row is None or row.status not in _SUSPENDABLE:
+        return None
+    return row.primary_email
+
+
+def member_has_departed(user: User) -> bool:
+    return user.deleted_at is not None or user.status in DEPARTED_STATUSES
 
 
 class ProvisionRetryError(Exception):
@@ -363,20 +390,182 @@ class GoogleWorkspaceProvisioningService:
         await self.db.commit()
         return sent_count > 0
 
+    async def stage_suspension(
+        self, user_id: str, organization_id: str, suspended: bool
+    ) -> bool:
+        """Record, in the caller's transaction, that the account should be
+        suspended (or no longer suspended).
+
+        Returns whether there is anything for :meth:`reconcile_suspension` to
+        do once the caller commits. Google is never called here: the
+        departure it follows has not committed yet.
+        """
+        row = await self._load(organization_id, user_id=user_id)
+        if row is None or row.status not in _SUSPENDABLE:
+            return False
+        if row.suspension_wanted == suspended and row.suspension_settled:
+            return False
+        row.suspension_wanted = suspended
+        row.suspension_settled = False
+        row.suspension_error = None
+        return True
+
+    async def reconcile_suspension(
+        self,
+        user_id: str,
+        organization_id: str,
+        *,
+        actor_id: Optional[str] = None,
+        stamp: bool = True,
+    ) -> None:
+        """Bring the Google account to the suspension the row wants.
+
+        Never raises: the departure or return it follows is already durable,
+        and a failure stays on the row (``suspension_settled`` False) for the
+        member profile's retry.
+        """
+        try:
+            await self._reconcile_suspension(user_id, organization_id, actor_id, stamp)
+        except Exception:
+            logger.exception(
+                f"Google Workspace suspension sync crashed for user {user_id}"
+            )
+            await self.db.rollback()
+
+    async def _reconcile_suspension(
+        self,
+        user_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        stamp: bool,
+    ) -> None:
+        from app.core.audit import log_audit_event
+
+        row = await self._load(organization_id, user_id=user_id, lock=True)
+        if row is None or row.suspension_settled or row.status not in _SUSPENDABLE:
+            await self.db.commit()
+            return
+        integration = await self._active_integration(organization_id)
+        if integration is None:
+            row.suspension_error = (
+                "The Google Workspace integration is not connected, so the "
+                "account could not be updated."
+            )
+            await self.db.commit()
+            return
+
+        wanted = row.suspension_wanted
+        if stamp:
+            await self._begin_attempt(row)
+        else:
+            await self.db.commit()
+
+        outcome = "unchanged"
+        try:
+            directory = directory_for(integration)
+            if wanted and not row.suspended_by_logbook:
+                if await directory.is_suspended(row.primary_email):
+                    # Someone suspended it in Google already. Not ours, so a
+                    # return will not lift it.
+                    outcome = "already_suspended"
+                else:
+                    await directory.set_suspended(row.primary_email, True)
+                    row.suspended_by_logbook = True
+                    row.suspended_at = datetime.now(timezone.utc)
+                    outcome = "suspended"
+            elif not wanted and row.suspended_by_logbook:
+                await directory.set_suspended(row.primary_email, False)
+                row.suspended_by_logbook = False
+                row.suspended_at = None
+                outcome = "unsuspended"
+            row.suspension_settled = True
+            row.suspension_error = None
+        except GoogleAccountNotFoundError as exc:
+            # Deleted in Google: there is nothing left to suspend or restore.
+            row.suspended_by_logbook = False
+            row.suspension_settled = True
+            row.suspension_error = str(exc)
+            outcome = "missing"
+        except GoogleWorkspaceError as exc:
+            row.suspension_error = str(exc)
+            outcome = "failed"
+        await self.db.commit()
+
+        await log_audit_event(
+            self.db,
+            "google_workspace.account_suspension",
+            "integrations",
+            "warning" if outcome == "failed" else "info",
+            {
+                "target_user_id": row.user_id,
+                "suspend": wanted,
+                "outcome": outcome,
+            },
+            user_id=actor_id,
+            organization_id=str(organization_id),
+        )
+        await self.db.commit()
+        logger.info(f"Google Workspace suspension for user {row.user_id}: {outcome}")
+
+    async def suspend_detached(
+        self,
+        organization_id: str,
+        primary_email: str,
+        actor_id: Optional[str],
+    ) -> bool:
+        """Suspend an account whose record is already gone (a hard delete).
+
+        Nothing is left to retry from, so the outcome goes to the audit log.
+        Never raises.
+        """
+        from app.core.audit import log_audit_event
+
+        outcome = "failed"
+        try:
+            integration = await self._active_integration(organization_id)
+            if integration is None:
+                outcome = "not_connected"
+            else:
+                directory = directory_for(integration)
+                if await directory.is_suspended(primary_email):
+                    outcome = "already_suspended"
+                else:
+                    await directory.set_suspended(primary_email, True)
+                    outcome = "suspended"
+        except GoogleAccountNotFoundError:
+            outcome = "missing"
+        except Exception:
+            logger.exception("Suspending a hard-deleted member's Google account failed")
+        try:
+            await log_audit_event(
+                self.db,
+                "google_workspace.account_suspension",
+                "integrations",
+                "info" if outcome != "failed" else "critical",
+                {"suspend": True, "outcome": outcome, "reason": "member_deleted"},
+                user_id=actor_id,
+                organization_id=str(organization_id),
+            )
+            await self.db.commit()
+        except Exception:
+            logger.exception("Could not audit a hard-deleted member's Google account")
+            await self.db.rollback()
+        return outcome in {"suspended", "already_suspended", "missing"}
+
     async def retry(self, user_id: str, organization_id: str) -> GoogleAccountProvision:
         """Finish whatever is incomplete for one member's account.
 
-        A failed or pending row creates the account; a created one re-adds any
-        groups that failed and, if the member never received the password,
-        resets it and sends a new one. That reset is safe only because nobody
-        has signed in with a password nobody received. A linked existing
-        account is never touched.
+        An unsettled suspension is brought into line first. Otherwise a failed
+        or pending row creates the account -- unless the member has left -- and
+        a created one re-adds any groups that failed and, if the member never
+        received the password, resets it and sends a new one. That reset is
+        safe only because nobody has signed in with a password nobody
+        received. A linked existing account is only ever suspended or
+        unsuspended, never otherwise changed.
         """
         row = await self._load(organization_id, user_id=user_id, lock=True)
         if row is None:
             raise LookupError("No Google Workspace account record for this member")
-        if row.status == GoogleAccountStatus.LINKED_EXISTING.value:
-            raise ProvisionRetryError(LINKED_EXISTING_MESSAGE)
         if row.last_attempt_at is not None:
             last = row.last_attempt_at
             if last.tzinfo is None:
@@ -386,6 +575,22 @@ class GoogleWorkspaceProvisioningService:
                     "This account was worked on moments ago. Wait a minute "
                     "before retrying."
                 )
+
+        integration = await self._active_integration(organization_id)
+        if integration is None:
+            raise ProvisionRetryError(
+                "Connect the Google Workspace integration before retrying."
+            )
+
+        if not row.suspension_settled and row.status in _SUSPENDABLE:
+            # Stamped and committed while the row is still locked, so a second
+            # retry queued on the lock sees this one and stops at the cooldown.
+            await self._begin_attempt(row)
+            await self.reconcile_suspension(user_id, organization_id, stamp=False)
+            return await self._reloaded(row.id, organization_id)
+
+        if row.status == GoogleAccountStatus.LINKED_EXISTING.value:
+            raise ProvisionRetryError(LINKED_EXISTING_MESSAGE)
         nothing_to_do = (
             row.status == GoogleAccountStatus.CREATED.value
             and not row.pending_groups
@@ -393,14 +598,24 @@ class GoogleWorkspaceProvisioningService:
         )
         if nothing_to_do:
             raise ProvisionRetryError("This Google account needs nothing further.")
+        if row.status in (
+            GoogleAccountStatus.PENDING.value,
+            GoogleAccountStatus.FAILED.value,
+        ):
+            member = (
+                await self.db.execute(
+                    select(User).where(
+                        User.id == row.user_id,
+                        User.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if member is None or member_has_departed(member):
+                raise ProvisionRetryError(
+                    "This member has left the department, so no Google account "
+                    "will be created for them."
+                )
 
-        integration = await self._active_integration(organization_id)
-        if integration is None:
-            raise ProvisionRetryError(
-                "Connect the Google Workspace integration before retrying."
-            )
-        # Stamped and committed while the row is still locked, so a second
-        # retry queued on the lock sees this one and stops at the cooldown.
         await self._begin_attempt(row)
 
         if row.status in (
@@ -428,7 +643,12 @@ class GoogleWorkspaceProvisioningService:
                     await self.send_credentials_email(row.id, organization_id, password)
             await self.db.commit()
 
-        refreshed = await self._load(organization_id, provision_id=row.id)
+        return await self._reloaded(row.id, organization_id)
+
+    async def _reloaded(
+        self, provision_id: str, organization_id: str
+    ) -> GoogleAccountProvision:
+        refreshed = await self._load(organization_id, provision_id=provision_id)
         if refreshed is None:
             raise LookupError("No Google Workspace account record for this member")
         await self.db.refresh(refreshed)

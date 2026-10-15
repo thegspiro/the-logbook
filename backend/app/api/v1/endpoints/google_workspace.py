@@ -44,6 +44,11 @@ def _to_response(row: Optional[GoogleAccountProvision]) -> GoogleAccountEnvelope
             attempts=row.attempts or 0,
             last_attempt_at=row.last_attempt_at,
             created_at=row.created_at,
+            suspension_wanted=bool(row.suspension_wanted),
+            suspension_settled=bool(row.suspension_settled),
+            suspended_by_logbook=bool(row.suspended_by_logbook),
+            suspended_at=row.suspended_at,
+            suspension_error=row.suspension_error,
         )
     )
 
@@ -73,10 +78,12 @@ async def retry_member_google_account(
 ):
     """Finish whatever is incomplete about the member's Google account.
 
-    Creates a failed or pending account; for a created one, re-adds failed
-    groups and, if the password never reached the member, resets it and emails
-    a new one. A linked existing account is refused (409). One run a minute
-    per member (429).
+    Brings an unsettled suspension into line first (suspend after a departure,
+    unsuspend after a return). Otherwise creates a failed or pending account
+    -- refused (409) for a member who has left -- and for a created one
+    re-adds failed groups and, if the password never reached the member,
+    resets it and emails a new one. A linked existing account with nothing to
+    reconcile is refused (409). One run a minute per member (429).
 
     **Requires permission: members.manage**
     """

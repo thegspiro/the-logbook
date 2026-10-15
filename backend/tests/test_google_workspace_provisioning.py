@@ -8,7 +8,7 @@ Google itself is never called: ``directory_for`` is replaced by a fake.
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,7 +25,7 @@ from app.models.google_workspace import (
     GoogleAccountStatus,
 )
 from app.models.integration import Integration
-from app.models.user import Organization
+from app.models.user import Organization, User, UserStatus
 from app.schemas.integration import GoogleWorkspaceConfig
 from app.services.email_service import append_to_email_html
 from app.services.google_workspace_provisioning_service import (
@@ -74,6 +74,7 @@ class FakeDirectory:
         self.created: list[tuple[str, ...]] = []
         self.groups: list[tuple[str, str]] = []
         self.resets: list[str] = []
+        self.suspend_calls = []
 
     async def create_user(self, email, given, family, password, org_unit):
         if self.create_error:
@@ -90,6 +91,22 @@ class FakeDirectory:
         if self.reset_error:
             raise self.reset_error
         self.resets.append(password)
+
+    # Suspension: ``suspended`` is Google's state for the one account.
+    suspended = False
+    suspend_error: Optional[Exception] = None
+    suspend_calls: list[bool]
+
+    async def is_suspended(self, email):
+        if self.suspend_error:
+            raise self.suspend_error
+        return self.suspended
+
+    async def set_suspended(self, email, suspended):
+        if self.suspend_error:
+            raise self.suspend_error
+        self.suspend_calls.append(suspended)
+        self.suspended = suspended
 
 
 # ---------------------------------------------------------------------------
@@ -718,3 +735,270 @@ class TestTransferEndpointAfterCommit:
         assert db_events == ["commit", "rollback"]
         assert result["success"] is True
         assert "_provision_google" not in result
+
+
+async def _member_with_account(db_session, status=GoogleAccountStatus.CREATED.value):
+    """A converted member whose Google account exists (or was linked)."""
+    org = await _org(db_session)
+    await _connect(db_session, org)
+    svc, prospect = await _prospect(db_session, org)
+    result = await svc._do_transfer(prospect, None)
+    row = await _row(db_session, result["user_id"])
+    row.status = status
+    row.credentials_sent = True
+    row.pending_groups = None
+    await db_session.commit()
+    officer = User(
+        organization_id=org.id,
+        username=f"officer-{_hex()}",
+        email=f"officer-{_hex()}@example.org",
+        first_name="Pat",
+        last_name="Officer",
+    )
+    db_session.add(officer)
+    await db_session.commit()
+    caller = SimpleNamespace(
+        id=officer.id, organization_id=org.id, username=officer.username
+    )
+    return org, str(result["user_id"]), caller
+
+
+async def _backdate_service(db_session, user_id):
+    """A rejoin must come after the last day of service, which a same-day drop
+    makes today; back-date the closed stints, as the service-history tests do."""
+    from app.models.user import MemberServicePeriod
+
+    stints = (
+        (
+            await db_session.execute(
+                select(MemberServicePeriod).where(
+                    MemberServicePeriod.user_id == user_id,
+                    MemberServicePeriod.end_date.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for stint in stints:
+        stint.end_date = date.today() - timedelta(days=30)
+    await db_session.flush()
+
+
+async def _change_status(db_session, user_id, caller, new_status):
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.endpoints.member_status import (
+        MemberStatusChangeRequest,
+        change_member_status,
+    )
+
+    await _backdate_service(db_session, user_id)
+    return await change_member_status(
+        uuid.UUID(user_id),
+        MemberStatusChangeRequest(new_status=new_status, reason="test"),
+        BackgroundTasks(),
+        db=db_session,
+        current_user=caller,
+    )
+
+
+@pytest.mark.integration
+class TestSuspension:
+    async def test_a_drop_suspends_and_undoing_it_lifts_the_suspension(
+        self, db_session
+    ):
+        from app.api.v1.endpoints.member_status import (
+            UndoDropRequest,
+            undo_member_drop,
+        )
+
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+            row = await _row(db_session, user_id)
+            assert fake.suspend_calls == [True]
+            assert row.suspended_by_logbook is True
+            assert row.suspension_settled is True
+            assert row.suspended_at is not None
+
+            await undo_member_drop(
+                uuid.UUID(user_id),
+                UndoDropRequest(),
+                db=db_session,
+                current_user=caller,
+            )
+        row = await _row(db_session, user_id)
+        assert fake.suspend_calls == [True, False]
+        assert row.suspended_by_logbook is False
+        assert row.suspension_wanted is False
+        assert row.suspended_at is None
+
+    async def test_a_rejoin_by_status_change_lifts_it(self, db_session):
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_involuntary")
+            await _change_status(db_session, user_id, caller, "active")
+        assert fake.suspend_calls == [True, False]
+
+    async def test_a_status_change_that_is_not_a_drop_leaves_google_alone(
+        self, db_session
+    ):
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "retired")
+            await _change_status(db_session, user_id, caller, "active")
+            await _change_status(db_session, user_id, caller, "leave")
+        assert fake.suspend_calls == []
+
+    async def test_reactivating_an_archived_member_lifts_it(self, db_session):
+        from app.services.member_archive_service import reactivate_member
+
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+            member = await db_session.get(User, user_id)
+            member.status = UserStatus.ARCHIVED
+            await db_session.commit()
+            await _backdate_service(db_session, user_id)
+            await reactivate_member(
+                db=db_session,
+                user_id=user_id,
+                organization_id=org.id,
+                reactivated_by=caller.id,
+            )
+        assert fake.suspend_calls == [True, False]
+
+    async def test_a_soft_delete_suspends(self, db_session):
+        from app.api.v1.endpoints.users import delete_user
+
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        with (
+            patch(f"{SERVICE}.directory_for", return_value=fake),
+            patch("app.api.v1.endpoints.users.log_audit_event", AsyncMock()),
+        ):
+            await delete_user(
+                uuid.UUID(user_id), hard=False, db=db_session, current_user=caller
+            )
+        assert fake.suspend_calls == [True]
+        assert (await _row(db_session, user_id)).suspended_by_logbook is True
+
+    async def test_a_hard_delete_suspends_from_the_captured_address(self, db_session):
+        from app.api.v1.endpoints.users import delete_user
+
+        org, user_id, caller = await _member_with_account(db_session)
+        address = (await _row(db_session, user_id)).primary_email
+        fake = FakeDirectory()
+        with (
+            patch(f"{SERVICE}.directory_for", return_value=fake),
+            patch("app.api.v1.endpoints.users.log_audit_event", AsyncMock()),
+            patch(
+                "app.api.v1.endpoints.users.find_hard_delete_blockers",
+                AsyncMock(return_value=[]),
+            ),
+        ):
+            await delete_user(
+                uuid.UUID(user_id), hard=True, db=db_session, current_user=caller
+            )
+        assert fake.suspend_calls == [True]
+        gone = (
+            await db_session.execute(
+                select(GoogleAccountProvision).where(
+                    GoogleAccountProvision.primary_email == address
+                )
+            )
+        ).scalar_one_or_none()
+        assert gone is None
+
+    async def test_a_linked_account_is_suspended_too(self, db_session):
+        org, user_id, caller = await _member_with_account(
+            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+        )
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+        assert fake.suspend_calls == [True]
+
+    async def test_a_suspension_that_was_not_ours_is_never_lifted(self, db_session):
+        org, user_id, caller = await _member_with_account(
+            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+        )
+        fake = FakeDirectory()
+        fake.suspended = True
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+            row = await _row(db_session, user_id)
+            assert row.suspension_settled is True
+            assert row.suspended_by_logbook is False
+            await _change_status(db_session, user_id, caller, "active")
+        assert fake.suspend_calls == []
+        assert fake.suspended is True
+
+    async def test_a_google_failure_never_undoes_the_drop_and_can_be_retried(
+        self, db_session
+    ):
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        fake.suspend_error = GoogleWorkspaceError("Google is busy.")
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+        member = await db_session.get(User, user_id)
+        await db_session.refresh(member)
+        assert member.status == UserStatus.DROPPED_VOLUNTARY
+        row = await _row(db_session, user_id)
+        assert row.suspension_settled is False
+        assert row.suspension_error == "Google is busy."
+
+        row.last_attempt_at = None
+        await db_session.commit()
+        fake.suspend_error = None
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            row = await GoogleWorkspaceProvisioningService(db_session).retry(
+                user_id, org.id
+            )
+        assert row.suspension_settled is True
+        assert row.suspended_by_logbook is True
+
+    async def test_an_account_deleted_in_google_settles_with_a_note(self, db_session):
+        from app.services.integration_services.google_workspace_service import (
+            GoogleAccountNotFoundError,
+        )
+
+        org, user_id, caller = await _member_with_account(db_session)
+        fake = FakeDirectory()
+        fake.suspend_error = GoogleAccountNotFoundError("gone")
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+        row = await _row(db_session, user_id)
+        assert row.suspension_settled is True
+        assert row.suspension_error == "gone"
+
+    async def test_no_account_is_created_for_a_member_who_has_left(self, db_session):
+        org, user_id, caller = await _member_with_account(
+            db_session, status=GoogleAccountStatus.FAILED.value
+        )
+        with patch(f"{SERVICE}.directory_for", return_value=FakeDirectory()):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+        with pytest.raises(ProvisionRetryError):
+            await GoogleWorkspaceProvisioningService(db_session).retry(user_id, org.id)
+
+    async def test_a_member_without_an_account_record_is_untouched(self, db_session):
+        org = await _org(db_session)
+        await _connect(db_session, org)
+        svc, prospect = await _prospect(db_session, org)
+        result = await svc._do_transfer(prospect, None)
+        await db_session.execute(
+            GoogleAccountProvision.__table__.delete().where(
+                GoogleAccountProvision.user_id == str(result["user_id"])
+            )
+        )
+        await db_session.commit()
+        staged = await GoogleWorkspaceProvisioningService(db_session).stage_suspension(
+            str(result["user_id"]), org.id, suspended=True
+        )
+        assert staged is False

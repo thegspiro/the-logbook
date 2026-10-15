@@ -30,6 +30,11 @@ const base: GoogleAccount = {
   attempts: 1,
   last_attempt_at: '2026-10-15T12:00:00Z',
   created_at: '2026-10-15T12:00:00Z',
+  suspension_wanted: false,
+  suspension_settled: true,
+  suspended_by_logbook: false,
+  suspended_at: null,
+  suspension_error: null,
 };
 
 const onChange = vi.fn();
@@ -89,6 +94,41 @@ describe('GoogleAccountPanel', () => {
 
     await waitFor(() => expect(onReload).toHaveBeenCalled());
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('shows an account suspended when the member left, with nothing to retry', () => {
+    renderPanel({ ...base, suspension_wanted: true, suspended_by_logbook: true, suspended_at: '2026-10-15T13:00:00Z' });
+    expect(screen.getByText('Suspended')).toBeInTheDocument();
+    expect(screen.getByTestId('google-suspension')).toHaveTextContent(/lifted automatically if they return/);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('says a suspension it did not apply will not be lifted', () => {
+    renderPanel({ ...base, status: 'linked_existing', suspension_wanted: true, suspended_by_logbook: false });
+    expect(screen.getByTestId('google-suspension')).toHaveTextContent(/will not lift it/);
+  });
+
+  it('retries a suspension that failed, without asking about passwords', async () => {
+    const user = userEvent.setup();
+    renderPanel({
+      ...base,
+      credentials_sent: false,
+      suspension_wanted: true,
+      suspension_settled: false,
+      suspension_error: 'Google is busy.',
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Google is busy.');
+    await user.click(screen.getByRole('button', { name: 'Retry suspending' }));
+
+    expect(screen.queryByText('Send a new Google password?')).not.toBeInTheDocument();
+    expect(mockRetry).toHaveBeenCalledWith('u-1');
+  });
+
+  it('offers to retry lifting a suspension after a return', () => {
+    renderPanel({ ...base, suspension_wanted: false, suspension_settled: false, suspended_by_logbook: true });
+    expect(screen.getByTestId('google-suspension')).toHaveTextContent(/still suspended/);
+    expect(screen.getByRole('button', { name: 'Retry unsuspending' })).toBeInTheDocument();
   });
 
   it('offers no retry on an existing account it must not touch', () => {

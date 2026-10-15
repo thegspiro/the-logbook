@@ -26,6 +26,14 @@ class GoogleAccountResponse(UTCResponseBase):
     attempts: int = 0
     last_attempt_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    # Whether the member's departure wants the account suspended, whether
+    # Google has been brought into line, and whether the suspension in place
+    # is The Logbook's own (only that one is lifted on a return).
+    suspension_wanted: bool = False
+    suspension_settled: bool = True
+    suspended_by_logbook: bool = False
+    suspended_at: Optional[datetime] = None
+    suspension_error: Optional[str] = None
 
 
 class GoogleAccountEnvelope(UTCResponseBase):

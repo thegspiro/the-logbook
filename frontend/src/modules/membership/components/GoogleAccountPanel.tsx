@@ -30,6 +30,12 @@ const STATUS_LABELS: Record<GoogleAccountStatus, string> = {
   failed: 'Not created',
 };
 
+const ACTION_LABELS: Record<NonNullable<ReturnType<typeof retryAction>>, (account: GoogleAccount) => string> = {
+  suspension: (account) => (account.suspension_wanted ? 'Retry suspending' : 'Retry unsuspending'),
+  create: () => 'Retry creating account',
+  finish: () => 'Finish setup',
+};
+
 interface GoogleAccountPanelProps {
   userId: string;
   account: GoogleAccount;
@@ -45,7 +51,11 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
   const handleRetry = async () => {
     // Only a created account whose password never arrived is reset: nobody
     // can have signed in with a password nobody received.
-    if (account.status === GoogleAccountStatus.CREATED && !account.credentials_sent) {
+    if (
+      retryAction(account) === 'finish' &&
+      account.status === GoogleAccountStatus.CREATED &&
+      !account.credentials_sent
+    ) {
       const ok = await confirm({
         title: 'Send a new Google password?',
         message:
@@ -84,6 +94,9 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
           <span className={`badge ${GOOGLE_ACCOUNT_STATUS_COLORS[account.status] ?? ''}`}>
             {STATUS_LABELS[account.status] ?? account.status}
           </span>
+          {account.suspension_wanted && account.suspension_settled && (
+            <span className="badge bg-theme-surface-secondary text-theme-text-secondary">Suspended</span>
+          )}
         </div>
         {account.status === GoogleAccountStatus.CREATED && (
           <p className="text-theme-text-secondary">
@@ -91,6 +104,31 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
               ? 'The temporary password was emailed to the member’s personal address.'
               : 'The member has not been sent a password for this account.'}
           </p>
+        )}
+        {account.suspension_wanted && account.suspension_settled && (
+          <p className="text-theme-text-secondary" data-testid="google-suspension">
+            {account.suspended_by_logbook
+              ? `Suspended when the member left${
+                  account.suspended_at ? ` (${formatDateTime(account.suspended_at, tz)})` : ''
+                }. It is lifted automatically if they return.`
+              : 'It was already suspended in Google when the member left, so The Logbook will not lift it if they return.'}
+          </p>
+        )}
+        {!account.suspension_settled && (
+          <p className="text-theme-text-secondary" data-testid="google-suspension">
+            {account.suspension_wanted
+              ? 'The member has left, but the account is not suspended yet.'
+              : 'The member has returned, but the account is still suspended.'}
+          </p>
+        )}
+        {account.suspension_error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-400"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>{account.suspension_error}</p>
+          </div>
         )}
         {account.pending_groups.length > 0 && (
           <p className="text-theme-text-secondary">Not yet added to: {account.pending_groups.join(', ')}</p>
@@ -115,7 +153,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
             className="btn-secondary inline-flex items-center gap-2"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            {retrying ? 'Working…' : action === 'create' ? 'Retry creating account' : 'Finish setup'}
+            {retrying ? 'Working…' : ACTION_LABELS[action](account)}
           </button>
         )}
       </div>

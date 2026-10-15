@@ -68,6 +68,25 @@ class GoogleAccountProvision(Base):
     last_attempt_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Suspension follows the member: dropped or deleted wants it suspended, a
+    # return wants it back. ``suspension_settled`` is False until Google has
+    # been brought to ``suspension_wanted``; a failure leaves it False for a
+    # retry. ``suspended_by_logbook`` records that the suspension is ours, and
+    # only ours is ever lifted: an account someone had already suspended in
+    # Google stays suspended when the member returns.
+    suspension_wanted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    suspension_settled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    suspended_by_logbook: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    suspension_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

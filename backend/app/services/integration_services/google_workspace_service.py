@@ -41,7 +41,13 @@ class GoogleAccountExistsError(GoogleWorkspaceError):
     """The address already belongs to a user, alias or group in the domain."""
 
 
-def _translate(exc: Exception, action: str) -> GoogleWorkspaceError:
+class GoogleAccountNotFoundError(GoogleWorkspaceError):
+    """The account a per-user call names no longer exists in Google."""
+
+
+def _translate(
+    exc: Exception, action: str, user_scoped: bool = False
+) -> GoogleWorkspaceError:
     from google.auth.exceptions import RefreshError
     from googleapiclient.errors import HttpError
 
@@ -65,6 +71,10 @@ def _translate(exc: Exception, action: str) -> GoogleWorkspaceError:
             return GoogleWorkspaceError(
                 "Google denied the request. The delegated admin may lack the "
                 "privilege to manage users or groups."
+            )
+        if status == 404 and user_scoped:
+            return GoogleAccountNotFoundError(
+                "The account no longer exists in Google Workspace."
             )
         if status == 404:
             return GoogleWorkspaceError(
@@ -111,11 +121,11 @@ class GoogleWorkspaceDirectory:
             static_discovery=True,
         )
 
-    async def _run(self, action: str, call: Any) -> Any:
+    async def _run(self, action: str, call: Any, user_scoped: bool = False) -> Any:
         try:
             return await asyncio.to_thread(call)
         except Exception as exc:
-            raise _translate(exc, action) from exc
+            raise _translate(exc, action, user_scoped) from exc
 
     async def create_user(
         self,
@@ -140,6 +150,32 @@ class GoogleWorkspaceDirectory:
         created = await self._run("account creation", call)
         google_id = created.get("id") if isinstance(created, dict) else None
         return google_id if isinstance(google_id, str) else None
+
+    async def is_suspended(self, primary_email: str) -> bool:
+        def call() -> Any:
+            return (
+                self._service()
+                .users()
+                .get(userKey=primary_email, projection="basic")
+                .execute()
+            )
+
+        user = await self._run("account lookup", call, user_scoped=True)
+        return bool(user.get("suspended")) if isinstance(user, dict) else False
+
+    async def set_suspended(self, primary_email: str, suspended: bool) -> None:
+        body = {"suspended": suspended}
+
+        def call() -> Any:
+            return (
+                self._service()
+                .users()
+                .update(userKey=primary_email, body=body)
+                .execute()
+            )
+
+        action = "account suspension" if suspended else "account unsuspension"
+        await self._run(action, call, user_scoped=True)
 
     async def reset_password(self, primary_email: str, password: str) -> None:
         body = {"password": password, "changePasswordAtNextLogin": True}

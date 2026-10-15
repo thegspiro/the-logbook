@@ -16,7 +16,8 @@ with a **Retry**.
 - **Account at conversion** — both the manual **Convert** button and automatic conversion on pipeline approval create the account
 - **Org unit and groups** — new accounts go into a configured organizational unit and can be added to up to 20 groups
 - **Password to the personal address** — the temporary Google password rides in the welcome email (as its own card, so customized welcome templates need no edits) or, when no welcome email is sent, in an email of its own; both go to the member's personal address, since the new mailbox cannot receive the password that opens it. It is never stored
-- **Existing accounts are left alone** — if the address already belongs to an account, alias or group, The Logbook records the link and changes nothing
+- **Existing accounts are linked, not changed** — if the address already belongs to an account, alias or group, The Logbook records the link and changes nothing except suspending it when the member leaves
+- **Suspended on departure** — dropping or deleting a member suspends the account; undoing the drop, a rejoin or a reactivation lifts a suspension The Logbook applied
 - **Administrator only** — connecting, changing or disconnecting needs `admin.access` in addition to `integrations.manage`
 
 ---
@@ -62,7 +63,29 @@ integration itself uses the standard `/api/v1/integrations/{id}/…` routes.
 
 ---
 
+## When a Member Leaves or Returns
+
+| What happens in The Logbook                                      | Google account                                 |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| Status changed to dropped (voluntary or involuntary)             | Suspended                                      |
+| Member deleted (soft or permanent)                               | Suspended                                      |
+| Drop undone, rejoin from dropped, or archived member reactivated | Unsuspended — only if The Logbook suspended it |
+| Retired, on leave, inactive, suspended in The Logbook            | Unchanged                                      |
+
+Both accounts The Logbook created and existing accounts it linked to are
+suspended. If an account was already suspended in Google when the member left,
+The Logbook records that and never lifts it. Suspending keeps the mailbox and
+its license; deleting the account is left to an administrator.
+
+The change is made after the departure is saved, so a Google failure never
+blocks it; the member's profile shows "not suspended yet" with a **Retry**. A
+permanent delete removes the account record with the member, so its outcome is
+written to the audit log instead. No account is ever created for a member who
+has left.
+
+---
+
 ## Not Covered
 
-- Suspending or deleting the account when a member leaves — manage that in the Google Admin console.
+- Deleting the Google account, or freeing its license, when a member leaves — suspension keeps both.
 - Renaming the account when a member's name changes.

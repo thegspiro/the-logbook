@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**312 tables · 5151 columns · 1052 foreign keys**
+**312 tables · 5156 columns · 1052 foreign keys**
 
 ---
 
@@ -288,7 +288,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 14 | A member's Google Workspace account, as The Logbook created or found it |
+| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 19 | A member's Google Workspace account, as The Logbook created or found it |
 
 ### Grants & Fundraising
 
@@ -4439,6 +4439,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `last_error` | TEXT | yes |  |  |  |
 | `attempts` | INTEGER | no |  | `0` |  |
 | `last_attempt_at` | DATETIME | yes |  |  |  |
+| `suspension_wanted` | BOOL | no |  | `0` |  |
+| `suspension_settled` | BOOL | no |  | `1` |  |
+| `suspended_by_logbook` | BOOL | no |  | `0` |  |
+| `suspended_at` | DATETIME | yes |  |  |  |
+| `suspension_error` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |

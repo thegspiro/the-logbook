@@ -55,11 +55,28 @@ def _member(**kw):
 
 @pytest.fixture(autouse=True)
 def _quiet_collaborators(monkeypatch):
-    """Neutralise audit logging and the administrator-continuity guards."""
+    """Neutralise audit logging, the administrator-continuity guards and the
+    Google Workspace suspension hook."""
     monkeypatch.setattr(users_endpoint, "log_audit_event", AsyncMock())
     monkeypatch.setattr(users_endpoint, "assert_not_last_administrator", AsyncMock())
     monkeypatch.setattr(
         users_endpoint, "assert_positions_retain_administrator", AsyncMock()
+    )
+    # The Google Workspace suspension hook reads its own row; these tests script
+    # every query the endpoint makes, and none of them has a Google account.
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    monkeypatch.setattr(
+        GoogleWorkspaceProvisioningService,
+        "get_for_user",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        GoogleWorkspaceProvisioningService,
+        "stage_suspension",
+        AsyncMock(return_value=False),
     )
 
 

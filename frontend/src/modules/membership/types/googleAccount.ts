@@ -15,6 +15,14 @@ export interface GoogleAccount {
   attempts: number;
   last_attempt_at: string | null;
   created_at: string | null;
+  /** The member's departure wants the account suspended. */
+  suspension_wanted: boolean;
+  /** False until Google has been brought to `suspension_wanted`. */
+  suspension_settled: boolean;
+  /** The suspension in place is The Logbook's own; only that one is lifted. */
+  suspended_by_logbook: boolean;
+  suspended_at: string | null;
+  suspension_error: string | null;
 }
 
 export interface GoogleAccountEnvelope {

@@ -7,7 +7,8 @@ Create Date: 2026-10-15 14:00:00.000000
 Adds ``google_account_provisions``: one row per member The Logbook tried to
 give a Google Workspace account when they were converted from an applicant —
 the account's address, whether it was created, linked to an existing account
-or failed, and whether the member has been sent its temporary password.
+or failed, whether the member has been sent its temporary password, and the
+suspension The Logbook applies when the member is dropped or deleted.
 
 Purely additive. Nothing is backfilled: members converted before this revision
 were never given an account by The Logbook, and the absence of a row is how
@@ -67,6 +68,17 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("last_attempt_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "suspension_wanted", sa.Boolean(), nullable=False, server_default="0"
+        ),
+        sa.Column(
+            "suspension_settled", sa.Boolean(), nullable=False, server_default="1"
+        ),
+        sa.Column(
+            "suspended_by_logbook", sa.Boolean(), nullable=False, server_default="0"
+        ),
+        sa.Column("suspended_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("suspension_error", sa.Text(), nullable=True),
         sa.Column("created_by", sa.String(36), nullable=True),
         sa.Column(
             "created_at",

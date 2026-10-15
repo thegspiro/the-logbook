@@ -396,12 +396,32 @@ async def change_member_status(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
 
+    # A drop suspends the member's Google Workspace account and a return
+    # from one lifts it. Staged here, in this transaction; Google is called
+    # only once the status change has committed.
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    google = GoogleWorkspaceProvisioningService(db)
+    was_dropped = previous in DROPPED_STATUSES
+    now_dropped = new_status in DROPPED_STATUSES
+    sync_google = was_dropped != now_dropped and await google.stage_suspension(
+        str(member.id), str(current_user.organization_id), suspended=now_dropped
+    )
+
     # Update the status and record when it changed
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
     await db.commit()
     await db.refresh(member)
+    if sync_google:
+        await google.reconcile_suspension(
+            str(member.id),
+            str(current_user.organization_id),
+            actor_id=str(current_user.id),
+        )
 
     # Audit log
     await log_audit_event(
@@ -725,10 +745,25 @@ async def undo_member_drop(
     dropped_as = UserStatus(member.status)
     await MemberServiceHistoryService(db).undo_separation(member, dropped_as)
 
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    google = GoogleWorkspaceProvisioningService(db)
+    sync_google = await google.stage_suspension(
+        str(member.id), str(current_user.organization_id), suspended=False
+    )
+
     member.status = restore
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason or "Drop undone"
     await db.commit()
+    if sync_google:
+        await google.reconcile_suspension(
+            str(member.id),
+            str(current_user.organization_id),
+            actor_id=str(current_user.id),
+        )
 
     await log_audit_event(
         db=db,
