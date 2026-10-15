@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None, as of this commit.** PR #3255 (Feature 08, Membership pipeline,
+pass 10) merged 2026-10-15T03:47:09Z — docs-only
+(`MP-08-membership-pipeline.md` and `PROGRESS.md` only; confirmed via the
+PR's own Changes section, "No application code changed."), already fully
+recorded in that PR's own Open PR note below, so there is nothing further
+to add here. Rotation row 08 stays ✅. This iteration (confirmed via
+`search_pull_requests`, `is:open head:claude/security-review-`, 0 results,
+that no other security-review PR is open) picked up Feature 09 (Medical
+screening, PHI, pass 1).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 10, PR #3255, merged clean — 0 fixed, 0 new findings; rotation row 08 marked ✅ as part of that PR), preserved for history</summary>
+
 **PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255)**: branch
 `claude/security-review-membership-pipeline`, Feature 08 (Membership
 pipeline), pass 10. 0 fixed, 0 new findings; MP-10's creation half and
@@ -29,6 +42,8 @@ re-confirmed open/accepted, unchanged. All 53 routes re-enumerated, no
 permission string changed. See
 `MP-08-membership-pipeline.md`'s **Pass 10** section. Row 08 → ✅ (pending
 this PR's merge); next is Feature 09 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3250's merge, Feature 07, Users & organizations, pass 9 — the state this pass's PR opened from), preserved for history</summary>
@@ -19162,7 +19177,7 @@ here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -19195,6 +19210,65 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 09 (Medical screening, pass 9) — 0 code fixes, 2 doc-mirror fixes, 3 re-confirmed findings flagged, 0 new security findings
+
+**Step 0.** `search_pull_requests` (`is:pr is:open
+head:claude/security-review-`, repo-scoped) returned 0 results. PR #3255
+(Feature 08, Membership pipeline, pass 10) had merged docs-only (confirmed
+via its own Changes section — `MP-08-membership-pipeline.md` +
+`PROGRESS.md` only, "No application code changed."); not a recordable
+event. Open PR row cleared; rotation row 09 (Medical screening) was the
+first `⬜`.
+
+**Review.** Baseline `df4fd720` (pass 8's merge, PR #2978) to current
+`HEAD` — a genuine ancestor this time, confirmed via
+`git merge-base --is-ancestor`. The real delta is two commits, both
+mechanical mypy-typing changes (a `None`-narrowing guard in
+`mcp/tools/medical.py` already unreachable given the SQL filter above it; a
+`TYPE_CHECKING`-only attribute block on `ScreeningRecord` for names
+`attach_record_names` already set at runtime) — read in full, no behavior
+change, no new finding. All 16 routes re-enumerated directly; auth
+dependency and permission string unchanged from pass 8 on every one.
+Tenant isolation, PHI encryption at rest, `SET NULL` nullability, update-
+schema FK omission, audit logging, PHI cache exclusion, no
+`.like()`/`.ilike()`, no raw CSV writer, no `window.confirm`/`alert`/
+`prompt`, MCP explicit-projection discipline, and the snake_case
+frontend/backend casing match were all re-confirmed directly against
+current code (not carried forward). Frontend module unchanged since pass
+8 (confirmed via `git log`), so not re-read line-by-line this pass, but
+every claim made about it above was re-verified against the current
+files.
+
+**Documentation correction (not a security finding).** Found that every
+pass since pass 3 (2026-09-02) had described two real, correctly-disposed
+open items — `grace_period_days`/`applies_to_roles`/`frequency_months`
+going unread by the grading function, and `get_compliance_status` not
+404ing an unknown subject — as "already in `KNOWN_LIMITATIONS.md`". Neither
+ever was; six consecutive passes repeated the claim without checking it.
+Added as `KNOWN_LIMITATIONS.md`'s **MS-16** and **MS-17** this pass; the
+findings themselves needed no re-deriving, only the mirror.
+
+**Re-confirmed open, unchanged:** MS-14 (`.view` grants full narrative PHI,
+no finer-grained read tier), MS-15 (`get_compliance_roster` loads every
+screening record in the org, unbounded), MS2-7 (a lapsing waiver is
+counted as expiring soon but never listed). All three LOW, all three
+flagged for an owner decision, all three already in
+`KNOWN_LIMITATIONS.md`. See `MS-09-medical-screening.md`'s **Pass 9**
+section for the full write-up.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` over
+`app/ tests/ alembic/` (CI-pinned `flake8==7.3.0`/`black==26.5.1`/
+`isort==9.0.1` in a fresh venv) clean; `validate_migrations.py --strict`
+596 revisions, single head; `check_route_permissions.py --strict` 270
+routes, 0 errors/warnings; scoped backend pytest (`-k "medical or
+screening or phi"`) 239 passed; full backend unit suite 14855 passed, 3
+pre-existing skips (nginx not installed); `npm run typecheck` clean;
+`npm run lint` clean; scoped frontend suite
+(`npx vitest run src/modules/medical-screening`) 50 passed.
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
 
 ### 2026-10-15 — Feature 08 (Membership pipeline, pass 10) — 0 fixed, 0 new findings; MP-10 (creation half) and MP-26 confirmed resolved by owner commit landed between passes
 
