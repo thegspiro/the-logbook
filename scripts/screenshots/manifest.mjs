@@ -3731,6 +3731,23 @@ export const SHOTS = [
     selector: "div.card:has(label:text-is('Training records date range'))",
   },
   {
+    id: "02-89-my-training-upcoming-skills-test",
+    doc: "02-training.md",
+    line: 170,
+    anchor: "The Upcoming Expirations & Due Dates list with a skills test row",
+    alt: "The My Training upcoming list with a skills test row reading Skills test expires, its date and the days remaining",
+    // The demo member's passing ladder-raise test (see seed_deduction_test) is
+    // the row; the sheet carries a validity period, so the pass lapses inside
+    // the list's six-month look-ahead.
+    auth: "member",
+    route: "/training/my-training",
+    // Clipped to the section: the rows are short, and a page shot renders them
+    // too small to read the date and day count.
+    selector:
+      "div.card-secondary:has(> button h2:text-is('Upcoming Expirations & Due Dates'))",
+    expect: "Skills test expires",
+  },
+  {
     id: "04-37-hour-tracking-mapping",
     doc: "04-events-meetings.md",
     line: 1196,

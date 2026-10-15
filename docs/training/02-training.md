@@ -161,14 +161,15 @@ One list for everything with a date on it, so you do not have to read three
 sections to find what is next. It looks six months ahead and is sorted soonest
 first. Amber means due within 90 days; red means overdue or expired.
 
-| Row                             | What it means                                                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Due _date_ · N days**         | A requirement you have not met yet, with its deadline.                                                                                                                    |
-| **Expires _date_ · N days**     | A certification, or any training record that carries an expiry date. A renewed certification is listed once, from its newest record.                                      |
-| **Opens _date_ · N days**       | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13)). |
-| **_N_ hrs to go**, with no date | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any day. It is listed last, with the counting window beneath.               |
-
+| Row                                       | What it means                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Due _date_ · N days**                   | A requirement you have not met yet, with its deadline.                                                                                                                               |
+| **Expires _date_ · N days**               | A certification, or any training record that carries an expiry date. A renewed certification is listed once, from its newest record.                                                 |
+| **Opens _date_ · N days**                 | A requirement you have already met whose next completion window is about to open (see [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted-2026-10-13)).            |
+| **_N_ hrs to go**, with no date           | An hours requirement counted over a rolling window. It has no deadline: it is met or short on any day. It is listed last, with the counting window beneath.                          |
 | **Expires _date_ · N days** (skills test) | A passing official skills test whose skill has a validity period. Set by an officer in the skill sheet's **Valid for (months)** field; see [Skills Testing](./09-skills-testing.md). |
+
+![The My Training upcoming list with a skills test row reading Skills test expires, its date and the days remaining](./images/02-89-my-training-upcoming-skills-test.png)
 
 When nothing is due, it says so.
 
