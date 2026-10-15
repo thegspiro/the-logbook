@@ -182,6 +182,44 @@ class TemplateService:
             await self.db.refresh(tpl)
         return created
 
+    async def resolve_outline(
+        self,
+        organization_id: UUID | str,
+        meeting_type: str,
+        template_id: Optional[str] = None,
+        created_by: Optional[UUID | str] = None,
+    ) -> Optional[MinutesTemplate]:
+        """The outline new minutes of *meeting_type* should start from.
+
+        The one asked for by id (it must be this department's own), else the
+        department's default for that kind of meeting, else any outline of that
+        kind, else None, which means the built-in order of business. A
+        department that has never opened its outlines gets the standard set
+        created the first time one is needed, so a new install behaves the same
+        whether or not anyone visited the outlines screen first.
+        """
+        if template_id:
+            outline = await self.get_template(template_id, organization_id)
+            if outline is None:
+                raise ValueError("Invalid outline")
+            return outline
+        outlines = await self.list_templates(organization_id)
+        if not outlines and created_by is not None:
+            outlines = await self.initialize_defaults(organization_id, created_by)
+        of_kind = [
+            o
+            for o in outlines
+            if (
+                o.meeting_type
+                if isinstance(o.meeting_type, str)
+                else o.meeting_type.value
+            )
+            == meeting_type
+        ]
+        return next((o for o in of_kind if o.is_default), None) or (
+            of_kind[0] if of_kind else None
+        )
+
     async def list_templates(
         self, organization_id: UUID | str, meeting_type: Optional[str] = None
     ) -> List[MinutesTemplate]:
