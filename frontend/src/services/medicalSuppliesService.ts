@@ -124,6 +124,11 @@ export interface MedicalImportResult extends InventoryImportResult {
   categories_created: string[];
 }
 
+export interface MedicalBulkRetireResult {
+  retired: string[];
+  failed: Array<{ item_id: string; error: string }>;
+}
+
 /** The list's filters, minus paging: an export is the whole filtered set. */
 export type MedicalExportFilters = Omit<MedicalItemFilters, 'skip' | 'limit' | 'fuzzy'>;
 
@@ -207,6 +212,19 @@ export const medicalSuppliesService = {
 
   async retireItem(itemId: string, notes?: string): Promise<void> {
     await api.post(`/medical-supplies/items/${itemId}/retire`, { notes });
+  },
+
+  /**
+   * Retire several supplies at once. Each is retired on its own, so ones that
+   * cannot go (checked out, assigned) come back in `failed` while the rest
+   * are retired.
+   */
+  async bulkRetireItems(itemIds: string[], notes?: string): Promise<MedicalBulkRetireResult> {
+    const response = await api.post<MedicalBulkRetireResult>('/medical-supplies/items/bulk-retire', {
+      item_ids: itemIds,
+      ...(notes ? { notes } : {}),
+    });
+    return response.data;
   },
 
   async getItemLots(itemId: string): Promise<InventoryLot[]> {

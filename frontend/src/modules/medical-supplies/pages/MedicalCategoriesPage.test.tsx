@@ -175,3 +175,80 @@ describe('MedicalCategoriesPage delete', () => {
     expect(mockDeleteCategory).not.toHaveBeenCalled();
   });
 });
+
+describe('MedicalCategoriesPage supplies per category', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockGetItems.mockReset();
+    mockCheckPermission.mockReset();
+    mockGetCategories.mockResolvedValue([AIRWAY, TRAUMA]);
+    mockCheckPermission.mockReturnValue(false);
+    mockGetItems.mockResolvedValue({
+      items: [
+        { id: 'item-1', name: 'Bag Valve Mask', quantity: 2 },
+        { id: 'item-2', name: 'Nasal Cannula', quantity: 0, is_lot_stocked: true, lot_stock: 12 },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 100,
+    });
+  });
+
+  it('loads nothing until a category is opened', async () => {
+    await renderPage();
+
+    expect(mockGetItems).not.toHaveBeenCalled();
+  });
+
+  it("lists a category's supplies, by name, with the stock each holds", async () => {
+    await renderPage();
+
+    const toggles = screen.getAllByRole('button', { name: 'Show supplies' });
+    await userEvent.click(toggles[0] ?? document.body);
+
+    const list = await screen.findByRole('list', { name: 'Supplies in Airway' });
+    expect(list).toHaveTextContent('Bag Valve Mask');
+    // Lot-stocked: the lots are the stock, not the stale column.
+    expect(list).toHaveTextContent('12 on hand');
+    expect(mockGetItems).toHaveBeenCalledWith({
+      category_id: 'cat-airway',
+      sort_by: 'name',
+      sort_order: 'asc',
+      limit: 100,
+    });
+    expect(screen.getAllByRole('button', { name: 'Hide supplies' })[0]).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('says so when a category is empty', async () => {
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 100 });
+    await renderPage();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show supplies' })[1] ?? document.body);
+
+    expect(await screen.findByText('No supplies in this category yet.')).toBeInTheDocument();
+  });
+
+  it('points to the full list when a category holds more than it shows', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Bag Valve Mask', quantity: 2 }],
+      total: 150,
+      skip: 0,
+      limit: 100,
+    });
+    await renderPage();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show supplies' })[0] ?? document.body);
+
+    expect(await screen.findByText(/Showing 1 of 150/)).toBeInTheDocument();
+  });
+
+  it('shows an error rather than an empty list when the load fails', async () => {
+    mockGetItems.mockRejectedValue(new Error('Server unavailable'));
+    await renderPage();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Show supplies' })[0] ?? document.body);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server unavailable');
+    expect(screen.queryByText('No supplies in this category yet.')).not.toBeInTheDocument();
+  });
+});

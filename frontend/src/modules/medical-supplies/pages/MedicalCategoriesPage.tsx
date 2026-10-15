@@ -9,9 +9,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
-import type { InventoryCategory } from '../../../services/eventServices';
+import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
+import { formatNumber } from '../../../utils/dateFormatting';
+import { onHandQuantity } from '../../inventory/utils/onHand';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
@@ -26,6 +28,83 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', description: '', low_stock_threshold: '' };
+
+// One page of the list API. A category holding more than this is told so and
+// pointed at Medical Supplies, which pages through all of them.
+const CATEGORY_ITEMS_LIMIT = 100;
+
+interface CategorySupplies {
+  items: InventoryItem[];
+  total: number;
+}
+
+interface CategorySupplyListProps {
+  categoryId: string;
+  categoryName: string;
+}
+
+/**
+ * The supplies filed under one category, fetched when the card is opened.
+ *
+ * Fetched on demand rather than with the categories: a department with thirty
+ * categories should not pay for thirty item lists to read the category names.
+ */
+const CategorySupplyList: React.FC<CategorySupplyListProps> = ({ categoryId, categoryName }) => {
+  const [state, setState] = useState<CategorySupplies | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    medicalSuppliesService
+      .getItems({ category_id: categoryId, sort_by: 'name', sort_order: 'asc', limit: CATEGORY_ITEMS_LIMIT })
+      .then((response) => {
+        if (!cancelled) setState({ items: response.items, total: response.total });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Failed to load supplies'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
+
+  if (error) {
+    return (
+      <p role="alert" className="alert-danger mt-3 text-sm">
+        {error}
+      </p>
+    );
+  }
+  if (!state) {
+    return <p className="text-theme-text-muted mt-3 text-sm">Loading supplies…</p>;
+  }
+  if (state.items.length === 0) {
+    return <p className="text-theme-text-muted mt-3 text-sm">No supplies in this category yet.</p>;
+  }
+  return (
+    <div className="mt-3">
+      <ul className="divide-theme-surface-border divide-y text-sm" aria-label={`Supplies in ${categoryName}`}>
+        {state.items.map((item) => (
+          <li key={item.id} className="flex items-baseline justify-between gap-3 py-1.5">
+            <span className="text-theme-text-primary min-w-0 truncate">{item.name}</span>
+            <span className="text-theme-text-muted shrink-0 tabular-nums">
+              {formatNumber(onHandQuantity(item))} on hand
+            </span>
+          </li>
+        ))}
+      </ul>
+      {state.total > state.items.length && (
+        <p className="text-theme-text-muted mt-2 text-xs">
+          Showing {formatNumber(state.items.length)} of {formatNumber(state.total)}.{' '}
+          <Link to="/medical-supplies" className="underline">
+            See them all under Medical Supplies
+          </Link>
+          .
+        </p>
+      )}
+    </div>
+  );
+};
 
 const MedicalCategoriesPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -42,6 +121,15 @@ const MedicalCategoriesPage: React.FC = () => {
   const [deleteItemCount, setDeleteItemCount] = useState<number | null>(null);
   const [moveTarget, setMoveTarget] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
+  const toggleExpanded = (categoryId: string) =>
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
   // The dialog opens before the supply count arrives; this is what lets a late
   // answer for a category the user has since moved on from be ignored.
   const deletingIdRef = useRef<string | null>(null);
@@ -231,34 +319,55 @@ const MedicalCategoriesPage: React.FC = () => {
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {categories.map((category) => (
-            <li key={category.id} className="card flex items-start justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="text-theme-text-primary font-medium">{category.name}</p>
-                {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
-                {category.low_stock_threshold !== undefined && (
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    Low stock at {category.low_stock_threshold} or below
-                  </p>
+            <li key={category.id} className="card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-theme-text-primary font-medium">{category.name}</p>
+                  {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
+                  {category.low_stock_threshold !== undefined && (
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Low stock at {category.low_stock_threshold} or below
+                    </p>
+                  )}
+                </div>
+                {canManage && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(category)}
+                      className="btn-icon"
+                      aria-label={`Edit ${category.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDelete(category)}
+                      className="btn-icon"
+                      aria-label={`Delete ${category.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </div>
-              {canManage && (
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(category)}
-                    className="btn-icon"
-                    aria-label={`Edit ${category.name}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openDelete(category)}
-                    className="btn-icon"
-                    aria-label={`Delete ${category.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+              <button
+                type="button"
+                onClick={() => toggleExpanded(category.id)}
+                className="touch-target-phone text-theme-text-secondary hover:text-theme-text-primary mt-2 inline-flex items-center gap-1 text-sm"
+                aria-expanded={expandedIds.has(category.id)}
+                aria-controls={`category-supplies-${category.id}`}
+              >
+                {expandedIds.has(category.id) ? (
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                )}
+                {expandedIds.has(category.id) ? 'Hide supplies' : 'Show supplies'}
+              </button>
+              {expandedIds.has(category.id) && (
+                <div id={`category-supplies-${category.id}`}>
+                  <CategorySupplyList categoryId={category.id} categoryName={category.name} />
                 </div>
               )}
             </li>
