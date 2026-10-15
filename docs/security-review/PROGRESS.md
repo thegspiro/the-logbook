@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3294](https://github.com/thegspiro/the-logbook/pull/3294)**: branch
+`claude/security-review-events-requests-p8` (suffixed rather than the bare
+`claude/security-review-events-requests`, since that name's own PR history
+— #1848, #2972 — has already merged, as has the pass-6 variant
+`claude/security-review-ev-16-pass6` (#2630) — CLAUDE.md Pitfall #24),
+Feature 16 (Events & requests), pass 8. Watchdog pickup. 0 fixes needed,
+EV-23 confirmed resolved (owner decision, between pass 7 and this pass).
+Docs-only — no application code changed. See
+`EV-16-events-requests.md`'s **Pass 8** section for the full write-up.
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3293, Feature 15 Scheduling pass-8 addendum, before it merged), preserved for history</summary>
+
 **PR [#3293](https://github.com/thegspiro/the-logbook/pull/3293)**:
 branch `claude/security-review-scheduling-p8` — **note:** this branch name
 collided with PR #3291's own branch of the same name (both independently
@@ -64,6 +78,8 @@ count: `scheduling.py` 107 (was 98); `scheduling_module_config.py` and
 `calcom_sync.py` unchanged. See `SCH-15-scheduling.md`'s **Pass 8** section.
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests).
+
+</details>
 
 </details>
 
@@ -19410,7 +19426,7 @@ here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -19436,6 +19452,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 16 (Events & requests, pass 8) — watchdog pickup, 0 fixes needed, real delta (36 commits)
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results. `PROGRESS.md`'s own Open PR row still named PR #3291
+(Feature 15, Scheduling, pass 8), confirmed merged via `git log` on `main`
+(merge commit `dbe9abc3c`). That merge touched only `PROGRESS.md` and
+`SCH-15-scheduling.md` (confirmed via `git show --stat`) — docs-only, so
+per the "docs-only PR is not a recordable event" rule there was nothing
+further to record beyond clearing the row (row 15 already ✅). Row 16
+(Events & requests) was the first `⬜`.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `false`
+directly; no `fetch --unshallow` needed.
+
+**Baseline.** Pass 7 merged as `b48425bea` (PR #2972, 2026-10-06). Since
+then: 36 non-merge commits touch this feature's declared files (32 across
+the 7 backend endpoint/service files, 2 model-file rewrites, 1 frontend
+route addition). Full write-up:
+`docs/security-review/EV-16-events-requests.md` → **Pass 8**.
+
+**Findings: 0 new, 0 fixed by this pass.** Everything found in the real
+delta was already landed, tested and (where relevant) documented by other
+sessions before this pass started: a genuine security hardening fix on
+the event-attachment list/download/upload paths (`7835d0bb5` — permission
+check added, extension/MIME agreement enforced, stored `Content-Type`
+allowlisted at download), an XC-1 fix on `PATCH /events/settings`'s
+client-supplied `default_assignee_id` (`1a2aae0d7`), and two new
+attendance-petition routes (cross-event pending list with a server-side
+`events.manage` gate on the wider scope, and a capped/row-locked withdraw)
+— all reviewed against the full checklist and found clean. **EV-23
+(standing, open since pass 3) is now resolved** — an owner decision
+implemented between pass 7 and this pass (`e78ffd4f2`, 2026-10-11) that
+lists every ahead-of-phase series occurrence in a 409 rather than
+silently overriding. EV-26 re-confirmed still fixed and unregressed.
+`KNOWN_LIMITATIONS.md` needed no edit — its EV-23 entry already carries
+the `✅ Resolved` banner from the 2026-10-11 decision, and its EV-26 entry
+is unchanged and accurate.
+
+**Completion gate:** flake8/black/isort clean against `app/ tests/
+alembic/` (pinned versions: flake8 7.3.0, black 26.5.1, isort 9.0.1,
+matching CI); `validate_migrations.py --strict` single head (601
+revisions); `check_route_permissions.py --strict` 270 routes, 0 errors;
+`pytest tests/ -k event` (python3.13) 1345 passed, 1 pre-existing skip;
+frontend `typecheck`/`lint` both clean.
+
+Rotation row 16 → ✅ (pending PR merge). Next: Feature 17 (Training core).
 
 ### 2026-10-15 — Feature 15 (Scheduling, pass 8) — watchdog pickup, 0 fixes, 1 new standing item (SCH-17, scope-boundary)
 
