@@ -17,6 +17,14 @@ names and alt text are unchanged. The notes it carried are kept here.
 | Store item detail and sizing request captures | **REPLACE** | Capture an embroidered item **and** an engraved one — only embroidered items offer a thread colour, and a single capture cannot show the difference |
 | Inventory Administration hub, Department Store section | **NEW** | The four cards (Store Overview, Store Catalog, Store Orders, Store Payments), the entry point the guide names; nothing in the set shows it |
 
+## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
+
+The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.
+Its image file names and alt text are unchanged. The rewrite corrected the
+guide's navigation to **Training Admin > Evaluations > Skills Test Templates**
+and **Skills Test Records**; any image showing a "Skills Testing" section with
+**Templates / Tests / Summary** tabs is stale and should be re-shot when found.
+
 ## Moved out of 06-apparatus-facilities.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
