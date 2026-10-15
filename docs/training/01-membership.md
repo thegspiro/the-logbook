@@ -1078,7 +1078,7 @@ Management this permission reads "Manage prospective members and pipeline".
   prospective member pipeline".
 - Officers named on a **Multi-Signer Approval** stage sign from **Sign-offs**
   and need neither. See
-  [Prospective Members → Sign-offs](./15-prospective-members.md#sign-offs-multi-signer-approval-2026-09-28).
+  [Prospective Members → Sign-offs](./15-prospective-members.md#sign-offs-multi-signer-approval).
 
 The pipeline tracks people who want to join but are not yet members. We call
 them _applicants_ or _prospects_. To open it, go to **Administration >

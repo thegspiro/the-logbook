@@ -221,3 +221,120 @@ class TestTemplateThroughTheRealImport:
         # The two individually tracked rows carry serial numbers, and the
         # import refuses a duplicate; the counted supplies carry none.
         assert second["failed"] == 2
+
+
+def _alias_row(**cells):
+    return {"Name": "Bag Valve Mask", **cells}
+
+
+@pytest.mark.unit
+class TestAlsoCalledColumn:
+    @pytest.mark.parametrize(
+        ("cell", "expected"),
+        [
+            ("BVM; Ambu bag", ["BVM", "Ambu bag"]),
+            ("BVM, Ambu bag", ["BVM", "Ambu bag"]),
+            ("  BVM ;; bvm ; ", ["BVM"]),
+        ],
+    )
+    def test_names_are_split_trimmed_and_deduplicated(self, cell, expected):
+        item, _category, errors, fatal = _coerce_csv_row(
+            _alias_row(**{"Also Called": cell}), 2
+        )
+        assert errors == []
+        assert fatal is False
+        assert item["also_called"] == expected
+
+    @pytest.mark.parametrize("header", ["also called", "Also_Called", "ALSOCALLED"])
+    def test_header_spellings_are_accepted(self, header):
+        item, *_rest = _coerce_csv_row(_alias_row(**{header: "BVM"}), 2)
+        assert item["also_called"] == ["BVM"]
+
+    def test_the_items_own_name_is_not_an_alias_whichever_column_comes_first(self):
+        # Also Called before Name: the settle pass must wait for the whole row.
+        row = {"Also Called": "bag valve mask; BVM", "Name": "Bag Valve Mask"}
+        item, *_rest = _coerce_csv_row(row, 2)
+        assert item["also_called"] == ["BVM"]
+
+    def test_a_cell_of_only_the_items_own_name_stores_nothing(self):
+        item, *_rest = _coerce_csv_row(
+            _alias_row(**{"Also Called": "Bag Valve Mask"}), 2
+        )
+        assert "also_called" not in item
+
+    def test_a_blank_cell_stores_nothing(self):
+        item, *_rest = _coerce_csv_row(_alias_row(**{"Also Called": "  "}), 2)
+        assert "also_called" not in item
+
+    def test_too_many_names_refuse_the_row_rather_than_truncate(self):
+        cell = "; ".join(f"name {chr(97 + i)}" for i in range(11))
+        item, _category, errors, fatal = _coerce_csv_row(
+            _alias_row(**{"Also Called": cell}), 4
+        )
+        assert fatal is True
+        assert errors[0]["row"] == 4
+        assert "Also Called" in errors[0]["error"]
+        assert "also_called" not in item
+
+    def test_an_overlong_name_refuses_the_row(self):
+        _item, _category, errors, fatal = _coerce_csv_row(
+            _alias_row(**{"Also Called": "x" * 101}), 2
+        )
+        assert fatal is True
+        assert "at most" in errors[0]["error"]
+
+
+@pytest.mark.unit
+class TestSampleCarriesAliases:
+    def test_the_bvm_row_shows_the_column_in_use(self):
+        row = next(
+            r for r in _IMPORT_TEMPLATE_ROWS if r["Name"].startswith("Bag Valve")
+        )
+        item, _category, errors, fatal = _coerce_csv_row(_as_row(row), 2)
+        assert errors == []
+        assert fatal is False
+        assert "BVM" in item["also_called"]
+
+    def test_the_header_lists_the_column(self):
+        assert "Also Called" in _IMPORT_TEMPLATE_HEADER
+
+
+@pytest.mark.integration
+class TestAliasesThroughTheRealImport:
+    async def test_imported_names_are_stored_and_found_by_the_fuzzy_search(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = InventoryService(db_session)
+        _cat, error = await service.create_category(
+            org_id, {"name": "Airway & Breathing", "item_type": "medical"}, admin_id
+        )
+        assert error is None
+        user = _user(org_id, admin_id)
+
+        result = await _import(db_session, user, await _template_csv(user))
+        assert result["failed"] == 0
+
+        items, _total = await service.get_items(
+            organization_id=org_id, search="BVM", fuzzy=True
+        )
+        assert [i.name for i in items] == ["Bag Valve Mask, Adult"]
+        assert items[0].also_called == ["BVM", "Ambu bag"]
+
+    async def test_a_row_with_too_many_names_fails_without_blocking_the_others(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        user = _user(org_id, admin_id)
+        too_many = "; ".join(f"name {chr(97 + i)}" for i in range(11))
+        csv_text = (
+            "Name,Tracking Type,Quantity,Also Called\n"
+            f'Splint,pool,3,"{too_many}"\n'
+            "Tape,pool,5,Medical tape\n"
+        )
+
+        result = await _import(db_session, user, csv_text.encode())
+
+        assert result["imported"] == 1
+        assert result["failed"] == 1
+        assert any("Also Called" in e["error"] for e in result["errors"])
