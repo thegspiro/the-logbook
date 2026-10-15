@@ -99,6 +99,32 @@ the whole delivery.
 
 Each line is labelled **Line 1**, **Line 2**… for screen readers _(2026-09-30)_.
 
+### Importing supplies from a CSV
+
+The inventory CSV import (`/inventory/import`, needs `inventory.manage`) has a
+downloadable sample that includes common medical supplies — airway, bleeding
+control and trauma, dressings, diagnostics and infection control — and
+deliberately **no medications**, which vary by protocol and include controlled
+substances.
+
+- **The Category cell is a name**, matched against categories you have already
+  created. The sample uses generic names (_Airway & Breathing_, _Bleeding
+  Control & Trauma_, _Dressings & Bandages_, _Diagnostics_, _Infection
+  Control_); rename them in the file to match yours. A name that matches nothing
+  still imports the row **with no category**, and an uncategorized item reads as
+  gear rather than medical. Each such row is listed as a warning.
+- **"Item Type" is checked and then ignored** — an item's type comes from its
+  category.
+- **"Also Called" carries alternate names.** Put them in one cell, separated by
+  semicolons or commas (`BVM; Ambu bag`); they become the item's "Also called"
+  names, which the checklist matcher looks through when linking a checklist
+  item to inventory. Blank and repeated names, and the item's own name, are
+  dropped. A row with more than 10 names, or a name over 100 characters, is
+  refused and reported rather than trimmed.
+- **The import carries no lots.** Add lot numbers and expiration dates afterwards
+  (for example through **Receive delivery**); nothing is flagged as expiring
+  until a supply has dated lots.
+
 ## On-hand comes from the lots
 
 For any item that has lots, on-hand is the sum of its **in-date** lots — not the

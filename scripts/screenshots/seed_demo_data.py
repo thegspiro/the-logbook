@@ -10361,6 +10361,12 @@ class Seeder:
         )
 
     DEDUCTION_TEMPLATE_NAME = "Ladder Raise — Point Deductions"
+    # How long a pass on that sheet stays valid. The pass is taken on the day the
+    # demo is seeded, so this is also how far ahead it expires: it must stay
+    # under the My Training upcoming list's six-month look-ahead or the row the
+    # guide pictures never appears, and four leaves room for the list's own
+    # rounding at both ends.
+    DEDUCTION_TEMPLATE_VALID_FOR_MONTHS = 4
 
     def seed_deduction_test(
         self, templates: list[dict], members: list[dict]
@@ -10395,6 +10401,7 @@ class Seeder:
                     "passing_percentage": 70,
                     "require_all_critical": True,
                     "visibility": "all_members",
+                    "valid_for_months": self.DEDUCTION_TEMPLATE_VALID_FOR_MONTHS,
                     "sections": [
                         {
                             "name": "Setup",
@@ -10468,6 +10475,18 @@ class Seeder:
             )
             self.api.post(
                 f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
+            )
+
+        # A database seeded before the validity period existed already holds this
+        # sheet, so creation alone would leave it without one. Not a structural
+        # change: it does not version the sheet or touch tests already taken.
+        if (
+            pick(template, "valid_for_months", "validForMonths")
+            != self.DEDUCTION_TEMPLATE_VALID_FOR_MONTHS
+        ):
+            self.api.put(
+                f"/training/skills-testing/templates/{pick(template, 'id')}",
+                {"valid_for_months": self.DEDUCTION_TEMPLATE_VALID_FOR_MONTHS},
             )
 
         existing = items(

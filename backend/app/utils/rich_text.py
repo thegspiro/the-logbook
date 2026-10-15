@@ -51,7 +51,8 @@ def sanitize_html(value: Optional[str]) -> str:
     """The allowed subset of *value*, with every other tag and attribute gone."""
     if not value:
         return ""
-    return nh3.clean(
+    # nh3 ships no type information, so its return value is Any.
+    cleaned: str = nh3.clean(
         value,
         tags=set(ALLOWED_TAGS),
         attributes={tag: set(attrs) for tag, attrs in ALLOWED_ATTRIBUTES.items()},
@@ -59,6 +60,7 @@ def sanitize_html(value: Optional[str]) -> str:
         link_rel="noopener noreferrer",
         strip_comments=True,
     )
+    return cleaned
 
 
 def html_to_text(value: Optional[str]) -> str:

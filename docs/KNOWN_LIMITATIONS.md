@@ -828,16 +828,17 @@ made these choices where nothing had been decided. Each is easy to reverse.
   active member except the circulating officer gets one email linking to the
   minutes; it is an optional kind members can switch off, and circulating again
   after a recall or return sends it again. Executive minutes are not announced.
-- **A suggestion changes nothing by itself.** Accepting one marks it and makes
-  the adoption default to "as amended"; the secretary recalls the minutes to
-  draft to work the change in and circulates again.
-- **Rich text covers section text only (owner decision 2026-10-14).** Sections
-  and an outline's starting text use the editor; suggestions, closed-session
-  summaries, motions and action items stay plain text. The editor has no tables,
-  images or colors, because the PDF cannot print them faithfully and
-  attachments already carry files. Sections written before the editor stay
-  plain text until edited, and a pasted section from Word keeps only the
-  allowed subset (headings, lists, bold, italic, underline, links, quotes).
+- **A suggestion made as a comment changes nothing by itself; one made as
+  tracked changes can be applied (owner decision 2026-10-15).** Accepting a
+  comment-only suggestion marks it and makes the adoption default to "as
+  amended"; the secretary recalls the minutes and works it in by hand. A
+  reviewer's edit of a section is applied change by change from the suggestions
+  panel, which recalls circulating minutes first (with a confirmation). Tracked
+  changes cover the text of a section only; they do not compare headings of
+  sections, motions or action items. A change in a section edited since is
+  applied only where its surrounding text still matches exactly once, so a
+  heavily rewritten section can refuse a change that a human could still place;
+  the secretary rejects it and makes it by hand.
 - **Outline changes do not reach minutes already written.** Deleting or editing
   an outline affects only minutes started from it afterwards, or an outline
   applied to a draft.

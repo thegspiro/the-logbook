@@ -234,4 +234,69 @@ describe('OutlineEditorModal', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByLabelText('Name')).toBeInTheDocument();
   });
+
+  describe('sections that need a motion and a second', () => {
+    type Sent = { sections: Array<{ key: string; needs_motion: boolean; motion_text: string }> };
+    const sentSections = () => (mockUpdate.mock.calls[0]?.[1] as Sent).sections;
+
+    it('starts a new outline with adjournment flagged and its wording written', async () => {
+      const user = userEvent.setup();
+      open();
+      await user.type(screen.getByLabelText('Name'), 'Short form');
+      await user.click(screen.getByRole('button', { name: 'Save outline' }));
+
+      const sent = (mockCreate.mock.calls[0]?.[0] as Sent).sections;
+      expect(sent.map((x) => [x.key, x.needs_motion])).toEqual([
+        ['call_to_order', false],
+        ['adjournment', true],
+      ]);
+      expect(sent[1]?.motion_text).toBe('Motion to adjourn the meeting.');
+    });
+
+    it('asks for the wording only once a section is flagged', async () => {
+      const user = userEvent.setup();
+      open({ outline });
+      expect(screen.queryByLabelText('Wording of the motion')).toBeNull();
+
+      const boxes = screen.getAllByRole('checkbox', { name: /Needs a motion and a second/ });
+      await user.click(boxes[2] as HTMLElement);
+
+      expect(screen.getByLabelText('Wording of the motion')).toBeInTheDocument();
+    });
+
+    it('saves the flag and the wording on the section it was set for', async () => {
+      const user = userEvent.setup();
+      open({ outline });
+      const boxes = screen.getAllByRole('checkbox', { name: /Needs a motion and a second/ });
+      await user.click(boxes[2] as HTMLElement);
+      await user.type(screen.getByLabelText('Wording of the motion'), '  Motion to adjourn.  ');
+      await user.click(screen.getByRole('button', { name: 'Save outline' }));
+
+      expect(sentSections().map((x) => [x.key, x.needs_motion, x.motion_text])).toEqual([
+        ['call_to_order', false, ''],
+        ['roll_call', false, ''],
+        ['adjournment', true, 'Motion to adjourn.'],
+      ]);
+    });
+
+    it('clears the wording when the flag is taken off', async () => {
+      const user = userEvent.setup();
+      const flagged: MinutesTemplate = {
+        ...outline,
+        sections: outline.sections.map((x) =>
+          x.key === 'adjournment' ? { ...x, needs_motion: true, motion_text: 'Motion to adjourn.' } : x
+        ),
+      };
+      open({ outline: flagged });
+      expect(screen.getByLabelText('Wording of the motion')).toHaveValue('Motion to adjourn.');
+
+      const boxes = screen.getAllByRole('checkbox', { name: /Needs a motion and a second/ });
+      await user.click(boxes[2] as HTMLElement);
+      await user.click(screen.getByRole('button', { name: 'Save outline' }));
+
+      const adjourn = sentSections().find((x) => x.key === 'adjournment');
+      expect(adjourn?.needs_motion).toBe(false);
+      expect(adjourn?.motion_text).toBe('');
+    });
+  });
 });

@@ -150,7 +150,7 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-fy-title"
-        className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl"
+        className="modal-panel-scroll mx-4 w-full max-w-md p-6"
       >
         <h3 id="create-fy-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
           Create Fiscal Year
@@ -320,7 +320,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
         role="dialog"
         aria-modal="true"
         aria-labelledby="category-dialog-title"
-        className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl"
+        className="modal-panel-scroll mx-4 w-full max-w-md p-6"
       >
         <h3 id="category-dialog-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
           {isEdit ? 'Edit Budget Category' : 'Create Budget Category'}

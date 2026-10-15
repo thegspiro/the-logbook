@@ -107,4 +107,71 @@ describe('SuggestChangeForm', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(mockAdd).not.toHaveBeenCalled();
   });
+
+  describe('editing the section’s own text', () => {
+    const edit = (original = { content: '<p>Three bids today.</p>', format: 'html' as 'html' | 'text' }) =>
+      render(
+        <SuggestChangeForm
+          minutesId="m1"
+          sectionKey="old_business"
+          subject="Old Business"
+          original={original}
+          onSent={onSent}
+          onCancel={onCancel}
+        />
+      );
+
+    it('opens the original text in the editor, with an optional comment and no wording box', async () => {
+      edit();
+      const editor = await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
+      expect(editor).toHaveTextContent('Three bids today.');
+      expect(screen.getByLabelText('Comment (optional)')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Suggested wording/)).not.toBeInTheDocument();
+    });
+
+    it('will not send an untouched copy', async () => {
+      edit();
+      await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
+      expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeDisabled();
+    });
+
+    it('sends the edited copy as tracked changes, with no comment needed', async () => {
+      const user = userEvent.setup();
+      edit();
+      const editor = await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
+      await user.click(editor);
+      await user.keyboard('X');
+      await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+
+      await waitFor(() => expect(mockAdd).toHaveBeenCalledTimes(1));
+      const [id, payload] = mockAdd.mock.calls[0] as [string, Record<string, unknown>];
+      expect(id).toBe('m1');
+      expect(payload.section_key).toBe('old_business');
+      expect(payload.comment).toBeUndefined();
+      expect(payload.proposed_text).toBeUndefined();
+      expect(payload.proposed_html).toEqual(expect.stringContaining('X'));
+      expect(payload.proposed_html).toEqual(expect.stringContaining('Three bids today.'));
+    });
+
+    it('still sends a comment on its own, with no edit', async () => {
+      const user = userEvent.setup();
+      edit();
+      await user.type(await screen.findByLabelText('Comment (optional)'), 'Please add the date');
+      await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+
+      expect(mockAdd).toHaveBeenCalledWith('m1', {
+        section_key: 'old_business',
+        comment: 'Please add the date',
+        proposed_text: undefined,
+        proposed_html: undefined,
+      });
+    });
+
+    it('opens an old plain-text section as paragraphs, words unchanged', async () => {
+      edit({ content: 'Hose order\n\nNote <5 bids', format: 'text' });
+      const editor = await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
+      expect(editor).toHaveTextContent('Hose order');
+      expect(editor).toHaveTextContent('Note <5 bids');
+    });
+  });
 });

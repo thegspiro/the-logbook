@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**311 tables · 5130 columns · 1049 foreign keys**
+**311 tables · 5137 columns · 1049 foreign keys**
 
 ---
 
@@ -429,14 +429,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 43 | Meeting Minutes model |
-| [`meeting_motions`](#meeting_motions) | `Motion` | 15 | Motion model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 45 | Meeting Minutes model |
+| [`meeting_motions`](#meeting_motions) | `Motion` | 16 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 14 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
 | [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 10 | An election's certified result, frozen into a set of minutes. |
 | [`minutes_revisions`](#minutes_revisions) | `MinutesRevision` | 13 | An approved version of a set of minutes, immutable once written. |
-| [`minutes_suggestions`](#minutes_suggestions) | `MinutesSuggestion` | 13 | A change a member proposes while the minutes are circulated for review. |
+| [`minutes_suggestions`](#minutes_suggestions) | `MinutesSuggestion` | 17 | A change a member proposes while the minutes are circulated for review. |
 | [`minutes_templates`](#minutes_templates) | `MinutesTemplate` | 12 | Meeting Minutes Template |
 
 ### Meetings
@@ -6539,6 +6539,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `rejection_reason` | TEXT | yes |  |  |  |
 | `adopted_on` | DATETIME | yes |  |  |  |
 | `adopted_as_amended` | BOOL | yes |  |  |  |
+| `adoption_moved_by` | VARCHAR(200) | yes |  |  |  |
+| `adoption_seconded_by` | VARCHAR(200) | yes |  |  |  |
 | `adopting_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
@@ -6568,6 +6570,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `moved_by` | VARCHAR(200) | yes |  |  |  |
 | `seconded_by` | VARCHAR(200) | yes |  |  |  |
 | `discussion_notes` | TEXT | yes |  |  |  |
+| `section_key` | VARCHAR(100) | yes |  |  |  |
 | `election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE SET NULL |
 | `ballot_item_id` | VARCHAR(100) | yes |  |  |  |
 | `status` | ENUM(`passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
@@ -6739,6 +6742,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `section_key` | VARCHAR(100) | yes |  |  |  |
 | `comment` | TEXT | no |  |  |  |
 | `proposed_text` | TEXT | yes |  |  |  |
+| `base_content` | TEXT | yes |  |  |  |
+| `proposed_content` | TEXT | yes |  |  |  |
+| `changes` | JSON | yes |  |  |  |
+| `applied_at` | DATETIME | yes |  |  |  |
 | `status` | VARCHAR(20) | no |  | `open` |  |
 | `resolution_note` | TEXT | yes |  |  |  |
 | `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |

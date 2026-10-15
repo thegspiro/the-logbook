@@ -86,7 +86,7 @@ under **Scheduling Admin** in the Administration menu. See
 
 > **No Scheduling module?** Departments that do not use scheduling can still
 > file shift reports on the **Manual Shift Report** page. See
-> [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry-2026-04-11).
+> [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry).
 
 ![Scheduling page tab bar with the schedule view below it](./images/03-01-scheduling-tabs.png)
 
@@ -2171,7 +2171,7 @@ department has at least one skill evaluation set up.
 **To turn a tag green,** add the skill under **Training Admin > Setup > Skill
 Evaluations** with exactly the same name. Capital letters do not matter, so
 "Pump Operations" and "pump operations" match. "Pump ops" does not. See
-[Skill Evaluations](./02-training.md#skill-evaluations-2026-10-05) in the
+[Skill Evaluations](./02-training.md#skill-evaluations) in the
 training guide.
 
 #### Form Sections

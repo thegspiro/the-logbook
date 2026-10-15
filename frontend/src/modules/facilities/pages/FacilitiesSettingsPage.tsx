@@ -252,7 +252,7 @@ function LookupDialog({
       <div className="modal-overlay z-50 flex items-center justify-center p-4">
         <DialogPanel
           onClose={onClose}
-          className="card modal-panel-scroll w-full max-w-md space-y-4 p-5"
+          className="modal-panel modal-panel-scroll w-full max-w-md space-y-4 p-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="lookup-title"
