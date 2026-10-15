@@ -928,6 +928,13 @@ class DocumentsService:
         Empty unless *viewer* is a full administrator: nobody else can open
         these folders, so nobody else can fix or confirm them, and their
         names are not listed to people they are closed to.
+
+        A confirmation holds only while the folder stays administrators-only.
+        Once someone else can open it again (a member took up the position),
+        the confirmation is dropped here, so a later loss lists the folder
+        again instead of hiding behind a decision made about an audience
+        that has since changed. This is the one write a read makes, and it
+        only ever clears a confirmation that no longer describes the folder.
         """
         if not _is_full_admin(_get_user_permissions(viewer)):
             return []
@@ -950,6 +957,17 @@ class DocumentsService:
         for folder in folders:
             opens[str(folder.id)] = await self._opens_to_any(
                 folder, organization_id, others, by_id
+            )
+
+        stale = [f for f in folders if opens[str(f.id)] and f.admin_only_confirmed_at]
+        for folder in stale:
+            folder.admin_only_confirmed_at = None
+            folder.admin_only_confirmed_by = None
+        if stale:
+            await self.db.commit()
+            logger.info(
+                f"Dropped the admin-only confirmation on {len(stale)} folder(s) "
+                f"in organization {organization_id}: members can open them again"
             )
 
         flagged: List[DocumentFolder] = []

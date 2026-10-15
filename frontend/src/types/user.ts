@@ -437,6 +437,8 @@ export interface RejoinServiceOptions {
 export interface MemberStatusChangeRequest extends RejoinServiceOptions {
   new_status: string;
   reason?: string | undefined;
+  /** The day a member left (YYYY-MM-DD); read only when the change takes them out of membership. Defaults to today. */
+  separation_date?: string | undefined;
   send_property_return_email?: boolean | undefined;
   return_deadline_days?: number | undefined;
   custom_instructions?: string | undefined;

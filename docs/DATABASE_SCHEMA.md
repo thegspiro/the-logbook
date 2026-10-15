@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**311 tables · 5139 columns · 1050 foreign keys**
+**311 tables · 5140 columns · 1050 foreign keys**
 
 ---
 
@@ -431,7 +431,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 45 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 16 | Motion model |
-| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 14 | Action Item model |
+| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
 | [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 10 | An election's certified result, frozen into a set of minutes. |
@@ -6606,6 +6606,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completion_notes` | TEXT | yes |  |  |  |
 | `carried_from_id` | VARCHAR(36) | yes | FK, IDX |  | → `minutes_action_items.id` ON DELETE SET NULL |
 | `carried_forward_at` | DATETIME | yes |  |  |  |
+| `last_reminded_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 

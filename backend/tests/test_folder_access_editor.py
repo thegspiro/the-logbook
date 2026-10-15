@@ -545,6 +545,42 @@ class TestAFolderThatLosesItsAudience:
         assert confirmed.admin_only_confirmed_by == ADMIN.id
         assert await _admin_only(db_session, org) == []
 
+    async def test_a_confirmation_lapses_once_someone_can_open_it_again(
+        self, db_session, org
+    ):
+        holder, folder = await self._quartermaster_folder(db_session, org)
+        folder_id = folder.id
+        await _remove_positions(db_session, holder)
+        await DocumentsService(db_session).confirm_admin_only(folder_id, org.id, ADMIN)
+
+        # A new quartermaster: the folder has an audience again, so the
+        # confirmation no longer describes it and is dropped on the next read.
+        newcomer = await _active_member(db_session, org, position_id=QUARTERMASTER)
+        assert await _admin_only(db_session, org) == []
+        stored = (
+            await db_session.execute(
+                select(DocumentFolder).where(DocumentFolder.id == folder_id)
+            )
+        ).scalar_one()
+        assert stored.admin_only_confirmed_at is None
+        assert stored.admin_only_confirmed_by is None
+
+        # Losing that member again lists it, rather than hiding it behind the
+        # earlier decision.
+        await _remove_positions(db_session, newcomer)
+        assert await _admin_only(db_session, org) == ["Quartermaster files"]
+
+    async def test_a_confirmation_holds_while_nobody_else_can_open_it(
+        self, db_session, org
+    ):
+        holder, folder = await self._quartermaster_folder(db_session, org)
+        await _remove_positions(db_session, holder)
+        await DocumentsService(db_session).confirm_admin_only(folder.id, org.id, ADMIN)
+
+        assert await _admin_only(db_session, org) == []
+        assert await _admin_only(db_session, org) == []
+        assert folder.admin_only_confirmed_at is not None
+
     async def test_confirming_a_folder_someone_else_opens_is_refused(
         self, db_session, org
     ):

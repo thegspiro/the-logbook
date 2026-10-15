@@ -814,6 +814,10 @@ administrators only**.
 - **API:** `GET /documents/folders/admin-only` returns the list, and is empty
   for anyone but a full administrator.
   `POST /documents/folders/{id}/confirm-admin-only` records the confirmation.
+- **A confirmation lapses when the folder regains an audience.** Reading the
+  list clears it, so `GET /documents/folders/admin-only` can write: it clears
+  the confirmation on any folder someone besides administrators can open
+  again.
 - **Downgrade** drops both columns, so the list shows every confirmed folder
   again after the next upgrade.
 

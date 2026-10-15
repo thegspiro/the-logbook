@@ -5,6 +5,58 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 14 – 15, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Predecessor: [October 13 – 14](#recent-changes-october-13--14-2026).
+
+**The headline:** **Meeting Minutes** now follow how a department really adopts
+them: circulate, take members' suggestions, adopt. Roll call, closed sessions,
+attachments, outlines and formatted text came with it. Checklist items also
+find catalog items under other names.
+
+### Read this first
+
+**If you run the server:** rebuild the backend image (`docker compose build
+backend`), or run `pip install -r backend/requirements.txt` from source; the
+minutes editor needs a new package, and the backend will not start without it.
+Three new migrations; `alembic heads` should report `1d65720bce34`. Manual Docker
+backups taken before this change did not include uploaded files; take a new one.
+
+**If you administer a department:**
+
+- **Minutes.** Members can now read minutes that have been circulated, and are
+  emailed when you circulate them (each member can turn that email off). Drafts
+  and executive sessions are still hidden. Set up your standard order of business
+  under **Minutes > Outlines**.
+- **Inventory.** Give items other names under **Also called** ("BVM" for "Bag
+  Valve Mask"). A medical supply category can be deleted; its supplies move to
+  another category first.
+- **Finance.** **Start from last year** no longer copies lines on retired
+  categories.
+
+**If you are a member:** open circulated minutes and use **Suggest a change** on
+the section you want corrected. Only you and the secretary see your suggestion.
+
+### What changed, by area
+
+| Area         | Change                                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Minutes      | Circulate for review, member suggestions, recall, adopt as presented or amended; circulation email; required sections              |
+| Minutes      | Roll call with six statuses and quorum; closed sessions; election results and addenda; attachments and signed copy; printable copy |
+| Minutes      | Outlines page; formatted text in sections; approved versions with a fingerprint; carry open action items forward                   |
+| Inventory    | Also called names, near-match search in checklist pickers, CSV column; delete a medical supply category                            |
+| Finance      | Start from last year skips retired categories                                                                                      |
+| Training     | Single enrollment enforces prerequisite programs                                                                                   |
+| Integrations | Claude connections made with member sign-in can now run tools                                                                      |
+| Appearance   | Opaque result lists in dark mode; every control's visible text is in its accessible name                                           |
+| Operations   | Docker backups include uploads; upgraded installations no longer 500 on medical categories                                         |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 13 – 14, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

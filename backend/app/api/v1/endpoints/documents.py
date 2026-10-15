@@ -246,6 +246,9 @@ async def list_admin_only_folders(
     administrators only; everyone else gets an empty list, since nobody else
     can open these folders to fix them.
 
+    Also drops the confirmation on any folder someone else can open again,
+    so a later loss lists it once more.
+
     **Authentication required**
     **Requires permission: documents.manage**
     """

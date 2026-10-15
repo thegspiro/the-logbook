@@ -31,6 +31,9 @@ Recommended crontab (add to host or container cron):
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
+# Daily at 7:20 AM — email reminders about open action items from adopted minutes, and the weekly open-items list to minutes managers
+20 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=minutes_action_item_reminders
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -260,6 +263,16 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
+    },
+    "minutes_action_item_reminders": {
+        "description": (
+            "Email assignees before an action item from adopted minutes is due "
+            "and while it is overdue, and send minutes managers a weekly list "
+            "of every open item"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:20",
+        "cron": "20 7 * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -998,6 +1011,19 @@ async def run_property_return_reminders(db: AsyncSession) -> Dict[str, Any]:
         return result.get("reminders_sent", 0)
 
     return await _for_each_org(db, "property_return_reminders", _process)
+
+
+async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email action item reminders to assignees and the weekly open-items list."""
+    from app.services.minutes_reminder_service import MinutesReminderService
+
+    async def _process(db_session, org):
+        service = MinutesReminderService(db_session)
+        reminders = await service.send_assignee_reminders(org)
+        digests = await service.send_open_items_digest(org)
+        return reminders + digests
+
+    return await _for_each_org(db, "minutes_action_item_reminders", _process)
 
 
 async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
@@ -7210,6 +7236,7 @@ TASK_RUNNERS = {
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
     "action_item_reminders": run_action_item_reminders,
+    "minutes_action_item_reminders": run_minutes_action_item_reminders,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7297,6 +7324,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
     "action_item_reminders": 86400,
+    # Checked daily; the weekly list keeps its own last-sent day per org.
+    "minutes_action_item_reminders": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).

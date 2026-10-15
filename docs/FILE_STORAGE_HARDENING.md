@@ -123,7 +123,9 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       folder is no longer listed. Confirming at save time records the same
       thing.
     - The record is cleared whenever an access save leaves someone else
-      able to open the folder.
+      able to open the folder. It is also cleared when the list is read and
+      someone else can open the folder again, for example a new holder of
+      its position. A later loss then lists the folder again.
     - Only the topmost shut folder is listed: a folder shut because its
       parent is shut is settled with the parent.
     - Personal folders are never listed, since they open to their owner
