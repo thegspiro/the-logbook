@@ -940,6 +940,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'meetings.manage',
         module: 'minutes',
       },
+      {
+        path: '/minutes/outlines',
+        label: 'Meeting outlines',
+        permission: 'minutes.manage',
+        module: 'minutes',
+      },
       { path: '/minutes/:minutesId', label: 'Minutes detail', module: 'minutes' },
     ],
   },

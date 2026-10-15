@@ -83,6 +83,8 @@ class EmailKind(str, enum.Enum):
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
     BUDGET_REQUESTS = "budget_requests"
+    MINUTES_ACTION_ITEMS = "minutes_action_items"
+    MINUTES_CIRCULATED = "minutes_circulated"
 
     # Optional, sent to officers because of a role they hold
     EVENT_DUTIES = "event_duties"
@@ -380,6 +382,29 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "New store orders",
         ),
         rationale="The same records are kept in Membership and the store.",
+    ),
+    EmailKind.MINUTES_ACTION_ITEMS: EmailPolicy(
+        label="Action items from meeting minutes",
+        required=False,
+        audience=_M,
+        includes=("Action items assigned to you when meeting minutes are approved",),
+        rationale=(
+            "Minutes > Action Items lists everything assigned to you, and "
+            "due-date reminders continue in the app."
+        ),
+    ),
+    EmailKind.MINUTES_CIRCULATED: EmailPolicy(
+        label="Meeting minutes circulated for review",
+        required=False,
+        audience=_M,
+        includes=(
+            "A notice that meeting minutes are ready to read and comment on "
+            "before they are adopted",
+        ),
+        rationale=(
+            "The minutes stay in Minutes, where members can read them and "
+            "suggest changes; the email only says they are there."
+        ),
     ),
     EmailKind.FINANCE_DUTIES: EmailPolicy(
         label="Treasurer duties",

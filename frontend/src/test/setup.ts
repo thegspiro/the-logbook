@@ -116,6 +116,16 @@ globalThis.ResizeObserver = class ResizeObserver {
   unobserve(_target: Element) {}
 };
 
+// ProseMirror (the rich-text editor) measures the DOM while it moves the caret
+// and scrolls it into view. jsdom has no layout, so these report an empty
+// result instead of being absent, which would throw.
+const noRects = () => [] as unknown as DOMRectList;
+const emptyRect = () => new DOMRect(0, 0, 0, 0);
+Range.prototype.getClientRects = noRects;
+Range.prototype.getBoundingClientRect = emptyRect;
+Element.prototype.getClientRects = noRects;
+document.elementFromPoint = () => null;
+
 // Suppress console errors during tests (optional)
 const originalError = console.error;
 beforeAll(() => {
