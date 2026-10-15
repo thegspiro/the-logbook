@@ -19327,7 +19327,7 @@ here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -32186,3 +32186,60 @@ reported as `pending_seal`, not tampering. Migration `bcd688674099`. Guard
 tests: `backend/tests/test_audit_chain_sealing.py`. Details:
 [`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md) →
 SEC2-28-10; the `KNOWN_LIMITATIONS.md` row is marked resolved.
+
+### 2026-10-15 — Feature 14 (Equipment check & shifts, pass 9) — watchdog pickup, near-zero-delta re-verification, 0 fixed, 0 new findings
+
+**Step 0.** `search_pull_requests` for `head:claude/security-review` (open)
+returned 0 results, confirmed independently rather than trusted from the
+task's own context. PR #3289 (Feature 13, Apparatus & NFC, pass 16) had
+already merged and this table's row 13 already read ✅ with row 14 the
+first `⬜` — nothing further to record from Step 0.
+
+**Review.** Baseline `ed51d2ea9` (pass 8's merge, PR #3195). Confirmed a full
+clone (`git rev-parse --is-shallow-repository` → `false`, no unshallow
+needed this time). 329 non-merge commits landed repo-wide in the window; of
+those, 4 touch the six declared primary backend files directly, each read in
+full: `9c906cb5a` (app-review B7's own fix — `update_template`/
+`update_compartment` moved from a bare `setattr` loop to `apply_updates`,
+org-scoping and the pre-existing XC-1 `apparatus_id` check unchanged),
+`bbe287458` (fuzzy catalog matching — the one new column it reads,
+`InventoryItem.also_called`, is read inside the same already-org-scoped
+query, not a new one; the column itself is Inventory's own, additively
+migrated), and two mypy-narrowing commits (`922cb6aa0`, `f5ad6018a`) whose
+only behavior change is correctly excluding ad-hoc checks with no
+`template_id` from satisfying a template requirement — read hunk by hunk, no
+scoping filter touched. `equipment_check.py`, `shift_completion.py`,
+`equipment_check_pdf.py` and `schemas/shift_completion.py` are
+byte-identical to the pass-8 baseline; route counts re-confirmed unchanged
+(52 + 21). The two adjacent-surface functions this feature's lens covers in
+`scheduled_tasks.py` (`run_end_of_shift_checklist_reminders`,
+`run_post_shift_validation`) carry the identical ad-hoc-check guard as the
+service-layer fix, applied consistently; the rest of that file's diff
+belongs to a new Minutes reminder feature, out of scope here. All eight
+shared-dependency files (`org_scoping.py`, `core/permissions.py`,
+`core/audit.py`, `utils/model_updates.py`, `utils/sql_search.py`,
+`core/dependencies.py`, `utils/csv_export.py`, `frontend/src/utils/
+apiCache.ts`) are byte-identical to pass 8. Three frontend files changed,
+all phone-layout restructures per their own commit messages
+(`CheckLogPage.tsx`, `ApparatusInventoryPage.tsx`, `FleetBoardPage.tsx`);
+grepped the added lines of each for a new API call, `window.confirm/alert/
+prompt`, `dangerouslySetInnerHTML`, raw `fetch(` — zero hits across all
+three. Every prior fix (EC-16, EC-6, EC-13, EC8-14-1, `.ilike()` escaping,
+`SafeCsvWriter`) re-read at its current location and intact; EC-7 and EC-11
+confirmed resolved (owner decision 2026-10-11) directly from
+`KNOWN_LIMITATIONS.md`'s own row rather than re-derived; EC-8 and the
+`get_item_deployments` permission-gate discrepancy remain open/accepted,
+unchanged.
+
+**Gate.** `flake8`/`black --check`/`isort --check-only` (isort 9.0.1, CI's
+pin) clean over `app/ tests/ alembic/`; `validate_migrations.py --strict`
+passed (601 revisions, single head `c903fc771081`); `check_route_
+permissions.py --strict` passed (270 routes, 0 errors/warnings); scoped
+backend tests (`-k "equipment_check or shift_completion"`) 514 passed, 1
+skipped (pre-existing, `pywebpush`); frontend `npm run typecheck` 0 errors,
+`npm run lint` 0 errors/0 warnings.
+
+Findings doc: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts.md)'s
+**Pass 9** section. No `KNOWN_LIMITATIONS.md` change needed — nothing new
+was found or fixed this pass. Rotation row 14 → ✅ (pending PR merge). Next:
+Feature 15 (Scheduling).

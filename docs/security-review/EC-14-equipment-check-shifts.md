@@ -2,18 +2,183 @@
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
-(pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8) · **PR:**
+(pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
+2026-10-15 (pass 9) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
-(pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged)
+(pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
+pass 9 (0 fixed, 0 new findings — PR number recorded in `PROGRESS.md`'s Open PR row)
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (52 routes as of pass 8; 50 before),
-`api/v1/endpoints/shift_completion.py` (21 routes),
+**Backend:** `api/v1/endpoints/equipment_check.py` (52 routes, unchanged since
+pass 8), `api/v1/endpoints/shift_completion.py` (21 routes),
 `services/equipment_check_service.py` (5,368 L),
 `services/shift_completion_service.py` (1,930 L)
 **Frontend:** in-app (no dedicated module directory)
-**Migrations:** none this iteration (no schema change)
+**Migrations:** none this iteration (no schema change to this feature's own
+tables)
+
+---
+
+## Pass 9 (2026-10-15) — near-zero-delta re-verification: 4 non-merge commits touched the primary files, all already-reviewed/mechanical; 0 fixed, 0 new findings
+
+**Step 0.** `search_pull_requests` for `repo:thegspiro/the-logbook is:pr
+is:open head:claude/security-review` returned 0 results — confirmed
+independently of the task's own context, not trusted from it. The previous
+security-review PR (#3289, Feature 13 Apparatus & NFC, pass 16) had merged
+2026-10-15 and `PROGRESS.md`'s rotation table already showed row 13 ✅ and
+row 14 (Equipment check & shifts) as the first `⬜`, consistent with that
+PR's own closure note — nothing to record from Step 0 before starting this
+feature.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `false`;
+the working tree already held a full clone, so no `git fetch --unshallow`
+was needed this pass (unlike pass 7 and the preceding Apparatus/NFC pass,
+both of which hit a shallow clone).
+
+**Baseline.** Pass 8 merged as `ed51d2ea9` (PR #3195, 2026-10-14). 329
+non-merge commits landed on `main` repo-wide in the window — confirmed via
+`git log --oneline ed51d2ea9..origin/main | wc -l` — of which exactly **4**
+touch the six declared primary files directly
+(`git log --no-merges -- <six files>`), each read via `git show`:
+
+| Commit      | What it changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Security reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `9c906cb5a` | app-review B7: `update_template`/`update_compartment` switched from a bare `setattr` loop to `apply_updates`                                                                                                                                                                                                                                                                                                                                                                                                | Already this feature's own established idiom (Pitfall #1/#20). `apply_updates(template, data, skip=self.PROTECTED_FIELDS)` — `PROTECTED_FIELDS` still includes `id`/`organization_id`; the pre-existing XC-1 `apparatus_id` in-org check (`is_in_org`) still runs _before_ this call, unchanged. A null for a NOT NULL column now surfaces as the method's existing `ValueError` → 400, not an unhandled `IntegrityError` → 500. Pure correctness fix (app-review's own finding, already dispositioned there). Clean.                                      |
+| `bbe287458` | Fuzzy catalog matching: `suggest_inventory_matches`/its sibling now also select `InventoryItem.also_called` and pass it through `best_matches`                                                                                                                                                                                                                                                                                                                                                              | The catalog query is unchanged in its `WHERE` clause — still `InventoryItem.organization_id == organization_id, InventoryItem.active.is_(True)` — so the added column is read inside the same already-org-scoped query, not a new one. `also_called` itself is Inventory's own column (migration `1d65720bce34`, additive/nullable, `_has_table`/`_has_column` guarded per Pitfall #26; canonicalized on write by `app/utils/item_aliases.normalize_aliases`, which this feature only consumes read-only). No new route, no new client-supplied id. Clean. |
+| `922cb6aa0` | mypy batch 3: `models/apparatus.py` gains a `TYPE_CHECKING`-only block (no runtime/column change) documenting three attributes `EquipmentCheckService` stamps onto loaded rows; `equipment_check_service.py` gets `if c.template_id is not None` guards before keying dicts by `template_id` (an ad-hoc check has no template and must not be read as satisfying one — a correctness fix, not a security one) and three `result` → `check_result`/`shift_result`/`ares` variable renames to avoid shadowing | Read every hunk; no query's `WHERE` clause changed, no org filter removed or weakened. Clean.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `f5ad6018a` | mypy batch 5: `shift_completion_service.py`'s `calls_responded` read as `report.calls_responded or 0` instead of the bare (possibly `None`) attribute                                                                                                                                                                                                                                                                                                                                                       | One line, feeding a response field the schema already types as an int-like count; not an auth or scoping path. Clean.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+`equipment_check.py`, `shift_completion.py` (both endpoint files),
+`equipment_check_pdf.py` and `schemas/shift_completion.py` are byte-identical
+to the pass-8 baseline (`git diff --numstat` returns no line for any of the
+four). `schemas/equipment_check.py` (+3/−14) lost the unreferenced
+`LastSealRecord` class (dead code, removed by `9c906cb5a`) and gained
+`InventoryMatchSuggestion.matched_alias: Optional[str]` (`bbe287458`) — a
+response field, not an input; no validation surface. `models/apparatus.py`
+(+10/−0) and `shift_completion_service.py` (+1/−1) are accounted for above.
+
+**Shared-dependency and adjacent-surface files** (this rotation's own
+established scope: `org_scoping.py`, `core/permissions.py`, `core/audit.py`,
+`utils/model_updates.py`, `utils/sql_search.py`, `core/dependencies.py`,
+`utils/csv_export.py`, `frontend/src/utils/apiCache.ts`) — all eight
+byte-identical to the pass-8 baseline, confirmed via `git diff --stat`
+returning no output for any of them.
+
+**`scheduled_tasks.py` (+102/−28) and `scheduling_service.py` (+29/−23)** —
+re-checked despite the primary files mostly holding, since both carry the
+two functions this feature's own lens covers
+(`run_end_of_shift_checklist_reminders`, `run_post_shift_validation`). Both
+functions are touched, each by the same `if tid is not None` /
+`if check_sid, tid` guard as `922cb6aa0` applied to
+`equipment_check_service.py` — an ad-hoc check (no `template_id`) no longer
+satisfies a template's reminder/validation requirement, which is the correct
+direction (it was previously possible for an ad-hoc check to silently mark a
+required end-of-shift template as done). Every query in both functions is
+still scoped by the `shift_ids`/`organization_id` already resolved upstream;
+no new by-id read, no new client-supplied FK. The rest of `scheduled_tasks.py`'s
+diff (`run_property_return_reminders`, `run_action_item_reminders`,
+`run_series_end_reminders`, `run_event_request_reminders`, new
+`SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS` entries) belongs to the new
+Minutes action-item-reminder feature, out of this rotation's scope and not
+re-reviewed here. `scheduling_service.py`'s remaining hunks are mypy-driven
+null-safety additions (`total_result.scalar() or 0`, `list(result.scalars().all())`,
+`if platoon_name is None: continue`, three `swap_request.target_user_id`/
+`requesting_shift_id` guards added to existing `if`/`elif` branches so a
+branch can no longer execute with the id it needs still `None`) — read in
+full; none weakens or removes a scoping filter, none is Scheduling's own
+rotation territory (SCH-15) revisited here beyond this feature's narrow
+lens on the two named functions.
+
+**Frontend.** `find frontend/src -iname "*Equipment*" -o -iname
+"*ShiftDetail*" -o -iname "*ShiftCheckIn*" -o -iname "*CheckLog*" -o -iname
+"*MyChecklist*"` re-run fresh rather than trusted from pass 6's path
+correction; `git diff --stat ed51d2ea9..origin/main` against every file it
+returned, plus `apiCache.ts`, shows real changes in three files, all from
+commits whose own messages name a phone-layout restructure
+(`6bf7d79fb` "Check log: phone layout", `0bb00a3c5` "Restack the apparatus
+inventory screen on phones", `9a0c70b26` "Compact the fleet board for
+phones") — `CheckLogPage.tsx` (+515/−159, plus `ScrollCueRow.tsx`/its test),
+`ApparatusInventoryPage.tsx` and `FleetBoardPage.tsx`. Grepped each diff for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, raw `fetch(`,
+`.toLocale*` — zero hits in all three. Grepped the added (`+`) lines of
+`ApparatusInventoryPage.tsx`/`FleetBoardPage.tsx` specifically for
+`equipmentCheckService.`/`api.`/`axios.` calls — zero hits: every service
+call in both diffs is pre-existing context being moved around a restructured
+layout, not a new one. `MyChecklistsPage.tsx`,
+`EquipmentCheckTemplateBuilder.tsx` (+9/−4, `9c906cb5a`'s own frontend half —
+drops `| null` from the batch-save update types to match the backend fix
+above) and the rest of the enumerated set: either byte-identical or already
+covered by the backend commit they belong to. `apiCache.ts` — byte-identical
+(see shared-dependency check above).
+
+**Re-verified: every prior fix and open item, read at its current location.**
+
+- **EC-16** (SAVEPOINT duplicate-report guard) — intact,
+  `shift_completion_service.py:616` (`begin_nested()`), `:635`
+  (`.with_for_update()` on the post-failure existence check). Byte-identical
+  region to pass 8 (the one changed line this pass, `calls_responded or 0`,
+  is 1000+ lines away in `_create_training_record_from_report`, unrelated).
+- **EC-6** (in-org `trainee_id` validation in `create_report`) — intact.
+- **EC-13** (submitter-quantity-inflation guard in `update_deployed_lot`) —
+  intact, `equipment_check_service.py:3525` (`.with_for_update()` still
+  present at the guard's locking read).
+- **`.ilike()` escaping** — intact, `equipment_check_service.py:5725`,
+  `like_pattern(item_name)` + `escape=LIKE_ESCAPE_CHAR`.
+- **`SafeCsvWriter`** — intact, `equipment_check.py:1534/1549`.
+- **EC8-14-1** (concurrent photo-upload lock, pass 8's own fix) — file
+  region unchanged; not re-diffed since `equipment_check.py` is
+  byte-identical to the pass-8 baseline.
+- **EC-7 / EC-11** — resolved by owner decision 2026-10-11, confirmed from
+  `KNOWN_LIMITATIONS.md`'s own row (not re-derived): read gates now
+  `inventory.check_view` OR `inventory.check_submit`; compliance metrics are
+  built (`EquipmentReadinessService.expected_checks_between`), no longer
+  hardcoded `0`.
+- **EC-8** (a few by-id reads used only for changelog text, no org filter) —
+  still open/accepted as harmless, per the same `KNOWN_LIMITATIONS.md` row;
+  not touched this window.
+- **`get_item_deployments` vs. its sibling permission-gate discrepancy** —
+  still present, re-read directly at `equipment_check.py:2059-2076`:
+  `inventory.check_view, inventory.view` vs. 20+ sibling manage-only
+  endpoints on `inventory.check_manage`. Still an owner-decision item per
+  `KNOWN_LIMITATIONS.md`'s dedicated entry; unchanged.
+- **Route inventory** — `equipment_check.py` 52, `shift_completion.py` 21,
+  both re-counted via `grep -c "^@router\.(get|post|put|patch|delete)"`
+  rather than carried forward; unchanged from pass 8.
+- **JSON mutation (Pitfall #12), SMS allowlist (Pitfall #18), unbounded
+  in-memory caches (Pitfall #9)** — no new nested-JSON write, no new
+  `SMSService` call, no new module-level dict/set tracker introduced by any
+  of the four primary-file commits or the two adjacent-surface files; grepped
+  fresh rather than assumed from prior-pass silence.
+
+**No new finding.** Every real change in the window either already belongs
+to another feature's own rotation entry (the fuzzy-matching/also-called
+feature is Inventory's, the Minutes reminder additions are that module's
+own), is a already-dispositioned correctness fix from app-review (`9c906cb5a`),
+or is mechanical mypy-driven null-safety narrowing that this pass read in
+full rather than inferred from its label.
+
+### Completion gate (pass 9)
+
+| Check                                                             | Result                                               |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/`                              | ✅ 2334 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin) | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ single head `c903fc771081`, 601 revisions         |
+| `python3 scripts/check_route_permissions.py --strict`             | ✅ 270 routes, 0 errors, 0 warnings                  |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`       | ✅ 514 passed, 1 skipped (pre-existing, `pywebpush`) |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors (aliased 7.0.2 compiler)                 |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors, 0 warnings                              |
+
+Full backend/frontend whole-suite runs not repeated this pass — no source
+file this feature owns changed behaviorally (three of the four primary-file
+commits are mechanical/already-reviewed-elsewhere; the fourth is a 1-line
+null-coalesce), so the targeted `-k` run plus the route/migration checks are
+the suite that could actually observe a regression, per CLAUDE.md's "match
+the verification to the change."
+
+Rotation row 14 → ✅ (pending PR merge). Next: Feature 15 (Scheduling).
 
 ---
 
