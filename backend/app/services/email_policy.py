@@ -94,6 +94,7 @@ class EmailKind(str, enum.Enum):
     INVENTORY_DUTIES = "inventory_duties"
     MEMBERSHIP_ADMIN = "membership_admin"
     FINANCE_DUTIES = "finance_duties"
+    MINUTES_DUTIES = "minutes_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -387,7 +388,10 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         label="Action items from meeting minutes",
         required=False,
         audience=_M,
-        includes=("Action items assigned to you when meeting minutes are approved",),
+        includes=(
+            "Action items assigned to you when meeting minutes are approved",
+            "Reminders before an action item is due and while it is overdue",
+        ),
         rationale=(
             "Minutes > Action Items lists everything assigned to you, and "
             "due-date reminders continue in the app."
@@ -405,6 +409,13 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "The minutes stay in Minutes, where members can read them and "
             "suggest changes; the email only says they are there."
         ),
+    ),
+    EmailKind.MINUTES_DUTIES: EmailPolicy(
+        label="Secretary duties",
+        required=False,
+        audience=_O,
+        includes=("A weekly list of open action items and who owns them",),
+        rationale="Minutes > Action Items lists every open item.",
     ),
     EmailKind.FINANCE_DUTIES: EmailPolicy(
         label="Treasurer duties",
