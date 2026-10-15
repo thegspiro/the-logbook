@@ -46,6 +46,7 @@ import { CarryForwardDialog } from '../components/CarryForwardDialog';
 import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
 import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
 import { PersonPicker } from '../components/PersonPicker';
 import { SectionMotion } from '../components/SectionMotion';
 import { RevisionsPanel } from '../components/RevisionsPanel';
@@ -286,6 +287,15 @@ export const MinutesDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // A time is a field of its own on the minutes, not part of a section. Sent as
+  // an explicit null to clear it, since an omitted key means "leave it alone".
+  const handleSaveTime = async (field: 'called_to_order_at' | 'adjourned_at', iso: string | null) => {
+    if (!minutesId) return;
+    const updated = await minutesService.updateMinutes(minutesId, { [field]: iso });
+    setMinutes(updated);
+    toast.success(iso ? 'Time recorded' : 'Time cleared');
   };
 
   const handleReorderSection = async (index: number, direction: 'up' | 'down') => {
@@ -1176,6 +1186,20 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {(section.key === 'call_to_order' || section.key === 'adjournment') && (
+                      <MeetingTimeCapture
+                        kind={section.key === 'call_to_order' ? 'start' : 'end'}
+                        value={section.key === 'call_to_order' ? minutes.called_to_order_at : minutes.adjourned_at}
+                        otherTime={section.key === 'call_to_order' ? minutes.adjourned_at : minutes.called_to_order_at}
+                        scheduled={section.key === 'call_to_order' ? minutes.meeting_date : undefined}
+                        timezone={tz}
+                        canEdit={Boolean(canManage && isEditable)}
+                        onSave={(iso) =>
+                          handleSaveTime(section.key === 'call_to_order' ? 'called_to_order_at' : 'adjourned_at', iso)
+                        }
+                      />
                     )}
 
                     <SectionMotion

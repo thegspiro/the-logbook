@@ -197,6 +197,24 @@ class MinuteService:
             raise ValueError("That item is not on the election's ballot")
 
     @staticmethod
+    def _check_meeting_times(started, ended) -> None:
+        """The meeting cannot have ended at or before the moment it began.
+
+        MySQL hands back naive datetimes and a client may send either, so a
+        naive value is read as UTC, the zone everything here is stored in.
+        """
+        if started is None or ended is None:
+            return
+
+        def utc(value: datetime) -> datetime:
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+        if utc(ended) <= utc(started):
+            raise ValueError(
+                "The meeting must be adjourned after it is called to order"
+            )
+
+    @staticmethod
     def _check_motion_section(minutes: MeetingMinutes, section_key) -> None:
         """A motion's section must be one of these minutes' own sections."""
         if section_key and section_key not in {
@@ -351,6 +369,9 @@ class MinuteService:
                 _default_sections_for(minutes_dict.get("meeting_type"))
             )
 
+        self._check_meeting_times(
+            minutes_dict.get("called_to_order_at"), minutes_dict.get("adjourned_at")
+        )
         minutes = MeetingMinutes(
             **minutes_dict,
             organization_id=str(organization_id),
@@ -631,6 +652,15 @@ class MinuteService:
             and hasattr(data.footer_config, "model_dump")
         ):
             update_data["footer_config"] = data.footer_config.model_dump()
+
+        # Only when a time is being changed, so minutes saved before this check
+        # existed stay editable. Judged on what the minutes will hold: moving
+        # only the end is checked against the saved start.
+        if "called_to_order_at" in update_data or "adjourned_at" in update_data:
+            self._check_meeting_times(
+                update_data.get("called_to_order_at", minutes.called_to_order_at),
+                update_data.get("adjourned_at", minutes.adjourned_at),
+            )
 
         apply_updates(
             minutes, update_data, skip={"id", "organization_id", "created_by"}

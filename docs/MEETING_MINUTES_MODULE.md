@@ -686,6 +686,23 @@ is not changed, and the flag is set on the Outlines screen.
   PDF's approval block and included in the sealed snapshot **only when
   recorded**, so a snapshot sealed earlier verifies exactly as it did.
 
+### Start and end times _(2026-10-15)_
+
+`called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
+and **Adjournment** sections (keys `call_to_order` and `adjournment`), on draft
+or rejected minutes, by someone with `minutes.manage`:
+
+- **Record now** stamps the current minute in one tap; **Use scheduled time**
+  (start only) takes the meeting's scheduled time; **Set a time…** and
+  **Change** open a date and time picker in the department's timezone. **Clear**
+  sends an explicit `null`.
+- The times travel with `PUT /{id}` like any other field. The server refuses an
+  end at or before the start whichever one is being changed — judged against
+  the value the minutes will hold, so moving only the end is checked against the
+  saved start — with a 400, and the same rule is applied on create. A naive
+  timestamp is read as UTC.
+- Circulating without the times is not warned about and not blocked.
+
 ### Page layout _(2026-10-15)_
 
 The detail page opens on the minutes themselves. Motions, closed sessions,

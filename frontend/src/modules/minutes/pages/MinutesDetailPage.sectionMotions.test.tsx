@@ -15,6 +15,7 @@ const CHIEF = 'user-chief';
 const mockGetMinutes = vi.fn();
 const mockAddMotion = vi.fn();
 const mockListAll = vi.fn();
+const mockUpdate = vi.fn();
 const authState = {
   checkPermission: () => true,
   user: { id: SECRETARY } as { id: string } | undefined,
@@ -37,6 +38,7 @@ vi.mock('../services/api', () => ({
     getMinutes: (...a: unknown[]) => mockGetMinutes(...a) as unknown,
     addMotion: (...a: unknown[]) => mockAddMotion(...a) as unknown,
     listAllMinutes: (...a: unknown[]) => mockListAll(...a) as unknown,
+    updateMinutes: (...a: unknown[]) => mockUpdate(...a) as unknown,
   },
 }));
 
@@ -93,6 +95,7 @@ describe('MinutesDetailPage section motions', () => {
     mockAddMotion.mockResolvedValue({});
     mockListAll.mockReset();
     mockListAll.mockResolvedValue([]);
+    mockUpdate.mockReset();
     authState.user = { id: SECRETARY };
   });
 
@@ -158,5 +161,37 @@ describe('MinutesDetailPage section motions', () => {
       .getAllByRole('option')
       .map((o) => o.textContent);
     expect(names).toEqual(['Choose from the roll…', 'Pat Chief', 'Lee Treasurer', 'Someone else (type a name)']);
+  });
+
+  it('records the start and end from the call to order and adjournment sections', async () => {
+    mockUpdate.mockImplementation((_id: string, body: Record<string, unknown>) =>
+      Promise.resolve({ ...draft, ...body })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Call to Order' });
+    const buttons = screen.getAllByRole('button', { name: 'Record now' });
+    expect(buttons).toHaveLength(2);
+
+    await user.click(buttons[0] as HTMLElement);
+    expect(mockUpdate).toHaveBeenCalledWith(MINUTES_ID, {
+      called_to_order_at: expect.stringMatching(/:00\.000Z$/) as unknown,
+    });
+    expect(await screen.findByText(/Called to order at/)).toBeInTheDocument();
+  });
+
+  it('offers no time capture once the minutes are circulated, but still shows a recorded time', async () => {
+    mockGetMinutes.mockResolvedValue({
+      ...draft,
+      status: 'submitted',
+      submitted_by: SECRETARY,
+      called_to_order_at: '2026-10-08T00:02:00Z',
+    });
+    renderWithRouter(<MinutesDetailPage />);
+
+    expect(await screen.findByText('Called to order at 7:02 PM')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record now' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Change the called to order time/ })).toBeNull();
   });
 });
