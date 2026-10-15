@@ -116,7 +116,7 @@ The **My Training** tab is tailored to your current needs:
   results, each opening a read-only scorecard. Previously these lived on the
   examiner's device and had to be read over their shoulder. What appears here —
   and how much of each result you see — is set by your department; see
-  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings-2026-08-08).
+  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings).
 
 ![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
 
@@ -3740,7 +3740,7 @@ number its own queue is measuring. Training's built-in three are **Compliance**,
 nothing keeps them.
 
 Access is `training.manage` plus the Training module enabled. See
-[Every Administration Page Opens the Same Way](./08-admin-reports.md#every-administration-page-opens-the-same-way-2026-08-23)
+[Administration Hubs](./08-admin-reports.md#administration-hubs)
 in the administration guide, which covers choosing the metrics and who can see
 the queue.
 

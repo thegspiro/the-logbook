@@ -470,6 +470,12 @@ class ProspectiveMember(Base):
         pipeline_name: Optional[str]
         target_role_name: Optional[str]
 
+    if TYPE_CHECKING:
+        # Not a column. MembershipPipelineService stamps the referrer's display name on
+        # loaded prospects for the response. Declared only for the type checker: an
+        # annotation SQLAlchemy sees would have to be mapped.
+        referred_by_name: Optional[str]
+
     __table_args__ = (
         Index("idx_prospect_org_status", "organization_id", "status"),
         Index("idx_prospect_org_pipeline", "organization_id", "pipeline_id"),

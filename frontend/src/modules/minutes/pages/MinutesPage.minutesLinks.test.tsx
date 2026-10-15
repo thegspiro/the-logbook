@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MinutesListItem } from '../types/minutes';
 
@@ -17,6 +17,7 @@ const mockCreateMeeting = vi.fn();
 const mockListAllMinutes = vi.fn();
 const mockGetStats = vi.fn();
 const mockCreateFromMeeting = vi.fn();
+const mockGetOutlines = vi.fn();
 const mockNavigate = vi.fn();
 
 vi.mock('react-router', async () => {
@@ -37,6 +38,7 @@ vi.mock('../services/api', () => ({
     listAllMinutes: (...a: unknown[]) => mockListAllMinutes(...a) as unknown,
     getStats: (...a: unknown[]) => mockGetStats(...a) as unknown,
     createFromMeeting: (...a: unknown[]) => mockCreateFromMeeting(...a) as unknown,
+    getOutlines: (...a: unknown[]) => mockGetOutlines(...a) as unknown,
   },
 }));
 
@@ -98,6 +100,8 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     mockGetStats.mockResolvedValue({ total: 1, this_month: 1, open_action_items: 0, pending_approval: 1 });
     mockCreateFromMeeting.mockReset();
     mockCreateFromMeeting.mockResolvedValue({ id: 'min-new' });
+    mockGetOutlines.mockReset();
+    mockGetOutlines.mockResolvedValue([]);
     mockCreateMeeting.mockReset();
     mockNavigate.mockReset();
   });
@@ -107,7 +111,7 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
 
     const link = await screen.findByRole('link', { name: /Minutes: October Business Meeting/ });
     expect(link).toHaveAttribute('href', '/minutes/min-1');
-    expect(link).toHaveTextContent('Awaiting approval');
+    expect(link).toHaveTextContent('Circulated for review');
   });
 
   it('counts minutes awaiting approval from the minutes service', async () => {
@@ -157,6 +161,38 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     await user.click(await screen.findByRole('button', { name: 'Create minutes from November Business Meeting' }));
 
     expect(mockCreateFromMeeting).toHaveBeenCalledWith('meet-2');
+    expect(mockNavigate).toHaveBeenCalledWith('/minutes/min-new');
+  });
+
+  it('starts from the default outline without asking when the department has one for that meeting type', async () => {
+    mockGetOutlines.mockResolvedValue([
+      { id: 'o1', name: 'Regular order', meeting_type: 'business', is_default: true, section_count: 8, created_at: '' },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create minutes from November Business Meeting' }));
+
+    await waitFor(() => expect(mockCreateFromMeeting).toHaveBeenCalledWith('meet-2'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks which outline to use when there are several for that meeting type', async () => {
+    mockGetOutlines.mockResolvedValue([
+      { id: 'o1', name: 'Regular order', meeting_type: 'business', is_default: true, section_count: 8, created_at: '' },
+      { id: 'o2', name: 'Short order', meeting_type: 'business', is_default: false, section_count: 4, created_at: '' },
+      { id: 'o3', name: 'Board order', meeting_type: 'board', is_default: true, section_count: 5, created_at: '' },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create minutes from November Business Meeting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Start the minutes from an outline' });
+    expect(mockCreateFromMeeting).not.toHaveBeenCalled();
+    await user.selectOptions(await within(dialog).findByRole('combobox'), 'o2');
+    await user.click(within(dialog).getByRole('button', { name: 'Create minutes' }));
+
+    await waitFor(() => expect(mockCreateFromMeeting).toHaveBeenCalledWith('meet-2', 'o2'));
     expect(mockNavigate).toHaveBeenCalledWith('/minutes/min-new');
   });
 

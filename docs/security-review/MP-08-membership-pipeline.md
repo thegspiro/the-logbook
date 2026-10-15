@@ -1,6 +1,6 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), pass 10 (PR pending)
 
 ---
 
@@ -63,6 +63,190 @@ it. The endpoint half fails against the unfixed endpoints, reproducing the
 exploit. `test_prospect_target_role_and_lifecycle.py` now records the chooser.
 
 **No schema change.** The chooser lives in the existing `metadata` JSON.
+
+---
+
+## Pass 10 (2026-10-15) — 0 fixed, 0 new findings; 2 standing items resolved by other work, 1 re-confirmed unchanged
+
+**Step 0.** PR #3250 (Feature 07, Users & organizations, pass 9) had
+already merged (docs-only — confirmed via its own PR body's Changes
+section, "No application code changed."); cleared from the Open PR row.
+Independently confirmed via `search_pull_requests`
+(`repo:thegspiro/the-logbook is:pr is:open head:claude/security-review-`,
+0 results) and `list_pull_requests` (state=open, no
+`claude/security-review-*` head among the 9 open PRs) that no
+security-review PR was open before this iteration started. Rotation row 08
+(Membership pipeline) was the first `⬜`.
+
+**Scope confirmation.** Rotation table row 08
+(`membership_pipeline.py`, `membership_pipeline_service.py`) plus this
+feature's established additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`, and `frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `a7a7c47d` (pass 9's merge commit, PR #3149,
+2026-10-13T06:47:15Z). `git diff a7a7c47d..HEAD` on the full declared
+scope: 4 files touched, 104 insertions / 15 deletions —
+`membership_pipeline.py` (+15/-2), `membership_pipeline_service.py`
+(+83/-12), `models/membership_pipeline.py` (+6/-0, a `TYPE_CHECKING`-only
+annotation for a non-mapped attribute the service already stamps onto
+loaded prospects — not a column), and one unrelated frontend test
+assertion deleted (`ApplicantDetailDialog.test.tsx`, a stale CSS-class
+check for a drawer variant that no longer exists, -0/-1). `schemas/
+membership_pipeline.py`, `api/prospect_privacy.py`, `utils/
+prospect_fields.py` and the rest of the frontend module are byte-for-byte
+unchanged (confirmed via `git diff`, empty). The authoring commit
+(`e3f236d8`, titled as an unrelated CSV-export streaming change) carries
+an author date of 2026-10-11T22:59Z — two days _before_ pass 9's own merge
+commit (`a7a7c47d`, 2026-10-13T06:47Z). That is not a contradiction:
+`e3f236d8` was developed on a side branch and merged into `main` only
+after `a7a7c47d` landed, so topologically it sits in `a7a7c47d..HEAD` (and
+so in this pass's review window) even though it was authored earlier in
+wall-clock time — pass 9 correctly described MP-10/MP-26 as still open,
+since this commit had not yet reached `main` when pass 9 ran. Read in
+full rather than taken on the commit title's word, since a change titled
+as a performance fix in an unrelated module carrying a real security fix
+in this one is exactly the shape this rotation exists to catch either way.
+
+**The real delta is the owner's 2026-10-05/2026-10-11/2026-10-12 decision
+closing MP-10's creation half and MP-26, both already recorded resolved in
+`docs/KNOWN_LIMITATIONS.md` but not yet reflected in this feature's own
+findings doc** (pass 9, written 2026-10-13, reviewed the point in history
+_before_ this commit reached `main` and so correctly described both as
+still open at the time):
+
+### MP-10 (creation half) — ✅ RESOLVED 2026-10-11 (owner decision)
+
+`create_election_package` (`membership_pipeline_service.py:6900-7132`) now
+deletes the prospect's existing **draft** or **ready**
+`ProspectElectionPackage` in the same transaction as it inserts the new
+one, under `.with_for_update()` on both the prospect row (via
+`get_prospect(..., lock_for_update=True)`) and the replaced-package select
+itself — two independent lock sites, traced rather than assumed, closing
+the read-then-write race per CLAUDE.md Pitfall #27: two concurrent
+regenerate calls for the same applicant now serialize instead of both
+reading "nothing to replace" and both inserting, which was the unbounded
+growth this finding described. Packages already **added to a ballot,
+elected, or not elected** (`ELECTION_PACKAGE_SYSTEM_STATUSES`, distinct
+from the caller-settable `ELECTION_PACKAGE_CALLER_STATUSES =
+{"draft", "ready"}`) are election history and are correctly left alone —
+the delete filters on the caller-settable set only
+(`membership_pipeline_service.py:7083-7091`). The coordinator's notes and
+package config carry over to the replacement unless the request supplies
+its own, via `copy.deepcopy(newest.package_config or {})` (Pitfall #12,
+correctly applied — no shared-reference mutation). The activity log's
+`election_package_created` entry records `replaced_package_ids` (bare
+UUIDs, no PII) — confirmed by reading `_stage_election_package`'s
+`details={"package_id": pkg.id, **(activity_details or {})}`
+(`:7273`), not assumed. `tests/
+test_election_package_regenerate.py::TestRegenerateReplaces` (9 tests)
+pins the delete-and-carry-forward behavior, the system-status exclusion,
+and the lock ordering.
+
+**Still open, unaffected by this fix:** `list_election_packages`
+(`membership_pipeline_service.py:7421-7457`) still has no
+`.limit()`/`.offset()` — confirmed by direct read. This is no longer
+unbounded by regeneration (at most one open package per applicant now),
+but a department's full election history (every decided package, ever) is
+still returned in one unpaginated call. `docs/KNOWN_LIMITATIONS.md`'s
+entry already correctly describes this narrower residual ("bounded by
+applicants × votes held rather than by clicks") — no edit needed there.
+
+### MP-26 — ✅ RESOLVED 2026-10-11 (owner decision)
+
+The sort-order guess fallback is gone for the ambiguous case. When neither
+the prospect's `current_step` nor a type-checked `step_id` identifies an
+`election_vote` stage, `create_election_package` now counts the
+pipeline's `election_vote` stages (`effective_steps`); with more than one,
+it raises `ElectionStageAmbiguousError` — a `ValueError` subclass so every
+other caller's existing `except ValueError` handling keeps working — which
+the endpoint (`membership_pipeline.py:2268-2274`) maps to a dedicated
+**422**, naming the request itself as the thing to fix, ahead of the
+generic 400 `ValueError` handler. A pipeline with exactly one
+`election_vote` stage is unaffected (the lookup is exact, no ambiguity to
+raise on) — confirmed by reading the branch: the `ElectionStageAmbiguousError`
+path is only reached when `election_stage_count > 1`.
+`tests/test_election_package_regenerate.py::TestAmbiguousElectionStage`
+and the two updated cases in
+`tests/test_membership_pipeline_pass4_round4_codex.py` pin both the 422
+and the single-stage pass-through. `docs/KNOWN_LIMITATIONS.md`'s entry
+already correctly reflects this as resolved — no edit needed.
+
+**No schema change for either fix** — both are pure behavior changes on
+existing nullable/JSON columns; `validate_migrations.py --strict` this
+pass shows 596 revisions and a single head, unchanged in shape by this
+window's commits in this feature's scope.
+
+**Route enumeration (checklist §1/§2), done fresh, not diffed:** AST walk
+of every `@router.(get|post|put|patch|delete)` decorator found **53
+routes** — unchanged from pass 9. Every route's `Depends`/
+`require_permission` arguments checked individually (not spot-checked);
+no permission string added, removed, or widened since pass 9's enumerated
+set. The two documented self-scoped exceptions (`list_my_sign_offs`,
+`approve_step`) are unchanged.
+
+**Fresh grep across the full current scope, not limited to the diff:** no
+`.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR` (both existing
+sites — `ProspectiveMember.first_name/last_name/email` search,
+`TrainingProgram.name` probationary lookup — still correctly escaped); no
+raw `csv.writer`/`csv.DictWriter` anywhere in the two backend scope files;
+no `window.confirm`/`alert`/`prompt` in `frontend/src/modules/
+prospective-members/`; router-wide `block_self_prospect_access`
+(`membership_pipeline.py:116`) still applies to every route with a
+`{prospect_id}` path parameter.
+
+### Standing item re-verified this pass
+
+- **MP-22** (a document delete, or the purge rewrite sharing the same
+  helper, can lose a file on disk if the commit fails after a successful
+  `os.remove`) — `delete_prospect_document` and `_delete_inactive_prospects`
+  are both untouched by this pass's diff (confirmed by `git diff` on the
+  function names, no hits). Owner-accepted tradeoff, unchanged;
+  `docs/KNOWN_LIMITATIONS.md` already records both sites accurately.
+
+No new flags. MP-10 (creation half) and MP-26 move from OPEN to RESOLVED,
+re-derived from current code this pass rather than copied from
+`KNOWN_LIMITATIONS.md`'s own description of them.
+
+### Verified good ✅ (pass 10)
+
+- **Both owner-decision fixes (MP-10 creation, MP-26) hold up under
+  independent re-reading**, traced through their locking, tenant scoping
+  (both operate on an already org-scoped `prospect`, resolved via
+  `get_prospect(prospect_id, organization_id, ...)` before either fix's
+  logic runs), and PII handling (the activity-log detail is UUIDs only)
+  rather than taken from the code comments' own account of them.
+- **No regression on any previously-closed finding** (MP-1 through MP-9,
+  MP-11 through MP-21, MP-23 through MP-25, MP-27 through MP-32) — none of
+  their call sites appear in this pass's diff.
+
+### Completion gate (pass 10)
+
+Run against CI's pinned toolchain (`flake8==7.3.0`, `black==26.5.1`,
+`isort==9.0.1`) in a fresh Python 3.13 virtualenv with a full
+`pip install -r requirements.txt`; frontend against a fresh `npm ci` from
+the repo root (`frontend/node_modules/@tiptap/*` was missing before the
+install, unrelated to this feature, and `npm ci` restored it per the
+committed lockfile — no manifest or lockfile edit made).
+
+| Check                                                                                                                                                                                        | Result                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `python3 -m flake8 app/ tests/ alembic/`                                                                                                                                                     | pass, 0 violations                               |
+| `python3 -m black --check app/ tests/ alembic/`                                                                                                                                              | pass, 2310 files unchanged                       |
+| `python3 -m isort --check-only app/ tests/ alembic/`                                                                                                                                         | pass, 0 violations                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                            | pass — 596 revisions, single head `f2c5e55e7dda` |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                            | pass — 270 routes checked, 0 errors, 0 warnings  |
+| cross-cutting guard tests (org-scoping ratchet, LIKE escaping, CSV sweep, capacity locking, endpoint-auth coverage, upload-scan sweep, `create_all`-table tolerance, baseline member grants) | 161 passed                                       |
+| scoped backend pytest (`-k "membership or prospect or pipeline or election"`)                                                                                                                | 1697 passed, 0 failed                            |
+| `cd frontend && npm run typecheck`                                                                                                                                                           | pass, 0 errors                                   |
+| `cd frontend && npm run lint`                                                                                                                                                                | pass, 0 errors, 0 warnings                       |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)                                                                                                                     | 285 passed (34 files)                            |
+
+No application source file changed this pass (0 fixes — the real fix had
+already landed on `main` via `e3f236d8`, authored before this pass began).
+Every check above verifies that the delta which landed since pass 9 is
+sound and that `docs/KNOWN_LIMITATIONS.md`'s existing description of it is
+accurate, not that a new patch applied cleanly.
 
 ---
 

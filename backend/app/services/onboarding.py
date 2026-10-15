@@ -309,8 +309,8 @@ class OnboardingService:
 
             # No OnboardingStatus found - check if this is a legacy installation
             # (organizations exist but no onboarding record was ever created)
-            result = await self.db.execute(select(func.count(Organization.id)))
-            org_count = result.scalar()
+            count_result = await self.db.execute(select(func.count(Organization.id)))
+            org_count = count_result.scalar() or 0
 
             if org_count > 0:
                 # Legacy installation - auto-mark as completed
@@ -1610,7 +1610,7 @@ class OnboardingService:
         # (docs/FILE_STORAGE_HARDENING.md decision 25).
         required_steps = ["organization", "admin_user", "key_custody"]
         for step in required_steps:
-            step_data = status.steps_completed.get(step)
+            step_data = (status.steps_completed or {}).get(step)
             if not step_data or not step_data.get("completed", False):
                 raise ValueError(f"Required step '{step}' has not been completed")
 

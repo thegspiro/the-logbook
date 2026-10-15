@@ -1,6 +1,6 @@
 # Finance Module
 
-> **Status**: Phase 1 (Foundation & Budget Tracking), Phase 1B (Approval Chains), Phase 2 (Purchase Requests), Phase 3 (Expense Reports & Check Requests), and Phase 4 (Dues & Assessments) are **implemented** as of 2026-03-12. Phase 5 (Dashboard, Reports & QuickBooks Export) is planned.
+> **Status**: All six phases below are **implemented** — foundation and budget tracking, approval chains, purchase requests, expense reports and check requests, dues and assessments, and the dashboard (`GET /finance/dashboard`), reports (`/finance/reports/*`) and QuickBooks export (`/finance/export/*`). What is still planned is marked _(planned)_ where it appears: three reports, the IIF export format and the approval-chain preview component. The phase headings record the order the module was built in.
 >
 > **Availability**: Controlled per organization at runtime via the organization's settings (`enabled_modules`), configured in Organization/Admin Settings. The API routers register unconditionally.
 >
@@ -1072,7 +1072,8 @@ Tables:
 Enums:
 
 - `FiscalYearStatus`: DRAFT, ACTIVE, CLOSED
-- `BudgetCategory` defaults: APPARATUS, TRAINING, FACILITIES, PERSONNEL, OPERATIONS, COMMUNICATIONS, PPE, MEDICAL_SUPPLIES, FUEL, UTILITIES, INSURANCE, ADMINISTRATIVE, OTHER
+
+Budget categories are the department's own; none are seeded.
 
 **New schema file:** `backend/app/schemas/finance.py`
 
@@ -1134,10 +1135,10 @@ Pages (Phase 1):
 
 ### Migration
 
-**New file:** `backend/alembic/versions/YYYYMMDD_XXXX_create_finance_tables.py`
-
-- Create fiscal_years, budget_categories, budgets tables
-- Seed default budget categories
+No migration creates the original finance tables (`fiscal_years`,
+`budget_categories`, `budgets` and the request tables): they are built from the
+models by `create_all()` at startup (CLAUDE.md pitfall #26). Later columns
+arrive through ordinary migrations.
 
 ---
 
@@ -1198,10 +1199,10 @@ Member submits PR for $3,000 in Training budget
   → Step 3: Email Confirmation (NOTIFICATION, email: "treasurer@dept.org") → waiting
 
 Training Officer approves Step 1 → Step 2 becomes PENDING
-  → In-app notification sent to all users with "trustee" position
+  → The step appears on the Approvals page of members holding the "trustee" position
 
 Any Trustee approves Step 2 → Step 3 fires automatically
-  → Email sent to treasurer@dept.org with approval summary → status: SENT
+  → Marked SENT (no email is sent for a NOTIFICATION step)
   → All steps complete → PR status → APPROVED
   → Budget encumbrance applied
 ```
@@ -1223,10 +1224,10 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 
 - `auto_approve_under`: If a step has this set and the request amount is below it, the step is automatically marked APPROVED (e.g., Training Officer auto-approves training expenses under $100)
 - `allow_self_approval`: By default false — prevents the requester from also being the approver at any step. Set true for positions like Treasurer submitting their own expense reports (they still need the next step's approval)
-- `required: false`: Optional review steps that can be skipped (e.g., "FYI to Chief" — if Chief doesn't act within X days, it auto-advances)
-- **NOTIFICATION steps**: Auto-advance immediately after sending. Emails use the built-in SMTP/provider service + Jinja2 templates (same infra as existing notification emails). The default template includes: request type, amount, requester name, approval chain summary, and a link to view the request. Custom templates can be assigned via `email_template_id`
-- **EMAIL approver for APPROVAL steps**: Generates a time-limited secure token (reuses the `TrainingApproval` token pattern). The email contains "Approve" and "Deny" buttons that link to a public endpoint (`/api/public/finance/approvals/{token}/approve` and `/deny`). Token expiry configurable per chain (default 7 days). If expired, the step must be re-sent or manually handled by an admin
-- **`notification_emails` on any step**: Even APPROVAL steps can have `notification_emails` — these addresses get a "heads up" email when the step is reached (not actionable, just informational). Useful for keeping stakeholders in the loop without giving them approval authority
+- `required`: stored, but nothing reads it — every approval step must be acted on
+- **NOTIFICATION steps**: Auto-advance as soon as they are reached and are marked SENT. No email is sent, and `email_template_id` is not read
+- **EMAIL approver for APPROVAL steps**: Generates a time-limited secure token (reuses the `TrainingApproval` token pattern). The email contains "Approve" and "Deny" buttons that link to a public endpoint (`POST /api/public/v1/finance/approvals/{token}/approve` and `/deny`; `GET /api/public/v1/finance/approvals/{token}` shows the request). The token expires 7 days after it is issued. If expired, the step must be re-sent or manually handled by an admin
+- **`notification_emails`**: stored on the step, but nothing reads it, so no "heads up" email is sent
 
 ### Who may act on a step _(2026-10-04)_
 
@@ -1252,7 +1253,7 @@ Approve and deny check the caller against the step's named approver, in addition
 
 - `GET/POST /finance/approval-chains`
 - `GET/PUT/DELETE /finance/approval-chains/{id}`
-- `GET/POST/PUT/DELETE /finance/approval-chains/{id}/steps` (manage steps within a chain)
+- `POST /finance/approval-chains/{id}/steps` and `PUT/DELETE /finance/approval-chains/{id}/steps/{step_id}` (manage steps within a chain; a chain's steps come back on `GET /finance/approval-chains/{id}`)
 - `GET /finance/approval-chains/preview?entity_type=purchase_request&amount=3000&category_id=X` (preview which chain would be selected — useful for the UI)
 - `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
 - `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
@@ -1354,11 +1355,19 @@ Enums:
 - `GET/POST /finance/purchase-requests`
 - `GET/PUT /finance/purchase-requests/{id}`
 - `POST /finance/purchase-requests/{id}/submit`
-- `POST /finance/purchase-requests/{id}/approve`
-- `POST /finance/purchase-requests/{id}/deny`
+- `POST /finance/purchase-requests/{id}/cancel`
 - `POST /finance/purchase-requests/{id}/mark-ordered`
 - `POST /finance/purchase-requests/{id}/mark-received`
 - `POST /finance/purchase-requests/{id}/mark-paid`
+- `GET/POST /finance/purchase-requests/{id}/receipt`
+- `PUT /finance/purchase-requests/{id}/functional-class`
+
+There is no per-request approve or deny endpoint. Approval goes through the
+shared approval endpoints — `POST /finance/approvals/{step_record_id}/approve`
+/ `deny` for a chain step, or
+`POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` / `deny` for
+a request with no step pending (see [Endpoints](#endpoints)). The same holds
+for expense reports and check requests.
 
 Business logic:
 
@@ -1397,16 +1406,19 @@ Enums:
 - `GET/POST /finance/expense-reports`
 - `GET/PUT /finance/expense-reports/{id}`
 - `POST /finance/expense-reports/{id}/submit`
-- `POST /finance/expense-reports/{id}/approve`
-- `POST /finance/expense-reports/{id}/deny`
 - `POST /finance/expense-reports/{id}/mark-paid`
-- `GET/POST/PUT/DELETE /finance/expense-reports/{id}/items` (line items)
+- `POST /finance/expense-reports/{id}/items` (add a line item; lines are read
+  back on the report)
+- `GET/POST /finance/expense-reports/{id}/items/{item_id}/receipt`
+- `PUT /finance/expense-reports/{id}/items/{item_id}/functional-class`
 - `GET/POST /finance/check-requests`
 - `GET/PUT /finance/check-requests/{id}`
 - `POST /finance/check-requests/{id}/submit`
-- `POST /finance/check-requests/{id}/approve`
-- `POST /finance/check-requests/{id}/deny`
 - `POST /finance/check-requests/{id}/issue`
+- `POST /finance/check-requests/{id}/void`
+- `PUT /finance/check-requests/{id}/functional-class`
+
+Approve and deny go through `/finance/approvals/...`, as for purchase requests.
 
 ### Frontend
 
@@ -1414,9 +1426,10 @@ Pages:
 
 - `ExpenseReportsPage` — `/finance/expenses` — list with status filters
 - `ExpenseReportDetailPage` — `/finance/expenses/:id` — line items, receipts, approval
-- `ExpenseReportFormPage` — `/finance/expenses/new` and `/finance/expenses/:id/edit`
+- `ExpenseReportFormPage` — `/finance/expenses/new`
 - `CheckRequestsPage` — `/finance/check-requests` — list
 - `CheckRequestFormPage` — `/finance/check-requests/new`
+- `CheckRequestDetailPage` — `/finance/check-requests/:id`
 
 ---
 
@@ -1453,7 +1466,7 @@ Enums:
 **Endpoints:**
 
 - `GET/POST /finance/dues-schedules`
-- `GET/PUT /finance/dues-schedules/{id}`
+- `PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
 - `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
@@ -1461,15 +1474,18 @@ Enums:
 - `POST /finance/dues/{id}/waive`
 - `POST /finance/dues/{id}/unwaive` _(2026-08-02; reason handling reversed 2026-08-13)_ — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event. **Free-text reasons are kept out of the immutable audit log**: the original waive reason is erased from the record and _not_ copied into the event (it may carry personal information that must remain eligible for privacy scrubbing) — the event records only the dues id and restored status
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
-- `POST /finance/dues/send-reminders` (trigger email notifications for overdue)
 
-> **No frontend calls any of the dues write endpoints yet.**
-> `DuesManagementPage` is read-only, and `financeStore` exposes only
-> `fetchDuesSchedules` / `fetchMemberDues` / `fetchDuesSummary`;
-> `modules/finance/services/api.ts` has no `unwaive` or payment-history method.
-> Schedule creation, dues generation, payment recording, waive, unwaive and the
-> ledger are API-only until that page is built out. Tracked in
-> `KNOWN_LIMITATIONS.md`.
+No dues reminder is sent: there is no reminder endpoint or scheduled task.
+
+> **The dues screen calls every write endpoint.** `duesService` in
+> `modules/finance/services/api.ts` wraps schedule create and update, dues
+> generation, payment recording, the payment ledger, waive and unwaive, and
+> **Finance › Dues** (`DuesManagementPage`) offers each to a `finance.manage`
+> holder: **New schedule** / **Edit schedule**, **Generate dues**, **Record
+> payment**, **Waive**, **Reverse waiver** and **Payment history**. The schedule
+> form offers only name, amount, frequency, due date, notes and active, because
+> nothing reads the stored grace period, late fee, fiscal year or membership
+> types — see `KNOWN_LIMITATIONS.md`.
 
 > **Why `unwaive` exists.** Payments against waived dues are refused, and
 > `PUT /finance/dues/{id}` _is_ the payment route, so without a reversal there
@@ -1482,8 +1498,8 @@ Enums:
 
 Pages:
 
-- `DuesManagementPage` — `/finance/dues` — schedule setup + member payment grid
-- `DuesDetailPage` — `/finance/dues/:scheduleId` — per-member payment status, bulk actions
+- `DuesManagementPage` — `/finance/dues` — schedules, member dues, and the
+  write actions described above
 
 ---
 
@@ -1493,11 +1509,19 @@ Pages:
 
 **Dashboard endpoint:** `GET /finance/dashboard`
 
-- Budget health: total budgeted vs spent vs encumbered (current fiscal year)
-- Pending approvals count (purchase requests, expenses, check requests)
-- Dues collection rate (current schedule)
-- Recent transactions (last 10 across all types)
-- Grant funds summary (cross-query to grants-fundraising module)
+`finance.view`. Returns `FinanceDashboardResponse`:
+
+- `budgetHealth`: total budgeted, spent, encumbered and remaining, percent used
+  and the category breakdown for the active fiscal year (zeros when none is
+  active)
+- `pendingApprovalsCount`, with `pendingPurchaseRequests`,
+  `pendingExpenseReports` and `pendingCheckRequests` — requests in
+  `pending_approval`
+- `duesCollectionRate`: the collection rate across all dues schedules
+- `recentTransactions`: always an empty list — the field is declared but
+  nothing fills it
+
+The dashboard carries no grant figures.
 
 **Report endpoints:**
 
@@ -1517,7 +1541,7 @@ Pages:
 
 **Endpoints:**
 
-- `GET/POST/PUT /finance/export/mappings` — manage QB account mappings
+- `GET/POST /finance/export/mappings` and `PUT /finance/export/mappings/{id}` — manage QB account mappings
 - `DELETE /finance/export/mappings/{id}` _(2026-10-09)_ — remove a mapping (org-scoped; `finance.manage`). Needed to clear a duplicate, which blocks the export
 - `GET /finance/export/readiness` _(2026-10-09)_ — per budget category: status (`ready`, `no_account`, `no_offset`, `duplicate_mappings`), the account and its source (`category`, `mapping`, or `parent` _(2026-10-14)_), the offset account, `accountInheritedFrom` / `offsetInheritedFrom` (the ancestor each came from) and the matching mapping ids; plus `unmatchedMappingIds`. Built on the export's own resolver (`finance.manage`)
 - `POST /finance/export/transactions` — generate CSV/IIF export file for date range. The download is named `quickbooks-journal_<first day>_<last day>.csv`, the days on the department's calendar _(2026-10-14)_; it was `finance_export.csv`
@@ -1548,7 +1572,7 @@ Export format:
 
 Pages:
 
-- `FinanceDashboardPage` (enhance from Phase 1) — budget gauges, approval queue, dues health, recent activity
+- `FinanceDashboardPage` — `/finance` — budget health, pending approvals and dues collection rate
 - `FinanceReportsPage` — `/finance/reports` _(built 2026-10-12)_ — budget vs actual, amendment log and payments register, with CSV download and print (`finance.view`); see [Board reports](#board-reports-2026-10-12)
 - `QuickBooksExportSettingsPage` — `/finance/settings/quickbooks` _(built 2026-10-09)_ — QB mapping configuration (protected: `finance.manage`). Two tables:
   - **Budget categories** — every category with the account it posts to (and whether the category, its mapping, or an ancestor — "From Operations" — supplies it), the account it is paid from, and a status: Ready, No account, No paid-from account, or More than one mapping. This is `GET /finance/export/readiness`, computed by `_resolve_category_accounts` — the same function the export runs — so a category shown Ready is one the export accepts; the page decides nothing itself. Each row offers Add mapping or Edit mapping.
@@ -1650,70 +1674,47 @@ Already tracks:
 | Module            | Integration                                                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **Members/Users** | Dues linked to user_id; expense reports submitted by users; approval workflows reference approvers; member financial summary page |
-| **Notifications** | Approval request notifications, dues reminders, budget threshold alerts, reimbursement status updates                             |
+| **Notifications** | Approval-link emails to EMAIL-type approvers and budget request emails; no dues reminders or budget threshold alerts are sent     |
 | **Audit**         | All financial state changes logged via `log_audit_event()`                                                                        |
 
 ---
 
 ## Data Model: Cross-Module Link Fields
 
-These optional FK columns on `purchase_requests` and `expense_line_items` enable the integrations above:
+These optional columns on `purchase_requests` and `expense_line_items` carry the
+links that exist today:
 
 **On `purchase_requests`:**
 
 - `apparatus_id` (FK apparatus, nullable) — for vehicle parts/maintenance/fuel
 - `facility_id` (FK facilities, nullable) — for station repairs/supplies
-- `reorder_request_id` (FK reorder_requests, nullable) — for inventory procurement
 
 **On `expense_line_items`:**
 
 - `expense_type` enum: GENERAL, UNIFORM_REIMBURSEMENT, PPE_REPLACEMENT, BOOT_ALLOWANCE, TRAINING_REIMBURSEMENT, CERTIFICATION_FEE, CONFERENCE, TRAVEL, MEALS, MILEAGE, EQUIPMENT_PURCHASE, OTHER
-- `training_course_id` (FK training_courses, nullable) — links to specific training
-- `training_record_id` (FK training_records, nullable) — links to member's training record
-- `inventory_item_id` (FK inventory_items, nullable) — links to specific equipment item
+
+The other links proposed in [Cross-Module Integrations](#cross-module-integrations)
+— `reorder_request_id` on purchase requests; `training_course_id`,
+`training_record_id` and `inventory_item_id` on expense lines; and the optional
+cost and budget-category columns on the inventory and training models — have
+not been added.
 
 ---
 
-## Key Files to Create/Modify
+## Key Files
 
-### New Files
-
-| File                                                         | Purpose                           |
-| ------------------------------------------------------------ | --------------------------------- |
-| `backend/app/models/finance.py`                              | All finance SQLAlchemy models     |
-| `backend/app/schemas/finance.py`                             | Pydantic request/response schemas |
-| `backend/app/services/finance_service.py`                    | Core finance business logic       |
-| `backend/app/api/v1/endpoints/finance.py`                    | FastAPI endpoints                 |
-| `backend/alembic/versions/YYYYMMDD_create_finance_tables.py` | Database migration                |
-| `frontend/src/modules/finance/index.ts`                      | Module barrel export              |
-| `frontend/src/modules/finance/routes.tsx`                    | Route definitions                 |
-| `frontend/src/modules/finance/types/index.ts`                | TypeScript types & enums          |
-| `frontend/src/modules/finance/services/api.ts`               | Axios instance with auth          |
-| `frontend/src/modules/finance/store/financeStore.ts`         | Zustand store                     |
-| `frontend/src/modules/finance/pages/*.tsx`                   | ~12 page components               |
-
-### Modified Files
-
-| File                              | Change                                                                           |
-| --------------------------------- | -------------------------------------------------------------------------------- |
-| `backend/app/core/permissions.py` | Add `FINANCE` category + `finance.view`, `finance.manage`, `finance.approve`     |
-| `backend/app/api/v1/api.py`       | Register finance router                                                          |
-| `backend/app/models/__init__.py`  | Import finance models                                                            |
-| `backend/app/models/inventory.py` | Add optional `purchase_request_id` and `budget_category_id` FKs                  |
-| `backend/app/models/training.py`  | Add optional `estimated_cost` to TrainingCourse, `actual_cost` to TrainingRecord |
-| `frontend/src/App.tsx`            | Add `{getFinanceRoutes()}`                                                       |
-| `frontend/src/constants/enums.ts` | Add finance-related enum constants (ExpenseType, etc.)                           |
-
-### Reuse from Existing Code
-
-| What                                    | Where                                                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `PaymentMethod` / `PaymentStatus` enums | `backend/app/models/grant.py` — import or extract to shared location                                          |
-| Module route pattern                    | `frontend/src/modules/grants-fundraising/routes.tsx` — follow same `lazyWithRetry` + `ProtectedRoute` pattern |
-| Module axios setup                      | `frontend/src/modules/grants-fundraising/services/api.ts` — copy auth interceptor pattern                     |
-| `generate_uuid`                         | `backend/app/core/utils.py` — reuse for all PK defaults                                                       |
-| `log_audit_event`                       | `backend/app/core/audit.py` — call for all financial state changes                                            |
-| `safe_error_detail`                     | `backend/app/core/utils.py` — use in all endpoint error handling                                              |
+| File                                                 | Purpose                                          |
+| ---------------------------------------------------- | ------------------------------------------------ |
+| `backend/app/models/finance.py`                      | All finance SQLAlchemy models and enums          |
+| `backend/app/schemas/finance.py`                     | Pydantic request/response schemas                |
+| `backend/app/services/finance_service.py`            | Core finance business logic                      |
+| `backend/app/services/finance_approver_matching.py`  | Who may act on an approval step                  |
+| `backend/app/api/v1/endpoints/finance.py`            | FastAPI endpoints (`/api/v1/finance`)            |
+| `frontend/src/modules/finance/routes.tsx`            | `getFinanceRoutes()`                             |
+| `frontend/src/modules/finance/types/index.ts`        | TypeScript types and enums (incl. `ExpenseType`) |
+| `frontend/src/modules/finance/services/api.ts`       | Module axios instance and services               |
+| `frontend/src/modules/finance/store/financeStore.ts` | Zustand store                                    |
+| `frontend/src/modules/finance/pages/`                | Page components                                  |
 
 ---
 

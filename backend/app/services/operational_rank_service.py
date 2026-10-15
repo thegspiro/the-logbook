@@ -167,7 +167,7 @@ class OperationalRankService:
                 OperationalRank.organization_id == organization_id,
             )
         )
-        if result.scalar() > 0:
+        if (result.scalar() or 0) > 0:
             return []
 
         ranks = []
@@ -554,20 +554,22 @@ class OperationalRankService:
         )
         members_result = await self.db.execute(members_q)
         issues: List[Dict] = []
-        for row in members_result.all():
-            normalized = (row.rank or "").strip().lower()
+        for member_row in members_result.all():
+            normalized = (member_row.rank or "").strip().lower()
             canonical = canonical_codes.get(normalized)
             # A recognizable but noncanonical legacy spelling still needs
             # repair. User.rank feeds exact dictionary lookups, so accepting
             # " Captain " here would hide a member receiving no permissions.
-            if canonical is None or row.rank != canonical:
+            if canonical is None or member_row.rank != canonical:
                 issues.append(
                     {
-                        "member_id": row.id,
+                        "member_id": member_row.id,
                         "member_name": format_display_name(
-                            row.first_name, row.last_name, row.preferred_name
+                            member_row.first_name,
+                            member_row.last_name,
+                            member_row.preferred_name,
                         ),
-                        "rank_code": row.rank,
+                        "rank_code": member_row.rank,
                     }
                 )
         return issues

@@ -134,6 +134,22 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The backend needs the `nh3` package for rich-text minutes (2026-10-14)
+
+Meeting-minutes sections can now be written with a rich-text editor. The
+server cleans that HTML with `nh3`, now pinned in `backend/requirements.txt`,
+and imports it when the minutes schemas load — so a backend started without it
+fails at import and never serves a request.
+
+- **Docker (including Unraid Compose Manager):** rebuild the backend image
+  (`docker compose build backend` or `--build`); the Dockerfile installs
+  `requirements.txt`. Nothing else changes.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+No migration, and nothing in existing minutes changes: every section written
+before the editor stays plain text until someone edits it.
+
 ### Audit rows are sealed onto the hash chain after they commit (2026-10-12)
 
 This does not stop a boot, but it changes what the audit-integrity screens and

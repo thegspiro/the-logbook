@@ -459,20 +459,6 @@ class EquipmentCheckCompleteItems(BaseModel):
     signature_data: Optional[str] = None
 
 
-class LastSealRecord(BaseModel):
-    """What the previous crew read on one sealed container.
-
-    The form compares the number in front of the crew against this one: equal
-    means nothing was opened since, which is what the shortcut rests on.
-    """
-
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
-
-    seal_number: Optional[str] = None
-    intact: bool = True
-    checked_at: Optional[datetime] = None
-
-
 class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     """Response schema for a single check item result."""
 
@@ -1075,6 +1061,9 @@ class InventoryMatchSuggestion(BaseModel):
     # to arbitrate.
     score: float
     confidence: str
+    # Set when one of the item's "also called" names, not its name, produced the
+    # match, so the reviewer can see why an unlike-looking item was proposed.
+    matched_alias: Optional[str] = None
 
 
 class InventoryMatch(BaseModel):

@@ -2191,7 +2191,7 @@ recorded yet, so these are capture-plan notes, not re-records:
 No script narrates facility-room management in enough depth to need a nested
 rooms chapter today; if a Facilities deep-dive script is added later, the
 walkthrough source is
-[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
+[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms).
 
 ## Resolved in-script for the 2026-08-12 → 08-14 changes
 

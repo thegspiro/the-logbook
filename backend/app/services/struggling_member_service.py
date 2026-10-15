@@ -9,7 +9,7 @@ Designed to be triggered weekly via the scheduled task system.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from loguru import logger
 from sqlalchemy import select
@@ -68,7 +68,7 @@ class StrugglingMemberService:
         # a UTC-morning cron that is still yesterday in the west.
         org_tz = await resolve_scheduling_timezone(self.db, organization_id)
         today = today_in(org_tz)
-        flagged_members = []
+        flagged_members: list[dict[str, Any]] = []
 
         for enrollment in enrollments:
             issues = []

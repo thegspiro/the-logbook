@@ -220,7 +220,7 @@ class MessagingService:
             .limit(limit)
         )
         result = await self.db.execute(query)
-        messages = result.scalars().all()
+        messages = list(result.scalars().all())
         return messages, total
 
     async def get_message_by_id(
@@ -1114,9 +1114,7 @@ class MessagingService:
                     "removed_from_audience": removed,
                     "user_id": str(u.id),
                     "name": u.display_name or (u.username or "Unknown"),
-                    "status": (
-                        u.status.value if hasattr(u.status, "value") else str(u.status)
-                    ),
+                    "status": getattr(u.status, "value", u.status),
                     "is_read": is_read,
                     "read_at": (
                         record.read_at.isoformat()

@@ -311,6 +311,8 @@ export interface InventoryMatchSuggestion {
    */
   score: number;
   confidence: 'exact' | 'strong' | 'weak';
+  /** The "also called" name that produced this match, when the item's own name did not. */
+  matchedAlias?: string | null;
 }
 
 export interface InventoryMatch {
@@ -436,7 +438,8 @@ export interface CheckTemplateItemUpdate {
   inventory_item_id?: string | null | undefined;
   has_expiration?: boolean | undefined;
   expiration_date?: string | null | undefined;
-  expiration_warning_days?: number | null | undefined;
+  // NOT NULL: no cleared state, so null is not offered.
+  expiration_warning_days?: number | undefined;
 }
 
 // ============================================================================
@@ -484,7 +487,8 @@ export interface CheckTemplateCompartmentUpdate {
   sort_order?: number | undefined;
   image_url?: string | null | undefined;
   is_header?: boolean | undefined;
-  container_type?: string | null | undefined;
+  // NOT NULL: no cleared state, so null is not offered.
+  container_type?: string | undefined;
   is_sealed?: boolean | undefined;
   parent_compartment_id?: string | null | undefined;
 }

@@ -85,6 +85,75 @@ class TestGenerateMinutesHtml:
         assert "<b>Hax</b>" not in html
         assert "&lt;b&gt;Hax&lt;/b&gt;" in html
 
+    def test_excused_members_and_guests_are_not_filed_under_absent(self):
+        attendees = [
+            {"name": "Alex", "status": "present", "present": True},
+            {"name": "Blake", "status": "late", "present": True, "note": "7:20"},
+            {"name": "Casey", "status": "left_early", "present": True},
+            {"name": "Drew", "status": "excused", "present": False},
+            {"name": "Eli", "status": "absent", "present": False},
+            {"name": "Visitor", "status": "guest", "present": False},
+        ]
+        html = _svc()._generate_minutes_html(_minutes(attendees=attendees))
+        assert "Present (3):" in html
+        assert "Excused (1):" in html
+        assert "Absent (1):" in html
+        assert "Guests (1):" in html
+        assert "Blake" in html
+        assert "arrived late; 7:20" in html
+        assert "left early" in html
+        excused = html.split("Excused (1):</strong>")[1].split("</p>")[0]
+        assert "Drew" in excused
+        assert "Visitor" not in excused
+
+    def test_roll_call_notes_are_escaped(self):
+        attendees = [{"name": "A", "status": "excused", "present": False}]
+        attendees[0]["note"] = "<img src=x>"
+        html = _svc()._generate_minutes_html(_minutes(attendees=attendees))
+        assert "<img src=x>" not in html
+        assert "&lt;img src=x&gt;" in html
+
+    def test_filed_election_results_are_published_and_escaped(self):
+        filed = SimpleNamespace(
+            election_title="Officer <i>election</i>",
+            snapshot={
+                "total_eligible_voters": 12,
+                "total_votes": 9,
+                "voter_turnout_percentage": 75.0,
+                "results_by_position": [
+                    {
+                        "position": "Chief",
+                        "candidates": [
+                            {
+                                "candidate_name": "Alex <b>Adams</b>",
+                                "vote_count": 6,
+                                "percentage": 66.7,
+                                "is_winner": True,
+                            },
+                            {
+                                "candidate_name": "Blake Brown",
+                                "vote_count": 3,
+                                "percentage": 33.3,
+                                "is_winner": False,
+                            },
+                        ],
+                    }
+                ],
+                "overall_results": [],
+            },
+        )
+        html = _svc()._generate_minutes_html(_minutes(), None, [filed])
+        assert "Election result" in html
+        assert "Eligible voters: 12" in html
+        assert "Ballots cast: 9" in html
+        assert "Winner" in html
+        assert "Officer <i>election</i>" not in html
+        assert "Alex <b>Adams</b>" not in html
+        assert "&lt;b&gt;Adams&lt;/b&gt;" in html
+
+    def test_no_election_section_when_none_filed(self):
+        assert "Election result" not in _svc()._generate_minutes_html(_minutes())
+
     def test_quorum_line_when_set(self):
         attendees = [{"name": "A", "present": True}]
         html = _svc()._generate_minutes_html(

@@ -535,6 +535,11 @@ class InventoryItem(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     manufacturer: Mapped[Optional[str]] = mapped_column(String(255))
     model_number: Mapped[Optional[str]] = mapped_column(String(255))
+    # Other names the item goes by ("BVM" for "Bag Valve Mask"). The checklist
+    # matcher looks through them when it proposes a catalog item. Canonical
+    # shape is None or a list of distinct strings, settled on write by
+    # app.utils.item_aliases.normalize_aliases.
+    also_called: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
 
     # Identification
     serial_number: Mapped[Optional[str]] = mapped_column(String(255), index=True)
