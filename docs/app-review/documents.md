@@ -1,7 +1,110 @@
 # Application Review — Documents (Tier B)
 
 **Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-14 (pass 5)
+
+---
+
+## Pass 5 (2026-10-14) — the update paths hold; two unused API surfaces removed, the guard now pinned by a test
+
+Lens for this pass: the update-payload discipline the B4–B7 passes applied
+(`exclude_unset`, `apply_updates`, an explicit `null` on a NOT NULL column),
+driven through the **real handlers**, plus an AST dead-code scan that this time
+includes `tests/` as a reference source. This module had been through four
+passes and two security reviews; the honest result is that its write paths were
+already right, and the value added is evidence and a regression test rather than
+a fix.
+
+### Update paths — verified, not assumed
+
+`PATCH /documents/{id}` and `PATCH /documents/folders/{id}` dump with
+`exclude_unset` (the only `exclude_none` hit in `endpoints/documents.py` is a
+comment saying why not). Both services apply the dict with `apply_updates`, and
+both handlers wrap the service call in `handle_service_errors`, so a ValueError
+is a 400. A null for each NOT NULL field the schemas can name (`name` and
+`visibility` on folders; `name` and `status` on documents) and for the two
+nullable-but-response-required folder fields (`color`, `icon` — refused by hand,
+DOC-20) came back 4xx, never 500; a null for the genuinely nullable `description`
+and `tags` cleared (200). Nothing to fix.
+
+New `backend/tests/test_documents_update_null_columns_integration.py` (10
+tests, `integration`) pins that, with the NOT NULL half derived from the schemas
+and models. It has no red-before-fix run — there was nothing to fix — so it was
+**mutation-checked** instead: removing the `handle_service_errors` wrapper from
+`update_document` makes exactly `document-name` and `document-status` fail
+(500), and restoring it brings back 10/10. Marker routing confirmed: 0 of 10
+under the unit job's expression.
+
+### DOC2-3 — INFO — `DocumentCreate` (backend schema) had no reference anywhere — ✅ REMOVED
+
+An AST scan of 92 definitions across the two document services, the three
+endpoint files and the schema module, resolving `Attribute` / `Name` / string /
+import references under `app/`, `scripts/` and — after the B7 lesson — `tests/`,
+found exactly one name with no reference at all: `schemas/documents.py::
+DocumentCreate`. Upload takes `Form` fields, not a body model. The frontend has an
+unrelated `FacilityDocumentCreate`; no doc names this class. Removed.
+
+### DOC2-4 — INFO — three unused frontend client methods — ✅ REMOVED
+
+`documentsService.getDocument`, `.updateDocument` and `.getMyFolder` have no
+caller outside their own tests (checked by name across all non-test `.ts` /
+`.tsx`, not just by the `documentsService.` prefix — `getFolderRoleOptions` looks
+unused by prefix and is not). The endpoints behind them are live and stay
+(`GET /my-folder` is the documented way to find a personal folder in
+`TROUBLESHOOTING.md`); only the typed wrappers and their tests are gone.
+`updateDocument` was also a small trap if someone wired it later: its payload type
+declared `description: string` and `tags: string`, so it could not express "clear
+this", which is the wrong shape for an update call.
+
+### Verified good ✅ (this pass)
+
+- Folder dialog (`FolderManageDialog`) sends every field it owns on save, with
+  `blankToNull` for the description and explicit `parent_id: null` to move to the
+  top level; upload omits blank optional fields (the create path), and the backend
+  falls back to the filename and to General Documents.
+- Download: ACL check (`can_access_document`) before any file work, then the
+  resolved path confined to _this organization's_ documents area, then an audit
+  event. A document with `content_html` and no `file_path` is a distinct 404.
+- All 13 routes in `endpoints/documents.py` carry `documents.view` or
+  `documents.manage`; no route added or removed since pass 4.
+- The three document-named endpoint files: `legal_documents.py` gates every route
+  on the legal/settings permissions; `station_documents.py` takes bare
+  authentication in its signature but authorizes per document type in the handler
+  (`_authorize_document`), so it is not an open route.
+- Related suites: 649 backend tests (document, folder, org-scoping ratchet, CSV
+  and LIKE sweeps) pass.
+
+### Observation, not a finding
+
+`frontend/src/services/documentsService.ts` also declares the Meetings types
+(`MeetingRecord`, `MeetingAttendee`, `MeetingActionItem`, `MeetingsSummary`),
+which `meetingsServices.ts` and `services/api.ts` import from there. They are used,
+so nothing was moved; they are simply in the wrong file.
+
+### Not read (scope, stated plainly)
+
+`DocumentsPage.tsx` (1,297 lines) was read only for its upload and payload paths,
+not its rendering; the file-storage and upload-validation internals, the folder
+ACL engine (`can_access_folder`, `_settle_access_fields`) and the print-document
+service behind `station_documents.py` were not re-read — the ACL is covered by
+passes 1–4 and the existing 649-test run above, and a clean result here says
+nothing new about them. There is no module reference doc for Documents to check
+the code against.
+
+### Completion gate (pass 5)
+
+| Check                                                                      | Result                                                                                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/`                                                       | ✅ exit 0, no output                                                                                                     |
+| `black --check app/ tests/`                                                | ✅ 1698 files unchanged                                                                                                  |
+| `isort --check-only` (changed files)                                       | ✅ clean                                                                                                                 |
+| `npm run typecheck`                                                        | ✅ exit 0                                                                                                                |
+| `eslint` (2 changed frontend files)                                        | ✅ no output                                                                                                             |
+| new backend file, mutation-checked                                         | ✅ 10 pass; **2 fail with the `update_document` wrapper removed** (`document-name`, `document-status`); 10 pass restored |
+| marker routing                                                             | ✅ `-m "not integration and not slow and not docker"` selects 0 of 10                                                    |
+| backend tests (document, folder, org-scoping ratchet, CSV and LIKE sweeps) | ✅ **649 passed, 1 skipped** (optional `pywebpush`)                                                                      |
+| frontend (`documentsService`, `components/documents`, `DocumentsPage`)     | ✅ 4 files, **62 passed**                                                                                                |
 
 ---
 
