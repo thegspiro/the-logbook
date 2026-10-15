@@ -1207,6 +1207,11 @@ administrator registers the client (name, exact redirect URI, optional secret)
 in the **Member sign-in (OAuth)** panel on the card.
 
 - Changing or resetting a password ends every connection the member holds.
+- **Fixed 2026-10-14:** a member's connection used to be refused on every tool
+  call, and Claude showed only "Error executing tool". If a member connected
+  before the fix and saw that, nothing needs redoing; ask again. A tool a member
+  does not have the permission for, or that a department switch above has turned
+  off, is still refused with its own message.
 - There is no self-service client registration; every client is registered by
   someone holding `integrations.mcp_keys`.
 

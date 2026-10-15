@@ -218,6 +218,31 @@ screens are unreachable.
 claude.ai's own connector screens are deliberately not pictured: they belong to
 Anthropic and change independently of this repository.
 
+## Queued by the October 14 – 15 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Nothing was captured; every row is open. Two images were added by feature
+commits in this window and are current: `02-89-my-training-upcoming-skills-test.png`
+and `09-03-template-valid-for.png`. `SCREENSHOT_STATUS.md` is generated and was
+not regenerated.
+
+| Guide / image                                       | Disposition       | Why                                                                                                                                                                         |
+| --------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `04-14-meeting-minutes.png`                         | **REPLACE**       | Minute cards now read **Circulated for review** / **Adopted** (were Awaiting approval / Approved), and an **Outlines** button sits in the page header. Re-shoot with one minutes in each state |
+| 04 Minutes detail                                   | **NEW + REPLACE** | The detail page opens on the minutes with folded panels ("Motions (3)", "Closed sessions", "Election results", "Action items", "Attachments", "Approved versions"). Any older detail-page image shows the previous single long page |
+| (new) circulated minutes with **Suggest a change**  | **NEW**           | A circulated set of minutes as a member sees it, with the form open under one section                                                                                       |
+| (new) **Adopt these minutes** dialog                | **NEW**           | The dialog with **When the body voted**, the adopting meeting and the as-amended tick                                                                                       |
+| (new) **Minutes > Outlines**                        | **NEW**           | The outlines list and the editor with the **Required** flag and **Make default**                                                                                            |
+| (new) Closed sessions panel                         | **NEW**           | One recorded closed session with reason, legal basis, times and who stayed                                                                                                  |
+| (new) section rich-text editor                      | **NEW**           | The editor toolbar (bold, italic, underline, headings, lists, quote, link) on a section                                                                                     |
+| (new) Roll call with six statuses                   | **NEW**           | Attendance panel with a suggested roll and the quorum line                                                                                                                  |
+| `04-35-minutes-linked-elections.png`                | **CHECK**         | Election results can now also arrive as a labelled **addendum** once minutes are circulated; confirm the image still matches the panel                                      |
+| (new) inventory item form, **Also called**          | **NEW**           | Gear and medical item forms with two alternate names entered                                                                                                                |
+| (new) checklist item picker, near match             | **NEW**           | A result found through an alias, showing it was matched that way                                                                                                            |
+| Any dark-mode image of the checklist item pickers, the medical-supply item picker or the storefront category badge | **REPLACE** | Their dropdowns and badge were translucent in dark mode and are now opaque; light-mode images are unchanged |
+| (new) Medical categories, delete dialog             | **NEW**           | The dialog that counts supplies and asks for a destination category                                                                                                         |
+| 05 CSV import preview                               | **CHECK**         | The sample file gained an **Also Called** column and medical rows                                                                                                           |
+
 ## Queued by the October 13 – 14 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).

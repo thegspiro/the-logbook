@@ -1423,10 +1423,12 @@ is a full-size touch target.
 Select **Minutes** in the sidebar. The **Meeting Minutes** page — _"Record
 meetings, write up their minutes, and track action items"_ — lists
 **meetings**. Under each meeting card are the **minutes** written from it, as
-links that show their state: **Draft**, **Awaiting approval**, **Approved**
-or **Returned for changes**.
+links that show their state: **Draft**, **Circulated for review**, **Adopted**
+or **Returned for changes**. (Before 2026-10-14 the middle two read **Awaiting
+approval** and **Approved**; see
+[Circulating and adopting minutes](#circulating-and-adopting-minutes).)
 
-Who sees which minutes is decided for you: members see only approved minutes.
+Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
 The **Pending Approval** tile counts minutes awaiting approval.
 
 ![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
@@ -1483,14 +1485,19 @@ card.
 **Who can do this:** officers with the **Create, edit, and manage meeting
 minutes** permission.
 
-1. On a draft (or returned) record, select **Submit for Approval**.
-2. A second officer opens it and selects **Approve Minutes** or **Reject
-   Minutes**.
+> **Renamed 2026-10-14.** **Submit for Approval** now reads **Circulate for
+> Review**, **Approve Minutes** reads **Adopt Minutes** and **Reject Minutes**
+> reads **Return for Changes**. The rules below are unchanged; the new steps are
+> in [Circulating and adopting minutes](#circulating-and-adopting-minutes).
+
+1. On a draft (or returned) record, select **Circulate for Review**.
+2. A second officer opens it and selects **Adopt Minutes** or **Return for
+   Changes**.
 
 **You cannot approve minutes you submitted yourself.** Approval needs a
-second person. The submitter is not offered **Approve Minutes**; they read
+second person. The submitter is not offered **Adopt Minutes**; they read
 _"Waiting for another officer to approve. You submitted these minutes, so you
-cannot approve them."_ **Reject Minutes** stays available to them as a way to
+cannot approve them."_ **Return for Changes** stays available to them as a way to
 withdraw the submission. So a secretary who writes and submits the minutes
 needs a second officer with the same permission to approve them.
 
@@ -1503,7 +1510,7 @@ department approved — including whether quorum was met — stays as it was.
 1. Open the minutes and select **Reopen for Correction**.
 2. Say what needs correcting (at least 10 characters). The minutes go back to
    **Draft**, and members cannot see them until they are approved again.
-3. Make the correction, then **Submit for Approval**. Another officer
+3. Make the correction, then **Circulate for Review**. Another officer
    approves them as before.
 
 The earlier approval and your reason are kept in the audit log.
@@ -1534,6 +1541,82 @@ One officer may take it through all three, but only in that order:
 So every approved meeting records who approved it and when. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
+
+### Circulating and adopting minutes
+
+_(2026-10-14)_ Most departments send the draft minutes round, take corrections
+and adopt them at the next meeting. The screen now follows that order:
+
+**Draft → Circulated for review → Adopted.** The buttons on the minutes page are
+**Circulate for Review**, **Recall to Draft**, **Return for Changes** and
+**Adopt Minutes**.
+
+- **Circulating sends the minutes to members.** Everyone without
+  `minutes.manage` can now read circulated minutes (before, only adopted ones),
+  and every active member with an email address, except the officer who
+  circulated them, gets an email linking to them. A member can switch that email
+  off under their notification settings; a department can make it required.
+  Executive-session minutes are never announced and members cannot read them.
+- **Required sections.** An outline can mark a section **required**. Minutes
+  cannot be circulated until each required section has words in it (the roll-call
+  section is satisfied by a recorded roll). An empty paragraph does not count.
+- **Members suggest changes from the section.** While minutes are circulating,
+  each section card carries **Suggest a change**. It opens a form under the text
+  with a comment and, optionally, the wording you suggest. A member sees only
+  their own suggestions. A suggestion never edits the minutes.
+- **The secretary works the suggestions.** Someone with `minutes.manage` sees all
+  suggestions, a count of open ones on each section, and **Accept** or
+  **Decline** (with a note). To work accepted changes in, click **Recall to
+  Draft** (suggestions are kept), edit, and circulate again, which emails
+  members again. **Return for Changes** sends the minutes back as rejected.
+- **Adopting.** **Adopt Minutes** opens **Adopt these minutes**: the date the
+  body voted (**When the body voted**), the minutes of the meeting at which it
+  voted, and whether they were adopted **as amended** (ticked for you when any
+  suggestion was accepted). The same rule as before applies: you cannot adopt
+  minutes you circulated yourself.
+- **Adopted minutes are locked.** **Reopen for Correction** works as described
+  above; it clears the adoption details but keeps the earlier version.
+
+**Writing sections with formatting.** A section's text now has a small editor:
+bold, italic, underline, two heading levels, bulleted and numbered lists, block
+quotes and links. Nothing else (no tables, pictures or colours) is accepted, and
+that is what the printed copy and the copy published to Documents can show.
+Sections written before the editor stay plain text, exactly as typed, until
+someone edits them.
+
+**Keeping the record.** Under the minutes themselves, these panels start folded
+and show their count ("Motions (3)"); open one to add to it. Attendance, the
+suggestions and the sections stay open.
+
+| Panel                | What it holds                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Attendance**       | Roll call with six statuses: present, late, left early, excused, absent, guest. **Present, late and left early count toward quorum**; the rest do not. A suggested roll is built from the event's check-ins, or the member list if there is no event |
+| **Motions**          | Mover, seconder and result; a motion can link to the election or ballot item that decided it                                                         |
+| **Closed sessions**  | Reason, legal basis, start and end times, who stayed (someone who stepped out is recorded), a summary, and the motion that moved into it             |
+| **Election results** | A closed election's certified tally, frozen into the minutes. If the election ends after minutes are circulated, the result is filed as a permanent, labelled **addendum** |
+| **Action items**     | Items, with **Carry action items forward** to bring open ones from earlier adopted minutes of the same meeting type (an item is open in only one place) |
+| **Attachments**      | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed |
+| **Approved versions**| One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version |
+
+**Print the minutes** for the signature lines. The printed copy shows
+attendance by status, quorum, sections, motions, action items, filed election
+results and the attachment list, and — once adopted — the approver, version and
+fingerprint.
+
+**Outlines (the standard order of business).** **Minutes > Outlines**
+(`minutes.manage`) edits the department's standard sections for each meeting
+type: title, prefilled text and a **required** flag. **Make default** chooses the
+one new minutes start from. When a meeting type has more than one outline,
+starting minutes asks which; **Apply outline** on a draft lays an outline over
+it, keeping every section that already has text. Deleting an outline does not
+change minutes already written from it.
+
+**Upgrading?** Minutes' rich-text editor needs the `nh3` package on the
+server; rebuild the backend image (see [`UPGRADING.md`](../UPGRADING.md)).
+
+<!-- Screenshots needed (queued in SCREENSHOT_CURRENCY.md): circulated minutes
+with Suggest a change open under a section; Adopt these minutes dialog; the
+Outlines page; the detail page with folded panels; the Closed sessions panel. -->
 
 ---
 
