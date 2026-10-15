@@ -16,6 +16,95 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3289](https://github.com/thegspiro/the-logbook/pull/3289)**: branch
+`claude/security-review-apparatus-nfc-p16` (suffixed rather than the bare
+`claude/security-review-apparatus-nfc`, since that name's own PR — #3185 —
+has already merged — CLAUDE.md Pitfall #24), Feature 13 (Apparatus & NFC),
+pass 16. Watchdog pickup. 0 code fixes, 0 new findings. The real delta since
+pass 15 (`4e923164`, 3 commits in the feature's own scope files, all read in
+full, part of a repo-wide mypy-typing sweep): two are mechanical
+(`models/apparatus.py`, `services/apparatus_service.py`); the third
+(`services/evoc_level_service.py`) already shipped a genuine, already-tested
+fail-closed fix for a dangling `required_evoc_level_id` — the sibling case to
+the standing AP2-4 flag, which stays unchanged/owner-accepted. All 99 routes
+(94 + 5) re-enumerated fresh by AST walk, 99/99 carrying a permission
+dependency. AP-19 stays fixed. See `AP-13-apparatus-nfc.md`'s **Pass 16**
+section. Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment
+check & shifts).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3288, Feature 12, Facilities, pass 9, before it merged), preserved for history</summary>
+
+**PR [#3288](https://github.com/thegspiro/the-logbook/pull/3288)**: branch
+`claude/security-review-facilities-p9` (suffixed rather than the bare
+`claude/security-review-facilities`, since that name's own PR — most
+recently #3169 — has already merged 8 times over this feature's prior
+passes — CLAUDE.md Pitfall #24), Feature 12 (Facilities), pass 9. Watchdog
+pickup. 0 code fixes, 0 new findings. The real delta since pass 8
+(`8d2e4d7a`, 4 commits in the feature's own scope files plus 5 more in
+shared dependencies, all read in full): the only feature-shaped change was a
+new admin-only-confirm guard on the generic document-folder create/update
+path (decision 29), confirmed **not** to reach facility folders — their
+sub-folder creators build `DocumentFolder` rows directly and facility
+folders have no admin-editable access form for that guard to protect.
+Everything else was frontend-only UI (dialog portal, required-field
+marking, due-date display) or mypy-narrowing commits confirmed
+behavior-neutral. All 98 routes re-enumerated fresh by AST walk, 98/98
+carrying a permission dependency. FAC-30 re-verified still open/
+owner-accepted, unchanged; FAC-13 stays closed; FAC-41/FAC-44 stay fixed.
+See `FAC-12-facilities.md`'s **Pass 9** section. Row 12 → ✅ (pending this
+PR's merge); next is Feature 13 (Apparatus & NFC).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3272, Feature 11, Inventory, pass 9, merged — the state this pass's PR opened from), preserved for history</summary>
+
+**PR [#3272](https://github.com/thegspiro/the-logbook/pull/3272)**: branch
+`claude/security-review-inventory-p9` (suffixed rather than the bare
+`claude/security-review-inventory` pass 8 used, since that branch's own PR
+#3166 already merged — CLAUDE.md Pitfall #24), Feature 11 (Inventory),
+pass 9. Watchdog pickup. 0 code fixes, 0 new findings, 1 doc-only correction
+(pass 8's recorded route count for `inventory.py` was 149; both an AST walk
+and a direct grep return 148 at pass 8's own merge commit and at current
+head alike — a one-off miscount, not a removed route). The real delta since
+pass 8 (`6d177fea`, 15 commits, all read in full): a new fuzzy
+catalog-matching feature plus an "also called" item-aliases column (fails
+closed if the query builder's org-scope clause is ever absent, capped at
+5000 candidate rows, additive/idempotent migration), a new hard-delete for
+medical supply categories (org- and domain-validated, lock-ordered to avoid
+deadlock), a CSV-import sample/validation addition that cannot spoof an
+item's domain, and five mypy-narrowing batches confirmed behavior-neutral.
+All 190 routes across the feature's five endpoint files enumerated for an
+auth dependency, not spot-checked. INV-22 re-verified still open/
+owner-accepted, unchanged. See `INV-11-inventory.md`'s **Pass 9** section.
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3262's merge, Feature 10, Documents & legal, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**Watchdog pickup, 2026-10-15: PR #3262 merged, rotation continues with
+Feature 11 (Inventory).** PR #3262 (Feature 10, Documents & legal, pass 9)
+merged 2026-10-15T12:20:31Z — the "watchdog tend" note below (and #3262's own
+Changes section) already fully recorded its disposition (0 code fixes, 0 new
+findings), so there is nothing further to add here. Rotation row 10 stays ✅.
+This session is itself a second watchdog pickup: the dedicated
+`/loop 30m /security-review` session appeared stalled (no new
+`claude/security-review-*` PR had opened in the ~2 hours since #3262 merged,
+while unrelated PRs kept merging normally in that window). Confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR is
+open — PR #3265 (the duplicate #3262 superseded) was already closed by the
+time this pass started. Per the Rotation table, row 11 (Inventory) is the
+first `⬜`, so this pass continues that feature (pass 9 for Inventory). See
+`INV-11-inventory.md`'s **Pass 9** section.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 9, PR #3262, merged; rotation forked and re-resolved during this same tend), preserved for history</summary>
+
 **PR [#3262](https://github.com/thegspiro/the-logbook/pull/3262)**: branch
 `claude/security-review-documents-legal-p9`, Feature 10 (Documents & legal),
 pass 9. 0 code fixes, 0 new findings. All 22 routes re-enumerated, unchanged
@@ -45,6 +134,8 @@ actionable review comment (the two `chatgpt-codex-connector` comments on
 both PRs report a Codex _usage-limit_ failure, not a finding, on both
 PRs). Nothing else needed fixing this tend; next watchdog check should
 confirm CI finished green before the PR is left to merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 9, PR #3256, merged docs-only — 0 code fixes, 0 new findings; rotation row 09 marked ✅ as part of that PR), preserved for history</summary>
@@ -19233,9 +19324,9 @@ here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -19264,6 +19355,125 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 13 (Apparatus & NFC, pass 16) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (state=open) returned
+0 PRs with a head branch starting `claude/security-review-`. PR #3288
+(Feature 12, Facilities, pass 9) had already merged, confirmed via
+`pull_request_read` (`merged: true`, `merged_at: 2026-10-15T19:48:50Z`),
+docs-only (`FAC-12-facilities.md` + this file's table/Log) — nothing further
+to record per the "docs-only PR is not a recordable event" rule. Row 12 was
+already ✅ and row 13 (Apparatus & NFC) the first `⬜`.
+
+**Review.** Baseline `4e923164` (pass 15's merge, PR #3185) to current
+`main` — after catching the clone was shallow again (`git fetch
+--unshallow`), 3 non-merge commits touched this feature's scope files, all
+part of a repo-wide mypy-typing sweep (batches 3–5). Two of the three
+(`models/apparatus.py`, `services/apparatus_service.py`) are confirmed
+mechanical by reading every hunk. The third
+(`services/evoc_level_service.py`) carries one genuine, already-fixed-and-
+tested behavior change: `check_driver_evoc_eligibility` now fails closed
+when an apparatus's `required_evoc_level_id` points at a deleted EVOC level
+row, instead of raising an unhandled `AttributeError`. This is the sibling
+case to the standing `AP2-4` flag (which is about the _apparatus_ itself
+failing to resolve, and remains open/owner-accepted, unchanged) — confirmed
+the fix's own comment cross-references AP2-4 and does not touch that branch.
+Route inventory re-enumerated fresh (94 + 5 = 99 routes, unchanged from pass
+15), all carrying an auth dependency. No new findings; AP-19 (fixed pass 15)
+re-confirmed intact.
+
+**Gate.** Hit two environment issues unrelated to this feature, both fixed
+without a source change: `frontend/node_modules` was missing `@tiptap/*`
+(fixed by `npm ci` from the repo root), and the local test database was
+missing a column from a migration landed after it was last migrated (fixed
+by `alembic upgrade head`). Full gate green afterward — see
+`AP-13-apparatus-nfc.md`'s **Pass 16** section.
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check &
+shifts).
+
+### 2026-10-15 — Feature 12 (Facilities, pass 9) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (state=open) returned
+0 PRs with a head branch starting `claude/security-review-`. PR #3272
+(Feature 11, Inventory, pass 9) had already merged, confirmed via
+`pull_request_read` (`merged: true`, `merged_at: 2026-10-15T16:50:17Z`).
+Row 11 was already ✅ and row 12 (Facilities) the first `⬜`, matching the
+state recorded in that PR's own body. This session is a watchdog pickup: the
+last security-review PR merged about an hour before this session started
+with no new `claude/security-review-*` PR or branch opened since.
+
+**Review.** Baseline `8d2e4d7a` (pass 8's merge, PR #3169) to current `HEAD`
+— 343 commits landed repo-wide in the window, of which 4 touched this
+feature's own scope files and 5 more touched its shared dependencies, all
+read in full via `git show`. The only feature-shaped change was "Confirm a
+folder only full administrators could open" (decision 29, documents module):
+checked whether its new `confirm_admin_only` guard on
+`DocumentsService.create_folder`/`update_folder` reaches facility folders,
+and confirmed it does not — `ensure_facility_folder` and its sub-folder
+creators build `DocumentFolder` rows directly and never call either guarded
+method, and facility folders have no admin-editable access form for the
+guard to protect in the first place (their `required_permissions` come from
+fixed constants, the subject of FAC-13, already closed). Everything else in
+the delta was frontend-only UI (dialog portal fix, required-field marking,
+due-date display) or mypy-narrowing commits confirmed behavior-neutral
+(`result.scalar() or 0` on COUNT queries, `TYPE_CHECKING`-only field
+declarations, a `floor` type narrowing). All 98 routes re-enumerated fresh by
+AST walk, 98/98 carrying a permission dependency — unchanged from pass 8.
+LIKE escaping, schema casing (`to_camel` vs. the frontend's matching
+camelCase types), org-scoping FK validation, and the one locking read
+(`get_emergency_contact`) all re-checked and unchanged. FAC-30 (P2,
+owner-accepted "leave as is") re-confirmed as the only standing item; FAC-13
+stays closed; FAC-41/FAC-44 stay fixed and intact. See
+`FAC-12-facilities.md`'s **Pass 9** section for full detail.
+
+**Gate.** flake8/black/isort (7.3.0/26.5.1/9.0.1, CI's pinned versions)
+clean; `validate_migrations.py --strict` single head (`b90813f63e25`), 600
+revisions; `check_route_permissions.py --strict` 270 routes, 0 errors/
+warnings; `pytest tests/ -k "facilit"` 229 passed, 1 pre-existing skip
+(`pywebpush`); the six tenancy/security guard tests plus the two migration
+guard tests together 181 passed; frontend `typecheck`/`lint` clean;
+`vitest run src/modules/facilities` 130 passed (18 files, up from 124 at
+pass 8 — pass 9's own dialog/due-date tests). 0 application-security
+findings, 0 new FAC-N findings, 0 code fixes applied (nothing needed
+fixing). Row 12 → ✅ (pending this PR's merge); next is Feature 13
+(Apparatus & NFC).
+
+### 2026-10-15 — Feature 11 (Inventory, pass 9) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `list_pull_requests` (state=open) returned 0 PRs with a head
+branch starting `claude/security-review-`. PR #3262 (Feature 10, Documents &
+legal, pass 9) had merged 2026-10-15T12:20:31Z, already fully recorded in its
+own Open PR note; not a recordable event beyond that. Row 11 (Inventory) was
+the first `⬜`. This session is a watchdog pickup: the dedicated
+`/loop 30m /security-review` session appeared stalled (no new
+`claude/security-review-*` PR in the ~2 hours since #3262 merged, while
+unrelated PRs kept merging normally).
+
+**Review.** Baseline `6d177fea` (pass 8's merge, PR #3166) to current `HEAD`
+— confirmed a genuine ancestor via `git merge-base --is-ancestor`. The real
+delta is 15 commits, all read in full: a new fuzzy catalog-matching feature
+plus an "also called" aliases column (new nullable JSON column with an
+additive/idempotent migration, a capped-and-dedup'd write-path normalizer, and
+an opt-in `fuzzy=true` search whose candidate scan fails closed if the query
+builder's org-scope clause is ever absent and is capped at 5000 rows); a new
+hard-delete for medical supply categories (both source and destination
+category ids org- and domain-validated, rows locked in sorted id order,
+counts taken as locking reads); a CSV-import sample/validation addition
+("medical" accepted as an Item Type value but discarded — domain still comes
+from the resolved category, not the cell); and five mypy-narrowing batches,
+each confirmed to state a guarantee the code already had rather than change
+behavior. All 190 routes across the feature's five endpoint files
+enumerated (not spot-checked) for an auth dependency; all 20 using
+`get_current_user` alone read individually and confirmed self-scoped,
+module-scoped, or org-scoped-by-construction. No route added or removed
+(decorator diff empty). INV-22 re-verified still open/owner-accepted,
+unchanged. One doc-only correction: pass 8's recorded route count for
+`inventory.py` (149) was a miscount — the file has carried 148 routes since
+before pass 8 and still does. Gate green (1728 scoped backend tests,
+backend lint/format/isort/migrations/route-permissions all clean, frontend
+typecheck/lint/vitest clean).
 
 ### 2026-10-15 — Feature 10 (Documents & legal, pass 9) — 0 fixes, 0 new findings
 

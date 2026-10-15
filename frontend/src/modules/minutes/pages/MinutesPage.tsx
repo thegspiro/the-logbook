@@ -21,6 +21,7 @@ import {
   ChevronUp,
   Users,
   ListOrdered,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
@@ -29,6 +30,7 @@ import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
@@ -90,6 +92,7 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
 
@@ -332,6 +335,16 @@ const MinutesPage: React.FC = () => {
                 <ListOrdered className="h-4 w-4" aria-hidden="true" />
                 <span>Outlines</span>
               </Link>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowReminderSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                <span>Reminders</span>
+              </button>
             )}
             {canViewAttendance && (
               <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
@@ -719,6 +732,10 @@ const MinutesPage: React.FC = () => {
         />
 
         {/* Create Minutes Modal */}
+        {canManage && (
+          <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+        )}
+
         {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">

@@ -60,6 +60,11 @@ const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
+// No recorded change by default, so the reason control stays out of the way of
+// tests that are not about it.
+const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
+  Promise.resolve({ user_id: TARGET_ID, status: 'active', status_changed_at: null, status_change_reason: null })
+);
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
@@ -110,6 +115,8 @@ vi.mock('../services/api', () => ({
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
+    getStatusChange: (...args: Parameters<typeof getStatusChange>) => getStatusChange(...args),
+    updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
   },
 }));
 
@@ -312,6 +319,35 @@ describe('MemberProfilePage membership and privacy', () => {
     getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
     changeStatus.mockReset();
     changeStatus.mockResolvedValue({ user_id: TARGET_ID, previous_status: 'retired', new_status: 'active' });
+    getStatusChange.mockReset();
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'active',
+      status_changed_at: null,
+      status_change_reason: null,
+    });
+  });
+
+  it('shows a members-manager the reason for the last status change', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'retired',
+      status_changed_at: '2026-10-01T15:00:00Z',
+      status_change_reason: 'Moved out of the district',
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Moved out of the district')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit status change reason' })).toBeInTheDocument();
+  });
+
+  it('does not ask a colleague for the status change reason', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Captain · Life member')).toBeInTheDocument();
+    expect(getStatusChange).not.toHaveBeenCalled();
   });
 
   it('describes a colleague by rank and member type, not employment status', async () => {
@@ -605,6 +641,42 @@ describe('MemberProfilePage membership and privacy', () => {
     await waitFor(() =>
       expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, { new_status: UserStatus.LEAVE, reason: undefined })
     );
+  });
+
+  it('asks when a current member left, and sends the date given', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    // A change within membership closes no stint, so no date is asked.
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'New Status' }), UserStatus.RETIRED);
+    const effective = screen.getByLabelText('Effective date');
+    expect(effective).toHaveAttribute('min', '2019-03-02');
+    await user.clear(effective);
+    await user.type(effective, '2026-01-15');
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, {
+        new_status: UserStatus.RETIRED,
+        reason: undefined,
+        separation_date: '2026-01-15',
+      })
+    );
+  });
+
+  it('asks no effective date when a retired member is brought back', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    await user.selectOptions(await screen.findByRole('combobox'), UserStatus.DROPPED_VOLUNTARY);
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
   });
 
   it('names both fields of the status dialog and sends the reason typed', async () => {

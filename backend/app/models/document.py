@@ -445,6 +445,18 @@ class DocumentFolder(Base):
         JSON, nullable=True
     )
 
+    # Decision 30: when an administrator decided this folder is meant for
+    # full administrators alone. The Documents notice lists folders nobody
+    # else can open, and leaves these out, so a deliberate choice is not
+    # raised again every time someone looks. Cleared whenever the folder's
+    # access is saved and someone besides administrators can open it.
+    admin_only_confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    admin_only_confirmed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

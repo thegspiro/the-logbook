@@ -1,7 +1,7 @@
 """Google Workspace account provisioning records
 
 Revision ID: 61dfbcc23cba
-Revises: bb60bd43bede
+Revises: c903fc771081
 Create Date: 2026-10-15 14:00:00.000000
 
 Adds ``google_account_provisions``: one row per member The Logbook tried to
@@ -33,7 +33,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "61dfbcc23cba"
-down_revision: Union[str, None] = "bb60bd43bede"
+down_revision: Union[str, None] = "c903fc771081"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

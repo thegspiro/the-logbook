@@ -2598,7 +2598,7 @@ menu.
 shows results once at least one check has been submitted.
 
 Full instructions:
-[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists).
 
 ---
 

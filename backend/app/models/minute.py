@@ -939,6 +939,13 @@ class ActionItem(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # When the assignee was last emailed a reminder about this item. The daily
+    # reminder task reads it to send each reminder once, and to space repeat
+    # reminders on an overdue item.
+    last_reminded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

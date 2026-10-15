@@ -523,6 +523,46 @@ can turn it off, and a department can make it required. An item added to
 already-approved minutes is emailed when it is added. A failed send is logged
 and never fails the approval.
 
+### Action item reminders _(2026-10-15)_
+
+Before this, an assignee was reminded only by a bell notification
+(`run_action_item_reminders`, 3, 1 and 0 days out and once overdue) and never by
+email, so a member who reads only their inbox heard nothing. The
+`minutes_action_item_reminders` task (daily, `07:20`) adds the email, in the
+same order of channels as everything else here: email first, bell as an
+addition. The bell task is unchanged.
+
+- **To the assignee**, one email per member per run, listing their items that
+  are due soon and overdue, only for items on **adopted** minutes that are open
+  (pending, in progress or overdue), have a due date and have not been carried
+  forward. The first reminder goes out _N_ days before the due date, the first
+  overdue one the day after, and later ones every _R_ days until the item is
+  completed or cancelled. An item more than 90 days overdue is no longer chased
+  by email, so the first run after an upgrade does not mail a member about
+  work from years ago; it still appears in the weekly list. `last_reminded_at`
+  on the item records the last reminder, and an item is marked only after the
+  email was accepted, so a refused or failed send is tried again next run.
+- **To the people who manage minutes**, a weekly list of every open item with
+  its owner and due date, overdue first, whether or not it has a due date. It
+  goes to active members holding `minutes.manage` who have not turned it off
+  (`EmailKind.MINUTES_DUTIES`, "Secretary duties"), at most once in seven days;
+  the day it last went out is kept in the `minutes` section of the organization
+  settings (`last_open_items_digest_on`). Nothing is sent when nothing is open.
+- Assignee reminders follow the member's existing choice under
+  `EmailKind.MINUTES_ACTION_ITEMS`, so turning off the assignment email turns
+  off the reminders with it.
+- **Settings** live in the organization settings' `minutes` section and are read
+  by `app/utils/minutes_settings.py`: `action_item_reminders` (on),
+  `reminder_days_before_due` (3; 0 to 30; 0 is the due date itself),
+  `overdue_repeat_days` (7; 0 to 90; 0 is one overdue reminder only) and
+  `open_items_digest` (on). Anything missing or malformed reads as its default.
+  **Minutes → Reminders** shows the server's reading to anyone who manages
+  minutes (`GET /minutes-records/settings`) and lets a settings administrator
+  change it (`PATCH /organization/settings`).
+- **Upgrading:** the reminders are on by default, so a department that has open
+  items on adopted minutes will start receiving these emails the day after the
+  upgrade. They can be switched off in **Minutes → Reminders** before or after.
+
 ### Printable minutes
 
 `GET /{id}/pdf` renders the minutes with attendance by status, quorum, sections,
@@ -752,6 +792,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 | Method   | Path                                      | Permission       | Description                                                                            |
 | -------- | ----------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `GET`    | `/settings`                               | `minutes.manage` | The action item reminder settings the server applies                                   |
 | `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
 | `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
 | `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
@@ -781,6 +822,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain

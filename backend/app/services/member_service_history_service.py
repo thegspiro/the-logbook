@@ -296,11 +296,19 @@ class MemberServiceHistoryService:
         separation_status: UserStatus,
         on_date: date,
         created_by: Optional[str],
+        *,
+        officer_dated: bool = False,
     ) -> Optional[MemberServicePeriod]:
         """Close the member's current stint as of ``on_date``.
 
         Does not commit; the caller's status change and this write land
         together or not at all.
+
+        ``officer_dated`` means an officer typed ``on_date``. A date before the
+        stint began is then refused rather than clamped: the clamp exists for
+        the default of today against a hire date set in the future, and
+        silently moving a date somebody entered would record a separation they
+        never asked for. Raises ValueError for such a date.
 
         The caller must hold the member row's lock (Pitfall #27). The stints
         are read with a locking read as well: under REPEATABLE READ a plain
@@ -315,6 +323,11 @@ class MemberServiceHistoryService:
         if open_periods:
             current = open_periods[-1]
             start = current.start_date or member.hire_date
+            if officer_dated and start and on_date < start:
+                raise ValueError(
+                    f"The effective date cannot be before the member's current "
+                    f"service began ({start.isoformat()})."
+                )
             current.end_date = max(on_date, start) if start else on_date
             current.separation_status = separation_status.value
             return current
@@ -323,6 +336,11 @@ class MemberServiceHistoryService:
             # by hand. There is nothing open to close, and inventing a stint
             # would double-count time they already accounted for.
             return None
+        if officer_dated and member.hire_date and on_date < member.hire_date:
+            raise ValueError(
+                f"The effective date cannot be before the member's hire date "
+                f"({member.hire_date.isoformat()})."
+            )
         period = MemberServicePeriod(
             organization_id=str(member.organization_id),
             user_id=str(member.id),

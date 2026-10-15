@@ -908,17 +908,6 @@ class ActivityLogResponse(UTCResponseBase):
     model_config = _response_config
 
 
-# --- Kanban Board Schema ---
-
-
-class PipelineKanbanColumn(BaseModel):
-    """Schema for a kanban board column (one per step)"""
-
-    step: PipelineStepResponse
-    prospects: List[ProspectListResponse] = []
-    count: int = 0
-
-
 # --- Document Schemas ---
 
 
