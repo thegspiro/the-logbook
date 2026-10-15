@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**311 tables · 5130 columns · 1049 foreign keys**
+**311 tables · 5134 columns · 1049 foreign keys**
 
 ---
 
@@ -436,7 +436,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
 | [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 10 | An election's certified result, frozen into a set of minutes. |
 | [`minutes_revisions`](#minutes_revisions) | `MinutesRevision` | 13 | An approved version of a set of minutes, immutable once written. |
-| [`minutes_suggestions`](#minutes_suggestions) | `MinutesSuggestion` | 13 | A change a member proposes while the minutes are circulated for review. |
+| [`minutes_suggestions`](#minutes_suggestions) | `MinutesSuggestion` | 17 | A change a member proposes while the minutes are circulated for review. |
 | [`minutes_templates`](#minutes_templates) | `MinutesTemplate` | 12 | Meeting Minutes Template |
 
 ### Meetings
@@ -6739,6 +6739,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `section_key` | VARCHAR(100) | yes |  |  |  |
 | `comment` | TEXT | no |  |  |  |
 | `proposed_text` | TEXT | yes |  |  |  |
+| `base_content` | TEXT | yes |  |  |  |
+| `proposed_content` | TEXT | yes |  |  |  |
+| `changes` | JSON | yes |  |  |  |
+| `applied_at` | DATETIME | yes |  |  |  |
 | `status` | VARCHAR(20) | no |  | `open` |  |
 | `resolution_note` | TEXT | yes |  |  |  |
 | `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |

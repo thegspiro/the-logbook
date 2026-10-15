@@ -40,7 +40,7 @@ from app.api.v1.endpoints.minutes import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import ensure_found, handle_service_errors
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.minute import MinutesStatus
 from app.models.user import Organization, User
 from app.schemas.minute import (
@@ -61,13 +61,17 @@ from app.schemas.minute import (
     MinutesVerification,
     MyActionItem,
     OpenActionItem,
+    SuggestionApply,
     SuggestionCreate,
     SuggestionResolve,
     SuggestionResponse,
     validate_attachment_category,
 )
 from app.services.minute_service import MinuteService
-from app.services.minutes_record_service import MinutesRecordService
+from app.services.minutes_record_service import (
+    MinutesRecordService,
+    SuggestionApplyConflict,
+)
 from app.utils import download_names
 from app.utils.minutes_pdf import render_minutes_pdf
 from app.utils.org_timezone import resolve_scheduling_timezone, scheduling_timezone
@@ -880,6 +884,69 @@ async def resolve_suggestion(
         event_category="meetings",
         severity="info",
         event_data={"minutes_id": minutes_id, "suggestion_id": suggestion_id},
+        user_id=str(current_user.id),
+    )
+    return _suggestion_response(
+        suggestion,
+        await service.member_names(
+            [suggestion.created_by, suggestion.resolved_by],
+            current_user.organization_id,
+        ),
+    )
+
+
+@router.post(
+    "/{minutes_id}/suggestions/{suggestion_id}/apply",
+    response_model=SuggestionResponse,
+)
+async def apply_suggestion(
+    minutes_id: str,
+    suggestion_id: str,
+    data: SuggestionApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Apply the accepted tracked changes of a suggestion to its section
+
+    The changes named in ``accepted`` are written into the section; the rest of
+    the suggestion's changes are rejected. Draft or rejected minutes only, so a
+    circulating set is recalled first. If a change no longer fits the section
+    (it was edited since the reviewer saw it) nothing is written and the answer
+    is 409 listing the ones that do not.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    service = MinutesRecordService(db)
+    try:
+        suggestion = await service.apply_suggestion(
+            minutes_id,
+            suggestion_id,
+            current_user.organization_id,
+            current_user.id,
+            data,
+        )
+    except SuggestionApplyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": str(exc), "failed": exc.failed},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(exc)
+        ) from exc
+    suggestion = ensure_found(suggestion, "Suggestion")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_suggestion_applied",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "suggestion_id": suggestion_id,
+            "accepted": sorted(data.accepted),
+        },
         user_id=str(current_user.id),
     )
     return _suggestion_response(

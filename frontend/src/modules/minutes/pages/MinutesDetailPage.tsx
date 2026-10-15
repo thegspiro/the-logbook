@@ -923,6 +923,7 @@ export const MinutesDetailPage: React.FC = () => {
           suggestions={suggestions.suggestions}
           loaded={suggestions.loaded}
           reload={suggestions.reload}
+          onMinutesChanged={fetchMinutes}
         />
 
         {/* Meeting Info */}
@@ -1180,6 +1181,7 @@ export const MinutesDetailPage: React.FC = () => {
                         minutesId={minutes.id}
                         sectionKey={section.key}
                         subject={section.title}
+                        original={{ content: section.content, format: section.format }}
                         onSent={async () => {
                           setSuggestingSection(null);
                           await suggestions.reload();

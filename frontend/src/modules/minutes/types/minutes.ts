@@ -467,12 +467,33 @@ export interface ClosedSessionInput {
 
 export type SuggestionStatus = 'open' | 'accepted' | 'declined';
 
+export type ChangeKind = 'replace' | 'insert' | 'delete' | 'format';
+export type ChangeDecision = 'open' | 'accepted' | 'rejected';
+
+/** One tracked change in a suggestion: the words removed and added, with context. */
+export interface SuggestionChange {
+  id: string;
+  kind: ChangeKind;
+  deleted: string;
+  inserted: string;
+  before: string;
+  after: string;
+  decision: ChangeDecision;
+}
+
 export interface MinutesSuggestion {
   id: string;
   minutes_id: string;
   section_key?: string | null;
   comment: string;
   proposed_text?: string | null;
+  /** The section as the reviewer saw it, and their edited copy (tracked changes only). */
+  base_content?: string | null;
+  proposed_content?: string | null;
+  changes?: SuggestionChange[];
+  /** The section has been edited since the reviewer saw it. */
+  section_changed?: boolean;
+  applied_at?: string | null;
   status: SuggestionStatus;
   resolution_note?: string | null;
   resolved_by_name?: string | null;

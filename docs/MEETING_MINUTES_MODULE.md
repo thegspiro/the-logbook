@@ -593,15 +593,34 @@ Draft ──Circulate──> Circulated ──Adopt──> Adopted ──Reopen�
   return or recall emails again.
 - **Suggestions.** While the minutes circulate, anyone who can view them may
   suggest a change. A member does it **from the section it is about** — each
-  section card has a _Suggest a change_ button that opens a form under the text
-  (a comment, and optional suggested wording) — or, from the suggestions panel,
-  for the minutes as a whole. A member sees only their own suggestions;
+  section card has a _Suggest a change_ button that opens the section's own text
+  in the editor under it. The reviewer **edits a copy**; a comment is optional.
+  For the minutes as a whole there is no text to edit, so it is a comment with
+  optional suggested wording. A member sees only their own suggestions;
   `minutes.manage` sees all, with a count of open suggestions on each section,
-  and is offered Accept and Decline instead of a form (the secretary corrects
-  the minutes, not suggests to them). A manager accepts or declines each (with
-  a note) until adoption. Suggestions never edit the minutes; the secretary
-  works accepted ones in after **Recall to Draft** (`POST /{id}/recall`,
-  circulated → draft; suggestions are kept) and circulates again.
+  and is offered the review actions instead of a form (the secretary corrects
+  the minutes, not suggests to them).
+- **Tracked changes.** The server turns a reviewer's edit into a list of
+  discrete changes (`app/utils/redline.py`: Python's `difflib` over tags, words
+  and whitespace, so a change is a few words, not a paragraph). The secretary
+  sees each as struck-out and added words with a little context, and **accepts
+  or rejects each one** (`POST /{id}/suggestions/{id}/apply {accepted: [...]}`).
+  Applying writes the accepted changes into the section (which becomes rich
+  text), rejects the rest, and marks the suggestion accepted, or declined if
+  nothing was accepted. Only **draft or rejected** minutes take it: on circulated
+  minutes the screen asks to recall them first. It is all or nothing. If the
+  section has been edited since the reviewer saw it, the suggestion says so and
+  each change is placed by its surrounding text, only where that text matches
+  exactly once; if any accepted change cannot be placed the answer is `409`
+  naming it, nothing is written, and the secretary rejects it or makes it by
+  hand. A plain-text section is compared as the paragraphs the editor opens it
+  in, and list items and quotes the editor wraps in a paragraph compare equal to
+  bare ones, so untouched text never shows as a change. A tracked suggestion is
+  never accepted without applying (`PUT … {status: accepted}` is refused);
+  declining it rejects every change.
+  Suggestions never edit the minutes by themselves. After **Recall to Draft**
+  (`POST /{id}/recall`, circulated → draft; suggestions are kept) the secretary
+  works accepted comment-only suggestions in by hand and circulates again.
 - **Adoption.** `POST /{id}/approve` takes an optional body
   `{adopted_on, adopting_minutes_id, as_amended}`. `adopted_on` defaults to now;
   `adopting_minutes_id` is the minutes of the meeting at which the body voted
@@ -708,13 +727,14 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 ## Database Migrations
 
-| Migration                                                      | Revision              | Description                                                                                                                           |
-| -------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `20260212_1200_add_meeting_minutes_tables.py`                  | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                       |
-| `20260213_0800_add_templates_documents_dynamic_sections.py`    | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                   |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py`  | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                        |
-| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`       | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
-| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py` | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
+| Migration                                                           | Revision              | Description                                                                                                                           |
+| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                       | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                       |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`         | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                   |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py`       | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                        |
+| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
+| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
+| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
 
 ### Migration Chain
 

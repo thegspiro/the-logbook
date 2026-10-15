@@ -19,6 +19,7 @@ from pydantic import (
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCResponseBase
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
+from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
 
 _response_config = ConfigDict(from_attributes=True)
@@ -929,22 +930,41 @@ class ClosedSessionResponse(UTCResponseBase):
 
 
 class SuggestionCreate(BaseModel):
-    """A change a member proposes while the minutes are circulated"""
+    """A change a member proposes while the minutes are circulated
+
+    Either a comment (with optional wording), or — for a section — an edited copy
+    of the section, from which the server derives the tracked changes. An edit
+    needs no comment.
+    """
 
     section_key: Optional[str] = Field(
         None, max_length=100, description="The section it is about; none = overall"
     )
-    comment: str = Field(..., min_length=3, max_length=2000)
+    comment: str = Field(default="", max_length=2000)
     proposed_text: Optional[str] = Field(
         None, max_length=10000, description="Replacement wording, if offered"
+    )
+    proposed_html: Optional[str] = Field(
+        None,
+        max_length=MAX_HTML_LENGTH,
+        description="The reviewer's edited copy of the section, as rich text",
     )
 
     @field_validator("comment")
     @classmethod
-    def _comment_not_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Say what should change")
+    def _tidy_comment(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def _says_something(self):
+        if self.proposed_html is not None and self.proposed_html.strip():
+            if not self.section_key:
+                raise ValueError("Tracked changes are made to a section")
+            return self
+        self.proposed_html = None
+        if len(self.comment) < 3:
+            raise ValueError("Say what should change")
+        return self
 
 
 class SuggestionResolve(BaseModel):
@@ -952,6 +972,25 @@ class SuggestionResolve(BaseModel):
 
     status: Literal["accepted", "declined"]
     note: Optional[str] = Field(None, max_length=1000)
+
+
+class SuggestionApply(BaseModel):
+    """Which tracked changes the secretary accepts; the rest are rejected"""
+
+    accepted: List[str] = Field(default_factory=list, max_length=500)
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class SuggestionChangeView(BaseModel):
+    """One tracked change as a reader sees it"""
+
+    id: str
+    kind: Literal["replace", "insert", "delete", "format"]
+    deleted: str = ""
+    inserted: str = ""
+    before: str = ""
+    after: str = ""
+    decision: Literal["open", "accepted", "rejected"] = "open"
 
 
 class SuggestionResponse(UTCResponseBase):
@@ -962,6 +1001,18 @@ class SuggestionResponse(UTCResponseBase):
     section_key: Optional[str] = None
     comment: str
     proposed_text: Optional[str] = None
+    base_content: Optional[str] = None
+    proposed_content: Optional[str] = None
+    changes: List[SuggestionChangeView] = []
+    section_changed: bool = False
+    applied_at: Optional[datetime] = None
+
+    @field_validator("changes", mode="before")
+    @classmethod
+    def _as_views(cls, value: Any) -> Any:
+        """The stored changes carry token positions; a reader gets the words."""
+        return [describe_change(c) for c in value or []]
+
     status: str
     resolution_note: Optional[str] = None
     resolved_by: Optional[str] = None

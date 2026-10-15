@@ -1182,6 +1182,23 @@ class MinutesSuggestion(Base):
     comment: Mapped[str] = mapped_column(Text, nullable=False)
     proposed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Tracked changes: the reviewer edited a copy of the section. ``base_content``
+    # is the section as they saw it and ``proposed_content`` their edit, both as
+    # sanitized rich text; ``changes`` is the list of discrete edits between them
+    # (app/utils/redline.py), each with the secretary's decision once made. All
+    # NULL for a plain comment-and-wording suggestion.
+    base_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    proposed_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    changes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # When the accepted changes were written into the section.
+    applied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Not a column: set when suggestions are listed, so the response can say the
+    # section has been edited since the reviewer saw it.
+    section_changed = False
+
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
