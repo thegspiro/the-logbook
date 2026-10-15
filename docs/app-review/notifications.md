@@ -1,7 +1,119 @@
 # Application Review — Notifications (Tier B)
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-15 (pass 5)
+
+---
+
+## Pass 5 (2026-10-15) — a rule's `enabled` could be cleared to NULL, breaking its own listing (1 fixed, 1 noqa removed, 2 noted)
+
+Lens for this pass: the update-payload discipline the B4–B9 passes applied
+(`exclude_unset`, `apply_updates`, an explicit `null`), driven through the real
+handler, plus CLAUDE.md #19 (does anything store a setting nothing reads) and an
+AST dead-code scan that counts `tests/` as a reference source. The module here is
+smaller than most of the rotation — 20 routes, a 660-line service, a 142-line rule
+resolver, 169 lines of channel gating — and this pass read all of the rule path and
+the log-scope routes.
+
+### NOTIF2-5 — LOW/MED — `PATCH /rules/{id}` with `{"enabled": null}` stored NULL, then returned 500 — ✅ FIXED
+
+`NotificationRuleUpdate.enabled` is `Optional[bool]`, the handler dumps with
+`exclude_unset`, and the column is nullable (`Mapped[Optional[bool]]`), so
+`apply_updates` — which refuses a null only against a NOT NULL column — wrote it.
+The commit succeeded; building the response then failed, because
+`NotificationRuleResponse.enabled` is a plain `bool`. Two things follow from a row
+left with `enabled = NULL`:
+
+- **every later `GET /rules` that includes it fails the same way**, so one bad
+  PATCH takes the organization's rules screen down until the row is repaired in
+  the database (the same shape as DOC-20 in the documents module, where a nullable
+  column sat behind a non-Optional response field);
+- the resolver reads `if rule.enabled` as false, so the notification that rule
+  governs is silently **off**.
+
+**Reproduced before fixing**, through the real handler against the real schema: the
+PATCH was a 500, and a `GET /rules` issued right after it was a 500 too (2 of 9 new
+cases failed on the unmodified schema; the other seven passed — `name`, `trigger`,
+`category`, `channel` already come back 400, and `description` / `config` still
+clear). Fixed in the request schema, not the handler: a `field_validator("enabled")`
+on `NotificationRuleUpdate` answers 422 for an explicit null and does nothing when
+the key is omitted. Reachability is low — the UI toggles through
+`POST /rules/{id}/toggle`, which sends a real boolean — so it needs a direct API
+client; the cost of one was an org-wide screen failure.
+
+### NOTIF2-6 — LOW — the rules screen can create and toggle a rule, but not edit or delete one — 🚩 FLAGGED (owner decision)
+
+`NotificationsPage` calls `getRules`, `createRule` and `toggleRule`.
+`updateRule`, `deleteRule` and `getRule` exist in `communicationsServices.ts` and the
+endpoints behind them are live, but nothing in the app calls them, so a rule made
+with the wrong trigger can only be switched off. Because the resolver keeps a
+notification on if **any** rule for it is enabled, "off" is a per-rule state the
+admin has to remember to apply to every stray one. Not a defect in what is shipped
+and not mine to design — mirrored to `docs/KNOWN_LIMITATIONS.md` (NOTIF2-6) with the
+two options. The unused client wrappers are left in place for that reason.
+
+### NOTIF2-7 — INFO — a `# noqa: F401` re-export that nothing imported — ✅ REMOVED
+
+`services/notification_rules.py` re-exported `ENFORCED_TRIGGERS` and `is_enforced`
+under `# noqa: F401  (re-exported for callers)`. No file imports either name from
+that path (the tests import them from `app.models.notification`, where they live),
+and pitfall #10 allows the narrow `# noqa: F401` for an `__init__.py` re-export, not
+this. Removed the two names and the suppression; the module docstring now points at
+the real home of `ENFORCED_TRIGGERS`.
+
+### Observation, not changed — redundant `# noqa: E712 / E711` repo-wide
+
+The same scan of `# noqa` comments found **67 `# noqa: E712` and 6 `# noqa: E711`**
+in `backend/app`, 16 of them in `scheduled_tasks.py` (the notification senders).
+`backend/.flake8` ignores E711 and E712 globally ("required by SQLAlchemy
+filters"), so every one is a no-op: harmless, but it is exactly the suppression
+pattern CLAUDE.md asks not to add, and earlier passes swept other files of it. Left
+alone here because deleting 73 comments across a dozen unrelated modules is its own
+mechanical change set and belongs in its own PR. (Also seen, not touched: four
+`# noqa: F821` on string `httpx.Response` annotations in `salesforce_service.py`,
+which a `TYPE_CHECKING` import would settle.)
+
+### Verified good ✅ (this pass)
+
+- **`#19` holds.** `ENFORCED_TRIGGERS` has four triggers (event reminder, training
+  expiry, suggestion submitted, equipment request update); each has a caller of
+  `NotificationRuleResolver` (`scheduled_tasks`, `cert_alert_service`,
+  `suggestions`, `equipment_request_notifications`), the response reports
+  `enforced` per rule, and the create form fixes `channel` to `in_app` and derives
+  `category` from the trigger, so no stored-but-inert control is offered. An
+  absent rule means on.
+- **Log scope.** `GET /logs` and `POST /logs/read-all` default to the caller's own
+  rows and require `notifications.manage` for `scope=organization`; the per-log
+  admin read needs `notifications.manage`; every `/my/*` route filters
+  `recipient_id`. A malformed pagination cursor is a 400, not a silent first page.
+- **`resolve_sms_recipients`** is called only by tests. That is by design: it is the
+  documented number-only wrapper over `resolve_sms_targets`, which the production
+  send path uses precisely because a bare number cannot be matched back to a member
+  when two share a handset. Kept.
+- `/notifications` log and `/my` routes are in `UNCACHEABLE_PREFIXES`.
+- Related suites: 607 backend tests (notification, push, SMS, message delivery,
+  consent, org-scoping ratchet, CSV, LIKE) pass.
+
+### Not read (scope, stated plainly)
+
+The Web Push send path and its SSRF controls were covered by passes 2–4 and were not
+re-read; the bell / inbox rendering in `NotificationsPage.tsx` was read only at its
+rule and log calls. The individual senders behind the four enforced triggers were
+checked for a resolver call, not for their own delivery logic.
+
+### Completion gate (pass 5)
+
+| Check                                                                                              | Result                                                                                                                   |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/`                                                                               | ✅ exit 0, no output                                                                                                     |
+| `black --check app/ tests/`                                                                        | ✅ 1726 files unchanged                                                                                                  |
+| `isort --check-only` (changed files)                                                               | ✅ clean                                                                                                                 |
+| new backend file, mutation-checked                                                                 | ✅ 9 pass with the fix; **2 fail with the schema validator stashed** (`enabled` null → 500; the follow-up listing → 500) |
+| marker routing                                                                                     | ✅ `-m "not integration and not slow and not docker"` selects 0 of 9; `-m integration` selects 9                         |
+| backend tests (notification, push, SMS, message delivery, consent, org-scoping ratchet, CSV, LIKE) | ✅ **607 passed, 1 skipped** (optional `pywebpush`)                                                                      |
+| `check_route_permissions.py --strict`                                                              | ✅ 0 errors, 0 warnings (no route added or removed)                                                                      |
+| frontend                                                                                           | n/a — no frontend file changed, so `tsc` / `eslint` / `vitest` were not re-run                                           |
 
 ---
 

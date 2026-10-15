@@ -49,7 +49,7 @@ from its open list.
 | B8  | documents                  | DOC2   | ✅     |
 | B9  | membership pipeline        | MP2    | ⬜     |
 | B10 | messaging & communications | MSG2   | ✅     |
-| B11 | notifications              | NOTIF2 | ⬜     |
+| B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ⬜     |
 | B13 | forms                      | FORM2  | ⬜     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
@@ -3142,3 +3142,28 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   eslint clean · backend related suites **649 passed, 1 skipped** · frontend
   documents tests **62 passed** · new file 10 pass, 0 under the unit job's marker
   expression. See documents.md → Pass 5. Next: B9 membership pipeline.
+- **B11 notifications ✅ (pass 5) — `PATCH /rules/{id}` with `enabled: null` stored NULL and
+  then returned 500 (NOTIF2-5).** Drove the rule update endpoint over HTTP against the
+  real schema. `name`, `trigger`, `category` and `channel` (NOT NULL) already come back
+  400 and `description` / `config` still clear; `enabled` is a **nullable column behind
+  a response field that is a plain `bool`**, so `apply_updates` wrote the NULL, the
+  commit succeeded, and serializing the response failed — a 500 after the write that
+  also broke every later `GET /rules` for the org, and left the rule reading as off
+  (2 of 9 cases failed on the unmodified schema, including the follow-up listing).
+  **Fixed** in the request schema with a validator that refuses an explicit null
+  (422) and ignores an omitted key. Same shape as DOC-20 in documents. **Removed
+  (NOTIF2-7):** a `# noqa: F401` re-export in `notification_rules.py` that no file
+  imported. **Flagged (NOTIF2-6):** the rules screen can create and toggle a rule but
+  not edit or delete it (the endpoints and client wrappers exist, nothing calls
+  them); owner decision, mirrored to KNOWN_LIMITATIONS. **Observed, not changed:**
+  67 `# noqa: E712` and 6 `# noqa: E711` in `backend/app`, all no-ops because
+  `.flake8` ignores both globally — a mechanical sweep for its own PR. **Verified
+  good:** #19 holds (all four `ENFORCED_TRIGGERS` have a resolver caller; the create
+  form offers no inert control); log scope is the caller's own unless
+  `notifications.manage`; `resolve_sms_recipients` is test-only by design (the
+  documented wrapper over `resolve_sms_targets`). **Not read:** the Web Push send path
+  (passes 2–4), the inbox rendering, the individual senders' delivery logic. Gate:
+  flake8 / black / isort clean · backend related suites **607 passed, 1 skipped** · new
+  file 9 pass, 2 fail without the fix, 0 under the unit job's marker expression ·
+  route-permission check 0 errors · no frontend change. See notifications.md →
+  Pass 5. Next: B12 integrations.
