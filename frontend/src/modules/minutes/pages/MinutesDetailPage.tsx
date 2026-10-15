@@ -8,10 +8,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { PromptDialog } from '../../../components/ux/PromptDialog';
+import { RichText } from '../../../components/ux/RichText';
+import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown, Gavel, ListChecks } from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
@@ -21,6 +23,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { plainTextToHtml, sectionIsBlank } from '../../../utils/richText';
 import type {
   MeetingMinutes,
   MotionCreate,
@@ -29,9 +32,27 @@ import type {
   ActionItemCreate,
   ActionItemPriority,
   SectionEntry,
+  AdoptionDetails,
+  ImportableElection,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { saveBlob } from '../../../utils/saveBlob';
+import { PanelDisclosure } from '../components/PanelDisclosure';
+import { AdoptDialog } from '../components/AdoptDialog';
+import { AttachmentsPanel } from '../components/AttachmentsPanel';
+import { AttendancePanel } from '../components/AttendancePanel';
+import { CarryForwardDialog } from '../components/CarryForwardDialog';
+import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
+import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
+import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
+import { PersonPicker } from '../components/PersonPicker';
+import { SectionMotion } from '../components/SectionMotion';
+import { RevisionsPanel } from '../components/RevisionsPanel';
+import { SuggestChangeForm } from '../components/SuggestChangeForm';
+import { SuggestionsPanel } from '../components/SuggestionsPanel';
+import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -42,8 +63,8 @@ const STATUS_BADGES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
-  submitted: 'Submitted',
-  approved: 'Approved',
+  submitted: 'Circulated for review',
+  approved: 'Adopted',
   rejected: 'Rejected',
 };
 
@@ -91,6 +112,7 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Inline editing
   const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [suggestingSection, setSuggestingSection] = useState<string | null>(null);
   const [sectionValue, setSectionValue] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -100,6 +122,20 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Publishing
   const [publishing, setPublishing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // Adopting, and laying an outline over the draft
+  const [showAdopt, setShowAdopt] = useState(false);
+  const [adopting, setAdopting] = useState(false);
+  const [hasAcceptedSuggestions, setHasAcceptedSuggestions] = useState(false);
+  const [showApplyOutline, setShowApplyOutline] = useState(false);
+  const [applyingOutline, setApplyingOutline] = useState(false);
+
+  // Closed elections a motion can be tied to; loaded when the motion form opens
+  const [ballots, setBallots] = useState<ImportableElection[] | null>(null);
+
+  // Carrying open action items forward from earlier meetings
+  const [showCarryForward, setShowCarryForward] = useState(false);
 
   // Motion form
   const [showMotionForm, setShowMotionForm] = useState(false);
@@ -137,6 +173,14 @@ export const MinutesDetailPage: React.FC = () => {
       .catch((err: unknown) => setAssigneesError(getErrorMessage(err, 'Could not load members')));
   }, [showActionForm, canManage, assignees]);
 
+  useEffect(() => {
+    if (!showMotionForm || !canManage || ballots !== null || !minutesId) return;
+    minutesService
+      .getImportableElections(minutesId)
+      .then(setBallots)
+      .catch(() => setBallots([]));
+  }, [showMotionForm, canManage, ballots, minutesId]);
+
   // Linked event
   const [linkedEvent, setLinkedEvent] = useState<EventDetail | null>(null);
   const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
@@ -166,6 +210,14 @@ export const MinutesDetailPage: React.FC = () => {
   useEffect(() => {
     if (minutesId) void fetchMinutes();
   }, [minutesId, fetchMinutes]);
+
+  // Reload without the full-page spinner, for panels that change the record
+  // (a saved roll call moves the quorum; carried items join the list) and must
+  // stay mounted, with their own state, while it refreshes.
+  const refreshMinutes = useCallback(async () => {
+    if (!minutesId) return;
+    setMinutes(await minutesService.getMinutes(minutesId));
+  }, [minutesId]);
 
   // Fetch linked event details when minutes load
   useEffect(() => {
@@ -199,6 +251,23 @@ export const MinutesDetailPage: React.FC = () => {
   }, [linkedEventId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
+  const suggestions = useMinutesSuggestions(minutesId ?? '', minutes?.status ?? 'draft');
+  // A member suggests from a section; the secretary answers rather than suggests.
+  const canSuggest = minutes?.status === 'submitted' && !canManage;
+  const openSuggestionCount = (sectionKey: string) =>
+    suggestions.suggestions.filter((x) => x.section_key === sectionKey && x.status === 'open').length;
+
+  const handleDownloadPdf = async () => {
+    if (!minutesId || !minutes) return;
+    setDownloadingPdf(true);
+    try {
+      saveBlob(await minutesService.downloadPdf(minutesId), `${minutes.title}.pdf`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to download the PDF'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   // ── Section CRUD ──
 
@@ -206,7 +275,9 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !minutes) return;
     try {
       setSaving(true);
-      const updatedSections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, content: sectionValue } : s));
+      const updatedSections = minutes.sections.map((s) =>
+        s.key === sectionKey ? { ...s, content: sectionValue, format: 'html' as const } : s
+      );
       const updated = await minutesService.updateMinutes(minutesId, { sections: updatedSections });
       setMinutes(updated);
       setEditingSection(null);
@@ -216,6 +287,15 @@ export const MinutesDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // A time is a field of its own on the minutes, not part of a section. Sent as
+  // an explicit null to clear it, since an omitted key means "leave it alone".
+  const handleSaveTime = async (field: 'called_to_order_at' | 'adjourned_at', iso: string | null) => {
+    if (!minutesId) return;
+    const updated = await minutesService.updateMinutes(minutesId, { [field]: iso });
+    setMinutes(updated);
+    toast.success(iso ? 'Time recorded' : 'Time cleared');
   };
 
   const handleReorderSection = async (index: number, direction: 'up' | 'down') => {
@@ -319,20 +399,66 @@ export const MinutesDetailPage: React.FC = () => {
       try {
         const updated = await minutesService.submitForApproval(minutesId);
         setMinutes(updated);
-        toast.success('Minutes submitted for approval');
+        toast.success('Minutes circulated for review');
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to submit minutes'));
+        toast.error(getErrorMessage(err, 'Failed to circulate minutes'));
       }
     });
 
-  const handleApprove = async () => {
-    if (!minutesId) return;
+  const handleOpenAdopt = async () => {
     try {
-      const updated = await minutesService.approve(minutesId);
+      const all = await minutesService.getSuggestions(minutesId ?? '');
+      setHasAcceptedSuggestions(all.some((x) => x.status === 'accepted'));
+    } catch {
+      setHasAcceptedSuggestions(false);
+    }
+    setShowAdopt(true);
+  };
+
+  const handleAdopt = async (details: AdoptionDetails) => {
+    if (!minutesId) return;
+    setAdopting(true);
+    try {
+      const updated = await minutesService.approve(minutesId, details);
       setMinutes(updated);
-      toast.success('Minutes approved');
+      setShowAdopt(false);
+      toast.success('Minutes adopted');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to approve minutes'));
+      toast.error(getErrorMessage(err, 'Failed to adopt minutes'));
+    } finally {
+      setAdopting(false);
+    }
+  };
+
+  const handleRecall = async () => {
+    if (!minutesId) return;
+    const ok = await confirm({
+      title: 'Take these minutes back to draft?',
+      message:
+        'Members will no longer see them until you circulate them again. Suggestions already made are kept. Use this to work in the changes you accepted.',
+      confirmLabel: 'Recall to draft',
+      cancelLabel: 'Leave them circulating',
+    });
+    if (!ok) return;
+    try {
+      setMinutes(await minutesService.recall(minutesId));
+      toast.success('Minutes are a draft again');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to recall the minutes'));
+    }
+  };
+
+  const handleApplyOutline = async (outlineId: string) => {
+    if (!minutesId) return;
+    setApplyingOutline(true);
+    try {
+      setMinutes(await minutesService.applyOutline(minutesId, outlineId));
+      setShowApplyOutline(false);
+      toast.success('Outline applied. Everything already written was kept.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to apply the outline'));
+    } finally {
+      setApplyingOutline(false);
     }
   };
 
@@ -343,7 +469,7 @@ export const MinutesDetailPage: React.FC = () => {
       setMinutes(updated);
       setShowRejectModal(false);
       setRejectReason('');
-      toast.success('Minutes rejected');
+      toast.success('Minutes returned for changes');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to reject minutes'));
     }
@@ -571,10 +697,40 @@ export const MinutesDetailPage: React.FC = () => {
                 {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
               </p>
             </div>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
-              {STATUS_LABELS[minutes.status] ?? minutes.status}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
+                {STATUS_LABELS[minutes.status] ?? minutes.status}
+              </span>
+              <button
+                type="button"
+                disabled={downloadingPdf}
+                onClick={() => {
+                  void handleDownloadPdf();
+                }}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
+              >
+                <FileDown className="h-4 w-4" aria-hidden="true" />
+                {downloadingPdf ? 'Preparing…' : 'Download PDF'}
+              </button>
+            </div>
           </div>
+
+          {/* How the body adopted them */}
+          {minutes.status === 'approved' && minutes.adopted_on && (
+            <p className="text-theme-text-secondary mt-1 text-sm">
+              Adopted {formatDate(minutes.adopted_on, tz)}
+              {minutes.adopted_as_amended === true && ' as amended'}
+              {minutes.adopted_as_amended === false && ' as presented'}
+              {minutes.adopting_minutes_id && (
+                <>
+                  {' at '}
+                  <Link to={`/minutes/${minutes.adopting_minutes_id}`} className="text-blue-600 hover:text-blue-700">
+                    {minutes.adopting_minutes_title ?? 'the adopting meeting'}
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
 
           {/* Rejection notice */}
           {minutes.status === 'rejected' && minutes.rejection_reason && (
@@ -688,7 +844,7 @@ export const MinutesDetailPage: React.FC = () => {
                   }}
                   className="btn-info rounded-md disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Submit for Approval
+                  Circulate for Review
                 </button>
               )}
               {minutes.status === 'submitted' && (
@@ -698,20 +854,29 @@ export const MinutesDetailPage: React.FC = () => {
                       to them (W51-6). */}
                   {minutes.submitted_by && minutes.submitted_by === currentUserId ? (
                     <p className="text-theme-text-secondary self-center text-sm">
-                      Waiting for another officer to approve. You submitted these minutes, so you cannot approve them.
+                      Waiting for another officer to adopt them. You circulated these minutes, so you cannot record
+                      their adoption.
                     </p>
                   ) : (
                     <button
                       onClick={() => {
-                        void handleApprove();
+                        void handleOpenAdopt();
                       }}
                       className="btn-success rounded-md"
                     >
-                      Approve Minutes
+                      Adopt Minutes
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      void handleRecall();
+                    }}
+                    className="btn-secondary rounded-md"
+                  >
+                    Recall to Draft
+                  </button>
                   <button onClick={() => setShowRejectModal(true)} className="btn-primary rounded-md">
-                    Reject Minutes
+                    Return for Changes
                   </button>
                 </>
               )}
@@ -762,6 +927,17 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
         )}
 
+        <SuggestionsPanel
+          minutesId={minutes.id}
+          status={minutes.status}
+          sections={minutes.sections}
+          canManage={canManage}
+          suggestions={suggestions.suggestions}
+          loaded={suggestions.loaded}
+          reload={suggestions.reload}
+          onMinutesChanged={fetchMinutes}
+        />
+
         {/* Meeting Info */}
         <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
           <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
@@ -792,25 +968,12 @@ export const MinutesDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Attendees */}
-          {minutes.attendees && minutes.attendees.length > 0 && (
-            <div className="border-theme-surface-border mt-4 border-t pt-4">
-              <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">
-                Attendees ({minutes.attendees.length})
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {minutes.attendees.map((a, i) => (
-                  <span
-                    key={i}
-                    className={`rounded-sm px-2 py-1 text-xs ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 line-through dark:bg-red-500/20 dark:text-red-400'}`}
-                  >
-                    {a.name}
-                    {a.role ? ` (${a.role})` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <AttendancePanel
+            minutesId={minutes.id}
+            attendees={minutes.attendees ?? []}
+            canEdit={Boolean(canManage && isEditable)}
+            onSaved={refreshMinutes}
+          />
         </div>
 
         {/* Dynamic Content Sections */}
@@ -818,13 +981,22 @@ export const MinutesDetailPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-theme-text-primary text-lg font-semibold">Meeting Sections</h2>
             {canManage && isEditable && (
-              <button
-                onClick={() => setShowAddSection(!showAddSection)}
-                className="inline-flex items-center gap-1 rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Section
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowApplyOutline(true)}
+                  className="btn-secondary touch:min-h-11 text-sm"
+                >
+                  Apply an outline
+                </button>
+                <button
+                  onClick={() => setShowAddSection(!showAddSection)}
+                  className="inline-flex items-center gap-1 rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Section
+                </button>
+              </div>
             )}
           </div>
 
@@ -911,15 +1083,41 @@ export const MinutesDetailPage: React.FC = () => {
                             </button>
                           </div>
                         )}
-                        <h3 className="text-md text-theme-text-primary font-semibold">{section.title}</h3>
+                        <h3 className="text-md text-theme-text-primary font-semibold">
+                          {section.title}
+                          {openSuggestionCount(section.key) > 0 && (
+                            <span className="ml-2 rounded-sm bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
+                              {openSuggestionCount(section.key)} open{' '}
+                              {openSuggestionCount(section.key) === 1 ? 'suggestion' : 'suggestions'}
+                            </span>
+                          )}
+                          {section.required && sectionIsBlank(section) && isEditable && (
+                            <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
+                              Required
+                            </span>
+                          )}
+                        </h3>
                       </div>
                       <div className="flex items-center gap-2">
+                        {canSuggest && (
+                          <button
+                            type="button"
+                            onClick={() => setSuggestingSection(suggestingSection === section.key ? null : section.key)}
+                            aria-expanded={suggestingSection === section.key}
+                            aria-label={`Suggest a change to ${section.title}`}
+                            className="touch:min-h-11 text-sm text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Suggest a change
+                          </button>
+                        )}
                         {canManage && isEditable && !isEditing && (
                           <>
                             <button
                               onClick={() => {
                                 setEditingSection(section.key);
-                                setSectionValue(section.content || '');
+                                setSectionValue(
+                                  section.format === 'html' ? section.content : plainTextToHtml(section.content)
+                                );
                               }}
                               className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                               aria-label={`Edit ${section.title}`}
@@ -942,16 +1140,12 @@ export const MinutesDetailPage: React.FC = () => {
 
                     {isEditing ? (
                       <div>
-                        <label htmlFor={`section-edit-${section.key}`} className="sr-only">
-                          Edit {section.title} content
-                        </label>
-                        <textarea
+                        <RichTextEditor
+                          key={section.key}
                           id={`section-edit-${section.key}`}
-                          rows={6}
                           value={sectionValue}
-                          onChange={(e) => setSectionValue(e.target.value)}
-                          className="form-input"
-                          aria-label={`${section.title} content`}
+                          onChange={setSectionValue}
+                          label={`${section.title} content`}
                         />
                         <div className="mt-2 flex gap-2">
                           <button
@@ -971,8 +1165,12 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ) : section.content ? (
-                      <div className="text-theme-text-secondary text-sm whitespace-pre-wrap">{section.content}</div>
+                    ) : !sectionIsBlank(section) ? (
+                      <RichText
+                        content={section.content}
+                        format={section.format}
+                        className="text-theme-text-secondary text-sm"
+                      />
                     ) : (
                       <p className="text-theme-text-muted text-sm italic">
                         No content yet.{' '}
@@ -982,12 +1180,49 @@ export const MinutesDetailPage: React.FC = () => {
                               setEditingSection(section.key);
                               setSectionValue('');
                             }}
-                            className="text-blue-600 hover:underline"
+                            className="text-blue-700 underline hover:no-underline dark:text-blue-400"
                           >
                             Add content
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {(section.key === 'call_to_order' || section.key === 'adjournment') && (
+                      <MeetingTimeCapture
+                        kind={section.key === 'call_to_order' ? 'start' : 'end'}
+                        value={section.key === 'call_to_order' ? minutes.called_to_order_at : minutes.adjourned_at}
+                        otherTime={section.key === 'call_to_order' ? minutes.adjourned_at : minutes.called_to_order_at}
+                        scheduled={section.key === 'call_to_order' ? minutes.meeting_date : undefined}
+                        timezone={tz}
+                        canEdit={Boolean(canManage && isEditable)}
+                        onSave={(iso) =>
+                          handleSaveTime(section.key === 'call_to_order' ? 'called_to_order_at' : 'adjourned_at', iso)
+                        }
+                      />
+                    )}
+
+                    <SectionMotion
+                      minutesId={minutes.id}
+                      section={section}
+                      motions={minutes.motions}
+                      attendees={minutes.attendees ?? []}
+                      canRecord={Boolean(canManage && isEditable)}
+                      onRecorded={fetchMinutes}
+                    />
+
+                    {canSuggest && suggestingSection === section.key && (
+                      <SuggestChangeForm
+                        minutesId={minutes.id}
+                        sectionKey={section.key}
+                        subject={section.title}
+                        original={{ content: section.content, format: section.format }}
+                        onSent={async () => {
+                          setSuggestingSection(null);
+                          await suggestions.reload();
+                        }}
+                        onCancel={() => setSuggestingSection(null)}
+                      />
                     )}
                   </div>
                 );
@@ -996,19 +1231,24 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {/* Motions */}
-        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary text-lg font-semibold">Motions ({minutes.motions.length})</h3>
-            {canManage && isEditable && (
+        <PanelDisclosure
+          id="motions-heading"
+          icon={<Gavel className="h-5 w-5" aria-hidden="true" />}
+          title="Motions"
+          count={minutes.motions.length}
+          defaultOpen={false}
+          actions={
+            canManage &&
+            isEditable && (
               <button
                 onClick={() => setShowMotionForm(!showMotionForm)}
                 className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
               >
                 {showMotionForm ? 'Cancel' : 'Add Motion'}
               </button>
-            )}
-          </div>
-
+            )
+          }
+        >
           {showMotionForm && (
             <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add motion">
               <label htmlFor="motion-text" className="sr-only">
@@ -1024,34 +1264,21 @@ export const MinutesDetailPage: React.FC = () => {
                 className="form-input"
               />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label htmlFor="moved-by" className="sr-only">
-                    Moved by
-                  </label>
-                  <input
-                    id="moved-by"
-                    type="text"
-                    value={motionForm.moved_by || ''}
-                    onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
-                    placeholder="Moved by"
-                    aria-label="Moved by"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="seconded-by" className="sr-only">
-                    Seconded by
-                  </label>
-                  <input
-                    id="seconded-by"
-                    type="text"
-                    value={motionForm.seconded_by || ''}
-                    onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
-                    placeholder="Seconded by"
-                    aria-label="Seconded by"
-                    className="form-input"
-                  />
-                </div>
+                <PersonPicker
+                  id="moved-by"
+                  label="Moved by"
+                  value={motionForm.moved_by || ''}
+                  onChange={(name) => setMotionForm({ ...motionForm, moved_by: name })}
+                  attendees={minutes.attendees ?? []}
+                />
+                <PersonPicker
+                  id="seconded-by"
+                  label="Seconded by"
+                  value={motionForm.seconded_by || ''}
+                  onChange={(name) => setMotionForm({ ...motionForm, seconded_by: name })}
+                  attendees={minutes.attendees ?? []}
+                  exclude={motionForm.moved_by || undefined}
+                />
                 <div>
                   <label htmlFor="motion-status" className="sr-only">
                     Motion status
@@ -1129,6 +1356,57 @@ export const MinutesDetailPage: React.FC = () => {
                   />
                 </div>
               </div>
+              {ballots && ballots.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="motion-ballot" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                      Decided by ballot
+                    </label>
+                    <select
+                      id="motion-ballot"
+                      value={motionForm.election_id ?? ''}
+                      onChange={(e) =>
+                        setMotionForm({
+                          ...motionForm,
+                          election_id: e.target.value || undefined,
+                          ballot_item_id: undefined,
+                        })
+                      }
+                      className="form-input"
+                    >
+                      <option value="">Not decided by ballot</option>
+                      {ballots.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(ballots.find((b) => b.id === motionForm.election_id)?.ballot_items ?? []).length > 0 && (
+                    <div>
+                      <label
+                        htmlFor="motion-ballot-item"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
+                        Item on that ballot
+                      </label>
+                      <select
+                        id="motion-ballot-item"
+                        value={motionForm.ballot_item_id ?? ''}
+                        onChange={(e) => setMotionForm({ ...motionForm, ballot_item_id: e.target.value || undefined })}
+                        className="form-input"
+                      >
+                        <option value="">The ballot as a whole</option>
+                        {(ballots.find((b) => b.id === motionForm.election_id)?.ballot_items ?? []).map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => {
                   void handleAddMotion();
@@ -1167,6 +1445,17 @@ export const MinutesDetailPage: React.FC = () => {
                             {motion.votes_abstain ? ` (${motion.votes_abstain} abstain)` : ''}
                           </span>
                         )}
+                        {motion.election_id && (
+                          <span>
+                            Decided by ballot:{' '}
+                            <Link
+                              to={`/elections/${motion.election_id}`}
+                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                            >
+                              {motion.election_title ?? 'the election'}
+                            </Link>
+                          </span>
+                        )}
                       </div>
                     </div>
                     {canManage && isEditable && (
@@ -1184,24 +1473,51 @@ export const MinutesDetailPage: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </PanelDisclosure>
+
+        <ClosedSessionsPanel
+          minutesId={minutes.id}
+          canEdit={Boolean(canManage && isEditable)}
+          attendees={minutes.attendees ?? []}
+          motions={minutes.motions}
+          defaultOpen={false}
+        />
+
+        <ElectionResultsPanel
+          minutesId={minutes.id}
+          canFile={canManage}
+          canRemoveDrafted={Boolean(canManage && isEditable)}
+          defaultOpen={false}
+        />
 
         {/* Action Items */}
-        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary text-lg font-semibold">
-              Action Items ({minutes.action_items.length})
-            </h3>
-            {canManage && isEditable && (
-              <button
-                onClick={() => setShowActionForm(!showActionForm)}
-                className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
-              >
-                {showActionForm ? 'Cancel' : 'Add Action Item'}
-              </button>
-            )}
-          </div>
-
+        <PanelDisclosure
+          id="action-items-heading"
+          icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
+          title="Action Items"
+          count={minutes.action_items.length}
+          defaultOpen={false}
+          actions={
+            canManage &&
+            isEditable && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCarryForward(true)}
+                  className="btn-secondary touch:min-h-11 text-sm"
+                >
+                  Carry forward open items
+                </button>
+                <button
+                  onClick={() => setShowActionForm(!showActionForm)}
+                  className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
+                >
+                  {showActionForm ? 'Cancel' : 'Add Action Item'}
+                </button>
+              </div>
+            )
+          }
+        >
           {showActionForm && (
             <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add action item">
               <label htmlFor="action-description" className="sr-only">
@@ -1346,7 +1662,48 @@ export const MinutesDetailPage: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </PanelDisclosure>
+
+        <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} defaultOpen={false} />
+
+        <RevisionsPanel
+          minutesId={minutes.id}
+          status={minutes.status}
+          version={minutes.updated_at}
+          defaultOpen={false}
+        />
+
+        <AdoptDialog
+          isOpen={showAdopt}
+          minutesId={minutes.id}
+          hasAcceptedSuggestions={hasAcceptedSuggestions}
+          attendees={minutes.attendees ?? []}
+          busy={adopting}
+          onClose={() => setShowAdopt(false)}
+          onAdopt={(details) => {
+            void handleAdopt(details);
+          }}
+        />
+
+        <OutlinePickerDialog
+          isOpen={showApplyOutline}
+          meetingType={minutes.meeting_type}
+          busy={applyingOutline}
+          title="Apply an outline"
+          intro="The outline’s sections are laid over these minutes in its order. Everything you have already written is kept; sections the outline lacks stay if they have text."
+          confirmLabel="Apply outline"
+          onClose={() => setShowApplyOutline(false)}
+          onChoose={(id) => {
+            void handleApplyOutline(id);
+          }}
+        />
+
+        <CarryForwardDialog
+          isOpen={showCarryForward}
+          minutesId={minutes.id}
+          onClose={() => setShowCarryForward(false)}
+          onCarried={refreshMinutes}
+        />
 
         {/* Link Event Modal */}
         {showLinkEventModal && (
@@ -1418,8 +1775,8 @@ export const MinutesDetailPage: React.FC = () => {
           isOpen={showReopenDialog}
           onClose={() => setShowReopenDialog(false)}
           onSubmit={(reason) => void handleReopen(reason)}
-          title="Reopen approved minutes"
-          message="Approved minutes are locked. Reopening returns them to draft so they can be corrected; they must then be submitted and approved again, and members will not see them as approved until they are."
+          title="Reopen adopted minutes"
+          message="Adopted minutes are locked. Reopening returns them to draft so they can be corrected; they must then be circulated and adopted again, and members will not see them as adopted until they are."
           label="What needs correcting"
           required
           minLength={10}
@@ -1447,12 +1804,12 @@ export const MinutesDetailPage: React.FC = () => {
             <DialogPanel onClose={() => setShowRejectModal(false)} className="modal-panel-scroll w-full max-w-md">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
-                  Reject Minutes
+                  Return Minutes for Changes
                 </h3>
               </div>
               <div className="px-6 py-4">
                 <label htmlFor="reject-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Reason for Rejection <span aria-hidden="true">*</span>{' '}
+                  What needs to change <span aria-hidden="true">*</span>{' '}
                   <span className="text-theme-text-muted text-xs">(at least 10 characters)</span>
                 </label>
                 <textarea

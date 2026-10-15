@@ -2318,7 +2318,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   description: blankToNull(comp.description),
                   image_url: blankToNull(comp.imageUrl),
                   is_header: comp.isHeader,
-                  container_type: comp.containerType || null,
+                  // NOT NULL column with no cleared state: a blank is left out
+                  // (keep the stored type), never sent as null.
+                  container_type: comp.containerType.trim() || undefined,
                   is_sealed: comp.isSealed,
                   // Compartments have no auto-save path, so this is the only
                   // writer: re-parenting one to the top level is expressible
@@ -2353,7 +2355,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       image_url: blankToNull(item.imageUrl),
                       has_expiration: item.hasExpiration,
                       expiration_date: blankToNull(item.expirationDate),
-                      expiration_warning_days: numberOrNull(item.expirationWarningDays),
+                      // NOT NULL, like the auto-save path above: blank is omitted.
+                      expiration_warning_days: item.expirationWarningDays
+                        ? Number(item.expirationWarningDays)
+                        : undefined,
                     })
                     .then(() => undefined);
                   void registerInFlightSave(

@@ -9,14 +9,14 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 | Technology      | Version | Purpose                                           |
 | --------------- | ------- | ------------------------------------------------- |
 | React           | 19      | UI framework                                      |
-| TypeScript      | 5.9     | Type-safe JavaScript                              |
+| TypeScript      | 7.0     | Compiler (`tsc-native`); 5.9 for type-aware lint  |
 | Vite            | 8.3     | Build tool and dev server                         |
 | Vitest          | 5       | Unit/integration testing                          |
-| Tailwind CSS    | 4.2     | Utility-first CSS                                 |
+| Tailwind CSS    | 4.x     | Utility-first CSS                                 |
 | Zod             | 4       | Schema validation                                 |
-| ESLint          | 9       | Linting (flat config)                             |
+| ESLint          | 10      | Linting (flat config)                             |
 | React Router    | 8.4     | Client-side routing (core `react-router` package) |
-| React Hook Form | 7.8x    | Form management                                   |
+| React Hook Form | 7.89    | Form management                                   |
 | Lucide React    | 1.x     | Icons                                             |
 | React Hot Toast | —       | Toast notifications                               |
 | DOMPurify       | —       | XSS sanitization                                  |
@@ -28,7 +28,7 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 ### Prerequisites
 
 - Node.js 22.x+
-- npm 10+
+- npm 11+ (the `engines` floor in `frontend/package.json`)
 
 ### Setup
 
@@ -43,7 +43,9 @@ cp .env.example .env
 npm run dev
 ```
 
-The dev server starts at `http://localhost:5173` with hot module replacement.
+The dev server starts at `http://localhost:3000` with hot module replacement
+(`server.port` in `vite.config.ts`), and proxies `/api` to the backend on
+`VITE_BACKEND_URL` (default `http://localhost:3001`).
 
 ### Environment Variables
 
@@ -63,13 +65,15 @@ VITE_API_URL=/api/v1
 ## Commands
 
 ```bash
-npm run dev        # Start dev server (port 5173)
-npm run build      # Production build
-npm run preview    # Preview production build
-npm run test       # Run tests
-npm run lint       # Lint code
-npm run format     # Format code
-npm run typecheck  # TypeScript type checking
+npm run dev              # Start dev server (port 3000)
+npm run build            # Typecheck (tsc-native), then production build
+npm run preview          # Preview production build
+npm run test             # Run tests (Vitest)
+npm run lint             # Lint code
+npm run lint:fix         # Lint and auto-fix
+npm run format           # Format code
+npm run typecheck        # TypeScript type checking (application code)
+npm run typecheck:tests  # TypeScript type checking (test files)
 ```
 
 ---
@@ -79,35 +83,48 @@ npm run typecheck  # TypeScript type checking
 ```
 frontend/src/
 ├── components/        # Reusable UI components
-│   ├── common/        # Shared components (Modal, Button, Table, etc.)
-│   ├── layout/        # Layout components (Sidebar, Header, etc.)
-│   ├── modules/       # Module-specific components
-│   └── ux/            # UX components (Skeleton, Breadcrumbs, Pagination, etc.)
+│   ├── layout/        # Layout components (AppLayout, navigation, etc.)
+│   ├── settings/      # SettingsLayout and the settings sections
+│   ├── ux/            # UX components (Skeleton, Breadcrumbs, Pagination, etc.)
+│   ├── <feature>/     # Shared feature folders (events, members, training, ...)
+│   └── *.tsx          # Shared top-level components (Modal, ErrorBoundary,
+│                      #   ProtectedRoute, ...)
 ├── constants/         # Centralized constants (config.ts, enums.ts)
 ├── pages/             # Page components (one per route)
 ├── modules/           # Feature modules (self-contained)
-│   ├── action-items/  # Action items from meetings
-│   ├── admin/         # Admin pages routes
-│   ├── admin-hours/   # Admin hours tracking
-│   ├── apparatus/     # Apparatus/vehicle management
-│   ├── communications/# Email templates & messaging
-│   ├── documents/     # Document management routes
-│   ├── elections/     # Elections & voting
-│   ├── events/        # Event management routes
-│   ├── facilities/    # Facilities management routes
-│   ├── forms/         # Custom forms routes
-│   ├── integrations/  # Integration routes
-│   ├── inventory/     # Inventory routes
-│   ├── membership/    # Membership management
-│   ├── minutes/       # Meeting minutes routes
-│   ├── notifications/ # Notification routes
-│   ├── onboarding/    # Onboarding wizard
-│   ├── public-portal/ # Public portal
-│   ├── scheduling/    # Scheduling module
-│   ├── settings/      # Settings routes
-│   └── training/      # Training module
+│   ├── action-items/        # Action items from meetings
+│   ├── admin/               # Admin pages routes
+│   ├── admin-hours/         # Admin hours tracking
+│   ├── apparatus/           # Apparatus/vehicle management
+│   ├── communications/      # Email templates & messaging
+│   ├── documents/           # Document management routes
+│   ├── elections/           # Elections & voting
+│   ├── events/              # Event management routes
+│   ├── facilities/          # Facilities management routes
+│   ├── finance/             # Budgets, purchase requests, dues, approvals
+│   ├── forms/               # Custom forms routes
+│   ├── governance/          # Legal documents and org chart
+│   ├── grants-fundraising/  # Grants, campaigns, donors
+│   ├── integrations/        # Integration routes
+│   ├── inventory/           # Inventory routes
+│   ├── ip-security/         # IP exceptions and blocked-access review
+│   ├── medical-screening/   # Medical screening requirements and records
+│   ├── medical-supplies/    # EMS stock, separate from gear and uniforms
+│   ├── membership/          # Membership management
+│   ├── minutes/             # Meeting minutes routes
+│   ├── notifications/       # Notification routes
+│   ├── onboarding/          # Onboarding wizard
+│   ├── prospective-members/ # Applicant pipeline
+│   ├── public-portal/       # Public portal
+│   ├── reports/             # Departmental reports and exports
+│   ├── scheduling/          # Scheduling module
+│   ├── settings/            # Settings routes
+│   ├── storefront/          # Department store and order windows
+│   ├── testing/             # In-app testing checklist (testingRegistry.ts)
+│   └── training/            # Training module
 ├── hooks/             # Custom React hooks
-├── services/          # API service functions (split into 13 domain files)
+├── services/          # Global API services, one file per domain
+│   ├── api.ts                 # Barrel re-export of the domain services
 │   ├── apiClient.ts           # Shared axios instance with interceptors
 │   ├── authService.ts         # Authentication API
 │   ├── userServices.ts        # User management API
@@ -120,7 +137,8 @@ frontend/src/
 │   ├── formsServices.ts       # Forms API
 │   ├── adminServices.ts       # Admin API
 │   ├── facilitiesServices.ts  # Facilities API
-│   └── meetingsServices.ts    # Meetings API
+│   ├── meetingsServices.ts    # Meetings API
+│   └── ...                    # Further domain services
 ├── stores/            # State management
 ├── types/             # TypeScript type definitions
 ├── utils/             # Utility functions
@@ -164,35 +182,47 @@ modules/<module>/
 ### CSS
 
 - **Tailwind CSS v4** — Use utility classes for styling; configuration via `@theme` directives in CSS (not `tailwind.config.js`)
-- **CSS Variables** — Use `--theme-*` variables for theming
+- **Theme tokens** — Use the `theme-*` utility classes (`bg-theme-surface`, `text-theme-text-primary`), which read the CSS variables below
 - **Dark mode** — Use `bg-theme-surface-modal` for modal backgrounds
 - **Responsive** — Mobile-first responsive design
 
 ### ESLint
 
-- **ESLint v9** with flat config (`eslint.config.js`, not `.eslintrc.json`)
+- **ESLint v10** with flat config (`eslint.config.js`, not `.eslintrc.json`)
 - **@typescript-eslint** plugins for TypeScript-specific rules
-- Run `npx eslint --fix frontend/src/` to auto-fix issues
+- Run `npm run lint:fix --workspace frontend` from the repo root to auto-fix issues
 
 ---
 
 ## Theming
 
-The application supports light and dark themes via CSS variables:
+The application supports light, dark and high-contrast themes via CSS
+variables in `src/styles/index.css`. `:root` holds the light values, and the
+`.dark` and `.high-contrast` classes override them:
 
 ```css
-/* Light theme */
---theme-bg: #ffffff;
---theme-text: #1a1a1a;
---theme-surface: #f5f5f5;
---theme-surface-modal: #ffffff;
+:root {
+  --surface-bg: #ffffff;
+  --surface-modal: #ffffff;
+  --surface-border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+}
 
-/* Dark theme */
---theme-bg: #1a1a1a;
---theme-text: #e0e0e0;
---theme-surface: #2a2a2a;
---theme-surface-modal: #333333;
+.dark {
+  --surface-bg: rgba(255, 255, 255, 0.06);
+  --surface-modal: #1e293b;
+  --surface-border: rgba(255, 255, 255, 0.2);
+  --text-primary: #ffffff;
+  --text-secondary: #ffffff;
+  --text-muted: #ffffff;
+}
 ```
+
+The `@theme` block maps them to Tailwind colors (for example
+`--color-theme-surface: var(--surface-bg)`), which is what makes classes such
+as `bg-theme-surface` and `text-theme-text-primary` available.
 
 ---
 
@@ -216,7 +246,7 @@ The application targets WCAG 2.1 Level AA:
 
 ## API Integration
 
-API calls are organized into 13 domain-specific service files in `src/services/`. Each service uses a shared `apiClient` with consistent interceptors:
+API calls are organized into domain-specific service files in `src/services/`. Each service uses the shared axios instance from `apiClient.ts`, with consistent interceptors:
 
 ```typescript
 // Example: fetch members
@@ -224,9 +254,9 @@ import { userService } from "@/services/userServices";
 
 const users = await userService.getUsers();
 
-// Or use the raw API client
-import { apiClient } from "@/services/apiClient";
-const response = await apiClient.get("/users");
+// Or use the raw API client (the module's default export)
+import api from "@/services/apiClient";
+const response = await api.get("/users");
 ```
 
 The shared API client automatically:

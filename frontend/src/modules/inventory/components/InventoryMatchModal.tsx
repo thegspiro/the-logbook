@@ -194,8 +194,14 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
                               >
                                 {selected && <Check className="h-3 w-3" />}
                               </span>
-                              <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm">
-                                {suggestion.name}
+                              <span className="min-w-0 flex-1 truncate text-sm">
+                                <span className="text-theme-text-primary">{suggestion.name}</span>
+                                {suggestion.matchedAlias && (
+                                  <span className="text-theme-text-muted">
+                                    {' '}
+                                    · also called &ldquo;{suggestion.matchedAlias}&rdquo;
+                                  </span>
+                                )}
                               </span>
                               <span
                                 className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${

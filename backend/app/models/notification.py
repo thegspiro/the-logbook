@@ -435,6 +435,13 @@ class DepartmentMessage(Base):
         cascade="all, delete-orphan",
     )
 
+    if TYPE_CHECKING:
+        # Not columns. MessagingService flags a message that an update published or
+        # newly targeted so the endpoint can notify. Declared only for the type
+        # checker: an annotation SQLAlchemy sees would have to be mapped.
+        _published_by_update: bool
+        _newly_targeted: Any
+
     __table_args__ = (
         Index("idx_dept_msg_org_pinned", "organization_id", "is_pinned"),
         # Inbox/unread queries filter on org + is_active + expires_at, so index

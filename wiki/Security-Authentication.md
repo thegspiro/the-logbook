@@ -12,14 +12,15 @@ Username and password authentication with Argon2id password hashing.
 
 1. User submits username and password
 2. Backend verifies password against Argon2id hash
-3. On success, issues JWT access token (8-hour lifetime) and refresh token (7-day lifetime)
-4. Tokens are set as **httpOnly cookies** (not stored in localStorage) for all API requests
-5. Refresh token used to obtain new access tokens without re-authentication
+3. On success, issues a JWT access token (30 minutes by default, `ACCESS_TOKEN_EXPIRE_MINUTES`) and a refresh token (7 days, `REFRESH_TOKEN_EXPIRE_DAYS`); the login response also carries the user, so no separate `GET /auth/me` is needed
+4. Tokens are set as **httpOnly cookies** — never stored in `localStorage` or readable by JavaScript, so an XSS bug cannot steal them
+5. The refresh token obtains new access tokens without re-authentication
 6. CSRF protection is enforced globally via middleware on all state-changing requests
 
-> **Security Note (2026-02-24):** JWT tokens were previously stored in `localStorage` and sent via `Authorization: Bearer` headers. This has been changed to httpOnly cookies to prevent XSS-based token theft. If you have custom integrations using Bearer tokens, update them to use cookie-based authentication.
-
-> **Auth Flow Update (2026-03-06):** The login response now includes user data directly (eliminating a separate `GET /auth/me` call), and a temporary Bearer token bridge stores the access token in memory for 30 minutes as a fallback for environments where httpOnly cookies are not immediately available (e.g., due to nginx proxy buffering). The backend's `get_current_user` accepts both cookie-based and Bearer token authentication. Security middleware (SecurityHeaders, IPLogging) was converted from Starlette `BaseHTTPMiddleware` to pure ASGI to prevent Set-Cookie header stripping.
+The browser app never sends an `Authorization` header. `get_current_user`
+also accepts `Authorization: Bearer <token>` for API and non-browser clients.
+Security middleware is pure ASGI rather than Starlette's `BaseHTTPMiddleware`,
+which can strip `Set-Cookie` headers when layers are stacked.
 
 ### Password Requirements
 
@@ -28,17 +29,19 @@ Username and password authentication with Argon2id password hashing.
 - Cannot reuse last 12 passwords
 - Must change every 90 days
 - **Minimum password age of 1 day** (prevents rapidly cycling through the history to return to an old password)
-- Account locks after 5 failed attempts (30-minute lockout)
-- **Optionally rejected if the password appears in a known breach corpus**
-  _(2026-08-16)_ — off by default (`BREACHED_PASSWORD_CHECK_ENABLED`), and only
+- Account locks after 5 consecutive failed attempts (15-minute lockout — see
+  [Account Lockout](#account-lockout-unlock-and-the-sign-in-audit-trail))
+- **Optionally rejected if the password appears in a known breach corpus** —
+  off by default (`BREACHED_PASSWORD_CHECK_ENABLED`), and only
   the first 5 characters of the SHA-1 hash are ever sent (k-anonymity). The
   lookup **fails open**: it is supplementary, and an outage must not block a
   password change while complexity, history, MFA and lockout all still apply.
 
-> **Lockout responses are generic by default** _(2026-08-17)_. A message that
-> distinguishes "locked" from "wrong password" confirms the account exists and
-> tells an attacker their spray is landing. The specific message is available
-> to operators through the audit log, not to the sign-in form.
+> **Lockout responses are generic by default.** A message that distinguishes
+> "locked" from "wrong password" confirms the account exists and tells an
+> attacker their spray is landing. The lock is visible to administrators on
+> the Members page and in the audit log (`account_locked`), not to the sign-in
+> form, unless `ACCOUNT_LOCKOUT_REVEAL` is enabled.
 
 > **Account lockout is per-user, so it does not cover password spraying.** One
 > password tried against a thousand accounts never reaches five failures on any
@@ -46,7 +49,7 @@ Username and password authentication with Argon2id password hashing.
 > accounts — is the control that covers that gap. See
 > [Configuration → Security → Attack Protection](Configuration-Security#attack-protection-2026-08-16--08-17).
 
-> **Forced-change exemption (2026-06-25):** When an account is flagged
+> **Forced-change exemption:** When an account is flagged
 > `must_change_password` — a new admin-created user, a self-registration, or an
 > admin password reset with _force change_ — the user must change their password
 > on first login. That mandatory change is **exempt from the 1-day minimum
@@ -55,7 +58,7 @@ Username and password authentication with Argon2id password hashing.
 > being demanded. The exemption applies only while `must_change_password` is set;
 > once cleared, the minimum-age rule resumes for ordinary voluntary changes.
 
-### Breached-Password Rejection _(2026-08-17, opt-in)_
+### Breached-Password Rejection (opt-in)
 
 Complexity rules say nothing about whether a password has already leaked.
 `Firetruck2024!` satisfies every rule above and appears in public breach
@@ -90,7 +93,7 @@ different password either way.
 See [Configuration → Security](Configuration-Security#breached-password-detection)
 for the settings.
 
-### Suspicious-IP Throttling _(2026-08-17, on by default)_
+### Suspicious-IP Throttling (on by default)
 
 The per-IP rate limit caps burst speed and the account lockout caps guesses
 against one user. Neither stops a **password spray**: one IP trying two
@@ -115,7 +118,7 @@ The ledger is keyed on IP address only and holds no account or member data.
 Redis-backed and shared across workers, with a capped, evicted per-process
 fallback.
 
-### Account Lockout, Unlock and the Sign-In Audit Trail _(2026-10-04)_
+### Account Lockout, Unlock and the Sign-In Audit Trail
 
 After `MAX_LOGIN_ATTEMPTS` (5) consecutive failures, password or second
 factor, an account is locked for `ACCOUNT_LOCKOUT_DURATION_MINUTES` (15). With
@@ -126,6 +129,12 @@ admin page shows "Sign-in locked until …" to `members.manage` holders, with an
 **Unlock** action (`POST /users/{id}/unlock`). Unlocking clears the failure
 count and is audited as `account_unlocked`. Resetting the password also clears
 the lock.
+
+For an account with MFA, a correct password does not reset the failure count
+or lift the lock — only a successful second factor does — so wrong
+authenticator codes accumulate to a lockout like wrong passwords. A
+rate-limited sign-in shows the server's `Retry-After` wait ("Too many failed
+attempts. Try again in N seconds.").
 
 Every sign-in event is written to the tamper-evident audit log under category
 `authentication`: `login` (with `method`: `password`, `password+totp` or
@@ -140,9 +149,9 @@ last hour" counts the organization's `login_failed` rows.
 
 ## OAuth
 
-Connect external identity providers for single sign-on. _(2026-05-29)_ "Sign in
-with Google" and "Sign in with Microsoft" (Azure AD, single-tenant), and
-_(2026-10-05)_ "Authentik SSO", are implemented via the OpenID Connect
+Connect external identity providers for single sign-on. "Sign in with Google",
+"Sign in with Microsoft" (Azure AD, single-tenant) and "Authentik SSO" are
+implemented via the OpenID Connect
 authorization-code flow in `services/oauth_service.py`.
 
 **The credentials come from the server's environment, not the Settings
@@ -190,16 +199,16 @@ refers people to a provider only when that provider is actually live.
    SPA landing page `/auth/callback` (`OAUTH_SUCCESS_REDIRECT`). On failure it
    redirects to `OAUTH_FAILURE_REDIRECT` (default `/login`) with an `error=`
    query param
-6. **MFA is enforced on the OAuth path too** _(2026-08-12)_. If the matched
+6. **MFA is enforced on the OAuth path too.** If the matched
    account has TOTP enabled, step 5 does **not** happen: no session cookies are
    issued and no session row is created. The callback instead redirects to
    `/auth/callback#mfa_token=<jwt>` — a 5-minute `mfa_pending` token carried in
    the **URL fragment**, which browsers never send to a server. The SPA strips
    the fragment from history immediately (`history.replaceState`), stores the
    challenge in the auth store, and routes to `/login`, where the standard
-   two-factor form completes `POST /auth/mfa/login`. Previously OAuth verified
-   only the primary credential, so a compromised Google/Microsoft account
-   bypassed the app's second factor entirely. Audit event:
+   two-factor form completes `POST /auth/mfa/login`, so a compromised
+   Google/Microsoft account does not bypass the app's second factor. Audit
+   event:
    `oauth_mfa_challenge` (category `authentication`)
 
 ### Supported Providers
@@ -247,7 +256,7 @@ AUTHENTIK_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/authentik/callb
 AUTHENTIK_ALLOWED_DOMAINS=yourdept.org
 ```
 
-### Callback Error Codes _(2026-05-29)_
+### Callback Error Codes
 
 The callback redirects to `OAUTH_FAILURE_REDIRECT?error=<code>` for these
 recoverable failures:
@@ -272,23 +281,20 @@ recoverable failures:
 
 ---
 
-## SAML and LDAP — Not Implemented _(clarified 2026-07-31)_
+## SAML and LDAP — Not Implemented
 
-Earlier revisions of this page described SAML 2.0 and LDAP/Active Directory
-sign-in with configuration steps. **Neither is implemented.** The
-`pysaml2` and `python-ldap` dependencies were declared but never imported by
-any application code, and were removed on 2026-07-31 to shrink the
-vulnerability surface. The `LDAP_*` settings still present in
+**Neither SAML 2.0 nor LDAP/Active Directory sign-in is implemented**, and no
+SAML or LDAP library is installed. The `LDAP_*` settings in
 `.env.example.full` are inert placeholders that gate nothing.
 
-Federated sign-in today means **OAuth 2.0 / OIDC via Google Workspace or
-Microsoft Azure AD** (documented above). If your department needs SAML or
+Federated sign-in means **OAuth 2.0 / OIDC via Google Workspace, Microsoft
+Azure AD or Authentik** (documented above). If your department needs SAML or
 LDAP, please open an issue — the placeholders exist because it is a plausible
 future addition, not because it half-works today.
 
 ---
 
-## Multi-Factor Authentication (MFA) _(2026-06-19)_
+## Multi-Factor Authentication (MFA)
 
 App-based **TOTP** two-factor authentication using apps like Google
 Authenticator, Authy, or 1Password. MFA is self-enrolled by default and can be
@@ -301,7 +307,8 @@ implementation detail.
 2. Start **Two-Factor Authentication** setup
 3. Scan the QR code with your authenticator app
 4. Enter the 6-digit code to confirm and enable MFA
-5. **Save the recovery codes** — they are shown exactly once
+5. **Save the recovery codes** — they are shown exactly once, and stay on
+   screen until you choose **Done**
 
 ### Login Challenge
 
@@ -324,10 +331,9 @@ rest. A member who loses their authenticator and exhausts their recovery codes
 can have MFA reset by an administrator (Members admin → **Reset MFA**, or
 `POST /users/{user_id}/reset-mfa`), then re-enroll from Settings → Security.
 
-**Privilege ceiling on admin resets** _(2026-08-12)_: the admin
-password-reset and MFA-reset endpoints now refuse to touch an account whose
-effective permissions exceed the caller's own. A `members.manage` holder can
-no longer reset the password or strip the second factor of a `security.manage`
+**Privilege ceiling on admin resets:** the admin password-reset and MFA-reset
+endpoints refuse to touch an account whose effective permissions exceed the
+caller's own. A `members.manage` holder cannot reset the password or strip the second factor of a `security.manage`
 admin and log in as them — the classic reset-to-escalate path. Every
 permission the target holds must be within the caller's set (wildcards
 honored, so `*` clears anyone); a violation returns 403
@@ -339,18 +345,18 @@ resettable, and both endpoints stay rate-limited and org-scoped.
 
 ## Public Portal API Keys
 
-Read-only public-portal endpoints (`/api/public/portal/*`) authenticate with an
+Read-only public-portal endpoints (`/api/public/v1/*`) authenticate with an
 API key sent in the `X-API-Key` header (not the session cookie / JWT used for
 the app):
 
 - **IP rate limit before bcrypt.** Key verification uses bcrypt (deliberately
-  slow); the per-IP rate limit now runs _before_ the database lookup and bcrypt
+  slow); the per-IP rate limit runs _before_ the database lookup and bcrypt
   step, so an unauthenticated flood of well-formed keys can't burn CPU.
 - **Selective lookup prefix.** Keys are `logbook_<random>`; the stored lookup
   prefix is the first 16 chars (`logbook_` + 8 key chars), so a lookup returns a
-  single candidate to verify instead of every key in the system. Keys issued
-  before this change stored only the constant `logbook_` prefix and **self-heal**
-  to the selective prefix on their next successful use — no re-issue needed.
+  single candidate to verify instead of every key in the system. A key stored
+  with only the constant `logbook_` prefix **self-heals** to the selective
+  prefix on its next successful use — no re-issue needed.
 - Keys are hashed (bcrypt) at rest; only the short prefix is stored in plaintext,
   for identification.
 
@@ -358,44 +364,41 @@ the app):
 
 ## Session Management
 
-| Feature                | Details                              |
-| ---------------------- | ------------------------------------ |
-| Access token lifetime  | 8 hours (configurable)               |
-| Refresh token lifetime | 7 days (configurable)                |
-| Inactivity timeout     | 30 minutes (no mouse/keyboard/touch) |
-| Concurrent sessions    | 3 per user (configurable)            |
-| Session IP monitoring  | Alerts on IP change during session   |
+| Feature                | Details                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Access token lifetime  | 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`), renewed silently by the refresh flow                             |
+| Refresh token lifetime | 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)                                                                         |
+| Inactivity timeout     | 15 minutes by default (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced server-side; the app warns 60 seconds before sign-out |
+| Session IP monitoring  | Alerts on IP change during session                                                                                      |
+| Password change        | Signs the member out of every session                                                                                   |
 
-### Refresh Rotation Is Strict — No Replay Grace _(2026-08-12)_
+### Refresh Rotation Is Strict — No Replay Grace
 
 Refresh tokens rotate on every use, and a **used token is dead immediately**.
-The former 30-second "rotation grace window" — which handed the session's
-_current_ token pair to anyone presenting the just-rotated previous token, to
-tolerate multi-tab and app-boot races — is removed: it let a token thief take
-over a session for 30 seconds after every legitimate refresh. Presenting any
-stale refresh token is now treated as replay/theft and **revokes all of that
-user's sessions** (logout everywhere). Concurrent refreshes from multiple tabs
-that previously slid through the grace window will now trip this — an accepted
-trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the columns behind it
-were removed on 2026-10-04; a `.env` that still sets it boots and logs that the
-setting has no effect.
+There is no grace window: handing the session's current token pair to anyone
+presenting the just-rotated previous token would let a token thief take over a
+session after every legitimate refresh. Presenting any stale refresh token is
+treated as replay/theft and **revokes all of that user's sessions** (logout
+everywhere). `REFRESH_ROTATION_GRACE_SECONDS` is not a setting; a `.env` that
+still sets it boots and logs that the setting has no effect.
 
-**Two refreshes at the same instant no longer revoke anything** _(2026-10-05,
-AUTH-21)_. Two tabs sharing one cookie jar can refresh the same valid token at
-once. The rotation is now an `UPDATE` conditional on the presented token, so of
+**Two refreshes at the same instant revoke nothing.** Two tabs sharing one
+cookie jar can refresh the same valid token at once. The rotation is an
+`UPDATE` conditional on the presented token, so of
 two overlapping refreshes exactly one wins; the other is answered with **409
 `LB-AUTH-012`** and revokes nothing. The client treats that answer as success —
 the shared cookie jar already holds the winner's tokens — and retries the
 original request. A refresh that starts _after_ the first has committed still
 reads as replay, as above: telling it from theft would need the previous token
-on record, which was removed with the grace window. See
+on record, which is not kept. See
 [Error codes](../docs/ERROR_CODES.md).
 
-### Sign-Out Is Confirmed, Not Assumed _(2026-10-05, FE3-34-2)_
+### Sign-Out Is Confirmed, Not Assumed
 
 The server clears the httpOnly auth cookies only on a successful
-`POST /auth/logout`, so a sign-out that failed on a shared station computer left
-the previous member's session live behind a login screen. `logout()` now asks
+`POST /auth/logout`, so a sign-out that failed on a shared station computer
+would leave the previous member's session live behind a login screen.
+`logout()` asks
 the server up to three times (pauses of 0.5 s and 1.5 s); a 401 counts as
 confirmed, since the server holds no live session for those cookies. The local
 session is torn down either way. If no attempt is confirmed, the app blocks the
@@ -404,29 +407,42 @@ browser window and offers **Try signing out again**, which clears the block once
 the server confirms. The block is stored in `localStorage`, so a reload cannot
 bring back a plain login screen.
 
-### Offline Queues Belong to the Member Who Queued Them _(2026-10-05, FE3-34-5)_
+### Offline Queues Belong to the Member Who Queued Them
 
-Equipment checks, shift reports and generic submissions queued while offline now
+Equipment checks, shift reports and generic submissions queued while offline
 record the owning member (`ownerId`) when they are written, and nothing is
 written with nobody signed in. Every drain sends only the signed-in member's own
-entries and leaves another member's in place. Entries queued before the upgrade
-carry no owner and are **held**: a notice in the app shell lists how many and of
+entries and leaves another member's in place. Entries with no owner (written by
+an older version of the app) are **held**: a notice in the app shell lists how many and of
 what kind, with **Send as me** and **Discard**, each behind a confirmation that
 states the consequence. Until one is chosen they are not sent under anyone's
 cookies.
 
-### Deactivated Organizations Cannot Log In _(2026-08-12)_
+### Deactivated Organizations Cannot Log In
 
-Password login now joins on the organization and requires
+Password login joins on the organization and requires
 `organizations.active IS TRUE` — both when resolving the canonical org and in
-the cross-org username fallback. Previously a member of a **deactivated**
-organization could still authenticate. The rejection is indistinguishable from
-a wrong password ("Incorrect username or password", with the usual dummy-hash
-timing defense), so org status is not enumerable. Two boundaries to know:
-the check runs at authentication time (existing sessions are not revoked when
-an org is deactivated, and expire naturally), and the **OAuth path does not
-yet perform an org-active check** — it rejects only inactive _users_ (tracked
-in KNOWN_LIMITATIONS).
+the cross-org username fallback — so a member of a **deactivated**
+organization cannot authenticate. The rejection is indistinguishable from a
+wrong password ("Incorrect username or password", with the usual dummy-hash
+timing defense), so org status is not enumerable. OAuth sign-in resolves only
+an active organization too, and fails with `no_account` otherwise. The check
+runs at authentication time: existing sessions are not revoked when an org is
+deactivated, and expire naturally.
+
+### Password Reset and Deep Links
+
+- **Forgot password** reports the link lifetime the server returns
+  (`expires_in_minutes`, 30), and shows **No Reset Link Was Sent** with the
+  server's message when the organization uses an SSO provider, instead of
+  "Check Your Email". A rate-limited reset link reads **Too Many Attempts**
+  with the wait, rather than "invalid".
+- **Both password checklists list every server rule** — length, the four
+  classes, no runs (123, abc), no character three times in a row — from the
+  moment the form opens.
+- **Deep links survive sign-in** with their query and anchor, through one
+  `postLoginRedirect` helper that keeps the open-redirect guard (a single
+  leading `/`, never `//host` or a full URL).
 
 ---
 
@@ -451,43 +467,10 @@ GET    /api/v1/auth/oauth/google             # Initiate Google sign-in (404 if n
 GET    /api/v1/auth/oauth/google/callback    # Google OAuth callback
 GET    /api/v1/auth/oauth/microsoft          # Initiate Microsoft sign-in (404 if not configured)
 GET    /api/v1/auth/oauth/microsoft/callback # Microsoft OAuth callback
+GET    /api/v1/auth/oauth/authentik          # Initiate Authentik sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/authentik/callback # Authentik OAuth callback
 ```
 
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Security Configuration](Configuration-Security) | [Encryption](Security-Encryption)
-
-## Sign-in, reset and MFA fixes _(2026-09-27 → 09-29)_
-
-Found by driving the flows in a browser (workflow review W02–W04,
-`docs/workflow-review/`):
-
-- **The MFA lockout now trips.** For an account with MFA, a correct password
-  used to reset the failed-attempt counter, so wrong authenticator codes never
-  accumulated to a lockout. The password step now leaves the counter and lock
-  alone; `mfa_login` clears both once the second factor succeeds. Password-only
-  accounts are unchanged (`tests/test_auth_mfa_lockout_reset.py`).
-- **Recovery codes are shown.** Enabling MFA closed the card before the ten
-  recovery codes could be read; they stay up until **Done**.
-- **The sign-in countdown is the server's.** A 429's `Retry-After` reaches the
-  page, so _"Too many failed attempts. Try again in N seconds."_ shows the real
-  wait (60s for the per-address limit) instead of a 4-second client backoff.
-- **Deep links survive sign-in** with their query and anchor, through one
-  `postLoginRedirect` helper that keeps the open-redirect guard (a single
-  leading `/`, never `//host` or a full URL).
-- **Forgot password** reports the link lifetime the server returns
-  (`expires_in_minutes`, 30 — the page said an hour), and shows **No Reset Link
-  Was Sent** with the server's message when the organization uses an SSO
-  provider, instead of "Check Your Email". A rate-limited reset link reads
-  **Too Many Attempts** with the wait, rather than "invalid".
-- **Both password checklists list every server rule** — length, the four
-  classes, no runs (123, abc), no character three times in a row — from the
-  moment the form opens.
-- **A password change signs you out everywhere** and the sign-in page now says
-  so.
-
-Still flagged (see `docs/KNOWN_LIMITATIONS.md`): password sign-in, failure,
-lockout and sign-out are not written to the audit log (W02-3); a locked
-account is indistinguishable from a wrong password to the member and to
-administrators (W02-4); Authentik is offered at setup with no sign-in flow
-behind it, and choosing it turns off self-service password reset (W01-11).

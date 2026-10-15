@@ -509,6 +509,12 @@ class DocumentFolder(Base):
     )
     owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[owner_user_id])
 
+    if TYPE_CHECKING:
+        # Not a column. DocumentsService stamps the active document count on
+        # loaded folders for the tree response. Declared only for the type
+        # checker: an annotation SQLAlchemy sees would have to be mapped.
+        document_count: int
+
     __table_args__ = (
         Index("idx_doc_folders_org", "organization_id"),
         Index("idx_doc_folders_parent", "parent_id"),
@@ -615,6 +621,14 @@ class Document(Base):
     uploader: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[uploaded_by]
     )
+
+    if TYPE_CHECKING:
+        # Not columns. DocumentsService stamps the uploader's and folder's
+        # display names on loaded rows for the list response. Declared only for
+        # the type checker: an annotation SQLAlchemy sees would have to be
+        # mapped.
+        uploader_name: Optional[str]
+        folder_name: Optional[str]
 
     __table_args__ = (
         Index("idx_documents_folder", "folder_id"),

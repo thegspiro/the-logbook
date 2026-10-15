@@ -1,5 +1,201 @@
 # Screenshot currency
 
+## Moved out of 04-events-meetings.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged. The notes it carried are kept here, unchanged in substance.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `04-02-event-detail.png` | **REPLACE** | Taken as an administrator, the page changed twice: the details card gained an **Organized by** row with a **Transfer event** link (2026-10-03), and every card on the page now carries the shared bordered `card` treatment instead of the borderless surface (2026-10-04). Re-shoot an upcoming event with RSVP open so the RSVP controls, the Organized by row and the bordered cards are in frame |
+| `04-04-event-qr-code.png` | **REPLACE** | The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame |
+| `04-05-create-event.png` | **REPLACE** | The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form |
+| `04-35-recurring-event-form.png` | **REPLACE** | The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date |
+| `04-08-event-analytics.png` | **REPLACE** | The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range. The page title is **Attendance Trends** and it has four summary cards |
+| `04-09-event-templates.png` | **REPLACE** | The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list |
+| `04-14-meeting-minutes.png` | **REPLACE** | The `/minutes` page changed on 2026-09-29 and 2026-10-03: the subtitle reads "Record meetings, write up their minutes, and track action items", the first tile is **Total Meetings**, the search box reads "Search by title, agenda, or notes...", dates read "Thu, Oct 1, 2026 at 7:00 PM", and each meeting card lists its minutes as links with their state. Re-shoot with at least one meeting that has approved minutes and one awaiting approval |
+| `04-38-rolling-recurrence.png` | **REPLACE** | The note under **Rolling 12-month cycle** now reads "New occurrences are added automatically so the series always runs 12 months ahead." (2026-09-29). Re-shoot the same clipped recurrence block |
+| `04-39-delete-event-series.png` | **REPLACE** | The dialog's cancel button now reads **Keep Event** (was **Go Back**) and its warning reads "Permanently delete "…"? Its RSVPs and attendance records are deleted too. You can't undo this." (2026-09-29). Re-shoot with **Delete all events in this series** selected |
+
+## Moved out of 10-mobile-pwa.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+
+## Moved out of 11-finance.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` and visible `_[Screenshot needed: …]_`
+
+## Moved out of 02-training.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes or a "Screenshots:"
+callout. Its hidden `<!-- Screenshot needed … -->` placeholders, image file
+names and alt text are unchanged; where an image appeared twice in a row, the
+repeat was dropped.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `02-01-my-training.png` | **REPLACE** | The subtitle under **My Training** reads "Every class, certification and training hour the department has on record for you, and how you are doing against the training you are required to complete.", and the third stat card is **Required Training** (not **Requirements**) with a hint line beneath the percentage — "3 of 4 requirements met". Re-shoot the same member and state with those two visible |
+| `02-03-submit-training.png` | **REPLACE** | The Submit External Training screen is rebuilt; the certificate attaches inline |
+| `02-16-requirements.png` | **REPLACE** | Re-shoot once to show the **Existing Members** section on the requirement form |
+| (new) requirement save dialog | **NEW** | The **Who does this change apply to?** dialog shown when saving an existing requirement |
+| (new) program add-requirement question | **NEW** | The **Members already enrolled** choice under **Add requirement** on a program page |
+| `02-17-officer-dashboard.png` | **REPLACE** | The subtitle under **Training Officer Dashboard** reads "Compliance, expiring certifications, hours, and what needs your attention" (was "Aggregated compliance, training, validation, and capacity signals"). Re-shoot the same seeded department; the widgets are otherwise unchanged |
+| `02-65-print-compliance.png` | **REPLACE** | The summary tiles read **Compliant / At Risk / Non-Compliant / Requirements** (were 100% Complete / Partially Complete / Not Started), headers wrap to the full requirement name instead of "ANNUAL MINIM…", unmet cells print **✗** rather than "—", and a legend sits under the table. Re-shoot the same department |
+| `02-39-finalize-checklist.png` | **CHECK** | Its alt text names a "Finalize Shift" button; the button reads **Close out shift**. Guide 03's `03-45-finalize-checklist.png` shows the current checklist |
+
+## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
+
+The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.
+Its image file names and alt text are unchanged. The rewrite corrected the
+guide's navigation to **Training Admin > Evaluations > Skills Test Templates**
+and **Skills Test Records**; any image showing a "Skills Testing" section with
+**Templates / Tests / Summary** tabs is stale and should be re-shot when found.
+
+## Moved out of 06-apparatus-facilities.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, its `> **Screenshot needed:**` and
+`_[Screenshot needed: …]_` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `10-13-mobile-header-menu.png` | **REPLACE** | The phone top bar has no menu button: it shows the department logo and name only, and **More** on the bottom bar opens the menu. The alt text still describes a menu button at the left edge |
+| `10-12-mobile-bottom-nav.png` | **CHECK** | If the frame shows an administrator's bar with a **Settings** tab, that tab opens My Account; the frame itself is unchanged unless it predates the centre **Add** button |
+| `10-15-mobile-menu-notifications.png` | **CHECK** | The menu is opened from **More** on the bottom bar, not a header button; replace if the frame shows a ☰ in the top bar |
+| Any phone capture of a settings screen | **REPLACE** | Settings screens show their sections as a sideways-scrolling row across the top; the sidebar idiom they show no longer exists |
+| Any Administration hub frame taken before 2026-10-05 (including `10-06-mobile-inventory-admin.png`) | **REPLACE** | Shows the doubled side margin; on a phone a hub's sections are now a chip row with an edge fade and arrow |
+| Phone and tablet shots of Settings, Training Setup, compliance rules, event roster and the Members Admin / Admin Hours / Eligibility Roster / Supply Expiring / My Checklists / Check Log / Compliance Requirements / Elections filters | **CHECK** | Taken before the 2026-10-03/04 layout pass (16px gutter, 44px roster controls, red selected state, shared card border) |
+
+| `06-01-apparatus-list.png` | **REPLACE** | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame |
+| `06-03-apparatus-detail.png` | **REPLACE** | The Overview's dates card is **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap |
+| `06-05-apparatus-fuel-tab.png` | **CHECK** | The alt text says "calculated efficiency", but the tab calculates no miles per gallon (columns: Date, Fuel Type, Gallons, Price/Gal, Cost, Mileage, Full Tank). The alt text is kept for `manifest.mjs`; confirm the frame shows no efficiency figure |
+| `06-06-apparatus-equipment-tab.png` | **CHECK** | The alt text says "with condition"; the tab shows quantity, location and Required / Mounted / Present badges, with no condition field |
+| `06-09-facilities-dashboard.png` | **REPLACE** | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width |
+| Facility detail **Files** tab | **REPLACE** | The folder structure is visible, and the audience is different (photos for every facilities role, documents for the sensitive tier only) |
+| Any navigation capture showing **Facilities** in a regular member's menu | **REPLACE** | It is not there any more |
+| `06-28-facility-settings.png` | **REPLACE** | The subtitle reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame |
+| **Write NFC tag** on the Check-In QR Codes cards | **NOT PICTURED** | Web NFC is Chrome-on-Android over HTTPS only, and the compact action renders nothing where unsupported. The harness runs headless Chromium over `http://localhost`, so it cannot produce the button; staging one would picture a control the reader's browser may correctly not have |
+
+## Moved out of 07-documents-forms.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, `_[Screenshot needed: …]_` lines, image file names and alt text
+are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `07-01-documents.png` | **REPLACE** | The page subtitle reads "SOPs, policies, forms, and other department files in one place" and the fourth total is **Added This Month** (was "This Month"). Re-take Documents & Files as an administrator with the four totals, the folder cards and the search bar in frame. The alt text still says "folder tree, file list" — the page shows folder cards |
+| `07-03-upload-documents.png` | **REPLACE** | The file box reads **Choose the file to upload** (not "Drag and drop your file here / or click to browse"), the name field's placeholder is "Optional — uses the file name if left blank", and the folder list starts with **General Documents (default)**. Re-take the Upload Document dialog, empty |
+| `07-04-forms-list.png` | **REPLACE** | The first tab reads **Forms** (was "My Forms"), status and category badges are capitalised, and the subtitle reads "Build forms, share them publicly, and send responses to other modules". Re-take with at least one published public form and one draft in frame |
+| `07-05-form-sharing.png` | **REPLACE** | The dialog is titled **Share Form** (was "Public Sharing Settings"), carries the **Allow submissions without signing in** checkbox under **Public Access**, and its footer reads "Anyone can submit this form without signing in." or "Only signed-in members can submit this form." followed by the globe-icon sentence. Re-take for a published public form with the box ticked |
+| `07-10-create-rule-modal.png` | **REPLACE** | The trigger list also offers **Equipment Request Update**, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." Re-take with **Event Reminder** chosen; never save. The alt text says "trigger and channel fields" — there is no channel field |
+| `07-11-new-message-form.png` | **REPLACE** | The **Persistent** checkbox reads **Keep in inbox after it is read**. Re-take New message with the audience and scheduling fields and the four checkboxes in frame; never post |
+| `07-15-suggestion-submit-anonymous.png` | **REPLACE** | A hint sits under **Screenshots (optional, up to 5)**: "PNG, JPEG, WebP or GIF, up to 10 MB each. Larger images are scaled down to 2560 pixels on the longest side, and animated GIFs keep only their first frame." Same state as before, with that hint in frame |
+| `07-24-suggestion-notification-rule.png` | **REPLACE** | Shot before the rule note's second sentence was reworded to "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." Same state: **Suggestion Submitted** chosen, never saved |
+
+## Moved out of 14-elections.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `11-01-finance-dashboard.png` | **REPLACE** | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. |
+| `11-06-approval-chains.png` | **REPLACE** | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. |
+| `11-08-create-purchase-request.png` | **REPLACE** | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. |
+| `11-12-purchase-request-detail.png` | **REPLACE** | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). |
+| `11-10-create-expense-report.png` | **REPLACE** | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. |
+| `11-14-expense-report-detail.png` | **REPLACE** | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. |
+| `11-12-create-check-request.png` | **REPLACE** | The budget field is labelled **Budget** (was "Budget (Optional)"). |
+| `11-16-check-request-detail.png` | **REPLACE** | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. |
+
+## Moved out of 17-privacy-data-rights.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `17-04-profile-as-member.png` | **REPLACE** | The **ID Card** button at the top right is gone (an ordinary member does not get a colleague's ID card), and the Contact Information panel reads "No contact details shared. This member has not added any, or your department keeps them private." Re-shoot the same profile as the same ordinary member |
+
+## Moved out of 12-grants-fundraising.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Image file names
+and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `12-03-opportunities.png` | **REPLACE** | Each opportunity's button reads **Start Application** (was Apply), and the subtitle reads "Browse grant programs and start an application" |
+| `12-04-create-application.png` | **REPLACE** | The subtitle reads "Only the program name and agency are required. You can add the rest later.", the opportunity field is labelled **Grant Opportunity**, the budget-summary placeholder reads "How the grant money will be spent..." and the contacts placeholder "Names, roles, and phone or email..." |
+| `12-06-application-budget-tab.png` | **CHECK** | If the frame shows the add button, it reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount** |
+| `12-10-donors.png` | **REPLACE** | The subtitle reads "Look up donors and what each has given" |
+| `12-14-fundraising-reports.png` | **REPLACE** | The tabs read **Grants** / **Fundraising**, the subtitle "Grant results and fundraising totals for the dates you choose", and the first figure **Total Raised** (was Total Donations) |
+| `12-02-grants-dashboard.png`, `12-09-campaign-detail.png`, `12-10-donors.png`, application detail captures | **REPLACE** | The add and edit buttons appear only for accounts that can manage fundraising. Caption which permissions the capturing account holds |
+
+## Moved out of 15-prospective-members.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `15-04-kanban-board.png` | **REPLACE** (low priority) | Each card's status badge shows the label (**Active**, **On Hold**), not the raw value ("active", "on hold"). The same applies to `15-01`, `15-02-board-truncated` and guide 01's `01-10`; re-shoot them in the same pass |
+| `15-09-convert-modal.png` | **REPLACE** | The frame still shows the Regular Member / Administrative cards and a **Send welcome email with login credentials** checkbox. Step 2 opens with **Member class** and **Starting status** dropdowns (pre-filled, with the "Pre-filled from this pipeline's conversion settings…" line under them), and the checkbox is replaced by the **How will they get their password?** group of three radio buttons. Re-shoot step 2 for a Regular applicant on a department with email set up, scrolled so the class/status pair and the password group are both in frame |
+| `15-10-pipeline-settings.png` | **REPLACE** | Below the Inactivity Timeout card sits the **When an Applicant Becomes a Member** card (Operational applicants / Administrative applicants, each with **Member class** and **Starting status**, and **Save Conversion Settings**), then the **Automatic Transfer to Membership** card; the status-page card reads "Let applicants check their application status through a public link", with help text naming the "Show this stage on the public status page" checkbox and the Enable Status Page stage. Re-shoot the same full page |
+| `15-11-table-bulk-actions.png` | **REPLACE** | The bar's buttons read **Advance Selected**, **Hold Selected** and **Reject Selected**. Re-shoot the same selection in Table view |
+
+| `14-01-elections-list.png` | **REPLACE** | The subtitle under **Elections** reads "Create elections, send ballots and publish results" for an elections manager ("See elections and their results" for a member); it read "Manage elections and view results". Re-shoot the same list as an administrator |
+| `19-25-ballot-template-settings-before.png`, `19-26-ballot-template-settings-after.png` | **REPLACE** | The details card's **Voting Method** reads "One choice per voter" (before) and "Ranked choice" (after) instead of "Simple Majority" / "Ranked Choice", and a **Winner** row shows the victory condition — in this example "Supermajority (67% of votes)" on both frames. Re-shoot the same draft before and after applying the template; the `19-25` alt text still says "Simple Majority" |
+| `14-16-election-settings.png` | **REPLACE** | The **Defaults** section (default voting method, victory condition, anonymity, write-ins) is gone; the sections are **Proxy Voting**, **Features**, **Test Ballot** and **Security**. Re-shoot so the section list no longer shows Defaults, and update the alt text, which still says "default rule toggles" |
+
+## Moved out of 13-medical-screening.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+placeholders, image file names and alt text are unchanged.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `13-01-medical-landing.png` | **REPLACE** | The page subtitle reads "Set screening requirements, record screenings, and see which ones expire soon." |
+| `13-02-requirements-tab.png` | **CHECK** | Alt text says "with frequency and grace period"; the requirement rows show type, frequency, roles and description, never the grace period |
+| `13-03-records-tab.png` | **CHECK** | A record with no member or prospect reads **Not linked to a member or prospect** in the name line, where it read Unknown; replace if the frame shows one |
+| `13-05-add-requirement.png` | **REPLACE** | The submit button reads **Add Requirement** (was Create), and the note under Applies to Roles reads "Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list here." The Grace Period field carries its own "Not enforced yet" note |
+| `13-07-add-record-linkage-notice.png` | **REPLACE** | The frame still shows the retired amber "Not linked" notice. The dialog opens with a **Record is for** choice (Member / Prospect) and a name list above Linked Requirement; retake it with a member selected |
+
+## Moved out of 08-admin-reports.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, visible `Screenshot needed`
+placeholders, image file names and alt text are unchanged. "Solid-tab shell"
+below means the current email design: accent tab naming the category, title on
+a tinted card, white message card, centred footer.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `08-02-organization-settings.png` | **CHECK** | A logo can be removed (**Remove logo**, shown only while one is set), and on a phone the settings body runs to the 16px page gutter. Replace if the frame shows the logo row or was taken at phone width |
+| `08-06-reports.png` | **REPLACE** | Subtitle reads "Run department reports and export them to CSV or PDF", the info panel is **How Reports Work**, every card description is rewritten, and on a tablet the grid sizes to its own width (two columns at 1024px with the sidebar open). Capture at laptop width with **All Reports** |
+| `08-08-public-portal.png` | **REPLACE** | Configuration tab shows only **Rate Limiting** and the **Security Best Practices** notice (AAA contrast, themed in dark mode); Allowed Origins and Caching are gone. Disabled banner: "The portal is disabled. External websites can't read any of your data until you enable it, create an API key, and turn on the fields to share under Data Control." The caption should not promise a domain or branding setting |
+| `08-69-compliance-requirements-config.png` | **REPLACE** | The capture shows the non-compliance notification panel's old "not yet active" label; the panel is live ("Sent by email once a day…"), and **Grace Period (days)** carries a "Not in effect yet" note |
+| `08-56-template-discard.png` | **REPLACE** | Preview shows the retired centred-masthead shell; must show the solid-tab shell. The editor has no **CSS Styles** box. Same state: unsaved edits, **Discard** beside **Save** |
+| `08-57-template-reset-dialog.png` | **REPLACE** | Dialog reads "Restores the subject, HTML body, plain-text body, styles and footer choice to the defaults. Your CC/BCC settings are kept. You cannot undo this." Preview behind it must be the solid-tab shell. Never confirm |
+| `08-58-template-send-test.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: **Send Test to Me** under the preview |
+| `08-36-template-search.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: list filtered to "welcome" |
+| `08-34-email-templates.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell, categories with **Templates** active. The blue banner reads "Every email uses the current design, including templates your department had edited — there is nothing to adopt" and points to **Previous version**; the frame shows the old "press Reset … to adopt it" text |
+| `08-64-email-footers-tab.png` | **REPLACE** | Tab opens with the **Department contact details** card, and each footer has separate **Phone**, **Email** and **Website** switches showing the value each would print. Re-take with the contact card and the first footer's switches in frame; never save |
+| `08-65-template-footer-selector.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: **Closes with** set to Public |
+| `08-66-template-variable-palette.png` | **REPLACE** | Retired centred-masthead preview; re-take with the solid-tab shell. Same state: the palette expanded |
+| `08-67-email-preview-design.png` | **REPLACE** | Shows the retired centred-masthead shell. Must show the solid-tab shell: the **Shift Assignment** preview's accent tab and right-hand note, the title on the tinted card, the message card. Once re-taken, alt text and caption should name those instead of "centred masthead and fact panel" |
+| `08-37-email-officers.png` | **CHECK** | The Officers tab lists a **Compliance Officer** office. The 2026-09-25 re-capture came back byte-identical; confirm the row is visible, and re-take if not |
+| Members, Training, Inventory and Events admin page headers | **REPLACE** | All four captures show a layout that no longer exists (header, headline metrics, Needs attention, section cards) |
+| Every settings capture, and every capture of a received Logbook email | **REPLACE** | Settings screens share one shell (section list / phone tab strip); every email uses the solid-tab shell |
+| Any capture of a right-aligned table | **REPLACE** | Table headings now sit over their own columns (scheduling reports, compliance officer dashboard, finance, grants and inventory tables were worst affected) |
+| Every administration capture at tablet width, or showing a blue selected toggle, a card grid or a hover-revealed action | **CHECK** | Selected toggles are primary red, card grids size to their own width, hover-revealed actions show on touch tablets, small buttons keep their icon beside the label. Laptop-width captures without these are unaffected |
+
 ## Claude (MCP) member sign-in walkthrough, captured 2026-10-12
 
 Guide 16's member sign-in section became a step-by-step walkthrough of

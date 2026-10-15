@@ -165,8 +165,8 @@ The Logbook is an open-source modular intranet platform for fire departments and
 - **Language:** TypeScript 5.9 (strict mode — see below)
 - **Routing:** react-router 8.4 (core package; react-router-dom was retired with v7)
 - **State management:** Zustand 5.0
-- **Forms:** react-hook-form 7.88 + Zod 4.6 validation
-- **Styling:** Tailwind CSS 4.2 (with `tailwind-merge`, dark mode via `class` strategy)
+- **Forms:** react-hook-form 7.89 + Zod 4.6 validation
+- **Styling:** Tailwind CSS 4.3 (dark mode via `class` strategy)
 - **HTTP client:** Axios 1.20
 - **Auth (client):** httpOnly cookies (managed by backend); no client-side JWT handling
 - **Icons:** lucide-react
@@ -174,7 +174,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 
 ### Backend (`/backend`)
 
-- **Framework:** FastAPI 0.141 (starlette 1.x) + Uvicorn
+- **Framework:** FastAPI 0.143 (starlette 1.x) + Uvicorn
 - **Language:** Python 3.13
 - **ORM:** SQLAlchemy 2.1 (async via aiomysql)
 - **Database:** MySQL 8.0
@@ -278,7 +278,7 @@ did.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
-every published version — including the `^8.70.1` this repo uses — caps its
+every published version — including the `^8.71.1` this repo uses — caps its
 peer range at `>=4.8.4 <6.1.0` (typescript-eslint#10940 tracks TS >=7.1
 support). A workspace can only declare one package named `typescript`, so the
 plain name is the version the linter needs and the compiler the project builds
@@ -405,9 +405,7 @@ import { useMyStore } from "./myStore";
 
 // Access state via getState(), reset in beforeEach:
 beforeEach(() => {
-  useMyStore.setState({
-    /* initial state */
-  });
+  useMyStore.setState({/* initial state */});
   vi.clearAllMocks();
 });
 ```
@@ -752,7 +750,7 @@ Mismatches between Pydantic schemas and frontend TypeScript types cause 422 erro
 
 - **Required vs optional fields:** If a frontend form field is optional, the corresponding Pydantic schema field must be `Optional[T] = None`. Do not mark fields as required in the schema if the frontend can omit them.
 - **Enum casing:** Backend `(str, Enum)` values must be **lowercase** (`routine`, not `ROUTINE`). If the frontend sends uppercase, add `.lower()` conversion or a `@field_validator`.
-- **Response shape — casing is per-module, not repo-wide** _(measured 2026-10-05, app-review B1)_: of the **54** schema modules declaring a `Response` class, **17 carry `alias_generator=to_camel`** (so FastAPI serializes camelCase, since it dumps response models `by_alias=True`) and **37 carry no alias generator at all** (so the wire is snake_case, exactly as the Python attributes are named). An earlier version of this document asserted the camelCase form unconditionally; it describes under a third of the codebase.
+- **Response shape — casing is per-module, not repo-wide** _(measured 2026-10-14; first measured 2026-10-05, app-review B1)_: of the **58** schema modules declaring a `Response` class, **17 carry `alias_generator=to_camel`** (so FastAPI serializes camelCase, since it dumps response models `by_alias=True`) and **41 carry no alias generator at all** (so the wire is snake_case, exactly as the Python attributes are named). An earlier version of this document asserted the camelCase form unconditionally; it describes under a third of the codebase.
 
   The two conventions are each internally consistent and the frontend types match their own module, which is why nothing is broken and why nothing catches a new mistake either. `schemas/apparatus.py` uses `to_camel` and `modules/apparatus/types` is `organizationId` / `unitNumber`; `schemas/medical_screening.py` does not and `modules/medical-screening/types` is `organization_id` / `screening_type`. Trusting one blanket rule gets it wrong two times in three, and the failure is silent: a hand-written interface in the wrong casing type-checks, passes lint, and reads every field as `undefined` at runtime.
 
@@ -929,7 +927,7 @@ result = await db.execute(
 )
 
 # CORRECT (b) — the model does NOT carry one: resolve the parent in-org, then
-# constrain the child by its parent FK. 48 of the 263 mapped models are this
+# constrain the child by its parent FK. 51 of the 305 mapped models are this
 # shape — Candidate, FormField, ApprovalChainStep, Motion — and for them (a) is
 # not merely discouraged, it raises AttributeError.
 election = await service.get_election(election_id, current_user.organization_id)
@@ -1329,7 +1327,7 @@ Full text, including the Python-side `matched_field` corollary, in
 
 ### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
 
-**Rule:** 40 of this schema's 254 tables are never created by any migration —
+**Rule:** 65 of this schema's 306 tables are never created by any migration —
 they come into being when `main.py`'s `_fast_path_init()` calls `create_all()`.
 CI runs `alembic upgrade head` against an **empty** database, so reflecting or
 altering such a table raises `NoSuchTableError` and kills the whole upgrade,

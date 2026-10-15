@@ -22,15 +22,15 @@ Complete technology reference for The Logbook.
 | Technology          | Version | Purpose                                                                                          |
 | ------------------- | ------- | ------------------------------------------------------------------------------------------------ |
 | **React**           | 19.3    | UI framework                                                                                     |
-| **TypeScript**      | 5.9     | Type-safe JavaScript                                                                             |
+| **TypeScript**      | 7.0     | Type-safe JavaScript (7.0 compiler via `tsc-native`; 5.9 for type-aware lint)                    |
 | **Vite**            | 8.3     | Build tool and dev server                                                                        |
-| **Tailwind CSS**    | 4.2     | Utility-first CSS framework                                                                      |
+| **Tailwind CSS**    | 4.3     | Utility-first CSS framework                                                                      |
 | **React Router**    | 8.4     | Client-side routing (core `react-router` package; `react-router-dom` was retired upstream at v7) |
 | **Vitest**          | 5.0     | Unit/integration testing                                                                         |
 | **React Hot Toast** | —       | Toast notifications                                                                              |
 | **Lucide React**    | 1.x     | Icon library                                                                                     |
 | **DOMPurify**       | —       | XSS sanitization                                                                                 |
-| **React Hook Form** | 7.88    | Form management                                                                                  |
+| **React Hook Form** | 7.89    | Form management                                                                                  |
 
 ### Frontend Capabilities
 

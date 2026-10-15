@@ -1,6 +1,18 @@
 # Building and Publishing Docker Images to GitHub Container Registry
 
-This guide will help you build The Logbook Docker images and push them to GitHub Container Registry (ghcr.io) so they can be pulled on Unraid.
+The project does not publish Docker images: no CI workflow builds or pushes
+them, and every shipped compose file — including the Unraid ones, which tag
+their builds `the-logbook-backend:local` / `the-logbook-frontend:local` —
+builds the backend and frontend on the host that runs them.
+
+This guide is for an operator who wants to publish their own images to GitHub
+Container Registry (ghcr.io) by hand — for example, to build once on a fast
+machine and run the result on a slower server. `scripts/build-and-push-images.sh`
+automates Steps 4-5 (it takes an optional tag argument, defaulting to
+`latest`). It pushes to the `ghcr.io/thegspiro/` namespace, which needs write
+access to that account; to publish under your own account, change
+`GITHUB_USERNAME` at the top of the script and the `thegspiro` in the commands
+below.
 
 ## Prerequisites
 
@@ -140,9 +152,9 @@ latest: digest: sha256:uvw901... size: 2345
 
 ---
 
-## Step 6: Make Images Public (Important for Unraid)
+## Step 6: Make Images Public (Optional)
 
-By default, GitHub Container Registry images are **private**. You need to make them public so Unraid can pull them without authentication.
+By default, GitHub Container Registry images are **private**. Make them public if the host that runs them should pull without logging in.
 
 1. Go to your GitHub profile → **Packages** tab
    - URL: https://github.com/thegspiro?tab=packages
@@ -176,18 +188,28 @@ If both commands succeed, your images are ready!
 
 ---
 
-## Step 8: Return to Unraid and Pull Images
+## Step 8: Run the Published Images
 
-Now go back to your Unraid server and run:
+No shipped compose file references these images, so point yours at them. On
+the host that runs the stack, add a `docker-compose.override.yml` (git-ignored,
+and merged automatically when neither `-f` nor `COMPOSE_FILE` names the files)
+next to `docker-compose.yml`:
+
+```yaml
+services:
+  backend:
+    image: ghcr.io/thegspiro/the-logbook-backend:latest
+  frontend:
+    image: ghcr.io/thegspiro/the-logbook-frontend:latest
+```
+
+If `.env` pins `COMPOSE_FILE` (the installers' production setup does), append
+`:docker-compose.override.yml` to it instead of relying on the automatic merge.
+Then pull and start:
 
 ```bash
-cd /mnt/user/appdata/the-logbook
-
-# This should now work!
-docker-compose pull
-
-# Start the services
-docker-compose up -d
+docker compose pull backend frontend
+docker compose up -d --no-build
 ```
 
 ---
@@ -201,10 +223,10 @@ docker-compose up -d
 **Solutions**:
 
 1. Make sure images are set to **Public** (Step 6)
-2. If private, login on Unraid:
+2. If private, log in on the host that pulls them:
    ```bash
    echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u thegspiro --password-stdin
-   docker-compose pull
+   docker compose pull backend frontend
    ```
 
 ### "manifest unknown" error
@@ -245,14 +267,14 @@ docker-compose up -d
    docker system prune -a
    ```
 
-### "authentication required" on Unraid
+### "authentication required" when pulling
 
-**Problem**: Unraid can't pull images even though they're public.
+**Problem**: The host can't pull images even though they're public.
 
 **Solutions**:
 
 1. Wait a few minutes for GitHub to update visibility settings
-2. Try logging out and back in on Unraid:
+2. Try logging out and pulling again:
    ```bash
    docker logout ghcr.io
    docker pull ghcr.io/thegspiro/the-logbook-backend:latest
@@ -271,10 +293,9 @@ docker push ghcr.io/thegspiro/the-logbook-backend:latest
 docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
 docker push ghcr.io/thegspiro/the-logbook-frontend:latest
 
-# On Unraid, pull and start
-cd /mnt/user/appdata/the-logbook
-docker-compose pull
-docker-compose up -d
+# On the host that runs them (with the Step 8 override in place)
+docker compose pull backend frontend
+docker compose up -d --no-build
 ```
 
 ---
@@ -298,10 +319,9 @@ docker push ghcr.io/thegspiro/the-logbook-backend:latest
 docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
 docker push ghcr.io/thegspiro/the-logbook-frontend:latest
 
-# On Unraid, pull new images and restart
-cd /mnt/user/appdata/the-logbook
-docker-compose pull
-docker-compose up -d
+# On the host that runs them, pull the new images and restart
+docker compose pull backend frontend
+docker compose up -d --no-build
 ```
 
 ---
@@ -319,7 +339,7 @@ docker push ghcr.io/thegspiro/the-logbook-backend:v1.0.0
 docker push ghcr.io/thegspiro/the-logbook-backend:latest
 ```
 
-Then in docker-compose.yml, you can pin to a specific version:
+Then in the Step 8 `docker-compose.override.yml`, you can pin to a specific version:
 
 ```yaml
 backend:
@@ -335,14 +355,8 @@ backend:
 
 ---
 
-## Automation (Optional)
+## Automation
 
-For automatic builds on every commit, see the GitHub Actions setup guide:
-
-- **File**: `.github/workflows/docker-publish.yml`
-- **Triggers**: Automatically builds and pushes images when you push to `main` branch
-- **Benefits**: No manual building, always up-to-date images
-
----
-
-**Ready to test on Unraid!** Once you've completed Steps 1-7, the images will be available for Unraid to pull.
+No workflow in `.github/workflows/` builds or publishes images, so publishing
+stays a manual step: run `scripts/build-and-push-images.sh [tag]` (or the
+commands above) whenever you want new images in the registry.

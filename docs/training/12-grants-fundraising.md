@@ -1,6 +1,9 @@
 # Grants & Fundraising
 
-The Grants & Fundraising module manages the complete lifecycle of fire department grants — from opportunity research through application, award, expenditure tracking, and compliance reporting — alongside fundraising campaigns, donor management, and donation tracking.
+The Grants & Fundraising module follows a fire department grant from start to
+finish: finding the program, applying, the award, tracking spending, and the
+reports the grantor asks for. It also handles fundraising: campaigns, donors,
+donations, pledges and fundraising events.
 
 ---
 
@@ -22,57 +25,60 @@ The Grants & Fundraising module manages the complete lifecycle of fire departmen
 14. [Reports & Analytics](#reports--analytics)
 15. [Realistic Example: Applying for an AFG Grant](#realistic-example-applying-for-an-afg-grant)
 16. [Troubleshooting](#troubleshooting)
+17. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Grants & Fundraising Overview
 
-Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`).
-
-| URL                             | Page                              | Permission           |
-| ------------------------------- | --------------------------------- | -------------------- |
-| `/grants`                       | Dashboard                         | `fundraising.view`   |
-| `/grants/opportunities`         | Grant Opportunities Library       | `fundraising.view`   |
-| `/grants/opportunities/new`     | Add Opportunity                   | `fundraising.manage` |
-| `/grants/applications`          | Application List (Pipeline/Table) | `fundraising.view`   |
-| `/grants/applications/new`      | Create Application                | `fundraising.manage` |
-| `/grants/applications/:id`      | Application Detail (5 tabs)       | `fundraising.view`   |
-| `/grants/applications/:id/edit` | Edit Application                  | `fundraising.manage` |
-| `/grants/campaigns`             | Fundraising Campaigns             | `fundraising.view`   |
-| `/grants/donors`                | Donor Directory/CRM               | `fundraising.view`   |
-| `/grants/donations`             | All Donations                     | `fundraising.view`   |
-| `/grants/donations/new`         | Record Donation                   | `fundraising.manage` |
-| `/grants/pledges`               | Pledges                           | `fundraising.view`   |
-| `/grants/events`                | Fundraising Events                | `fundraising.view`   |
-| `/grants/reports`               | Financial Reports                 | `fundraising.view`   |
+Select **Grants & Fundraising** in the menu (the sidebar, or the top bar). Your
+administrator must first turn the module on in the department's module
+settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
+**Campaigns**, **Donors**, **Donations**, **Pledges**, **Events** and
+**Reports**.
 
 ### Permissions
 
-| Permission           | Description                                                                                        |
-| -------------------- | -------------------------------------------------------------------------------------------------- |
-| `fundraising.view`   | View dashboard, opportunities, applications, campaigns, donors, donations, reports                 |
-| `fundraising.manage` | Create/update/delete applications, budget items, expenditures, tasks, campaigns, donors, donations |
+Two permissions control the module. The Role Management screen lists them as:
 
-**Finding it.** With the module on, members holding `fundraising.view` see
-**Grants & Fundraising** in the sidebar (or the top bar), with Dashboard,
-Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events and Reports beneath
-it.
+| Permission                | What it allows                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **View fundraising data** | Open every page: the dashboard, opportunities, applications, campaigns, donors, donations, pledges, events and reports                      |
+| **Manage fundraising**    | Adding and changing opportunities, applications, budget items, expenditures, tasks, notes, campaigns, donors, donations, pledges and events |
+
+The two permissions are separate. **Manage fundraising** does not include
+viewing. An officer who has only **Manage fundraising** cannot open the
+dashboard, the lists or the reports. Give officers who run fundraising **both**
+permissions.
+
+Members with view access only do not see the add and edit buttons — **New
+Campaign**, **Add Donor**, **New Application**, **Add Budget Item**, **Record
+Expenditure**, **Add Task**, **Add Note** and the rest. Those appear only for
+officers who can manage fundraising.
 
 ---
 
 ## Grants Dashboard
 
-The main dashboard at `/grants` shows key performance indicators:
+**Dashboard** shows the figures at a glance:
 
-- **Total Funds Raised** (YTD and 12-month)
-- **Active Campaigns** with progress bars toward goals
-- **Upcoming Grant Deadlines** (next 90 days, urgency-coded)
-- **Pending Applications** count
-- **Active Grants** being managed
-- **Recent Donations** activity
+- **Total Raised YTD** and **Total Raised (12mo)**
+- **Active Campaigns** and **Total Donors**
+- **Total Grant Funding**, **Active Grants** and **Pending Applications**
 - **Outstanding Pledges**
-- **Compliance Tasks Due**
-- **Pipeline by Status** (applications across all stages)
+- **Upcoming Deadlines** — grant deadlines in the next 90 days, with how many
+  days are left
+- **Compliance Tasks Due** — tasks due in the next 30 days
+- **Recent Donations**
+- **Grant Pipeline** — applications in each stage
+
+Dates on the dashboard use the department's own date, from the time zone in the
+organization's profile settings (Eastern time if none is set). So an evening
+look at the dashboard does not count from tomorrow.
+
+Selecting **Active Grants**, **Pending Applications** or **Total Grant Funding**
+opens the application list filtered to the same applications the card counted.
+**Outstanding Pledges** opens the Pledges list.
 
 ![Grants dashboard with KPI cards for raised funds and active campaigns](./images/12-02-grants-dashboard.png)
 
@@ -80,39 +86,58 @@ The main dashboard at `/grants` shows key performance indicators:
 
 ## Grant Opportunities Library
 
-The opportunities library is a catalog of available grant programs. Pre-loaded with common fire service grants:
+**Opportunities** — "Browse grant programs and start an application" — has two
+parts:
 
-| Program      | Agency  | Description                                                 |
-| ------------ | ------- | ----------------------------------------------------------- |
-| **AFG**      | FEMA    | Assistance to Firefighters Grant — equipment, PPE, training |
-| **SAFER**    | FEMA    | Staffing for Adequate Fire & Emergency Response — hiring    |
-| **FP&S**     | FEMA    | Fire Prevention & Safety — prevention, research             |
-| State grants | Various | State-specific emergency services funding                   |
+- **Federal Programs:** reference cards for four well-known programs, with a
+  short description of each:
+
+  | Program                                                       | Agency                    | Category   |
+  | ------------------------------------------------------------- | ------------------------- | ---------- |
+  | Assistance to Firefighters Grant (**AFG**)                    | FEMA                      | Equipment  |
+  | Staffing for Adequate Fire and Emergency Response (**SAFER**) | FEMA                      | Staffing   |
+  | Fire Prevention & Safety (**FP&S**)                           | FEMA                      | Prevention |
+  | Firehouse Subs Public Safety Foundation                       | Firehouse Subs Foundation | Equipment  |
+
+- **All Opportunities:** the programs your department has added, with their
+  award range, deadline and match requirement.
 
 ### Browsing Opportunities
 
-1. Navigate to **Grants > Opportunities**
-2. Filter by category: Equipment, Staffing, Training, Prevention, Facilities, Vehicles, Wellness, Community, Other
-3. Search by name or agency
-4. **Deadline urgency** color-coded: Red (< 14 days), Yellow (< 30 days), Green (> 30 days)
-5. **Start Application** on an opportunity opens a new application already linked to it
+1. Select **Grants & Fundraising → Opportunities**.
+2. Filter by category: Equipment, Staffing, Training, Prevention, Facilities,
+   Vehicles, Wellness, Community or Other.
+3. Search by name or agency.
+4. Check the deadline. Within 14 days it shows in red as "_n_d left"; within 30
+   days, in amber. A past deadline reads **Expired**, and a program with no date
+   reads **Rolling deadline**.
+5. Select **Details** to see eligible uses, eligibility, match details and the
+   application link.
+6. Select **Start Application** to open a new application already linked to the
+   program.
 
 ### Adding an Opportunity
 
-**Required Permission:** `fundraising.manage`
+**Required Permission:** Manage fundraising
 
-1. Click **Add Opportunity** (shown only to `fundraising.manage` holders)
-2. Enter the **Program name** — the only required field — and, as you know them, the agency or funder, category, federal program code, description, eligible uses and who is eligible
-3. Enter the typical award range (smallest and largest). Tick **The department must contribute a local match** to give the match percentage and a note about it
-4. Choose the **Deadline**: Fixed date (the date is then required), Recurring (enter the next deadline if known) or Rolling (no date)
-5. Add the application and program-information links (http or https only) and any notes
-6. Click **Add opportunity**. You return to the library, where the new program is listed
+1. Select **Add Opportunity**.
+2. Enter the **Program name** — the only required field. As you know them, add
+   the agency or funder, category, federal program code, description, eligible
+   uses and who is eligible.
+3. Enter the typical award range (smallest and largest). Tick **The department
+   must contribute a local match** to give the match percentage and a note about
+   it.
+4. Choose the **Deadline**: Fixed date (the date is then required), Recurring
+   (enter the next deadline if known) or Rolling (no date).
+5. Add the application and program-information links (they must start with http
+   or https) and any notes.
+6. Select **Add opportunity**. You return to the library, where the new program
+   is listed.
 
-The required-documents list, tags and a recurring schedule can be stored through the API but are not on this form.
+The form has no place for a required-documents list, tags or a recurring
+schedule.
 
 ![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
-
-**[SCREENSHOT — REPLACE `12-03-opportunities.png`.** Each opportunity's button now reads **Start Application** (was Apply), and the subtitle reads "Browse grant programs and start an application".**]**
 
 ---
 
@@ -120,52 +145,53 @@ The required-documents list, tags and a recurring schedule can be stored through
 
 ### Creating an Application
 
-**Required Permission:** `fundraising.manage`
+**Required Permission:** Manage fundraising
 
-1. Navigate to **Grants > Applications** and click **New Application**. As the form says: _"Only the program name and agency are required. You can add the rest later."_
+1. Select **Grants & Fundraising → Applications**, then **New Application**. As
+   the form says: _"Only the program name and agency are required. You can add
+   the rest later."_
 2. Fill in:
-   - **Grant Program Name** — or choose one under **Grant Opportunity** (the field was labelled Opportunity ID)
-   - **Grant Agency** — funding organization
-   - **Amount Requested** — what you're asking for
-   - **Match Amount** / **Match Source** — local match requirements
-   - **Application Deadline** — when to submit
-   - **Project Description** — what the grant will fund
-   - **Priority** — Low, Medium, High, or Critical
-   - **Assigned To** — team member managing the application
-3. Click **Create Application** (editing later saves with **Save Changes**) — the application starts in **Researching** status
+   - **Grant Program Name** — or choose a program under **Grant Opportunity**
+   - **Grant Agency** — the funding organization
+   - **Amount Requested** — what you are asking for
+   - **Match Amount** / **Match Source** — the local match
+   - **Application Deadline** — when it must be submitted
+   - **Project Description** — what the grant will pay for
+   - **Priority** — Low, Medium, High or Critical
+   - **Assigned To** — the member managing the application
+3. Select **Create Application**. The application starts in **Researching**.
+   When you edit it later, save with **Save Changes**.
 
 ![Create grant application form with program, agency, and amount fields](./images/12-04-create-application.png)
-
-**[SCREENSHOT — REPLACE `12-04-create-application.png`.** The subtitle now reads "Only the program name and agency are required. You can add the rest later.", the opportunity field is labelled **Grant Opportunity**, the budget-summary placeholder reads "How the grant money will be spent..." and the contacts placeholder "Names, roles, and phone or email...".**]**
 
 ---
 
 ## Grant Application Pipeline
 
-Applications progress through 10 stages:
+Applications move through 10 stages:
 
-| Status              | Description                                 | Next Steps                   |
-| ------------------- | ------------------------------------------- | ---------------------------- |
-| **Researching**     | Evaluating fit, gathering requirements      | Move to Preparing when ready |
-| **Preparing**       | Writing application, assembling documents   | Submit for Internal Review   |
-| **Internal Review** | Department leadership review                | Submit to grantor            |
-| **Submitted**       | Application filed with funding agency       | Wait for response            |
-| **Under Review**    | Grantor is evaluating                       | Wait for decision            |
-| **Awarded**         | Grant approved!                             | Begin spending and reporting |
-| **Denied**          | Application not selected                    | Note lessons learned         |
-| **Active**          | Grant period in progress, funds being spent | Track expenditures           |
-| **Reporting**       | Performance reports due                     | File required reports        |
-| **Closed**          | Grant period complete                       | Final closeout               |
+| Status              | Meaning                                      | Next step                    |
+| ------------------- | -------------------------------------------- | ---------------------------- |
+| **Researching**     | Checking the fit and the requirements        | Move to Preparing when ready |
+| **Preparing**       | Writing the application, gathering documents | Send for internal review     |
+| **Internal Review** | Department leadership reviews it             | Submit to the grantor        |
+| **Submitted**       | Filed with the funding agency                | Wait for a response          |
+| **Under Review**    | The grantor is evaluating it                 | Wait for a decision          |
+| **Awarded**         | The grant was approved                       | Begin spending and reporting |
+| **Denied**          | The application was not selected             | Note lessons learned         |
+| **Active**          | The grant period is running; money is spent  | Track expenditures           |
+| **Reporting**       | Performance reports are due                  | File the required reports    |
+| **Closed**          | The grant period is over                     | Final closeout               |
 
 ### Moving an Application Between Stages
 
-An application can only move to the stages that make sense next, and the
-**Application Status** list on the edit form offers only those (plus the stage
-it is in now):
+An application can only move to the stages that make sense next. The
+**Application Status** list on the edit form offers only those, plus the stage
+it is in now:
 
 | From                                      | Can move to                                    |
 | ----------------------------------------- | ---------------------------------------------- |
-| Researching, Preparing or Internal Review | any of the other two, or Submitted             |
+| Researching, Preparing or Internal Review | either of the other two, or Submitted          |
 | Submitted                                 | Under Review, Awarded or Denied                |
 | Under Review                              | Submitted (a resubmission), Awarded or Denied  |
 | Awarded                                   | Active, or Closed (an award declined/returned) |
@@ -176,19 +202,33 @@ it is in now):
 
 So a submitted application cannot slip back into drafting, and a closed grant
 cannot return to Researching. Any other move is refused with a message naming
-the stages that are allowed. A **new** application can be recorded at any stage
-— useful when entering a grant the department already has.
+the stages that are allowed. A **new** application can start at any stage —
+useful when entering a grant the department already has.
 
 ### Pipeline View vs Table View
 
-Applications can be viewed in two ways:
+You can view applications two ways:
 
-- **Pipeline (Kanban)** — One column per stage. Each column's header shows how many applications are in that stage, and the column loads 25 cards at a time; **Show more** at the bottom loads the next batch. (Change a stage from the application's own page.)
-- **Table** — Sortable, filterable list with status badges, a page at a time. The pager under the table moves between pages and sets how many rows a page shows (25 by default); sorting by a column sorts every application, not only the page you are looking at.
+- **Pipeline** — one column per stage. Each column's header shows how many
+  applications are in that stage. A column shows 25 cards at a time; **Show
+  more** at the bottom shows the next batch. Change an application's stage from
+  its own page.
+- **Table** — a sortable, filterable list with status badges, one page at a
+  time. The pager under the table moves between pages and sets how many rows a
+  page shows (25 by default). Sorting by a column sorts every application, not
+  only the page you are on.
 
-Nothing is left out of either view: every application matching the filters can be reached, however many the department has. (The page used to load the newest 1,000 and silently stop.)
+Every application matching your filters can be reached in either view, however
+many the department has.
 
-**Filtering.** Search matches the program name or the agency. The **Status** filter offers single statuses and three groups — **Active grants** (Active and Reporting), **Pending** (Researching through Under Review) and **Funded** (Awarded, Active, Reporting and Closed). The dashboard's **Active Grants**, **Pending Applications** and **Total Grant Funding** cards open the list on the matching group, so the list shows the same applications the card counted.
+**Filtering.** Search matches the program name or the agency. The **Status**
+filter offers single statuses and three groups:
+
+- **Active grants** — Active and Reporting
+- **Pending** — Researching through Under Review
+- **Funded** — Awarded, Active, Reporting and Closed
+
+**Clear filters** resets them.
 
 ![Grant applications in pipeline view with a column per status](./images/12-05-applications-pipeline.png)
 
@@ -196,129 +236,158 @@ Nothing is left out of either view: every application matching the filters can b
 
 ## Budget Items & Expenditure Tracking
 
-Each grant application has a **budget** broken down into line items and tracked expenditures.
+Each application has a **budget** made of line items, and the spending recorded
+against it. Open the application to see its tabs: **Overview**, **Budget**,
+**Expenditures**, **Compliance & Follow-Up** and **Activity Log**.
 
 ### Budget Items
 
-Navigate to the **Budget** tab on an application detail page and use **Add Budget Item** (the button read Add Item).
+On the **Budget** tab, select **Add Budget Item** and enter:
 
-| Field            | Description                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| Category         | Equipment, Personnel, Training, Contractual, Supplies, Travel, Construction, Indirect, Other |
-| Description      | What the money is for                                                                        |
-| Amount Budgeted  | Planned spending for this line                                                               |
-| Amount Spent     | Auto-calculated from expenditures                                                            |
-| Amount Remaining | Budgeted minus spent                                                                         |
-| Federal Share    | How much is covered by the grant                                                             |
-| Local Match      | Department's cost-share obligation                                                           |
+| Field           | What it is                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| **Category**    | Personnel, Equipment, Supplies, Travel, Training, Contractual, Construction, Indirect Costs, Other |
+| **Description** | What the money is for                                                                              |
+| **Amount**      | Planned spending on this line                                                                      |
+
+The tab shows **Total Budgeted**, **Total Spent** and **Remaining**, overall and
+for each line. Spending on a line is added up from the expenditures linked to
+it.
 
 ### Expenditures
 
-Navigate to the **Expenditures** tab to record spending against the budget:
+On the **Expenditures** tab, record spending against the budget:
 
-1. Click **Record Expenditure**
-2. Enter the amount and date; **Description**, **Vendor**, and **Invoice / PO Number** are marked _(optional)_
-3. Optionally link it under **Budget Item (optional)** — **None** leaves it unlinked
-4. Add receipt URL and approval info
-5. Save
+1. Select **Record Expenditure**.
+2. Enter the **Description**, **Amount** and **Date**. All three are required.
+   **Vendor (optional)** and **Invoice / PO Number (optional)** can be added
+   too.
+3. Optionally choose a line under **Budget Item (optional)**. **None** leaves it
+   unlinked.
+4. Save with **Record Expenditure**.
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
 
 **Spending over the award or a budget line is recorded, with a warning.** An
-expenditure is never refused for being over — by the time it is entered the
-money has been spent, and refusing it would only make the books disagree with
-the bank. Instead:
+expenditure is never refused for being over. By the time it is entered the money
+has been spent, and refusing it would only make the books disagree with the
+bank. Instead:
 
 - after you record an expenditure that puts the grant over its **Amount
-  Awarded**, or its budget line over its budget, a warning appears saying by how
-  much;
+  Awarded**, or a budget line over its amount, a warning says by how much;
 - the application page shows a standing warning while total spending is over
   the amount awarded;
 - each overspend is written to the audit log.
 
-**[SCREENSHOT — CHECK `12-06-application-budget-tab.png`.** If the frame shows the add button, it now reads **Add Budget Item**, and the summary's "Match Required" figure is labelled **Match Amount**.**]**
+> **The amount awarded cannot be entered on the application form.** The form
+> has no field for it. Until an awarded amount is on record, the application
+> shows none, the over-award warning cannot appear, and the dashboard's **Total
+> Grant Funding** and the report's **Total Awarded** leave that grant out. The
+> budget-line warning still works.
 
 ### Edge Cases
 
-| Scenario                        | Behavior                                     |
-| ------------------------------- | -------------------------------------------- |
-| Expenditure exceeds budget item | Allowed but flagged; over-budget highlighted |
-| Budget item deleted             | Cascades to linked expenditures              |
-| Expenditure without budget item | Standalone expenditure; still tracked        |
+| Situation                              | What happens                                                               |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| An expenditure goes over its line      | Recorded, with a warning                                                   |
+| An expenditure is not linked to a line | It still counts toward the grant's total spending, but not toward any line |
 
 ---
 
 ## Compliance Tasks
 
-Awarded grants come with reporting and compliance obligations. The system tracks these as tasks.
+An awarded grant comes with reporting and other obligations. The Logbook tracks
+these as tasks on the **Compliance & Follow-Up** tab.
 
 ### Task Types
 
-| Type                | Description                                 |
-| ------------------- | ------------------------------------------- |
-| Performance Report  | Periodic progress report to grantor         |
-| Financial Report    | Spending report with receipts/documentation |
-| Progress Update     | Informal status update                      |
-| Site Visit          | On-site inspection by grantor               |
-| Audit               | Financial or program audit                  |
-| Equipment Inventory | Physical inventory of grant-purchased items |
-| NFIRS Submission    | National Fire Incident Reporting submission |
-| Closeout Report     | Final report at end of grant period         |
-| Other               | Custom compliance task                      |
+| Type                | What it is                                       |
+| ------------------- | ------------------------------------------------ |
+| Performance Report  | A regular progress report to the grantor         |
+| Financial Report    | A spending report with receipts or documentation |
+| Progress Update     | An informal status update                        |
+| Site Visit          | An on-site inspection by the grantor             |
+| Audit               | A financial or program audit                     |
+| Equipment Inventory | A count of items bought with the grant           |
+| NFIRS Submission    | A National Fire Incident Reporting System filing |
+| Closeout Report     | The final report at the end of the grant period  |
+| Other               | Anything else                                    |
 
 ### Task Statuses
 
-| Status      | Description                  |
+| Status      | Meaning                      |
 | ----------- | ---------------------------- |
-| Pending     | Not yet started              |
-| In Progress | Work underway                |
-| Completed   | Task finished and documented |
-| Overdue     | Past due date, not completed |
+| Pending     | Not started yet              |
+| In Progress | Work under way               |
+| Completed   | Finished and documented      |
+| Overdue     | Past its due date, not done  |
 | Waived      | Excused (with documentation) |
+
+You set a task's status yourself from the list on each task. **Mark Complete**
+records the completion date (the department's date) and adds an entry to the
+**Activity Log**. A task does not become **Overdue** by itself.
+
+### Tasks created when a grant is awarded
+
+The first time an application moves to **Awarded**, The Logbook creates its
+compliance tasks for you:
+
+- **Performance Report #1, #2…** — one per reporting period, if the application
+  has a **Reporting Frequency** (monthly, quarterly, semi-annual or annual), a
+  grant start date and a grant end date. The first is due one period after the
+  start date; the last falls on or before the end date.
+- **Grant Closeout Report** — due 90 days after the grant end date, if one is
+  set.
+- **Grant-Funded Equipment Inventory** — if the application is linked to an
+  opportunity in the Equipment or Vehicles category. It is due on the grant end
+  date. If no end date is set, it is still created, due on the day of the award
+  (the department's date).
+
+The Activity Log notes how many tasks were created. This happens only once per
+application, even if it moves to Awarded again. Set the reporting frequency and
+the grant dates **before** you move the application to Awarded.
 
 ### Managing Tasks
 
-1. Navigate to the **Compliance** tab on an application
-2. Tasks may be auto-generated when the application status changes to "Awarded" (based on grant type and reporting frequency)
-3. Assign tasks to team members
-4. Set reminder days (e.g., remind 14 days before due date)
-5. Mark tasks complete when done
+1. Open the **Compliance & Follow-Up** tab on the application.
+2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
+   **Description (optional)**, **Due Date**, **Priority** and **Report Template
+   (optional)**.
+3. Change a task's status as the work moves along, and select **Mark Complete**
+   when it is done.
+
+> **No reminders are sent.** The Logbook does not email anyone before a task is
+> due, or when it is past due. Use **Compliance Tasks Due** on the dashboard
+> (the next 30 days) and **Upcoming Deadlines** to keep track.
 
 ![Grant application compliance tasks tab with due dates and status badges](./images/12-07-application-compliance-tab.png)
-
-### Edge Cases
-
-| Scenario             | Behavior                                                       |
-| -------------------- | -------------------------------------------------------------- |
-| Task overdue         | Status auto-changes to Overdue; notification sent              |
-| Waived task          | Requires documentation reason                                  |
-| Auto-generated tasks | Created based on grant type and reporting_frequency setting    |
-| Reminder not sending | Check that reminder_days_before is set and email is configured |
 
 ---
 
 ## Application Notes & Activity
 
-The **Activity** tab on each application provides a chronological log of all actions:
+The **Activity Log** tab on each application is a timeline. It shows:
 
-- Status changes
-- Budget modifications
-- Expenditure recordings
-- Document uploads
-- Notes added
-- Task completions
+- every status change
+- the compliance tasks created at the award
+- each compliance task marked complete
+- the notes members add with **Add Note** ("Add an update or a call summary...")
+
+Each entry shows who made it and the date.
 
 ### Note Types
 
-| Type           | Description                          |
-| -------------- | ------------------------------------ |
-| General        | Free-form notes                      |
-| Status Change  | Automatic log of status transitions  |
-| Document Added | File upload notification             |
-| Contact Made   | Record of communication with grantor |
-| Milestone      | Key project milestone                |
-| Financial      | Financial event or update            |
-| Compliance     | Compliance-related note              |
+Each entry is labelled with its type:
+
+| Type           | What it records                       |
+| -------------- | ------------------------------------- |
+| General        | A note a member added                 |
+| Status Change  | A move from one stage to another      |
+| Document Added | A document added                      |
+| Contact Made   | A conversation with the grantor       |
+| Milestone      | A key project milestone               |
+| Financial      | A financial event or update           |
+| Compliance     | Compliance tasks created or completed |
 
 ![Grant application activity log with its timeline of status changes and notes](./images/12-08-application-activity-log.png)
 
@@ -326,75 +395,76 @@ The **Activity** tab on each application provides a chronological log of all act
 
 ## Fundraising Campaigns
 
-Campaigns organize fundraising efforts around a specific goal.
+A campaign groups fundraising around one goal. **Campaigns** — "Track each
+campaign's progress toward its goal" — lists them with a progress bar toward
+each goal. Filter by status or type.
 
 ### Creating a Campaign
 
-**Required Permission:** `fundraising.manage`
+**Required Permission:** Manage fundraising
 
-1. Navigate to **Grants > Campaigns** and click **New Campaign**
+1. Select **Grants & Fundraising → Campaigns**, then **New Campaign**.
 2. Fill in:
-   - **Name** — e.g., "2026 Annual Fund Drive"
-   - **Description** — campaign purpose and story
-   - **Campaign Type** — General, Equipment, Training, Community, Memorial, Event, Other
-   - **Goal Amount** — target fundraising amount
-   - **Start/End Dates** — campaign period
-   - **Status** — Draft, Active, Paused, Completed, Cancelled
-3. Click **Create Campaign**
+   - **Name** (required) — for example, "2026 Annual Fund Drive"
+   - **Description** — the campaign's purpose and story
+   - **Campaign Type** — General, Equipment, Training, Community, Memorial,
+     Event or Other
+   - **Goal Amount** (required, more than zero)
+   - **Start Date** (required)
+   - **Status** — Draft, Active, Paused, Completed or Cancelled
+   - **Restricted fund — donors are giving for a stated purpose** — tick it when
+     donors are giving for something specific, then say what under **What the
+     donors are giving for** (required when ticked)
+3. Select **Create Campaign**.
 
-### Campaign Features
-
-- **Progress tracking** — Real-time progress bar toward goal
-- **Suggested donation amounts** — Pre-set tiers (e.g., $25, $50, $100, $250)
-- **Minimum donation** — Floor amount
-- **Anonymous donations** — Toggle allowing anonymous giving
-- **Match Campaign linking** — Link to a grant application for cost-share campaigns
+**Restricted funds.** A restricted campaign appears in the Finance module's
+**Restricted funds** report, and payments can be charged to it. See
+[Finance → Restricted Funds](./11-finance.md#restricted-funds). On an existing
+campaign, **Mark as restricted fund** and **Make unrestricted** change it.
+Making a campaign unrestricted asks first: "Payments will no longer be charged
+to it, and it will leave the Restricted funds report. Only do this if its donors
+did not give for a stated purpose."
 
 ![Fundraising campaign detail with the goal progress bar and donations](./images/12-09-campaign-detail.png)
 
 ### Edge Cases
 
-| Scenario                       | Behavior                                    |
-| ------------------------------ | ------------------------------------------- |
-| Campaign past end date         | Status can be manually changed to Completed |
-| Campaign linked to grant match | Donations count toward grant cost-share     |
-| Soft-delete campaign           | Marked inactive; historical data preserved  |
+| Situation                                  | What happens                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                                                                   |
+| A campaign's status needs to change        | You choose the status only when you create the campaign. The campaigns page has no control to change it afterwards, so choose it with care |
+| A donation is not linked to a campaign     | It does not count toward any campaign's total                                                                                              |
 
 ---
 
 ## Donor Management
 
-The donor CRM tracks all individuals, businesses, and organizations that support the department.
+**Donors** — "Look up donors and what each has given" — lists every person,
+business and organization that supports the department.
 
 ### Creating a Donor Record
 
-1. Navigate to **Grants > Donors** and click **Add Donor**
-2. Fill in: name, email, phone, address, donor type (Individual, Business, Foundation, Government, Other)
-3. For business donors: company name
-4. Add tags and communication preferences
-5. Save
+1. Select **Grants & Fundraising → Donors**, then **Add Donor**.
+2. Fill in the name, email, phone and address, and the **Donor Type**:
+   Individual, Business, Foundation, Government or Other.
+3. For a business or foundation, add the **Company Name**.
+4. Save.
 
-### Donor Profile
+### What the donor list shows
 
-Each donor profile shows:
-
-- Contact information
-- **Giving history** — total donated, donation count, first/last donation dates
-- **Donation records** — chronological list of all gifts
-- **Tags** — for categorization and segmentation
-- **Communication preferences** — how and when to contact
+For each donor: their contact details, **total donated**, how many donations,
+and the date of their last donation. Search by name or email, or filter by type.
+A donor's first and last donation dates use the department's date, so an evening
+gift is dated the day it was given.
 
 ![Donor list with contact details and giving summaries](./images/12-10-donors.png)
 
-**[SCREENSHOT — REPLACE `12-10-donors.png`.** The subtitle now reads "Look up donors and what each has given".**]**
-
 ### Edge Cases
 
-| Scenario                 | Behavior                                                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Donor linked to a member | `user_id` field connects to the member profile                                                                                                                                                                           |
-| Anonymous donor          | `is_anonymous = true`; members with only `fundraising.view` see **Anonymous donor** with no contact details, and a search by the donor's name does not find the record. `fundraising.manage` holders see the full record |
-| Donor deactivated        | Soft-delete; historical records preserved                                                                                                                                                                                |
+| Situation          | What happens                                                                                                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An anonymous donor | Members with view access only see **Anonymous donor** with no contact details, and searching by the donor's name does not find them. Officers who can manage fundraising see the full record |
+| Duplicate donors   | The Logbook does not spot duplicates, and they cannot be merged. Search before adding                                                                                                        |
 
 ---
 
@@ -402,98 +472,118 @@ Each donor profile shows:
 
 ### Creating a Donation Record
 
-1. Navigate to **Grants > Donations** and click **Record Donation** (shown only to `fundraising.manage` holders)
+1. Select **Grants & Fundraising → Donations**, then **Record Donation** (shown
+   only to officers who can manage fundraising).
 2. Fill in:
-   - **Amount** and **Date received** (both required; the date defaults to today)
-   - **Payment Method** — Cash, Check, Credit Card, Bank Transfer, PayPal, Venmo, Other
-   - **Payment status** — defaults to Completed. Only a completed gift counts toward the campaign's raised total and the donor's giving history
+   - **Amount** and **Date received** (both required; the date defaults to
+     today)
+   - **Payment Method** — Cash, Check, Credit Card, Bank Transfer, PayPal, Venmo
+     or Other
+   - **Payment status** — defaults to Completed. Only a completed gift counts
+     toward the campaign's raised total and the donor's giving history
    - **Campaign** — optional
-   - **Donor** — choose from the donor directory, or leave it as "Not in the donor directory" and enter a name and email for a one-time gift
-   - **Anonymous** — hide who gave from everyone who can only view fundraising (`fundraising.view`): the Donations list and the dashboard's recent donations show **Anonymous** and the API returns no donor name, email or link to the donor. Officers with `fundraising.manage` still see the donor, so receipts and thank-you letters can go out
+   - **Donor** — choose from the donor directory, or leave it as "Not in the
+     donor directory" and enter a name and email for a one-time gift
+   - **Anonymous** — hides who gave from members with view access only. The
+     Donations list and the dashboard's recent donations show **Anonymous**.
+     Officers who can manage fundraising still see the donor, so receipts and
+     thank-you letters can go out
    - **Dedication** — In honor of or In memory of, with the name
    - **Tax deductible** — on by default
    - **Notes**
-3. Click **Record donation**. You return to the Donations list
+3. Select **Record donation**. You return to the Donations list.
 
-A link to `/grants/donations/new?donorId=…&campaignId=…` opens the form with that donor and campaign already chosen.
-
-Not on the form: the recurring-gift flag and frequency, the check number and transaction ID. The create API does not accept the last two; nothing acts on the recurring flag.
+The form has no place for a recurring-gift schedule, a check number or a
+transaction ID. Put a check number in **Notes**.
 
 ### Payment Statuses
 
-| Status    | Description                          |
-| --------- | ------------------------------------ |
-| Pending   | Payment initiated, not yet confirmed |
-| Completed | Payment received and confirmed       |
-| Failed    | Payment attempt failed               |
-| Refunded  | Payment returned to donor            |
-| Cancelled | Payment cancelled before processing  |
+| Status    | Meaning                                     |
+| --------- | ------------------------------------------- |
+| Pending   | Payment started, not yet confirmed          |
+| Completed | Payment received and confirmed              |
+| Failed    | The payment attempt failed                  |
+| Refunded  | The payment was returned to the donor       |
+| Cancelled | The payment was cancelled before processing |
 
 ### Donation Acknowledgments
 
-Track whether receipts and thank-you letters have been sent:
-
-- `receipt_sent` / `receipt_sent_at` — tax receipt
-- `thank_you_sent` / `thank_you_sent_at` — thank-you letter
+The Donations list has a **Receipt** column, which reads **Sent** when a tax
+receipt is on record as sent. There is no button for marking receipts or
+thank-you letters as sent, so keep track of those in your own records.
 
 ### Edge Cases
 
-| Scenario                           | Behavior                                                                                                                               |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Recurring donation                 | Records each occurrence separately; tracks frequency                                                                                   |
-| Anonymous donation with dedication | Dedication shown; donor name, email and donor link hidden from `fundraising.view`-only members (amount, date and campaign still shown) |
-| Donation to inactive campaign      | Allowed but logged; counted toward campaign total                                                                                      |
-| Check donation                     | `check_number` is stored but API-only; put it in Notes                                                                                 |
+| Situation                               | What happens                                                                                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| An anonymous donation with a dedication | The dedication is shown. The donor's name and email are hidden from members with view access only; amount, date and campaign still show |
+| A donation to a campaign that has ended | Allowed, and counted toward the campaign's total                                                                                        |
+| A check donation                        | Put the check number in **Notes**                                                                                                       |
 
 ---
 
 ## Pledges
 
-Pledges track donation commitments that haven't been fulfilled yet.
+A pledge is a promise to give that has not been fully paid yet.
 
-Open **Grants & Fundraising > Pledges**, or click the **Outstanding Pledges** figure on the dashboard. The list shows each pledge's donor, campaign, amount pledged, amount received, what remains, due date and status, and filters by status.
+Open **Grants & Fundraising → Pledges**, or select the **Outstanding Pledges**
+figure on the dashboard. The list shows each pledge's donor, campaign, amount
+pledged, amount received, what remains, due date and status. Filter it by
+status.
 
 ### Recording a Pledge
 
-**Required Permission:** `fundraising.manage`
+**Required Permission:** Manage fundraising
 
-1. Click **Record Pledge**
-2. Choose the **Donor** and **Campaign** (both optional), and enter the **Amount pledged** and **Pledge date** (required) and a **Due date** (optional)
-3. Click **Record pledge**. A new pledge starts as Pending
+1. Select **Record Pledge**.
+2. Choose the **Donor** and **Campaign** (both optional). Enter the **Amount
+   pledged** and **Pledge date** (required) and a **Due date** (optional).
+3. Select **Record pledge**. A new pledge starts as Pending.
 
 ### Recording What Came In
 
-Click the pencil on a pledge to edit it. Enter the **Amount received so far** and set the **Status** yourself: recording a donation does not update a pledge, so the two are kept in step by hand. Clearing the due date or notes and saving removes them.
+Select the pencil on a pledge to edit it. Enter the **Amount received so far**
+and set the **Status** yourself. Recording a donation does not update a pledge,
+so you keep the two in step by hand. Clearing the due date or notes and saving
+removes them.
 
-The stored reminder switch and payment schedule are not on the form: nothing sends pledge reminders or reads a schedule.
+> **No pledge reminders are sent.** Nothing emails a donor or an officer when a
+> pledge comes due. Check the Pledges list, filtered by status.
 
 ### Pledge Statuses
 
-| Status          | Description                   |
-| --------------- | ----------------------------- |
-| Pending         | Pledged, nothing received yet |
-| Partly received | Some of it received           |
-| Fulfilled       | Full amount received          |
-| Cancelled       | Pledge withdrawn              |
-| Overdue         | Past due date, not fully paid |
+| Status          | Meaning                           |
+| --------------- | --------------------------------- |
+| Pending         | Pledged, nothing received yet     |
+| Partly received | Some of it received               |
+| Fulfilled       | The full amount received          |
+| Cancelled       | The pledge was withdrawn          |
+| Overdue         | Past its due date, not fully paid |
 
-The dashboard's **Outstanding Pledges** figure is what remains on Pending and Partly received pledges. Overdue pledges are not in it.
+You set every status yourself, including **Overdue**. The dashboard's
+**Outstanding Pledges** figure is what remains on Pending and Partly received
+pledges. Overdue pledges are not in it.
 
 ---
 
 ## Fundraising Events
 
-Event-based fundraising (dinners, galas, auctions, raffles, etc.) links campaigns to specific events.
+Fundraising events — dinners, galas, auctions, raffles and the like — can be
+tied to a campaign.
 
-Open **Grants & Fundraising > Events**. Each event shows its type, date and time, location, campaign, revenue goal, money raised, expenses, net (raised less expenses) and attendance, newest first, and the list filters by status.
+Open **Grants & Fundraising → Events**. Each event shows its type, date and
+time, location, campaign, revenue goal, money raised, expenses, net (raised less
+expenses) and attendance, newest first. Filter the list by status.
 
 ### Adding a Fundraising Event
 
-**Required Permission:** `fundraising.manage`
+**Required Permission:** Manage fundraising
 
-1. Click **Add Event**
-2. Enter the **Name**, **Type** and **Date and time** (required), and optionally the location, campaign, ticket price, capacity, revenue goal, registration link (http or https), description and notes
-3. Click **Add event**. A new event starts in Planning
+1. Select **Add Event**.
+2. Enter the **Name**, **Type** and **Date and time** (required). Optionally add
+   the location, campaign, ticket price, capacity, revenue goal, registration
+   link (starting http or https), description and notes.
+3. Select **Add event**. A new event starts in Planning.
 
 ### Event Types
 
@@ -501,39 +591,43 @@ Dinner, Gala, Auction, Raffle, Golf Outing, Walkathon, Other
 
 ### Tracking Results
 
-Click **Edit** on the event. The **Results** section sets:
+Select **Edit** on the event. The **Results** section sets:
 
-- **Status** — Planning, Open, Sold out, Completed, Cancelled
+- **Status** — Planning, Open, Sold out, Completed or Cancelled
 - **Attendance**
 - **Money raised**
 - **Expenses**
 
-Sponsors and a link to a calendar event can be stored through the API but are not on the form.
+The form has no place for sponsors or a link to a calendar event.
 
 ---
 
 ## Reports & Analytics
 
-Navigate to **Grants > Reports** — _"Grant results and fundraising totals for the dates you choose"_ — which has two tabs, **Grants** and **Fundraising** (named Grant Reports and Fundraising Reports before 2026-09-29). The Fundraising tab's headline figure is **Total Raised**.
+Select **Grants & Fundraising → Reports** — _"Grant results and fundraising
+totals for the dates you choose"_. Choose a **Start date** and **End date**. The
+range includes the whole end date, and dates are counted in the department's
+time zone (UTC if none is set). The page has two tabs.
 
 ### Grant Report
 
-- Grant applications by status
-- Total requested vs awarded amounts
-- Success rate (awarded/total applications)
-- Active grant burn rate (spending vs timeline)
+The **Grants** tab shows:
+
+- **Total Applications**, **Total Requested** and **Total Awarded**
+- **Awarded / Denied** and **Success Rate**
+- **Total Spent**
+- **Compliance Summary** — tasks by status, including **Overdue**
+- **Spending by Category**
 
 ### Fundraising Report
 
-- Donation totals by period (monthly, quarterly, annual)
-- Donor acquisition and retention rates
-- Campaign performance comparison
-- Payment method breakdown
-- Average donation size
+The **Fundraising** tab shows:
+
+- **Total Raised**, **Donation Count**, **Unique Donors** and **Average Gift**
+- **Donations by Payment Method**, with each method's share
+- **Monthly Totals**
 
 ![Fundraising report with donation trends and top campaigns](./images/12-14-fundraising-reports.png)
-
-**[SCREENSHOT — REPLACE `12-14-fundraising-reports.png`.** The tabs read **Grants** / **Fundraising**, the subtitle "Grant results and fundraising totals for the dates you choose", and the first KPI **Total Raised** (was Total Donations).**]**
 
 ---
 
@@ -541,190 +635,130 @@ Navigate to **Grants > Reports** — _"Grant results and fundraising totals for 
 
 ### Background
 
-**Oakville Fire Department** needs to replace aging SCBA equipment. Chief **Morrison** assigns Lt. Walsh to apply for an Assistance to Firefighters Grant (AFG).
+**Oakville Fire Department** needs to replace aging SCBA equipment. Chief
+**Morrison** asks Lt. Walsh to apply for an Assistance to Firefighters Grant
+(AFG).
 
 ### Part 1: Research (January)
 
-Lt. Walsh opens the **Opportunities Library** and finds the AFG program:
+Lt. Walsh opens **Opportunities**. The department added the AFG program last
+year:
 
 - **Agency:** FEMA
-- **Deadline:** Rolling (applications accepted Jan–Mar)
-- **Typical Award:** $50,000–$500,000
-- **Match Required:** Yes — 15% local cost-share
-- **Required Documents:** Application narrative, cost analysis, department profile
+- **Category:** Equipment
+- **Deadline:** Recurring (applications accepted January to March)
+- **Typical award:** $50,000–$500,000
+- **Local match:** yes — 15%
 
-He creates a new application:
+He selects **Start Application** and fills in:
 
-- **Title:** "SCBA Replacement — AFG 2026"
+- **Grant Program Name:** "SCBA Replacement — AFG 2026"
 - **Amount Requested:** $180,000
-- **Match Amount:** $31,765 (15% of total project cost $211,765)
+- **Match Amount:** $31,765 (15% of the total project cost of $211,765)
 - **Priority:** Critical
-- **Status:** Researching
+
+The application starts in **Researching**.
 
 ### Part 2: Application Preparation (February)
 
 Lt. Walsh moves the application to **Preparing** and:
 
 1. Adds budget items:
-   - Equipment (SCBA units): $165,000 — Federal: $140,250, Local: $24,750
-   - Training (SCBA certification): $15,000 — Federal: $12,750, Local: $2,250
-   - Indirect costs: $11,765 — Federal: $10,000, Local: $1,765
-
-2. Writes the project narrative describing the need
-3. Uploads supporting documents (department profile, cost quotes, needs assessment)
-4. Adds a note: "Contacted regional FEMA office for guidance on narrative format"
+   - Equipment (SCBA units): $165,000
+   - Training (SCBA certification): $15,000
+   - Indirect Costs: $11,765
+2. Writes the project description.
+3. Gathers supporting documents (department profile, cost quotes, needs
+   assessment).
+4. Adds a note: "Contacted regional FEMA office for guidance on narrative
+   format".
 
 ### Part 3: Submission (March 1)
 
-Chief Morrison reviews and approves → Lt. Walsh submits:
-
-- Status: **Submitted**
-- Application deadline met with 2 weeks to spare
+Chief Morrison reviews it in **Internal Review** and approves. Lt. Walsh
+submits it to FEMA and sets the status to **Submitted** — two weeks before the
+deadline.
 
 ### Part 4: Award (June 15)
 
-FEMA notifies the department: **Awarded!**
+FEMA approves the full $180,000. Before changing the status, Lt. Walsh edits
+the application and fills in:
 
-Lt. Walsh updates the application:
+- **Grant Start Date:** July 1, 2026
+- **Grant End Date:** June 30, 2027
+- **Reporting Frequency:** Quarterly
 
-- Status: **Awarded**
-- Amount Awarded: $180,000
-- Grant Start Date: July 1, 2026
-- Grant End Date: June 30, 2027
-- Reporting Frequency: Quarterly
+Then he sets the status to **Awarded**. The Logbook creates the compliance
+tasks:
 
-The system auto-generates compliance tasks:
+- Performance Report #1 (due October 1, 2026)
+- Performance Report #2 (due January 1, 2027)
+- Performance Report #3 (due April 1, 2027)
+- Grant-Funded Equipment Inventory (due June 30, 2027)
+- Grant Closeout Report (due September 28, 2027)
 
-- Q1 Performance Report (due Oct 15)
-- Q1 Financial Report (due Oct 15)
-- Q2 Performance Report (due Jan 15)
-- Q2 Financial Report (due Jan 15)
-- Q3 Performance Report (due Apr 15)
-- Q4 Performance Report + Closeout (due Jul 15)
-- Equipment Inventory (due Jul 30)
+He adds the quarterly **Financial Report** tasks FEMA also asks for with **Add
+Task**.
 
 ### Part 5: Grant Period (July–December)
 
-As SCBA units arrive and are deployed, Lt. Walsh records expenditures:
+He moves the application to **Active**. As SCBA units arrive, he records
+expenditures:
 
-- Jul 15: MSA Safety invoice — $82,500 (30 SCBA units, first shipment)
-- Aug 20: Training vendor — $7,500 (SCBA certification course)
-- Oct 1: MSA Safety invoice — $82,500 (30 SCBA units, second shipment)
+- July 15: MSA Safety invoice — $82,500 (30 SCBA units, first shipment)
+- August 20: training vendor — $7,500 (SCBA certification course)
+- October 1: MSA Safety invoice — $82,500 (30 SCBA units, second shipment)
 
-Budget utilization: $172,500 / $180,000 = 95.8%
+Spent so far: $172,500 of $180,000 (95.8%).
 
-He completes the Q1 reports on time and marks the tasks as Complete.
+He files the first reports on time and selects **Mark Complete** on each task.
 
 ### Part 6: Closeout (July 2027)
 
 Lt. Walsh files the final closeout report:
 
 - Total spent: $175,200
-- Equipment inventory verified: all 60 SCBA units accounted for
-- Remaining $4,800 returned to FEMA
+- Equipment inventory checked: all 60 SCBA units accounted for
+- The remaining $4,800 returned to FEMA
 - Status: **Closed**
 
 ---
 
 ## Troubleshooting
 
-| Issue                                  | Solution                                                                                                                          |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Grant opportunity not showing deadline | Check that deadline_type and deadline_date are set. Rolling deadlines have no fixed date.                                         |
-| Cannot create application              | Verify `fundraising.manage` permission. Check that the module is enabled.                                                         |
-| Budget items not matching expenditures | Expenditures must be linked to budget items for automatic tracking. Unlinked expenditures count toward totals but not line items. |
-| Compliance task not auto-created       | Auto-creation depends on reporting_frequency being set on the application. Set it after the application is awarded.               |
-| Campaign progress not updating         | Donations must be linked to the campaign via campaign_id. Unlinked donations don't count.                                         |
-| Donor duplicate                        | System does not auto-detect donor duplicates. Search before creating. Merge not yet available.                                    |
-| Pledge shows overdue incorrectly       | Check the due_date. Partial payments keep the pledge in Partial status until fully paid.                                          |
-| Report shows $0 for a period           | Verify the date range includes transactions. Some reports filter by fiscal_year_id.                                               |
-| Cannot delete application              | Applications with expenditures or compliance tasks must have those removed first.                                                 |
+| Problem                                               | What to do                                                                                                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An opportunity shows no deadline                      | Check its **Deadline** setting. A Rolling deadline has no date, and a Recurring one shows a date only when the next deadline was entered.                     |
+| You cannot create an application                      | You need the **Manage fundraising** permission, and the module must be turned on.                                                                             |
+| Budget lines do not match the expenditures            | Link each expenditure to its budget item. Unlinked expenditures count toward the grant's total, but not toward any line.                                      |
+| No compliance tasks were created at the award         | They need a **Reporting Frequency** and grant dates, set **before** the move to Awarded. Tasks are created only once; add any missing ones with **Add Task**. |
+| A campaign's progress does not change                 | Link the donation to the campaign, and make sure its **Payment status** is Completed. Unlinked or pending donations do not count.                             |
+| A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                    |
+| A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                              |
+| A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                               |
+| **Total Awarded** or **Total Grant Funding** reads $0 | The application form cannot record an awarded amount. See the note under [Expenditures](#expenditures).                                                       |
+| Nobody was reminded about a deadline                  | The Logbook does not send grant, compliance or pledge reminders. Check the dashboard's **Upcoming Deadlines** and **Compliance Tasks Due**.                   |
+
+---
+
+## If You Learned an Older Version
+
+If you are following older notes, an older recording or an SOP, these things
+work differently from what they may say.
+
+- **Buttons were renamed.** **Start Application** (was Apply), **Add Budget
+  Item** (was Add Item), **Save Changes** (was Update Application), **Clear
+  filters** (was Clear). The application summary reads **Match Amount** (was
+  Match Required). The report tabs read **Grants** and **Fundraising** (were
+  Grant Reports and Fundraising Reports), and the first figure is **Total
+  Raised** (was Total Donations).
+- **Re-run older reports that ended on the day they were run.** At one time a
+  report whose range ended today left out everything recorded later that day,
+  and the payment-method breakdown showed 0.0% for every method. If you still
+  rely on such a report, run it again.
+- **Grant reminders were never sent.** Older material may promise grant
+  deadline, compliance or pledge reminders. The Logbook does not send them.
 
 ---
 
 **Previous:** [Finance](./11-finance.md) | **Next:** [Medical Screening](./13-medical-screening.md)
-
----
-
-## Report and Permission Fixes _(2026-08-30)_
-
-### Re-run any report whose range ended today
-
-**A grant or fundraising report covering a date range that included today — the
-default — silently dropped every application or donation recorded later that
-same day.** Its totals were understated, with no warning. The report now
-includes the entire end date.
-
-**If you filed a report and are relying on its numbers, run it again.**
-
-### The payment-method breakdown showed 0.0% for everything
-
-On the fundraising report, the percentage breakdown by payment method showed
-**0.0% for every method** as soon as two or more methods had donations — with
-no error to suggest anything was wrong. Percentages calculate correctly now.
-
-### View-only members were shown buttons that did not work
-
-A member with view-only access to Grants & Fundraising could open the
-campaigns, donors and dashboard pages, or an individual application's detail
-page, and see **New Campaign, Add Donor, New Application, Add Item, Record
-Expenditure, Add Task and Add Note** — all of which failed on click and
-explained nothing. Those controls are hidden now for members without permission
-to use them.
-
-> **[SCREENSHOT — REPLACE the dashboard, campaigns, donors and application
-> detail captures**, and caption which grants the capturing account holds — the
-> action buttons are permission-dependent now.**]**
-
-### Deleting an opportunity no longer takes its applications with it
-
-**Deleting a grant opportunity could silently wipe out every application ever
-linked to it.** Fixed.
-
-## Lists stop getting slower as history accumulates _(2026-09-05)_
-
-Every list in this module — opportunities, applications, budget items,
-expenditures, compliance tasks, notes, campaigns, donors, donations, pledges and
-fundraising events — used to fetch your organization's **entire** matching table
-before picking out the page you asked for.
-
-For a department with years of donation, donor or grant-application history,
-that meant every single page view loaded the complete history, however small the
-page.
-
-Paging now happens in the database, so a page load only reads the rows it
-displays.
-
-**Nothing about what you see changed** — same rows, same order, same totals — so
-there is nothing to re-check after upgrading. The lists are simply no longer
-affected by how much history sits behind them.
-
-## Changes September 24 – October 4, 2026
-
-### Dates are the department's, not the server's _(2026-09-26)_
-
-The server runs on UTC, which for a US department is already tomorrow every
-evening. The grants and fundraising dashboards' upcoming-deadline, tasks-due
-and campaign figures, and the completed date stamped on a compliance task when
-you mark it complete, now use the department's date — the timezone under
-**Settings → Organization → Profile → Timezone**, America/New_York when none is
-set — so an evening look at the dashboard no longer counts from tomorrow. A donor's first
-and last donation dates, read from the donation's timestamp, are the
-department's day too; an evening gift used to be dated the next day. Report
-date ranges themselves are still UTC — see
-[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) (GF-24a).
-
-### Wording _(2026-09-29)_
-
-Buttons and messages say what they do: **Start Application** (was Apply),
-**Add Budget Item** (was Add Item), **Save Changes** (was Update Application),
-**Clear filters** (was Clear), and the grant detail's summary reads **Match
-Amount** (was Match Required). Compliance task statuses show as words (**In
-Progress**) instead of `in progress`. Empty lists say whether a filter is the
-reason (_"No donations match your search or filter."_) or there is nothing yet,
-and point a member who can add one at the button that does.
-
-### Dark mode _(2026-10-03)_
-
-The dashboard's load-error panel was a light-only block in dark mode; it uses
-the themed alert colours now.

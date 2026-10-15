@@ -93,15 +93,6 @@ class FolderRoleOption(BaseModel):
 # ============================================
 
 
-class DocumentCreate(BaseModel):
-    """Schema for creating a document (metadata only, file uploaded separately)"""
-
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    folder_id: Optional[UUID] = None
-    tags: Optional[str] = None
-
-
 class DocumentUpdate(BaseModel):
     """Schema for updating a document"""
 

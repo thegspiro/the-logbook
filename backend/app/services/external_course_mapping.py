@@ -24,7 +24,7 @@ from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -291,7 +291,7 @@ async def apply_course_mapping(
                     )
                 )
             ).scalar_one_or_none()
-            replaceable = TrainingRecord.category_id.is_(None)
+            replaceable: ColumnElement[bool] = TrainingRecord.category_id.is_(None)
             if default_category_id:
                 replaceable = replaceable | (
                     TrainingRecord.category_id == default_category_id

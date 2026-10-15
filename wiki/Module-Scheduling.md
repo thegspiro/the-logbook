@@ -5,20 +5,12 @@ standing shifts, swap and time-off requests, shift templates and patterns,
 shift close-out and call counts, shift completion reports, and scheduling
 reports.
 
-<<<<<<< HEAD
-> **Equipment checklists moved to Inventory on 2026-08-31.** A checklist is a
-> list of inventory items, so the whole feature — authoring it, performing it
-> and reporting on it — lives in the
-> [Inventory module](Module-Inventory#equipment-checklists)
-> under `/inventory/checklists`. **Scheduling hosts none of it.**
-=======
 > **Equipment checklists belong to Inventory.** A checklist is a list of
 > inventory items, so the whole feature — authoring it, performing it and
 > reporting on it — lives in the
 > [Inventory module](Module-Inventory#equipment-checklists) under
-> `/inventory/checklists`. Members reach their checklists from the **My
-> Checklists** nav row.
->>>>>>> origin/main
+> `/inventory/checklists`. **Scheduling hosts none of it.** Members reach their
+> checklists from the **My Checklists** nav row.
 >
 > What Scheduling keeps is the shift's own business: a "Start checklist" link
 > on shift check-in and on the shift detail panel, both pointing at
@@ -1045,5 +1037,5 @@ one tap.
 - [Inventory Module](Module-Inventory) — equipment checklists
 - [Apparatus Module](Module-Apparatus) | [Events Module](Module-Events) |
   [Training Module](Module-Training)
-- `docs/SCHEDULING_MODULE.md` — engineering reference
+- [Scheduling Module — Developer Reference](Module-Scheduling-Developer) — routes, API, data model
 - `docs/KNOWN_LIMITATIONS.md` — open scheduling limitations

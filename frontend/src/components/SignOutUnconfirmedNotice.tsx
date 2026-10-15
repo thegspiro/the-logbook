@@ -36,7 +36,7 @@ export const SignOutUnconfirmedNotice: React.FC = () => {
         aria-modal="true"
         aria-labelledby="sign-out-unconfirmed-title"
         aria-describedby="sign-out-unconfirmed-body"
-        className="card modal-panel-scroll max-w-md p-6 text-center"
+        className="modal-panel modal-panel-scroll max-w-md p-6 text-center"
       >
         <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-red-700 dark:text-red-400" aria-hidden="true" />
         <h1 id="sign-out-unconfirmed-title" className="text-theme-text-primary mb-2 text-lg font-semibold">

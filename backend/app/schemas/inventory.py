@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.schemas.base import UTCResponseBase
 from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
+from app.utils.item_aliases import normalize_aliases
 from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
 
 _response_config = ConfigDict(from_attributes=True)
@@ -474,6 +475,14 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class InventoryCategoryDeleteResult(BaseModel):
+    """What a permanent category delete did"""
+
+    category_name: str
+    items_moved: int
+    moved_to_name: Optional[str] = None
+
+
 # ============================================
 # Guided Setup Schemas
 # ============================================
@@ -533,6 +542,7 @@ class InventoryItemBase(BaseModel):
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
+    also_called: Optional[List[str]] = None
     serial_number: Optional[str] = Field(None, max_length=255)
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
@@ -594,6 +604,11 @@ class InventoryItemBase(BaseModel):
             raise ValueError(f"Only one {conflict} style may be set on an item")
         return value
 
+    @field_validator("also_called")
+    @classmethod
+    def _settle_also_called(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        return normalize_aliases(value)
+
 
 class InventoryItemCreate(InventoryItemBase):
     """Schema for creating a new inventory item"""
@@ -640,6 +655,7 @@ class InventoryItemUpdate(BaseModel):
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
+    also_called: Optional[List[str]] = None
     serial_number: Optional[str] = Field(None, max_length=255)
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
@@ -690,6 +706,11 @@ class InventoryItemUpdate(BaseModel):
         if conflict:
             raise ValueError(f"Only one {conflict} style may be set on an item")
         return value
+
+    @field_validator("also_called")
+    @classmethod
+    def _settle_also_called(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        return normalize_aliases(value)
 
 
 class InventoryItemResponse(InventoryItemBase):

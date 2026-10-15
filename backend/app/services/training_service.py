@@ -68,7 +68,7 @@ def _same_requirement_value(stored: Any, sent: Any) -> bool:
     """
     if stored in (None, []) and sent in (None, []):
         return True
-    return stored == sent
+    return bool(stored == sent)
 
 
 class TrainingService:
@@ -298,10 +298,8 @@ class TrainingService:
                     requirements_met.append(req.id)
                     continue
                 if tier_exempt_types and getattr(req, "training_type", None):
-                    req_type = (
-                        req.training_type.value
-                        if hasattr(req.training_type, "value")
-                        else str(req.training_type)
+                    req_type = str(
+                        getattr(req.training_type, "value", req.training_type)
                     )
                     if req_type in tier_exempt_types:
                         requirements_met.append(req.id)

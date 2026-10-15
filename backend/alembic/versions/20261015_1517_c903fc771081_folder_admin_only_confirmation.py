@@ -1,7 +1,7 @@
 """Record when a folder was confirmed as meant for administrators only.
 
 Revision ID: c903fc771081
-Revises: 252c7517d80a
+Revises: bb60bd43bede
 Create Date: 2026-10-15 15:17:00.000000
 
 Decision 30 (docs/FILE_STORAGE_HARDENING.md): a folder can come to open to
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c903fc771081"
-down_revision: Union[str, None] = "252c7517d80a"
+down_revision: Union[str, None] = "bb60bd43bede"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

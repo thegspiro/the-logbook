@@ -37,6 +37,7 @@ from app.models.minute import (
 )
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
+from app.utils.rich_text import FORMAT_HTML, html_to_text, normalize_format
 from app.utils.sql_ordering import nulls_last_asc
 
 # Minutes written with the dynamic-section format keep the money inside
@@ -92,8 +93,22 @@ def _is_finance_section(section: Any) -> bool:
     return any(marker in haystack for marker in _FINANCE_SECTION_MARKERS)
 
 
+def _plain(section: Any) -> Any:
+    """A rich-text section as the plain text an assistant should read."""
+    if (
+        isinstance(section, dict)
+        and normalize_format(section.get("format")) == FORMAT_HTML
+    ):
+        return {
+            **section,
+            "content": html_to_text(section.get("content")),
+            "format": "text",
+        }
+    return section
+
+
 def _sections(m: Any, expose_finance: bool) -> list:
-    sections = m.get_sections() or []
+    sections = [_plain(sec) for sec in (m.get_sections() or [])]
     if expose_finance:
         return list(sections)
     return [sec for sec in sections if not _is_finance_section(sec)]

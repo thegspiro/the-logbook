@@ -1,8 +1,19 @@
 # Skills Testing & Psychomotor Evaluations
 
-The Skills Testing module provides digital skill sheet evaluations that mirror NREMT-style psychomotor examinations. Examiners use a tablet or computer to score individual steps, track time, flag critical criteria, and generate auditable pass/fail results — replacing paper skill sheets with a structured digital workflow.
+Skills Testing replaces paper skill sheets. An examiner scores each step on a
+phone, tablet or computer. The Logbook keeps the time, flags critical steps and
+works out the pass or fail. Every result is kept, with the examiner, the
+candidate, the marks and the time.
 
-Skills Testing lives within the Training module and integrates with Training Requirements, Training Records, Training Programs, and the compliance pipeline.
+Skills Testing is part of the Training module. A passing test can complete a
+requirement in a training program.
+
+> **Skills Testing is one of two practical-skills systems.** A department
+> chooses **Skills Testing** or **Shift report sign-offs** under **Training
+> Administration > Settings & Data > Practical Skills**. Skills Testing is the
+> default. If your department chose sign-offs, the Skills Testing screens in
+> this guide are hidden and record nothing new. Nothing is deleted. See
+> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system).
 
 ---
 
@@ -15,175 +26,207 @@ Skills Testing lives within the Training module and integrates with Training Req
 5. [Administering a Skills Test](#administering-a-skills-test)
 6. [Scoring & Critical Criteria](#scoring--critical-criteria)
 7. [Completing a Test](#completing-a-test)
-8. [Officer Validation](#officer-validation--a-result-is-not-a-record-until-an-officer-says-so-2026-08-08)
+8. [Officer Validation](#officer-validation)
 9. [Viewing Results](#viewing-results)
 10. [Skills Testing Summary Dashboard](#skills-testing-summary-dashboard)
 11. [Realistic Example: NREMT Trauma Assessment](#realistic-example-nremt-trauma-assessment)
 12. [Practice Mode](#practice-mode)
-13. [Who Sees a Result — Disclosure Settings](#who-sees-a-result--disclosure-settings-2026-08-08)
-14. [Withdrawing a Result — Void, Cancel, Delete](#withdrawing-a-result--void-cancel-delete-2026-08-08)
-15. [Printing: the blank sheet and the completed scorecard](#printing-the-blank-sheet-and-the-completed-scorecard-2026-08-11)
-16. [Attempt Limits](#attempt-limits-2026-08-08)
+13. [Who Sees a Result — Disclosure Settings](#who-sees-a-result--disclosure-settings)
+14. [Withdrawing a Result — Void, Cancel, Delete](#withdrawing-a-result--void-cancel-delete)
+15. [Printing: the blank sheet and the completed scorecard](#printing-the-blank-sheet-and-the-completed-scorecard)
+16. [Attempt Limits](#attempt-limits)
 17. [Permissions](#permissions)
 18. [Integration with Training Compliance](#integration-with-training-compliance)
 19. [Troubleshooting](#troubleshooting)
+20. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Overview
 
-> **Skills Testing is one of two practical-skills systems** _(2026-10-12)_. A
-> department chooses **Skills Testing** or **Shift report sign-offs** under
-> **Training Administration > Settings & Data > Practical Skills**. If your
-> department chose sign-offs, the Skills Testing screens in this guide are
-> hidden and record nothing new (nothing is deleted). See
-> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system-2026-10-12).
+Fire departments and EMS agencies run hands-on skills checks for
+certification, recertification and in-house proficiency. These follow standard
+skill sheets, such as those from the National Registry of Emergency Medical
+Technicians (NREMT). An examiner watches a candidate do a procedure and scores
+each step.
 
-Many fire departments and EMS agencies conduct psychomotor skills evaluations as part of certification, recertification, and internal proficiency checks. These evaluations follow standardized skill sheets (such as those published by the NREMT) where an examiner observes a candidate performing a procedure and scores each step.
+Skills Testing gives you:
 
-The Skills Testing module digitizes this process, providing:
+- **Reusable templates** built from skill sheets (NREMT, NFPA or your own)
+- **Live scoring**, step by step, with section totals
+- **Critical steps** that fail the test on their own
+- **A clock**, with an optional time limit
+- **An automatic pass or fail** from the passing mark and the critical steps
+- **A full record** of every test: examiner, candidate, marks and times
 
-- **Reusable templates** based on skill sheets (NREMT, NFPA, or department-defined)
-- **Real-time scoring** with per-step pass/fail and section subtotals
-- **Critical criteria tracking** for automatic failure conditions
-- **Time tracking** with configurable time limits
-- **Automatic pass/fail calculation** based on scoring thresholds and critical criteria
-- **Audit trail** of every test with examiner, candidate, scores, and timestamps
+**Where to find it:**
+
+| Who                                  | Where                                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every member                         | **Training > Skills Testing**. Two tabs: **Available Tests** (tap one to start it) and **My Results**                                       |
+| Officers who manage training records | **Training Admin > Evaluations**. **Skills Test Templates** holds the skill sheets and the summary cards; **Skills Test Records** holds every test |
+
+Your own results also appear on **My Training**, in the **Skills Tests**
+section.
 
 ---
 
 ## Skill Sheet Templates
 
-Templates are the reusable definitions of a skills test — the digital equivalent of a blank NREMT skill sheet. Each template contains:
+A template is a blank skill sheet, kept for reuse. Each one has:
 
-- **Metadata** — Name, category, description, version number
-- **Sections** — Ordered groups of related steps (e.g., "Scene Size-Up", "Primary Survey")
-- **Criteria within sections** — Individual scored items with descriptions and whether they are critical (required)
-- **Scoring configuration** — Passing percentage, whether all critical criteria must be met, optional time limit
+- **Settings** — name, category, description, passing mark, time limit
+- **Sections** — groups of related steps, in order (for example "Scene
+  Size-Up", "Primary Survey")
+- **Steps (criteria)** inside each section — each with a type, and marked
+  **Critical** if it must pass
 
 ![Skill sheet templates list with category and publication status](./images/09-01-skill-templates.png)
 
 ### Template Statuses
 
-| Status        | Description                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Draft**     | Template is being built or edited. Cannot be used for testing.                                                  |
-| **Published** | Template is active and available for examiners to use.                                                          |
-| **Archived**  | Template has been retired. Historical test results still reference it, but no new tests can be created from it. |
+| Status        | What it means                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| **Draft**     | Being built. It cannot be used for a test yet                                                         |
+| **Published** | Ready. Examiners can start tests from it                                                              |
+| **Archived**  | Retired. Old results still show it, but no new test can start from it, and it can no longer be edited |
 
 ---
 
 ## Creating a Template
 
-**Required Permission:** `training.manage`
+**Who can do this:** officers with the **Manage training records** permission.
 
-Navigate to **Training Admin > Skills Testing > Templates** and click **Create Template**.
+Go to **Training Admin > Evaluations > Skills Test Templates** and select
+**New Template**. (On a phone the button reads **New**.)
+
+> **Tip.** **Add from library** next to it copies a ready-made starter sheet,
+> which you can then edit.
 
 ### Step 1: Template Metadata
 
-Fill in the basic information:
+Fill in the **Template Settings**:
 
-| Field                           | Description                                                                               | Example                                                |
-| ------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Name**                        | Descriptive name of the skill sheet                                                       | "Patient Assessment/Management — Trauma"               |
-| **Category**                    | Training category (EMS, Fire, Hazmat, etc.)                                               | "EMS"                                                  |
-| **Description**                 | Purpose and scope                                                                         | "NREMT psychomotor exam for trauma patient assessment" |
-| **Passing Percentage**          | Minimum score to pass (0–100)                                                             | 70                                                     |
-| **Require All Critical**        | If enabled, failing any required criterion = automatic fail                               | Enabled                                                |
-| **Time Limit**                  | Optional time limit in minutes                                                            | 10                                                     |
-| **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment"         |
-| **Valid for (months)**          | Optional. How long a passing official test stays valid, counted from the day it was taken. Blank means it never expires | 24                                                     |
+| Field                                     | What it does                                                                                                         | Example                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Template Name**                         | The name of the skill sheet. Required                                                                                | "Patient Assessment/Management — Trauma"               |
+| **Category**                              | Free text, used for sorting and searching                                                                            | "EMS"                                                  |
+| **Visibility**                            | Who can see the sheet: **All Members**, **Officers Only** or **Assigned Members Only**. Officers always see it       | All Members                                            |
+| **Linked Training Requirement (optional)** | A program requirement that passing this test completes. See [below](#linking-a-template-to-a-training-requirement) | "Recruit Academy — Phase 3: Trauma Assessment"         |
+| **Description**                           | Purpose and scope                                                                                                    | "NREMT psychomotor exam for trauma patient assessment" |
+| **Global Time Limit (minutes)**           | Optional time limit for the whole test                                                                               | 10                                                     |
+| **Passing Percentage (%)**                | The lowest score that passes (0–100)                                                                                 | 70                                                     |
+| **Valid for (months)**                    | Optional, 1–120. How long a pass stays valid, from the day of the test. Leave blank if it never expires              | 24                                                     |
+| **Tags (comma-separated)**                | Optional labels                                                                                                      | "NFPA 1001, Probationary"                              |
+| **Require all critical criteria to pass** | When ticked, any failed critical step fails the test, whatever the score                                             | Ticked                                                 |
+| **Count Pass/Fail steps toward the overall percentage** | When ticked, each Pass / Fail step is worth points (1 unless you set a number). See [What the percentage is made of](#what-the-percentage-is-made-of) | Ticked |
 
-A skill with a validity period shows up in the member's **Upcoming Expirations & Due Dates** list on My Training
-(_Skills test expires <date> · N days_) once it is within six months of lapsing, and as expired afterwards. Only a
-passing, validated, non-practice test counts, the newest pass per skill is the one that is read, and a result the
-department withholds from the member (see [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08)) is not
-listed. Taking and passing the skill again moves the expiry. Changing the period applies to tests already passed.
+The **Result Disclosure** group in the same panel sets who sees results from
+this sheet. See
+[Overriding it on a single template](#overriding-it-on-a-single-template).
+
+**How "Valid for (months)" shows up for the member.** The skill appears in the
+member's **Upcoming Expirations & Due Dates** list on My Training about six
+months before it lapses. It reads **Skills test expires** with the date, and
+**Skills test expired** afterwards.
+
+- Only a passing, validated, official test counts. Practice runs never count.
+- The newest pass for that skill is the one used. Passing again moves the date.
+- A result the department does not show the member (see
+  [Who Sees a Result](#who-sees-a-result--disclosure-settings)) is not listed.
+- Changing the number of months also applies to tests already passed.
+
+![Valid for (months) field on the skill sheet template form, with its help text](./images/09-03-template-valid-for.png)
 
 ![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 
 ### Step 2: Define Sections and Criteria
 
-Add sections to organize the evaluation, then add criteria (scored items) within each section.
+Add sections, then add steps (criteria) inside each section.
 
 **Adding a section:**
 
-1. Click **Add Section** below the template metadata.
-2. Enter the section name (e.g., "Scene Size-Up").
-3. Optionally add examiner instructions for the section.
+1. Select **Add Section** under **Evaluation Sections**.
+2. Type the section name (for example "Scene Size-Up").
+3. Add a description if you want one.
 
-**Adding criteria to a section:**
+**Adding a step to a section:**
 
-1. Within a section, click **Add Criterion**.
-2. Enter the step description (e.g., "Determines scene/situation safety").
-3. Select the **criterion type**. The dropdown offers five:
-   - **Pass / Fail** (default) — one tap, the digital equivalent of a tick box
-   - **Numeric Score** — a weighted step scored out of its max, and the only
-     type that always feeds the overall percentage; the others feed it only as
-     their **If this step is failed** setting says (step 5)
-   - **Timed Task** — a stopwatch on the step itself, with its own limit
-   - **Checklist** — several sub-items ticked off within one step
-   - **Statement** — text the examiner reads aloud to the candidate; it marks
-     itself and is never scored
-4. On a **Numeric Score** step, set **Max Points** — this is where weighting
-   lives, and a step worth 20 moves the percentage twice as far as one worth 10.
-   The field appears for that type alone; the other four have nothing to weight.
+1. Inside the section, select **Add Criterion**.
+2. Type the step (for example "Determines scene/situation safety").
+3. Choose its **Type**. There are five:
+
+   | Type              | What it is                                                                                     |
+   | ----------------- | ---------------------------------------------------------------------------------------------- |
+   | **Pass / Fail**   | One tap. The digital tick box. This is the default                                             |
+   | **Numeric Score** | Scored out of a maximum. It always counts toward the percentage                                |
+   | **Timed Task**    | A stopwatch on the step itself, with its own **Time Limit (sec)**                              |
+   | **Checklist**     | Several items ticked off inside one step                                                       |
+   | **Statement**     | Text the examiner reads aloud. It marks itself and is never scored                            |
+
+4. On a **Numeric Score** step, set **Max Points**. This is how you weight a
+   step: a step worth 20 moves the percentage twice as far as one worth 10. A
+   Numeric Score step with no **Max Points** cannot be saved.
 5. On a **Pass / Fail**, **Checklist** or **Timed Task** step, choose what a
    failure costs under **If this step is failed**:
-   - **Recorded only — no effect on the score** — the verdict appears on the
-     scorecard and moves nothing
-   - **Worth points — earned by passing** — adds its points (1 unless you set
-     a number) to the points available; a fail earns none of them
-   - **Deducts points — taken off if failed** — takes a fixed number of points
-     (1 unless you set a number) off the total, without changing the points
-     available
+   - **Recorded only — no effect on the score.** The mark shows on the
+     scorecard and changes nothing.
+   - **Worth points — earned by passing.** Adds points (1 unless you type a
+     number) to the points available. A fail earns none of them.
+   - **Deducts points — taken off if failed.** Takes points (1 unless you type
+     a number) off the total. The points available stay the same. A step left
+     unscored is not charged.
 
-   Left alone, a Pass / Fail step follows the template's default and the other
-   two are recorded only. The builder refuses to save a template where a step
-   deducts points but no step earns any — there would be no total for the
-   deduction to come off.
-6. Check **Critical** (_Must pass to pass the test_) if failing the step should
-   end the test — a failed critical criterion is an automatic fail when
-   **Require all critical criteria to pass** is enabled on the template. This is
-   a separate question from step 5: **If this step is failed** decides what a
-   failure costs, **Critical** decides whether it ends the test. A step can
-   deduct points without being critical, so a candidate can lose points on it
-   and still pass.
+   Left alone, a Pass / Fail step follows the template setting **Count
+   Pass/Fail steps toward the overall percentage**. Checklist and Timed Task
+   steps are recorded only.
+6. Tick **Critical** (_Must pass to pass the test_) if failing the step should
+   fail the test. That happens when **Require all critical criteria to pass**
+   is ticked on the template.
+
+**"If this step is failed" and "Critical" answer different questions.** The
+first decides what a failure costs. The second decides whether it ends the
+test. A step can take points off without being critical, so a candidate can
+lose points on it and still pass.
+
+**Passing Points (critical Numeric Score steps only).** A critical Numeric
+Score step also has **Passing Points**: the score the candidate must reach on
+that step. The field only shows on critical steps, because a step that is not
+critical cannot fail the test on its own. **Passing Points** cannot be higher
+than **Max Points**. If you untick **Critical**, the number you typed is kept,
+hidden, and comes back if you tick **Critical** again.
+
+> **What if a step deducts points but nothing earns any?** The template will
+> not save. There is no total for the deduction to come off. Give at least one
+> step a point value first.
 
 ![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
 
-> **Hint:** Critical criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
-
-> **Passing Points appears only on critical criteria** _(2026-08-08)_. It used to
-> render for every scored criterion, with a "(critical only)" hint doing the
-> explaining — so it asked for a threshold the scorer then ignored, because a
-> non-critical criterion contributes its points to the overall score and cannot
-> fail the test on its own.
->
-> Two consequences worth knowing:
->
-> - The "passing score cannot exceed max score" validation is now scoped to
->   critical criteria too. Previously a value left over from before you unchecked
->   **Critical** could block saving over a field the editor no longer showed —
->   an error with no reachable cause.
-> - **Unchecking Critical keeps the stored threshold rather than clearing it.**
->   Clearing would look tidier, but the threshold falls back to `0` when absent,
->   so an accidental toggle off and back on would leave the criterion quietly
->   passing at any score. The value sits inert until the criterion is critical
->   again.
+> **Hint:** Critical steps are the digital version of the "Critical Criteria"
+> box at the bottom of an NREMT skill sheet. If a candidate fails one, the
+> result is a FAIL whatever their points. A step that is not critical and was
+> never marked shows as **Not scored**, not as a fail.
 
 ### Step 3: Save as Draft
 
-Click **Save** to save the template as a draft. You can continue editing drafts at any time before publishing.
+Select **Save Draft** at the top, or **Create Template** at the bottom. The
+template is saved as a draft. You can keep editing a draft at any time. Once
+it is saved, a **Publish** button appears next to **Save Draft**.
 
 ### Linking a Template to a Training Requirement
 
-When building or editing a template, use the **Linked Training Requirement** field to connect it to a requirement in a training program. Once linked, **passing any test created from this template automatically marks that requirement complete** for the candidate in their program — the officer does not have to record it separately.
+Use **Linked Training Requirement (optional)** to connect the template to a
+requirement in a training program. Then **passing a test from this template
+completes that requirement** for the candidate, in their program. Nobody has to
+record it separately.
 
-- The link is set on the **template**, so it applies to every test created from it. Individual tests can override it (see [Administering a Skills Test](#administering-a-skills-test)).
-- Leave the field blank for templates used only for practice or ad-hoc proficiency checks that do not satisfy a program requirement.
+- The link is on the **template**, so it applies to every test from it. An
+  officer starting a test can point that one test at a different requirement
+  (see [Setting Up a Test Session](#setting-up-a-test-session)).
+- Leave it on **None** for sheets used only for practice or informal checks.
 
-See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirements and phases fit into a program.
+See [Training Pipelines](./02-training.md#training-pipelines) for how
+requirements and phases fit into a program.
 
 ![Template builder with its linked training requirement field](./images/09-12-template-linked-requirement.png)
 
@@ -191,587 +234,561 @@ See the [Training Pipelines](./02-training.md#training-pipelines) guide for how 
 
 ## Publishing Templates
 
-When a template is ready for use:
+When a template is ready:
 
-1. Open the template. There is no separate read-only detail page — a
-   template's own page **is** the builder, whether it is a draft or already
-   published, and `/templates/{id}` and `/templates/{id}/edit` render the
-   same screen.
-2. Click **Publish**.
-3. The system validates that the template has at least one section with at least one criterion.
-4. Once published, the template becomes available for examiners to use in test sessions.
+1. Open the template. Its page is the builder, whether it is a draft or
+   already published.
+2. Select **Publish**, then **Publish** again in the confirmation. You can also
+   publish a draft from the **Publish** icon on its row in the templates list.
+3. The Logbook checks that the template has at least one section with at least
+   one step.
+4. Once published, examiners can start tests from it.
 
-**Version control:** When you edit a published template and structural fields change (sections, criteria, scoring configuration), the version number auto-increments. Historical test results always reference the template version they were administered under.
+**Editing a published template.** You can still edit it. If you change the
+sections, steps, passing mark, critical rule, Pass/Fail scoring or time limit,
+the version number goes up by one. Every test keeps a copy of the sheet it was
+taken against, so editing never changes a test already run (see
+[A completed scorecard is frozen](#a-completed-scorecard-is-frozen)).
 
-**Duplicating a template:** Click **Duplicate** on any template to create a draft copy with " (Copy)" appended to the name. This is useful for creating variants (e.g., adapting an NREMT template for department-specific requirements).
+**Duplicating a template.** Select **Duplicate** on any template. You get a
+draft copy with " (Copy)" added to its name. Use it to make a variant, such as
+an NREMT sheet adapted to your department.
+
+**Archiving a template.** Select **Archive** on its row. It stops appearing
+when starting a test, but it is not deleted. Old tests keep their scorecards,
+and the **Archived** filter still finds it.
 
 ---
 
 ## Administering a Skills Test
 
-**Required Permission:** Authenticated user (examiner is auto-set to current user)
+**Who can do this:** any member. You are the examiner of any test you start.
 
-Navigate to **Training Admin > Skills Testing > Tests** and click **New Test**.
+### Who can run a test
 
-### Anyone can hold the clipboard _(2026-08-08)_
+**Any member can run an official skills test.** In most departments a senior
+member often holds the clipboard. What a member cannot do is decide that the
+result stands. That is a separate step: **validation** by a training officer.
+See [Officer Validation](#officer-validation).
 
-Skills testing used to require the training-officer permission end to end. A
-member could neither drill on their own nor examine a colleague. That is not how
-departments actually run these — a senior member is very often the one holding
-the clipboard.
-
-**Any member can now run an official skills test.** What a member cannot do is
-decide that the result stands. That decision is a second, separate step:
-**validation** by a training officer. See
-[Officer Validation](#officer-validation--a-result-is-not-a-record-until-an-officer-says-so-2026-08-08).
-
-Template authoring is unchanged — writing the standard is still an officer act.
+Writing templates is still for officers only.
 
 ![Skills Testing as an ordinary member sees it — available tests and their own results](./images/09-09-member-skills-testing.png)
 
 ### Setting Up a Test Session
 
-1. **Select Template** — Choose a published skill sheet template from the dropdown.
-2. **Find the Candidate** — **Type at least two characters of their name** and pick from the results. This is a search, not a roster dropdown — see [Finding a candidate](#finding-a-candidate-2026-08-08) below. **You cannot select yourself for an official test** _(2026-08-01)_ — see [Separation of Duties](#separation-of-duties) below.
-3. **Linked Requirement** _(optional)_ — If the template is linked to a training requirement, it is pre-selected here. You can **override it for this test** to point at a **different requirement** — for example, when the same skill satisfies a requirement in another phase or program.
-4. Click **Start Test**.
+Start from either place:
 
-> **Tapping a test from the Skills Testing page carries it through**
-> _(2026-08-08)_ — the template you tapped arrives already selected on the Start
-> Skill Test page, instead of landing you on an empty picker.
+- **Training > Skills Testing > Available Tests** — tap a test. The **Start
+  Skill Test** page opens with that sheet already chosen.
+- **Training Admin > Evaluations > Skills Test Records** — select **Start
+  Test** (officers).
 
-### Finding a candidate _(2026-08-08)_
+Then, on **Start Skill Test**:
 
-The candidate field is a **name search**, not a dropdown of everyone in the
-department. Type at least two characters and matching members appear.
+1. **Select Template** — choose a published sheet. Search by name or
+   category.
+2. **Test Mode** — choose **Official Evaluation** or **Practice Run**. Officers
+   start on Official; other members start on Practice. A member running an
+   official test is told it will not count until a training officer validates
+   it.
+3. **Select Candidates** — **type at least two characters of a name** and pick
+   from the results. See [Finding a candidate](#finding-a-candidate). You can
+   add several candidates. One test is created for each, you start with the
+   first, and the rest wait in the records list. **You cannot pick yourself
+   for an official test** — see [Separation of Duties](#separation-of-duties).
+4. **Counts Toward Requirement (optional)** — officers only, official tests
+   only. If the template is linked to a requirement, it is used by default.
+   You can point this test at a **different requirement** instead, for
+   example when the same skill counts in another phase or program.
+5. **Notes (optional).**
+6. Select **Begin Evaluation** (or **Begin Practice**, or **Start N
+   Evaluations** for several candidates).
 
-| What you'll notice                                | Why it works that way                                                                                                                        |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nothing appears until you have typed 2 characters | There is deliberately **no search that returns the whole roster**. You can confirm a name you already know; you cannot browse the department |
-| Only the first 15 matches are shown               | And the list does not tell you it was cut short. Type more of the name rather than scrolling                                                 |
-| You can type first name, surname, or both         | Matching runs against the full display name, so "john s" finds John Smith, and a surname on its own works too                                |
-| Only active members appear                        | Deactivated and deleted accounts are excluded                                                                                                |
-| A **practice** test defaults to you               | Drilling alone is one tap — your own name is filled in without a search                                                                      |
-| The field is unavailable to some members          | It needs `training.view` or `training.manage`. A position carrying no training access has no business looking up test candidates             |
+The test is created with you as the **examiner**, and the scoring screen
+opens.
 
-The search deliberately carries **only a name and an internal id** — no phone
-number, no email, no address. That is why every member can use it without
-opening up the member directory.
+### Finding a candidate
+
+The candidate box is a **name search**, not a list of everyone in the
+department.
+
+| What you'll notice                                | Why                                                                                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Nothing appears until you type 2 characters       | On purpose there is no way to list the whole roster. You can confirm a name you know; you cannot browse     |
+| Only the first 15 matches show                    | The list says **Showing the first 15 matches — type more of the name**. Type more rather than scrolling     |
+| You can type first name, surname, or both         | Matching uses the full name, so "john s" finds John Smith. A surname on its own works too                   |
+| Only active members appear                        | Inactive and deleted accounts are left out                                                                  |
+| A member's **practice** test starts with their own name | Drilling alone takes one tap — your name is filled in for you                                         |
+| Some members cannot use the search                | It needs the **View training records** or **Manage training records** permission                            |
+
+The search shows **only a name** — no phone number, email or address. That is
+why every member can use it without opening the member directory.
 
 ![Candidate name search on the Start Skill Test page with matching members listed](./images/09-07-candidate-search.png)
 
-The system creates a new test session with:
-
-- The current user as the **examiner**
-- Status set to **not_started**
-
 ### Separation of Duties
 
-_(Added 2026-08-01.)_ The examiner is always the person creating the test, and
-the candidate comes from the form — so nothing previously stopped an
-instructor examining themselves and recording a pass. Because a passing test
-**completes the linked training requirement**, that pass counts toward
-certification.
+The examiner and the candidate on an **official** test must be different
+people. A passing test can complete a training requirement and count toward
+certification, so nobody can examine themselves. The Logbook refuses to create
+such a test, and the Start Skill Test page says **You can't examine yourself on
+an official evaluation — someone else has to hold the clipboard.** Even an
+officer cannot score or complete an official test in which they are the
+candidate.
 
-The system now refuses to create a graded test where the examiner and the
-candidate are the same person. A second qualified examiner has to observe you,
-which is what a psychomotor evaluation means.
-
-**Practice mode is exempt.** Practice attempts are not logged to the audit
-trail, never touch enrollment progress, and self-drilling is the point of
-them — so you can run a practice test on yourself freely.
+**Practice mode is exempt.** Practice runs are never recorded against you, so
+you can practise on yourself freely.
 
 The rule holds after the test too. An officer cannot validate, **Void result**
-or **Send back to examiner** on a test in which they are the candidate — void
-and send-back are refused with _"You cannot void your own skills test"_ (or
-_return_), and another officer has to act on it.
-
-- The template's sections and criteria loaded for scoring
+or **Send back to examiner** on a test in which they are the candidate. The
+message reads _"You cannot validate your own skills test"_ (or _void_, or
+_return_). Another officer has to act on it.
 
 ![Start skill test form with its template and candidate fields](./images/09-06-new-test-form.png)
 
 ### Test Statuses
 
-| Status          | Description                                                                                                                     |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **not_started** | Test created but candidate has not begun                                                                                        |
-| **in_progress** | Candidate is actively being evaluated                                                                                           |
-| **completed**   | Test finished and scored                                                                                                        |
-| **cancelled**   | Test was cancelled before completion — closed out from the records tab with **Cancel**, keeping whatever partial scoring exists |
+| Status          | What it means                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| **draft**       | Created, but scoring has not started                                                            |
+| **in progress** | The candidate is being evaluated                                                                |
+| **completed**   | Finished and scored                                                                             |
+| **cancelled**   | Closed out before it finished, with **Cancel**. Any partial marks are kept                      |
+| **voided**      | A completed official result an officer withdrew. See [Withdrawing a Result](#withdrawing-a-result--void-cancel-delete) |
 
-### Your scoring saves itself _(2026-08-08)_
+### Your scoring saves itself
 
-The active test screen **autosaves** while an evaluation is live. It used to
-persist only when you pressed **Save** or entered review — on a screen used
-one-handed outdoors, where a locked phone or a killed tab lost every criterion
-scored since you last thought to save.
+While a test is in progress, the scoring screen **saves on its own**. A locked
+phone or a closed tab does not lose your marks. The **Save** button still works
+if you want to save by hand.
 
-Autosave is silent and runs only while the test is in progress. **Save** still
-works and still does the same thing; you no longer have to remember it.
+> **What if two people edit one test?** Neither one's work is silently thrown
+> away. If someone else saved the test after you opened it, your save is
+> refused and autosave stops. The screen says _Someone else changed this test.
+> Your scoring is not being saved._ and offers **Reload current results**. The
+> Logbook only retries on its own when the retry cannot overwrite another
+> examiner's marks.
 
-> **If two people edit one test, neither one's work is silently discarded.**
-> Two examiners on the same evaluation — or an officer editing the scorecard
-> while a phone holds unsaved criteria — used to lose one side's work, and _the
-> side that lost got a success message._ A save made against an out-of-date copy
-> is now refused, autosave **suspends and tells you**, and you can reload to pick
-> up the current state. It does not keep retrying a save that cannot succeed
-> while you believe your scoring is still going through.
+### Scoring with no signal
 
-### Scoring with no signal _(2026-10-06)_
+A test you have opened on your phone keeps working when the signal drops. Your
+scoring is saved **on the device** and sent when the signal comes back. You
+don't have to do anything.
 
-A test you have opened on your phone keeps working when the signal goes. Your
-scoring is saved **on the device** and sent as soon as it has signal again — you
-do not have to do anything.
-
-- A banner says so while there is no signal, and the save status reads
-  **Saved on this device**.
-- **Open the test once with signal** before heading somewhere without it. The
-  phone keeps a copy of tests _you_ are examining that are not finished yet;
-  a test never opened on the device cannot be opened offline.
-- **You can also start a test with no signal.** Opening **Start Skill Test**
-  with signal keeps the published sheets on the device. With no signal the page
-  offers those sheets and the members you have examined on this device; the
-  test is created when the phone reconnects, before its scoring is sent. If the
-  sheet was edited in the meantime the server refuses it — you are told, and the
-  scoring stays on the device. A test started offline is dated by when it
-  reached the server.
+- A banner says so while there is no signal. The save status reads **Saved on
+  this device**.
+- **Open the test once with signal** before going somewhere without it. The
+  phone keeps a copy of unfinished tests _you_ are examining. A test never
+  opened on the device cannot be opened offline.
+- **You can start a test with no signal.** Opening **Start Skill Test** with
+  signal keeps the published sheets on the device. With no signal, the page
+  offers those sheets and the members you have examined on this device. The
+  test is created when the phone reconnects, and then its scoring is sent. If
+  the sheet was edited in the meantime, the test is refused. You are told, and
+  the scoring stays on the device. A test started offline is dated by when it
+  reached The Logbook.
 - **Submitting with no signal** shows **Submitted on this device**. The test is
-  scored by the server when it reconnects — there is no result on the phone
-  until then, and the pass/fail you see afterwards is the server's.
-- Saves made offline are combined, so an hour without signal sends one update,
-  and the submission is always sent after the last save.
-- **If the server refuses it** — the test was voided or completed elsewhere, or
-  changed by someone else meanwhile — you get a message naming the test and
-  candidate, and a red banner on the test with the reason. The scoring stays on
-  the device until **you** choose **Discard from this device**; it is never
+  scored when the phone reconnects. There is no result on the phone until
+  then.
+- Saves made offline are combined. An hour without signal sends one update,
+  and the submission is always sent last.
+- **If The Logbook refuses it** — the test was voided or completed elsewhere,
+  or someone else changed it — you get a message naming the test and the
+  candidate. A red banner on the test gives the reason. The scoring stays on
+  the device until **you** choose **Discard from this device**. It is never
   thrown away on its own.
 - **Signing out asks first.** If evaluations are still waiting to be sent,
-  **Sign Out** tries to send them, and if it cannot, warns you and offers **Stay
-  signed in**. Signing out anyway deletes them from the device — on a shared
-  station, the next person must not be able to read them. The automatic
-  **idle sign-out** cannot ask, so do not leave a phone with unsent
-  evaluations unattended until it has signal.
+  **Sign Out** tries to send them. If it cannot, it warns you and offers **Stay
+  signed in**. Signing out anyway deletes them from the device, so the next
+  person on a shared station cannot read them. The automatic sign-out after
+  you are idle cannot ask. Do not leave a phone with unsent evaluations alone
+  until it has signal.
 
-### The timer records what you measured _(2026-08-08)_
+### The timer records what you measured
 
-The examiner's stopwatch reading is what gets recorded. Previously the elapsed
-time was overwritten on completion with "completed minus started" — and the start
-is stamped once, when the test first goes in progress, so **a test begun at 09:00
-and finished after lunch recorded seven hours.** Time limits are pass/fail
-criteria on many sheets, so that was not a cosmetic problem.
+The examiner's stopwatch reading is what gets recorded. A test begun at 09:00
+and finished after lunch records the time you actually measured, not the hours
+in between.
 
-Wall clock is now only a fallback for a test completed with no measured value.
-Reopening an in-progress test also **restores the timer** rather than restarting
-it at 00:00.
+- The test clock starts on your first real action: recording a mark, or moving
+  to another section. Starting a step's stopwatch also starts the test clock.
+- A step's stopwatch reading is kept when you move on, whether or not you
+  pressed stop.
+- Reopening a test in progress **picks the timer up where it was**. It does
+  not restart at 00:00.
+- The time from start to finish is used only if a test has no measured time.
 
-#### Moving on no longer loses the reading _(2026-08-09)_
+### Coming back to an interrupted test
 
-The stopwatch reading used to be recorded **only when you pressed Stop**. Sections
-are torn down when you move between them, so timing an evolution and tapping
-**Next** lost the reading entirely — on the one step whose time limit _is_ the
-pass/fail criterion.
+Reopening a test in progress **opens at the first section with blank steps**.
 
-The value is now committed when the step is torn down, whether or not you pressed
-Stop. Starting a stopwatch also starts the test clock, so the two cannot disagree.
+In **Skills Test Records**, an unfinished test says **Tap to resume** (or
+**Tap to start** if scoring has not begun) and opens on the scoring screen. A
+finished test opens on its scorecard. A cancelled test says neither. It is
+closed, and opening it shows its scorecard.
 
-#### Coming back to an interrupted test _(2026-08-09)_
-
-Reopening a test in progress now **opens at the first section with blank steps**,
-rather than dropping you back at section 1 to hunt for where you had got to. In
-the officer's **Test Records** tab an unfinished test says **Tap to resume** and
-opens on the scoring screen; a finished one still opens on its scorecard.
-
-A test that has been started says **Tap to resume**; one created but not yet
-begun says **Tap to start**. A cancelled test says neither — it is closed, and
-opening it shows its scorecard rather than the scoring screen.
-
-**The server counts every pickup**, not the device, so a client cannot reset
-it. A resumed test shows **Resumed evaluation** above the scoring — the clock
+A resumed test shows **Resumed evaluation** above the scoring. The clock
 carried on from the last save, so the recorded time is not an exact stopwatch
-reading — and its printed scorecard says **Timing not verified**. If someone
-else saved the same test in between, the screen says _Someone else changed this
-test. Your scoring is not being saved._ and offers **Reload current results**.
-It retries on its own only when the retry cannot overwrite another examiner's
-marks on this test.
+reading. Its printed scorecard says **Timing not verified**. The Logbook counts
+every pickup itself, so resuming on another device does not hide it.
 
 ![Test records showing unfinished, completed and cancelled rows side by side](./images/09-14-test-records-statuses.png)
 
-#### A cancelled test is read-only _(2026-08-09)_
+### A cancelled test is read-only
 
-A cancelled test used to render as a **live evaluation**: editable criteria, a
-running clock, and a **Finish** button that the server rejects. It now renders
-read-only and says plainly that **nothing was decided** — it does not show a pass
-or a fail, because there was neither. The officer panel no longer describes an
-abandoned test as counting toward the candidate's record, because it counts
-toward nothing.
+A cancelled test cannot be scored or finished. Opening it shows its marks
+read-only and says plainly that **nothing was decided** — no pass and no fail.
+It counts toward nothing on the candidate's record and uses none of their
+attempts.
 
-Cancelling a test from the Test Records tab now asks for its optional reason in a
-proper dialog. It used to use the browser's own prompt, which some browsers
-suppress — and a suppressed prompt is indistinguishable from pressing Cancel, so
-the cancellation silently did nothing.
+To cancel, use the cancel icon on the row in **Skills Test Records**. A dialog
+asks for an optional reason.
 
 ---
 
 ## Scoring & Critical Criteria
 
-During the test, the examiner scores each criterion as the candidate performs the procedure.
+During the test, the examiner scores each step as the candidate does it.
 
-### The scoring screen _(rebuilt 2026-08-09)_
+### The scoring screen
 
-The screen is built for someone standing outdoors, in gloves, watching a
-candidate rather than the tablet.
+The screen is built for someone standing outdoors, in gloves, watching the
+candidate rather than the screen.
 
-- **The candidate's name is on the screen.** Confirm you have the right person
-  open before you start — nothing on the old screen told you.
-- **Section chips across the top**, 44px and showing their own state, replace the
-  10px progress dots that were unhittable with a glove and silent about what was
-  left.
-- **A running "scored / total" count and a save-status line** sit with them, so
-  "am I finished?" and "did that save?" are both answerable at a glance.
-- **The primary bottom-bar button is Next**, not Finish — on every section but
-  the last, where it becomes **Finish & Review** because there is nowhere left
-  to move on to. On the old screen the biggest, reddest button on _every_
-  section ended the evaluation while moving on was a small grey one.
-- **Moving between sections returns you to the top of the screen**, rather than
-  dropping you halfway down the new one.
+- **The candidate's name is at the top.** Check you have the right person
+  before you start.
+- **Section chips across the top** show each section's state. A finished
+  section is green. Tap a chip to jump to it.
+- **A "N of M steps scored" count and a save-status line** answer "am I
+  finished?" and "did that save?" at a glance.
+- **The bottom bar has Prev, Next and Finish.** On the last section, **Next**
+  is gone and **Finish & Review** becomes the main button.
+- **Moving to another section takes you to its top.**
 
 ![The scoring screen partway through a test, with section chips, the scored count and a mix of scored and unscored steps](./images/09-16-active-scoring-screen.png)
 
 ### Recording a mark
 
-Each criterion type is scored differently, and each can be **undone**:
+Each type of step is marked differently, and each mark can be **undone**:
 
-| Criterion type | How you mark it                                                                | Clearing it               |
-| -------------- | ------------------------------------------------------------------------------ | ------------------------- |
-| **Pass/Fail**  | Tap Pass or Fail                                                               | Tap the same one again    |
-| **Score**      | Tap the number                                                                 | Tap the same number again |
-| **Checklist**  | Tick the boxes the candidate completed, or tap **Candidate did none of these** | **Clear this step**       |
-| **Statement**  | Marks itself — nothing to do                                                   | n/a                       |
-| **Timed**      | Start and stop the stopwatch                                                   | Re-run it                 |
+| Step type         | How you mark it                                                               | To clear it                |
+| ----------------- | ----------------------------------------------------------------------------- | -------------------------- |
+| **Pass / Fail**   | Tap Pass or Fail                                                              | Tap the same one again     |
+| **Numeric Score** | Tap the number (10 points or fewer), or drag the slider (more than 10)        | Tap the same number again  |
+| **Checklist**     | Tick the items the candidate did, or tap **Candidate did none of these**      | **Clear this step**        |
+| **Statement**     | Marks itself — nothing to do                                                  | n/a                        |
+| **Timed Task**    | Start and stop the stopwatch                                                  | Run it again               |
 
-> **A mis-tap used to be uncorrectable.** The only way out of tapping the wrong
-> verdict was to record the opposite one on a candidate. Tapping the same value
-> again now clears it. This matters most on a critical step, where a mis-tapped
-> **0** and a deliberate **0** score identically but mean completely different
-> things.
+> **Why clearing matters.** On a critical step, a mis-tapped **0** and a
+> deliberate **0** score the same but mean very different things. Tap the same
+> value again to clear a mistake.
 
-> **"Candidate did none of these" is not the same as an unscored step.** A
-> checklist used to count as scored only once a box was ticked — so the case an
-> examiner most needs to record was indistinguishable from a step they forgot,
-> and could only be entered by ticking a box and unticking it.
+> **"Candidate did none of these" is not the same as a blank step.** It
+> records that the candidate did none of the items. A blank step means nobody
+> has judged it yet.
 
-**Add note** is a full-size labelled control, not a 12px text link. It is what
-explains a mark to whoever reads the scorecard weeks later; it should not be the
-hardest thing on the screen to hit.
+**Add note** sits under each step. A note explains a mark to whoever reads the
+scorecard weeks later.
 
 ### Running Score
 
-As the examiner scores criteria, the interface displays:
+As you score, the screen shows:
 
-- **Section score** — points earned / total possible points in each section
-- **Overall running score** — total points earned / total possible points across all sections
-- **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
+- **Section score** — points earned out of the points available in each
+  section
+- **Overall score** — points earned out of the points available across the
+  whole sheet
+- **Percentage** — updated as you go. It is based on points, not on how many
+  steps passed
 
-> **Unscored steps read "—/N" in neutral type, not a red "0/N".** A red zero
-> reads as a fail the examiner never recorded.
+> **A blank step reads "—/N" in plain type, not a red "0/N".** A red zero would
+> look like a fail you never recorded.
 
-### What the percentage is actually made of _(2026-08-09)_
+### What the percentage is made of
 
-A scorecard once read **86%** over a sheet whose visible sections included four
-knowledge questions, two of them failed — and nothing on the page explained how
-those two could be wrong without moving the number.
+**Not every type of step counts toward the percentage:**
 
-They could because **not every criterion type feeds the percentage**:
+| Step type         | Counts toward the percentage?                                                      |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| **Numeric Score** | Yes — earns 0 up to its **Max Points**                                             |
+| **Pass / Fail**   | **Only if the step, or the template, says so** (see below)                         |
+| **Checklist**     | Only if its **If this step is failed** setting says so                             |
+| **Timed Task**    | Only if its **If this step is failed** setting says so                             |
+| **Statement**     | No — read aloud, marks itself, never scored                                        |
 
-| Criterion type | Counts toward the percentage?                                |
-| -------------- | ------------------------------------------------------------ |
-| **Score**      | Yes — earns 0…max                                            |
-| **Pass/Fail**  | **Only if the step or the template opts in** (see below)     |
-| **Checklist**  | Only if its **If this step is failed** setting says so       |
-| **Timed**      | Only if its **If this step is failed** setting says so       |
-| **Statement**  | No — read aloud, marks itself, never scored                  |
+So a sheet can show, say, **86%** while some Pass / Fail questions on it were
+failed. Those steps still appear on the scorecard, and a **critical** one still
+fails the test outright.
 
-This is a defensible way to build a sheet — the questions still appear on the
-scorecard, and a **critical** one still fails the test outright regardless of
-points. It was simply invisible to whoever read the result.
+Two things make this readable:
 
-Two things fixed that:
-
-- **The scorecard now shows its working.** A breakdown panel above the sections
-  gives the per-section point totals, the passing threshold applied, and any
-  critical step that decided the outcome on its own. It **flags any section that
-  contributed nothing** to the percentage, which is exactly the case that made
-  "86%" unreadable. Both the officer's and the candidate's result pages show it.
-- **Pass/Fail steps can be made to carry points**, with a per-template setting.
-  A passed step earns its points (its max score, or 1 if none is set); a failed
-  one earns none.
+- **The scorecard shows its working.** A breakdown panel above the sections
+  gives each section's points, the passing mark used, and any critical step
+  that decided the result on its own. It **flags any section that added
+  nothing** to the percentage. Both the officer's and the candidate's result
+  pages show it.
+- **Pass / Fail steps can carry points.** Tick **Count Pass/Fail steps toward
+  the overall percentage** on the template, or set a step to **Worth points**.
+  A passed step earns its points (1 unless you set a number). A failed one
+  earns none.
 
 ![A completed scorecard's score breakdown, with per-section totals and the passing threshold](./images/09-15-scorecard-breakdown.png)
 
-> **Turning the setting on never re-scores an old result.** The rule is frozen
-> into each test at the moment it is created, so a test taken under the old
-> behaviour keeps the number it was given. Change it and only new tests follow
-> the new rule.
+> **Changing the template never re-scores an old result.** Each test keeps the
+> rules it was created under. Only new tests follow a change.
 
-> **Checklist and timed steps are recorded only unless you choose otherwise.**
-> Their **If this step is failed** setting can make them worth points or deduct
-> points, judged on the step's overall pass or fail — a checklist earns no
-> fraction for partly completed items. If either must decide the outcome, make
-> it a **critical** criterion.
+> **Checklist and Timed Task steps are recorded only, unless you choose
+> otherwise.** Their **If this step is failed** setting can make them worth
+> points or take points off. That is judged on the step's overall pass or fail.
+> A checklist earns nothing for part of its items. If either must decide the
+> result, make it **Critical**.
 
 #### A failed step that costs points without ending the test
 
 A step set to **Deducts points — taken off if failed** costs a fixed number of
-points when the examiner records a fail, and ends the test only if it is also
+points when the examiner records a fail. It ends the test only if it is also
 **Critical**.
 
 ![A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark — PASS, with no critical failure](./images/19-30-skill-point-deduction.png)
 
-The candidate above lost ten points on one failed step and still passed at 74%,
-because that step is not Critical. The first line of **How this score was
-calculated** reads as the subtraction it is: **47 of 50 points earned, −10
-deducted = 74%**, with the pass mark stated underneath and the step that took
-the points named at the bottom. The earned figure is gross — a reader adding up
-the marks on the sheet arrives at 47.
+The candidate above lost ten points on one failed step and still passed at
+74%, because that step is not critical. The first line of **How this score was
+calculated** reads as a subtraction: **47 of 50 points earned, −10 deducted =
+74%**. The pass mark is stated under it, and the step that cost the points is
+named at the bottom. The "earned" figure is before the deduction, so someone
+adding up the marks on the sheet also gets 47.
 
-- **A deducting step does not enlarge the point pool.** The sheet above is out
-  of 50 whether or not it lists the step, so a candidate who does it correctly
-  reads the same percentage as one testing on a sheet that never mentioned it.
-  Only the fault costs anything.
-- **A step left unscored is never charged.** A deduction is a recorded
-  judgement about what the candidate did, and an examiner who never marked the
-  step made no such judgement. (A blank _Critical_ step is a different matter,
-  and is reported as a critical failure in its own right.)
-- **Deductions can drive the total below zero, and the percentage stops at
-  0%.** The individual penalties are still listed in full, so the clamp hides
-  nothing.
+- **A deducting step does not add to the points available.** The sheet above
+  is out of 50 whether or not it lists that step. A candidate who does it
+  right gets the same percentage as on a sheet without it. Only the mistake
+  costs anything.
+- **A step left blank is never charged.** A deduction is a judgement about
+  what the candidate did. An examiner who never marked the step made no
+  judgement. (A blank _critical_ step is different, and counts as a critical
+  failure.)
+- **Deductions can take the total below zero, but the percentage stops at
+  0%.** Each deduction is still listed in full.
 
-If the sheet carries no point-earning steps at all, there is nothing for a
-deduction to come off, and the panel says so — _The N deducted points did not
-affect this score. No step on this template earns points, so there is no total
-to subtract from. A training officer should give the scored steps a point
-value._
+If the sheet has no steps that earn points, there is nothing to take points
+off. The panel says so: _The N deducted points did not affect this score. No
+step on this template earns points, so there is no total to subtract from. A
+training officer should give the scored steps a point value._
 
-### A statement that is read on the clock _(2026-08-09)_
+### A statement that is read on the clock
 
-The test clock starts on the examiner's first real action — recording a result,
-or moving between sections — because an examiner watching a candidate will not
-reliably remember to press play on a skill whose time limit is itself the
-pass/fail criterion.
+Statements mark themselves as soon as they appear, so on their own they do
+**not** start the clock. Opening a test that starts with a statement does not
+start timing before the candidate is in position.
 
-**Statements are excluded from that by default.** They mark themselves as a
-section renders, which is nobody's action, so opening a test whose first section
-leads with a statement must not start timing before the candidate is even in
-position.
+Some sheets read the opening statement as a brief _before_ the clock. Others
+read it _inside_ the time limit ("your time starts now"). For those, tick
+**Read inside the time limit** on the statement in the template:
 
-But sheets differ. Some read the opening statement as a brief _before_ the clock;
-others read it _inside_ the limit — "your time starts now." So a statement can be
-marked **starts the timer**:
-
-| Setting           | What the examiner sees                          | Effect                                    |
-| ----------------- | ----------------------------------------------- | ----------------------------------------- |
-| **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
-| **On**            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
+| Setting           | What the examiner sees                          | Effect                                     |
+| ----------------- | ----------------------------------------------- | ------------------------------------------ |
+| **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing  |
+| **On**            | A **"Start clock & read"** button under the box | Tapping it starts the clock                |
 
 ![A read-aloud statement inside the time limit, with the START CLOCK & READ button beneath it](./images/09-18-statement-starts-clock.png)
 
-After the tap the button is gone, replaced by the line _"This statement is
-inside the time limit. The clock is running."_ — the same criterion, now with
-nothing left to press.
+After the tap the button is replaced by _"This statement is inside the time
+limit. The clock is running."_
 
-> **It is a button, not an automatic start.** Whether a statement is read on the
-> clock is a property of the sheet; _when_ it is read is not. An examiner opens a
-> test to have it ready and reads the prompt once the candidate is in position,
-> which may be minutes later — starting on render would time the wait. Tapping it
-> also clears a manual pause, the way pressing play does.
+> **It is a button, not an automatic start.** You may open a test to have it
+> ready and read the prompt minutes later, once the candidate is in position.
+> Starting the clock as the screen opened would time the wait. Tapping the
+> button also undoes a manual pause, the same as pressing play.
 
-> **Statement criteria are excluded from every count.** They mark themselves, so
-> counting them showed progress on a section nobody had touched — and a section
-> could read "3 / 3" with a real step still blank.
+> **Statements never count as scored steps.** They are left out of every
+> count, so a section never reads "3 of 3" with a real step still blank.
 
 ### Critical Criteria
 
-If "Require All Critical" is enabled on the template:
+If **Require all critical criteria to pass** is ticked on the template:
 
-- Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
-- This is true even if the candidate's percentage score exceeds the passing threshold
+- Any **critical** step that is not passed means an **automatic FAIL**.
+- This is true even if the percentage is above the passing mark.
+- A critical step left blank counts the same as a fail.
 
-A critical step is labelled **(Critical)** in its own text, and where the
-template requires all of them the section header says what that means outright —
-"Steps marked (Critical) must pass. Leaving one unscored counts the same as a
-fail." There is no asterisk to decode.
+A critical step is labelled **(Critical)**. Where the template requires all of
+them, the section header says so: "Steps marked (Critical) must pass. Leaving
+one unscored counts the same as a fail."
 
 ![A section of the scoring screen — the count of steps scored, a step scored 10/10, and the next one still blank at —/20](./images/09-17-scoring-criteria-mix.png)
 
-An **unscored** step reads **"—/20"** rather than "0/20", which are different
-things: the dash is a step nobody has judged, and a zero is a judgement. The
-section counts only the steps that can be scored — "1 of 2 steps scored" — so
-statements and headings never pad it.
-
-How a score is entered depends on how many points the step is worth: **10 or
-fewer** gives a row of numbered buttons, where tapping the same number again
-clears it; **more than 10** gives a slider. Both leave the step blank until you
-touch them.
+A blank step reads **"—/20"**, not "0/20". The dash means nobody has judged
+it; a zero is a judgement. The section count includes only steps that can be
+scored ("1 of 2 steps scored"), so statements never pad it.
 
 ---
 
 ## Completing a Test
 
-When the candidate finishes the procedure:
+When the candidate has finished:
 
-1. Click **Finish & Review** (**Finish** on a section before the last). The
-   timer automatically stops.
+1. Select **Finish & Review** (or **Finish** on an earlier section).
 
-   > **If any steps are still blank, a dialog names the count** and offers
-   > **Keep scoring** or **Review them**. The test cannot be submitted until
-   > every step has a result, but the review screen lists the blank ones and can
-   > record a step as **not observed**. Where the template requires all critical
-   > steps **and one of the blank ones is critical**, the dialog also says that
-   > an unscored critical step scores the same as a fail — which is what
-   > actually happens.
+   > **What if some steps are still blank?** A dialog, **Some steps have no
+   > result**, gives the count and offers **Keep scoring** or **Review them**.
+   > A test cannot be submitted until every step has a result. The review
+   > screen lists the blank steps by name. A step that is not critical can be
+   > recorded as **Not observed**, with a reason; it neither earns nor costs the
+   > candidate anything. A critical step cannot be marked Not observed. Where
+   > the template requires all critical steps and a blank one is critical, the
+   > dialog says an unscored critical step scores the same as a fail — which
+   > is what happens.
 
    ![The warning raised on finishing — how many steps have no result, and the choice between going back to score and reviewing them](./images/09-18-finish-with-unscored-steps.png)
 
-   > **The clock keeps running while the dialog is open.** An examiner who taps
-   > Finish, reads the warning and goes back to score the last step is still
-   > mid-evaluation, and stopping the clock on them would under-record a test
-   > whose time limit may itself be the criterion.
+   > **The clock keeps running while the dialog is open.** If you go back to
+   > score the last step, the candidate is still being evaluated. Stopping the
+   > clock would under-record a test whose time limit may itself be the
+   > criterion.
 
-2. The system shows a **post-completion review screen** where the examiner can:
-   - Review each section's criteria and scores
-   - Add **section-level notes** with feedback for specific areas
-   - Add overall performance notes
-   - Verify the scoring before finalizing
-3. The system automatically calculates:
-   - **Total score** — percentage based on points earned vs. total possible points
-   - **Critical criteria check** — whether all required criteria were met (if applicable)
-   - **Elapsed time** — total time from start to completion (auto-stopped)
-   - **Pass/Fail result** — based on both the score threshold and critical criteria
+2. On the **review screen** you can:
+   - Check each section's steps and marks
+   - Add **section notes** with feedback for a specific area
+   - Check the scoring before you submit
+3. Select **Submit Test**, then **Submit** in **Submit this test?**. Once
+   submitted, the marks and notes cannot be changed. (A practice run has
+   **View Results** instead.)
+4. The Logbook works out:
+   - **The score** — points earned out of points available, as a percentage
+   - **The critical check** — whether every critical step passed (if
+     required)
+   - **The time** — the clock reading
+   - **Pass or fail** — from the passing mark and the critical steps
 
 ### Result Determination
 
-A candidate **passes** if ALL of the following are true:
+A candidate **passes** if both are true:
 
-1. Their percentage score meets or exceeds the template's **passing percentage**
-2. If "Require All Critical" is enabled, ALL required criteria were scored as passed
+1. Their percentage is at or above the template's **Passing Percentage**.
+2. If **Require all critical criteria to pass** is ticked, every critical step
+   passed.
 
-A candidate **fails** if ANY of the following are true:
+A candidate **fails** if either is true:
 
-1. Their percentage score is below the passing percentage
-2. Any required criterion was not passed (when "Require All Critical" is enabled)
+1. Their percentage is below the passing mark.
+2. A critical step was not passed (when **Require all critical criteria to
+   pass** is ticked).
 
-The result screen leads with the outcome and the percentage, then shows the
-candidate, the examiner, the elapsed time and the arithmetic behind the score —
-**"24 of 50 points earned = 48%. Passing mark is 70% — not met."** A passing
-scorecard is pictured in [What the percentage is actually made of](#what-the-percentage-is-actually-made-of-2026-08-09); this is the
-other outcome:
+The result screen leads with the outcome and the percentage. It then shows the
+candidate, the examiner, the time and the arithmetic — for example **"24 of 50
+points earned = 48%. Passing mark is 70% — not met."** A passing scorecard is
+shown in [What the percentage is made of](#what-the-percentage-is-made-of);
+this is the other outcome:
 
 ![A failed scorecard — the result, the percentage against the passing mark, and the critical step that failed on its own](./images/09-19-failed-test-result.png)
 
-**When a critical step is what sank it, the screen says so separately** — "A
-critical step failed this test regardless of the percentage", naming the step and
-the section it is in. That banner appears whether or not the percentage also
-fell short, so an examiner explaining the result to a candidate never has to work
-out which of the two rules applied.
+**When a critical step decided it, the screen says so separately:** "A critical
+step was not met, which fails the test whatever the score." A **Critical step
+not met** box names the step and its section. It appears whether or not the
+percentage also fell short, so you never have to work out which rule applied.
 
-Below it, every section is listed with its points, and each step with what it
-scored and any note the examiner left — "Hood not deployed before entry."
+Below that, every section is listed with its points, and each step with its
+mark and any note — for example "Hood not deployed before entry."
 
 ### Effect on Training Pipeline Progress
 
-When a test that is linked to a training requirement (either through the template or an override set when the test was started) ends in a **PASS**, and the test is **not** in practice mode, the system **completes that requirement on the candidate's active program enrollment**. This advances their pipeline — potentially completing a phase and moving them forward.
+When an **official** test linked to a training requirement ends in a **PASS**,
+The Logbook **completes that requirement on the candidate's active program
+enrollment**. The link can come from the template or from an officer's choice
+when starting the test. This moves the candidate along their program, and can
+complete a phase.
 
-- A **FAIL** does not change pipeline progress.
-- **Practice-mode** passes are excluded and never affect enrollment progress (see [Practice Mode](#practice-mode)).
-- **A pass run by a member who is not a training officer does not credit
-  anything until an officer validates it** _(2026-08-08)_ — see the next
-  section.
+- A **FAIL** does not change program progress.
+- **Practice** passes never count (see [Practice Mode](#practice-mode)).
+- **A pass from a test run by a member who is not a training officer counts
+  only once an officer validates it.** See the next section.
 
-See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirement completion advances phases.
+See [Training Pipelines](./02-training.md#training-pipelines) for how a
+completed requirement moves a program forward.
 
 ---
 
-## Officer Validation — a result is not a record until an officer says so _(2026-08-08)_
+## Officer Validation
 
-Opening the examiner role to every member meant the authority it used to carry
-had to land somewhere. It lands here.
+Any member can run a test, so somebody has to decide that a member-run result
+stands. That is a training officer, and the step is called **validation**.
 
 ### What "awaiting validation" means
 
-When a member without the training-officer permission completes an **official**
-test, the result is saved and scored — but it is a **submission, not a record**.
-Until an officer validates it:
+When a member without the **Manage training records** permission completes an
+**official** test, the result is saved and scored. But it is a **submission,
+not a record**. Until an officer validates it:
 
-| It does not…                                             | It does…                                              |
-| -------------------------------------------------------- | ----------------------------------------------------- |
-| Credit the linked training requirement                   | Save every mark, note and the elapsed time            |
-| Spend one of the candidate's attempts                    | Appear in the officer's review queue                  |
-| Count toward the department's pass rate or average score | Show on the candidate's list as _awaiting validation_ |
-| Show the candidate whether they passed                   | Preserve the examiner's name and the timestamp        |
+| It does not…                                             | It does…                                               |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| Complete the linked training requirement                 | Keep every mark, note and the time                     |
+| Use up one of the candidate's attempts                   | Appear in the officer's review queue                   |
+| Count toward the department's pass rate or average score | Show on the candidate's list as **Awaiting validation** |
+| Show the candidate whether they passed                   | Keep the examiner's name and the date and time         |
 
-The outcome is withheld from the candidate on purpose. Nobody has yet decided
-that the result stands, so showing a PASS or a FAIL would be asserting something
-no officer has agreed to.
+The outcome is held back from the candidate on purpose. No officer has agreed
+that the result stands, so showing a PASS or FAIL would claim something nobody
+has decided.
 
 ![A member's own skills tests, one awaiting an officer's validation with its outcome withheld](./images/09-10-member-awaiting-validation.png)
 
 ### If you are a training officer
 
-**Nothing about your own workflow changes.** When you complete a test yourself,
-it validates in the same step — you are the authority the second step exists to
-obtain, so there is no queue of your own tests to approve afterward.
+**A test you complete yourself is validated in the same step.** You are the
+authority validation exists to get, so there is no queue of your own tests.
 
-What is new is the **review queue** of tests other members ran:
+To work through tests other members ran:
 
-1. Go to **Training Admin > Skills Testing > Test Records**.
-2. Set the status dropdown to **Needs Validation**. A **Needs validation** badge
-   also marks these rows in the unfiltered list, so you can spot them without
-   filtering.
-3. Open a result and read the scorecard — every criterion, the notes, and the
-   measured time are all there. A banner at the top states plainly that the
-   result does not yet count toward the candidate's record.
-4. **Accept result** to validate it, or **Void result** to reject it. Both sit
-   at the bottom of the scorecard you have just read, under **Officer actions**,
-   so the decision is made on the record rather than on a list row _(2026-08-08)_.
+1. Go to **Training Admin > Evaluations > Skills Test Records**, or select the
+   **Needs Validation** card on **Skills Test Templates**.
+2. Set the status filter to **Needs Validation**. A **Needs validation** badge
+   also marks these rows in the full list.
+3. Open a result and read the scorecard — every step, the notes and the time.
+   A banner at the top says the result does not count yet.
+4. Under **Officer actions** at the bottom of the scorecard, choose:
+   - **Accept result** — validates it.
+   - **Send back to examiner** — for a result that needs correcting rather
+     than rejecting. You must give a reason of at least 10 characters. The
+     test reopens for the examiner with every mark intact, so they can fix it
+     and submit again. Nothing is recorded against the candidate, and they are
+     not told.
+   - **Void result** — rejects it. See below.
 
-Each action states what it will do to _this_ test before you take it — whether
-the candidate is notified, and whether they will see your notes or only the
-scores. That sentence is resolved from the disclosure settings actually in force
-(test, then template, then department default), so it is worth reading even on a
-skill you administer often: a template can override the department, and a single
-test can override the template. See
-[Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08).
+From the list you can also validate a row with its validate icon, or tick
+several rows and select **Accept** to validate them together.
 
-> **Where the count lives.** The **Templates** tab carries a **Needs
-> Validation** stat card, which appears only while the queue is non-empty — it
-> takes the Pass Rate card's place, on the reasoning that a queue nobody clears
-> is blocking candidates from getting credit and so outranks the pass rate for
-> attention.
+Each action says what it will do to _this_ test before you take it — whether
+the candidate is told, and whether they will see your notes or only the
+scores. That sentence follows the disclosure settings in force for the test
+(the test's own, then the template's, then the department default). Read it
+even on a skill you test often: a template can differ from the department, and
+one test can differ from its template. See
+[Who Sees a Result](#who-sees-a-result--disclosure-settings).
 
-**Validate** is the moment the result becomes real: the pipeline requirement is
-credited if it passed, one attempt is spent, the department statistics move, and
-the candidate can see the outcome under the template's normal disclosure rules.
+**Accepting is when the result becomes real:** the requirement is completed if
+it passed, one attempt is used, the department figures move, and the candidate
+can see the outcome under the disclosure rules.
 
-**Void is the rejection path.** There is no separate "reject" button, and that
-is deliberate — voiding keeps the submission and records the reason it was
-refused, rather than deleting an evaluation somebody actually sat for. The
-candidate sees the reason.
+**Void is the way to reject.** There is no separate "reject" button. Voiding
+keeps the submission and records why it was refused, rather than deleting an
+evaluation someone actually sat. You must give a reason of at least 10
+characters, and the candidate can read it.
 
 ![Officer review queue — completed results awaiting validation, each row with its accept, notify and void controls and a bulk Accept above them](./images/09-11-validation-queue.png)
 
 ### Edge cases
 
-| Situation                                                          | What happens                                                                                                                                                                                    |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **You are the candidate on a test you are asked to validate**      | Refused. An officer cannot validate their own evaluation — otherwise a peer could "examine" you and you could sign off your own pass                                                            |
-| **You validate a result twice**                                    | Nothing happens the second time. Validation is idempotent; the result comes back unchanged                                                                                                      |
-| **You try to validate a practice attempt**                         | Refused — practice is never recorded, so there is nothing to validate                                                                                                                           |
-| **You try to validate a voided result**                            | Refused                                                                                                                                                                                         |
-| **You try to validate a test still in progress**                   | Refused — only a completed test has a result to validate                                                                                                                                        |
-| **The officer who validated a result later leaves the department** | The result stays validated. It does not revert to pending because the person who signed it departed                                                                                             |
-| **Results from before 2026-08-08**                                 | Already validated, credited to their examiner. Under the old rules only officers could run official tests, so each one already carries that sign-off — nothing lands in the queue retroactively |
-| **A member examines themselves on an official test**               | Still refused, exactly as before — see [Separation of Duties](#separation-of-duties)                                                                                                            |
-| **The candidate hits their attempt limit**                         | The cap is spent at **validation**, not at completion. A submission that is never validated never costs the candidate a chance — see [Attempt Limits](#attempt-limits-2026-08-08)               |
+| What happens                                                      | Result                                                                                                                                   |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **You are the candidate on a test you are asked to validate**     | Refused. Otherwise a peer could "examine" you and you could sign off your own pass                                                       |
+| **You validate a result twice**                                   | Nothing happens the second time. The result is unchanged                                                                                 |
+| **You try to validate a practice run**                            | Refused — practice is never recorded, so there is nothing to validate                                                                    |
+| **You try to validate a voided result**                           | Refused                                                                                                                                  |
+| **You try to validate a test still in progress**                  | Refused — only a completed test has a result to validate                                                                                 |
+| **You try to send back a result already accepted**                | Refused. Void it instead, which gives back the requirement and the attempt                                                               |
+| **The officer who validated a result later leaves**               | The result stays validated                                                                                                               |
+| **A member examines themselves on an official test**              | Refused — see [Separation of Duties](#separation-of-duties)                                                                              |
+| **The candidate reaches their attempt limit**                     | An attempt is used at **validation**, not at completion. A submission never validated never costs a chance — see [Attempt Limits](#attempt-limits) |
 
 ---
 
@@ -779,89 +796,71 @@ candidate sees the reason.
 
 ### Individual Test Results
 
-Navigate to **Training Admin > Skills Testing > Tests** and click on any completed test to view:
+Go to **Training Admin > Evaluations > Skills Test Records** and select a
+completed test to see:
 
-- Candidate and examiner names
-- Template name and version
-- Final score and pass/fail result
-- Section-by-section breakdown
-- Time elapsed
-- Date and time of completion
+- The candidate and the examiner
+- The template name
+- The score and the pass or fail
+- Each section's breakdown
+- The time taken
+- When it was completed
 
 ### Test History
 
-The **Test Records** tab supports filtering by:
+**Skills Test Records** can be filtered by:
 
-- **Status** — in progress, completed, cancelled, voided, or **Needs
+- **Status** — In Progress, Completed, Cancelled, Voided, or **Needs
   Validation** (the review queue)
 - **Search** — a template, candidate or examiner name
 - **Date range** — when the test was completed, or when it was opened if it is
-  still unfinished. The tab opens on the **last twelve months**; clear the range
-  to see every test on file. The **Needs Validation** card on the Templates tab
-  links to the queue with no date range, so every result awaiting sign-off is
-  listed however old it is.
+  not finished. The tab opens on the **last twelve months**. Clear the range to
+  see every test. The **Needs Validation** card opens the queue with no date
+  range, so every result awaiting sign-off is listed however old it is.
 
-_(2026-10-05)_ Records come a page at a time — 25 by default, with a **Per
-page** choice and page buttons under the list — rather than the department's
-whole history on every visit. Search runs across every page, not just the one
-on screen. **My Results** on the member's Skills Testing page and the skills
-list on **My Training** page the same way.
+Records come a page at a time — 25 by default, with a **Per page** choice and
+page buttons under the list. Search covers every page, not just the one on
+screen. **My Results** on the member's Skills Testing page, and the skills list
+on **My Training**, page the same way.
 
-**Export** downloads the records the tab is showing — the same status, search
-and date range — as a CSV with one row per evaluated step. It needs a date
-range of **at most a year**; with no range, or a longer one, the button is
-greyed out and the line under the date picker says why. For a longer audit
-period, export it a year at a time.
+**Export** downloads what the tab is showing — the same status, search and
+date range — as a spreadsheet file (CSV) with one row per scored step. It needs
+a date range of **a year or less**. With no range, or a longer one, the button
+is greyed out and the line under the date picker says why. For a longer
+period, export one year at a time. Export is for officers only.
 
-### What the member sees _(2026-08-08)_
+### What the member sees
 
-Members no longer have to read their result over an examiner's shoulder.
-**My Training** carries a **Skills Tests** section listing that member's own
-official and practice results, each linking to a read-only detail page.
+**My Training** has a **Skills Tests** section. It lists the member's own
+official and practice results, and each one opens a read-only page.
 
-What appears there is governed by the department's disclosure settings — see
-[Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08). A result
-the department does not share is simply absent from the list.
+What appears there follows the department's disclosure settings — see
+[Who Sees a Result](#who-sees-a-result--disclosure-settings). A result the
+department does not share is simply not listed.
 
-Each row carries the template name, the examiner and the date, and its outcome
-on the right — **Passed** or **Failed**. A practice attempt is badged
-**Practice**. A test still waiting on an officer is badged **Awaiting
-validation** and reads **Under review** instead of an outcome: a result scored
-by a peer is not shown to the member until it has been validated, so a member
-may know an attempt happened before they are told how it went.
+Each row shows the template name, the examiner and the date, with the outcome
+on the right — **Passed** or **Failed**. Practice runs carry a **Practice**
+badge, and voided results a **Voided** badge (reading **Withdrawn**). A test
+waiting on an officer carries **Awaiting validation** and reads **Under
+review** instead of an outcome. A member may know a test happened before they
+are told how it went.
 
 ![The member's own skill test results on My Training — official attempts badged PASS or FAIL with their dates, and a practice attempt badged Practice](./images/09-21-my-skill-test-results.png)
 
-> **A failed test can still read 100% _(2026-08-12)_, and that is correct.** The
-> percentage measures the **scored** criteria only. A plain pass/fail step
-> carries no points unless the template opts in to scoring them, and a checklist
-> or time-limit criterion never does — those are gates on the evolution rather
-> than measures of how well it went. So a candidate who takes full marks on
-> every scored criterion and then misses a critical pass/fail step (in the shot
-> above, full PPE) fails the test at 100%. Read the outcome badge for whether
-> they passed and the percentage for how they scored; they answer different
-> questions. The scorecard names the criterion that failed it.
+> **What if a failed test reads 100%?** That is correct. The percentage
+> measures **scored** steps only. A plain Pass / Fail step carries no points
+> unless the template counts it, and Checklist and Timed Task steps carry none
+> unless set to. So a candidate can take full marks on every scored step, miss
+> a critical Pass / Fail step (in the picture above, full PPE), and fail at
+> 100%. The badge tells you whether they passed; the percentage tells you how
+> they scored. The scorecard names the step that failed them.
 
-### A completed scorecard is frozen _(2026-08-08)_
+### A completed scorecard is frozen
 
-Every test now stores a snapshot of the template it was scored against, taken
-when the test was created. Editing a published template afterwards changes only
-future tests.
-
-This closes a class of silent corruption that was previously possible. Because
-criteria are identified by their position on the sheet, editing a published
-template used to rewrite the structure that _completed_ tests read from — so:
-
-- **inserting** a criterion shifted recorded pass/fail marks onto their
-  neighbours,
-- **deleting** one dropped its recorded result off the scorecard, and
-- **raising the passing percentage** could turn a recorded pass into a fail.
-
-> **Tests completed before this shipped were backfilled from the current
-> template.** The structure they were originally scored against was overwritten
-> in place and cannot be recovered — but the current template is already what
-> those tests displayed, so nothing visible changed. What the backfill buys is
-> that they are now frozen against _future_ edits.
+Every test keeps a copy of the template it was scored against, taken when the
+test was created. Editing a published template afterwards only changes future
+tests. Inserting or deleting a step, or raising the passing mark, never moves
+a recorded mark or turns a recorded pass into a fail.
 
 ![Skills test records listing sessions with candidate, template and status](./images/09-09-test-records.png)
 
@@ -869,45 +868,26 @@ template used to rewrite the structure that _completed_ tests read from — so:
 
 ## Skills Testing Summary Dashboard
 
-**Required Permission:** Authenticated _(revised 2026-08-08 — the Skills Testing
-page is no longer officer-only. The figures are department-wide aggregates and
-carry no individual's name.)_
+The summary is the row of cards across the top of **Training Admin >
+Evaluations > Skills Test Templates**. Only officers who can manage training
+records reach this page.
 
-The summary is the row of cards across the top of **Training Admin > Skills
-Testing > Templates** _(revised 2026-10-05 — there is no separate Summary tab)_:
+| Card                 | What it shows                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Templates**        | How many templates you have, not counting archived ones                                                          |
+| **Tests This Month** | Official tests created this calendar month. Practice runs and **voided** results are left out                    |
+| **Needs Validation** | Official results waiting for an officer's sign-off. Always shown, even at 0. Select it to open the review queue |
+| **Pass Rate**        | The share of **validated**, completed official tests that passed                                                 |
+| **Avg Score**        | The average percentage across **validated**, completed official tests                                            |
 
-| Card                 | Description                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Templates**        | Number of skill sheet templates (archived excluded)                                                                                  |
-| **Tests This Month** | Official test sessions created in the current month. Practice attempts and **voided** results are excluded                           |
-| **Needs Validation** | Official results awaiting an officer's sign-off — **officers only**, shown even at 0. Click it to open Test Records filtered to them |
-| **Pass Rate**        | Percentage of **validated** completed tests that resulted in a pass — officers only; members see —                                  |
-| **Avg Score**        | Mean percentage score across **validated** completed tests — officers only; members see —                                            |
+> **"—" means there is nothing to measure yet.** **Pass Rate** and **Avg
+> Score** show "—" when there is no figure: no validated test yet, or (for the
+> score) nothing tested carried points.
 
-The summary endpoint also reports published templates and all-time test totals,
-which no card shows. _(Corrected 2026-10-04: this table used to list seven
-metrics, including **Total Templates**, **Published Templates** and **Total
-Tests**, and send you to a **Summary** tab. There is no Summary tab, and the
-cards are the ones above.)_
-
-> **"—" means there is nothing to measure yet** _(2026-09-29)_. **Pass Rate**
-> and **Avg Score** show "—" when the department has no figure — no validated
-> test yet, or (for the score) nothing tested carried points. They used to show
-> **0%**, so a department whose only test passed read "Pass Rate 100%" beside
-> "Avg Score 0%", and a department that had run no tests read as failing every
-> one.
-
-> **Pass rate and average score count only validated results** _(2026-08-08)_.
-> A member-run result nobody has signed off is a submission, not yet the
-> department's finding — folding it in would let the headline number move on
-> evaluations an officer may still reject. Expect these two figures to lag the
-> raw test count while a review queue is outstanding.
-
-> **Needs Validation is deliberately officer-only.** It is an org-wide count of
-> _other people's_ outstanding evaluations, which is not a member's to see, and
-> it is only actionable by someone who can validate. Until 2026-10-05 the card
-> appeared only while the queue was non-empty and took the Pass Rate card's
-> place; it now sits beside it permanently.
+> **Pass rate and average score count only validated results.** A member-run
+> result nobody has signed off is not yet the department's finding, and an
+> officer may still reject it. Expect these two figures to lag the test count
+> while there is a review queue.
 
 ![Skills testing summary with a non-zero Needs Validation count](./images/09-12-summary-pending-validation.png)
 
@@ -915,30 +895,42 @@ cards are the ones above.)_
 
 ## Realistic Example: NREMT Trauma Assessment
 
-This walkthrough demonstrates a complete skills testing scenario — from template creation to test completion — using a realistic NREMT "Patient Assessment/Management — Trauma" skill sheet.
+This walkthrough follows one skills test from template to result, using an
+NREMT "Patient Assessment/Management — Trauma" skill sheet.
 
 ### Background
 
-**Springfield Fire-Rescue** is conducting quarterly EMT recertification skills evaluations. Training Officer **Lt. Maria Santos** needs to set up the NREMT Trauma Assessment skill sheet and evaluate EMT **Firefighter Jake Thompson**.
+**Springfield Fire-Rescue** is running quarterly EMT recertification skills
+checks. Training Officer **Lt. Maria Santos** needs to set up the NREMT Trauma
+Assessment sheet and evaluate EMT **Firefighter Jake Thompson**.
 
 ---
 
 ### Part 1: Creating the Template
 
-Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clicks **Create Template**.
+Lt. Santos goes to **Training Admin > Evaluations > Skills Test Templates** and
+selects **New Template**.
 
-**Template metadata:**
+**Template settings:**
 
-- **Name:** Patient Assessment/Management — Trauma
+- **Template Name:** Patient Assessment/Management — Trauma
 - **Category:** EMS
-- **Description:** NREMT psychomotor evaluation for trauma patient assessment and management. Candidate must demonstrate a systematic approach to assessing and managing a trauma patient, including scene size-up, primary survey, secondary assessment, and reassessment.
-- **Passing Percentage:** 70
-- **Require All Critical:** Enabled
-- **Time Limit:** 10 minutes
+- **Description:** NREMT psychomotor evaluation for trauma patient assessment
+  and management. Candidate must demonstrate a systematic approach to
+  assessing and managing a trauma patient, including scene size-up, primary
+  survey, secondary assessment, and reassessment.
+- **Passing Percentage (%):** 70
+- **Require all critical criteria to pass:** ticked
+- **Count Pass/Fail steps toward the overall percentage:** ticked, so each
+  Pass / Fail step is worth 1 point
+- **Global Time Limit (minutes):** 10
+
+Every step below is a **Pass / Fail** step. "Critical" means the **Critical**
+box is ticked.
 
 **Section 1: Scene Size-Up**
 
-| #   | Criterion                                            | Required |
+| #   | Criterion                                            | Critical |
 | --- | ---------------------------------------------------- | -------- |
 | 1   | Takes or verbalizes appropriate PPE precautions      | Yes      |
 | 2   | Determines the scene/situation is safe               | Yes      |
@@ -949,7 +941,7 @@ Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clic
 
 **Section 2: Primary Survey / Resuscitation**
 
-| #   | Criterion                                                                 | Required |
+| #   | Criterion                                                                 | Critical |
 | --- | ------------------------------------------------------------------------- | -------- |
 | 1   | Verbalizes general impression of the patient                              | No       |
 | 2   | Determines responsiveness/level of consciousness (AVPU)                   | No       |
@@ -960,14 +952,14 @@ Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clic
 
 **Section 3: History Taking**
 
-| #   | Criterion                                              | Required |
+| #   | Criterion                                              | Critical |
 | --- | ------------------------------------------------------ | -------- |
 | 1   | Obtains baseline vital signs (BP, pulse, respirations) | No       |
 | 2   | Attempts to obtain SAMPLE history                      | No       |
 
 **Section 4: Secondary Assessment**
 
-| #   | Criterion                                                          | Required |
+| #   | Criterion                                                          | Critical |
 | --- | ------------------------------------------------------------------ | -------- |
 | 1   | Inspects and palpates head, neck, and cervical spine               | No       |
 | 2   | Inspects and palpates chest                                        | No       |
@@ -980,54 +972,63 @@ Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clic
 
 **Section 5: Reassessment**
 
-| #   | Criterion                                        | Required |
+| #   | Criterion                                        | Critical |
 | --- | ------------------------------------------------ | -------- |
 | 1   | Demonstrates ongoing reassessment of vital signs | No       |
 | 2   | Verbalizes continued treatment and monitoring    | No       |
 
-**Totals:** 5 sections, 20 criteria (5 required/critical)
+**Totals:** 5 sections, 24 steps (5 critical)
 
-Lt. Santos saves the template, reviews it, and clicks **Publish**. The template is now version 1 and available for use.
+Lt. Santos selects **Create Template**, reviews the draft, and selects
+**Publish**. The template is version 1 and ready to use.
 
 ---
 
 ### Part 2: Administering the Test
 
-On evaluation day, Lt. Santos navigates to **Training Admin > Skills Testing > Tests** and clicks **New Test**.
+On evaluation day, Lt. Santos opens **Training Admin > Evaluations > Skills
+Test Records** and selects **Start Test**.
 
-1. **Template:** Selects "Patient Assessment/Management — Trauma (v1)"
-2. **Candidate:** Selects "Jake Thompson"
-3. Clicks **Start Test**
+1. **Select Template:** "Patient Assessment/Management — Trauma"
+2. **Test Mode:** **Official Evaluation**
+3. **Select Candidates:** types "thom" and picks "Jake Thompson"
+4. Selects **Begin Evaluation**
 
-The test session is created. Lt. Santos reads the scenario prompt aloud:
+The scoring screen opens. Lt. Santos reads the scenario aloud:
 
-> _"You are dispatched to a single-vehicle motorcycle accident. Upon arrival, you find a 28-year-old male lying supine on the roadway. He is conscious and complaining of pain to his left leg. A bystander tells you the patient was traveling approximately 30 mph when he lost control. The patient is wearing a helmet."_
+> _"You are dispatched to a single-vehicle motorcycle accident. Upon arrival,
+> you find a 28-year-old male lying supine on the roadway. He is conscious and
+> complaining of pain to his left leg. A bystander tells you the patient was
+> traveling approximately 30 mph when he lost control. The patient is wearing
+> a helmet."_
 
-Lt. Santos starts the timer and FF Thompson begins the evaluation.
+Lt. Santos starts the timer and FF Thompson begins.
 
 ---
 
 ### Part 3: Scoring the Evaluation
 
-As FF Thompson works through the assessment, Lt. Santos scores each criterion:
+As FF Thompson works, Lt. Santos marks each step Pass or Fail ([x] = Pass,
+[ ] = Fail):
 
 **Scene Size-Up (6/6):**
 
-- [x] Takes or verbalizes appropriate PPE precautions _(Required)_
-- [x] Determines the scene/situation is safe _(Required)_
+- [x] Takes or verbalizes appropriate PPE precautions _(Critical)_
+- [x] Determines the scene/situation is safe _(Critical)_
 - [x] Determines the mechanism of injury/nature of illness
 - [x] Determines the number of patients
 - [x] Requests additional EMS assistance if necessary
-- [x] Considers stabilization of the spine _(Required)_
+- [x] Considers stabilization of the spine _(Critical)_
 
 **Primary Survey / Resuscitation (5/6):**
 
 - [x] Verbalizes general impression of the patient
 - [x] Determines responsiveness/level of consciousness (AVPU)
 - [x] Determines chief complaint/apparent life threats
-- [x] Assesses airway and breathing _(Required)_
-- [x] Assesses circulation — bleeding, pulse, skin _(Required)_
-- [ ] Identifies patient priority and makes transport decision _(Missed — forgot to verbalize transport priority)_
+- [x] Assesses airway and breathing _(Critical)_
+- [x] Assesses circulation — bleeding, pulse, skin _(Critical)_
+- [ ] Identifies patient priority and makes transport decision _(Fail —
+      forgot to verbalize transport priority)_
 
 **History Taking (2/2):**
 
@@ -1043,344 +1044,335 @@ As FF Thompson works through the assessment, Lt. Santos scores each criterion:
 - [x] Inspects and palpates lower extremities
 - [x] Inspects and palpates upper extremities
 - [x] Inspects and palpates posterior
-- [ ] Manages secondary injuries and wounds appropriately _(Missed — did not splint the injured leg)_
+- [ ] Manages secondary injuries and wounds appropriately _(Fail — did not
+      splint the injured leg)_
 
 **Reassessment (1/2):**
 
 - [x] Demonstrates ongoing reassessment of vital signs
-- [ ] Verbalizes continued treatment and monitoring _(Missed — did not verbalize ongoing care plan)_
+- [ ] Verbalizes continued treatment and monitoring _(Fail — did not
+      verbalize ongoing care plan)_
 
 ---
 
 ### Part 4: Results
 
-Lt. Santos clicks **Finish & Review**. The system calculates:
+Lt. Santos selects **Finish & Review**, checks the marks, and selects **Submit
+Test**. The Logbook works out:
 
-| Metric                    | Value                |
+| Measure                   | Value                |
 | ------------------------- | -------------------- |
-| **Criteria Passed**       | 17 / 20              |
-| **Percentage Score**      | 85%                  |
-| **Passing Threshold**     | 70%                  |
-| **Score Meets Threshold** | Yes                  |
-| **Critical Criteria Met** | 5 / 5 (all passed)   |
-| **Time Elapsed**          | 7 minutes 42 seconds |
+| **Points earned**         | 21 / 24              |
+| **Percentage**            | 87.5%                |
+| **Passing mark**          | 70%                  |
+| **Passing mark met**      | Yes                  |
+| **Critical steps passed** | 5 / 5                |
+| **Time**                  | 7 minutes 42 seconds |
 | **Result**                | **PASS**             |
 
-**Missed Steps:**
+**Failed steps:**
 
-1. Primary Survey #6 — Did not verbalize transport priority decision
-2. Secondary Assessment #8 — Did not splint the injured leg
-3. Reassessment #2 — Did not verbalize ongoing care plan
+1. Primary Survey #6 — did not verbalize the transport priority decision
+2. Secondary Assessment #8 — did not splint the injured leg
+3. Reassessment #2 — did not verbalize the ongoing care plan
 
-**Section Breakdown:**
+**Section breakdown:**
 
 | Section                        | Score | Percentage |
 | ------------------------------ | ----- | ---------- |
 | Scene Size-Up                  | 6/6   | 100%       |
-| Primary Survey / Resuscitation | 5/6   | 83%        |
+| Primary Survey / Resuscitation | 5/6   | 83.3%      |
 | History Taking                 | 2/2   | 100%       |
-| Secondary Assessment           | 7/8   | 88%        |
+| Secondary Assessment           | 7/8   | 87.5%      |
 | Reassessment                   | 1/2   | 50%        |
 
-FF Thompson passed with 85% — all critical criteria were met and the score exceeds the 70% passing threshold. The missed steps are documented for follow-up training.
+FF Thompson passed with 87.5%. Every critical step passed, and the score is
+above the 70% passing mark. The failed steps are on the scorecard for
+follow-up training. Lt. Santos is a training officer, so the result is
+validated in the same step.
 
 ---
 
 ### Example of a FAIL Scenario
 
-If FF Thompson had forgotten to assess the airway (a **required** criterion in Primary Survey), the result would be:
+Suppose FF Thompson had also failed to assess the airway — a **critical** step
+in the Primary Survey:
 
-| Metric                    | Value                                          |
-| ------------------------- | ---------------------------------------------- |
-| **Criteria Passed**       | 16 / 20                                        |
-| **Percentage Score**      | 80%                                            |
-| **Passing Threshold**     | 70%                                            |
-| **Score Meets Threshold** | Yes                                            |
-| **Critical Criteria Met** | 4 / 5 — **FAILED** (missed required criterion) |
-| **Result**                | **FAIL — Critical Criteria Not Met**           |
+| Measure                   | Value                                  |
+| ------------------------- | -------------------------------------- |
+| **Points earned**         | 20 / 24                                |
+| **Percentage**            | 83.3%                                  |
+| **Passing mark**          | 70%                                    |
+| **Passing mark met**      | Yes                                    |
+| **Critical steps passed** | 4 / 5                                  |
+| **Result**                | **FAIL — a critical step was not met** |
 
-Even though 80% exceeds the 70% threshold, the candidate fails because "Require All Critical" is enabled and one critical criterion was not met. This mirrors real NREMT evaluation rules.
+83.3% is above the 70% mark, but the candidate fails. **Require all critical
+criteria to pass** is ticked, and one critical step failed. This matches real
+NREMT rules.
 
 ---
 
 ## Practice Mode
 
-Tests can be administered in **practice mode** for training purposes without affecting official records or compliance:
+A **Practice Run** is for training. It never touches official records or
+compliance.
 
-1. When creating a new test, toggle **Practice Mode** on.
-2. The test is clearly marked with a "Practice" badge throughout the scoring interface.
-3. Practice tests do **not** count toward training compliance or certification requirements.
-4. After completing a practice test, the examiner can:
-   - **Email results** — Send the results summary to the candidate for self-study
-   - **Discard results** — Delete the practice test record entirely
-   - **Retake** — Start a new test with the same template and candidate
+1. On **Start Skill Test**, choose **Practice Run** under **Test Mode**.
+   Members start on Practice; officers start on Official.
+2. The test is marked **Practice** throughout.
+3. A practice run does **not** count toward any requirement or certification.
+   It never uses an attempt and never needs validation.
+4. When the practice run is finished, you can:
+   - **Email Results to Candidate** — officers only. Sends the results for
+     self-study, following the disclosure rules
+   - **Retake** — start a new run with the same sheet and candidate
+   - **Discard** — delete the practice run
 
-> Practice mode is useful for study sessions, departmental skills labs, and letting candidates self-assess before an official evaluation.
+> **Tip.** Practice mode suits study sessions, skills labs, and letting
+> candidates check themselves before an official evaluation.
 
-### A practice attempt belongs to the member _(2026-08-08)_
+### A practice attempt belongs to the member
 
-Practice used to be a dead end for the person taking it — the results lived on
-the examiner's device. Four things changed:
+| Question                   | Answer                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Who can run one**        | **Any member**, on themselves or on a peer                                                                      |
+| **Who can see the result** | The candidate, on **My Training → Skills Tests**, as well as the examiner                                       |
+| **Who can delete it**      | The candidate, the examiner, **or** an officer                                                                  |
+| **How long it is kept**    | **One year** by default, then deleted automatically                                                             |
 
-|                            | Before                 | Now                                                                                                                                                                                                                                    |
-| -------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Who can run one**        | `training.manage` only | **Any member** can run a practice test on a peer — and, since 2026-08-08, an official one too. The difference is that an official result needs an officer's validation before it counts, while a practice attempt never counts at all. |
-| **Who can see the result** | Examiner only          | The candidate, on **My Training → Skills Tests**                                                                                                                                                                                       |
-| **Who can discard it**     | Examiner only          | The candidate, the examiner, **or** an officer                                                                                                                                                                                         |
-| **How long it is kept**    | Forever                | **One year**, then purged automatically                                                                                                                                                                                                |
+Practice runs are never held back by a release setting (see below). They are
+the candidate's own drill notes, not the department's evaluation record.
 
-Practice attempts never consume an attempt against a requirement's
-`max_attempts` limit, and they are exempt from the release gate described below —
-they are the candidate's own drill notes, not the department's evaluation record
-to hold back.
-
-> **Edge case — a template marked "officers only" stays officers-only in
-> practice.** Creating a practice test returns the full template body, so
-> practice creation follows exactly the same visibility rule as opening the
-> template. A member cannot see a restricted skill sheet by starting a practice
-> test against it.
+> **What if a template is "Officers Only"?** It stays officers-only in
+> practice too. Starting a practice run follows the same visibility rule as
+> opening the template, so a member cannot see a restricted sheet that way.
 
 ---
 
-## Who Sees a Result — Disclosure Settings _(2026-08-08)_
+## Who Sees a Result — Disclosure Settings
 
-Completing a test used to show the candidate the whole scorecard at once,
-including every criterion note. That is right for a routine drill and wrong for a
-promotional evaluation — and examiner notes are frequently candid working notes
-for the training file ("hesitant, needed two prompts") rather than feedback
-drafted for the member to read.
+Showing the candidate the whole scorecard is right for a routine drill. It is
+wrong for, say, a promotional evaluation. Examiner notes are often frank
+working notes for the training file ("hesitant, needed two prompts"), not
+feedback written for the member.
 
-Disclosure is now three separate questions. Each is answered at the department
-level and can be overridden on a single template, or on a single test.
+So disclosure is three separate questions. The first two have a department
+default, which a template can override, and a single test can override again.
+The third is set on the template or the test.
 
 ### What the member sees — Results disclosure
 
-| Setting          | The candidate sees                                        |
-| ---------------- | --------------------------------------------------------- |
-| **Full results** | Every mark, every point, every written note. _(Default)_  |
-| **Scores only**  | Every mark and point — **all written commentary removed** |
-| **Nothing**      | The result does not appear for them at all                |
+| Setting                                                   | The candidate sees                                    |
+| --------------------------------------------------------- | ----------------------------------------------------- |
+| **Full results — scores and examiner notes** _(default)_  | Every mark, every point, every written note           |
+| **Scores only — pass/fail and points, no written notes**  | Every mark and point — **all written notes removed**  |
+| **Nothing — results are never shown to the member**       | The result does not appear for them at all            |
 
 ### When they see it — Release
 
-| Setting           | Behaviour                                                        |
-| ----------------- | ---------------------------------------------------------------- |
-| **On completion** | Visible as soon as the examiner submits. _(Default)_             |
-| **On release**    | The finished result stays invisible until an officer releases it |
+| Setting                                                       | What happens                                                   |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| **As soon as the examiner submits** _(default)_               | The result is visible once it is decided                       |
+| **Only after an officer releases the result**                 | The finished result stays hidden until an officer releases it  |
 
-"On release" is for the evaluation you want a chief to read first, or a failure
-you would rather deliver in person. It is the same pattern the shift-report
-review workflow already uses.
+Use a release for an evaluation you want a chief to read first, or a failure
+you would rather deliver in person. Shift reports use the same idea.
 
 ### Who else can see it
 
-- **Named viewers** — add a preceptor or FTO to a specific test.
-- **Positions** — list corporate positions (e.g. Training Officer, Company
-  Officer) whose holders may read results.
+- **Named viewers** — add a preceptor or field training officer (FTO) to one
+  test.
+- **Positions** — on a template, tick positions (for example Training Officer
+  or Company Officer) whose holders may read results from that sheet.
 
-> **A viewer never sees more than the candidate does.** If the department shows
-> the candidate scores only, a named preceptor also sees scores only. There is no
-> reading of "sharing a result" under which the observer sees more of it than its
-> subject.
+> **A viewer never sees more than the candidate does.** If the candidate sees
+> scores only, a named preceptor also sees scores only.
 
-#### Naming a viewer on one test _(2026-08-08)_
+#### Naming a viewer on one test
 
-Open the test and use the **Viewers** panel. Search for the member, add them,
-and they can read that one result.
+Open the test as an officer and use the **Viewers** panel. Search for the
+member, add them, and they can read that one result. The panel appears on
+official tests only.
 
-**This is per test, not per template — deliberately.** The relationship is to
-the person being tested, not to the skill. A trainee's FTO changes over time,
-and a standing template-wide grant would quietly follow the skill onto every
-_other_ candidate's results too.
+**This is per test, not per template, on purpose.** The link is to the person
+being tested, not to the skill. A trainee's FTO changes over time, and a
+template-wide grant would also open _other_ candidates' results.
 
-| Edge case                               | What happens                                                                                                  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Trying to add the **candidate**         | They are not in the picker. They already see the result as policy allows, and the system refuses the grant    |
-| Trying to add the **examiner**          | Also not in the picker — they always see what they themselves recorded, so the grant would do nothing visible |
-| Adding someone to a **withheld** result | They see exactly what the candidate sees, which for "Nothing" is nothing at all                               |
-| Removing a viewer                       | Takes effect immediately; the result disappears from their list                                               |
+| What happens                            | Result                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Trying to add the **candidate**         | They are not in the picker. They already see the result as the settings allow                              |
+| Trying to add the **examiner**          | Also not in the picker. They always see what they recorded                                                 |
+| Adding someone to a **withheld** result | They see exactly what the candidate sees — for **Nothing**, nothing at all                                 |
+| Removing a viewer                       | Takes effect at once. The result disappears from their list                                                |
 
 ![Named viewers on a single test, with the note that a viewer never sees more than the candidate](./images/09-13-test-viewers-panel.png)
 
 ### Setting the department default
 
 Open **Training → My Training** and, as an officer, the **Member Visibility
-Settings** tab — the same editor that governs what members see of the rest of
-their training. The **Skills-Test Results** group sits at its foot, two
-dropdowns rather than switches:
+Settings** tab. This is the same editor that controls what members see of the
+rest of their training. The **Skills-Test Results** group has two dropdowns:
 
 ![The Skills-Test Results settings — what a member sees of a result, and when they see it](./images/09-20-result-disclosure-settings.png)
 
-**What the member sees** carries the reasoning next to the control: examiner
-notes are often candid working notes for the training file rather than feedback
-written to be read by the member. **When they see it** explains what a release
-buys you — a chance to review the scorecard, or to deliver a failure in person,
-before the member reads it — and notes that practice attempts are never held
-back.
+- **What the member sees** — the three choices above. The help text explains
+  that examiner notes are often working notes for the training file.
+- **When they see it** — the two release choices. The help text explains that
+  a release lets an officer review the scorecard, or deliver a failure in
+  person, first. Practice runs are never held back.
 
-The "when" question disappears entirely if you set disclosure to **Nothing**,
-since there is then nothing to time.
+**When they see it** is hidden when **What the member sees** is **Nothing**,
+since there is nothing to time.
 
-### Overriding it on a single template _(2026-08-08)_
+### Overriding it on a single template
 
-The template builder now carries a **Result Disclosure** group, so a single
-skill sheet can differ from the department default without changing it for
-everyone. A promotional evaluation can withhold notes while routine drills stay
-fully open.
+The template builder has a **Result Disclosure** group. One skill sheet can
+differ from the department default without changing it for everyone. A
+promotional evaluation can hide notes while routine drills stay fully open.
 
-Every field starts at **Inherit**, and the inherit option **tells you what it
-resolves to** — you will see something like _"Inherit — Scores only (pass/fail
-and points, no written notes)"_, read from your department's configuration. You
-can tell what leaving the template alone actually does without opening another
-page.
+Each dropdown starts on **Inherit**, and the Inherit choice **says what it
+means**. For example: _"Inherit — Scores only — pass/fail and points, no written
+notes"_, read from your department's settings. You can see what leaving it
+alone does without opening another page.
 
-| Field                    | Options                                                                                |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| **What the member sees** | Inherit / Full results / Scores only / Nothing                                         |
-| **When they see it**     | Inherit / On completion / On release — **hidden** when disclosure is "Nothing"         |
-| **Which positions**      | A picker of your department's positions. **Omitted entirely** if you have none defined |
+| Field                                         | Choices                                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **What the member sees**                      | Inherit, or one of the three disclosure choices                                         |
+| **When they see it**                          | Inherit, or one of the two release choices. **Hidden** when the member sees **Nothing** |
+| **Also visible to these positions (optional)** | A tick list of your department's positions. **Not shown** if you have none             |
 
-Setting a field back to **Inherit** genuinely clears the override — it does not
-leave the last value quietly in place.
+Setting a dropdown back to **Inherit** really clears the override. It does not
+keep the last value in place.
 
 ![Per-template Result Disclosure controls showing the inherited default](./images/09-08-template-result-disclosure.png)
 
 ### Releasing a withheld result
 
-On **Training Admin > Skills Testing > Tests**, a completed, unreleased official
-result carries a **Release** action beside **Void**. It is offered on any
-unreleased result, not only under the "on release" mode — the action is
-idempotent and refuses tests whose results are never shown, so you do not have to
-work out which mode a given template inherits before you can act.
+In **Skills Test Records**, a completed official result that has not been
+released has a release icon next to the void icon. It appears on any
+unreleased result, whatever the release setting. Releasing twice does nothing,
+and a result the member may never see is refused, so you do not need to check
+the setting first.
 
-Opening the result itself gives you the same action under **Officer actions**,
-but shown only where it is a real step: under the "on release" mode, on a result
-not yet released, for a test the member is allowed to see at all. Elsewhere the
-result is already as visible as it will ever be, and a Release button would
-imply the member is waiting on something.
+On the result itself, **Release to candidate** appears under **Officer
+actions** only where it is a real step: the result is held for release, and the
+member is allowed to see it. Until the result is accepted, the button is
+greyed out — there is no decided outcome to release yet.
 
-### The member is told when a result becomes theirs to read _(2026-08-08)_
+### The member is told when a result becomes theirs to read
 
-The moment a result becomes visible to the candidate, they get an in-app
-notification linking to it — **not** the moment an officer clicks something. The
-two are not the same, and the notification follows the disclosure rules rather
-than the button:
+When a result becomes visible to the candidate, they get an in-app
+notification linking to it. That depends on the disclosure rules, not on which
+button an officer pressed:
 
-| What happens                                             | Is the member notified?                                                    |
-| -------------------------------------------------------- | -------------------------------------------------------------------------- |
-| An officer completes a test (validates in the same step) | Yes, under "on completion"                                                 |
-| A member-run submission is accepted by an officer        | Yes, under "on completion"                                                 |
-| A result is accepted under the "on release" mode         | No — it counts, but they still cannot read it                              |
-| That same result is later released                       | Yes                                                                        |
-| A result is accepted where disclosure is **Not shown**   | No. Announcing a result they may not read would disclose it by implication |
-| A member runs the test and nobody has validated it yet   | No. There is no decided outcome to tell them about                         |
-| An official result they could see is **voided**          | Yes, with the reason                                                       |
-| A result they could never see is voided                  | No                                                                         |
-| Any practice attempt                                     | No — practice is the member's own drill note                               |
+| What happens                                                  | Is the member notified?                                                     |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| An officer completes a test (validated in the same step)      | Yes, under "As soon as the examiner submits"                                |
+| An officer accepts a member-run result                        | Yes, under "As soon as the examiner submits"                                |
+| A result is accepted under "Only after an officer releases"   | No — it counts, but they cannot read it yet                                 |
+| That result is later released                                 | Yes                                                                         |
+| A result is accepted where the member sees **Nothing**        | No. Announcing a result they may not read would give it away                |
+| A member ran the test and nobody has validated it yet         | No. There is no decided outcome to tell them about                          |
+| An official result they could see is **voided**               | Yes, with the reason                                                        |
+| A result they could never see is voided                       | No                                                                          |
+| Any practice run                                              | No — practice is the member's own drill note                                |
 
-The notification says which level they are getting: at **Scores only** it states
-that examiner notes are not included, so nobody goes looking for commentary that
-was deliberately withheld.
+Under **Scores only**, the notification says examiner notes are not included,
+so nobody goes looking for notes that were held back on purpose.
 
 ### Edge cases worth knowing
 
-- **A withheld result reads as _absent_, not as _forbidden_.** It is dropped from
-  the member's list entirely and the detail page returns "not found". This is
-  deliberate: a "you may not view this" message would announce _"you were
-  evaluated and may not know how it went,"_ which is worse than silence.
-- **"No results" no longer reliably means "none taken."** The member's empty
-  state says so, without asserting that something is being withheld — which
-  usually it is not.
-- **Emailing results obeys the same policy**, resolved for the _recipient_, not
-  for the officer sending it. "Email results" is not a way around the
-  department's decision to withhold or redact.
-- **Defaults are unchanged from before this shipped** — full results, on
-  completion. Nobody silently loses sight of a result they can read today.
+- **A withheld result looks _absent_, not _forbidden_.** It is left out of the
+  member's list, and opening it directly says "not found". A "you may not view
+  this" message would announce "you were evaluated and may not know how it
+  went", which is worse than silence.
+- **An empty list does not always mean "none taken".** The member's empty list
+  says _Results your department doesn't share won't appear here_, without
+  claiming anything is being held back.
+- **Emailing results follows the same settings**, worked out for the
+  _recipient_, not the officer sending it. **Email Results to Candidate** is
+  not a way around a decision to hide or trim a result.
 
 ---
 
-## Withdrawing a Result — Void, Cancel, Delete _(2026-08-08)_
+## Withdrawing a Result — Void, Cancel, Delete
 
-Three different things can go wrong with a test, and they are three different
-actions. The records tab offers exactly one of them per row; **Void** is also
-available under **Officer actions** on the result page itself, which is where
-you normally discover that a result should not stand.
+Three different things can go wrong with a test, and each has its own action.
+**Skills Test Records** offers the one that fits on each row. **Void result**
+is also under **Officer actions** on the result page, which is usually where
+you find that a result should not stand.
 
-| Action     | Use it for                                            | What happens                                                                                                                                                                                                                                         |
-| ---------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Delete** | A **practice** attempt                                | The row is removed.                                                                                                                                                                                                                                  |
-| **Void**   | A completed **official** result that should not stand | The row is **kept**, with a reason you must supply and your name on it. It is dropped from totals, pass rate and average score, and **any training requirement the pass had completed is released**. The member sees the reason on their own result. |
-| **Cancel** | An evaluation **abandoned mid-session**, never scored | Partial results are kept and the test is closed out.                                                                                                                                                                                                 |
+| Action     | Use it for                                          | What happens                                                                                                                                                                                          |
+| ---------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Delete** | A **practice** run                                  | The record is removed                                                                                                                                                                                 |
+| **Void**   | A completed **official** result that should not stand | The record is **kept**, with your reason (at least 10 characters) and your name. It drops out of the totals, pass rate and average score, and **any requirement the pass completed is given back**. The member sees the reason |
+| **Cancel** | A test **abandoned part-way**, never scored         | Any partial marks are kept and the test is closed out. No reason is required                                                                                                                         |
 
-> **An official result can no longer be deleted.** A scored evaluation is a
-> record of what an examiner observed — it is withdrawn, not erased. Void is the
-> action; the reason and the author are part of the record.
+> **An official result cannot be deleted.** A scored evaluation is a record of
+> what an examiner saw. It is withdrawn, not erased. Void is the action, and
+> the reason and the officer are part of the record.
 
-> **Cancel is not void.** An unscored test has no result to withdraw and nothing
-> to release from the pipeline, so it needs neither a reason nor a pipeline
-> reversal.
+> **Cancel is not void.** An unscored test has no result to withdraw and
+> nothing to give back, so it needs neither.
+
+**Send back to examiner** is the fourth option, for a result still awaiting
+validation that needs correcting. See
+[If you are a training officer](#if-you-are-a-training-officer).
 
 ---
 
-## Printing: the blank sheet and the completed scorecard _(2026-08-11)_
+## Printing: the blank sheet and the completed scorecard
 
-Two print views exist, and they are opposite halves of the same sheet. Both open
-in a **new tab** and raise the browser's print dialog on load, so you are not
-dropped out of the list you were working in.
+There are two print views — the two halves of the same sheet. Both open in a
+**new tab** and bring up the browser's print dialog, so you stay on the page
+you were working on.
 
-| View                    | Where you start                                                    | URL                                                        | What it is                                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Blank skill sheet**   | Training Admin → **Templates** tab → a template's **Print** action | `/training/skills-testing/print/template?id=<template_id>` | The department's own sheet as a paper form: marking boxes, candidate and examiner fields, signature lines                               |
-| **Completed scorecard** | A finished result page → **Print**                                 | `/training/skills-testing/print/scorecard?id=<test_id>`    | A finished evaluation as a paper record: what was marked against each step, the arithmetic behind the percentage, and who signed it off |
+| View                    | Where to start                                                                                            | What it is                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Blank skill sheet**   | **Skills Test Templates** → the **Print blank sheet** icon on a template's row                            | Your own sheet as a paper form: marking boxes, candidate and examiner fields, signature lines                                  |
+| **Completed scorecard** | **My Training → Skills Tests** → open a finished result → **Print**                                       | A finished evaluation on paper: the mark against each step, the arithmetic behind the percentage, and who signed it off       |
 
 ### Why print at all
 
-**The blank sheet is for where the app cannot go.** A skills evaluation happens
-at a burn tower, in an apparatus bay, or at a county training ground — places
-with no usable signal, where the examiner screen cannot save. Departments
-already fall back to paper there; printing _your own template_ rather than a
-generic form means what gets marked in the field matches what gets transcribed
-afterwards. Sections and criteria are numbered exactly as the examiner screen
-numbers them, and each criterion type prints the marking affordance its
-on-screen control produces, so one paper mark maps onto one field with no
-interpretation in between.
+**The blank sheet is for places The Logbook cannot reach.** Skills checks
+happen at a burn tower, in an apparatus bay or at a county training ground,
+often with no signal. Printing _your own template_, rather than a generic form,
+means what gets marked in the field matches what gets typed in afterwards.
+Sections and steps are numbered exactly as on the scoring screen. Each type of
+step prints the mark its on-screen control records, so one paper mark maps to
+one field. Drafts can be printed too, which helps proofreading.
 
-**The completed scorecard is for the two places a screen cannot go** — a
-candidate's paper training file, and a state or ISO audit packet. Emailing
-results already works, and neither of those accepts an email.
+**The completed scorecard is for where a screen cannot go:** a candidate's
+paper training file, or a state or ISO audit packet. Neither accepts an email.
 
 ### Who can print what
 
-Both routes are open to **any signed-in member**, and that is deliberate rather
-than an oversight.
+Both views are open to **any signed-in member**, on purpose.
 
-- The **blank sheet** carries no member data. It is the empty form, and the
-  templates list that links to it already applies the template's own visibility
-  rules; the server enforces visibility and department scoping when it fetches
-  the template.
-- The **completed scorecard** is redacted **by the server** before it reaches the
-  page. An officer receives the full scorecard; a candidate under `scores`
-  disclosure receives per-criterion marks with the examiner's notes stripped; a
-  result still awaiting validation arrives with **no outcome at all**. The page
-  renders exactly what the response contained and derives nothing that was
-  withheld.
+- The **blank sheet** holds no member information. The templates list already
+  applies each sheet's visibility rule, and the sheet itself is checked again
+  when it loads.
+- The **completed scorecard** is trimmed **before it reaches your browser**. An
+  officer gets the full scorecard. A candidate under **Scores only** gets the
+  marks without the examiner's notes. A result still awaiting validation
+  arrives with **no outcome at all**. The page prints exactly what it was given.
 
-> **This is why the print route is not gated on `training.manage`.** Gating it
-> would stop a member printing a result they are already allowed to read on
-> screen, while withholding nothing from anyone else — the disclosure policy is
-> what controls the content, and it does so before the data leaves the server.
-> Printing cannot become a way around the policy.
+> **Why printing is not restricted to officers.** Restricting it would stop a
+> member printing a result they can already read on screen, while hiding
+> nothing from anyone else. The disclosure settings control what is in the
+> scorecard, before it leaves The Logbook. Printing cannot get around them.
 
 ### Edge cases
 
-| Situation                                                   | What happens                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Result still awaiting officer validation                    | The **Print** button is not offered, and the print page refuses one anyway. There is no outcome to print yet                                                                                                                                            |
-| Candidate under `scores` disclosure prints their own result | They get the marks and the arithmetic; the examiner's written notes are absent — the same redaction they see on screen                                                                                                                                  |
-| Practice attempt                                            | Prints like any completed attempt; the page identifies it as practice so a practice sheet cannot be filed as an official record                                                                                                                         |
-| Template archived after a sheet was printed                 | The paper sheet is still valid to transcribe from, but check the criteria against the current template before entering results — an archived template may have been superseded                                                                          |
-| Pop-up blocker                                              | Both views open with `window.open`; a blocker will silently stop them. If **Print** appears to do nothing, allow pop-ups for the site                                                                                                                   |
-| Printing with "Background graphics" on                      | Browsers do not print page backgrounds by default, and the app forces a white page when they do, so this is safe to leave on. Builds from 2026-08-15 to 08-16 could print the themed background behind the sheet in light mode; if you see that, update |
+| What happens                                            | Result                                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result still awaiting officer validation                | **Print** is not offered, and the print page refuses anyway. There is no outcome to print yet                                                                  |
+| Candidate under **Scores only** prints their own result | They get the marks and the arithmetic, without the examiner's notes — the same as on screen                                                                    |
+| Practice run                                            | Prints like any finished test. The page marks it **Practice attempt — not an official record**, so it cannot be filed as one                                   |
+| Template archived after a sheet was printed             | The paper sheet is still fine to copy from, but check its steps against the current template first — an archived template may have been replaced               |
+| Pop-up blocker                                          | A blocker can silently stop the new tab. If **Print** seems to do nothing, allow pop-ups for the site                                                          |
+| Printing with "Background graphics" on                  | Safe to leave on. The Logbook forces a white page when printing                                                                                                |
 
 ![A blank skill sheet as it prints: the sections, the criteria, and a marking box beside each step for the examiner to fill in by hand](./images/09-22-template-print-sheet.png)
 
@@ -1390,158 +1382,187 @@ than an oversight.
 
 ---
 
-## Attempt Limits _(2026-08-08)_
+## Attempt Limits
 
-If the training requirement a template is linked to caps attempts
-(`max_attempts`), skills testing now enforces it. Previously only the
-officer-entered knowledge-test path did, so a candidate capped at two attempts
-could be given a third evaluation and have the pass credited.
+A training requirement can limit how many attempts a candidate gets. If the
+requirement a test is linked to has a limit, Skills Testing enforces it.
 
-You will be stopped in **two** places:
+You are stopped in **two** places:
 
-1. **When you create the test** — so you are refused _before_ running an
+1. **When you create the test** — so you are told _before_ running an
    evaluation that could not count.
 2. **When the result is accepted** — because several tests can be started
-   before any is submitted, so the create-time check alone is not enough.
+   before any is submitted, so the first check alone is not enough.
 
-**Where the chance is actually spent moved on 2026-08-08.** Since any member can
-now examine, completion is no longer the moment a result counts — **validation**
-is. The cap is therefore spent when a training officer validates the result, and
-a submission that is never validated never costs the candidate a chance.
+An attempt is used when a training officer **validates** the result, not when
+the test is completed. A submission that is never validated never costs the
+candidate a chance. The message reads _Maximum attempts (N) reached for this
+requirement. Practice attempts are still available and are never recorded._
 
 What counts as an attempt:
 
-|                                                         | Consumes an attempt?                      |
-| ------------------------------------------------------- | ----------------------------------------- |
-| A completed, **validated** official test — pass or fail | **Yes**                                   |
-| A completed official test **awaiting validation**       | No — it is a submission, not yet a record |
-| A **voided** result                                     | No — the department withdrew it           |
-| A **practice** attempt                                  | No                                        |
-| A test started but never completed                      | No                                        |
+|                                                         | Uses an attempt?                            |
+| ------------------------------------------------------- | ------------------------------------------- |
+| A completed, **validated** official test — pass or fail | **Yes**                                     |
+| A completed official test **awaiting validation**       | No — it is a submission, not yet a record   |
+| A **voided** result                                     | No — the department withdrew it             |
+| A **practice** run                                      | No                                          |
+| A test started but never completed                      | No                                          |
 
 > **Recertification still works.** A requirement that is already completed,
-> verified or waived is exempt from the cap, so testing a member again against a
-> satisfied requirement is always allowed.
+> verified or waived has no limit, so testing a member again against it is
+> always allowed.
 
 ---
 
 ## Permissions
 
-_Revised 2026-08-08 — examining moved out from behind `training.manage`._
+"Officers" below means members whose position includes the **Manage training
+records** permission.
 
-| Action                                     | Required Permission                       |
-| ------------------------------------------ | ----------------------------------------- |
-| Create/edit/publish templates              | `training.manage`                         |
-| Duplicate templates                        | `training.manage`                         |
-| Archive templates                          | `training.manage`                         |
-| Set a template's disclosure override       | `training.manage`                         |
-| Create and administer an **official** test | **Authenticated (any member)**            |
-| Create and administer a **practice** test  | Authenticated (any member)                |
-| Look up a candidate by name                | `training.view` **or** `training.manage`  |
-| **Validate** an official result            | `training.manage`                         |
-| Delete a **practice** test record          | Candidate, examiner, or `training.manage` |
-| Delete an **official** test record         | Not permitted — use **Void**              |
-| **Cancel** an unscored test                | Authenticated (any member)                |
-| **Void** or **release** a result           | `training.manage`                         |
-| Grant or revoke a **named viewer**         | `training.manage`                         |
-| Set disclosure defaults                    | `training.manage`                         |
-| View own results                           | Authenticated (own results only)          |
-| View all results                           | `training.manage`                         |
-| View the summary cards                     | Authenticated (Needs Validation, Pass Rate and Avg Score: `training.manage`) |
+| Action                                        | Who can do it                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| Create, edit, publish, duplicate or archive templates | Officers                                                    |
+| Set a template's disclosure override          | Officers                                                            |
+| Run an **official** test                      | Any member                                                          |
+| Run a **practice** test                       | Any member                                                          |
+| Look up a candidate by name                   | Members with **View training records** or **Manage training records** |
+| **Validate**, send back, **void** or **release** a result | Officers                                                |
+| Delete a **practice** run                     | The candidate, the examiner, or an officer                          |
+| Delete an **official** result                 | Nobody — use **Void**                                               |
+| **Cancel** an unscored test                   | Officers                                                            |
+| Add or remove a **named viewer**              | Officers                                                            |
+| Set the department disclosure defaults        | Officers                                                            |
+| Export test records                           | Officers                                                            |
+| See your own results                          | Any member (your own only)                                          |
+| See all results and the summary cards         | Officers                                                            |
 
-> A member who opens a test they are not party to gets a **"not found"**, not a
-> "forbidden". A withheld result reads as absent rather than off-limits —
-> telling someone a record exists that they may not read is itself a
-> disclosure.
+> **What if a member opens a test they are not part of?** They get **"not
+> found"**, not "forbidden". Telling someone a record exists that they may not
+> read is itself a disclosure.
 
 ---
 
 ## Integration with Training Compliance
 
-Skills tests integrate with the broader training compliance system:
+Skills tests connect to the rest of training through **program requirements**:
 
-- **Training Requirements:** A skill sheet template can be linked to a specific **training requirement** (see [Linking a Template to a Training Requirement](#linking-a-template-to-a-training-requirement)), and the link can be overridden per test. When a candidate passes a non-practice test from a linked template, the requirement is completed on their active enrollment and their program progress advances.
-- **Training Records:** Completed skill tests create training records that count toward hours and completion requirements.
-- **Training Programs:** Skills evaluations can be assigned as phase requirements within structured programs (e.g., "Recruit Academy Phase 3 requires passing Trauma Assessment and Cardiac Arrest Management").
-- **Compliance Matrix:** Skills test completion status feeds into the department-wide compliance matrix view.
+- **Training Requirements.** A template can be linked to a requirement (see
+  [Linking a Template to a Training Requirement](#linking-a-template-to-a-training-requirement)),
+  and an officer can change the link for one test. When a candidate passes an
+  official test from a linked template, and the result is validated, the
+  requirement is completed on their active program enrollment.
+- **Training Programs.** Link templates to the requirements in a program's
+  phases — for example "Recruit Academy Phase 3 requires passing Trauma
+  Assessment and Cardiac Arrest Management."
+- **Expiry.** A template with **Valid for (months)** puts the skill on the
+  member's **Upcoming Expirations & Due Dates** list on My Training.
 
-### Integration with Shift Completion Reports _(2026-04-07)_
+A skills test does not create a training record and does not add training
+hours.
 
-Skills observed during shift completion reports now support **1-5 scoring** that connects to the formal skills tracking system:
+### Integration with Shift Completion Reports
 
-- When an officer files a shift completion report with observed skills, each skill can be scored 1-5 (Needs work → Excellent)
-- If the skill name matches a `SkillEvaluation` record in the training module — matched case-insensitively by name — the score flows through to a `SkillCheckoff` record, updating the trainee's competency score history
-- Unlinked skills are still recorded in the shift report but do not feed into formal competency tracking
+This applies **only to departments that chose Shift report sign-offs** under
+**Practical Skills**.
 
-The scoring buttons are pictured in
-[Scheduling → Score Labels](./03-scheduling.md#score-labels), where the same
-panel is documented as part of filing a report.
+| Your department runs     | What the shift report does with skills                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Skills Testing** (the default) | The shift report form shows **no skills list**. Nothing a shift report holds about skills reaches competency or program progress                      |
+| **Shift report sign-offs** | The officer ticks the skills a member demonstrated, and can score each 1–5. Matching skills count toward the member's competency, as described below       |
 
-> **There is no linkage indicator _(2026-08-12)_.** This section previously
-> described a **Skill Linkage Status** feature in Scheduling Settings showing
-> green for a linked skill and amber for an unlinked one, and a green "linked"
-> badge beside each skill name on the report form. Neither exists — there is no
-> such setting, and the skill chips carry no badge. The matching happens
-> silently at submission, so the only way to tell whether a skill linked is to
-> look at whether a checkoff was recorded against the trainee.
+Under shift report sign-offs:
 
-**Data flow:**
+- On a shift completion report, the officer selects each skill the member
+  demonstrated and can give it a score from 1 to 5. The labels for each score
+  are set by the department; see
+  [Scheduling → Score Labels](./03-scheduling.md#score-labels).
+- When the report is **approved**, each demonstrated skill whose name matches
+  a skill under **Training Admin > Evaluations > Skill Evaluations** is
+  recorded as a sign-off for the member, with its score. The member's
+  competency history and the competency view update.
+- A skill with no matching name stays on the report but goes no further.
 
 ```
-Shift Report filed with skill scores
+Shift report approved, with demonstrated skills
     ↓
-ShiftCompletionService checks SkillEvaluation records
+Each skill name is matched against Skill Evaluations
     ↓
-Matching skills → SkillCheckoff records created/updated with score
+Matching skills → a sign-off is recorded, with the score
     ↓
-Competency score history updated
+The member's competency history updates
     ↓
-Competency Matrix reflects new scores
+The competency view shows the new scores
 ```
 
-> **Edge case:** Skill name matching ignores capitals but nothing else. "Pump operations" on a shift report matches a skill named "PUMP OPERATIONS", but not one named "Pump ops". Skills are defined under **Training Admin > Setup > Skill Evaluations** _(2026-10-05; corrected — this note used to say the match was case-sensitive)_.
+> **What if a skill name does not quite match?** Matching ignores capital
+> letters but nothing else. "Pump operations" on a report matches a skill
+> named "PUMP OPERATIONS", but not one named "Pump ops". In **Shift Reports
+> settings → Apparatus Skills**, each skill has a green tag if it matches a
+> Skill Evaluation and an amber one if it does not. See
+> [Skill Evaluations](./02-training.md#skill-evaluations) in the
+> training guide.
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                            | Solution                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cannot create a test — "Template must be published"              | Only published templates can be used for testing. Navigate to the template and click Publish.                                                                                                                                                                                                                                                                     |
-| Cannot publish template — validation error                       | The template must have at least one section containing at least one criterion. Add sections and criteria, then try again.                                                                                                                                                                                                                                         |
-| Cannot edit a published template                                 | Published templates can still be edited. If structural fields change (sections, criteria, scoring), the version auto-increments.                                                                                                                                                                                                                                  |
-| Cannot update a completed test                                   | Completed and cancelled tests are locked and cannot be modified.                                                                                                                                                                                                                                                                                                  |
-| Test shows FAIL but score is above passing percentage            | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score.                                                                                                                                                                                                                    |
-| Candidate doesn't appear in the search                           | Type at least **two characters** of their name — nothing is shown before that, and there is no "browse everyone" option by design. Only the first 15 matches appear and the list does not say it was cut short, so type more of the name rather than scrolling. The candidate must also be an **active** member of your organization; check their account status. |
-| The candidate field is missing entirely                          | Looking up a candidate needs `training.view` or `training.manage`. A position with no training access cannot search for test candidates. Ask an administrator to add the permission to your position.                                                                                                                                                             |
-| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it — it credits no requirement and shows no outcome. Open **Training Admin > Skills Testing > Test Records**, set the status dropdown to **Needs Validation**, and Validate or Void it.                                                   |
-| "You cannot validate a test you are the candidate in"            | Separation of duties. An officer cannot sign off their own evaluation, even when someone else examined them — another officer has to validate it.                                                                                                                                                                                                                 |
-| Validate is refused — "nothing to validate"                      | Practice attempts are never recorded, so there is nothing to sign off. Voided results and tests still in progress are refused for the same reason: only a completed, official, non-voided test has a result to validate.                                                                                                                                          |
-| Old results appeared in the review queue                         | They should not. Every official result predating 2026-08-08 was backfilled as validated by its examiner — under the old rules only officers could run them. If you see historical results queued, report it rather than mass-validating.                                                                                                                          |
-| A practice test says it cannot be finished, over and over        | Fixed 2026-08-08. If the completion reached the server but its response never got back to your phone, every retry used to fail permanently on a test that had in fact gone through. The review screen now shows the existing results instead, and reports the server's actual message.                                                                            |
-| Template shows "archived" — can I still view old tests?          | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests.                                                                                                                                                                                                             |
-| Score calculation seems wrong                                    | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct.                                                                                                                                                                  |
-| Pass Rate or Avg Score shows —                                   | Either you are not a training officer (these figures are officer-only), or no official test has been validated yet. They count validated completed tests only, so a queue of results awaiting sign-off leaves them at — until an officer validates one. |
-| Non-critical criteria showing as "FAIL"                          | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes.                                                                                                                                                                                                                                               |
-| Completed test times show UTC instead of local time              | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh.                                                                                                                                                                                                                                                             |
-| Practice test results appearing in compliance                    | Practice tests are excluded from compliance calculations. If incorrectly categorized, delete the practice record — the candidate, the examiner or an officer can.                                                                                                                                                                                                 |
-| Cannot delete a test record                                      | **Official results can no longer be deleted.** Use **Void**, which keeps the record with your reason on it and releases any training requirement the pass had completed. Delete remains available for practice attempts.                                                                                                                                          |
-| "Cannot create test — no attempts remaining"                     | The linked training requirement caps attempts and the candidate has used them. Completed official tests count, pass or fail; voided results and practice attempts do not. If the cap was reached in error, void the attempt that should not count. A requirement already completed, verified or waived is exempt, so recertification testing is unaffected.       |
-| Autosave says it has stopped / "this test was changed elsewhere" | Someone else saved the same test after you loaded it. Reload the test to pick up the current state, then re-enter anything you scored since. Autosave deliberately stops rather than retrying a save that cannot succeed.                                                                                                                                         |
-| Elapsed time looks wrong on an old test                          | Tests completed before 2026-08-08 recorded wall-clock time from when the test first went in progress, so one begun in the morning and submitted after lunch shows hours. Newer tests record the examiner's stopwatch reading.                                                                                                                                     |
-| A member says their result is missing                            | Check the department's disclosure setting (**Training Admin > Configuration > Skills-Test Results**) and the template's override. If disclosure is **Nothing**, or release is set to **On release** and the result has not been released, the member sees no entry at all — this is by design. Release it from the records tab.                                   |
-| Editing a published template changed an old scorecard            | It no longer can. Every test created from 2026-08-08 onward stores a snapshot of the template at creation. Tests completed before that were backfilled from the current template and are frozen against further edits.                                                                                                                                            |
-| Passing Points field disappeared from a criterion                | It is shown only on **critical** criteria — a non-critical criterion cannot fail the test on its own, so the threshold was never read. Check **Critical** to bring the field back; the previous value is still there.                                                                                                                                             |
-| Statement criterion text not saving                              | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template.                                                                                                                                                                                                                                                         |
-| Can I score a test with no signal?                               | Yes, for a test opened on the device while it had signal — see [Scoring with no signal](#scoring-with-no-signal-2026-10-06). The scoring is sent, and scored by the server, when the device reconnects. |
+| Problem                                                          | What to do                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Template must be published before it can be used for testing"   | Only published templates can be used. Open the template and select **Publish**                                                                                                                                                                                                                                                                           |
+| Cannot publish a template                                        | It needs at least one section with at least one step. Add them and try again                                                                                                                                                                                                                                                                             |
+| Can I edit a published template?                                 | Yes. If you change the sections, steps or scoring rules, the version number goes up. Archived templates cannot be edited                                                                                                                                                                                                                                 |
+| Cannot change a completed test                                   | Completed and cancelled tests are locked. An officer can **Send back to examiner** a member-run result still awaiting validation                                                                                                                                                                                                                         |
+| Test shows FAIL but the score is above the passing mark          | Check whether **Require all critical criteria to pass** is ticked. If a critical step was not passed, the result is FAIL whatever the score                                                                                                                                                                                                                |
+| Candidate doesn't appear in the search                           | Type at least **two characters** of their name — nothing shows before that, and there is no way to browse everyone. Only the first 15 matches appear, so type more of the name. The candidate must also be an **active** member; check their account status                                                                                              |
+| The candidate search does not work for me                        | Looking up a candidate needs the **View training records** or **Manage training records** permission. Ask an administrator to add it to your position                                                                                                                                                                                                    |
+| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it. Open **Training Admin > Evaluations > Skills Test Records**, set the status filter to **Needs Validation**, and accept, send back or void it                                                                                 |
+| "You cannot validate your own skills test"                       | Separation of duties. You cannot sign off your own evaluation, even when someone else examined you. Another officer has to validate it                                                                                                                                                                                                                   |
+| Validation is refused                                            | Practice runs are never recorded, so there is nothing to sign off. Voided results and tests still in progress are refused too: only a completed, official, unvoided test has a result to validate                                                                                                                                                        |
+| Template is archived — can I still see old tests?                | Yes. Each test keeps a copy of the sheet it was taken against. Archived templates just can't be used for new tests                                                                                                                                                                                                                                      |
+| The score looks wrong                                            | The score is points earned ÷ points available × 100. Check each step's **Max Points**, its **If this step is failed** setting, and whether **Count Pass/Fail steps toward the overall percentage** is ticked. The breakdown panel on the scorecard shows the working                                                                                     |
+| Pass Rate or Avg Score shows —                                   | No official test has been validated yet. These figures count validated, completed tests only, so a queue of results awaiting sign-off leaves them at — until an officer validates one                                                                                                                                                                     |
+| Practice results showing in compliance                           | Practice runs never count toward compliance, requirements or statistics. Check the row's **Practice** badge — a test without it is official. A practice run can be deleted by the candidate, the examiner or an officer                                                                                                                                   |
+| Cannot delete a test record                                      | **Official results cannot be deleted.** Use **Void**, which keeps the record with your reason and gives back any requirement the pass completed. Delete is only for practice runs                                                                                                                                                                          |
+| "Maximum attempts (N) reached for this requirement"              | The linked requirement limits attempts and the candidate has used them. Validated official tests count, pass or fail; voided results and practice runs do not. If an attempt should not count, void it. A requirement already completed, verified or waived has no limit, so recertification testing is unaffected                                      |
+| "Someone else changed this test" / autosave has stopped          | Someone else saved the same test after you opened it. Select **Reload current results**, then re-enter anything you scored since. Autosave stops rather than retrying a save that cannot succeed                                                                                                                                                         |
+| A member says their result is missing                            | Check the department setting (**My Training > Member Visibility Settings > Skills-Test Results**) and the template's override. If the member sees **Nothing**, or the result waits for a release that has not happened, they see no entry at all — this is by design. Release it from **Skills Test Records**                                            |
+| The **Passing Points** field disappeared from a step             | It only shows on **critical** Numeric Score steps. Tick **Critical** to bring it back; the earlier value is still there                                                                                                                                                                                                                                 |
+| A statement step will not save                                   | Choose the **Statement** type and fill in its text. A statement with no text cannot be saved ("Statement text is required")                                                                                                                                                                                                                              |
+| Can I score a test with no signal?                               | Yes, for a test opened on the device while it had signal — see [Scoring with no signal](#scoring-with-no-signal). The scoring is sent, and the test is scored, when the device reconnects                                                                                                                                                                 |
+
+---
+
+## If You Learned an Older Version
+
+If you are following older notes, an older recording or an SOP, these things
+have moved, been renamed or work differently.
+
+- **The officer screens moved.** Templates and test records are under
+  **Training Admin > Evaluations**, as **Skills Test Templates** and **Skills
+  Test Records**. There is no separate **Summary** tab: the summary is the row
+  of cards on **Skills Test Templates**.
+- **Skill Evaluations moved** from **Training Admin > Setup** to **Training
+  Admin > Evaluations**.
+- **Any member can run an official test.** Before, only officers could, so
+  every official result from before that change already counts as validated
+  by its examiner. Nothing from that time lands in the review queue. If old
+  results do appear in the queue, report it rather than accepting them all.
+- **Official results cannot be deleted.** Use **Void** instead.
+- **Old elapsed times may look long.** Tests completed before the stopwatch
+  reading was recorded show the time from when the test first went in progress
+  to when it was submitted, so a test begun in the morning and submitted after
+  lunch shows hours.
+- **Old scorecards were frozen from the template as it stood then.** Tests
+  completed before each test kept its own copy of the sheet were given a copy
+  of the template at that time. What they were first scored against cannot be
+  recovered, but it is what those tests already showed.
+- **Passing Points only shows on critical steps.**
+- **The Needs Validation card is always shown** to officers, next to Pass
+  Rate, even when the queue is empty.
+- **Pass Rate and Avg Score show "—", not 0%,** when there is nothing to
+  measure.
 
 ---
 
 **Previous:** [Administration & Reports](./08-admin-reports.md) | **Next:** [Mobile & PWA Usage](./10-mobile-pwa.md)
-
-## August 12–14, 2026 update
-
-- Point deductions: [A failed step that costs points without ending the test](#a-failed-step-that-costs-points-without-ending-the-test)
-- Resumed tests and save conflicts: [Coming back to an interrupted test](#coming-back-to-an-interrupted-test-2026-08-09)
-- Result visibility: [Who Sees a Result — Disclosure Settings](#who-sees-a-result--disclosure-settings-2026-08-08)
-- Officer-only checklist steps: [Steps only the officer sees](./02-training.md#steps-only-the-officer-sees)

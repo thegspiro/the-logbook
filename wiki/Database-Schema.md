@@ -1,233 +1,78 @@
 # Database Schema
 
-The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Alembic migrations.
+The Logbook stores its data in MySQL 8.0 (MariaDB 10.11 in the ARM compose
+file, `docker-compose.arm.yml`), accessed through SQLAlchemy 2 (async) and
+versioned with Alembic.
+
+> **The authoritative, table-by-table reference is
+> [`docs/DATABASE_SCHEMA.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/DATABASE_SCHEMA.md)**
+> — every table, column, key and index, generated from the models by
+> `backend/scripts/generate_schema_docs.py` and checked in CI, so it cannot
+> drift. This page is an orientation: how the schema is organised, the
+> conventions every table follows, and how migrations work. It deliberately
+> does not list columns.
 
 ---
 
-## Core Tables
+## How the schema is organised
 
-### Users & Authentication
+The models live in `backend/app/models/`, roughly one file per domain, and the
+schema has a little over 300 tables. The table below names a handful of real
+tables per domain as a starting point; the generated reference groups every
+table by model file.
 
-| Table              | Description                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`            | Member profiles (name, email, rank, station, `membership_number`, status). `anonymized_at` (DateTime, nullable) records when a departed member's PII was scrubbed by the anonymization workflow _(2026-07-31)_. `oauth_provider` (String(50), nullable) and `oauth_subject` (String(255), nullable, indexed `ix_users_oauth_subject`) bind an external IdP identity for OAuth sign-in _(2026-05-29)_ |
-| `roles`            | System roles and custom positions                                                                                                                                                                                                                                                                                                                                                                    |
-| `user_roles`       | Many-to-many: user ↔ role mapping                                                                                                                                                                                                                                                                                                                                                                    |
-| `permissions`      | Granular permission definitions                                                                                                                                                                                                                                                                                                                                                                      |
-| `role_permissions` | Many-to-many: role ↔ permission mapping                                                                                                                                                                                                                                                                                                                                                              |
-| `organizations`    | Multi-tenant organization records                                                                                                                                                                                                                                                                                                                                                                    |
-| `refresh_tokens`   | JWT refresh token storage                                                                                                                                                                                                                                                                                                                                                                            |
-
-### Audit & Security
-
-| Table                      | Description                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `audit_logs`               | Tamper-proof audit trail with keyed (HMAC) hash chain. `organization_id` (nullable — platform-level events have no tenant; indexed, no FK, backfilled from `user_id`; migration `20260801_0009`) scopes every read path directly; hash-chain **v3** includes it in the signed input, so tenant attribution on new rows is tamper-evident _(updated 2026-07-30)_ |
-| `notification_rules`       | Notification rule definitions with trigger, category, channel, and config _(2026-03-23)_                                                                                                                                                                                                                                                                        |
-| `notification_logs`        | In-app and email notification records with `action_url`, expiry, and `metadata` JSON column for structured context (shift*id, shift_date, checklist_count, etc.) *(updated 2026-03-26)\_                                                                                                                                                                        |
-| `department_messages`      | Internal department messages with targeting (roles by id, statuses, or member ids), priority, `is_persistent`, `requires_acknowledgment`, `expires_at`, `deleted_at` (soft delete), and `scheduled_at` (deferred publish) _(updated 2026-07-17)_                                                                                                                |
-| `department_message_reads` | Per-user read/acknowledged tracking for department messages (preserved on soft delete as compliance evidence) _(updated 2026-07-17)_                                                                                                                                                                                                                            |
-| `security_alerts`          | Intrusion detection and security event alerts. `organization_id` scopes each alert to its owning department (nullable for platform-level pre-auth/IP-only alerts); an org admin only sees/acknowledges/resolves their own org's alerts _(updated 2026-07)_                                                                                                      |
-| `audit_ship_state`         | Single-row high-water mark for off-host audit shipping — `last_shipped_id` advances only when the collector acknowledges a batch _(2026-07-31)_                                                                                                                                                                                                                 |
-| `user_consents`            | Current consent state per (member, type): `photo_use`, `public_roster_listing`, `sms_notifications`. Unique on (`user_id`, `consent_type`); the change history lives in `audit_logs` as `consent_updated` events _(2026-07-31)_                                                                                                                                 |
-
----
-
-## Module Tables
-
-### Training
-
-| Table                       | Description                                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_records`          | Individual training completions (with `rank_at_completion`, `station_at_completion`)                                                                                                                                                                                                                                                                                       |
-| `training_categories`       | Course categories with optional `registry_code` for NREMT NCCR linkage _(2026-04-11)_                                                                                                                                                                                                                                                                                      |
-| `training_courses`          | Course definitions and categories. `program_id` (String(36), nullable, FK `training_programs` `SET NULL`) records the pipeline this course's cohorts enrol into _(2026-08-05)_                                                                                                                                                                                             |
-| `course_classes`            | Syllabus of a multi-class course — ordered classes, each with a required `class_course_id` (FK `training_courses`, `CASCADE`: the column is NOT NULL so `SET NULL` is illegal) and _relative_ timing (`day_offset`, local `start_time`, `duration_minutes`). Unique `uq_course_class_sequence` on (`course_id`, `sequence`) _(2026-08-05)_                                 |
-| `course_cohorts`            | One scheduled run of a multi-class course: `start_date`, `meeting_days` (JSON), `date_roll_policy` (enum), `blackout_dates` (JSON), `program_id` _(2026-08-05)_                                                                                                                                                                                                            |
-| `course_cohort_classes`     | A syllabus row materialized onto real UTC datetimes. `event_id` is `SET NULL` + unique (deleting an event must not erase the cohort's record of the class) and `course_class_id` is nullable (ad-hoc classes, and syllabus rows deleted later). Unique `uq_cohort_class_source` on (`cohort_id`, `course_class_id`) is the idempotency key for regeneration _(2026-08-05)_ |
-| `course_cohort_members`     | Cohort roster; `enrollment_id` (FK `program_enrollments`, `SET NULL`) ties a member to the ProgramEnrollment tracking their progress. Unique `uq_cohort_member_user` on (`cohort_id`, `user_id`) _(2026-08-05)_                                                                                                                                                            |
-| `training_requirements`     | Department training requirements (hours, shifts, calls, certs). `include_current_month` (Bool, nullable) is a per-requirement evaluation-period override — `NULL` inherits the org default, `true`/`false` explicit _(2026-05-29)_                                                                                                                                         |
-| `training_programs`         | Structured multi-phase training curricula                                                                                                                                                                                                                                                                                                                                  |
-| `program_phases`            | Phases within a training program                                                                                                                                                                                                                                                                                                                                           |
-| `program_enrollments`       | Member enrollments in training programs                                                                                                                                                                                                                                                                                                                                    |
-| `training_waivers`          | Training requirement waivers (auto-linked from LOA or manual)                                                                                                                                                                                                                                                                                                              |
-| `skill_templates`           | Reusable skill-sheet templates (NREMT-style psychomotor sheets). `requirement_id` (String(36), nullable, FK `training_requirements` SET NULL, indexed `idx_skill_template_requirement`) is the default training-pipeline requirement a passing test satisfies _(2026-07-14)_                                                                                               |
-| `skill_tests`               | Individual skill-test administrations to a candidate. `requirement_id` (String(36), nullable, FK `training_requirements` SET NULL, indexed `idx_skill_test_requirement`) inherits the template default at creation (overridable per test); a passing non-practice test marks it COMPLETE on the candidate's active enrollment _(2026-07-14)_                               |
-| `training_submissions`      | Self-reported training pending review                                                                                                                                                                                                                                                                                                                                      |
-| `shift_completion_reports`  | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) _(updated 2026-03-28)_                                                                            |
-| `training_module_configs`   | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, shift review defaults, and manual entry settings (`manual_entry_enabled`, `manual_entry_apparatus_types`) _(updated 2026-04-11)_                                                 |
-| `external_training_imports` | Individual import records with status and `credit_hours` for CE credit preservation _(updated 2026-04-11)_                                                                                                                                                                                                                                                                 |
-| `compliance_configs`        | Per-org compliance configuration. `include_current_month` (Bool, NOT NULL, default `true`) controls whether the in-progress month counts toward compliance windows _(2026-05-29)_                                                                                                                                                                                          |
-
-### Membership
-
-| Table                      | Description                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `member_leaves_of_absence` | Leave records with `exempt_from_training_waiver` and `linked_training_waiver_id`                                                                                                                                                                                                                                         |
-| `member_service_periods`   | One row per continuous stint of membership: `start_date` (NULL = the hire date), `end_date`, `separation_status`, `counts_toward_service`, `notes`. Credited length of service is the sum of the counted stints; a member with no rows is one unbroken stint from the hire date _(2026-09-24, migration `500a63596f66`)_ |
-
-Membership tiers are **not a table**: they live in
-`organizations.settings["membership_tiers"]`, together with
-`rejoin_service_credit` (`continue` or `restart`), the department's default
-when a former member rejoins.
-
-### Events
-
-| Table               | Description                                            |
-| ------------------- | ------------------------------------------------------ |
-| `events`            | Event records with recurrence, reminders, and location |
-| `event_attendees`   | RSVP and attendance tracking                           |
-| `event_attachments` | Files attached to events                               |
-
-### Scheduling
-
-| Table                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shifts`                      | Shift definitions with date, time, location, finalization state (`is_finalized`, `finalized_at`, `finalized_by`), aggregate snapshots (`call_count`, `total_hours`) _(updated 2026-03-28)_, and `closeout_step` — the close-out wizard's resume point, carrying no entered data _(2026-08-19)_                                                                                                                                                                                |
-| `org_calls`                   | **One call the department ran**, counted once however many units rolled _(2026-08-18)_. Date-only `call_date`, org-defined `call_type` slug, `source`, `external_ref` (unique per org, for idempotent dispatch re-sync). Deliberately holds no address, patient identity, narrative, response times, or displayed CAD number                                                                                                                                                  |
-| `org_call_responses`          | **One apparatus on one call** _(2026-08-18)_ — the join that makes deduplication work. `shift_id` is **SET NULL** so deleting a shift cannot reduce historical call volume; `apparatus_id` is polymorphic with no FK, exactly like `shifts.apparatus_id`. Unique on (`call_id`, `apparatus_id`)                                                                                                                                                                               |
-| `shift_attendance`            | Member attendance records with clock-in/out times, duration, and per-member `call_count` snapshot _(updated 2026-03-28)_                                                                                                                                                                                                                                                                                                                                                      |
-| `shift_calls`                 | Incident/call records linked to shifts with `responding_members` JSON array                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `shift_assignments`           | Member assignments to shifts with positions                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `shift_templates`             | Reusable shift configurations                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `shift_patterns`              | Patterns for bulk shift generation                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `swap_requests`               | Shift swap requests                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `time_off_requests`           | Time-off requests                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `basic_apparatus`             | Lightweight vehicle records for scheduling                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `equipment_check_templates`   | Master equipment check templates with timing and position assignment _(2026-03-19)_                                                                                                                                                                                                                                                                                                                                                                                           |
-| `check_template_compartments` | Named sections within a template, nested via `parent_compartment_id` _(2026-03-19)_                                                                                                                                                                                                                                                                                                                                                                                           |
-| `check_template_items`        | Individual check items with type, expiration, serial/lot tracking _(2026-03-19)_. Now also the **live** state of a position: `quantity_on_truck` (NULL = never counted, target stands in), `restock_needed` + `restock_reported_by`/`_at`/`_note`, and the `inventory_item_id` catalog link everything hangs off _(2026-08-10)_                                                                                                                                               |
-| `check_item_deployed_lots`    | **One row per lot's presence on one position** _(2026-08-10)_. A position's count is the sum of these and its expiration the earliest; lot number and date are snapshotted so a deleted shelf lot does not erase the truck's record                                                                                                                                                                                                                                           |
-| `shift_equipment_checks`      | Submitted check records linked to shifts; `shift_id` nullable for standalone ad-hoc checks; composite indexes on `(shift_id, template_id)` _(updated 2026-04-04)_                                                                                                                                                                                                                                                                                                             |
-| `shift_equipment_check_items` | Individual item results within a submitted check _(2026-03-19)_. `expiration_found` is the counterpart to `serial_found`/`lot_found` — what the crew read off a replacement unit. _(2026-08-11)_ It is recorded on the check but **no longer written back onto the template item on submit** — a submitter asserting a fresh date could otherwise clear an expired-item auto-fail; the template's authoritative expiration changes only through the manage-level supply flows |
-
-### Inventory
-
-| Table                          | Description                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_items`              | Equipment items (individual or pool, with `tracking_type`). Barcodes are per-organization sequential numbers (`INV-000001` …) assigned at creation time; the prefix/counter live in `organizations.settings["barcode"]` _(2026-06-10)_                                                                     |
-| `inventory_lots`               | A dated batch of a consumable held as ready stock (lot number, expiration, quantity, received date). **The source of "on hand" for any item that has lots**; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage _(documented 2026-08-10)_ |
-| `inventory_categories`         | Item categories                                                                                                                                                                                                                                                                                            |
-| `item_assignments`             | Member ↔ item assignments                                                                                                                                                                                                                                                                                  |
-| `item_issuances`               | Pool item issue/return records                                                                                                                                                                                                                                                                             |
-| `issuance_allowances`          | Per-category issue caps by role and period (`max_quantity`, `period_type` annual/career/`one_time`; `role_id` NULL = all members). Unique `(organization_id, category_id, role_id)`. Surfaced via the Allowances admin page _(wired 2026-06-09; table since `20260304_0300`)_                              |
-| `inventory_checkouts`          | Checkout/return tracking with `expected_return_at`                                                                                                                                                                                                                                                         |
-| `departure_clearances`         | Departure clearance records                                                                                                                                                                                                                                                                                |
-| `clearance_line_items`         | Individual items in a departure clearance                                                                                                                                                                                                                                                                  |
-| `maintenance_records`          | Equipment maintenance history                                                                                                                                                                                                                                                                              |
-| `nfpa_inspection_details`      | Structured NFPA 1851 inspection results, one-to-one with a `maintenance_record` (assessment booleans, contamination level, SCBA fields, recommendation)                                                                                                                                                    |
-| `equipment_requests`           | Member equipment request/approval workflow. Terminal `fulfilled` state added via `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id` _(2026-06-09)_                                                                                                                          |
-| `inventory_write_offs`         | Write-off request/approval workflow                                                                                                                                                                                                                                                                        |
-| `inventory_notification_queue` | Delayed notification consolidation queue. `attempt_count` (Integer, NOT NULL, default `0`) and `last_attempt_at` (DateTime(tz), nullable) track delivery retries _(2026-05-29)_                                                                                                                            |
-| `property_return_reminders`    | Tracks reminder notices sent to departed members                                                                                                                                                                                                                                                           |
-| `storage_areas`                | Hierarchical storage locations (linked to facility rooms)                                                                                                                                                                                                                                                  |
-| `variant_groups`               | Groups related items by size/style _(2026-03-07)_                                                                                                                                                                                                                                                          |
-| `equipment_kits`               | Named item bundles for single-operation issuance _(2026-03-07)_                                                                                                                                                                                                                                            |
-| `equipment_kit_items`          | Component items within a kit _(2026-03-07)_                                                                                                                                                                                                                                                                |
-| `member_size_preferences`      | Garment size preferences per member _(2026-03-07)_                                                                                                                                                                                                                                                         |
-| `reorder_requests`             | Reorder request lifecycle (pending → received) _(2026-03-07)_                                                                                                                                                                                                                                              |
-| `inventory_impact_plans`       | Saved impact-planner scenarios: `name`, optional `description`, the filter set as `filters` (JSON), `created_by`. Migration `20260622_0001` _(2026-06-23)_                                                                                                                                                 |
-
-### Elections
-
-| Table                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `elections`                  | Election definitions: voting period, method, victory condition, runoff/quorum config, per-election anonymity salt (destroyed at close), rollback history. Status ENUM includes the `nominations` phase (`nomination_deadline` auto-closes it); lifecycle automation fields `auto_open`, `reminder_hours_before_close`, `reminder_sent_at` (migration `20260801_0004`/`0005`); `tie_policy` (`co_winners` \| `runoff` \| `revote` \| `chair_decides`) and `eligible_roster_snapshot` (voter roll frozen at open; NULL = legacy live evaluation) via migration `20260801_0008` _(2026-07-29)_ |
-| `candidates`                 | Election candidates (member-linked or write-in). Pending third-party nominations are stored as `accepted=False` rows until the nominee accepts; `merged_into_candidate_id` aliases a write-in variant to its consolidation target without mutating signed vote rows (migration `20260801_0008`) _(2026-07-29)_                                                                                                                                                                                                                                                                              |
-| `votes`                      | Vote records: HMAC signature, sequential chain hash, unique dedup hash, voter receipt hash, `is_test` flag, soft-delete audit fields. Anonymous votes store only a salted `voter_hash`, never `voter_id`. Paper-tally votes carry `is_manual` + `recorded_by` + `manual_batch_id` (no voter identity or dedup hash; signature covers `is_manual`, so a paper vote can't be re-labeled electronic) — migrations `20260801_0005`/`0006` _(2026-07-29)_                                                                                                                                        |
-| `voting_tokens`              | Per-voter email ballot tokens, stored as **SHA-256 hashes** (raw token lives only in the emailed link's URL fragment; migration `20260731_0001`): expiry, usage/access tracking, `is_test` flag, and the voter's eligibility snapshotted at issue time — eligible ballot items (`eligible_item_ids`, migration `20260730_0001`) and eligible positions (`eligible_positions`, migration `20260801_0001`) _(2026-07-29)_                                                                                                                                                                     |
-| `manual_ballot_batches`      | One row per recorded paper-ballot tally: recorder, status (`pending` \| `confirmed` \| `voided`), notes, and the attestation requirement **snapshotted at record time** (later setting changes never re-judge old batches). Pending batches' votes are excluded from results/stats. Migration `20260801_0007` _(2026-07-29)_                                                                                                                                                                                                                                                                |
-| `manual_ballot_attestations` | Officer attestations of a paper batch; unique `(batch_id, attested_by)` — each officer counts once, and the recorder can never attest their own batch. Migration `20260801_0007` _(2026-07-29)_                                                                                                                                                                                                                                                                                                                                                                                             |
-| `saved_ballot_templates`     | Org-scoped reusable ballot snapshots: `name` (display), `name_key` (SHA-256 of the NFKC-casefolded name; unique per org via `uq_saved_ballot_template_org_name_key`, so duplicate names collide case-insensitively), optional `description`, `ballot_items` (JSON — **configuration only, never candidates, voters, votes, tokens, or attendance**), `created_by` (SET NULL so templates outlive their author). Migration `20260812_0001` _(2026-08-12)_                                                                                                                                    |
-| `prospect_election_packages` | Auto-generated from prospective member pipeline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-
-### Meeting Minutes & Documents
-
-| Table              | Description                          |
-| ------------------ | ------------------------------------ |
-| `meeting_minutes`  | Minutes records with status workflow |
-| `minute_sections`  | Content sections within minutes      |
-| `minute_templates` | Meeting type templates               |
-| `documents`        | File storage with metadata           |
-| `document_folders` | Folder hierarchy                     |
-
-### Forms
-
-| Table              | Description                                |
-| ------------------ | ------------------------------------------ |
-| `forms`            | Form definitions with status and category  |
-| `form_fields`      | Field definitions with type and validation |
-| `form_submissions` | Submitted form data                        |
-
-### Prospective Members
-
-| Table                | Description                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| `pipelines`          | Application pipeline configurations. FK indexes added on `created_by` _(2026-04-11)_ |
-| `pipeline_stages`    | Stages within pipelines. FK index added on `email_template_id` _(2026-04-11)_        |
-| `applicants`         | Prospective member records                                                           |
-| `prospect_documents` | Applicant documents. FK index added on `uploaded_by` _(2026-04-11)_                  |
-
-### Facilities
-
-| Table                         | Description                                                         |
-| ----------------------------- | ------------------------------------------------------------------- |
-| `facilities`                  | Building/facility records with type, status, NFPA fields            |
-| `facility_types`              | Facility type definitions (Fire Station, EMS Station, etc.)         |
-| `facility_statuses`           | Facility status definitions (Operational, Under Construction, etc.) |
-| `facility_rooms`              | Rooms within facilities with NFPA 1500/1585 zone classification     |
-| `facility_systems`            | Building systems (HVAC, fire suppression, 8 fire-critical types)    |
-| `facility_inspections`        | Inspection records with inspector, findings, corrective actions     |
-| `facility_maintenance`        | Maintenance work orders with 16 NFPA-aligned types                  |
-| `facility_utilities`          | Utility accounts and monthly usage readings                         |
-| `facility_emergency_contacts` | Building-specific emergency contacts                                |
-| `facility_compliance_items`   | Compliance checklists (fire code, ADA, etc.)                        |
-| `locations`                   | Stations, rooms, addresses (auto-synced from facility rooms)        |
-
-### Grants & Fundraising
-
-| Table                   | Description                                        |
-| ----------------------- | -------------------------------------------------- |
-| `grants`                | Grant application records (AFG, SAFER, FP&S, USDA) |
-| `grant_notes`           | Notes attached to grants                           |
-| `fundraising_campaigns` | Campaign records with goal tracking                |
-| `donors`                | Donor management mini-CRM                          |
+| Domain                         | Model file(s)                                                                                                                    | Representative tables                                                                                                                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organizations, members, access | `user.py`, `operational_rank.py`, `organization_officer.py`                                                                      | `organizations`, `users`, `positions`, `user_positions`, `sessions`, `password_history`, `operational_ranks`, `member_service_periods`, `member_leaves_of_absence`                        |
+| Audit and security             | `audit.py`, `security_alert.py`, `ip_security.py`, `consent.py`, `error_log.py`                                                  | `audit_logs`, `audit_log_checkpoints`, `security_alerts`, `ip_exceptions`, `blocked_access_attempts`, `user_consents`, `error_logs`                                                       |
+| Training                       | `training.py`, `skills_testing.py`, `knowledge_test.py`, `qualification.py`                                                      | `training_courses`, `training_records`, `training_requirements`, `training_programs`, `program_enrollments`, `requirement_progress`, `training_waivers`, `skill_tests`, `knowledge_tests` |
+| Scheduling                     | `training.py` (the shift tables), `scheduling_module_config.py`, `shift_history_import.py`, `external_shift_hours.py`            | `shifts`, `shift_templates`, `shift_assignments`, `shift_swap_requests`, `shift_time_off`, `shift_patterns`, `shift_equipment_checks`, `scheduling_module_configs`                        |
+| Events                         | `event.py`, `event_request.py`                                                                                                   | `events`, `event_rsvps`, `event_templates`, `event_external_attendees`, `event_requests`                                                                                                  |
+| Meetings and minutes           | `meeting.py`, `minute.py`                                                                                                        | `meetings`, `meeting_attendees`, `meeting_minutes`, `meeting_motions`, `minutes_templates`, `minutes_action_items`                                                                        |
+| Elections                      | `election.py`                                                                                                                    | `elections`, `candidates`, `votes`, `voting_tokens`                                                                                                                                       |
+| Membership pipeline            | `membership_pipeline.py`                                                                                                         | `prospective_members`, `membership_pipelines`, `membership_pipeline_steps`, `prospect_step_progress`, `prospect_interviews`                                                               |
+| Apparatus                      | `apparatus.py`                                                                                                                   | `apparatus`, `apparatus_types`, `apparatus_statuses`, `apparatus_maintenance`, `apparatus_operators`, `evoc_levels`, `equipment_check_templates`                                          |
+| Inventory                      | `inventory.py`, `nfc_tag.py`, `label_printer.py`                                                                                 | `inventory_items`, `inventory_categories`, `item_assignments`, `item_issuances`, `checkout_records`, `item_variant_groups`, `inventory_lots`, `storage_areas`, `inventory_nfc_tags`       |
+| Facilities and locations       | `facilities.py`, `location.py`                                                                                                   | `facilities`, `facility_rooms`, `facility_maintenance`, `facility_inspections`, `facility_utility_accounts`, `facility_utility_readings`, `locations`                                     |
+| Finance                        | `finance.py`                                                                                                                     | `fiscal_years`, `budgets`, `budget_categories`, `purchase_requests`, `expense_reports`, `check_requests`, `dues_schedules`, `member_dues`, `approval_chains`                              |
+| Grants and fundraising         | `grant.py`                                                                                                                       | `grant_opportunities`, `grant_applications`, `grant_expenditures`, `fundraising_campaigns`, `donors`, `donations`, `pledges`                                                              |
+| Forms and documents            | `forms.py`, `document.py`, `legal.py`                                                                                            | `forms`, `form_fields`, `form_submissions`, `documents`, `document_folders`, `legal_document_revisions`                                                                                   |
+| Communications                 | `notification.py`, `email_template.py`                                                                                           | `department_messages`, `notification_rules`, `notification_logs`, `push_subscriptions`, `email_templates`, `scheduled_emails`                                                             |
+| Storefront                     | `storefront.py`                                                                                                                  | `store_products`, `store_product_variants`, `store_orders`, `store_order_items`, `store_order_windows`                                                                                    |
+| Other modules                  | `suggestion.py`, `org_chart.py`, `public_portal.py`, `medical_screening.py`, `admin_hours.py`, `integration.py`, `onboarding.py` | `suggestions`, `org_chart_nodes`, `public_portal_config`, `screening_records`, `admin_hours_entries`, `integrations`, `onboarding_sessions`                                               |
 
 ---
 
-## Migrations
+## Conventions
 
-Migrations are managed by Alembic. Migration files are in `backend/alembic/versions/`.
+| Aspect                  | Convention                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary keys            | `id VARCHAR(36)`, an application-generated UUID string (`default=generate_uuid`). No auto-increment integers.                                                                                                                                                                               |
+| Tenancy                 | Most tables carry `organization_id` → `organizations.id`, usually `ON DELETE CASCADE`. Child tables without the column (candidates, form fields, approval-chain steps, grant budget items, …) are scoped through their parent.                                                              |
+| Timestamps              | `DateTime(timezone=True)`, stored in **UTC**. Conversion to the member's or organization's timezone happens in the frontend.                                                                                                                                                                |
+| Actor columns           | `created_by`, `recorded_by` and similar point at `users.id`.                                                                                                                                                                                                                                |
+| Enums                   | Python `(str, Enum)` classes with **lowercase** values.                                                                                                                                                                                                                                     |
+| `SET NULL` foreign keys | Always `nullable=True` — MySQL rejects `ON DELETE SET NULL` on a `NOT NULL` column (error 1830).                                                                                                                                                                                            |
+| Naming                  | `plural_snake_case` tables, `snake_case` columns.                                                                                                                                                                                                                                           |
+| JSON columns            | `JSON` columns hold settings and structured lists. `organizations.settings` uses `MutableDict`, which tracks top-level key changes only; code changing nested keys uses `copy.deepcopy()` or `flag_modified()`. Each JSON column has one canonical stored shape, normalized on every write. |
+| Encrypted fields        | Sensitive values are encrypted by the application (AES-256-GCM, keyed by `ENCRYPTION_KEY` / `ENCRYPTION_SALT`) before they are stored.                                                                                                                                                      |
 
-### Running Migrations
+### Multi-tenancy
 
-```bash
-docker-compose exec backend alembic upgrade head
-```
+All organization data is scoped by `organization_id`:
 
-### Checking Current Version
+- Unique constraints are org-scoped (for example
+  `UniqueConstraint("organization_id", "barcode")`), so two departments can use
+  the same values.
+- Every by-id read, update and delete filters on the caller's organization, or
+  resolves the row through a parent that was already org-scoped.
+- Client-supplied foreign keys are checked to belong to the caller's
+  organization before they are stored.
 
-```bash
-docker-compose exec backend alembic current
-```
+The rules and their enforcement are in
+[docs/rules/tenancy.md](../docs/rules/tenancy.md).
 
-### Migration Naming Convention
-
-Files follow the pattern: `YYYYMMDD_HHMM_description.py`
-
----
-
-## Multi-Tenancy
-
-All data is scoped by `organization_id`. Key constraints:
-
-- Unique constraints are org-scoped (e.g., `UniqueConstraint("organization_id", "barcode")`)
-- All queries filter by the current user's organization
-- Cross-org data access is prevented at the service layer
-
----
-
-## Organization Settings JSON Structure (email_service)
+### Example: `organizations.settings.email_service`
 
 The `organizations.settings` JSON column stores email platform configuration under the `email_service` key. No database migration is needed when adding new email platforms — the JSON structure is flexible. Secret fields are AES-256-GCM encrypted (legacy Fernet values still readable).
 
@@ -255,423 +100,48 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ## Recent Schema Changes (2026-10-05 → 10-06)
 
-**As of 2026-10-06 the single head is `15802f3df5c4`** (a no-op merge of the badge-code and known-limitations branches). Run `alembic heads` to confirm. `docs/DATABASE_SCHEMA.md` is the complete column reference; this section names what changed. Every migration here is guarded and idempotent.
-
-### New Tables
-
-| Table                          | Migration      | Description                                                                                                                                         |
-| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `course_cohort_missed_classes` | `d4d0a483cdd5` | One officer decision (credit or make-up) per member and class held before the member joined a cohort. No backfill: a class with no row is undecided |
-
-### New Columns and Indexes
-
-| Table                                   | Column(s)                                                 | Migration      | Description                                                                                                                                                          |
-| --------------------------------------- | --------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`                                 | `badge_code` (unique with `organization_id`)              | `ad3b979746f1` | Server-issued member badge code, backfilled for every existing member. Not in any API response except `GET /member-badges/{id}`                                      |
-| `training_requirements`                 | `shift_credited` (NOT NULL, default false)                | `f16b004db34e` | Whether shift attendance may satisfy the requirement; SHIFTS rows backfilled true, HOURS left false                                                                  |
-| `training_requirements`                 | `name_match_until` (DATE, nullable)                       | `60aaf273de27` | Certification name matching applies only to records on or before it; every existing row set to the day the migration ran, new rows NULL (no name matching)           |
-| `self_report_configs`                   | `attachment_retention_days` (nullable)                    | `cdb725bb1d12` | NULL keeps certificate files indefinitely; no backfill. The table is built by `create_all`, so the step is skipped where it does not exist yet                       |
-| `course_cohort_classes`                 | `makeup_for_class_id` (FK, SET NULL)                      | `d4d0a483cdd5` | Marks a make-up session so it never counts as a class a later joiner missed                                                                                          |
-| `facility_documents`, `facility_photos` | `document_id`, indexed with `organization_id`             | `c56303befb2c` | Canonical id of a referenced shared document, derived from `file_path` on every write and backfilled; narrows the facility-reference locking read (FAC-41). Not a FK |
-| `document_folders`                      | indexes `(organization_id, slug)` and `(parent_id, slug)` | `c56303befb2c` | Make the system-root and per-record folder lookups index-satisfied (FAC-44)                                                                                          |
-
-### Data Migrations
-
-| Migration      | Effect                                                                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `99b16109d44c` | Resets `prospect_step_progress` rows left `in_progress` ahead of the applicant's current stage by the old regress bug. Idempotent; **the downgrade does nothing** |
-
-Downgrades: `ad3b979746f1` drops the column (badges printed with a code stop scanning below it), `d4d0a483cdd5` drops the table and every decision in it, and the three single-column revisions drop their column.
-
 ---
 
-## Recent Schema Changes (2026-09-24 → 09-30)
-
-**As of 2026-09-30 the single head is `601fdb28ab8c`.** Run `alembic heads` to
-confirm, and expect exactly one line. The window's revisions forked and were
-rejoined seven times by no-op merge revisions (some forks merged twice in
-parallel, and the duplicates merged again); between 2026-09-24 and 09-27 `main`
-briefly carried two or three heads, and `alembic upgrade head` refuses to run
-then. Pulling a later `main` fixes that without a downgrade.
-`docs/DATABASE_SCHEMA.md` is regenerated from the models and is the complete
-column reference; this section names what changed.
-
-**Every foreign key now declares `ondelete`** _(2026-09-25)_. The 88 that
-relied on the database default say `ondelete="RESTRICT"`, which is what MySQL
-already enforced. No migration ships and no stored constraint changes.
-
-### New Tables
-
-| Table                                                             | Migration      | Description                                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inventory_nfc_tags`                                              | `ced0061dedc8` | NFC tags linked to items; later to storage areas (`b713c2e8ee26`) and equipment-check compartments (`45b36bae9098`, `check_compartment_id`), with a one-target check. The tag id is stored as a peppered SHA-256 hash plus its last four characters. Off until `inventory.nfc_tracking_enabled` |
-| `inventory_nfc_scans`                                             | `b713c2e8ee26` | Tap log                                                                                                                                                                                                                                                                                         |
-| `inventory_nfc_audits`, `inventory_nfc_audit_items`               | `7ad83f52735c` | Shelf audits and what each found; `client_submission_id` (unique per organization, `31e8ad77527b`) makes an offline replay idempotent                                                                                                                                                           |
-| `inventory_nfc_audit_digests`                                     | `b1eb0458782a` | One row per "audits overdue" digest sent; `storage_areas.audit_frequency` (weekly / monthly / quarterly / yearly, NULL = unscheduled) arrives in the same revision                                                                                                                              |
-| `inventory_label_prints`                                          | `81537606ee07` | Label print history, seeded with one row per item whose latest print is recorded on the item                                                                                                                                                                                                    |
-| `member_service_periods`                                          | `500a63596f66` | Membership stints (see [Membership](#membership)). No backfill                                                                                                                                                                                                                                  |
-| `suggestion_box_watchers`                                         | `1ae1ffbc445e` | Positions and members told of a box's submissions without being able to read them                                                                                                                                                                                                               |
-| `suggestion_status_events`                                        | `0010291816fd` | Status history and public responses; one event backfilled per suggestion already past `new`                                                                                                                                                                                                     |
-| `suggestion_votes`                                                | `e79309de6735` | Idea-board votes                                                                                                                                                                                                                                                                                |
-| `external_agencies`, `external_apparatus`, `external_shift_hours` | `f03c9f236904` | Shifts members work on another department's apparatus: the agencies and units scheduling officers maintain, and one row per shift worked (agency and apparatus names snapshotted at the write); `start_at` / `end_at` added by `31027aabca12` (nullable, no backfill)                           |
-| `email_template_backups`                                          | `15c5bc7700aa` | The pre-redesign copy of every stored email template the solid-tab reset overwrote                                                                                                                                                                                                              |
-
-### New Columns
-
-| Table                  | Column(s)                                                                                                       | Migration      | Description                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `inventory_categories` | `allow_self_checkout` (NOT NULL, default false), `self_checkout_loan_days` (nullable)                           | `2000f4561f52` | Kiosk opt-in and loan period; every existing category starts opted out                                            |
-| `prospective_members`  | `target_role_id`, `deactivated_at`, `deactivated_reason`, `reactivated_at`, `withdrawn_at`, `withdrawal_reason` | `77d4aa7798dd` | Target role and lifecycle stamps; the stamps are backfilled from `prospect_activity_log`                          |
-| `membership_pipelines` | `public_show_future_stages` (default true)                                                                      | `1b52ea3a079e` | Default keeps the previous behaviour                                                                              |
-| `membership_pipelines` | `conversion_config` (NULL = previous defaults)                                                                  | `601fdb28ab8c` | The class and status an applicant becomes on conversion, per applicant track                                      |
-| `suggestion_boxes`     | `public_board_enabled` (default false)                                                                          | `e79309de6735` | Idea board; `suggestions` gains `published_at`, `published_by`, `published_title`, `published_summary`            |
-| `training_records`     | `source_event_id`, unique with `user_id`                                                                        | `2b15c5a8ba82` | The Training event whose finalized attendance wrote the record, so re-finalizing updates it in place; no backfill |
-| `user_consents`        | `granted` server default false                                                                                  | `b4014469fd76` | No stored row changes                                                                                             |
-
-### Data Migrations
-
-| Migration                                                      | Effect                                                                                                                                                                                                                      |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `43e9df281412`                                                 | Seeds the `assistant_membership_coordinator` system position where the slug is missing                                                                                                                                      |
-| `3c918c06466d`, `7d2b4e8a1c35`                                 | Seed the `compliance_officer` position and a Compliance suggestion box, then switch on boxes still exactly as seeded                                                                                                        |
-| `d4e1a7c93b58`                                                 | Renames the seeded "Fire Chief" position and rank to "Chief" where the name is still exactly the seeded one; the `fire_chief` code is unchanged                                                                             |
-| `941e1251ad74`, `1ae1ffbc445e`, `fb7da5b05833`, `8c47e8945f69` | Enum values: `application_withdrawn`, `suggestion_submitted`, `equipment_request_update` (template and trigger types), and `withdrawn` on admin-hours entries                                                               |
-| `3f3b315165ed`                                                 | Removes the exact line "Please do not reply to this email." from stored email footers                                                                                                                                       |
-| `f0d76814a9ab`, `b795d1b3401b`, `15c5bc7700aa`, `ba5c348d7045` | Move stored email templates onto the current design. **`b795d1b3401b` does not reverse** (earlier values were not recorded); `15c5bc7700aa` resets even edited templates and keeps the old copy in `email_template_backups` |
-
----
-
-## Recent Schema Changes (2026-08-23 → 08-24)
-
-**Head after this window: `e7a41b6d09c2`.** Twelve revisions. The window
-opened on `a17c4e9d2b61` and immediately forked in two — the
-equipment-check/admin-hub chain and the label-printer chain both descend from
-it directly — and `e4b91c7d2a58` rejoins them.
-
-### New Tables
-
-| Table                          | Migration                                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `admin_hub_metric_preferences` | `20260823_1000_c3e91a7f4d28`                    | Which three metrics a module's administration page shows. `organization_id` (CASCADE), `module_key`, `user_id` (nullable), `scope_key`, `metric_keys` (JSON), `applies_to_everyone`. **Two scopes share this table**: the department-wide row carries a NULL `user_id` and the scope key `__department__` — a user id can never collide with it, because ids are 36-character UUIDs and `__department__` is not one. `applies_to_everyone` on that row decides whether an individual administrator may keep a personal selection. **Only three keys are stored**; the fourth slot is always the count that feeds the attention queue, so a page cannot be configured into hiding the number its own queue is about. **Absence of a row means the module's built-in default four, never "no metrics"** (CLAUDE.md Pitfall #19 — a missing config must mean current behaviour, or an upgrade blanks every admin page in the department) |
-| `shift_equipment_check_seals`  | `20260823_1100_d5b207e4f139`                    | What the crew read off a tamper seal. `check_id` → `shift_equipment_checks.id` (CASCADE), `template_compartment_id` → `check_template_compartments.id` (**SET NULL**, nullable — a template compartment can be deleted years after the check that referenced it, and the audit record must survive that), `compartment_name` (Text, copied so the record reads without the template), `seal_number`, `intact`, `cleared_item_count`, `notes`. **A seal record is filed whether or not it cleared anything** — a broken seal is exactly the finding worth keeping                                                                                                                                                                                                                                                                                                                                                                      |
-| `nfc_tags`                     | `20260823_2000_c3b71f0d5a92`                    | Member ID card credentials. `organization_id`, `user_id`, `uid_hash`, `uid_preview`, `credential_type`, `label`, `status`, `issued_at`, `last_used_at`, `revoked_at`, `revoked_reason`, `issued_by`. **The credential is stored only as a peppered SHA-256 hash.** A card serial (or a code written onto a blank tag) is the whole of the credential, so a plaintext column would make a database dump a stack of working ID cards. `uid_preview` holds the last four characters purely so an officer can tell two of a member's cards apart on screen. The table is created whether or not a department uses cards; the feature is gated by the `nfc-id-cards` integration row, which **starts off** and fails closed                                                                                                                                                                                                                |
-| `label_printers`               | `20260823_1200_b3e7f1a92c40` (+ `c7d1f4a83e29`) | Registered network label printers. `organization_id`, `name`, `location`, `host`, `port`, `dpi`, `label_format`, `custom_width`, `custom_height`, `darkness`, `is_default`, `is_active`, `created_by_id`, and `language` added by `c7d1f4a83e29`. **The backend opens the socket**, so the host must be reachable from the backend container — nothing validates that at save time. `language` separates `zpl` (Zebra and ZPL-emulating printers) from `escpos` (receipt-class thermal, several taking linerless label media); the renderer, the stock sizes offered and the status query all branch on it. Existing rows default to `zpl` as a **statement of fact** — that was the only language that existed when they were written                                                                                                                                                                                                |
-| `standing_shift_claims`        | `20260823_1400_e7a41b6d09c2`                    | A member's recurring claim on a seat. `organization_id`, `user_id`, `pattern`, `weekday`, `period`, `position`, `apparatus_id`, `start_date`, `end_date`, `is_active`, `ended_at`. **Stored as a claim rather than written once as a batch of assignments**, so giving up a single date leaves the series intact and shifts generated later can still be seated from it. **No backfill** — inferring a claim from a member's existing assignments would guess a commitment nobody made                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-
-### New Columns
-
-| Table                                      | Column                                   | Type                             | Migration      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------ | ---------------------------------------- | -------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check_template_compartments`              | `is_sealed`                              | Boolean, NOT NULL, default false | `d5b207e4f139` | This container is closed with a numbered tamper seal. No backfill: every existing compartment stays unsealed, which is what every department has today                                                                                                                                                                                                                                                                                                   |
-| `event_rsvps`                              | `early_check_in_minutes`                 | Integer, nullable                | `d5e82c0a7f31` | How far ahead of the scheduled start a self check-in landed. The tap time stays the honest record of arrival; this says how early it was, so a manager is shown who tapped in early rather than comparing timestamps by eye. **Existing rows are NULL** — backfilling means deciding what each event's start was at the moment somebody tapped, and an event whose start was edited afterwards would be given a number that was never true               |
-| `training_submissions`, `training_records` | `start_time`                             | Time, nullable                   | `a71c9d4e5b62` | The form asks for a start time and a length and derives the hours from the pair, but only the date and the hours were stored — so editing had to invent a start (it assumed 09:00) and a reviewer could not tell a morning class from an evening one. **Nullable, no backfill**: NULL reads as "not recorded", which is the truth                                                                                                                        |
-| `email_templates`                          | `header_accent`, `status_chip`, `layout` | nullable                         | `e7c4a913b8d2` | What a notice looks like, as **data** rather than hexes baked into markup. The renderer fills the `{{header_accent}}` / `{{chip_tint}}` / `{{status_chip}}` tokens `build_shell` leaves in the body. **NULL means "this body carries its own colours"**, true of every pre-migration row — they hold literal hexes, have no tokens to fill, and render byte for byte as they do today. A department opts in by creating a template or pressing **Reset** |
-
-### Changed Values
-
-| Table                  | Column         | Change                                                                   | Migration      | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------- | -------------- | ------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `check_template_items` | `check_type`   | Nine values collapse to four — `level` / `function` / `count` / `expiry` | `c3f81a4d5e72` | `header` and `text` are untouched: they are layout, not checks. **This does not reverse** — `pass_fail`, `present` and `functional` all become `function` and `reading` joins `level`, and no column remembers which. The downgrade deliberately leaves the types canonical rather than guessing, because a wrong guess renders the wrong control on a safety checklist. The migration also **writes the instruction the old type carried implicitly** into items whose description was empty; an item whose author described the test keeps their own words. In the seeded preset library that covered 185 of 232 items |
-| `admin_hours`          | `entry_method` | Adds `nfc_station`                                                       | `e7a41b9c3d85` | A card tapped at an officer-operated station was recorded as `qr_scan` — so exports claimed the member had scanned a QR code with their own phone when somebody else had tapped their card at a station. **Existing rows are left as they are**: a historical `qr_scan` really was written by the QR path, and rewriting one invents provenance the database never recorded                                                                                                                                                                                                                                              |
-
----
-
-## Recent Schema Changes (2026-08-19 → 08-23)
-
-### New Tables
-
-| Table                           | Migration                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `legal_document_revisions`      | `20260820_0135_06adc68a8b84` | Governance record for the public `/privacy` and `/terms` wording. `organization_id` (CASCADE), `document_type` (`privacy_policy`/`terms_of_service`), `status` (`draft`/`published`/`archived`), `body`, `change_note` (**NOT NULL** — the reason for a wording change is required at the schema layer, because the point of proposing rather than editing in place is that somebody later can see it), free-text `effective_date` (displayed as "Last updated", **never parsed**), `created_by` and `published_by` (both **SET NULL** — the wording published on a date is a department record and outlives the account that drafted it), `published_at`. Index `ix_legal_revisions_org_type_status` on (`organization_id`, `document_type`, `status`). **The live text is not here** — it stays in `organizations.settings["legal"]`, which is what the anonymous public endpoint reads with no join |
-| `equipment_check_bulk_requests` | `20260821_8a4f2d1c9b30`      | Idempotency ledger for bulk check-item creation. `organization_id` (CASCADE), `compartment_id` → `check_template_compartments.id` (CASCADE), `idempotency_key`, `payload_hash`, `item_ids` (JSON). Unique on (`compartment_id`, `idempotency_key`). A retry with the same key **and** the same payload replays `item_ids`; the same key with a _different_ payload is **rejected** rather than quietly creating a second set of items                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-
-### New Columns
-
-| Table                    | Column                 | Type                  | Migration                    | Description                                                                                                                                                                                                           |
-| ------------------------ | ---------------------- | --------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shift_equipment_checks` | `client_submission_id` | String(100), nullable | `20260822_1200_a17c4e9d2b61` | Minted **on the client before the request leaves the phone**, which is what makes a queued offline submission safe to retry: the retry resolves to the row the first attempt created instead of adding a second check |
-
-### New Constraints
-
-| Table                    | Constraint                                                                                  | Migration                    | Description                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `shift_equipment_checks` | `uq_shift_equipment_check_shift_template` on (`shift_id`, `template_id`)                    | `20260822_1200_a17c4e9d2b61` | One check per shift per template, as a **database** rule rather than a UI convention |
-| `shift_equipment_checks` | `uq_shift_equipment_check_client_submission` on (`organization_id`, `client_submission_id`) | `20260822_1200_a17c4e9d2b61` | Makes a retried offline submission idempotent                                        |
-
-### Column Modifications
-
-| Table                         | Change                                     | Migration                             | Reason                                                                                                                                                                  |
-| ----------------------------- | ------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shift_equipment_check_items` | `compartment_name` `VARCHAR(200)` → `TEXT` | `d6f4a13c9e20` **and** `4c8d7e2a91b3` | Deep nested storage paths did not fit. **Applied by two separate migrations** (see note below)                                                                          |
-| `documents`                   | `file_name`, `file_path` → nullable        | `9f6d1c2a4b70`                        | Generated documents have no uploaded file. Repeats a correction that already-upgraded databases would never execute                                                     |
-| `events.event_type`           | ENUM gains `recruitment`                   | `5223a69474b8`                        | Appended **after** `other`, not inserted mid-list: MySQL stores an ENUM as the member's **ordinal**, so inserting would reassign the type of every event already stored |
-
-### Data-only migrations
-
-| Migration      | What it does                                                                                                                                                                                                                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `1eeb053d59b7` | Normalizes `shifts.positions`, `shift_templates.positions`, `basic_apparatus.positions` to `[{"position", "required"}]`. **Downgrade is a deliberate no-op** — the original `count` cannot be recovered from the expanded seats, so it leaves them in place rather than guessing. Downgrading loses no data; it just does not restore the legacy shape |
-| `7ed8593bc904` | Repeats the storage-area barcode backfill and series counter                                                                                                                                                                                                                                                                                           |
-| `5c2f6a8b1d34` | Creates `push_subscriptions` where it is absent                                                                                                                                                                                                                                                                                                        |
-
-### Three migrations repair databases that believe they are up to date
-
-`7ed8593bc904`, `5c2f6a8b1d34` and `9f6d1c2a4b70` all exist for the same
-reason: an earlier migration was released under one revision id and later
-renumbered, so that id now belongs to a **different** migration. A database
-upgraded during that window carries a valid Alembic stamp for work that never
-ran, and the stamp cannot distinguish the two histories.
-
-The fix repeats the idempotent work downstream under schema inspection. On a
-healthy database all three are no-ops.
-
-> **`compartment_name` is widened twice.** `d6f4a13c9e20` and `4c8d7e2a91b3`
-> are the same migration on two different parents, and both are reachable.
-> Re-application is a no-op, but each `downgrade()` narrows the column back to
-> `VARCHAR(200)` — **downgrading past both will truncate deep compartment
-> paths.** Tracked as SCHEMA-1 in `docs/KNOWN_LIMITATIONS.md`.
-
-`a17c4e9d2b61` is the head at the time of writing — confirm with
-`cd backend && python scripts/validate_migrations.py` rather than trusting this
-line.
-
-## Recent Schema Changes (2026-08-18 → 08-19)
-
-### New Tables
-
-| Table                | Migration                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `org_calls`          | `20260818_1200_82bdcb3b1e64` | PII-free call volume. `organization_id` (CASCADE), date-only `call_date`, nullable `call_type` slug, `source` (`manual`/`dispatch`/`derived`, a plain string so a new dispatch vendor needs no migration), nullable `external_ref`, `created_by` (**SET NULL**). Indexes `ix_org_calls_organization_id`, `ix_org_calls_call_date`, `idx_org_call_org_date`; unique `uq_org_call_external_ref` on (`organization_id`, `external_ref`) — org-scoped because two departments on the same CAD share its numbering, and the constraint is what makes a dispatch re-sync idempotent instead of duplicating the day's calls on every poll |
-| `org_call_responses` | `20260818_1200_82bdcb3b1e64` | One apparatus's response to one call. `call_id` (CASCADE), `shift_id` (**SET NULL** — deleting a shift must not silently reduce the department's historical volume), polymorphic `apparatus_id` with **no FK** (a department on `basic_apparatus` has no `apparatus.id` to point at, and constraining to one table locks the other out). Unique `uq_call_response_apparatus` on (`call_id`, `apparatus_id`): a unit responds to a given call once, or re-finalizing a shift adds a second run to the tally every time an officer corrects a number                                                                                 |
-
-### New Columns
-
-| Table    | Column          | Type              | Migration                    | Description                                                                                                                                                                                                                        |
-| -------- | --------------- | ----------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shifts` | `closeout_step` | Integer, nullable | `20260819_0900_2827079fd66c` | Close-out resume point: `0`/NULL not started, `1` attendance saved, `2` calls saved. **Carries no entered data** — the wizard writes real records as it advances, so this only says which screen to reopen on. Cleared on finalize |
-
-Both revisions are introspection-guarded and additive; neither backfills. An
-organization that has never used count-only tracking gets two empty tables and
-a NULL column, and every report keeps reading the source it already read.
-
-`2827079fd66c` is the head at the time of writing — confirm with
-`cd backend && python scripts/validate_migrations.py` rather than trusting this
-line.
-
-## Recent Schema Changes (2026-08-10)
-
-### New Tables
-
-| Table                      | Migration       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check_item_deployed_lots` | `20260810_0008` | One lot's presence on one checklist position: `template_item_id` (CASCADE), `inventory_lot_id` (**SET NULL** — a depleted shelf lot may be deleted while its units are still on a truck), snapshotted `lot_number` / `expiration_date`, `quantity`, `deployed_at` / `deployed_by`. Indexed `idx_deployed_lot_item_exp` on (`template_item_id`, `expiration_date`), which serves both the drill-in and the first-expiring-first-out consumption order. **Existing single-lot data is migrated across**, so nothing already recorded is lost and every derived count matches what the item reported before |
-
-### New Columns
-
-| Table                         | Column                | Type                                          | Migration       | Description                                                                                                                                                                                                       |
-| ----------------------------- | --------------------- | --------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `email_templates`             | `footer_key`          | String(32), nullable                          | `20260810_0004` | Which named footer this template closes with. **NULL means the department's default**, so changing the default reaches every template that has not overridden it without a data migration                         |
-| `shift_equipment_check_items` | `expiration_found`    | Date, nullable                                | `20260810_0005` | What the crew read off a replacement unit. Without it, a field-replaced item kept the old date, was force-failed on every submission, held its apparatus in a deficiency state and never left the supply worklist |
-| `check_template_items`        | `restock_needed`      | Boolean, NOT NULL, default `0`                | `20260810_0006` | Raised by whoever used the unit, at the time they used it                                                                                                                                                         |
-| `check_template_items`        | `restock_reported_at` | DateTime(tz), nullable                        | `20260810_0006` |                                                                                                                                                                                                                   |
-| `check_template_items`        | `restock_reported_by` | String(36), nullable, FK `users` **SET NULL** | `20260810_0006` |                                                                                                                                                                                                                   |
-| `check_template_items`        | `restock_note`        | Text, nullable                                | `20260810_0006` |                                                                                                                                                                                                                   |
-| `check_template_items`        | `quantity_on_truck`   | Integer, **nullable**                         | `20260810_0007` | The live count. **NULL means nobody has counted since the item was defined** and the target stands in — reading NULL as zero would report every untouched truck as stripped                                       |
-
-### New Indexes
-
-| Table                      | Index                       | Columns                               | Migration       |
-| -------------------------- | --------------------------- | ------------------------------------- | --------------- |
-| `check_template_items`     | `idx_check_item_restock`    | `restock_needed`                      | `20260810_0006` |
-| `check_item_deployed_lots` | `idx_deployed_lot_org`      | `organization_id`                     | `20260810_0008` |
-| `check_item_deployed_lots` | `idx_deployed_lot_item`     | `template_item_id`                    | `20260810_0008` |
-| `check_item_deployed_lots` | `idx_deployed_lot_item_exp` | `template_item_id`, `expiration_date` | `20260810_0008` |
-
-### Data-only migrations
-
-| Migration       | Effect                                                                                                                                                                                                                                                                                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `20260810_0003` | NULLs `email_templates.css_styles` on rows still holding a **verbatim** copy of one of the two stylesheets ever shipped as a default, so untouched templates start tracking the built-in stylesheet. A department that edited its CSS matches neither string and is left alone. Downgrade re-fills NULLs, so the column is never left NULL for code that predates the fallback |
-
-> **These four check migrations were renumbered from `0003`–`0006` to
-> `0005`–`0008`.** `main` landed the email-template pair at `20260810_0003` /
-> `_0004` while the branch was open, and both branches had numbered from
-> `20260810_0002`. Two revision IDs with two files each is **not a merge conflict
-> git can see** — it is a chain Alembic refuses to load, and the backend crashes
-> on startup rather than at review. Run `alembic heads` after merging main rather
-> than assuming a documented head is current.
-
-The head after this window was `20260810_0008`; it has long since moved on. See
-the newest section above, and run `alembic heads`.
-
----
-
-## Recent Schema Changes (2026-08-05)
-
-### New Tables
-
-| Table                   | Migration       | Description                                                                                                                                                                                    |
-| ----------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `course_classes`        | `20260805_0001` | Multi-class course syllabus. `class_course_id` NOT NULL (`CASCADE`, since `SET NULL` on a NOT NULL column is MySQL error 1830); unique `uq_course_class_sequence` on (`course_id`, `sequence`) |
-| `course_cohorts`        | `20260805_0001` | One scheduled run of a multi-class course; enums `cohortstatus` and `daterollpolicy`                                                                                                           |
-| `course_cohort_classes` | `20260805_0001` | Materialized class with UTC `scheduled_start`/`scheduled_end`; `event_id` unique + `SET NULL`; unique `uq_cohort_class_source` on (`cohort_id`, `course_class_id`); enum `cohortclassstatus`   |
-| `course_cohort_members` | `20260805_0001` | Cohort roster; unique `uq_cohort_member_user` on (`cohort_id`, `user_id`); enum `cohortmemberstatus`                                                                                           |
-
-### New Columns
-
-| Table              | Column       | Type                                                    | Migration       | Description                                                                                                      |
-| ------------------ | ------------ | ------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `training_courses` | `program_id` | String(36), nullable, FK `training_programs` `SET NULL` | `20260805_0001` | Pipeline this course's cohorts enrol into; set by the first cohort that generates one, so later cohorts reuse it |
-
-### New Indexes
-
-| Table                   | Index                          | Columns                              | Migration       |
-| ----------------------- | ------------------------------ | ------------------------------------ | --------------- |
-| `course_classes`        | `idx_course_class_org_course`  | `organization_id`, `course_id`       | `20260805_0001` |
-| `course_cohorts`        | `idx_course_cohort_org_course` | `organization_id`, `course_id`       | `20260805_0001` |
-| `course_cohort_classes` | `idx_cohort_class_start`       | `organization_id`, `scheduled_start` | `20260805_0001` |
-
-> **`20260805_0001` chains off `20260802_0010`** (the storefront email-template
-> revision), which is the head it landed on. It was drafted as a merge of the
-> two heads that existed at the time (`20260801_0020` storefront and
-> `20260802_0001` dues ledger), but `20260802_0002` had already merged those on
-> main, so it is a plain linear revision.
-
----
-
-## Recent Schema Changes (2026-07-31)
-
-### New Tables
-
-| Table              | Migration       | Description                                                                                     |
-| ------------------ | --------------- | ----------------------------------------------------------------------------------------------- |
-| `audit_ship_state` | `20260801_0011` | Off-host audit-shipping watermark (`last_shipped_id`, `last_shipped_at`)                        |
-| `user_consents`    | `20260801_0014` | Per-member consent state; unique index `idx_user_consent_unique` on (`user_id`, `consent_type`) |
-
-### New Columns
-
-| Table                   | Column                | Type                         | Migration       | Description                                                                                       |
-| ----------------------- | --------------------- | ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
-| `audit_log_checkpoints` | `archived_at`         | DateTime(timezone), nullable | `20260801_0010` | Set when this checkpoint's rows were exported and purged by retention                             |
-| `audit_log_checkpoints` | `last_log_hash`       | String(64), nullable         | `20260801_0010` | Chain hash of the final purged row; the surviving chain head anchors to it                        |
-| `audit_log_checkpoints` | `archive_attestation` | String(64), nullable         | `20260801_0010` | Keyed HMAC over the archived range — a DB-only attacker cannot forge a "sanctioned" head deletion |
-| `users`                 | `anonymized_at`       | DateTime(timezone), nullable | `20260801_0012` | When the member's PII was scrubbed; NULL = not anonymized                                         |
-
-### Column Modifications
-
-| Table                      | Column     | Change                | Migration       | Description                                                                                                                                                                                                 |
-| -------------------------- | ---------- | --------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member_leaves_of_absence` | `end_date` | `NOT NULL` → nullable | `20260801_0013` | **Bug fix.** The model documents `NULL` as "permanent leave", but the original migration created the column `NOT NULL`, so recording a permanent leave failed with IntegrityError 1048 on any real database |
-
----
-
-## Recent Schema Changes (2026-07-14)
-
-### New Columns
-
-| Table             | Column           | Type                                                        | Migration       | Description                                                                                    |
-| ----------------- | ---------------- | ----------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
-| `skill_templates` | `requirement_id` | String(36), FK `training_requirements` (SET NULL, nullable) | `20260714_0001` | Default training-pipeline requirement this skill sheet satisfies                               |
-| `skill_tests`     | `requirement_id` | String(36), FK `training_requirements` (SET NULL, nullable) | `20260714_0001` | Requirement this test satisfies; inherited from the template at creation, overridable per test |
-
-### New Indexes
-
-| Table             | Index                            | Columns            | Migration       |
-| ----------------- | -------------------------------- | ------------------ | --------------- |
-| `skill_templates` | `idx_skill_template_requirement` | `(requirement_id)` | `20260714_0001` |
-| `skill_tests`     | `idx_skill_test_requirement`     | `(requirement_id)` | `20260714_0001` |
-
----
-
-## Recent Schema Changes (2026-04-04)
-
-### New Columns
-
-| Table                     | Column                            | Type                          | Migration       | Description                                               |
-| ------------------------- | --------------------------------- | ----------------------------- | --------------- | --------------------------------------------------------- |
-| `training_module_configs` | `form_show_performance_rating`    | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle performance rating section on report creation form |
-| `training_module_configs` | `form_show_areas_of_strength`     | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle strengths section on report creation form          |
-| `training_module_configs` | `form_show_areas_for_improvement` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle improvement section on report creation form        |
-| `training_module_configs` | `form_show_officer_narrative`     | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle narrative section on report creation form          |
-| `training_module_configs` | `form_show_skills_observed`       | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle skills section on report creation form             |
-| `training_module_configs` | `form_show_tasks_performed`       | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle tasks section on report creation form              |
-| `training_module_configs` | `form_show_call_types`            | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle call types section on report creation form         |
-| `training_module_configs` | `apparatus_type_skills`           | JSON (nullable)               | `20260404_0300` | Per-apparatus-type skill lists for shift reports          |
-| `training_module_configs` | `apparatus_type_tasks`            | JSON (nullable)               | `20260404_0300` | Per-apparatus-type task lists for shift reports           |
-| `requirement_progress`    | `started_at`                      | DateTime(tz, nullable)        | `20260404_0500` | Timestamp when requirement transitions to IN_PROGRESS     |
-
-### Column Modifications
-
-| Table                    | Column     | Change        | Migration       | Reason                                                             |
-| ------------------------ | ---------- | ------------- | --------------- | ------------------------------------------------------------------ |
-| `shift_equipment_checks` | `shift_id` | Made nullable | `20260404_0100` | Support standalone ad-hoc equipment checks without an active shift |
-
-### New Indexes
-
-| Table                         | Index                           | Columns                         | Migration       |
-| ----------------------------- | ------------------------------- | ------------------------------- | --------------- |
-| `shift_equipment_checks`      | Composite                       | `(shift_id, template_id)`       | `20260404_0400` |
-| `shift_equipment_check_items` | Composite                       | `(check_id, template_item_id)`  | `20260404_0400` |
-| `shift_assignments`           | `idx_shift_assign_shift_status` | `(shift_id, assignment_status)` | `20260604_0001` |
-
----
-
-## Recent Schema Changes (2026-06-10)
-
-### New Columns
-
-| Table       | Column     | Type            | Migration       | Description                                                                                                                                                            |
-| ----------- | ---------- | --------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `positions` | `settings` | JSON (nullable) | `20260610_0002` | Per-position UI preferences; holds `label_presets` keyed by module (the network printer, label size, and barcode symbology a role uses in each module, e.g. inventory) |
-
----
-
-## Recent Schema Changes (2026-06-09)
-
-### New Columns
-
-| Table                | Column                     | Type                                      | Migration       | Description                                                            |
-| -------------------- | -------------------------- | ----------------------------------------- | --------------- | ---------------------------------------------------------------------- |
-| `equipment_requests` | `fulfilled_by`             | String(36), FK users (SET NULL, nullable) | `20260604_0100` | Quartermaster who fulfilled the approved request                       |
-| `equipment_requests` | `fulfilled_at`             | DateTime(tz, nullable)                    | `20260604_0100` | When the request was fulfilled                                         |
-| `equipment_requests` | `fulfillment_type`         | String(20, nullable)                      | `20260604_0100` | `issuance` \| `checkout` \| `assignment`                               |
-| `equipment_requests` | `fulfillment_reference_id` | String(36, nullable)                      | `20260604_0100` | ID of the created `ItemIssuance` / `CheckOutRecord` / `ItemAssignment` |
-
-### New Indexes
-
-| Table               | Index                           | Columns                         | Migration       |
-| ------------------- | ------------------------------- | ------------------------------- | --------------- |
-| `shift_assignments` | `idx_shift_assign_shift_status` | `(shift_id, assignment_status)` | `20260604_0001` |
-
-### Data Backfills
-
-| Table                               | Change                                                                                   | Migration       | Reason                                                                       |
-| ----------------------------------- | ---------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------- |
-| `inventory_items`                   | Backfill barcodes for legacy rows                                                        | `20260604_0200` | Removes a write-on-read in the list endpoint (superseded by `20260610_0001`) |
-| `inventory_items` / `organizations` | Reassign sequential `INV-000001` barcodes; seed per-org counter in `settings["barcode"]` | `20260610_0001` | Single sequential barcode scheme; also merges the two open heads             |
-
----
-
-## Recent Schema Changes (2026-05-29)
-
-### New Columns
-
-| Table                          | Column                  | Type                                   | Migration       | Description                                                                             |
-| ------------------------------ | ----------------------- | -------------------------------------- | --------------- | --------------------------------------------------------------------------------------- |
-| `users`                        | `oauth_provider`        | String(50) (nullable)                  | `20260528_0002` | IdP that owns this identity (`google` / `microsoft`); `NULL` for password-only accounts |
-| `users`                        | `oauth_subject`         | String(255) (nullable, indexed)        | `20260528_0002` | Provider's stable subject identifier (index `ix_users_oauth_subject`)                   |
-| `compliance_configs`           | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: whether the in-progress month counts toward compliance                     |
-| `training_requirements`        | `include_current_month` | Boolean (nullable)                     | `20260503_0002` | Per-requirement override; `NULL` inherits the org default                               |
-| `inventory_notification_queue` | `attempt_count`         | Integer (NOT NULL, server_default `0`) | `20260502_0002` | Delivery retry counter                                                                  |
-| `inventory_notification_queue` | `last_attempt_at`       | DateTime(tz, nullable)                 | `20260502_0002` | Timestamp of the last delivery attempt                                                  |
-
-### Column Modifications
-
-| Table                     | Change                                                                             | Migration                         | Reason                                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_module_configs` | Added `server_default` to the boolean toggle columns; backfilled NULLs to defaults | `20260502_0001` / `20260502_0003` | Ensure non-NULL booleans on fresh inserts and existing rows (config response also coerces NULL `manual_entry_*` booleans to defaults) |
-| `training_sessions`       | Dropped dead `approval_required` column                                            | `20260502_0004`                   | Unused — finalize sign-off is governed solely by `require_completion_confirmation`                                                    |
-
----
-
-**See also:** [Backend Development](Development-Backend) | [API Reference](API-Reference)
+## Migrations
+
+Migrations are managed by Alembic and live in `backend/alembic/versions/`.
+Files are named `YYYYMMDD_HHMM_<description>.py`, with the revision id often
+included after the timestamp.
+
+### How a database gets its schema
+
+- **A fresh install does not replay the migration chain.** On first start,
+  `backend/main.py`'s `_fast_path_init()` creates every table from the models
+  (`create_all`), runs the few migration-only and seed-data files
+  (`MIGRATION_ONLY_FILES`, `SEED_DATA_FILES`), and stamps Alembic at head. The
+  models in `app/models/` are therefore the schema a new deployment receives.
+- **An existing database is upgraded** to head with Alembic, which the backend
+  runs at startup.
+
+Two consequences follow. A model change alone changes the schema of every new
+install, so a schema change needs both a model change and a migration. And
+some tables are built only by `create_all` — no migration ever creates them —
+so a migration that reflects or alters one must first check that the table
+exists, or `alembic upgrade head` against an empty database fails. CI enforces
+this (`tests/test_migration_create_all_tables.py`); see
+[docs/rules/migrations.md](../docs/rules/migrations.md#a-migration-must-tolerate-a-table-only-create_all-builds).
+
+### Commands
+
+```bash
+# Apply migrations (from the repo root)
+npm run db:migrate
+
+# Or inside the Docker stack
+docker compose exec backend alembic upgrade head
+docker compose exec backend alembic current
+```
+
+### Regenerating the reference
+
+A change under `backend/app/models/` that alters the schema must regenerate
+the generated reference, or the Backend Unit Tests job fails:
+
+```bash
+cd backend && python scripts/generate_schema_docs.py
+```
