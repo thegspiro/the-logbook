@@ -125,7 +125,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ✅     |
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ✅     |
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ✅     |
-| W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ⬜     |
+| W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ✅     |
 | W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ⬜     |
 | W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ⬜     |
 
@@ -209,6 +209,46 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   forever (W51-9).
 
 ## Log
+
+### W67 — The department store — 2026-10-15
+
+Driven as:
+
+- `quartermaster` setting the store up (settings, a sized item with a
+  per-member limit, an order window) and working an order through payment
+  to fulfilled;
+- `member` shopping and checking out;
+- `member2` probing, ordering and cancelling;
+- 390×844 for the store, My Orders and the console.
+
+Held:
+
+- clear validation on items and windows;
+- every double-click records once;
+- the payment policy is stated at checkout;
+- status changes reach My Orders;
+- another member and the admin list refuse a member.
+
+Fixed:
+
+- W67-1 (MED — a per-member limit showed as "Only 2 left" in every size, and
+  would have read "Sold out" once reached; offers now carry
+  `stock_available`).
+- W67-2 (MED — the stepper went past the limit, and the refusal blamed
+  stock).
+- W67-3 (MED — cancelling an order took one tap).
+- W67-4 (LOW — the countdown announced 17 days beside a visible 16).
+- W67-5 (LOW — 16–20px checkboxes and back link; unnamed row buttons).
+
+Flagged: W67-6 (LOW — the cart is lost on a reload).
+
+Environment: today's merge needed `nh3` and `npm ci` before the schema and
+typecheck would build.
+
+Gate: typecheck and lint are clean; 207 storefront frontend and 416
+storefront backend tests pass.
+
+Next: W68.
 
 ### W66 — Dues: set them, record a payment, who is behind — 2026-10-14
 

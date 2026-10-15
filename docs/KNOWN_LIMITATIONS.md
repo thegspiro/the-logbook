@@ -5756,6 +5756,18 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   - Decision: whether members get a "My dues" view (and on what gate), and
     which dues reminders go out (email first, pitfall 18).
 
+## Department Store — The Cart Does Not Survive a Reload (2026-10-14)
+
+Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
+
+- **What happens:** the cart lives only in the page's memory. A reload, or a
+  phone browser discarding the tab while the member switches apps, empties
+  it.
+- **Why it is not simply fixed:** keeping it means choosing where (browser
+  storage on that device, or saved on the server so it follows the member)
+  and how long it lasts, against an order window that closes.
+- **Decision:** whether to keep the cart, and where.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const mockGetMyOrders = vi.fn();
 const mockReportPayment = vi.fn();
@@ -82,10 +83,13 @@ const unpaidOrder = {
   },
 };
 
+// ConfirmProvider is part of the app shell; cancelling asks first.
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <MyOrdersPage />
+      <ConfirmProvider>
+        <MyOrdersPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -245,6 +249,8 @@ describe('MyOrdersPage', () => {
     await screen.findByRole('heading', { name: 'ORD-2026-0001' });
 
     await user.click(screen.getByRole('button', { name: /cancel order/i }));
+    // It asks first (W67).
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel order' }));
 
     await waitFor(() => {
       expect(mockCancelMyOrder).toHaveBeenCalledWith('o1');
@@ -304,7 +310,9 @@ describe('MyOrdersPage', () => {
     ]);
     render(
       <MemoryRouter initialEntries={['/store/orders?highlight=o1']}>
-        <MyOrdersPage />
+        <ConfirmProvider>
+          <MyOrdersPage />
+        </ConfirmProvider>
       </MemoryRouter>
     );
 
@@ -337,5 +345,23 @@ describe('MyOrdersPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(await screen.findByRole('heading', { name: 'ORD-2026-0001' })).toBeInTheDocument();
+  });
+
+  // W67: a member's cancellation is final and took one tap.
+  it('asks before cancelling, and keeps the order when told to', async () => {
+    mockGetMyOrders.mockResolvedValue([unpaidOrder]);
+    mockCancelMyOrder.mockResolvedValue({ ...unpaidOrder, status: 'cancelled' });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel order' }));
+    expect(await screen.findByText(/cannot be reopened/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep order' }));
+    expect(mockCancelMyOrder).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel order' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel order' }));
+    await waitFor(() => expect(mockCancelMyOrder).toHaveBeenCalledWith(unpaidOrder.id));
   });
 });
