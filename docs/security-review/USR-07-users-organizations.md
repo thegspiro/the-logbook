@@ -4,6 +4,156 @@
 
 ---
 
+## Pass 9 (2026-10-14)
+
+**Step 0** (orchestrator): confirmed via `search_pull_requests` that no
+`claude/security-review-*` PR was open; PR #3248 (Feature 06, Elections &
+ballots, pass 9) had merged, naming Feature 07 as next, matching
+`PROGRESS.md`'s Open PR note. This pass picks up that row.
+
+**Scope:** the same twelve files pass 6/7/8 declared:
+`endpoints/users.py`, `endpoints/organizations.py`,
+`endpoints/member_status.py`, `endpoints/member_leaves.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`services/member_leave_service.py`, `models/user.py`, `schemas/user.py`,
+`schemas/organization.py`, `app/mcp/tools/members.py`,
+`app/mcp/tools/organization.py`. **Baseline:** `8f1855a3` (pass 8's head).
+**Head:** `80d92def` (PR #3248's merge — this feature's own prior pass had
+already merged by the time this iteration started). 344 commits landed in
+the window; `git log --oneline 8f1855a3..80d92def -- <declared files>`
+narrows that to **3 commits touching a declared file directly**: `c926b687`
+(mypy date/datetime narrowing), `51c77a9c` (mypy API-layer fixes), and
+`ea4d2b18` (`fix(users): editing a colleague's profile needs
+members.manage`). Every one of the three read in full via `git show`, not
+sampled.
+
+**`c926b687` and `51c77a9c` are mypy-only, confirmed by reading the diff, not
+the commit message.** `c926b687` touches only
+`services/member_leave_service.py` (`waiver_updates: Dict[str, Optional[date]]
+= {}` — an annotation on an already-empty dict, no behavior change).
+`51c77a9c` touches `member_status.py` (an `isinstance(member.status,
+UserStatus)` narrowing replacing an equivalent `hasattr` check, a local
+variable rename for a second `db.execute` call that was shadowing its first
+result object, and `ensure_found(org_result.scalar_one_or_none(), ...)`
+replacing a two-line `scalar_one_or_none()` + `ensure_found()` — same
+runtime check, written as one expression), `organizations.py` (the identical
+`ensure_found(await db.get(...), ...)` collapse on the two `/retention-policy`
+routes), `users.py` (local-variable renames to stop a second `db.execute`
+call's `result` from shadowing the first's, an `Optional[str]`-safe
+`or ""` on two welcome-email name fields, and `ec.model_dump() for ec in
+profile_update.emergency_contacts or []` replacing a `hasattr` guard with the
+same effect for an already-validated Pydantic list), and `schemas/user.py`
+(splitting `_UserBaseFields` out of `UserBase` so a response schema can
+declare `email: Optional[EmailStr] = None` — matching what
+`_clear_hidden_contact_fields` already nulled on the wire for a caller the
+contact-visibility rules exclude; the type annotation now says what the
+runtime already did, not a new redaction path). None of the three changes
+anything this checklist's seven dimensions test: no new by-id query, no
+changed permission string, no new client-supplied FK, no schema field made
+either more or less visible than it already was at runtime.
+
+**`ea4d2b18` is a genuine security fix, landed independently of this
+rotation before this pass started — re-verified end to end, not re-applied.**
+`PATCH /users/{user_id}/profile` and `/contact-info` previously accepted
+**either** `users.edit` **or** `members.manage` for a write to someone else's
+record. `MemberProfilePage` (#2858) had already stopped offering the edit
+forms to a `users.edit`-only holder, but the API still took the write from
+anyone who called it directly — the gap this pass's own checklist item
+("the permission string matches the sensitivity of the data") exists to
+catch, and PERM-02's broader `ORU-7`/ceiling-guard family never covered
+because the ceiling guards gate privilege grants, not record-editing scope.
+Both routes now accept only the subject or a `members.manage` holder
+(`users.py:1602-1611`, `:1759-1768`); with `users.edit` no longer able to
+reach a colleague's record, the separate write-time redaction wrapper
+(`_profile_response`) had no remaining caller and was removed — the route
+now returns the row directly, which is correct precisely because the only
+two viewers left are the two `_redact_profile_for_viewer` already exempts.
+Confirmed by reading the current file (not the diff alone): both gates check
+`_has_permission("members.manage", ...)` with no `users.edit` fallback, the
+redaction-exempt viewer sets on read and write are now identical by
+construction (write returns the row unredacted only for the subject/manager,
+same as what the read's exemption already covers), and
+`docs/UPGRADING.md`/`wiki/Role-System.md`/`wiki/Security-Privacy.md` each
+carry a dated note matching the code. No seeded position is weakened — the
+five default positions carrying `users.edit` (Fire Chief, Deputy Chief,
+Assistant Chief, President, Membership Coordinator) all also carry
+`members.manage`, confirmed by grepping `DEFAULT_POSITIONS` directly — so
+this narrows only a hypothetical custom position built with `users.edit` and
+without `members.manage`, which `docs/UPGRADING.md`'s entry names explicitly.
+Re-ran the feature's own regression tests for this fix directly
+(`test_user_profile_permissions.py`, `test_pii_exposure.py`): **70 passed**,
+including the new `TestColleagueProfileWrite`/`TestColleagueContactInfoWrite`
+classes asserting a `users.edit`-only caller gets 403 on both routes and a
+`members.manage` holder or the subject passes the gate.
+
+**All 77 routes across the four principal files re-enumerated mechanically**
+(32/24/14/7, unchanged counts from pass 8) — no route added, removed, or
+re-gated this window other than the `ea4d2b18` narrowing above. No new
+`.ilike()`/`.like()` without `escape=`, no raw `csv.writer`, no
+`window.confirm`/`alert`/`prompt` introduced (grepped fresh — 0 hits).
+
+**Re-verified, not re-derived — both remaining standing items unchanged:**
+
+- **USR-5** (LOW/MED, unbounded lists; narrowed by the owner, partially
+  fixed) — `get_archived_members` (`member_status.py:952`),
+  `list_users_with_roles` (`users.py:870`), and
+  `MemberLeaveService.list_leaves` (`member_leave_service.py:160`) are
+  unchanged in shape (line drift only, from this window's own insertions
+  landing above them in `users.py`). `leave_widget_summary`'s SQL-aggregate
+  fix remains `✅ Fixed` in `KNOWN_LIMITATIONS.md`, unchanged this pass. Still
+  accepted-as-is per the owner's decision recorded there — `members.manage`-
+  gated and org-scoped on all three, not a cross-tenant leak.
+- **USR-8** (MED, `GET /users` sends the full roster record to every
+  `members.view` holder; narrowed by the owner) —
+  `UserService.get_users_for_organization` (`user_service.py:28`),
+  `UserListResponse` (`schemas/user.py:533`, now split from `UserBase` by
+  this window's own mypy commit but unchanged in field set), `list_users`
+  (`users.py:124`). The `/directory` split remains the owner's accepted
+  remedy; `GET /users` itself unchanged. Still open per the owner's pass-7
+  decision, unchanged this pass.
+- **USR-10a** — confirmed still recorded `✅ Resolved 2026-10-11` in both this
+  file (pass 5 entry) and `KNOWN_LIMITATIONS.md`; no code in its three sites
+  (`member_status.py`, `membership_tier_service.py`) touched by this window's
+  3 commits, so nothing to re-verify beyond the citation itself.
+
+**Skimmed, not independently re-audited — `docs/module-audit/orgs-roles-users.md`
+and `docs/app-review/orgs-roles-users.md`** (Step 2's app-review/module-audit
+check): every item in the module-audit doc is recorded fixed (ORU-1 through
+ORU-9), consistent with this file's own 8 prior passes. The app-review doc's
+one open item, **ORU-7c** ("mass-editing the org-wide `member` role can
+escalate every member at once; intended... an optional confirmation/guard is
+the owner's call"), is `roles.py`/`role_service.py` territory — Feature 02
+(Permissions & roles, `PERM`), not one of this feature's four declared files —
+and was already explicitly accepted by its own pass 4 (2026-08-09) as
+intended behavior, not a defect. Not re-litigated here; noted so a future
+USR-07 pass does not mistake it for an open item in this feature's own scope.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** The
+only behaviorally-relevant change in this window (`ea4d2b18`) was already a
+correct, complete fix landed before this pass began; the other two commits
+are mypy-only and change nothing this checklist tests.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Result                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ✅ 0 violations                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | ✅ clean (2295 files unchanged)                             |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ✅ clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 594 revisions, single head `252c7517d80a`                |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 269 routes, 0 errors, 0 warnings                         |
+| `pytest tests/test_user_profile_permissions.py tests/test_pii_exposure.py` (the `ea4d2b18` fix's own regression tests)                                                                                                                                                                                                                                                                                                                                                                                           | ✅ 70 passed                                                |
+| `pytest tests/ -q -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative or membership_tier or capacity_locking or navigation_layout or setup_checklist or mcp or preferred_name or display_name or membership_number or membership_id or bottom_nav or email_choices or email_link_domain or service_period or rejoin or badge or undo_drop or directory or unlock or dashboard_pulse"` | ✅ 1,537 passed, 1 pre-existing skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ✅ 0 errors                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ✅ 0 errors, 0 warnings (`--max-warnings 10`)               |
+| Scoped frontend suite (`MemberProfilePage`, `Members`, `AddMember`, `UserSettingsPage` — 4 files)                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 143 passed                                               |
+
+`npm ci` was run at the worktree root first — this worktree had no
+`node_modules` installed at all, the same fresh-worktree quirk pass 4 and
+pass 8 both documented.
+
+---
+
 ## Pass 8 (2026-10-13, watchdog pickup)
 
 **Watchdog pickup.** The dedicated `/loop 30m /security-review` session had no

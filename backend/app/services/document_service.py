@@ -7,7 +7,7 @@ and publishing meeting minutes as formatted documents.
 
 from datetime import datetime, timezone
 from html import escape
-from typing import List, Optional
+from typing import List, Optional, Sequence
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -21,8 +21,21 @@ from app.models.document import (
     DocumentType,
     system_folder_fields,
 )
-from app.models.minute import MeetingMinutes, MinutesMeetingType, MinutesStatus
+from app.models.minute import (
+    MeetingMinutes,
+    MinutesClosedSession,
+    MinutesElectionResult,
+    MinutesMeetingType,
+    MinutesStatus,
+)
 from app.models.user import Organization
+from app.utils.minutes_attendance import derive_status
+from app.utils.rich_text import (
+    FORMAT_HTML,
+    normalize_format,
+    sanitize_html,
+    section_is_blank,
+)
 
 
 class DocumentService:
@@ -199,7 +212,37 @@ class DocumentService:
         tz_name = org.timezone if org else None
 
         # Generate HTML
-        html = self._generate_minutes_html(minutes, tz_name)
+        filed_results = (
+            (
+                await self.db.execute(
+                    select(MinutesElectionResult)
+                    .where(
+                        MinutesElectionResult.minutes_id == minutes.id,
+                        MinutesElectionResult.organization_id == str(organization_id),
+                    )
+                    .order_by(
+                        MinutesElectionResult.created_at, MinutesElectionResult.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        sessions = (
+            (
+                await self.db.execute(
+                    select(MinutesClosedSession)
+                    .where(
+                        MinutesClosedSession.minutes_id == minutes.id,
+                        MinutesClosedSession.organization_id == str(organization_id),
+                    )
+                    .order_by(MinutesClosedSession.started_at, MinutesClosedSession.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        html = self._generate_minutes_html(minutes, tz_name, filed_results, sessions)
 
         # Check if already published (update instead of creating duplicate)
         if minutes.published_document_id:
@@ -250,6 +293,149 @@ class DocumentService:
         await self.db.refresh(doc)
         return doc
 
+    @staticmethod
+    def _attendee_label(entry: dict, status: str) -> str:
+        """One roll-call line as it reads in the published minutes."""
+        label = escape(str(entry.get("name", "")))
+        if entry.get("role"):
+            label += f' ({escape(str(entry["role"]))})'
+        detail = {"late": "arrived late", "left_early": "left early"}.get(status)
+        note = entry.get("note")
+        extras = [x for x in (detail, escape(str(note)) if note else None) if x]
+        if extras:
+            label += f' <span style="color:#666;">[{"; ".join(extras)}]</span>'
+        return label
+
+    def _closed_sessions_html(
+        self, sessions: Sequence[MinutesClosedSession], tz_name: Optional[str]
+    ) -> list:
+        """Closed sessions as published HTML: reason, authority, times, who was
+        in the room, and the public summary."""
+        parts: list = []
+
+        def clock(value) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return self._to_local(value, tz_name).strftime("%I:%M %p")
+
+        for number, closed in enumerate(sessions, 1):
+            parts.append(
+                '<div class="minutes-closed-session" style="margin-bottom:24px;">'
+            )
+            parts.append(
+                '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">'
+                f"Closed session {number}</h4>"
+            )
+            span = clock(closed.started_at) + (
+                f" to {clock(closed.ended_at)}" if closed.ended_at else ""
+            )
+            facts = [
+                f"<strong>Reason:</strong> {escape(closed.reason)}",
+                f"<strong>Time:</strong> {escape(span)}",
+            ]
+            if closed.legal_basis:
+                facts.append(
+                    f"<strong>Authority:</strong> {escape(closed.legal_basis)}"
+                )
+            parts.append(f'<p style="font-size:13px;">{"<br/>".join(facts)}</p>')
+            people = closed.participants or []
+            if people:
+                names = ", ".join(
+                    escape(str(p.get("name", "")))
+                    + (
+                        f' ({escape(clock(p.get("joined_at")))}'
+                        f'{" – " + escape(clock(p.get("left_at"))) if p.get("left_at") else ""})'
+                        if p.get("joined_at")
+                        else ""
+                    )
+                    for p in people
+                )
+                parts.append(
+                    f'<p style="font-size:13px;"><strong>In the room ({len(people)}):</strong> {names}</p>'
+                )
+            if closed.summary:
+                parts.append(
+                    f'<p style="font-size:13px; white-space:pre-wrap;">{escape(closed.summary)}</p>'
+                )
+            parts.append("</div>")
+        return parts
+
+    def _election_results_html(self, results: Sequence[MinutesElectionResult]) -> list:
+        """The election results filed with the minutes, as published HTML."""
+        parts: list = []
+        for filed in results:
+            snapshot = filed.snapshot or {}
+            parts.append('<div class="minutes-election" style="margin-bottom:24px;">')
+            parts.append(
+                '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">'
+                f"Election result — {escape(filed.election_title)}</h4>"
+            )
+            if getattr(filed, "is_addendum", False):
+                parts.append(
+                    '<p style="font-size:12px; color:#666;"><em>Addendum: filed after '
+                    "these minutes were circulated. It records the final result of an "
+                    "election held at this meeting that closed later; it is not part "
+                    "of the text that was adopted.</em></p>"
+                )
+            facts = [
+                (
+                    f"Eligible voters: {escape(str(snapshot['total_eligible_voters']))}"
+                    if "total_eligible_voters" in snapshot
+                    else ""
+                ),
+                (
+                    f"Ballots cast: {escape(str(snapshot['total_votes']))}"
+                    if "total_votes" in snapshot
+                    else ""
+                ),
+                (
+                    f"Turnout: {escape(str(snapshot['voter_turnout_percentage']))}%"
+                    if "voter_turnout_percentage" in snapshot
+                    else ""
+                ),
+            ]
+            facts_text = " &middot; ".join(f for f in facts if f)
+            if facts_text:
+                parts.append(f'<p style="font-size:13px;">{facts_text}</p>')
+            contests = list(snapshot.get("results_by_position") or [])
+            if snapshot.get("overall_results"):
+                contests.append(
+                    {
+                        "position": "Other candidates" if contests else "",
+                        "candidates": snapshot["overall_results"],
+                    }
+                )
+            for contest in contests:
+                title = contest.get("label") or contest.get("position")
+                if title:
+                    parts.append(
+                        f'<p style="margin:8px 0 2px; font-size:13px;"><strong>{escape(str(title))}</strong></p>'
+                    )
+                parts.append(
+                    '<table style="width:100%; border-collapse:collapse; font-size:13px;">'
+                    '<tr style="background:#f3f4f6;"><th style="padding:6px; text-align:left; border:1px solid #ddd;">Candidate</th>'
+                    '<th style="padding:6px; text-align:right; border:1px solid #ddd;">Votes</th>'
+                    '<th style="padding:6px; text-align:right; border:1px solid #ddd;">%</th>'
+                    '<th style="padding:6px; text-align:left; border:1px solid #ddd;">Outcome</th></tr>'
+                )
+                for cand in contest.get("candidates") or []:
+                    outcome = (
+                        "Winner"
+                        if cand.get("is_winner")
+                        else "Tied" if cand.get("is_tied") else ""
+                    )
+                    parts.append(
+                        f'<tr><td style="padding:6px; border:1px solid #ddd;">{escape(str(cand.get("candidate_name", "")))}</td>'
+                        f'<td style="padding:6px; text-align:right; border:1px solid #ddd;">{escape(str(cand.get("vote_count", 0)))}</td>'
+                        f'<td style="padding:6px; text-align:right; border:1px solid #ddd;">{escape(str(cand.get("percentage", 0)))}</td>'
+                        f'<td style="padding:6px; border:1px solid #ddd;">{outcome}</td></tr>'
+                    )
+                parts.append("</table>")
+            parts.append("</div>")
+        return parts
+
     def _to_local(self, dt: datetime, tz_name: Optional[str]) -> datetime:
         """Convert a UTC datetime to the organization's local timezone."""
         if not tz_name or not dt:
@@ -257,7 +443,11 @@ class DocumentService:
         return dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
 
     def _generate_minutes_html(
-        self, minutes: MeetingMinutes, tz_name: Optional[str] = None
+        self,
+        minutes: MeetingMinutes,
+        tz_name: Optional[str] = None,
+        election_results: Sequence[MinutesElectionResult] = (),
+        closed_sessions: Sequence[MinutesClosedSession] = (),
     ) -> str:
         """Generate formatted HTML for published meeting minutes"""
         header = minutes.get_effective_header() or {}
@@ -318,6 +508,16 @@ class DocumentService:
                 + "</p>"
             )
 
+        adopted_on = getattr(minutes, "adopted_on", None)
+        if adopted_on:
+            how = getattr(minutes, "adopted_as_amended", None)
+            parts.append(
+                '<p style="font-size:13px; color:#666;">Adopted '
+                f"{escape(self._to_local(adopted_on, tz_name).strftime('%B %d, %Y'))}"
+                + (" as amended" if how else " as presented" if how is False else "")
+                + "</p>"
+            )
+
         # Called to order / adjourned
         if minutes.called_to_order_at:
             parts.append(
@@ -335,21 +535,35 @@ class DocumentService:
             parts.append(
                 '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Attendance</h4>'
             )
-            present = [a for a in minutes.attendees if a.get("present", True)]
-            absent = [a for a in minutes.attendees if not a.get("present", True)]
-            if present:
+            # Grouped by the roll-call status, not by the derived ``present``
+            # flag: that flag means "counted toward quorum", which would file
+            # an excused member and a guest under Absent.
+            by_status: dict = {}
+            for entry in minutes.attendees:
+                by_status.setdefault(derive_status(entry), []).append(entry)
+            in_room = [
+                (e, status)
+                for status in ("present", "late", "left_early")
+                for e in by_status.get(status, [])
+            ]
+            for label, entries, muted in (
+                ("Present", in_room, False),
+                (
+                    "Excused",
+                    [(e, "excused") for e in by_status.get("excused", [])],
+                    True,
+                ),
+                ("Absent", [(e, "absent") for e in by_status.get("absent", [])], True),
+                ("Guests", [(e, "guest") for e in by_status.get("guest", [])], False),
+            ):
+                if not entries:
+                    continue
                 names = ", ".join(
-                    f'{escape(a["name"])}'
-                    + (f' ({escape(a["role"])})' if a.get("role") else "")
-                    for a in present
+                    self._attendee_label(e, status) for e, status in entries
                 )
+                colour = " color:#999;" if muted else ""
                 parts.append(
-                    f'<p style="font-size:13px;"><strong>Present ({len(present)}):</strong> {names}</p>'
-                )
-            if absent:
-                names = ", ".join(escape(a["name"]) for a in absent)
-                parts.append(
-                    f'<p style="font-size:13px; color:#999;"><strong>Absent ({len(absent)}):</strong> {names}</p>'
+                    f'<p style="font-size:13px;{colour}"><strong>{label} ({len(entries)}):</strong> {names}</p>'
                 )
             if minutes.quorum_met is not None:
                 q_text = "Quorum met" if minutes.quorum_met else "Quorum NOT met"
@@ -364,8 +578,8 @@ class DocumentService:
         sections = minutes.get_sections()
         if sections:
             for section in sorted(sections, key=lambda s: s.get("order", 0)):
-                content = section.get("content", "")
-                if content and content.strip():
+                if not section_is_blank(section):
+                    content = section.get("content", "")
                     title = escape(section.get("title", section.get("key", "Section")))
                     parts.append(
                         '<div class="minutes-section" style="margin-bottom:20px;">'
@@ -373,9 +587,18 @@ class DocumentService:
                     parts.append(
                         f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>'
                     )
-                    parts.append(
-                        f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>'
-                    )
+                    if normalize_format(section.get("format")) == FORMAT_HTML:
+                        # Cleaned again on the way out: the stored value was
+                        # cleaned on write, and a published page is the last
+                        # place to rely on that having always happened.
+                        parts.append(
+                            '<div style="font-size:14px; color:#333;">'
+                            f"{sanitize_html(content)}</div>"
+                        )
+                    else:
+                        parts.append(
+                            f'<div style="font-size:14px; color:#333; white-space:pre-wrap;">{escape(content)}</div>'
+                        )
                     parts.append("</div>")
 
         # Motions
@@ -418,12 +641,22 @@ class DocumentService:
                             else ""
                         )
                     )
+                ballot = getattr(getattr(motion, "election", None), "title", None)
+                if ballot:
+                    detail_parts.append(f"Decided by ballot: {escape(ballot)}")
                 if detail_parts:
                     parts.append(
                         f'<p style="margin:0; font-size:12px; color:#666;">{" | ".join(detail_parts)}</p>'
                     )
                 parts.append("</div>")
             parts.append("</div>")
+
+        # Closed sessions: the record that they were held and who stayed. What
+        # was said in them stays in the (restricted) executive section.
+        parts.extend(self._closed_sessions_html(closed_sessions, tz_name))
+
+        # Election results filed with the minutes
+        parts.extend(self._election_results_html(election_results))
 
         # Action Items
         if minutes.action_items:

@@ -385,6 +385,49 @@
    - Add new shared patterns as an @utility here rather than repeating
      inline class strings; keep related ones together under a group header.
    ================================================================ */
+/* --- Rich text --- Minutes sections and the editor that writes them. Tailwind's
+   preflight strips list markers and heading sizes, so the subset the editor
+   offers (headings, lists, quotes, links) is restored here, once, for both the
+   read-only view and the editing surface. */
+@utility rich-text {
+  & p {
+    margin: 0 0 0.5rem;
+  }
+  & p:last-child {
+    margin-bottom: 0;
+  }
+  & h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0.75rem 0 0.25rem;
+  }
+  & h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    font-style: italic;
+    margin: 0.5rem 0 0.25rem;
+  }
+  & ul {
+    list-style: disc;
+    margin: 0 0 0.5rem;
+    padding-left: 1.5rem;
+  }
+  & ol {
+    list-style: decimal;
+    margin: 0 0 0.5rem;
+    padding-left: 1.5rem;
+  }
+  & blockquote {
+    border-left: 3px solid var(--color-theme-surface-border);
+    margin: 0 0 0.5rem;
+    padding-left: 0.75rem;
+    font-style: italic;
+  }
+  & a {
+    @apply text-blue-700 underline dark:text-blue-400;
+  }
+}
+
 /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
 @utility form-input {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden;

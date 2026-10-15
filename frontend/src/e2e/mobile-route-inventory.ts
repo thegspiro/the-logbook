@@ -989,6 +989,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
   },
   {
+    path: '/minutes/outlines',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'outline list built from the shared card, btn-secondary and Modal utilities; /minutes is the representative module route',
+  },
+  {
     path: '/minutes/:minutesId',
     source: 'src/modules/minutes/routes.tsx',
     coverage: 'exempt',
