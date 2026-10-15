@@ -134,7 +134,7 @@ The **My Training** tab shows:
 - **Skills Tests** — your own official and practice skills-test results. Each
   opens a read-only scorecard. Your department decides which results appear
   and how much of each you see; see
-  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings-2026-08-08).
+  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings).
 - **Pipeline Progress**, **Shift Statistics**, **Shift Completion Reports**
   and **Self-Reported Training**.
 
