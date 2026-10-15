@@ -164,6 +164,32 @@ screens that are actually about gear. **Routes, permission keys and table names
 have never changed through any of this**, so no link, bookmark or integration
 breaks.
 
+### Importing supplies from a CSV
+
+A department can bring its existing stock in through the inventory CSV import
+(`/inventory/import`, which needs `inventory.manage`). Its downloadable sample
+includes common medical supplies — airway, bleeding control and trauma,
+dressings, diagnostics and infection control — as counted rows, plus one
+individually tracked, serial-numbered device. It deliberately has **no
+medications**: they vary by protocol and include controlled substances.
+
+Three things about the import decide where those rows land:
+
+- **The Category cell is a name, matched against categories you have already
+  created** (case-insensitively, among all of them, medical included). The
+  sample uses generic names — _Airway & Breathing_, _Bleeding Control & Trauma_,
+  _Dressings & Bandages_, _Diagnostics_, _Infection Control_ — so rename them in
+  the file to match your own. A name that matches nothing still imports the
+  row, **with no category**, and an uncategorized item reads as gear rather
+  than medical; the import lists each such row as a warning.
+- **"Item Type" is checked and then ignored.** An item's type comes from its
+  category, so writing `medical` there does not make a row medical by itself
+  (it is accepted, so it is not rejected).
+- **The import carries no lots.** Lot numbers and expiration dates are added
+  afterwards, for example through **Receive delivery**; a supply imported by
+  count shows its quantity but nothing is flagged as expiring until it has
+  dated lots.
+
 ---
 
 ## The domain boundary

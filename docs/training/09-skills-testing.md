@@ -13,7 +13,7 @@ requirement in a training program.
 > Administration > Settings & Data > Practical Skills**. Skills Testing is the
 > default. If your department chose sign-offs, the Skills Testing screens in
 > this guide are hidden and record nothing new. Nothing is deleted. See
-> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system-2026-10-12).
+> [02 — Training](./02-training.md#a-department-runs-one-practical-skills-system).
 
 ---
 
@@ -1500,7 +1500,7 @@ The competency view shows the new scores
 > named "PUMP OPERATIONS", but not one named "Pump ops". In **Shift Reports
 > settings → Apparatus Skills**, each skill has a green tag if it matches a
 > Skill Evaluation and an amber one if it does not. See
-> [Skill Evaluations](./02-training.md#skill-evaluations-2026-10-05) in the
+> [Skill Evaluations](./02-training.md#skill-evaluations) in the
 > training guide.
 
 ---
