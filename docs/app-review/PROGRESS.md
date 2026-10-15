@@ -47,7 +47,7 @@ from its open list.
 | B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ⬜     |
-| B9  | membership pipeline        | MP2    | ⬜     |
+| B9  | membership pipeline        | MP2    | ✅     |
 | B10 | messaging & communications | MSG2   | ✅     |
 | B11 | notifications              | NOTIF2 | ⬜     |
 | B12 | integrations               | INT2   | ⬜     |
@@ -3119,3 +3119,32 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   related suites **1034 passed, 1 skipped** · frontend inventory **1661 passed** ·
   new backend file 21 pass, 10 fail without the fix, 0 under the unit job's marker
   expression. See equipment-check.md → Pass 5. Next: B8 documents.
+- **B9 membership pipeline ✅ (pass 5) — `PUT /pipelines/{id}` answered a null
+  NOT NULL column with a 500 (MP2-6).** Drove the five update endpoints over HTTP
+  against the real schema, sending `null` for every NOT NULL field the schemas can
+  name (9, derived). The step, prospect, election-package and interview handlers
+  already catch the `ValueError` `apply_updates` raises and return a 400;
+  `update_pipeline` was the one handler with no `try/except`, so `name` and
+  `public_show_future_stages` were 500s (2 of 15 cases failed on the unmodified
+  handler, 13 passed). **Fixed** by catching it like its siblings; the nullable
+  controls (`description`, `notes`, `coordinator_notes`) still clear. **Dead code
+  (MP2-7):** the AST scan (counting `tests/`) flagged five names, four of them
+  decorator-registered validators read and kept; `PipelineKanbanColumn` appears
+  nowhere else in the repository and was removed. **Noted (MP2-8):** the step
+  update schema accepts `sort_order` that the service deliberately strips (a stage
+  moves via `reorder_steps`); the stage modal re-sends the current value, harmless,
+  now pinned by a test, dropping the field from the schema and mapper is a small
+  follow-up. **Verified good:** all five handlers use `exclude_unset`; the two
+  routes without `require_permission` (`/my-sign-offs`, `approve-step`) are
+  deliberate, role-scoped and documented; frontend update payloads send explicit
+  nulls for the nullable clears; `/prospective-members/` is in
+  `UNCACHEABLE_PREFIXES`. **Not read:** the rest of the 8,848-line service (advance /
+  regress, auto-advance, form and email side effects, conversion, public status) and
+  the 16,798-line frontend beyond its update payloads. **Sandbox faults, not code:**
+  the Python lacked the pinned `nh3` dependency (16 files failed to collect) and the
+  local schema predated `main`; both fixed in the sandbox and recorded in the gate.
+  Gate: flake8 / black / isort clean · backend related suites **1256 passed, 1
+  skipped** · new file 15 pass, 2 fail without the fix, 0 under the unit job's
+  marker expression · route-permission check 0 errors · no frontend change. See
+  membership-pipeline.md → Pass 5. Next: B10 messaging & communications — already
+  marked ✅ in the status table, so the next ⬜ is B11 notifications.
