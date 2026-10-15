@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockAll = vi.fn();
@@ -17,6 +17,14 @@ vi.mock('../../../components/ux/DateTimeQuarterHour', () => ({
 import { AdoptDialog } from './AdoptDialog';
 import { renderWithRouter } from '../../../test/utils';
 import { localToUTC } from '../../../utils/dateFormatting';
+import type { AttendeeEntry } from '../types/minutes';
+
+const roll: AttendeeEntry[] = [
+  { name: 'Pat Chief', status: 'present', present: true },
+  { name: 'Lee Treasurer', status: 'late', present: true },
+  { name: 'Sam Absent', status: 'absent', present: false },
+  { name: 'A visitor', status: 'guest', present: false },
+];
 
 describe('AdoptDialog', () => {
   const onAdopt = vi.fn();
@@ -37,6 +45,7 @@ describe('AdoptDialog', () => {
         isOpen
         minutesId="m1"
         hasAcceptedSuggestions={hasAccepted}
+        attendees={roll}
         busy={false}
         onClose={onClose}
         onAdopt={onAdopt}
@@ -98,5 +107,93 @@ describe('AdoptDialog', () => {
   it('warns that adoption locks the minutes', async () => {
     open();
     expect(await screen.findByText(/these minutes are locked/)).toBeInTheDocument();
+  });
+
+  describe('motion to adopt', () => {
+    it('states the motion for what was decided', async () => {
+      const user = userEvent.setup();
+      open();
+
+      expect(await screen.findByText('To adopt the minutes as presented.')).toBeInTheDocument();
+      await user.click(screen.getByRole('radio', { name: 'As amended' }));
+      expect(screen.getByText('To adopt the minutes as amended.')).toBeInTheDocument();
+    });
+
+    it('offers only members recorded as present to move and second', async () => {
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+
+      const mover = screen.getByLabelText('Moved by');
+      const names = within(mover)
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+      expect(names).toEqual(['Choose from the roll…', 'Pat Chief', 'Lee Treasurer', 'Someone else (type a name)']);
+    });
+
+    it('sends who moved and who seconded', async () => {
+      const user = userEvent.setup();
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+
+      await user.selectOptions(screen.getByLabelText('Moved by'), 'Pat Chief');
+      await user.selectOptions(screen.getByLabelText('Seconded by'), 'Lee Treasurer');
+      await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
+
+      expect(onAdopt).toHaveBeenCalledWith({
+        adopted_on: expect.stringMatching(/Z$/) as unknown,
+        adopting_minutes_id: undefined,
+        as_amended: false,
+        moved_by: 'Pat Chief',
+        seconded_by: 'Lee Treasurer',
+      });
+    });
+
+    it('takes a typed name for a guest', async () => {
+      const user = userEvent.setup();
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+
+      await user.selectOptions(screen.getByLabelText('Moved by'), 'Someone else (type a name)');
+      await user.type(screen.getByLabelText('Moved by, typed name'), 'Chief Emeritus Alvarez');
+      await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
+
+      expect(onAdopt).toHaveBeenCalledWith(expect.objectContaining({ moved_by: 'Chief Emeritus Alvarez' }));
+    });
+
+    it('does not let the mover second, even by typing the name', async () => {
+      const user = userEvent.setup();
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+
+      await user.selectOptions(screen.getByLabelText('Moved by'), 'Someone else (type a name)');
+      await user.type(screen.getByLabelText('Moved by, typed name'), 'Guest Person');
+      await user.selectOptions(screen.getByLabelText('Seconded by'), 'Someone else (type a name)');
+      await user.type(screen.getByLabelText('Seconded by, typed name'), 'guest person');
+      await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('cannot also second');
+      expect(onAdopt).not.toHaveBeenCalled();
+    });
+
+    it('leaves the mover out of the seconder choices', async () => {
+      const user = userEvent.setup();
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+
+      await user.selectOptions(screen.getByLabelText('Moved by'), 'Pat Chief');
+
+      expect(within(screen.getByLabelText('Seconded by')).queryByRole('option', { name: 'Pat Chief' })).toBeNull();
+    });
+
+    it('records no movers when none are chosen', async () => {
+      const user = userEvent.setup();
+      open();
+      await screen.findByRole('option', { name: /November business meeting/ });
+      await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
+
+      const sent = onAdopt.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(sent.moved_by).toBeUndefined();
+      expect(sent.seconded_by).toBeUndefined();
+    });
   });
 });

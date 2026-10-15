@@ -3576,6 +3576,46 @@ across the reload until you dismiss it.
 
 _[Screenshot needed: Catalog Links with a mix of ticked exact matches and unticked likely ones; and the "had been linked by someone else" list after an apply.]_
 
+### Finding the right catalog item when the names differ _(2026-10-15)_
+
+A checklist is typed by hand, so "4 x 4 gauze" on the rig rarely matches "Gauze
+Pads, 4x4 Sterile" in the catalog, and "BVM" never matches "Bag Valve Mask". The
+item picker and Catalog Links now cope with that:
+
+- **The picker shows near matches after the exact ones.** Plurals ("pad" and
+  "pads"), "4 x 4" against "4x4" and a slightly different spelling all count.
+  Exact matches stay at the top, as before.
+- **Sizes and ages never blur.** A word with a number in it must match exactly
+  ("4x4" never offers "4x8"; "Size 3" never "Size 4"), and Adult does not match
+  Pediatric.
+- **Review screens only tick an exact match for you.** Anything fuzzier is
+  offered, and waits for you to confirm it.
+- **Also called.** On the item form for gear and for medical supplies, **Also
+  called** takes up to 10 other names for the item, separated by commas ("BVM,
+  Ambu bag"). The picker and Catalog Links search them too, and a suggestion
+  made through one says so. A match through an alias is never ticked for you,
+  because two items can share a nickname.
+
+The inventory CSV import has a matching **Also Called** column: put the names in
+one cell separated by semicolons or commas. A row with more than ten names, or a
+name over 100 characters, is refused and reported rather than trimmed. The
+downloadable sample now also includes common medical supplies (no medications).
+Its **Category** cells are names matched against categories you already
+created; a name that matches nothing imports the row with **no category**, and
+an uncategorized item reads as gear, not medical.
+
+<!-- Screenshots needed: the item form with the Also called field; the picker
+showing a "matched through" suggestion (queued in SCREENSHOT_CURRENCY.md). -->
+
+### Deleting a medical supply category _(2026-10-14)_
+
+The Medical Supplies categories page can now delete a category (`inventory.manage_medical`).
+If the category still holds supplies, the dialog shows how many and asks which
+other medical category should take them — retired supplies included — before it
+deletes. A category with subcategories cannot be deleted; move or delete those
+first. The supplies' low-stock levels follow their new category. A gear category
+is never offered as a destination.
+
 ### Checklists now require the Inventory module
 
 A department that had Inventory switched off but uses equipment checks has it

@@ -6,6 +6,9 @@ import userEvent from '@testing-library/user-event';
 const mockList = vi.fn();
 const mockAdd = vi.fn();
 const mockResolve = vi.fn();
+const mockApply = vi.fn();
+const mockRecall = vi.fn();
+const mockMinutesChanged = vi.fn();
 const toastError = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -13,6 +16,8 @@ vi.mock('../services/api', () => ({
     getSuggestions: (...a: unknown[]) => mockList(...a) as unknown,
     addSuggestion: (...a: unknown[]) => mockAdd(...a) as unknown,
     resolveSuggestion: (...a: unknown[]) => mockResolve(...a) as unknown,
+    applySuggestion: (...a: unknown[]) => mockApply(...a) as unknown,
+    recall: (...a: unknown[]) => mockRecall(...a) as unknown,
   },
 }));
 
@@ -48,6 +53,12 @@ describe('SuggestionsPanel', () => {
     mockList.mockReset();
     mockAdd.mockReset();
     mockResolve.mockReset();
+    mockApply.mockReset();
+    mockRecall.mockReset();
+    mockMinutesChanged.mockReset();
+    mockApply.mockResolvedValue({});
+    mockRecall.mockResolvedValue({});
+    mockMinutesChanged.mockResolvedValue(undefined);
     mockList.mockResolvedValue([]);
     mockAdd.mockResolvedValue(open);
     mockResolve.mockResolvedValue({ ...open, status: 'accepted' });
@@ -56,7 +67,16 @@ describe('SuggestionsPanel', () => {
   // The panel is handed its suggestions by the page; this stands in for the page.
   const Harness: React.FC<{ status: MinutesStatus; canManage: boolean }> = ({ status, canManage }) => {
     const shared = useMinutesSuggestions('m1', status);
-    return <SuggestionsPanel minutesId="m1" status={status} sections={sections} canManage={canManage} {...shared} />;
+    return (
+      <SuggestionsPanel
+        minutesId="m1"
+        status={status}
+        sections={sections}
+        canManage={canManage}
+        onMinutesChanged={mockMinutesChanged}
+        {...shared}
+      />
+    );
   };
   const render = (status: MinutesStatus, canManage: boolean) =>
     renderWithRouter(<Harness status={status} canManage={canManage} />);
@@ -151,5 +171,145 @@ describe('SuggestionsPanel', () => {
 
     await screen.findByText('The vote was 5-1');
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  describe('with tracked changes', () => {
+    const tracked: MinutesSuggestion = {
+      ...open,
+      id: 'g2',
+      comment: '',
+      proposed_text: null,
+      base_content: '<p>Three bids today.</p>',
+      proposed_content: '<p>Four quotes today.</p>',
+      changes: [
+        {
+          id: 'c1',
+          kind: 'replace',
+          deleted: 'Three bids',
+          inserted: 'Four quotes',
+          before: '',
+          after: 'today.',
+          decision: 'open',
+        },
+        { id: 'c2', kind: 'insert', deleted: '', inserted: 'sharp', before: 'was', after: 'vote', decision: 'open' },
+      ],
+    };
+
+    beforeEach(() => {
+      mockList.mockResolvedValue([tracked]);
+    });
+
+    it('shows each change as struck-out and added words, all accepted to begin with', async () => {
+      render('submitted', true);
+
+      const list = await screen.findByRole('list', { name: 'Tracked changes' });
+      const cards = within(list).getAllByRole('listitem');
+      expect(cards).toHaveLength(2);
+      expect(within(cards[0] as HTMLElement).getByText('Three bids').tagName).toBe('DEL');
+      expect(within(cards[0] as HTMLElement).getByText('Four quotes').tagName).toBe('INS');
+      expect(screen.getByRole('radio', { name: 'Accept change 1' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Accept change 2' })).toBeChecked();
+      expect(screen.getByRole('button', { name: 'Apply 2 accepted changes' })).toBeEnabled();
+    });
+
+    it('offers no plain Accept, only applying the changes that are accepted', async () => {
+      render('submitted', true);
+      await screen.findByRole('list', { name: 'Tracked changes' });
+      expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    });
+
+    it('applies only the accepted changes, after recalling circulating minutes on confirmation', async () => {
+      const user = userEvent.setup();
+      render('submitted', true);
+
+      await user.click(await screen.findByRole('radio', { name: 'Reject change 2' }));
+      await user.click(screen.getByRole('button', { name: 'Apply 1 accepted change' }));
+      expect(mockRecall).not.toHaveBeenCalled();
+      await user.click(await screen.findByRole('button', { name: 'Recall and apply' }));
+
+      await waitFor(() => expect(mockApply).toHaveBeenCalledWith('m1', 'g2', ['c1']));
+      expect(mockRecall).toHaveBeenCalledWith('m1');
+      expect(mockMinutesChanged).toHaveBeenCalled();
+    });
+
+    it('leaves the minutes circulating and writes nothing if the recall is declined', async () => {
+      const user = userEvent.setup();
+      render('submitted', true);
+
+      await user.click(await screen.findByRole('button', { name: 'Apply 2 accepted changes' }));
+      await user.click(await screen.findByRole('button', { name: 'Leave them circulating' }));
+
+      expect(mockRecall).not.toHaveBeenCalled();
+      expect(mockApply).not.toHaveBeenCalled();
+    });
+
+    it('applies straight away when the minutes are already a draft', async () => {
+      const user = userEvent.setup();
+      render('draft', true);
+
+      await user.click(await screen.findByRole('button', { name: 'Apply 2 accepted changes' }));
+
+      await waitFor(() => expect(mockApply).toHaveBeenCalledWith('m1', 'g2', ['c1', 'c2']));
+      expect(mockRecall).not.toHaveBeenCalled();
+    });
+
+    it('rejects everything with one click and will not apply nothing', async () => {
+      const user = userEvent.setup();
+      render('draft', true);
+
+      await user.click(await screen.findByRole('button', { name: 'Reject all' }));
+      expect(screen.getByRole('button', { name: 'Apply 0 accepted changes' })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Accept all' }));
+      expect(screen.getByRole('button', { name: 'Apply 2 accepted changes' })).toBeEnabled();
+    });
+
+    it('says which changes no longer fit when the section has moved on, and writes nothing', async () => {
+      mockApply.mockRejectedValue(
+        Object.assign(new Error('Request failed with status code 409'), {
+          isAxiosError: true,
+          response: { status: 409, data: { detail: { message: 'No longer fit', failed: ['c1'] } } },
+        })
+      );
+      const user = userEvent.setup();
+      render('draft', true);
+
+      await user.click(await screen.findByRole('button', { name: 'Apply 2 accepted changes' }));
+
+      expect(await screen.findByText(/no longer fits the section/)).toBeInTheDocument();
+      expect(toastError).toHaveBeenCalled();
+      expect(mockMinutesChanged).toHaveBeenCalled();
+    });
+
+    it('warns when the section has been edited since the suggestion was made', async () => {
+      mockList.mockResolvedValue([{ ...tracked, section_changed: true }]);
+      render('draft', true);
+      expect(await screen.findByText(/has been edited since this suggestion was made/)).toBeInTheDocument();
+    });
+
+    it('shows a member their own tracked changes, with nothing to decide', async () => {
+      render('submitted', false);
+      const list = await screen.findByRole('list', { name: 'Tracked changes' });
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Apply/ })).not.toBeInTheDocument();
+    });
+
+    it('shows what was decided once the suggestion is answered', async () => {
+      mockList.mockResolvedValue([
+        {
+          ...tracked,
+          status: 'accepted',
+          changes: [
+            { ...(tracked.changes ?? [])[0], decision: 'accepted' },
+            { ...(tracked.changes ?? [])[1], decision: 'rejected' },
+          ],
+        },
+      ]);
+      render('draft', true);
+      const cards = within(await screen.findByRole('list', { name: 'Tracked changes' })).getAllByRole('listitem');
+      expect(within(cards[0] as HTMLElement).getByText('Accepted')).toBeInTheDocument();
+      expect(within(cards[1] as HTMLElement).getByText('Rejected')).toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
   });
 });

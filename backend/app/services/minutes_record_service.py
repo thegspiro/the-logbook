@@ -14,6 +14,7 @@ paper evidence of the approval and can only exist after it.
 """
 
 import asyncio
+import copy
 import os
 from datetime import date, datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -45,6 +46,7 @@ from app.models.user import User
 from app.schemas.minute import (
     ClosedSessionCreate,
     ClosedSessionUpdate,
+    SuggestionApply,
     SuggestionCreate,
     SuggestionResolve,
 )
@@ -64,8 +66,34 @@ from app.utils.minutes_snapshot import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.redline import apply_changes, canonical, compute_changes, plain_to_html
+from app.utils.rich_text import FORMAT_HTML, normalize_format
 
 EDITABLE_STATUSES = (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value)
+
+
+class SuggestionApplyConflict(ValueError):
+    """Some accepted changes no longer fit the section they were made against.
+
+    Carries the ids that could not be placed. The section is left as it was, so
+    the secretary can reject those changes or make them by hand.
+    """
+
+    def __init__(self, failed: List[str]):
+        super().__init__(
+            "Some of these changes no longer fit the section, which has been "
+            "edited since: " + ", ".join(failed)
+        )
+        self.failed = failed
+
+
+def _section_html(section: dict) -> str:
+    """A section's text as the rich-text subset, whichever format it is stored in."""
+    content = section.get("content") or ""
+    if normalize_format(section.get("format")) == FORMAT_HTML:
+        return canonical(content)
+    return canonical(plain_to_html(content))
+
 
 OPEN_ITEM_STATUSES = (
     MinutesActionItemStatus.PENDING.value,
@@ -980,7 +1008,18 @@ class MinutesRecordService:
         result = await self.db.execute(
             query.order_by(MinutesSuggestion.created_at, MinutesSuggestion.id)
         )
-        return list(result.scalars().all())
+        rows = list(result.scalars().all())
+        current = {s.get("key"): _section_html(s) for s in minutes.get_sections()}
+        for row in rows:
+            # Read by the response: has the section been edited since the
+            # reviewer saw it? A suggestion that is already answered has no
+            # use for the question.
+            row.section_changed = bool(
+                row.changes
+                and row.status == MinutesSuggestionStatus.OPEN.value
+                and current.get(row.section_key) != row.base_content
+            )
+        return rows
 
     async def add_suggestion(
         self,
@@ -1001,16 +1040,29 @@ class MinutesRecordService:
                 "Changes can be suggested only while the minutes are circulated "
                 "for review"
             )
-        if data.section_key and data.section_key not in {
-            s.get("key") for s in minutes.get_sections()
-        }:
+        sections = {s.get("key"): s for s in minutes.get_sections()}
+        if data.section_key and data.section_key not in sections:
             raise ValueError("That section is not in these minutes")
+
+        base_content = proposed_content = None
+        changes = None
+        if data.proposed_html:
+            base_content = _section_html(sections[str(data.section_key)])
+            proposed_content = canonical(data.proposed_html)
+            changes = compute_changes(base_content, proposed_content)
+            if not changes:
+                raise ValueError(
+                    "Your copy is the same as the section; nothing changed"
+                )
         suggestion = MinutesSuggestion(
             minutes_id=minutes.id,
             organization_id=organization_id,
             section_key=data.section_key or None,
             comment=data.comment,
             proposed_text=(data.proposed_text or "").strip() or None,
+            base_content=base_content,
+            proposed_content=proposed_content,
+            changes=changes,
             created_by=str(user.id),
         )
         self.db.add(suggestion)
@@ -1046,10 +1098,102 @@ class MinutesRecordService:
         ).scalar_one_or_none()
         if suggestion is None:
             return None
+        if suggestion.changes and data.status == MinutesSuggestionStatus.ACCEPTED.value:
+            raise ValueError(
+                "A suggestion with tracked changes is accepted by applying the "
+                "changes you accept"
+            )
+        if suggestion.changes:
+            suggestion.changes = [
+                {**c, "decision": "rejected"} for c in suggestion.changes
+            ]
         suggestion.status = data.status
         suggestion.resolution_note = (data.note or "").strip() or None
         suggestion.resolved_by = str(resolved_by)
         suggestion.resolved_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(suggestion)
+        return suggestion
+
+    async def apply_suggestion(
+        self,
+        minutes_id: str,
+        suggestion_id: str,
+        organization_id: UUID | str,
+        applied_by: UUID | str,
+        data: SuggestionApply,
+    ) -> Optional[MinutesSuggestion]:
+        """Write the accepted tracked changes into the section and settle it.
+
+        Draft or rejected minutes only: circulated minutes are locked, so the
+        secretary recalls them first. All or nothing — if any accepted change no
+        longer fits the section (it was edited since), nothing is written and
+        ``SuggestionApplyConflict`` names the ones that do not. The changes not
+        accepted are rejected, and the suggestion is accepted if anything was
+        applied and declined if nothing was.
+        """
+        minutes = await self.lock_minutes(minutes_id, organization_id)
+        if minutes is None:
+            return None
+        self._require_editable(minutes, "apply a suggestion's changes to")
+        suggestion = (
+            await self.db.execute(
+                select(MinutesSuggestion)
+                .where(
+                    MinutesSuggestion.id == str(suggestion_id),
+                    MinutesSuggestion.minutes_id == minutes.id,
+                    MinutesSuggestion.organization_id == str(organization_id),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if suggestion is None:
+            return None
+        if not suggestion.changes:
+            raise ValueError("This suggestion has no tracked changes to apply")
+        if suggestion.status != MinutesSuggestionStatus.OPEN.value:
+            raise ValueError("This suggestion has already been answered")
+
+        known = {c["id"] for c in suggestion.changes}
+        accepted = set(data.accepted)
+        if not accepted <= known:
+            raise ValueError("Those changes are not part of this suggestion")
+
+        sections = copy.deepcopy(minutes.get_sections())
+        target = next(
+            (s for s in sections if s.get("key") == suggestion.section_key), None
+        )
+        if target is None:
+            raise ValueError("The section this suggestion is about is gone")
+
+        applied_text = None
+        if accepted:
+            applied_text, failed = apply_changes(
+                suggestion.base_content or "",
+                _section_html(target),
+                suggestion.changes,
+                accepted,
+            )
+            if failed:
+                raise SuggestionApplyConflict(failed)
+            target["content"] = canonical(applied_text)
+            target["format"] = FORMAT_HTML
+            minutes.sections = sections
+
+        suggestion.changes = [
+            {**c, "decision": "accepted" if c["id"] in accepted else "rejected"}
+            for c in suggestion.changes
+        ]
+        now = datetime.now(timezone.utc)
+        suggestion.status = (
+            MinutesSuggestionStatus.ACCEPTED.value
+            if accepted
+            else MinutesSuggestionStatus.DECLINED.value
+        )
+        suggestion.resolution_note = (data.note or "").strip() or None
+        suggestion.resolved_by = str(applied_by)
+        suggestion.resolved_at = now
+        suggestion.applied_at = now if accepted else None
         await self.db.commit()
         await self.db.refresh(suggestion)
         return suggestion

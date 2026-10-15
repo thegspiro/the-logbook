@@ -496,6 +496,27 @@ DEFAULT_ANNUAL_SECTIONS = [
     },
 ]
 
+# Parliamentary procedure puts these two behind a motion and a second, so the
+# built-in outlines mark them and carry the usual wording. The wording is a
+# starting point the secretary edits on the section, not a fixed script.
+DEFAULT_MOTION_SECTIONS = {
+    "approval_of_previous": "Motion to approve the minutes of the previous meeting.",
+    "adjournment": "Motion to adjourn the meeting.",
+}
+
+for _defaults in (
+    DEFAULT_BUSINESS_SECTIONS,
+    DEFAULT_SPECIAL_SECTIONS,
+    DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS,
+    DEFAULT_EXECUTIVE_SECTIONS,
+    DEFAULT_ANNUAL_SECTIONS,
+):
+    for _section in _defaults:
+        if _section["key"] in DEFAULT_MOTION_SECTIONS:
+            _section["needs_motion"] = True
+            _section["motion_text"] = DEFAULT_MOTION_SECTIONS[_section["key"]]
+
 
 class MinutesTemplate(Base):
     """
@@ -672,6 +693,12 @@ class MeetingMinutes(Base):
         DateTime(timezone=True), nullable=True
     )
     adopted_as_amended: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # Who moved and seconded the adoption. Names, not user ids, because a
+    # department may let a guest make the motion as an honorary act.
+    adoption_moved_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    adoption_seconded_by: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
     adopting_minutes_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("meeting_minutes.id", ondelete="SET NULL"),
@@ -803,6 +830,11 @@ class Motion(Base):
     moved_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     seconded_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     discussion_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # The outline section this motion belongs to, when it was made from one
+    # ("Approval of Previous Minutes", "Adjournment"). Not a foreign key: a
+    # section is an entry inside the minutes' JSON, not a row.
+    section_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # The ballot that decided this motion, when it went to a ballot rather
     # than a voice or hand vote. ``ballot_item_id`` is the item's id inside
@@ -1181,6 +1213,23 @@ class MinutesSuggestion(Base):
     section_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     comment: Mapped[str] = mapped_column(Text, nullable=False)
     proposed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Tracked changes: the reviewer edited a copy of the section. ``base_content``
+    # is the section as they saw it and ``proposed_content`` their edit, both as
+    # sanitized rich text; ``changes`` is the list of discrete edits between them
+    # (app/utils/redline.py), each with the secretary's decision once made. All
+    # NULL for a plain comment-and-wording suggestion.
+    base_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    proposed_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    changes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # When the accepted changes were written into the section.
+    applied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Not a column: set when suggestions are listed, so the response can say the
+    # section has been edited since the reviewer saw it.
+    section_changed = False
 
     status: Mapped[str] = mapped_column(
         String(20),

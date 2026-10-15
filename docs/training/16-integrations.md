@@ -1154,6 +1154,11 @@ It stays **off** until three things are true:
    optional secret) in the **Member sign-in (OAuth)** panel on the card.
 
 - Changing or resetting a password ends every connection the member holds.
+- **Fixed on 2026-10-14:** before then, every tool call on a member's
+  connection was refused, and Claude showed only "Error executing tool". A
+  member who connected before the fix and saw that does not need to reconnect;
+  just ask again. A tool the member lacks the permission for, or that a
+  department switch has turned off, is still refused, with its own message.
 - Members cannot register a client themselves. Every client is registered by
   someone who can issue Claude service keys.
 

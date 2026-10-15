@@ -200,7 +200,7 @@ Next year's budget is built in a **Draft** fiscal year. As a finance manager, op
 2. Select **Copy lines**, then **Copy lines** again in the confirmation.
 3. The message tells you how many lines were copied and how many the draft already had (for example _"12 lines copied, 2 already there"_).
 
-Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. Lines whose owner comes from their category keep getting it from the category.
+Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. **Lines on a category you have retired are not copied** _(2026-10-14)_; the confirmation message counts them as "retired". A sub-line still in use under a retired parent is copied, because only the line's own category is checked. Lines whose owner comes from their category keep getting it from the category.
 
 **2. Set the request deadline.** Budget-line owners propose next year's amounts for their lines until this date:
 

@@ -937,6 +937,8 @@ def _build_template_response(tpl) -> TemplateResponse:
             default_content=s.get("default_content", ""),
             format=normalize_format(s.get("format")),
             required=s.get("required", False),
+            needs_motion=bool(s.get("needs_motion", False)),
+            motion_text=s.get("motion_text") or "",
         )
         for s in (tpl.sections or [])
     ]
@@ -976,6 +978,8 @@ def _build_response(minutes) -> MinutesResponse:
             content=s.get("content", ""),
             format=normalize_format(s.get("format")),
             required=bool(s.get("required", False)),
+            needs_motion=bool(s.get("needs_motion", False)),
+            motion_text=s.get("motion_text") or "",
         )
         for s in raw_sections
     ]
@@ -1023,6 +1027,8 @@ def _build_response(minutes) -> MinutesResponse:
         rejection_reason=minutes.rejection_reason,
         adopted_on=minutes.adopted_on,
         adopted_as_amended=minutes.adopted_as_amended,
+        adoption_moved_by=minutes.adoption_moved_by,
+        adoption_seconded_by=minutes.adoption_seconded_by,
         adopting_minutes_id=minutes.adopting_minutes_id,
         adopting_minutes_title=_adopting_title(minutes),
         created_by=minutes.created_by,
@@ -1073,6 +1079,7 @@ def _build_motion_response(motion) -> MotionResponse:
         motion_text=motion.motion_text,
         moved_by=motion.moved_by,
         seconded_by=motion.seconded_by,
+        section_key=motion.section_key,
         discussion_notes=motion.discussion_notes,
         status=motion.status if isinstance(motion.status, str) else motion.status.value,
         votes_for=motion.votes_for,
