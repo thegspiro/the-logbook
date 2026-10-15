@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3291](https://github.com/thegspiro/the-logbook/pull/3291)**: branch
+`claude/security-review-scheduling-p8` (suffixed
+rather than the bare `claude/security-review-scheduling`, since that name's
+own PR history — #1846, #1847, #1968, #2210, #2971 — has already merged
+repeatedly, as has the pass-6 variant `claude/security-review-feature15-pass6`
+(#2628) — CLAUDE.md Pitfall #24), Feature 15 (Scheduling), pass 8. Watchdog
+pickup. 0 code fixes, 1 new standing item (SCH-17, scope-boundary, not a
+vulnerability). The real delta since pass 7's merge (`08063fea3`, PR #2971):
+32 non-merge commits touching 11 of the 13 declared files with real content
+(the other 2 — `scheduling_module_config.py`, `calcom_service.py` — zero
+diff, confirmed). Five genuine new features reviewed in full (shared-call
+picker, open-swap pickup, custom crew seats, pre-shift-work timing, Weekend
+Only pattern preset), one already-applied-and-tested XC-1 fix re-verified
+(`970adc6b5`), the rest mypy-typing mechanics or another feature's own
+commits incidentally touching one in-scope file (reviewed to that file only).
+Two new out-of-scope-but-adjacent file groups found opportunistically
+(`pre_shift_work_service.py`, `shift_history_import_*`) and reviewed clean —
+recorded as SCH-17, widening pass 7's own still-unresolved SCH-15
+scope-boundary recommendation rather than opening a second, separate one.
+All standing items (SCH-9, SCH-10, SCH-13, SCH-16) re-verified intact; SCH-15
+re-confirmed unchanged (its four files still zero-diff since pass 7). Route
+count: `scheduling.py` 107 (was 98); `scheduling_module_config.py` and
+`calcom_sync.py` unchanged. See `SCH-15-scheduling.md`'s **Pass 8** section.
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3290, Feature 14, Equipment check & shifts, pass 9, before it merged), preserved for history</summary>
+
 **PR [#3290](https://github.com/thegspiro/the-logbook/pull/3290)**: branch
 `claude/security-review-equipment-check-shifts-p9` (suffixed rather than the
 bare `claude/security-review-equipment-check-shifts`, since that name's own
@@ -35,6 +64,8 @@ EC-7/EC-11 confirmed resolved by owner decision; EC-8 and the
 `get_item_deployments` gate discrepancy remain open/accepted, unchanged. See
 `EC-14-equipment-check-shifts.md`'s **Pass 9** section. Row 14 → ✅ (pending
 this PR's merge); next is Feature 15 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3289, Feature 13, Apparatus & NFC, pass 16, before it merged), preserved for history</summary>
@@ -19353,7 +19384,7 @@ here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -19380,6 +19411,63 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 15 (Scheduling, pass 8) — watchdog pickup, 0 fixes, 1 new standing item (SCH-17, scope-boundary)
+
+**Step 0.** `list_pull_requests` (state=open) returned 0 PRs with a head
+branch starting `claude/security-review-`. `PROGRESS.md`'s own Open PR row
+still named PR #3290 (Feature 14, Equipment check & shifts, pass 9), which
+had already merged — confirmed via `git log`/`git pull` on `main`, fast-
+forwarding 3 commits. That merge touched only `EC-14-equipment-check-
+shifts.md` and this file, so per the "docs-only PR is not a recordable
+event" rule there was nothing further to record beyond clearing the row
+(already ✅). Row 15 (Scheduling) was the first `⬜`.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `false`
+directly; no `fetch --unshallow` needed this time.
+
+**Review.** Baseline: pass 7's own merge commit, found by `git log --all
+--grep` for PR #2971 rather than trusting a cited SHA (`08063fea3`,
+2026-10-06 04:46 UTC). 32 non-merge commits touch the 13 declared backend
+files since then; real content landed in 11 of 13 (`git diff --stat`
+confirmed per file). Every commit read individually: one already-applied
+XC-1 fix (`970adc6b5`, pattern/report refs now validated in-org before
+storage), five genuine new features read in full (shared-call picker SCHED-
+10, open-swap pickup W33-4, custom crew seats SCHED-CUSTOM-SEAT, pre-shift-
+work timing, Weekend Only pattern preset), two correctness/Pitfall-29-class
+fixes (call-tracking mode-since stamp, SHIFTS-requirement grading
+unification), the rest mypy-typing mechanics or another feature's own
+commits incidentally touching one in-scope file (reviewed to that file
+only, the rest of that commit left to its own feature's rotation turn).
+
+Two new file groups outside the declared 13-file scope were found adjacent
+to the in-scope changes — `pre_shift_work_service.py` (new, 715 L) and
+`shift_history_import_{engine,service}.py` + `shift_history_import.py` (new,
+3,163 L combined) — in the same position pass 7's SCH-15 found "External
+Shift Hours". Both reviewed opportunistically and found clean (org-scoped
+throughout, XC-1-validated FKs, locked capacity/approval paths, bounded
+uploads with malware scanning, correct route registration in all three
+registries) — recorded as **SCH-17**, which widens pass 7's still-
+unactioned SCH-15 recommendation rather than opening a second one. All
+standing items re-verified: SCH-9/SCH-10/SCH-13 intact at their current
+(shifted) locations; SCH-15's own four files are still zero-diff since pass
+7, so its recommendation is unchanged; SCH-16's self-documented TOCTOU is
+unchanged. Route count: `scheduling.py` 107 (was 98, verified by AST decorator
+parse, 0 missing an auth dependency); `scheduling_module_config.py` and
+`calcom_sync.py` unchanged (zero diff).
+
+**Gate.** Full gate run for real, not assumed: `flake8`/`black --check`/
+`isort --check-only` against `app/`, `tests/` and `alembic/` all clean;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors/warnings;
+scoped `pytest` (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type or pre_shift or pre_work or
+custom_crew or open_swap or xc1_scheduling"`) — 1826 passed, 1 pre-existing
+skip (`pywebpush`); `npm run typecheck` and `npm run lint` both clean. See
+`SCH-15-scheduling.md`'s **Pass 8** section.
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests).
 
 ### 2026-10-15 — Feature 13 (Apparatus & NFC, pass 16) — watchdog pickup, 0 fixes, 0 new findings
 
