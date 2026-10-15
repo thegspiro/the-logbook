@@ -325,6 +325,9 @@ export const BallotVotingPage: React.FC = () => {
 
   const ballotItems = election.ballot_items || [];
   const unanswered = unansweredItems(choices, ballotItems);
+  // An election built from positions alone carries no ballot items, so
+  // unansweredItems() is empty and Submit would otherwise enable over nothing.
+  const hasNoItems = ballotItems.length === 0;
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
@@ -350,8 +353,9 @@ export const BallotVotingPage: React.FC = () => {
 
         <div className="mb-6">
           <p className="text-theme-text-secondary text-sm">
-            Make a selection for each item below: vote for an option, write in your own choice where allowed, or choose
-            Abstain. Submit becomes available once every item has a selection.
+            {hasNoItems
+              ? 'This ballot has no items to vote on, so it cannot be submitted from this link. Please vote in the app, or contact the election administrator.'
+              : 'Make a selection for each item below: vote for an option, write in your own choice where allowed, or choose Abstain. Submit becomes available once every item has a selection.'}
           </p>
         </div>
 
@@ -378,18 +382,20 @@ export const BallotVotingPage: React.FC = () => {
           <button
             type="button"
             onClick={handleSubmitBallot}
-            disabled={unanswered.length > 0}
+            disabled={hasNoItems || unanswered.length > 0}
             aria-describedby="ballot-submit-help"
             className="rounded-lg bg-red-700 px-8 py-3 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Submit Ballot
           </button>
           <p id="ballot-submit-help" className="text-theme-text-muted mt-2 text-sm" aria-live="polite">
-            {unanswered.length > 0
-              ? `${unanswered.length} item${unanswered.length === 1 ? '' : 's'} still need${
-                  unanswered.length === 1 ? 's' : ''
-                } a selection or Abstain: ${unanswered.map((i) => i.title || i.id).join(', ')}.`
-              : 'You will have a chance to review your choices before they are submitted.'}
+            {hasNoItems
+              ? 'Nothing on this ballot can be submitted.'
+              : unanswered.length > 0
+                ? `${unanswered.length} item${unanswered.length === 1 ? '' : 's'} still need${
+                    unanswered.length === 1 ? 's' : ''
+                  } a selection or Abstain: ${unanswered.map((i) => i.title || i.id).join(', ')}.`
+                : 'You will have a chance to review your choices before they are submitted.'}
           </p>
         </div>
 
