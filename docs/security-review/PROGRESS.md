@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER)**:
+**PR [#3293](https://github.com/thegspiro/the-logbook/pull/3293)**:
 branch `claude/security-review-scheduling-p8`, Feature 15 (Scheduling), pass 8. Watchdog pickup. 1 fix (SCH-17, LOW), 1 flagged (SCH-18, LOW), 1
 scope-boundary note (SCH-19). Diffed since pass 7's merge (`08063fea3`, PR
 #2971): `attach_call_ids`/`detach_call_ids` on `ShiftFinalizeRequest`/
