@@ -28,6 +28,24 @@ all read in full and verified. See `DOC-10-documents-legal.md`'s **Pass 9**
 section. Row 10 → ✅ (pending this PR's merge); next is Feature 11
 (Inventory).
 
+**Watchdog tend, 2026-10-15 ~09:45 UTC: rotation forked, duplicate closed.**
+Two independent sessions picked up Feature 10 pass 9 within six minutes of
+each other: this PR (#3262, opened 09:32:14Z) and PR #3265 (branch
+`claude/security-review-documents-legal`, opened 09:38:43Z, identical
+disposition — 0 fixes, 0 new findings). Per the `security-review` skill's
+Step 0 ("more than one open → the rotation forked; tend the oldest, close
+the rest as duplicates with a comment"), #3262 is the older of the two and
+is the one being tended; #3265 was closed with a comment pointing back
+here. Confirmed via `list_pull_requests` (state=open) that no other
+`claude/security-review-*` PR is open. CI on #3262's head
+(`e9bd307b`) was still queued at the time of this check (PR opened
+13 minutes prior) — no red check, no merge conflict (`mergeable_state`
+was `unstable`, consistent with pending checks, not `dirty`), no
+actionable review comment (the two `chatgpt-codex-connector` comments on
+both PRs report a Codex _usage-limit_ failure, not a finding, on both
+PRs). Nothing else needed fixing this tend; next watchdog check should
+confirm CI finished green before the PR is left to merge.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 9, PR #3256, merged docs-only — 0 code fixes, 0 new findings; rotation row 09 marked ✅ as part of that PR), preserved for history</summary>
 
