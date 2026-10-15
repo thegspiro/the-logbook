@@ -5,8 +5,9 @@
 [#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
 [#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
 [#2971](https://github.com/thegspiro/the-logbook/pull/2971) (pass 7, 0
-fixed, SCH-10 confirmed fixed), pass 8 (this PR, 0 fixed, 1 new
-scope-boundary item)
+fixed, SCH-10 confirmed fixed),
+[#3291](https://github.com/thegspiro/the-logbook/pull/3291) (pass 8, 0
+fixed, 1 new scope-boundary item)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (4,400 L, 107 routes, up from
 98), `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),

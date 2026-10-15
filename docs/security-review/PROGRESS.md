@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this one)**: branch `claude/security-review-scheduling-p8` (suffixed
+**PR [#3291](https://github.com/thegspiro/the-logbook/pull/3291)**: branch
+`claude/security-review-scheduling-p8` (suffixed
 rather than the bare `claude/security-review-scheduling`, since that name's
 own PR history — #1846, #1847, #1968, #2210, #2971 — has already merged
 repeatedly, as has the pass-6 variant `claude/security-review-feature15-pass6`
