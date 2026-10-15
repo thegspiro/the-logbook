@@ -181,6 +181,10 @@ batch scanner is titled **Distribute Items**.
   agree. Negative quantities and purchase prices are refused per row. An
   import whose `Vendor` cell names an unknown supplier still imports the row
   and lists the name for attaching afterwards (see [Vendors](Module-Inventory-Developer#vendors))
+  The downloadable sample includes common medical supplies (no medications);
+  its `Category` cells are names matched against categories you have already
+  created, and a row that matches none imports uncategorized, which reads as gear
+  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv))
 - **CSV Export** — export of the filtered list to CSV (see
   [Item Management](Module-Inventory-Developer#item-management))
 - **Variant Groups, sizes and styles** — see
