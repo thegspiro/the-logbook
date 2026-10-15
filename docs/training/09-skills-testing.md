@@ -1247,6 +1247,13 @@ keep the last value in place.
 
 ![Per-template Result Disclosure controls showing the inherited default](./images/09-08-template-result-disclosure.png)
 
+Here is the same group with both dropdowns set on the sheet: **Scores only** and
+**Only after an officer releases the result**. A member who takes a test from
+this sheet sees nothing of it until an officer releases it. After the release
+they see pass or fail and the points, but none of the examiner's written notes.
+
+![The Result Disclosure group with Scores only and Only after an officer releases the result chosen](./images/09-25-template-scores-on-release.png)
+
 ### Releasing a withheld result
 
 In **Skills Test Records**, a completed official result that has not been
