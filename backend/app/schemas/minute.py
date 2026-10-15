@@ -679,6 +679,18 @@ class ApplyOutline(BaseModel):
     template_id: str = Field(..., min_length=1, max_length=36)
 
 
+class MinutesReminderSettingsResponse(BaseModel):
+    """The department's action item reminder settings, as the server resolves them.
+
+    Keys match the ``minutes`` section of ``PATCH /organization/settings``.
+    """
+
+    action_item_reminders: bool
+    reminder_days_before_due: int
+    overdue_repeat_days: int
+    open_items_digest: bool
+
+
 class MinutesReject(BaseModel):
     """Schema for rejecting minutes"""
 

@@ -211,6 +211,7 @@ describe('MedicalSuppliesPage', () => {
 
     expect(screen.queryByRole('button', { name: /Add supply/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Receive delivery/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import or export/i })).not.toBeInTheDocument();
   });
 
   it('shows the management actions to a medical-only supply officer', async () => {
@@ -221,6 +222,16 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByRole('button', { name: /Add supply/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Receive delivery/i })).toBeInTheDocument();
+  });
+
+  it('opens import and export from the actions row', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /Import or export medical supplies/i }));
+
+    expect(screen.getByRole('dialog', { name: /Import \/ export supplies/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export lot list/i })).toBeInTheDocument();
   });
 
   it('shows the management actions to a quartermaster holding only the broad grant', async () => {
@@ -626,6 +637,47 @@ describe('MedicalSuppliesPage', () => {
     expect(screen.getByRole('button', { name: 'Retry category list' })).toBeInTheDocument();
   });
 
+  // The word, not only the orange tint: the overview counts low items, and the
+  // list was the only place to find which, by colour alone.
+  it('says "Low" beside an item at or below its reorder point, and only there', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [
+        item({ id: 'low', name: 'Oral airway kit', quantity: 2, reorder_point: 5 }),
+        item({ id: 'ok', name: 'Bag-valve mask', quantity: 9, reorder_point: 5 }),
+      ],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    expect(await screen.findByRole('cell', { name: /^2\s*Low$/ })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '9' })).toBeInTheDocument();
+  });
+
+  it('does not call an empty catalog "Nothing expiring"', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, total_items: 0, expiring_soon: 0, expired: 0, low_stock: 0 });
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
+    mockGetExpiringLots.mockResolvedValue([]);
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByRole('heading', { name: 'No medical supplies yet' })).toBeInTheDocument();
+    expect(screen.queryByText('Nothing expiring')).not.toBeInTheDocument();
+  });
+
+  it('names the way to the categories page', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByRole('link', { name: 'Categories' })).toHaveAttribute(
+      'href',
+      '/medical-supplies/categories'
+    );
+  });
+
   it('does not derive the organization-wide count from one page of a multi-page catalog', async () => {
     mockGetSummary.mockResolvedValue({ ...summary, total_items: 450, low_stock: 23 });
     mockGetItems.mockResolvedValue({
@@ -638,7 +690,8 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
 
-    expect(await screen.findByRole('cell', { name: '3' })).toBeInTheDocument();
+    // 3 in-date units against a reorder point of 5: low, and the cell says so.
+    expect(await screen.findByRole('cell', { name: /^3\s*Low$/ })).toBeInTheDocument();
     assertOrganizationLowStockCount(23);
   });
 

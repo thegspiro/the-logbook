@@ -128,6 +128,22 @@ Screenshots to create or replace are in
 
 ---
 
+# October 13–15, 2026 workflow updates
+
+Index for the seventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                                       | Now in                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Minutes: circulate, member suggestions, adopt, closed sessions, roll call, attachments, outlines, rich text | [04 — Events & Meetings](./04-events-meetings.md#circulating-and-adopting-minutes)                      |
+| "Also called" names and near-match search for checklist items; CSV "Also Called" column                     | [05 — Inventory](./05-inventory.md)                                                                     |
+| Delete a medical supply category (supplies move first)                                                      | [05 — Inventory](./05-inventory.md)                                                                     |
+| Start from last year skips retired categories                                                               | [11 — Finance](./11-finance.md)                                                                         |
+| Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
+| Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
+
 # October 12–13, 2026 workflow updates
 
 Index for the sixth window. Audit:

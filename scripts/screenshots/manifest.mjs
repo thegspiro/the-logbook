@@ -7286,6 +7286,29 @@ export const SHOTS = [
     },
   },
   {
+    id: "09-25-template-scores-on-release",
+    doc: "09-skills-testing.md",
+    line: 1250,
+    anchor:
+      "The template builder's Result Disclosure group with Scores only and Only after an officer releases the result chosen",
+    alt: "The Result Disclosure group with What the member sees set to Scores only and When they see it set to Only after an officer releases the result",
+    route: "/training/skills-testing/templates/new",
+    // The two choices are made on the form rather than saved on a seeded sheet:
+    // the weighted sheet already carries `scores` for the candidate-facing
+    // captures, and releasing its results on request would hold back the very
+    // rows those pictures show.
+    selector: "div:has(> p:text-is('Result Disclosure'))",
+    expect: { selector: "#template-result-release" },
+    prepare: async (page) => {
+      const group = page.getByText("Result Disclosure", { exact: true });
+      await group.waitFor({ state: "visible", timeout: 10_000 });
+      await group.scrollIntoViewIfNeeded();
+      await page.locator("#template-result-disclosure").selectOption("scores");
+      await page.locator("#template-result-release").selectOption("on_release");
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,

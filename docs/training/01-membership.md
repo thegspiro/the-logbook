@@ -2616,7 +2616,7 @@ made from the same results — see [Inventory](./05-inventory.md).
 
 The planner's screens — the "Needs item" rows, the sizes to buy and the
 shortfall — are pictured in
-[Inventory](./05-inventory.md#impact-planner--demand-forecasting--bulk-operations-2026-06-22).
+[Inventory](./05-inventory.md#impact-planner).
 This part only shows what a new member's first kit looks like through them.
 
 ---
