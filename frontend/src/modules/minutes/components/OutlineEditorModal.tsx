@@ -79,7 +79,15 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
         ? toRows(source.sections)
         : toRows([
             { order: 0, key: 'call_to_order', title: 'Call to Order', default_content: '', required: true },
-            { order: 1, key: 'adjournment', title: 'Adjournment', default_content: '', required: true },
+            {
+              order: 1,
+              key: 'adjournment',
+              title: 'Adjournment',
+              default_content: '',
+              required: true,
+              needs_motion: true,
+              motion_text: 'Motion to adjourn the meeting.',
+            },
           ])
     );
     setError(null);
@@ -112,6 +120,8 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
         default_content: '',
         format: 'html',
         required: false,
+        needs_motion: false,
+        motion_text: '',
       },
     ]);
 
@@ -142,6 +152,9 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
         default_content: r.default_content,
         format: 'html',
         required: r.required,
+        needs_motion: Boolean(r.needs_motion),
+        // Wording is sent every save so unticking the box clears it.
+        motion_text: r.needs_motion ? (r.motion_text ?? '').trim() : '',
       };
     });
     // Every field the form owns is sent, so a cleared description or notice is
@@ -323,6 +336,36 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
                       Required: needs text before the minutes can be circulated
                     </span>
                   </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={Boolean(row.needs_motion)}
+                      onChange={(e) => setRow(row.rowId, { needs_motion: e.target.checked })}
+                    />
+                    <span className="text-theme-text-secondary">
+                      Needs a motion and a second, such as adopting the minutes or adjourning
+                    </span>
+                  </label>
+                  {row.needs_motion && (
+                    <div>
+                      <label htmlFor={`section-motion-${row.rowId}`} className="form-label">
+                        Wording of the motion
+                      </label>
+                      <input
+                        id={`section-motion-${row.rowId}`}
+                        type="text"
+                        maxLength={2000}
+                        value={row.motion_text ?? ''}
+                        onChange={(e) => setRow(row.rowId, { motion_text: e.target.value })}
+                        placeholder="Motion to adjourn the meeting."
+                        className="form-input"
+                      />
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        The secretary can reword it on the minutes before recording the motion.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   <button

@@ -357,11 +357,18 @@ async def update_pipeline(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pipeline = await service.update_pipeline(
-        str(pipeline_id),
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    # apply_updates raises ValueError for a null aimed at a NOT NULL column
+    # (name, public_show_future_stages); unhandled, that was a 500.
+    try:
+        pipeline = await service.update_pipeline(
+            str(pipeline_id),
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pipeline:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"

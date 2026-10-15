@@ -1419,7 +1419,11 @@ Needs the **Manage gear, uniforms and equipment** permission.
    are Category, Item Type, Serial Number, Asset Tag, Status, Condition,
    Tracking Type, Quantity, Manufacturer, Model Number, Purchase Date, Purchase
    Price, Purchase Order, Vendor, Warranty Expiration, Storage Location,
-   Station, Size, Color, Description and Notes.
+   Station, Size, Color, Description, Notes and **Also Called** (other names
+   for the item, separated by semicolons or commas; see
+   [When the checklist and the catalog use different names](#when-the-checklist-and-the-catalog-use-different-names)).
+   The template's example rows include common medical supplies (no
+   medications).
 4. Select **Choose a CSV file** and pick your file. (The box does not take
    dragged files.)
 5. Check the preview of the first rows.
@@ -1431,18 +1435,20 @@ A value with a comma in it must be in quotes, for example
 
 ### Validation
 
-| What happens                                            | What it means                                                                                                                      |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| A row has no name                                       | The row is skipped                                                                                                                 |
-| A serial number is already in your catalog or the file  | The row is skipped                                                                                                                 |
-| A pool item has no quantity                             | The row is skipped                                                                                                                 |
-| Quantity or purchase price is negative                  | The row is skipped                                                                                                                 |
-| The category name does not match one you have           | The item is imported **without a category**, and the result warns you                                                              |
-| The **Vendor** names a supplier you do not have on file | The item is imported with the name as plain text. The result lists such names so you can attach them later on the **Vendors** page |
-| One supplier is spelled several ways (`Gals`, `gals`)   | It is listed **once**                                                                                                              |
-| A row that was skipped named an unknown supplier        | That name is **not** listed                                                                                                        |
-| The name matches a supplier you switched off            | The item is linked to that supplier                                                                                                |
-| The file is very large                                  | It is refused. Split it into smaller files                                                                                         |
+| What happens                                                       | What it means                                                                                                                      |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| A row has no name                                                  | The row is skipped                                                                                                                 |
+| A serial number is already in your catalog or the file             | The row is skipped                                                                                                                 |
+| A pool item has no quantity                                        | The row is skipped                                                                                                                 |
+| Quantity or purchase price is negative                             | The row is skipped                                                                                                                 |
+| The category name does not match one you have                      | The item is imported **without a category**, and the result warns you                                                              |
+| An item is imported without a category                             | It is treated as gear, not as a medical supply                                                                                     |
+| **Also Called** has more than 10 names, or one over 100 characters | The row is skipped and reported. The names are not shortened                                                                       |
+| The **Vendor** names a supplier you do not have on file            | The item is imported with the name as plain text. The result lists such names so you can attach them later on the **Vendors** page |
+| One supplier is spelled several ways (`Gals`, `gals`)              | It is listed **once**                                                                                                              |
+| A row that was skipped named an unknown supplier                   | That name is **not** listed                                                                                                        |
+| The name matches a supplier you switched off                       | The item is linked to that supplier                                                                                                |
+| The file is very large                                             | It is refused. Split it into smaller files                                                                                         |
 
 > **Tip.** Start with a small test import (5 to 10 items) before a large one.
 
@@ -2909,6 +2915,28 @@ dismiss it, even after a reload.
 
 <!-- Screenshot needed: Catalog Links with a mix of ticked exact matches and unticked likely ones; and the "had been linked by someone else" list after an apply. -->
 
+### When the checklist and the catalog use different names
+
+A checklist is typed by hand, so "4 x 4 gauze" on the rig rarely matches "Gauze
+Pads, 4x4 Sterile" in the catalog, and "BVM" never matches "Bag Valve Mask". The
+item picker and **Catalog Links** allow for this:
+
+- **Near matches are shown after exact ones.** Plurals ("pad" and "pads"),
+  spacing ("4 x 4" and "4x4") and small spelling differences all count. Exact
+  matches stay at the top.
+- **Sizes and ages must match exactly.** A word with a number in it must be the
+  same ("4x4" never offers "4x8"; "Size 3" never offers "Size 4"), and Adult
+  never matches Pediatric.
+- **Only an exact match is ticked for you.** Anything less certain is offered
+  and waits for you to confirm it.
+- **Also called.** On the item form for gear and for medical supplies, **Also
+  called** takes up to 10 other names for the item, separated by commas ("BVM,
+  Ambu bag"). The picker and Catalog Links search these names too, and say when
+  a suggestion came from one. A match through another name is never ticked for
+  you, because two items can share a nickname.
+
+<!-- Screenshots needed: the item form with the Also called field; the picker showing a "matched through" suggestion (queued in SCREENSHOT_CURRENCY.md). -->
+
 ### Doing a check
 
 - **A failed item needs a note.** A **Fail** or **Out of service** the member
@@ -2976,6 +3004,18 @@ off the main item list.
 - Creating or editing a medical category or item, and retiring an item, are
   recorded in the audit log, with who made the change.
 - Officers who manage medical supplies retire medical items from this page.
+
+### Deleting a medical supply category
+
+Officers with **Manage medical supplies** can delete a category on the Medical
+Supplies categories page.
+
+- **If the category still holds supplies,** the dialog says how many, and asks
+  which other medical category should take them (retired supplies included)
+  before it deletes. Only medical categories are offered.
+- **A category with subcategories cannot be deleted.** Move or delete the
+  subcategories first.
+- **The supplies' low-stock levels follow their new category.**
 
 ---
 

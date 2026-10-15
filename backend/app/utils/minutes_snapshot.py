@@ -81,6 +81,20 @@ def build_snapshot(
     sections = sorted(
         minutes.get_sections(), key=lambda s: (s.get("order", 0), s.get("key", ""))
     )
+    adoption = {
+        "adopted_on": _iso(getattr(minutes, "adopted_on", None)),
+        "as_amended": getattr(minutes, "adopted_as_amended", None),
+        "adopting_minutes_id": getattr(minutes, "adopting_minutes_id", None),
+    }
+    # Left out when unset so a snapshot taken before the motion was recorded
+    # keeps the hash it was sealed with.
+    for field, attribute in (
+        ("moved_by", "adoption_moved_by"),
+        ("seconded_by", "adoption_seconded_by"),
+    ):
+        value = getattr(minutes, attribute, None)
+        if value:
+            adoption[field] = value
     return {
         "title": minutes.title,
         "meeting_type": _val(minutes.meeting_type),
@@ -90,11 +104,7 @@ def build_snapshot(
         "called_to_order_at": _iso(minutes.called_to_order_at),
         "adjourned_at": _iso(minutes.adjourned_at),
         "attendees": minutes.attendees or [],
-        "adoption": {
-            "adopted_on": _iso(getattr(minutes, "adopted_on", None)),
-            "as_amended": getattr(minutes, "adopted_as_amended", None),
-            "adopting_minutes_id": getattr(minutes, "adopting_minutes_id", None),
-        },
+        "adoption": adoption,
         "quorum_met": minutes.quorum_met,
         "quorum_count": minutes.quorum_count,
         "quorum_type": minutes.quorum_type,
@@ -119,6 +129,11 @@ def build_snapshot(
                 "votes_abstain": m.votes_abstain,
                 "election_id": getattr(m, "election_id", None),
                 "ballot_item_id": getattr(m, "ballot_item_id", None),
+                **(
+                    {"section_key": m.section_key}
+                    if getattr(m, "section_key", None)
+                    else {}
+                ),
             }
             for m in sorted(minutes.motions or [], key=lambda m: (m.order, m.id))
         ],
