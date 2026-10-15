@@ -13,7 +13,7 @@ import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { blankToNull, numberOrNull } from '../../../utils/formValues';
+import { blankToNull, formatNameList, numberOrNull, parseNameList } from '../../../utils/formValues';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import { MEDICAL_UNITS } from '../types';
@@ -36,6 +36,8 @@ interface MedicalItemFormModalProps {
 
 interface FormState {
   name: string;
+  /** Comma-separated; becomes the supply's `also_called` list. */
+  also_called: string;
   category_id: string;
   description: string;
   manufacturer: string;
@@ -49,6 +51,7 @@ interface FormState {
 function initialState(item?: InventoryItem): FormState {
   return {
     name: item?.name ?? '',
+    also_called: formatNameList(item?.also_called),
     category_id: item?.category_id ?? '',
     description: item?.description ?? '',
     manufacturer: item?.manufacturer ?? '',
@@ -97,6 +100,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         // save, for the same reason.
         await medicalSuppliesService.updateItem(item.id, {
           name: form.name.trim(),
+          // Sent whole every save; `[]` is how the box being emptied clears it.
+          also_called: parseNameList(form.also_called),
           category_id: form.category_id,
           description: blankToNull(form.description),
           manufacturer: blankToNull(form.manufacturer),
@@ -112,6 +117,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         // an empty string, which the Pydantic validators reject with a 422.
         await medicalSuppliesService.createItem({
           name: form.name.trim(),
+          also_called: parseNameList(form.also_called).length ? parseNameList(form.also_called) : undefined,
           category_id: form.category_id,
           description: form.description.trim() || undefined,
           manufacturer: form.manufacturer.trim() || undefined,
@@ -195,6 +201,23 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
             placeholder="e.g. 4x4 Gauze Pads"
             required
           />
+        </div>
+
+        <div>
+          <label htmlFor="ms-also-called" className="form-label">
+            Also called
+          </label>
+          <input
+            id="ms-also-called"
+            className="form-input w-full"
+            value={form.also_called}
+            onChange={(e) => set('also_called', e.target.value)}
+            placeholder="e.g. BVM, Ambu bag"
+            aria-describedby="ms-also-called-help"
+          />
+          <p id="ms-also-called-help" className="text-theme-text-muted mt-1 text-xs">
+            Other names for this supply, separated by commas. Checklists use them to find it.
+          </p>
         </div>
 
         <div>

@@ -1061,6 +1061,9 @@ class InventoryMatchSuggestion(BaseModel):
     # to arbitrate.
     score: float
     confidence: str
+    # Set when one of the item's "also called" names, not its name, produced the
+    # match, so the reviewer can see why an unlike-looking item was proposed.
+    matched_alias: Optional[str] = None
 
 
 class InventoryMatch(BaseModel):

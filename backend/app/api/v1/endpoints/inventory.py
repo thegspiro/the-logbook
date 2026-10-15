@@ -641,6 +641,7 @@ async def list_items(
     group_by: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    fuzzy: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -724,6 +725,7 @@ async def list_items(
         group_by=grouping,
         skip=skip,
         limit=limit,
+        fuzzy=fuzzy,
     )
 
     # Counted over the whole filtered set rather than the page above, so a
