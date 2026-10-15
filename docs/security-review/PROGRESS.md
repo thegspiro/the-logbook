@@ -17,25 +17,55 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **PR [#3293](https://github.com/thegspiro/the-logbook/pull/3293)**:
-branch `claude/security-review-scheduling-p8`, Feature 15 (Scheduling), pass 8. Watchdog pickup. 1 fix (SCH-17, LOW), 1 flagged (SCH-18, LOW), 1
-scope-boundary note (SCH-19). Diffed since pass 7's merge (`08063fea3`, PR
-#2971): `attach_call_ids`/`detach_call_ids` on `ShiftFinalizeRequest`/
-`CloseoutCallsRequest` had no list-length bound (each id costs a locking DB
-query), fixed with `max_length=200` matching
-`CallTrackingService.MAX_ATTACHABLE_CALLS`. Same-shape gap on
-`member_call_counts`/`reported_call_types` flagged as SCH-18 (needs an
+branch `claude/security-review-scheduling-p8` — **note:** this branch name
+collided with PR #3291's own branch of the same name (both independently
+derived the deterministic `claude/security-review-<feature>-p<pass>` name
+for the same feature/pass; CLAUDE.md Pitfall #24's back-association warning
+is exactly what made GitHub's checks tab show #3291's old CI runs under
+this PR at first). Feature 15 (Scheduling) — **not a new pass**: PR #3291
+(below) already completed and merged pass 8 while this PR's review was
+still running concurrently. This PR is a follow-up fix for one real gap
+pass 8's independent review missed: `attach_call_ids`/`detach_call_ids` on
+`ShiftFinalizeRequest`/`CloseoutCallsRequest` had no list-length bound (each
+id costs a locking DB query), fixed with `max_length=200` matching
+`CallTrackingService.MAX_ATTACHABLE_CALLS` (SCH-18). Same-shape gap on
+`member_call_counts`/`reported_call_types` flagged as SCH-19 (needs an
 owner-picked ceiling, mirrored to `KNOWN_LIMITATIONS.md`) rather than guessed
-at. A new ~2,200-line "Shift History Import" feature landed outside this
-feature's declared scope (same shape as pass 7's "External Shift Hours"
-note); reviewed opportunistically and found clean on every checklist
-dimension — recommending it join the declared scope next pass (SCH-19). Also
-reviewed in depth and found correctly built: pre-shift work sessions, open
-swap pickup, the close-out picker's `detach_call_ids` undo path, and the
-open seat-name vocabulary. `scheduling.py` now 107 routes (up from 98 at
-pass 7), all carrying a recognized auth dependency. SCH-9/11/13/16 and the
-cross-cutting SCH-10 re-confirmed intact/unchanged. See
-`SCH-15-scheduling.md`'s **Pass 8** section. Row 15 → ✅ (pending this PR's
-merge); next is Feature 16 (Events & requests).
+at. Rebased onto #3291's merge and recorded as **Pass 8 addendum** in
+`SCH-15-scheduling.md`, not a duplicate **Pass 8** section. Rotation row 15
+was already ✅ from #3291's merge and is unchanged by this PR; so is the
+"next: Feature 16 (Events & requests)" pointer.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3291, Feature 15, Scheduling, pass 8, before it merged), preserved for history</summary>
+
+**PR [#3291](https://github.com/thegspiro/the-logbook/pull/3291)**: branch
+`claude/security-review-scheduling-p8` (suffixed
+rather than the bare `claude/security-review-scheduling`, since that name's
+own PR history — #1846, #1847, #1968, #2210, #2971 — has already merged
+repeatedly, as has the pass-6 variant `claude/security-review-feature15-pass6`
+(#2628) — CLAUDE.md Pitfall #24), Feature 15 (Scheduling), pass 8. Watchdog
+pickup. 0 code fixes, 1 new standing item (SCH-17, scope-boundary, not a
+vulnerability). The real delta since pass 7's merge (`08063fea3`, PR #2971):
+32 non-merge commits touching 11 of the 13 declared files with real content
+(the other 2 — `scheduling_module_config.py`, `calcom_service.py` — zero
+diff, confirmed). Five genuine new features reviewed in full (shared-call
+picker, open-swap pickup, custom crew seats, pre-shift-work timing, Weekend
+Only pattern preset), one already-applied-and-tested XC-1 fix re-verified
+(`970adc6b5`), the rest mypy-typing mechanics or another feature's own
+commits incidentally touching one in-scope file (reviewed to that file only).
+Two new out-of-scope-but-adjacent file groups found opportunistically
+(`pre_shift_work_service.py`, `shift_history_import_*`) and reviewed clean —
+recorded as SCH-17, widening pass 7's own still-unresolved SCH-15
+scope-boundary recommendation rather than opening a second, separate one.
+All standing items (SCH-9, SCH-10, SCH-13, SCH-16) re-verified intact; SCH-15
+re-confirmed unchanged (its four files still zero-diff since pass 7). Route
+count: `scheduling.py` 107 (was 98); `scheduling_module_config.py` and
+`calcom_sync.py` unchanged. See `SCH-15-scheduling.md`'s **Pass 8** section.
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3290, Feature 14, Equipment check & shifts, pass 9, before it merged), preserved for history</summary>
@@ -19379,7 +19409,7 @@ here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -19406,6 +19436,63 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 15 (Scheduling, pass 8) — watchdog pickup, 0 fixes, 1 new standing item (SCH-17, scope-boundary)
+
+**Step 0.** `list_pull_requests` (state=open) returned 0 PRs with a head
+branch starting `claude/security-review-`. `PROGRESS.md`'s own Open PR row
+still named PR #3290 (Feature 14, Equipment check & shifts, pass 9), which
+had already merged — confirmed via `git log`/`git pull` on `main`, fast-
+forwarding 3 commits. That merge touched only `EC-14-equipment-check-
+shifts.md` and this file, so per the "docs-only PR is not a recordable
+event" rule there was nothing further to record beyond clearing the row
+(already ✅). Row 15 (Scheduling) was the first `⬜`.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `false`
+directly; no `fetch --unshallow` needed this time.
+
+**Review.** Baseline: pass 7's own merge commit, found by `git log --all
+--grep` for PR #2971 rather than trusting a cited SHA (`08063fea3`,
+2026-10-06 04:46 UTC). 32 non-merge commits touch the 13 declared backend
+files since then; real content landed in 11 of 13 (`git diff --stat`
+confirmed per file). Every commit read individually: one already-applied
+XC-1 fix (`970adc6b5`, pattern/report refs now validated in-org before
+storage), five genuine new features read in full (shared-call picker SCHED-
+10, open-swap pickup W33-4, custom crew seats SCHED-CUSTOM-SEAT, pre-shift-
+work timing, Weekend Only pattern preset), two correctness/Pitfall-29-class
+fixes (call-tracking mode-since stamp, SHIFTS-requirement grading
+unification), the rest mypy-typing mechanics or another feature's own
+commits incidentally touching one in-scope file (reviewed to that file
+only, the rest of that commit left to its own feature's rotation turn).
+
+Two new file groups outside the declared 13-file scope were found adjacent
+to the in-scope changes — `pre_shift_work_service.py` (new, 715 L) and
+`shift_history_import_{engine,service}.py` + `shift_history_import.py` (new,
+3,163 L combined) — in the same position pass 7's SCH-15 found "External
+Shift Hours". Both reviewed opportunistically and found clean (org-scoped
+throughout, XC-1-validated FKs, locked capacity/approval paths, bounded
+uploads with malware scanning, correct route registration in all three
+registries) — recorded as **SCH-17**, which widens pass 7's still-
+unactioned SCH-15 recommendation rather than opening a second one. All
+standing items re-verified: SCH-9/SCH-10/SCH-13 intact at their current
+(shifted) locations; SCH-15's own four files are still zero-diff since pass
+7, so its recommendation is unchanged; SCH-16's self-documented TOCTOU is
+unchanged. Route count: `scheduling.py` 107 (was 98, verified by AST decorator
+parse, 0 missing an auth dependency); `scheduling_module_config.py` and
+`calcom_sync.py` unchanged (zero diff).
+
+**Gate.** Full gate run for real, not assumed: `flake8`/`black --check`/
+`isort --check-only` against `app/`, `tests/` and `alembic/` all clean;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors/warnings;
+scoped `pytest` (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type or pre_shift or pre_work or
+custom_crew or open_swap or xc1_scheduling"`) — 1826 passed, 1 pre-existing
+skip (`pywebpush`); `npm run typecheck` and `npm run lint` both clean. See
+`SCH-15-scheduling.md`'s **Pass 8** section.
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests).
 
 ### 2026-10-15 — Feature 13 (Apparatus & NFC, pass 16) — watchdog pickup, 0 fixes, 0 new findings
 
@@ -32295,91 +32382,64 @@ Findings doc: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts
 was found or fixed this pass. Rotation row 14 → ✅ (pending PR merge). Next:
 Feature 15 (Scheduling).
 
-### 2026-10-15 — Feature 15 (Scheduling, pass 8) — watchdog pickup, 1 fixed (SCH-17), 1 flagged (SCH-18), 1 scope-boundary note (SCH-19)
+### 2026-10-15 — Feature 15 (Scheduling) — concurrent-watchdog addendum: 1 fixed (SCH-18), 1 flagged (SCH-19), a branch-name collision caught and resolved
 
-**Step 0.** `list_pull_requests` (state=open) returned 0 PRs with a head
-branch starting `claude/security-review-`. PR #3290 (Feature 14, Equipment
-check & shifts, pass 9) had already merged (`merged_at:
-2026-10-15T21:33:26Z`), confirmed via `pull_request_read`. Row 14 was
-already ✅ and row 15 (Scheduling) the first `⬜` per the live **Open PR**
-note's own "next" pointer (the embedded status table further down this file
-is a stale historical snapshot inside a collapsed pass's own log entry, not
-the live tracker — the **Open PR** section at the top of this file is the
-authoritative pointer, confirmed against GitHub each time per this
-rotation's own Step 0 rule).
+**Step 0, as run at the time, and what actually happened.** `list_pull_requests`
+(state=open) returned 0 PRs with a head branch starting
+`claude/security-review-` right after PR #3290 (Feature 14) merged. That
+check was correct when made, but a **second, independent watchdog session
+picked up the same feature at essentially the same moment** and finished
+first: PR #3291 (Feature 15, Scheduling, pass 8) opened at 21:53 and merged
+at 22:22, entirely while this iteration's own review (launched beforehand)
+was still running. Both sessions derived the identical deterministic branch
+name `claude/security-review-scheduling-p8`, and both named their first new
+finding "SCH-17" — a genuine fork, caught only when this iteration went to
+open its own PR and found GitHub Actions showing check runs against commits
+and a commit message it never produced (CLAUDE.md Pitfall #24's
+back-association behavior, triggered by the branch-name collision rather
+than a literal reused branch).
 
-**Review.** `docs/security-review/SCH-15-scheduling.md` already carries
-passes 1, 2, 3, 4, 5, 6, 7 (this feature has been through the rotation
-before), so this iteration is pass 8, diffed against pass 7's merge
-(`08063fea3`, PR #2971) rather than re-read from scratch — consistent with
-how passes 3/6/7 worked. Clone was shallow; `git fetch --unshallow` was
-required before the diff could be trusted.
-
-**SCH-17 (LOW, fixed).** `ShiftFinalizeRequest.attach_call_ids` and
+**Reconciliation, not a second pass.** #3291's review is the real pass 8 —
+its own log entry above (`### 2026-10-15 — Feature 13...` block two entries
+up is unrelated; see the pass-8 entry recorded by that merge itself) stands
+as written. This iteration's review found one thing pass 8's independent
+pass did not: `ShiftFinalizeRequest.attach_call_ids` and
 `CloseoutCallsRequest.attach_call_ids`/`detach_call_ids` had no list-length
-bound; each id costs a locking DB query in a loop, so an authenticated
+bound (each id costs a locking DB query in a loop, so an authenticated
 `scheduling.manage`/shift-officer caller could submit tens of thousands of
-ids to inflate one request's DB cost. Fixed with `max_length=200`, matching
-`CallTrackingService.MAX_ATTACHABLE_CALLS` — the one legitimate source of
-these ids.
+ids to inflate one request's DB cost). Rather than discard that fix or ship
+a duplicate "Pass 8" writeup, this iteration merged `main` (now past #3291)
+into its branch, resolved the resulting conflicts in `SCH-15-scheduling.md`
+and this file by keeping #3291's content as the authoritative pass-8 record
+and recording its own, genuinely new finding as a **Pass 8 addendum**
+section instead — renumbered to **SCH-18** (fix) and **SCH-19** (flagged
+sibling gap) since #3291's own new finding had already claimed "SCH-17".
+The scope-boundary note this iteration also drew independently duplicated
+#3291's own SCH-17 exactly and was dropped rather than recorded twice.
 
-**SCH-18 (LOW, flagged, not fixed).** Same shape of gap on
-`member_call_counts` (list) and `reported_call_types` (dict) — not touched
-by this pass's delta, and closing it needs an owner-picked cap (no clean
-existing ceiling for the call-type vocabulary, which is itself unbounded in
-org settings, unlike `attach_call_ids` which could borrow
-`MAX_ATTACHABLE_CALLS`). Mirrored to `KNOWN_LIMITATIONS.md`'s Scheduling
-Module table.
+**SCH-18 (LOW, fixed).** Bound `attach_call_ids`/`detach_call_ids` to
+`max_length=200`, matching `CallTrackingService.MAX_ATTACHABLE_CALLS` — the
+one legitimate source of these ids.
 
-**SCH-19 (scope-boundary note, not a vulnerability).** A new "Shift History
-Import" feature (~2,200 backend lines, `endpoints/shift_history_import.py` +
-service/engine/models/schemas/2 migrations + 14 frontend files) landed
-entirely outside Scheduling's declared 13-file scope, same shape as pass 7's
-"External Shift Hours" note. Reviewed opportunistically and found clean on
-every checklist dimension: every route `scheduling.manage`-gated, every
-by-id fetch org-scoped, all three client-supplied-reference mapping types
-(member/unit/seat) validated in-org before being stored in JSON columns
-(XC-1, with `copy.deepcopy()` per CLAUDE.md Pitfall #12), upload capped at
-10MB + malware-scanned, row count capped at 10,000, CSV export via
-`SafeCsvWriter`, commit path correctly locked, unmatched-name members
-created as `ARCHIVED`/`password_hash=None` (records, not accounts, no
-privilege-escalation surface), both migrations correctly guarded (Pitfall
-#26) and both `SET NULL` FKs nullable (Pitfall #2). Recommending it join
-Scheduling's declared scope for the next pass.
+**SCH-19 (LOW, flagged, not fixed).** Same shape of gap on
+`member_call_counts` (list) and `reported_call_types` (dict), left open
+pending an owner-picked cap (no clean existing ceiling for the call-type
+vocabulary, which is itself unbounded in org settings). Mirrored to
+`KNOWN_LIMITATIONS.md`'s Scheduling Module table.
 
-**Re-verified intact, no new issue:** SCH-9, SCH-11, SCH-13, SCH-16, all at
-their current line numbers. SCH-10 (DNS-rebinding TOCTOU, cross-cutting)
-unchanged, still tracked in `KNOWN_LIMITATIONS.md`; `calcom_service.py` has
-zero diff this window. Also reviewed in depth and found correctly built:
-pre-shift work sessions (officer cannot approve their own time; one
-client-supplied FK validated in-org), open swap pickup (re-validates the
-full signup/capacity/eligibility stack, refuses self-pickup), the close-out
-picker's `detach_call_ids` undo path (fails safe — no-op, not error — on a
-foreign-org call id), and the open seat-name vocabulary (bounded, resolved
-case-insensitively, never built into SQL). An already-landed XC-1 fix
-(`970adc6b`, outside this rotation) closing the one unvalidated FK gap this
-feature had left was re-verified correct, not re-flagged. Route inventory:
-`scheduling.py` now 107 routes (up from 98 at pass 7), all 107 confirmed via
-AST walk to carry a recognized auth dependency; `scheduling_module_config.py`
-(3), `calcom_sync.py` (1), and opportunistically `shift_history_import.py`
-(9, all `scheduling.manage`) also checked clean the same way.
+**Gate**, re-run independently against CI's pinned tool versions
+(flake8==7.3.0, black==26.5.1, isort==9.0.1): `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors;
+`check_endpoint_permissions.py --strict` — 1,815 documented handlers, 0
+errors; `pytest tests/test_scheduling.py tests/test_scheduling_endpoints.py
+tests/test_xc1_scheduling_events.py -q` — 151 passed; frontend
+`npm run typecheck`/`npm run lint` both clean.
 
-**Gate.** `flake8`/`black --check`/`isort --check-only` (CI's pins:
-flake8==7.3.0, black==26.5.1, isort==9.0.1) clean over `app/ tests/
-alembic/`; `validate_migrations.py --strict` passed (single head
-`c903fc771081`, 601 revisions); `check_route_permissions.py --strict`
-passed (270 routes, 0 errors/warnings); `check_endpoint_permissions.py
---strict` passed (1,815 documented handlers, 0 errors/warnings); scoped
-backend tests (`-k "scheduling or shift or swap or calcom or
-position_slots or call_tracking or call_type or pre_shift or
-history_import"`) 1,799 passed, 1 skipped (pre-existing, `pywebpush`);
-frontend `npm run typecheck` 0 errors, `npm run lint` 0 errors/0 warnings.
-Flagged, not fixed: `backend/requirements.txt` declares newer
-black/flake8/isort than CI's own pinned install step — a pre-existing,
-repo-wide tooling-drift item outside this feature's scope, left for whoever
-owns the next dependency bump to reconcile.
-
-Findings doc: [`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 8**
-section. `KNOWN_LIMITATIONS.md` updated (SCH-18 row added to the Scheduling
-Module table). Rotation row 15 → ✅ (pending PR merge). Next: Feature 16
-(Events & requests).
+Findings doc: [`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 8
+addendum** section (pass 8 itself is #3291's). `KNOWN_LIMITATIONS.md`
+updated (SCH-19 row added to the Scheduling Module table). Rotation row 15
+was already ✅ from #3291's merge; this addendum does not change it, nor the
+"next: Feature 16 (Events & requests)" pointer — the rotation does not
+advance again until this PR merges, per "one PR at a time."

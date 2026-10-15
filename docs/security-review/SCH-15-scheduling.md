@@ -5,17 +5,19 @@
 [#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
 [#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
 [#2971](https://github.com/thegspiro/the-logbook/pull/2971) (pass 7, 0
-fixed, SCH-10 confirmed fixed), pass 8 PR recorded in `PROGRESS.md`
+fixed, SCH-10 confirmed fixed),
+[#3291](https://github.com/thegspiro/the-logbook/pull/3291) (pass 8, 0
+fixed, 1 new scope-boundary item)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (4,400 L, 107 routes, up from
 98), `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),
 `api/v1/endpoints/calcom_sync.py` (1 route, unchanged),
 `services/scheduling_service.py` (10,389 L, up from ~8,100),
 `services/scheduling_module_config_service.py`,
-`services/standing_shift_service.py` (zero diff since pass 7),
-`services/call_tracking_service.py` (887 L),
-`services/shift_eligibility_service.py` (1,491 L),
-`services/shift_completion_service.py` (2,126 L, shared with Feature 14),
+`services/standing_shift_service.py` (unchanged logic, mypy-typed),
+`services/call_tracking_service.py` (887 L, up from ~700),
+`services/shift_eligibility_service.py` (1,491 L, up from ~1,200),
+`services/shift_completion_service.py` (shared with Feature 14),
 `services/integration_services/calcom_service.py` (zero diff since pass 6),
 `services/scheduling_widget_service.py` (185 L — in this pass's declared
 scope for the first time; a trivial mypy-narrowing diff, otherwise unchanged
@@ -27,337 +29,388 @@ from the dashboard-widgets endpoint pass 1 already reviewed),
 `utils/scheduling_dates.py` (zero diff)
 **Frontend:** `modules/scheduling`, `pages/scheduling`
 **Migrations:** `20260823_1400_e7a41b6d09c2_add_standing_shift_claims.py` (from
-an earlier pass); `84819ea78a79` (pass 7 window); `20261011_0030_46c55e6a3330_
-shift_pre_work_sessions.py` (pass 8 window, new table — see below)
+an earlier pass); `84819ea78a79` (pass 7 window, seeds `training.view_analytics`
+on existing leadership positions); `20261006_0436_56c91e7d9e10` (pass 8
+window, widens `shift_assignments.position` / `standing_shift_claims.position`
+to VARCHAR — see Pass 8 below); `20261011_0030_46c55e6a3330` (pass 8 window,
+adds `shift_pre_work_sessions`, out-of-declared-scope table, reviewed
+opportunistically below)
 
 ---
 
-## Pass 8 (2026-10-15) — real delta (12 backend files, 2,127/-535 L; 71
+## Pass 8 (2026-10-15) — real delta (32 non-merge commits touching 11 of 13 declared files), 0 fixes needed, 1 new scope-boundary item (SCH-17), all standing flags re-confirmed
 
-frontend files, 6,453/-629 L), 2 fixes (abuse-resistance), 1 new flagged
-finding, 1 scope-boundary note, all standing items re-verified intact
-
-**Full clone confirmed before trusting any diff.** The working tree was a
-shallow clone; `git fetch --unshallow` was required before `git diff`/`git
-show` against the pass-7 merge commit (`08063fea3`) could be trusted — a
-single-commit `git show --stat` against two large feature commits
-(`031fa2c2`, `ebb6bc6f`) initially printed a spurious multi-thousand-line
-diff because their parents were outside the shallow boundary, exactly the
-failure mode SCH-15 pass 7 and other features' passes have hit before.
-Re-run after unshallowing, both commits showed their real (small or zero)
-diff against the declared scope files.
+**Watchdog pickup.** No `claude/security-review-*` PR was open (checked via
+`list_pull_requests`, not `PROGRESS.md`'s own Open PR row, which still named
+the just-merged PR #3290 for a different feature). Rotation row 15
+(Scheduling) was the first `⬜`.
 
 ### Scope
 
-**Baseline:** `08063fea3` (PR #2971's merge commit, pass 7). Since then: 29
-non-merge-touching commits on the declared backend files (several are
-repo-wide mypy-typing batches with zero behavioral change), real content
-churn in 12 files (`scheduling.py`, `scheduling_service.py`, `schemas/
-scheduling.py`, `call_tracking_service.py`, `shift_completion_service.py`,
-`shift_eligibility_service.py`, `mcp/tools/scheduling.py`, `models/
-call_tracking.py`, `models/scheduling_module_config.py`,
-`scheduling_module_config_service.py`, `calcom_sync.py`,
-`scheduling_widget_service.py`); zero diff in `standing_shift_service.py`,
-`calcom_service.py`, `schemas/scheduling_module_config.py`,
-`utils/scheduling_dates.py`. Frontend: 71 files in `modules/scheduling/` +
-`pages/scheduling/`, 36 non-merge commits.
+**Full-depth clone confirmed before trusting any count** —
+`git rev-parse --is-shallow-repository` returned `false` directly (no
+`fetch --unshallow` needed this time). Baseline: pass 7's own merge commit,
+`08063fea3` (PR #2971, merged 2026-10-06 04:46 UTC) — found by searching
+`git log --all --grep` for the PR number rather than trusting a cited SHA, per
+the lesson in pass 7's own "pass-6 citation error corrected" entry.
 
-**Read in full, not diff-sampled:** every added/changed hunk in the 12
-backend files above (confirmed via `git diff` against the baseline, not a
-commit-message summary); `pre_shift_work_service.py` (new, 714 L, entire
-file); `scheduling_widget_service.py` (entire file, first time this feature's
-doc names it, though its one caller was already in pass 1's route table).
-**Opportunistically reviewed, outside the declared 13-file scope** (new this
-window, clearly Scheduling-adjacent — see SCH-19): `shift_history_import.py`
-(endpoint, 334 L), `shift_history_import_service.py` (1,317 L),
-`shift_history_import_engine.py` (matching/analysis engine, skimmed for the
-write-boundary methods only, not read in full), `models/
-shift_history_import.py`, `schemas/shift_history_import.py`, and their two
-migrations. **Not read line-by-line:** the frontend's 71 changed files — grep-
-swept for the standard banned-pattern set (`window.confirm`/`alert`/`prompt`,
-`dangerouslySetInnerHTML`, banned `.toLocale*`, `date-fns` imports, direct
-`fetch()`) with zero hits, and the five files touching the highest-risk new
-surface (`PreShiftWorkOffer.tsx`, `PreShiftWorkReviewList.tsx`,
-`ActivePreShiftWorkCard.tsx`, `ShiftPreShiftWorkSection.tsx`,
-`OpenSwapPickups.tsx`) were additionally confirmed to route every call
-through the module's shared `services/api.ts` (no direct `fetch`/`axios`).
+**32 non-merge commits since `08063fea3` touch the 13 declared backend files**
+(confirmed by `git log` scoped to those exact paths, not a broader grep).
+Real content changes (`git diff --stat`) landed in 11 of the 13:
+`scheduling.py` (+503/-9), `scheduling_service.py` (+1,338/-193),
+`schemas/scheduling.py` (+174/-15), `call_tracking_service.py` (+199/-8),
+`shift_eligibility_service.py` (+160/-12), `shift_completion_service.py`
+(+110/-7), `calcom_sync.py` (+1/-1, a type annotation),
+`scheduling_module_config_service.py` (+4/-2, a type annotation),
+`standing_shift_service.py` (+15/-14, type annotations only),
+`mcp/tools/scheduling.py` (+32/-5), `models/call_tracking.py` (+22/-16, mypy
+`Mapped`/`mapped_column` typing). **Zero diff**, confirmed not assumed:
+`scheduling_module_config.py`, `calcom_service.py`.
 
-### New features this window
+Every commit was read individually (not sampled) and traced to one of:
+mechanical mypy-narrowing (`265a26be3`, `7879398dc`, `f5ad6018a`, `d1d72a3c2`,
+`51c77a9ce`, `668fca634`, `c1b61de67`, `17e289411`, `9aca4fb41` and their
+merge commits — type annotations and `Mapped`/`mapped_column` migrations, no
+behavior change, confirmed by reading each diff); a genuine XC-1 fix already
+applied and tested (`970adc6b5`, see "Re-verified" below); five real features,
+each reviewed in full (`b7a7482c0` shared-call picker, `77a7d6572` open-swap
+pickup, `b0c189a9c` custom crew seats, `dea67d773` pre-shift work timing,
+`6f8568583` Weekend Only pattern preset); two correctness/reporting changes
+(`9bda6d96f` call-tracking-mode-since stamp, `7489c4865` SHIFTS-requirement
+grading unification — Pitfall #29 class, owner-decided); one read-only
+eligibility helper added for a different feature's gate (`ebb6bc6f9`'s
+`shift_eligibility_service.py` change, see below); one pure extraction
+refactor (`44d8edb6f`'s `scheduling.py` change, apparatus-options lookup
+moved to a shared helper, logic unchanged); and groundwork for a different
+feature's permission model that happens to touch `mcp/tools/scheduling.py`
+(`6c45efd38`, see below).
 
-- **Pre-shift work sessions** (`dea67d77`, migration `46c55e6a3330`): a member
-  can time equipment-check prep against an upcoming shift before check-in
-  opens; an officer (or `scheduling.manage`) approves it before it counts
-  toward hours. Reviewed in full — see "Verified good" below.
-- **Open swap pickup** (`W33-4`): `GET /swap-requests/open` and
-  `POST /swap-requests/{id}/pick-up` let any eligible member claim a swap
-  nobody was named on, instead of waiting for an officer to assign it.
-- **"Weekend Only" shift-pattern preset** (`6f856858`): patterns can carry
-  `schedule_config.weekday_shifts`, a per-weekday day/night map, parsed
-  defensively (bounded 0–6, dropped rather than raised on malformed JSON).
-- **Call-tracking close-out picker gains detach** (`save_closeout_calls`'s
-  new `detach_call_ids`): the undo for attaching another unit's call;
-  `CallTrackingService.detach_response` takes a locking read before deciding,
-  matching `attach_response`'s shape, and is a no-op (not an error) on a
-  foreign-org call id, since the org-scoped `OrgCallResponse` filter simply
-  finds nothing to remove.
-- **Open seat-name vocabulary** (`schemas.SeatToken`, `app.utils.positions.
-resolve_seat`/`resolve_department_seat`): a shift/standing-claim/swap seat
-  is no longer a closed `ShiftPosition` enum — it is any string a department
-  has defined, bounded to 100 chars, resolved case-insensitively against the
-  shift's own (or the department's own) seat list, and rejected with a 422
-  (`UnknownSeatError`) otherwise. No injection surface: the token is only
-  ever compared in-memory or stored in a JSON column, never built into SQL.
-- **XC-1 fix landed outside this rotation, re-verified here** (`970adc6b`):
-  `create_pattern`/`update_pattern`'s `template_id`,
-  `assigned_members[].user_id` and `schedule_config.{day,night}_template_id`,
-  and `ShiftCompletionService.create_report`/`update_report`'s
-  `tasks_performed[].equipment_check_id`, are now validated in-org via the
-  shared `assert_in_org`/`assert_all_in_org` helpers before any write —
-  closing the one unvalidated-reference gap this feature had left (prior
-  passes' "every client-supplied FK is validated" claim was accurate for
-  every other write path; these five were the exception, now closed).
-- **MCP tool permission declarations** (cross-cutting fix, reviewed and
-  already covered by `MCPO-27`'s own pass): `logbook_tool`'s `permissions`
-  kwarg became required with no default; `scheduling.py`'s four tools
-  (`list_shifts`, `list_open_shifts`, `get_shift_notes`,
-  `get_scheduling_summary`) each now declare
-  `permissions=("scheduling.view", "scheduling.manage")`, matching the
-  equivalent endpoint's gate. Not re-litigated as a new finding here.
+**Adjacent-file sweep, per the standing lesson that a feature's real surface
+can sit outside its declared scope list:** `backend/app/services/
+pre_shift_work_service.py` (new, 715 L, introduced by `dea67d773`) and
+`backend/app/api/v1/endpoints/shift_history_import.py` +
+`backend/app/services/shift_history_import_{engine,service}.py` (new, 3,163 L
+combined, introduced by a separate commit range culminating in `0a1817680`) —
+both feed or are fed by scheduling data but are not in the declared 13-file
+list. Reviewed opportunistically, same depth pass 7 gave the "External Shift
+Hours" files it found in the same position — see SCH-17 below.
+
+**Frontend:** `modules/scheduling/` and `pages/scheduling/` swept for every
+changed file since `08063fea3` (67 files) against the checklist's banned
+patterns (`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, raw `date-fns` imports) — zero hits across all 67, confirmed by
+a direct grep per file, not a sample. The new `admin/historyImport/` tree (12
+files) and `PreShiftWork*`/`OpenSwapPickups` components were read in full as
+part of reviewing SCH-17 and the two in-scope features above; the remaining
+changed files (settings-panel mypy-adjacent type fixes, a notifications panel,
+pattern-preset UI) were swept by the same grep and are not separately
+narrated here.
+
+### Re-verified standing items
+
+- **SCH-9 (fixed)** — `_all_users_in_org` still called from both shift-call
+  write paths (`create_shift_call`, `update_shift_call` in
+  `scheduling_service.py`, lines shifted but logic byte-identical to pass 7's
+  description). Confirmed by direct read, not assumed from the name surviving
+  a grep.
+- **SCH-10 (fixed 2026-10-05, confirmed unchanged)** — `calcom_service.py` has
+  **zero diff** since pass 6 (confirmed above), and the cross-cutting
+  `SSRFSafeAsyncTransport` fix it rides on is outside this feature's files
+  entirely, so there is nothing in this feature's own scope that could regress
+  it. Not re-verified line-by-line again this pass since the file is
+  byte-identical to the version pass 7 already read in full.
+- **SCH-13 (fixed)** — `finalize_shift` (`scheduling_service.py`) and
+  `save_closeout_calls` (same file) both still lock the shift row before
+  touching attendance/call rows; `save_closeout_calls` additionally now runs
+  `detach_call_ids` before `attach_call_ids`, both before the count
+  reconciliation (new this pass, part of `b7a7482c0` — see "Real commits
+  reviewed" below), preserving the lock-ordering invariant rather than
+  introducing a new race. `_reject_deleting_a_used_call_type`
+  (`scheduling.py`) still locks the org row before the usage check, unchanged.
+- **SCH-15 (scope-boundary, pass 7)** — pass 7's own recommendation ("add
+  External Shift Hours to Scheduling's declared scope, or confirm it belongs
+  elsewhere") was not acted on between passes; the four files it named
+  (`models/external_shift_hours.py`, `services/external_shift_hours_service.py`,
+  `services/external_apparatus_service.py`,
+  `endpoints/external_shift_hours.py`) have **zero diff** since pass 7
+  (confirmed by `git diff --stat`), so there is nothing new to re-review, and
+  the recommendation stands unchanged — repeated in SCH-17 below alongside
+  the two newer scope-boundary files, so a future pass can act on both at
+  once rather than finding them one at a time.
+- **SCH-16 (LOW, accepted, self-documented TOCTOU)** — the unlocked
+  `slugs_named_by_requirements` check in `_reject_deleting_a_used_call_type`
+  (`scheduling.py`, now ~line 4099) is unchanged: still runs after the locked
+  `slugs_locked_by_history` check, still carries the same in-code
+  acknowledgment of the gap. No action needed, unchanged from pass 7's
+  disposition.
+
+### New standing items added this pass
+
+- **SCH-17 (scope-boundary, not a vulnerability).** Two more out-of-scope
+  file groups appeared this pass, in the same position SCH-15 (pass 7)
+  flagged External Shift Hours:
+  - `backend/app/services/pre_shift_work_service.py` (715 L, new, from
+    `dea67d773`) plus its schema/endpoint surface inside `scheduling.py` and
+    `schemas/scheduling.py` (which _are_ in scope, so the wiring was reviewed
+    in full as part of this pass — see "Real commits reviewed").
+  - `backend/app/api/v1/endpoints/shift_history_import.py` (334 L) and
+    `backend/app/services/shift_history_import_{engine,service}.py` (1,512 L
+    - 1,317 L), a standalone CSV-import feature registered separately in
+      `api.py`, not imported by any of the 13 declared files.
+
+  Both reviewed opportunistically this pass and found clean:
+  - `pre_shift_work_service.py`: every query org-scoped
+    (`organization_id` filtered on every by-id lookup); self-review refusal
+    enforced (`review()` raises `PermissionError` when the reviewer is the
+    session's own member and lacks `scheduling.manage`); lock ordering
+    matches `member_check_in`'s (shift before session) to avoid deadlock, with
+    an in-code comment naming the reason; bounded duration
+    (`MAX_PRE_WORK_MINUTES = 1440`); the one new `ondelete="SET NULL"` column
+    (`reviewed_by`) is `nullable=True`; the new table is guarded against
+    `create_all` (Pitfall #26) in its migration.
+  - `shift_history_import_{engine,service}.py` / `shift_history_import.py`:
+    all 9 routes gated `require_permission("scheduling.manage")`; upload
+    capped at 10MB (`read_upload_limited`) and malware-scanned
+    (`reject_if_malicious`) before parsing; a separate `MAX_IMPORT_ROWS` cap
+    bounds row count independent of the byte cap; every by-id get
+    (`get_import`/`get_draft`) filters `organization_id`; client-supplied
+    member/apparatus ids in a mapping decision are validated in-org
+    (`_validated_member_mapping`/`_validated_unit_mapping`) before being
+    stored (XC-1); the commit path locks the draft row for its whole duration
+    (`for_update=True`) so two concurrent commits of the same draft serialize
+    rather than double-write; CSV template download uses `SafeCsvWriter`
+    (Pitfall #15); the three new frontend routes are registered in all three
+    registries (`APPLICATION_PAGES.md`, `testingRegistry.ts`,
+    `mobile-route-inventory.ts`), confirmed by direct grep, each gated
+    `scheduling.manage` client-side matching the server gate.
+
+  **Recommendation for the next pass, repeated and widened from SCH-15:**
+  formally add `pre_shift_work_service.py`, `shift_history_import.py` and the
+  two `shift_history_import_*` service files (plus the still-unresolved
+  External Shift Hours quartet from pass 7) to Scheduling's declared scope,
+  or confirm each belongs to a different rotation feature — four passes in a
+  row have now found real, review-worthy surface outside the declared file
+  list, which is a pattern rather than a one-off.
+
+- **No new vulnerability-class finding.** Every by-id query reviewed this
+  pass filters `organization_id`; every client-supplied FK (the pattern's
+  `template_id`/`assigned_members[].user_id`/`day_template_id`/
+  `night_template_id` fixed by `970adc6b5`, the report's
+  `tasks_performed[].equipment_check_id` fixed by the same commit, the
+  history-import mapping ids, the pre-shift-work `apparatus_id`) is validated
+  in-org before being stored; every new locking surface
+  (`detach_response`/`list_attachable_calls` in `call_tracking_service.py`,
+  `pick_up_open_swap` in `scheduling_service.py`,
+  `PreShiftWorkService.start`/`end`/`review`, the history-import commit) takes
+  its lock in an order consistent with the feature's existing deadlock-avoidance
+  reasoning; no new `.like()`/`.ilike()` anywhere in scope; no new JSON-column
+  shallow-copy mutation; the one widened column
+  (`shift_assignments.position`/`standing_shift_claims.position`, ENUM to
+  VARCHAR) ships with a migration that is guarded, idempotent and has a real,
+  refusing-not-corrupting downgrade (see "Schema & migration notes" below);
+  the new `SeatToken` request type caps length (`SEAT_NAME_MAX_LENGTH`) and
+  settles through the same `resolve_seat`/`resolve_department_seat` whitelist
+  every seating path already used, so a request cannot name a seat the shift
+  (or, for a standing claim, the department) does not actually carry — no
+  stored-XSS surface opened by widening the column, since the value is still
+  validated against a known vocabulary before being accepted, not freeform
+  text; the five new MCP scheduling tools added by `6c45efd38`'s pattern all
+  declare `permissions=("scheduling.view", "scheduling.manage")`, matching
+  the equivalent endpoints' gates, and are read-only.
+
+### Real commits reviewed (feature commits, read in full)
+
+- **`970adc6b5`** — XC-1 fix, already applied and tested
+  (`test_xc1_scheduling_events.py`, 440 L): `create_pattern`/`update_pattern`
+  now validate `template_id`, `assigned_members[].user_id` and
+  `schedule_config.{day,night}_template_id` in-org via
+  `assert_in_org`/`assert_all_in_org` before any write; a partial update
+  checks only the keys present, and an explicit `null` still clears
+  `template_id`. `ShiftCompletionService.create_report`/`update_report` gained
+  the same check for `tasks_performed[].equipment_check_id`. Before this fix,
+  a foreign id here was never read back cross-tenant (generation re-resolves
+  every reference in-org and silently drops what it cannot find), so the
+  actual pre-fix impact was within-org referential integrity only — a pattern
+  could silently generate without its template or a member — matching the
+  severity class of the already-closed SCH-9. Fixed, not merely flagged.
+- **`b7a7482c0`** (shared-call picker, SCHED-10 owner decision) —
+  `CallTrackingService.list_attachable_calls`/`detach_response` both filter
+  `organization_id` on every table joined (`OrgCall`, `OrgCallResponse`,
+  `Shift`); `detach_response` takes a locking read of every response row for
+  the call before deciding whether this shift is the last responder (so a
+  concurrent attach by another unit is visible before the decision);
+  `list_attachable_calls` is bounded (`MAX_ATTACHABLE_CALLS = 200`); the
+  endpoint resolves the shift through `_authorize_shift_management` (manage
+  permission or shift officer) before either method is reachable. Cross-org
+  cases are explicitly tested
+  (`test_attach_rejects_a_call_from_another_org`,
+  `test_another_orgs_calls_are_never_offered`,
+  `test_another_orgs_call_is_untouched`).
+- **`77a7d6572`** (open-swap pickup, W33-4 owner decision) —
+  `get_open_swaps_for_member`/`pick_up_open_swap` both filter
+  `organization_id` throughout; `pick_up_open_swap` locks request → shift →
+  offered assignment, in the order `respond_to_swap_offer` already uses, so a
+  concurrent pickup attempt serializes on the request row; the vacating seat
+  is excluded from its own capacity check (it moves in the same transaction);
+  the full `_validate_assignment_candidate` (duplicate, overlap, leave,
+  eligibility, EVOC, seat cap) runs with no override path; a training seat is
+  refused outright. `self.requesting_user_id == member_id` ("pick up your own
+  shift") is refused. 458 L of integration tests, including a cross-org case.
+- **`b0c189a9c`** (custom crew seats, SCHED-CUSTOM-SEAT owner decision) — the
+  widened VARCHAR columns accept a value only through `resolve_seat`
+  (matches a seat the specific shift already carries) or
+  `resolve_department_seat` (matches the department's own defined
+  vocabulary for a standing claim) — never arbitrary client text. Both raise
+  `UnknownSeatError` (422) otherwise. `SeatToken`'s `AfterValidator` caps
+  length at `SEAT_NAME_MAX_LENGTH` before any of that runs. Migration
+  `56c91e7d9e10` reviewed in full: guarded against `create_all`-only tables
+  (checks column existence first), idempotent (the one data rewrite is a
+  case-sensitive `BINARY` match on legacy uppercase values, safe to re-run),
+  and its downgrade inspects every row for a non-built-in seat and refuses
+  with the offending values named rather than truncating data.
+- **`dea67d773`** (pre-shift work timing) — reviewed as SCH-17 above.
+- **`6f8568583`** (Weekend Only pattern preset) — `_parse_weekday_shifts`
+  reads `schedule_config["weekday_shifts"]` defensively (Pitfall #19 shape:
+  malformed input is dropped, not raised), and the existing
+  `MAX_GENERATION_DAYS` cap on shift generation is untouched by this change —
+  confirmed the new code path is additive to, not a replacement for, the
+  bounded generation loop.
+- **`9bda6d96f`** (call-tracking mode-since stamp, SCHED-14/15 owner decision)
+  — `_stamp_call_tracking_mode_since` explicitly strips any client-supplied
+  `mode_since` before saving (`{k: v for k, v in incoming.items() if k !=
+"mode_since"}`) and computes the stamp itself from `org_today`, so a client
+  cannot backdate or forge the adoption date the report later warns against.
+- **`7489c4865`** (SHIFTS-requirement grading unification, Pitfall #29 class,
+  owner-decided) — the Shift Compliance report's SHIFTS rows now go through
+  the same shared grader (`evaluate_member_requirement_detail`) and shared
+  shift-count source (`load_credited_shift_dates`) as every other screen that
+  shows this figure, closing the three-sources-of-truth gap KNOWN_LIMITATIONS
+  already named. `load_credited_shift_dates` is `organization_id`-scoped.
+  Primarily a correctness fix (CMP-20 already covers it from the Compliance
+  feature's side per its own doc reference in the commit), not a new
+  tenant-isolation surface.
+- **`ebb6bc6f9`** (crew training recording — Training feature, not
+  Scheduling's) — only its `shift_eligibility_service.py` change is in this
+  feature's scope: a new read-only `can_serve_as_shift_officer` helper,
+  org-scoped (`_get_org(organization_id)`), built from the same
+  rank/qualification/training sources `get_eligible_positions` already uses,
+  deliberately excluding the org-wide open-positions grant per its own
+  docstring. No write path, no new surface. The feature's own endpoint/service
+  files (`training_submissions.py`, `training_submission_service.py`) are
+  Training's scope (rows 17/18, not yet reached by this rotation) and were
+  not reviewed here.
+- **`44d8edb6f`** (suggestion-box answer types — Forms feature, not
+  Scheduling's) — only its `scheduling.py` change is in this feature's scope:
+  a pure extraction, moving the existing (already org-scoped, already
+  reviewed) apparatus-options lookup into a shared
+  `app/services/apparatus_options.py` helper so the Forms module's vehicle
+  question can reuse it. No logic change at the call site, confirmed by diff.
+- **`6c45efd38`** (MCP OAuth groundwork — MCP feature, not Scheduling's) —
+  only its `mcp/tools/scheduling.py` change is in this feature's scope: the
+  four existing read-only scheduling MCP tools gained a `permissions=(...)`
+  declaration (`scheduling.view`, `scheduling.manage`) as part of a
+  repo-wide change requiring every MCP tool to declare member permissions.
+  Matches the equivalent endpoints' own gates; no scheduling-specific
+  authorization logic changed.
+
+### Route inventory
+
+**`scheduling.py`: 107 routes (was 98)** — verified by direct `@router.*`
+decorator parse via a small AST script (not a commit message or a diff of
+the prior count), cross-checked against `grep -c "@router\."` (both agree).
+All 107 carry a recognized auth dependency
+(`get_current_user`/`require_permission`/`get_optional_current_user`) in
+their signature — 0 with none, confirmed by the same script scanning every
+route's argument list for one of those three names.
+**`scheduling_module_config.py`: 3 routes, unchanged** (zero diff this
+window). **`calcom_sync.py`: 1 route, unchanged** (zero diff this window).
+**Total across the three declared endpoint files: 111 routes, 111/111 with a
+recognized auth dependency.**
 
 ### Verified good ✅ (pass 8)
 
-- **Pre-shift work is correctly org-scoped, self-service-scoped, and
-  separation-of-duties-correct throughout.** Every service method filters
-  `organization_id` explicitly (`start`, `end`, `get_session`,
-  `list_for_shift`, `list_awaiting_review`, `review`); the five member-facing
-  routes (`eligible-shifts`, `active`, `POST /pre-shift-work`,
-  `.../end`, and the review queue) are all self-scoped to
-  `current_user.id`/`current_user.organization_id` with no client-supplied
-  user id anywhere; `review()` requires `can_manage or is_officer` and
-  separately refuses `str(session.user_id) == str(reviewer.id) and not
-can_manage` — an officer cannot approve their own prep time, matching the
-  shift-report separation-of-duties pattern `7df93344f` established
-  elsewhere in this feature. `start()` locks the member's own `User` row
-  (`for_update=True`) then takes a **locking** re-read of the
-  one-active-session invariant (`with_for_update()`, not a plain `SELECT`) —
-  the correct Pitfall #27 shape for a check-then-insert under REPEATABLE READ.
-  `review()` locks the shift, then the session, in the same order
-  `member_check_in`'s own ending of a stray session takes them, with an
-  explicit in-code comment about the deadlock that the reverse order would
-  risk. The one client-supplied FK (`apparatus_id` in `start()`) is validated
-  in-org via `resolve_apparatus_display_map` before being stored (XC-1).
-  Approved-but-unreviewed time cannot be double-credited: `approved_minutes_
-for_shift`/`approved_pre_work_minutes` read only `status == APPROVED` rows,
-  never `PENDING`/`ACTIVE`, and every hours reader that now adds prep time
-  (shift detail, `finalize_shift`'s snapshot, the member-hours report, the
-  monthly-totals report, and `get_shift_compliance`'s shared-grader path) adds
-  it through this one function rather than re-deriving the rule — matching
-  Pitfall #29 ("a screen reports what the backend decided").
-- **Open swap pickup (`pick_up_open_swap`) is bounded the same way a signup
-  is, not a shortcut around it.** It locks the swap request, then the
-  offering shift, then the offered assignment — the same order
-  `respond_to_swap_offer`/`review_swap_request` already take, so a second
-  pickup attempt on the same swap serializes and finds it no longer pending.
-  It refuses a self-pickup (`requesting_user_id == member_id`), a training
-  seat, a cancelled or finalized shift, and re-validates the member's
-  signup window and `_validate_assignment_candidate(enforce_position_
-eligibility=True, enforce_capacity=True)` before moving the seat — the
-  duplicate/overlap/leave/EVOC/seat-cap checks a signup gets, not a weaker
-  set. `get_open_swaps_for_member` (the listing) deliberately reuses
-  `get_eligible_positions_bulk` rather than re-deriving eligibility, per the
-  explicit in-code Pitfall #29 citation.
-- **Shift template pattern-generation's FK-reference check (XC-1) and the
-  new weekend preset's defensive JSON parsing are both correctly bounded.**
-  `_pattern_refs_error` validates only the keys present in a partial update
-  (an omitted key leaves the reference alone; an explicit `null` clears it,
-  matching Pitfall #1's update semantics) and runs before either
-  `create_pattern`'s insert or `update_pattern`'s `_crud_update`.
-  `_parse_weekday_shifts` drops (never raises on) a malformed weekday key,
-  an out-of-0–6 value, or a non-list `types` entry, so a corrupted
-  `schedule_config` degrades generation for that one pattern instead of
-  taking the whole request down.
-- **The new Shift History Import feature (SCH-19, below) passes every
-  checklist dimension checked.** Every route requires `scheduling.manage`;
-  every by-id fetch (`get_import`/`get_draft`/`discard`) filters
-  `organization_id`; the three client-supplied-reference mapping types
-  (`MemberMapping.user_id`, `UnitMapping.id` for both "own apparatus" and
-  "external apparatus", and the seat-name mapping) are each validated in-org
-  or against the department's own seat vocabulary before being stored in the
-  draft's JSON columns (XC-1), via `copy.deepcopy()` before every mutation
-  (Pitfall #12); the upload is capped at 10 MB, scanned with
-  `reject_if_malicious`, and the parsed row count is capped at 10,000
-  (`MAX_IMPORT_ROWS`); the CSV template download uses `SafeCsvWriter`
-  (Pitfall #15); `commit()` locks the draft row for its whole duration so two
-  admins cannot double-commit, and locks each existing shift it attaches to
-  before reading its people; members created for unmatched names are
-  `status=ARCHIVED` with `password_hash=None` — records, not accounts, so the
-  feature cannot be used to seed a sign-in-capable user; both migrations
-  guard on table/column existence first (Pitfall #26) and both `SET NULL`
-  FKs (`reviewed_by`/`updated_by`/`created_by`/`committed_by`) are
-  `nullable=True` (Pitfall #2).
-- **Every by-id lookup added or touched this window still filters
-  `organization_id`**, re-confirmed by reading each one directly rather than
-  trusting its docstring: `_lock_existing_shift`, `get_open_swaps_for_member`
-  /`pick_up_open_swap`'s three locked reads, `PreShiftWorkService`'s eight
-  org-filtered queries, `CallTrackingService.detach_response`/
-  `list_attachable_calls`.
-- **No new `.like()`/`.ilike()` call; no new raw SQL; no new JSON-column
-  shallow-copy mutation** — `ShiftEligibilityService.update_scheduling_
-settings` (which now also carries the call-tracking `mode_since` stamp and
-  the new `pre_shift_work_enabled` flag) still opens with
-  `copy.deepcopy(org.settings or {})`, confirmed at its current line.
-- **SCH-9, SCH-11, SCH-13 and SCH-16 all re-verified intact at their current
-  lines**, none touched by this pass's diff: `_all_users_in_org` (`:2029`)
-  still guards `create_shift_call`/`update_shift_call`'s `responding_members`
-  (`:3303`, `:3374`); `respond_to_swap_offer`'s target-identity and
-  live-state re-checks are unchanged; `finalize_shift` (`:9352`) and
-  `save_closeout_calls` (`:9921`) keep their documented shift-then-
-  attendance/call lock ordering, now also crediting approved pre-shift
-  minutes into `finalize_shift`'s hours snapshot without disturbing that
-  order; `_reject_deleting_a_used_call_type` (`scheduling.py:4003`) and its
-  unlocked `slugs_named_by_requirements` check (SCH-16, accepted) are
-  unchanged. SCH-10 (DNS-rebinding TOCTOU) is unchanged and still tracked in
-  `KNOWN_LIMITATIONS.md`; `calcom_service.py` has zero diff this window.
+- No new by-id endpoint missing org-scoping; no new unvalidated
+  client-supplied FK (`970adc6b5` closed the one gap that existed, in
+  pattern/report refs); no new unbounded query (`list_attachable_calls`
+  capped at 200, `get_open_swaps_for_member` capped at
+  `OPEN_SWAP_LIMIT`, history-import rows capped at `MAX_IMPORT_ROWS`, upload
+  bytes capped at 10MB); no new `.like()`/`.ilike()`; no cache-exclusion-list
+  gap (`/scheduling/` already covers every new route under that prefix; the
+  separately-mounted `shift_history_import.py` routes are also under
+  `/api/v1/scheduling/history-import`, so the same prefix rule already
+  covers them — confirmed by reading the mount path in `api.py`); no JSON-
+  column shallow-copy mutation; no new `ondelete="SET NULL"` column missing
+  `nullable=True` (`reviewed_by` on `shift_pre_work_sessions` checked
+  explicitly); the one migration narrowing/widening a column
+  (`56c91e7d9e10`) has a real, non-destructive downgrade; no new outbound
+  HTTP call in scope (`calcom_service.py` zero diff).
+- Four new read-then-write / capacity-sensitive paths landed this window
+  (`detach_response`, `pick_up_open_swap`, `PreShiftWorkService.start`/`end`/
+  `review`, the history-import commit) and all four lock in an order
+  consistent with the feature's existing deadlock-avoidance reasoning, with
+  an in-code comment naming the reason in three of the four (the fourth,
+  `detach_response`, reasons about the lock in its docstring instead of
+  inline).
+- Separation of duties holds on the two new approval-shaped paths:
+  `pick_up_open_swap` refuses the offerer picking up their own shift;
+  `PreShiftWorkService.review` refuses a shift officer approving their own
+  session (requires `scheduling.manage` instead).
 
-### Findings
+### Completion gate
 
-#### SCH-17 — LOW (abuse resistance) — `attach_call_ids`/`detach_call_ids` had no length bound — ✅ FIXED
+| Check                                                                                                                                                                                | Result                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                        | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                                                                                                                                                 | ✅ clean (2,334 files unchanged)                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                            | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                    | ✅ single head `c903fc771081`, 601 revisions      |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                | ✅ 270 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type or pre_shift or pre_work or custom_crew or open_swap or xc1_scheduling"` | ✅ 1826 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                                                                                                                                                  | ✅ clean                                          |
+| `npm run lint`                                                                                                                                                                       | ✅ clean                                          |
 
-**What:** `ShiftFinalizeRequest.attach_call_ids` (pre-existing field, reused
-by this window's close-out picker) and the picker's new
-`CloseoutCallsRequest.detach_call_ids` were both plain `Optional[List[UUID]]`
-with no `max_length`. Each id in the list costs the server a locking
-`SELECT` plus (for attach) an insert decision in
-`CallTrackingService.attach_response`/`detach_response`, called in a Python
-loop — `for call_id in attach_call_ids or []: ...` — so request size directly
-multiplies database round trips.
+Rotation row 15 → ✅ (pending this PR's merge). Next: Feature 16 (Events &
+requests).
 
-**Where:** `app/schemas/scheduling.py` — `ShiftFinalizeRequest.attach_call_ids`
-and `CloseoutCallsRequest.attach_call_ids`/`detach_call_ids`.
+## Pass 8 addendum (2026-10-15) — SCH-18 fixed, SCH-19 flagged (found after pass 8's own PR #3291 merged)
 
-**Failure scenario:** an authenticated member holding `scheduling.manage`, or
-any shift's officer, submits a close-out save with tens of thousands of
-random UUIDs in `detach_call_ids`. Pydantic accepts the list unbounded; the
-service loop issues one `SELECT ... FOR UPDATE` per id before finding nothing
-to detach (a no-op per the id's own org-scoping — see "Verified good" above),
-holding row-lock overhead and connection time for the whole request. The
-caller already must be authenticated and hold a real permission, so this is
-not an unauthenticated DoS, but it is a disproportionate cost from one request
-a legitimate client never needs: `list_attachable_calls` (the only source of
-real ids a client would send) already caps its own offer at
-`MAX_ATTACHABLE_CALLS = 200`.
+A second, independently-launched watchdog iteration reviewed Feature 15 at
+the same time as the pass above (PR #3291) and surfaced one real gap pass 8
+did not catch, plus a sibling gap left open. Recorded as an addendum rather
+than a competing "Pass 8" section since #3291 already holds that pass's
+record; the rotation's own "next: Feature 16" pointer is unchanged by this
+addendum — it is a follow-up fix, not a new pass.
 
-**Impact:** LOW. Authenticated-and-permissioned amplification, not an
-unauthenticated DoS vector, and bounded by the officer/manager population
-size, not the public internet.
-
-**Fix:** added `Field(max_length=200)` to all three fields, matching
+**SCH-18 (LOW, fixed).** `ShiftFinalizeRequest.attach_call_ids` and
+`CloseoutCallsRequest.attach_call_ids`/`detach_call_ids` had no
+list-length bound. Each id costs the server a locking DB lookup in a loop
+(`CallTrackingService`'s attach/detach paths), so an authenticated
+`scheduling.manage`/shift-officer caller could submit an unbounded list of
+ids to inflate one request's DB cost — an abuse-resistance gap, not a
+tenant-isolation one (every id is still resolved through an org-scoped
+query). Fixed in `backend/app/schemas/scheduling.py` with
+`Field(default=None, max_length=200)`, matching
 `CallTrackingService.MAX_ATTACHABLE_CALLS` — the one legitimate source of
-these ids — with a comment at each site explaining why 200.
+these ids.
 
-#### SCH-18 — LOW (abuse resistance) — `member_call_counts`/`reported_call_types` remain unbounded — OPEN
+**SCH-19 (LOW, flagged, not fixed).** Same shape of gap on
+`ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types`
+(a dict keyed by call type). Left open: unlike `attach_call_ids`, there is no
+existing ceiling to borrow for the call-type vocabulary, which is itself
+unbounded in org settings, so closing this needs an owner-picked cap rather
+than a guess. `responding_members`'s existing 100-entry cap is a plausible
+precedent for the list side. Mirrored to `KNOWN_LIMITATIONS.md`'s Scheduling
+Module table.
 
-**What:** `ShiftFinalizeRequest.member_call_counts` (`List[MemberCallCredit]`)
-and `reported_call_types` (`dict[str, int]`, also on `CloseoutCallsRequest`)
-carry the same shape of gap as SCH-17 — no `max_length` on the list, no bound
-on the dict's key count — but neither was touched by this pass's diff, and
-closing it means picking a cap (a crew-size ceiling for the list; a
-call-type-vocabulary ceiling for the dict) that has no established precedent
-elsewhere in this file the way `MAX_ATTACHABLE_CALLS` gave SCH-17 a
-non-arbitrary number to reuse. Fixing SCH-17 with a borrowed, justified
-number and guessing a number here were different-weight changes.
-
-**Where:** `app/schemas/scheduling.py` — `ShiftFinalizeRequest.
-member_call_counts`, `ShiftFinalizeRequest.reported_call_types`,
-`CloseoutCallsRequest.reported_call_types`.
-
-**Failure scenario:** same shape as SCH-17 — an authenticated
-`scheduling.manage`/shift-officer caller submits a `member_call_counts` list
-with thousands of entries (each validated against `self.reported_call_count`
-in a Python loop) or a `reported_call_types` dict with thousands of keys,
-costing CPU/validation time proportional to request size with no server-side
-ceiling.
-
-**Impact:** LOW, same authenticated-and-permissioned ceiling as SCH-17.
-
-**Fix:** not applied. Recommend an owner decision on a reasonable crew-size
-cap (the existing `responding_members` field on `ShiftCall` caps at 100 per
-SCH-9's fix, which is a reasonable precedent to reuse) and a call-type-count
-cap (the department's own call-type vocabulary, which is itself unbounded in
-settings — bounding the request without first bounding the vocabulary it
-reports against would just move the ceiling).
-
-### SCH-19 — scope-boundary note (not a vulnerability)
-
-`1acc20a44` and two follow-ups added a **Shift History Import** feature
-(`endpoints/shift_history_import.py`, `services/shift_history_import_
-service.py`, `services/shift_history_import_engine.py`,
-`models/shift_history_import.py`, `schemas/shift_history_import.py`, two
-migrations, registered separately in `api.py`, plus 14 frontend files under
-`pages/scheduling/admin/historyImport/`) that lets an officer upload a CSV of
-historical shifts and commit them as finalized shifts/attendance/external
-hours. ~2,200 backend lines, entirely outside this feature's declared
-13-file scope — the same shape as SCH-15 (pass 7)'s "External Shift Hours"
-note. Reviewed opportunistically this pass (see "Verified good" above) and
-found clean on every checklist dimension checked. **Recommendation for the
-next pass:** formally add these files to Scheduling's declared scope (or
-confirm them as a different feature's responsibility), so they get a tracked
-review going forward rather than being swept in incidentally a second time.
-
-## Schema & migration notes (pass 8)
-
-`shift_pre_work_sessions` (added `20261011_0030_46c55e6a3330`) is the only
-table this feature's declared scope gained this window. `shift_id`/`user_id`/
-`organization_id` are `ondelete="CASCADE"`/`nullable=False`; `reviewed_by` is
-`ondelete="SET NULL"`/`nullable=True` (Pitfall #2 holds); guarded on
-`_has_table` first (Pitfall #26); downgrade is a documented, lossy
-`DROP TABLE IF EXISTS`. Opportunistically reviewed (SCH-19's scope):
-`shift_history_imports`, `shift_history_import_rows` and
-`shift_history_import_mappings` (added `c6c4ffcfdfb3`/`376ec2fef6d3`) — same
-pattern, all `SET NULL` FKs nullable, all guarded on existence first. No
-other schema changes in the declared scope this window; migration chain
-validated at a single head (`c903fc771081`, 601 revisions — the jump from
-pass 7's 371 reflects five weeks of whole-repo migration volume, not a
-scheduling-specific count).
-
-## Guard tests added (pass 8)
-
-None added this pass. SCH-17's fix is a `Field(max_length=200)` constraint —
-Pydantic enforces it structurally (a 201st id is rejected at the schema
-boundary before any handler code runs), so a regression would require
-deleting the constraint itself, which a reviewer reading the field
-definition would see directly; no behavior exists to regress silently the
-way a service-layer check could. The pre-shift-work and open-swap-pickup
-features landed with their own test coverage before this pass began (not
-authored here): `test_pre_shift_work.py`, `test_open_swap_pickup.py`,
-`test_xc1_scheduling_events.py` (the already-landed XC-1 fix), all included
-in the completion-gate run below.
-
-## Completion gate (pass 8)
-
-| Check                                                                                                                                        | Result                                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                                | ✅ 0 violations (CI's pinned 7.3.0, not the newer 7.4.1 `pip` resolves by default — see note) |
-| `black --check app/ tests/ alembic/`                                                                                                         | ✅ 2,334 files unchanged (CI's pinned 26.5.1)                                                 |
-| `isort --check-only app/ tests/ alembic/`                                                                                                    | ✅ clean (CI's pinned 9.0.1)                                                                  |
-| `python3 scripts/validate_migrations.py --strict`                                                                                            | ✅ single head `c903fc771081`, 601 revisions                                                  |
-| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                            | ✅ 270 routes checked, 0 errors, 0 warnings                                                   |
-| `python3 scripts/check_endpoint_permissions.py --strict` (repo root)                                                                         | ✅ 1,815 documented handlers, 0 errors, 0 warnings                                            |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type or pre_shift or history_import"` | ✅ 1,799 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip)                       |
-| `npm run typecheck`                                                                                                                          | ✅ 0 errors                                                                                   |
-| `npm run lint`                                                                                                                               | ✅ 0 errors, 0 warnings                                                                       |
-
-**Tooling note, out of this pass's scope:** `backend/requirements.txt`
-currently declares `black==26.10.1`/`flake8==7.4.1`/`isort==9.0.2`, while
-`.github/workflows/ci.yml`'s "Install linting tools" step pins
-`black==26.5.1`/`flake8==7.3.0`/`isort==9.0.1` — the two have drifted out of
-the lockstep the step's own comment says they must stay in (it documents two
-earlier drifts of exactly this kind). Not a Scheduling-specific issue and not
-fixed here; this pass installed and ran against CI's pinned versions
-specifically to match what actually gates a PR, per that file's own
-guidance. Flagged for whoever owns the next dependency bump to reconcile.
-
-Rotation row 15 → ✅ (pending PR merge). Next: Feature 16 (Events & requests).
+**Gate** (independently re-run against CI's pinned tool versions —
+flake8==7.3.0, black==26.5.1, isort==9.0.1): `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors;
+`check_endpoint_permissions.py --strict` — 1,815 documented handlers, 0
+errors; `pytest tests/test_scheduling.py tests/test_scheduling_endpoints.py
+tests/test_xc1_scheduling_events.py -q` — 151 passed; `npm run typecheck` —
+0 errors; `npm run lint` — 0 errors/0 warnings.
 
 ---
 
