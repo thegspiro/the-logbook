@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Archive,
   ArrowLeft,
+  ArrowUpDown,
   CalendarClock,
   PackagePlus,
   Pencil,
@@ -39,6 +40,7 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
+import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
@@ -168,6 +170,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
 
   // Which query the rows in `items` actually answer. Rendering the empty state
   // off `items.length` alone reports "no medical supplies" whenever the list
@@ -492,7 +495,7 @@ const MedicalSuppliesPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Four actions do not fit across a phone — "Add supply" ran to
+          {/* Five actions do not fit across a phone — "Add supply" ran to
               408px. `hscroll` already scrolls them; the marker is what tells the
               mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
           <div
@@ -517,6 +520,15 @@ const MedicalSuppliesPage: React.FC = () => {
                 >
                   <Tag className="h-4 w-4" />
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowImportExport(true)}
+                  className="btn-icon"
+                  aria-label="Import or export medical supplies"
+                  title="Import / export"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowDeliveryModal(true)}
@@ -924,6 +936,13 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
+      {showImportExport && (
+        <MedicalImportExportModal
+          onClose={() => setShowImportExport(false)}
+          onImported={() => void refresh()}
+          filters={{ search: debouncedSearch || undefined, category_id: categoryFilter || undefined }}
+        />
+      )}
     </div>
   );
 };

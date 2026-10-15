@@ -9200,6 +9200,46 @@ class InventoryService:
         )
         return [(row[0], row[1]) for row in result.all()]
 
+    async def get_lots_for_export(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> List[Tuple[InventoryLot, str, Optional[str]]]:
+        """Every stocked lot in a domain, as ``(lot, item_name, category_name)``.
+
+        The lot-level counterpart to the items export: one row per lot still
+        holding stock, soonest expiry first, so an expiry audit reads top-down.
+        Undated lots sort last rather than first — MySQL orders NULL ahead of
+        any date ascending, which would bury the lots that actually expire.
+
+        Retired items and emptied lots are left out for the reason
+        ``get_expiring_lots`` gives: neither is stock anyone can act on.
+        """
+        query = (
+            select(InventoryLot, InventoryItem.name, InventoryCategory.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .outerjoin(
+                InventoryCategory, InventoryCategory.id == InventoryItem.category_id
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+                InventoryLot.id.asc(),
+            )
+        )
+        result = await self.db.execute(query)
+        return [(row[0], row[1], row[2]) for row in result.all()]
+
     async def get_overdue_checkouts_for_alerts(
         self,
         organization_id: UUID | str,

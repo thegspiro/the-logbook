@@ -211,6 +211,7 @@ describe('MedicalSuppliesPage', () => {
 
     expect(screen.queryByRole('button', { name: /Add supply/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Receive delivery/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import or export/i })).not.toBeInTheDocument();
   });
 
   it('shows the management actions to a medical-only supply officer', async () => {
@@ -221,6 +222,16 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByRole('button', { name: /Add supply/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Receive delivery/i })).toBeInTheDocument();
+  });
+
+  it('opens import and export from the actions row', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /Import or export medical supplies/i }));
+
+    expect(screen.getByRole('dialog', { name: /Import \/ export supplies/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export lot list/i })).toBeInTheDocument();
   });
 
   it('shows the management actions to a quartermaster holding only the broad grant', async () => {

@@ -15,6 +15,7 @@ import type {
   ExpiringLot,
   InventoryCategory,
   InventoryCategoryCreate,
+  InventoryImportResult,
   InventoryItem,
   InventoryItemCreate,
   InventoryItemsListResponse,
@@ -112,6 +113,14 @@ export interface MedicalItemFilters {
   skip?: number | undefined;
   limit?: number | undefined;
 }
+
+/** The general import's result, plus the medical categories the import created. */
+export interface MedicalImportResult extends InventoryImportResult {
+  categories_created: string[];
+}
+
+/** The list's filters, minus paging: an export is the whole filtered set. */
+export type MedicalExportFilters = Omit<MedicalItemFilters, 'skip' | 'limit' | 'fuzzy'>;
 
 export const medicalSuppliesService = {
   async getSummary(expiringWithinDays?: number, options?: MedicalReadOptions): Promise<MedicalSupplySummary> {
@@ -218,6 +227,40 @@ export const medicalSuppliesService = {
 
   async deleteLot(lotId: string): Promise<void> {
     await api.delete(`/medical-supplies/lots/${lotId}`);
+  },
+
+  // Exports skip the response cache: a file somebody reconciles stock against
+  // must be what the server holds now, not what it held thirty seconds ago.
+  async exportItemsCsv(filters?: MedicalExportFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/export', {
+      params: filters,
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async exportLotsCsv(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/lots/export', {
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async downloadImportTemplate(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/import-template', { responseType: 'blob' });
+    return response.data;
+  },
+
+  /** Every row creates a new supply; an unknown category is created as a medical one. */
+  async importItemsCsv(file: File): Promise<MedicalImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<MedicalImportResult>('/medical-supplies/items/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   async getExpiringLots(daysAhead = 30, options?: MedicalReadOptions): Promise<ExpiringLot[]> {
