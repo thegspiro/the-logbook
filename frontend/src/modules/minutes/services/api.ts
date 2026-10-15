@@ -343,9 +343,29 @@ export const minutesService = {
 
   async addSuggestion(
     minutesId: string,
-    data: { section_key?: string | undefined; comment: string; proposed_text?: string | undefined }
+    data: {
+      section_key?: string | undefined;
+      comment?: string | undefined;
+      proposed_text?: string | undefined;
+      /** The reviewer's edited copy of the section; the server derives the tracked changes. */
+      proposed_html?: string | undefined;
+    }
   ): Promise<MinutesSuggestion> {
     const response = await api.post<MinutesSuggestion>(`/minutes-records/${minutesId}/suggestions`, data);
+    return response.data;
+  },
+
+  /** Write the accepted tracked changes into the section; the rest are rejected. Draft minutes only. */
+  async applySuggestion(
+    minutesId: string,
+    suggestionId: string,
+    accepted: string[],
+    note?: string
+  ): Promise<MinutesSuggestion> {
+    const response = await api.post<MinutesSuggestion>(
+      `/minutes-records/${minutesId}/suggestions/${suggestionId}/apply`,
+      { accepted, note: note || null }
+    );
     return response.data;
   },
 

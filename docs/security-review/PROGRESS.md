@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3262](https://github.com/thegspiro/the-logbook/pull/3262)**: branch
+`claude/security-review-documents-legal-p9`, Feature 10 (Documents & legal),
+pass 9. 0 code fixes, 0 new findings. All 22 routes re-enumerated, unchanged
+from pass 8. The real delta since pass 8 (`bb6f0a7d`): folder
+`allowed_roles` moved from position slugs to ids (migration `5b2e9c7d4a18`,
+fails closed on an unmatched slug), deleting a position now releases or
+refuses on the folders that name it, the decision-29 "only administrators
+could open this" confirmation, and the published-minutes HTML additions —
+all read in full and verified. See `DOC-10-documents-legal.md`'s **Pass 9**
+section. Row 10 → ✅ (pending this PR's merge); next is Feature 11
+(Inventory).
+
+**Watchdog tend, 2026-10-15 ~09:45 UTC: rotation forked, duplicate closed.**
+Two independent sessions picked up Feature 10 pass 9 within six minutes of
+each other: this PR (#3262, opened 09:32:14Z) and PR #3265 (branch
+`claude/security-review-documents-legal`, opened 09:38:43Z, identical
+disposition — 0 fixes, 0 new findings). Per the `security-review` skill's
+Step 0 ("more than one open → the rotation forked; tend the oldest, close
+the rest as duplicates with a comment"), #3262 is the older of the two and
+is the one being tended; #3265 was closed with a comment pointing back
+here. Confirmed via `list_pull_requests` (state=open) that no other
+`claude/security-review-*` PR is open. CI on #3262's head
+(`e9bd307b`) was still queued at the time of this check (PR opened
+13 minutes prior) — no red check, no merge conflict (`mergeable_state`
+was `unstable`, consistent with pending checks, not `dirty`), no
+actionable review comment (the two `chatgpt-codex-connector` comments on
+both PRs report a Codex _usage-limit_ failure, not a finding, on both
+PRs). Nothing else needed fixing this tend; next watchdog check should
+confirm CI finished green before the PR is left to merge.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 9, PR #3256, merged docs-only — 0 code fixes, 0 new findings; rotation row 09 marked ✅ as part of that PR), preserved for history</summary>
+
 **PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256)**: branch
 `claude/security-review-medical-screening`, Feature 09 (Medical screening,
 PHI), pass 9. 0 code fixes, 2 doc-mirror fixes, 0 new security findings.
@@ -29,6 +62,8 @@ unenforced; `get_compliance_status` not 404ing an unknown subject) were
 and MS-17 this pass. See `MS-09-medical-screening.md`'s **Pass 9** section.
 Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
 legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3255's merge, Feature 08, Membership pipeline, pass 10 — the state this pass's PR opened from), preserved for history</summary>
@@ -19197,7 +19232,7 @@ here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -19229,6 +19264,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 10 (Documents & legal, pass 9) — 0 fixes, 0 new findings
+
+**Step 0.** No open `claude/security-review-*` PR (GitHub `pulls?state=open`
+filtered on head ref, 0 results). PR #3256 (Feature 09, pass 9) had merged
+docs-only — not a recordable event. Row 10 was the first `⬜`.
+
+**Review.** Baseline `bb6f0a7d` (PR #3160's merge). In-scope delta: folder
+access by position id instead of slug (`documents_service.py`, migration
+`5b2e9c7d4a18`), `release_position_from_folders` called from
+`RoleService.delete_role`, the `confirm_admin_only` warning
+(`_someone_but_admins_opens`), and new published-minutes HTML in
+`document_service.py`. Verified: position ids validated in-org; the
+migration keeps an unmatched slug so the folder stays closed; deleting a
+folder's only position is refused rather than opening the folder; the
+admin-only check defers to `can_access_folder` and cannot bypass the
+shut-out check; every new minutes field is `html.escape`d and rich text is
+re-sanitized by `nh3` with an `http`/`https`/`mailto` allowlist. The minutes
+service/model/schema delta belongs to Feature 24 and was left to that row.
+All 22 routes unchanged. Gate green (807 scoped backend tests, 43 frontend).
 
 ### 2026-10-15 — Feature 09 (Medical screening, pass 9) — 0 code fixes, 2 doc-mirror fixes, 3 re-confirmed findings flagged, 0 new security findings
 

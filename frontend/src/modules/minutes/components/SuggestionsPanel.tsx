@@ -11,10 +11,14 @@
  */
 
 import React, { useState } from 'react';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 import { MessageSquarePlus } from 'lucide-react';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { PromptDialog } from '../../../components/ux/PromptDialog';
+import { RichText } from '../../../components/ux/RichText';
 import { SuggestChangeForm } from './SuggestChangeForm';
+import { TrackedChanges } from './TrackedChanges';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -33,6 +37,13 @@ const STATUS_LABEL: Record<string, string> = {
   declined: 'Declined',
 };
 
+/** The change ids the server could not place, when an apply was refused as a conflict (409). */
+const conflictingChanges = (err: unknown): string[] | null => {
+  if (!axios.isAxiosError(err) || err.response?.status !== 409) return null;
+  const detail = (err.response.data as { detail?: { failed?: unknown } } | undefined)?.detail;
+  return Array.isArray(detail?.failed) ? detail.failed.filter((x): x is string => typeof x === 'string') : [];
+};
+
 interface SuggestionsPanelProps {
   minutesId: string;
   status: MinutesStatus;
@@ -41,6 +52,8 @@ interface SuggestionsPanelProps {
   suggestions: MinutesSuggestion[];
   loaded: boolean;
   reload: () => Promise<void>;
+  /** Called after changes are applied or minutes recalled, so the page reloads the minutes. */
+  onMinutesChanged: () => Promise<void> | void;
 }
 
 export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
@@ -51,8 +64,13 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
   suggestions,
   loaded,
   reload,
+  onMinutesChanged,
 }) => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
+  const [decisions, setDecisions] = useState<Record<string, Record<string, 'accepted' | 'rejected'>>>({});
+  const [doesNotFit, setDoesNotFit] = useState<Record<string, string[]>>({});
+  const [applying, setApplying] = useState<string | null>(null);
   const [suggestingOverall, setSuggestingOverall] = useState(false);
   const [declining, setDeclining] = useState<MinutesSuggestion | null>(null);
 
@@ -69,6 +87,52 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
       await reload();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to answer the suggestion'));
+    }
+  };
+
+  const decide = (suggestionId: string, changeId: string, decision: 'accepted' | 'rejected') =>
+    setDecisions((current) => ({ ...current, [suggestionId]: { ...current[suggestionId], [changeId]: decision } }));
+
+  const setAll = (suggestion: MinutesSuggestion, decision: 'accepted' | 'rejected') =>
+    setDecisions((current) => ({
+      ...current,
+      [suggestion.id]: Object.fromEntries((suggestion.changes ?? []).map((c) => [c.id, decision])),
+    }));
+
+  const acceptedIds = (suggestion: MinutesSuggestion) =>
+    (suggestion.changes ?? [])
+      .filter((c) => (decisions[suggestion.id]?.[c.id] ?? 'accepted') === 'accepted')
+      .map((c) => c.id);
+
+  const apply = async (suggestion: MinutesSuggestion) => {
+    if (circulating) {
+      const ok = await confirm({
+        title: 'Take these minutes back to draft?',
+        message:
+          'Changes can only be written into draft minutes. They go back to draft, so members will not see them until you circulate them again. The suggestions are kept.',
+        confirmLabel: 'Recall and apply',
+        cancelLabel: 'Leave them circulating',
+      });
+      if (!ok) return;
+    }
+    setApplying(suggestion.id);
+    try {
+      if (circulating) await minutesService.recall(minutesId);
+      await minutesService.applySuggestion(minutesId, suggestion.id, acceptedIds(suggestion));
+      setDoesNotFit((current) => ({ ...current, [suggestion.id]: [] }));
+      toast.success('Changes applied to the section');
+    } catch (err: unknown) {
+      const failed = conflictingChanges(err);
+      if (failed) {
+        setDoesNotFit((current) => ({ ...current, [suggestion.id]: failed }));
+        toast.error('Some changes no longer fit the section. Reject them, or make them by hand.');
+      } else {
+        toast.error(getErrorMessage(err, 'Failed to apply the changes'));
+      }
+    } finally {
+      setApplying(null);
+      await onMinutesChanged();
+      await reload();
     }
   };
 
@@ -130,6 +194,40 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
                 {s.created_by_name ?? 'A member'} &middot; {formatDateTime(s.created_at, tz)}
               </p>
               <p className="text-theme-text-primary mt-2 text-sm whitespace-pre-wrap">{s.comment}</p>
+              {s.changes && s.changes.length > 0 && (
+                <>
+                  {s.section_changed && (
+                    <p className="alert-warning mt-2 text-xs" role="status">
+                      This section has been edited since this suggestion was made. Changes that still fit will be
+                      applied; if one does not, nothing is written and you are told which.
+                    </p>
+                  )}
+                  <TrackedChanges
+                    suggestionId={s.id}
+                    changes={s.changes}
+                    doesNotFit={doesNotFit[s.id] ?? []}
+                    {...(canAnswer && s.status === 'open'
+                      ? {
+                          decisions: decisions[s.id] ?? {},
+                          onDecide: (changeId: string, decision: 'accepted' | 'rejected') =>
+                            decide(s.id, changeId, decision),
+                        }
+                      : {})}
+                  />
+                  {s.proposed_content && (
+                    <details className="mt-2">
+                      <summary className="text-theme-text-secondary cursor-pointer text-xs">
+                        Show the reviewer’s whole version
+                      </summary>
+                      <RichText
+                        content={s.proposed_content}
+                        format="html"
+                        className="text-theme-text-secondary mt-1 text-sm"
+                      />
+                    </details>
+                  )}
+                </>
+              )}
               {s.proposed_text && (
                 <blockquote className="border-theme-surface-border text-theme-text-secondary mt-2 border-l-4 pl-3 text-sm whitespace-pre-wrap">
                   {s.proposed_text}
@@ -144,16 +242,47 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
                 </p>
               )}
               {canAnswer && s.status === 'open' && (
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void answer(s, 'accepted');
-                    }}
-                    className="btn-success touch:min-h-11 text-sm"
-                  >
-                    Accept
-                  </button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {s.changes && s.changes.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={applying !== null || acceptedIds(s).length === 0}
+                        onClick={() => {
+                          void apply(s);
+                        }}
+                        className="btn-success touch:min-h-11 text-sm"
+                      >
+                        {applying === s.id
+                          ? 'Applying…'
+                          : `Apply ${acceptedIds(s).length} accepted ${acceptedIds(s).length === 1 ? 'change' : 'changes'}`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAll(s, 'accepted')}
+                        className="btn-secondary touch:min-h-11 text-sm"
+                      >
+                        Accept all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAll(s, 'rejected')}
+                        className="btn-secondary touch:min-h-11 text-sm"
+                      >
+                        Reject all
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void answer(s, 'accepted');
+                      }}
+                      className="btn-success touch:min-h-11 text-sm"
+                    >
+                      Accept
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setDeclining(s)}

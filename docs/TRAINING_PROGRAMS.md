@@ -57,7 +57,7 @@ original for members who joined before the effective date
 after. All three columns are `NULL` on existing rows, which keeps the old
 behaviour. Field-level detail is in `backend/app/docs/TRAINING_MODULE.md`
 (TrainingRequirement → Grandfathering Fields); the officer's view is in
-[Training & Certification › Existing Members](training/02-training.md#existing-members--exempting-or-giving-a-catch-up-deadline-2026-10-03).
+[Training & Certification › Existing Members](training/02-training.md#existing-members--exempting-or-giving-a-catch-up-deadline).
 
 **Three requirement rules changed on 2026-10-05.**
 
@@ -576,7 +576,7 @@ omitted field is left alone and an explicit `null` clears it.
   decides it), and the member is told in-app when their submission is rejected,
   approved with changes, sent back for revision, or has its approval reversed —
   not on a plain approval. See
-  [Reviewing Submissions › Who Is Told, In-App](training/02-training.md#who-is-told-in-app-2026-09-28)
+  [Reviewing Submissions › Who Is Told, In-App](training/02-training.md#who-is-told-in-app)
 - **Separation of duties:** an officer cannot approve their own self-reported
   training — a second officer must review it, so hours/credit can't be granted
   unchecked. (Rejecting or requesting revision on one's own submission is allowed.)

@@ -116,7 +116,7 @@ describe('MinutesDetailPage review and adoption', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Suggest a change to Old Business' }));
     const form = await screen.findByRole('form', { name: 'Suggest a change to Old Business' });
-    await user.type(within(form).getByLabelText('What should change?'), 'Vendor B was $3,950');
+    await user.type(within(form).getByLabelText('Comment (optional)'), 'Vendor B was $3,950');
     await user.click(within(form).getByRole('button', { name: 'Send suggestion' }));
 
     await waitFor(() =>
@@ -129,6 +129,31 @@ describe('MinutesDetailPage review and adoption', () => {
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Suggest a change to Old Business' })).toBeNull());
     expect(screen.queryByRole('button', { name: 'Adopt Minutes' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Recall to Draft' })).not.toBeInTheDocument();
+  });
+
+  it('lets a member edit the section’s own text and sends it as tracked changes', async () => {
+    authState.checkPermission = (p: string) => p !== 'minutes.manage';
+    mockGetMinutes.mockResolvedValue({
+      ...base,
+      sections: [
+        { order: 0, key: 'old_business', title: 'Old Business', content: '<p>Three bids today.</p>', format: 'html' },
+      ],
+    });
+    mockAddSuggestion.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Suggest a change to Old Business' }));
+    const editor = await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
+    expect(editor).toHaveTextContent('Three bids today.');
+    await user.click(editor);
+    await user.keyboard('X');
+    await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+
+    await waitFor(() => expect(mockAddSuggestion).toHaveBeenCalledTimes(1));
+    const [, payload] = mockAddSuggestion.mock.calls[0] as [string, { section_key: string; proposed_html: string }];
+    expect(payload.section_key).toBe('old_business');
+    expect(payload.proposed_html).toContain('Three bids today.');
   });
 
   it('gives the secretary no Suggest button on a section, but counts the open suggestions there', async () => {

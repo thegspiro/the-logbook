@@ -46,7 +46,7 @@ from its open list.
 | B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ✅     |
-| B8  | documents                  | DOC2   | ⬜     |
+| B8  | documents                  | DOC2   | ✅     |
 | B9  | membership pipeline        | MP2    | ✅     |
 | B10 | messaging & communications | MSG2   | ✅     |
 | B11 | notifications              | NOTIF2 | ⬜     |
@@ -3119,6 +3119,29 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   related suites **1034 passed, 1 skipped** · frontend inventory **1661 passed** ·
   new backend file 21 pass, 10 fail without the fix, 0 under the unit job's marker
   expression. See equipment-check.md → Pass 5. Next: B8 documents.
+- **B8 documents ✅ (pass 5) — the write paths were already right; evidence, a
+  regression test and two dead surfaces.** Drove `PATCH /documents/{id}` and
+  `PATCH /documents/folders/{id}` over HTTP against the real schema with `null` for
+  every NOT NULL field (derived from schema and model) plus `color` / `icon`: all
+  4xx, none 500, and the nullable `description` / `tags` still clear — so, unlike
+  B4–B7, nothing to fix. The new 10-test file therefore has no red-before-fix run;
+  it is **mutation-checked** instead (dropping `handle_service_errors` from
+  `update_document` fails exactly `document-name` and `document-status`).
+  **Dead code:** the AST scan (now including `tests/` as a reference source, the
+  B7 lesson) found `schemas/documents.py::DocumentCreate` unreferenced anywhere,
+  removed (DOC2-3); and three frontend client methods with no non-test caller —
+  `getDocument`, `updateDocument`, `getMyFolder` — removed with their tests, the
+  endpoints stay (DOC2-4). **Verified good:** folder dialog sends every field it
+  owns with `blankToNull`; download checks ACL, confines the path to the org's
+  storage, audits; all 13 document routes carry a permission; `legal_documents`
+  and `station_documents` gate correctly (the latter in the handler). **Not read:**
+  `DocumentsPage` rendering (1,297 lines), upload-validation / storage internals,
+  the folder-ACL engine and the print service (the ACL is covered by passes 1–4 and
+  649 passing tests). **Observation:** the Meetings types live in
+  `documentsService.ts`; used, so not moved. Gate: flake8 / black / isort / tsc /
+  eslint clean · backend related suites **649 passed, 1 skipped** · frontend
+  documents tests **62 passed** · new file 10 pass, 0 under the unit job's marker
+  expression. See documents.md → Pass 5. Next: B9 membership pipeline.
 - **B9 membership pipeline ✅ (pass 5) — `PUT /pipelines/{id}` answered a null
   NOT NULL column with a 500 (MP2-6).** Drove the five update endpoints over HTTP
   against the real schema, sending `null` for every NOT NULL field the schemas can
