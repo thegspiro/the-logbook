@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3290](https://github.com/thegspiro/the-logbook/pull/3290)**: branch
+`claude/security-review-equipment-check-shifts-p9` (suffixed rather than the
+bare `claude/security-review-equipment-check-shifts`, since that name's own
+PR — #2203 — has already merged, as have `security-review-equipment-check`
+(#1963) and `security-review-equipment-shifts` (#1842) — CLAUDE.md Pitfall
+#24), Feature 14 (Equipment check & shifts), pass 9. Watchdog pickup. 0 code
+fixes, 0 new findings. The real delta since pass 8 (`ed51d2ea9`, 329
+non-merge commits repo-wide, 4 touching the six primary files directly): one
+is app-review B7's own already-dispositioned `apply_updates` fix, one is
+Inventory's own fuzzy-catalog-matching feature reading a new column inside
+an already-org-scoped query, and two are mypy-driven null-safety narrowing
+whose only behavior change correctly excludes ad-hoc checks from satisfying
+a template requirement. All shared-dependency files byte-identical; route
+counts unchanged (52 + 21). Three frontend files changed, all phone-layout
+restructures with no new API surface. Every prior fix re-read and intact;
+EC-7/EC-11 confirmed resolved by owner decision; EC-8 and the
+`get_item_deployments` gate discrepancy remain open/accepted, unchanged. See
+`EC-14-equipment-check-shifts.md`'s **Pass 9** section. Row 14 → ✅ (pending
+this PR's merge); next is Feature 15 (Scheduling).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3289, Feature 13, Apparatus & NFC, pass 16, before it merged), preserved for history</summary>
+
 **PR [#3289](https://github.com/thegspiro/the-logbook/pull/3289)**: branch
 `claude/security-review-apparatus-nfc-p16` (suffixed rather than the bare
 `claude/security-review-apparatus-nfc`, since that name's own PR — #3185 —
@@ -31,6 +54,8 @@ the standing AP2-4 flag, which stays unchanged/owner-accepted. All 99 routes
 dependency. AP-19 stays fixed. See `AP-13-apparatus-nfc.md`'s **Pass 16**
 section. Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment
 check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3288, Feature 12, Facilities, pass 9, before it merged), preserved for history</summary>

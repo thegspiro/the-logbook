@@ -8,7 +8,7 @@
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-pass 9 (0 fixed, 0 new findings — PR number recorded in `PROGRESS.md`'s Open PR row)
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (52 routes, unchanged since
 pass 8), `api/v1/endpoints/shift_completion.py` (21 routes),
