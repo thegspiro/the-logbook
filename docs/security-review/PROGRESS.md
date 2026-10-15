@@ -16,14 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None, as of this commit.** PR #3250 (Feature 07, Users & organizations,
-pass 9) merged 2026-10-15T01:47:53Z — docs-only (`USR-07-users-organizations.md`
+**PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255)**: branch
+`claude/security-review-membership-pipeline`, Feature 08 (Membership
+pipeline), pass 10. 0 fixed, 0 new findings; MP-10's creation half and
+MP-26 confirmed RESOLVED — the owner's 2026-10-05/11/12 decision closing
+both had already landed on `main` via a commit titled as an unrelated
+CSV-export streaming change (`e3f236d8`), merged after pass 9's own
+baseline, so pass 9 correctly described them as still open at the time.
+Re-derived from current code rather than copied from
+`docs/KNOWN_LIMITATIONS.md`'s own (already-accurate) account. MP-22
+re-confirmed open/accepted, unchanged. All 53 routes re-enumerated, no
+permission string changed. See
+`MP-08-membership-pipeline.md`'s **Pass 10** section. Row 08 → ✅ (pending
+this PR's merge); next is Feature 09 (Medical screening, PHI).
 
-- `PROGRESS.md` only; confirmed via the PR's own Changes section, "No
-  application code changed."), already fully recorded in that PR's own Open PR
-  note below, so there is nothing further to add here. Rotation row 07 stays ✅.
-  This iteration (no `claude/security-review-*` PR open, confirmed via
-  `search_pull_requests`) picks up Feature 08 (Membership pipeline).
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3250's merge, Feature 07, Users & organizations, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3250 (Feature 07, Users & organizations,
+pass 9) merged 2026-10-15T01:47:53Z — docs-only
+(`USR-07-users-organizations.md` and `PROGRESS.md` only; confirmed via the
+PR's own Changes section, "No application code changed."), already fully
+recorded in that PR's own Open PR note below, so there is nothing further
+to add here. Rotation row 07 stays ✅. This iteration (no
+`claude/security-review-*` PR open, confirmed via `search_pull_requests`)
+picks up Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 9, PR #3250, merged 2026-10-15), preserved for history</summary>
