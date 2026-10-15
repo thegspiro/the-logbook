@@ -153,6 +153,14 @@ class Meeting(Base):
         "Location", foreign_keys=[location_id]
     )
 
+    if TYPE_CHECKING:
+        # Not columns. MeetingsService stamps the creator's name and the attendee and
+        # action-item counts on loaded meetings for the list response. Declared only
+        # for the type checker: an annotation SQLAlchemy sees would have to be mapped.
+        creator_name: Optional[str]
+        attendee_count: int
+        action_item_count: int
+
     __table_args__ = (
         Index("idx_meetings_org_date", "organization_id", "meeting_date"),
         Index("idx_meetings_org_type", "organization_id", "meeting_type"),

@@ -653,8 +653,11 @@ sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-# Option 2: Use the minimal profile
-docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+# Option 2: Use the minimal profile. Append it to the COMPOSE_FILE line in .env
+# rather than passing -f: an explicit -f list replaces COMPOSE_FILE, which would
+# drop docker-compose.prod.yml (and, for Method 2, the external-services file)
+sed -i '/^COMPOSE_FILE=/ s/$/:docker-compose.minimal.yml/' .env
+docker compose up -d
 
 # Option 3: Upgrade the instance type
 # Stop instance → Change instance type → Start instance

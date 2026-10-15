@@ -33,6 +33,13 @@ docker compose up -d
 > weak, if `DEBUG` or API docs are enabled, if HTTPS isn't enforced, or if
 > `FRONTEND_URL` points at `localhost` and `ALLOWED_ORIGINS` names no address
 > other than localhost to use instead.
+>
+> **Names.** Every command here is for the standard stack: services `mysql`,
+> `redis`, `backend`, `frontend`; containers `intranet-*`; database user
+> `intranet_user` and database `intranet_db` (the `.env.example` defaults). An
+> Unraid install uses service `db`, containers `logbook-*`, user
+> `logbook_user` and database `the_logbook` instead — see
+> [Deployment: Unraid](Deployment-Unraid).
 
 ---
 
@@ -70,7 +77,7 @@ docker compose logs -f
 # View specific service logs
 docker compose logs -f backend
 docker compose logs -f frontend
-docker compose logs -f db
+docker compose logs -f mysql
 
 # Last 50 lines
 docker compose logs --tail=50 backend
@@ -92,7 +99,7 @@ docker stats
 curl http://localhost:3001/health
 
 # Container info
-docker inspect logbook-backend
+docker inspect intranet-backend
 ```
 
 ---
@@ -112,11 +119,11 @@ docker inspect logbook-backend
 
 ```bash
 # MySQL shell
-docker exec -it logbook-db mysql -u logbook_user -p
+docker exec -it intranet-mysql mysql -u intranet_user -p
 
 # Once in MySQL:
 SHOW DATABASES;
-USE the_logbook;
+USE intranet_db;
 SHOW TABLES;
 SELECT * FROM users LIMIT 5;
 ```
@@ -125,9 +132,12 @@ SELECT * FROM users LIMIT 5;
 
 ```bash
 # Redis CLI
-docker exec -it logbook-redis redis-cli
+docker exec -it intranet-redis redis-cli
 
-# Once in Redis:
+# Once in Redis, authenticate first (REDIS_PASSWORD from .env):
+AUTH your_redis_password
+
+# Then:
 PING
 KEYS *
 GET key_name
@@ -137,13 +147,13 @@ GET key_name
 
 ```bash
 # Access Python shell
-docker exec -it logbook-backend bash
+docker exec -it intranet-backend bash
 
 # Run Python commands
-docker exec -it logbook-backend python -c "print('Hello')"
+docker exec -it intranet-backend python -c "print('Hello')"
 
 # Run migrations
-docker exec -it logbook-backend alembic upgrade head
+docker exec -it intranet-backend alembic upgrade head
 ```
 
 ---
@@ -171,7 +181,7 @@ cd /mnt/user/appdata/the-logbook/unraid
 ### Run Database Migrations
 
 ```bash
-docker exec logbook-backend alembic upgrade head
+docker exec intranet-backend alembic upgrade head
 ```
 
 ---
@@ -181,24 +191,24 @@ docker exec logbook-backend alembic upgrade head
 ### Manual Backup
 
 ```bash
-# Full backup
+# Full backup: database, uploads (from the running backend container) and config
 ./scripts/backup.sh   # host-side script, run from the install directory
 
 # Database only
-docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
+docker exec intranet-mysql mysqldump -u intranet_user -p intranet_db > backup.sql
 
-# Uploads only
-tar -czf uploads-backup.tar.gz /path/to/uploads/
+# Uploads only (logbook-backend on Unraid, intranet-backend otherwise)
+docker exec logbook-backend tar -czf - -C /app uploads > uploads-backup.tar.gz
 ```
 
 ### Restore
 
 ```bash
 # Database restore
-docker exec -i logbook-db mysql -u logbook_user -p the_logbook < backup.sql
+docker exec -i intranet-mysql mysql -u intranet_user -p intranet_db < backup.sql
 
-# Uploads restore
-tar -xzf uploads-backup.tar.gz -C /path/to/uploads/
+# Uploads restore (the archive holds a top-level uploads/ directory)
+docker exec -i logbook-backend tar -xzf - --no-overwrite-dir -C /app < uploads-backup.tar.gz
 ```
 
 ---
@@ -307,16 +317,16 @@ chown -R 99:100 /mnt/user/appdata/the-logbook/
 
 ```bash
 # Check database is running
-docker compose ps db
+docker compose ps mysql
 
 # View database logs
-docker compose logs db
+docker compose logs mysql
 
 # Verify credentials
 cat .env | grep DB_
 
 # Test connection
-docker exec logbook-backend python -c "import pymysql; pymysql.connect(host='db', user='logbook_user', password='YOUR_PASSWORD', database='the_logbook')"
+docker exec intranet-backend python -c "import pymysql; pymysql.connect(host='mysql', user='intranet_user', password='YOUR_PASSWORD', database='intranet_db')"
 ```
 
 ### Frontend Not Loading
@@ -331,7 +341,7 @@ docker compose build --no-cache frontend
 docker compose up -d frontend
 
 # Check nginx config
-docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
+docker exec intranet-frontend cat /etc/nginx/conf.d/default.conf
 ```
 
 ### API Errors
@@ -347,7 +357,7 @@ docker compose logs backend
 docker compose restart backend
 
 # Check environment variables
-docker exec logbook-backend env | grep -i secret
+docker exec intranet-backend env | grep -i secret
 ```
 
 ---
@@ -383,7 +393,7 @@ curl -X POST http://localhost:3001/api/v1/users/reset-password \
   -d '{"user_id": 1, "new_password": "NewSecurePassword123!"}'
 
 # Via database
-docker exec -it logbook-db mysql -u root -p
+docker exec -it intranet-mysql mysql -u root -p
 # Then run: UPDATE users SET password_hash='new_hash' WHERE id=1;
 ```
 
@@ -398,7 +408,7 @@ docker exec -it logbook-db mysql -u root -p
 docker compose ps
 
 # Specific health check
-docker inspect --format='{{.State.Health.Status}}' logbook-backend
+docker inspect --format='{{.State.Health.Status}}' intranet-backend
 ```
 
 ### Resource Usage
@@ -420,8 +430,8 @@ docker compose exec backend du -sh /app/logs
 # Backend health endpoint
 curl http://localhost:3001/health
 
-# Expected response:
-{"status":"healthy","timestamp":"2026-01-31T12:00:00Z"}
+# Expected response once started ("degraded" when MySQL or Redis is unreachable):
+{"status":"healthy","ready":true}
 ```
 
 ---
@@ -452,7 +462,7 @@ docker system prune -a --volumes
 
 ```bash
 # Truncate Docker logs
-truncate -s 0 $(docker inspect --format='{{.LogPath}}' logbook-backend)
+truncate -s 0 $(docker inspect --format='{{.LogPath}}' intranet-backend)
 
 # Or rotate logs
 docker compose down
@@ -481,9 +491,9 @@ FRONTEND_URL=               # https://your-domain.com (links in emails)
 ```bash
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
-DB_HOST=db
-DB_NAME=the_logbook
-DB_USER=logbook_user
+DB_HOST=mysql
+DB_NAME=intranet_db
+DB_USER=intranet_user
 ENVIRONMENT=production
 DEBUG=false
 TZ=America/New_York
@@ -500,15 +510,14 @@ Modules), stored in the organization's `enabled_modules` setting. See
 
 ## 📱 Useful URLs (Default Ports)
 
-| Resource               | URL                                |
-| ---------------------- | ---------------------------------- |
-| **Frontend**           | http://localhost:3000              |
-| **API Docs (Swagger)** | http://localhost:3001/docs         |
-| **API Docs (ReDoc)**   | http://localhost:3001/redoc        |
-| **API JSON**           | http://localhost:3001/openapi.json |
-| **Health Check**       | http://localhost:3001/health       |
-| **Database Health**    | http://localhost:3001/health/db    |
-| **Redis Health**       | http://localhost:3001/health/redis |
+| Resource               | URL                                                         |
+| ---------------------- | ----------------------------------------------------------- |
+| **Frontend**           | http://localhost:3000                                       |
+| **API Docs (Swagger)** | http://localhost:3001/docs                                  |
+| **API Docs (ReDoc)**   | http://localhost:3001/redoc                                 |
+| **API JSON**           | http://localhost:3001/openapi.json                          |
+| **Health Check**       | http://localhost:3001/health                                |
+| **Detailed Health**    | http://localhost:3001/health/detailed (non-production only) |
 
 ---
 

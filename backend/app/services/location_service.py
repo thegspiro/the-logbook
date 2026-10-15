@@ -225,7 +225,7 @@ class LocationService:
         result = await self.db.execute(
             select(func.count(Event.id)).where(Event.location_id == str(location_id))
         )
-        event_count = result.scalar()
+        event_count = result.scalar() or 0
         if event_count > 0:
             # Soft-delete: deactivate so existing events keep their FK
             location.is_active = False

@@ -62,7 +62,8 @@ Feature suggestions are welcome! Please:
 
 ### Prerequisites
 
-- Python >= 3.11
+- Python >= 3.13
+- Node.js >= 22 and npm >= 11 (the `engines` floor in `frontend/package.json`)
 - MySQL >= 8.0
 - Redis >= 7
 - Docker & Docker Compose (optional but recommended)
@@ -89,10 +90,11 @@ nano .env
 make docker-up
 
 # OR start services manually
-# Backend:
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
-# Frontend:
-cd frontend && npm install && npm run dev
+# Backend (main.py is at the top of backend/, so the app is main:app):
+cd backend && pip install -r requirements.txt && uvicorn main:app --reload --host 0.0.0.0 --port 3001
+# Frontend — run npm install from the repo root; the root package-lock.json
+# is the single lockfile for both workspaces:
+npm install && npm run dev:frontend
 ```
 
 ### Project Structure

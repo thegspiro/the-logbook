@@ -90,19 +90,21 @@ describe('MinutesDetailPage approval and due dates (W51)', () => {
     expect(await screen.findByText('Due: Oct 15, 2026')).toBeInTheDocument();
   });
 
-  it('does not offer Approve to the officer who submitted the minutes', async () => {
+  it('does not offer Adopt to the officer who circulated the minutes', async () => {
     renderWithRouter(<MinutesDetailPage />);
 
-    expect(await screen.findByText(/You submitted these minutes, so you cannot approve them/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Approve Minutes' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reject Minutes' })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/You circulated these minutes, so you cannot record their adoption/)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adopt Minutes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return for Changes' })).toBeInTheDocument();
   });
 
-  it('offers Approve to another officer', async () => {
+  it('offers Adopt to another officer', async () => {
     authState.user = { id: CHIEF };
     renderWithRouter(<MinutesDetailPage />);
 
-    expect(await screen.findByRole('button', { name: 'Approve Minutes' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Adopt Minutes' })).toBeInTheDocument();
   });
 });
 
@@ -126,7 +128,7 @@ describe('MinutesDetailPage reopen for correction (MM-17)', () => {
     await user.click(screen.getByRole('button', { name: 'Reopen as draft' }));
 
     expect(mockReopen).toHaveBeenCalledWith(MINUTES_ID, 'Quorum threshold was entered wrong');
-    expect(await screen.findByRole('button', { name: 'Submit for Approval' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Circulate for Review' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reopen for Correction' })).not.toBeInTheDocument();
   });
 
@@ -134,7 +136,7 @@ describe('MinutesDetailPage reopen for correction (MM-17)', () => {
     mockGetMinutes.mockResolvedValue(submitted);
     renderWithRouter(<MinutesDetailPage />);
 
-    expect(await screen.findByRole('button', { name: 'Reject Minutes' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Return for Changes' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reopen for Correction' })).not.toBeInTheDocument();
   });
 
@@ -162,7 +164,7 @@ describe('MinutesDetailPage reopen for correction (MM-17)', () => {
     mockGetMinutes.mockResolvedValue({ ...submitted, status: 'draft' });
     renderWithRouter(<MinutesDetailPage />);
 
-    expect(await screen.findByRole('button', { name: 'Submit for Approval' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Circulate for Review' })).toBeInTheDocument();
     expect(screen.queryByText(/marked as being corrected/)).not.toBeInTheDocument();
   });
 });

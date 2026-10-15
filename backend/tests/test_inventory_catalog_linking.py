@@ -216,7 +216,7 @@ class TestSuggestInventoryMatches:
         service._linkable_items = AsyncMock(
             return_value=[_item(id="a", name="4x4 Gauze")]
         )
-        self._catalog(mock_db, [("inv-1", "Gauze Pads, 4x4 Sterile")])
+        self._catalog(mock_db, [("inv-1", "Gauze Pads, 4x4 Sterile", None)])
 
         result = await service.suggest_inventory_matches("tmpl-1", "org-1")
 
@@ -232,7 +232,7 @@ class TestSuggestInventoryMatches:
                 _item(id="b", name="Trauma Shears"),
             ]
         )
-        self._catalog(mock_db, [("inv-1", "Trauma Shears")])
+        self._catalog(mock_db, [("inv-1", "Trauma Shears", None)])
 
         result = await service.suggest_inventory_matches("tmpl-1", "org-1")
 
@@ -259,7 +259,7 @@ class TestSuggestInventoryMatches:
         service._linkable_items = AsyncMock(
             return_value=[_item(id="a", name="Oxygen Cylinder")]
         )
-        self._catalog(mock_db, [("inv-1", "Trauma Shears")])
+        self._catalog(mock_db, [("inv-1", "Trauma Shears", None)])
 
         result = await service.suggest_inventory_matches("tmpl-1", "org-1")
 
@@ -272,7 +272,7 @@ class TestSuggestInventoryMatches:
         service._linkable_items = AsyncMock(
             return_value=[_item(id="a", name="Trauma Shears")]
         )
-        self._catalog(mock_db, [("inv-1", "Trauma Shears")])
+        self._catalog(mock_db, [("inv-1", "Trauma Shears", None)])
 
         await service.suggest_inventory_matches("tmpl-1", "org-1")
 

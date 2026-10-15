@@ -88,6 +88,7 @@ reportlab==5.0.1
 pypdf==6.20.0  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
 Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
+nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils/rich_text.py)
 
 # ============================================
 # API & Networking

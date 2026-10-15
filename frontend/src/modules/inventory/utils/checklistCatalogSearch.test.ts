@@ -51,10 +51,17 @@ describe('searchChecklistCatalog', () => {
     ]);
   });
 
+  it('asks both halves for near-name matches, since the rig and the catalog rarely spell a name alike', async () => {
+    await searchChecklistCatalog('4 x 4 gauze', { gear: true, medical: true }, 6);
+
+    expect(mockMedicalItems).toHaveBeenCalledWith(expect.objectContaining({ fuzzy: true }));
+    expect(mockGearItems).toHaveBeenCalledWith(expect.objectContaining({ fuzzy: true }));
+  });
+
   it('sends the same bounded query to both halves', async () => {
     await searchChecklistCatalog('gauze', { gear: true, medical: true }, 6);
 
-    const params = { search: 'gauze', limit: 6, active_only: true };
+    const params = { search: 'gauze', limit: 6, active_only: true, fuzzy: true };
     expect(mockMedicalItems).toHaveBeenCalledWith(params);
     expect(mockGearItems).toHaveBeenCalledWith(params);
   });

@@ -1175,10 +1175,10 @@ class AdminHoursService:
             ).where(approved_filter)
         )
         approved_row = approved_result.one()
-        approved_minutes = int(approved_row[0])
+        approved_minutes = int(approved_row[0] or 0)
         approved_entries = approved_row[1]
 
-        pending_minutes = int(total_minutes) - approved_minutes
+        pending_minutes = int(total_minutes or 0) - approved_minutes
         pending_entries = total_entries - approved_entries
 
         # By category
@@ -1206,7 +1206,7 @@ class AdminHoursService:
                 "category_id": cat_id,
                 "category_name": cat_name,
                 "category_color": cat_color,
-                "total_minutes": int(cat_minutes),
+                "total_minutes": int(cat_minutes or 0),
                 "total_hours": hours_from_minutes(cat_minutes),
                 "entry_count": cat_count,
             }

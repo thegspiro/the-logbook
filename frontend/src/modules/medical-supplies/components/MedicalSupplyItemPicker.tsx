@@ -263,7 +263,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
           id={listboxId}
           ref={listboxRef}
           role="listbox"
-          className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg"
+          className="popover-panel absolute z-20 mt-1 max-h-56 w-full overflow-auto"
         >
           {!loading && failed && (
             <div className="px-3 py-2 text-sm">

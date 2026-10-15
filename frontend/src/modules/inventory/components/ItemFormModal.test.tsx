@@ -361,6 +361,74 @@ describe('ItemFormModal', () => {
     });
   });
 
+  describe('also called', () => {
+    const alsoCalled = (): HTMLElement => screen.getByLabelText('Also called');
+
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockUpdateItem.mockReset();
+      mockCreateItem.mockResolvedValue({});
+      mockUpdateItem.mockResolvedValue({});
+    });
+
+    it('offers the field, with what it is for', () => {
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      expect(alsoCalled()).toHaveAccessibleDescription(/separated by commas/);
+    });
+
+    it('sends the names as a list on create', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Bag Valve Mask');
+      await user.type(alsoCalled(), 'BVM, Ambu bag , ');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      expect(mockCreateItem.mock.calls[0]?.[0]).toMatchObject({ also_called: ['BVM', 'Ambu bag'] });
+    });
+
+    it('omits it on create when left empty', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Bag Valve Mask');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      const payload = mockCreateItem.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload['also_called']).toBeUndefined();
+    });
+
+    it('fills the box from the stored list when editing', () => {
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ also_called: ['BVM', 'Ambu bag'] })} />);
+
+      expect(alsoCalled()).toHaveValue('BVM, Ambu bag');
+    });
+
+    it('sends an empty list when the box is emptied, so the clear persists', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ also_called: ['BVM'] })} />);
+
+      await user.clear(alsoCalled());
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ also_called: [] });
+    });
+
+    it('keeps the stored names when an edit does not touch them', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen editItem={makeItem({ also_called: ['BVM'] })} />);
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ also_called: ['BVM'] });
+    });
+  });
+
   it('generates size variants when the toggle is enabled', async () => {
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
