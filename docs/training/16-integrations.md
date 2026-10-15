@@ -287,7 +287,8 @@ without the contact's details.
 | Salesforce says "too many requests"                | Tries again, up to three times, waiting a little longer each time                                                                                               |
 | Salesforce fails briefly while being read          | Tries again, up to three times. A failed write is not tried again, so a record cannot be created twice                                                          |
 | The Connected App details are wrong                | Fails at once with "Failed to refresh Salesforce access token — verify your Connected App credentials"                                                          |
-| Part of a pull fails                               | The whole pull fails. Half a pull is never applied                                                                                                              |
+| Salesforce fails partway through sending a pull    | The whole pull fails. Half a list of contacts is never applied                                                                                                  |
+| One contact in a pull cannot be applied            | That contact is skipped and counted as failed. The other contacts are still applied                                                                             |
 | A field does not match                             | Skipped, with a note in the log                                                                                                                                 |
 | Sandbox and production are mixed up                | A warning is shown; sandbox data does not go to production                                                                                                      |
 | The sign-in expires                                | Renewed automatically                                                                                                                                           |
@@ -783,7 +784,7 @@ someone's behalf, so it is issued the way a key is: by an officer, by hand.
 
 ### Running a station
 
-Open **Administration → Member Management → Check-In Station**. You need the
+Open **Administration → Members → Check-In Station**. You need the
 check-in station permission above.
 
 1. Pick what members are checking into.
@@ -813,7 +814,8 @@ tag written again.
 
 ## Training Provider Integrations
 
-Training providers are set up in **Training Admin > Setup > Integrations**, on
+Training providers are set up in **Training Admin > Settings & Data >
+Integrations**, on
 the **External Training Integrations** screen. That is separate from the
 Integrations page. See
 [Training & Certification > External Training Integrations](./02-training.md#external-training-integrations).
@@ -906,7 +908,7 @@ the **Import Queue** marked **duplicate** and never becomes a training record.
 An acknowledgment on a later day, such as next year's, is recorded as usual.
 
 <!-- Screenshot needed:
-_[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
+_[Training Admin → Settings & Data → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
 -->
 
 ### Syncing on a schedule
@@ -1427,6 +1429,9 @@ work differently from what they describe.
   red health marks. Health is on each integration's **Details** page.
 - **Test is on the card.** The connect window has no **Test Connection**
   button; connect first, then select **Test** on the card.
+- **Training provider integrations are under Settings & Data.** Older notes
+  say **Training Admin > Setup > Integrations**. There is no Setup area in
+  Training Admin any more.
 - **NFC ID Cards is something you switch on.** A department that has not
   activated it has no ID Cards section and no check-in station.
 - **An older Target Solutions setup may need entering again.** Older versions

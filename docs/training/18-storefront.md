@@ -202,9 +202,13 @@ ones come back listed by order number. Recording the payment _or_ waiving the
 balance releases an order. So a free replacement clears the rule without money
 changing hands.
 
-Every step before the handover still happens under all three rules. The shirt
-is ordered, received and marked ready for pickup either way. Only putting it in
-the member's hands waits.
+Under **No payment gate** and **Payment required before pickup**, every step
+before the handover still happens. The shirt is ordered, received and marked
+ready for pickup either way. Only putting it in the member's hands waits.
+
+Under **Payment required before the vendor order**, an unpaid order stops
+sooner. It cannot be marked **ordered** or **ready for pickup** until it is
+paid or the balance is waived. The message gives the balance.
 
 ### Notifications
 
@@ -763,8 +767,9 @@ payment status to see who still owes.
    photo.
 3. **Personalization:** prompt "Name for embroidery", **Embroidered**, maximum
    20 characters, $8.00 upcharge.
-4. Leave it as **Draft**, check how it looks to members, then switch it to
-   **Active (for sale)**.
+4. Leave it as **Draft** while you check its details in the catalog. Members
+   cannot see a draft item, and there is no member preview of one. Then switch
+   it to **Active (for sale)**.
 
 **Opening (October 1)**
 
