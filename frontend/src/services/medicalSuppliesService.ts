@@ -70,6 +70,7 @@ export interface MedicalItemUpdate {
   category_id?: string;
   description?: string | null;
   manufacturer?: string | null;
+  also_called?: string[] | null;
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
@@ -103,6 +104,8 @@ export interface MedicalItemFilters {
   location_id?: string | undefined;
   storage_area_id?: string | undefined;
   search?: string | undefined;
+  /** With `search`, also return supplies whose name or "also called" names merely resemble it, below the exact matches. */
+  fuzzy?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;

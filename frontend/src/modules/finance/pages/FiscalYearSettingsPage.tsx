@@ -142,7 +142,7 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
 
   return (
     <div className="modal-overlay z-50 flex items-center justify-center">
-      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
+      <div className="modal-panel modal-panel-scroll mx-4 w-full max-w-md p-6">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Fiscal Year</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
@@ -292,7 +292,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ open, onClose, onSaved, c
 
   return (
     <div className="modal-overlay z-50 flex items-center justify-center">
-      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
+      <div className="modal-panel modal-panel-scroll mx-4 w-full max-w-md p-6">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">
           {isEdit ? 'Edit Budget Category' : 'Create Budget Category'}
         </h3>

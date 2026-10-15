@@ -480,6 +480,9 @@ const ItemDetailPage: React.FC = () => {
             }
           />
           <Field label="Description" value={item.description || '--'} />
+          {item.also_called && item.also_called.length > 0 && (
+            <Field label="Also called" value={item.also_called.join(', ')} />
+          )}
           {item.notes && <Field label="Notes" value={item.notes} />}
         </Card>
 

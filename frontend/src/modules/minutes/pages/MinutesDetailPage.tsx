@@ -13,7 +13,7 @@ import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown, Gavel, ListChecks } from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
@@ -38,6 +38,7 @@ import type {
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { saveBlob } from '../../../utils/saveBlob';
+import { PanelDisclosure } from '../components/PanelDisclosure';
 import { AdoptDialog } from '../components/AdoptDialog';
 import { AttachmentsPanel } from '../components/AttachmentsPanel';
 import { AttendancePanel } from '../components/AttendancePanel';
@@ -46,7 +47,9 @@ import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
 import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
 import { RevisionsPanel } from '../components/RevisionsPanel';
+import { SuggestChangeForm } from '../components/SuggestChangeForm';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
+import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -106,6 +109,7 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Inline editing
   const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [suggestingSection, setSuggestingSection] = useState<string | null>(null);
   const [sectionValue, setSectionValue] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -244,6 +248,11 @@ export const MinutesDetailPage: React.FC = () => {
   }, [linkedEventId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
+  const suggestions = useMinutesSuggestions(minutesId ?? '', minutes?.status ?? 'draft');
+  // A member suggests from a section; the secretary answers rather than suggests.
+  const canSuggest = minutes?.status === 'submitted' && !canManage;
+  const openSuggestionCount = (sectionKey: string) =>
+    suggestions.suggestions.filter((x) => x.section_key === sectionKey && x.status === 'open').length;
 
   const handleDownloadPdf = async () => {
     if (!minutesId || !minutes) return;
@@ -911,6 +920,9 @@ export const MinutesDetailPage: React.FC = () => {
           status={minutes.status}
           sections={minutes.sections}
           canManage={canManage}
+          suggestions={suggestions.suggestions}
+          loaded={suggestions.loaded}
+          reload={suggestions.reload}
         />
 
         {/* Meeting Info */}
@@ -1060,6 +1072,12 @@ export const MinutesDetailPage: React.FC = () => {
                         )}
                         <h3 className="text-md text-theme-text-primary font-semibold">
                           {section.title}
+                          {openSuggestionCount(section.key) > 0 && (
+                            <span className="ml-2 rounded-sm bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
+                              {openSuggestionCount(section.key)} open{' '}
+                              {openSuggestionCount(section.key) === 1 ? 'suggestion' : 'suggestions'}
+                            </span>
+                          )}
                           {section.required && sectionIsBlank(section) && isEditable && (
                             <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
                               Required
@@ -1068,6 +1086,17 @@ export const MinutesDetailPage: React.FC = () => {
                         </h3>
                       </div>
                       <div className="flex items-center gap-2">
+                        {canSuggest && (
+                          <button
+                            type="button"
+                            onClick={() => setSuggestingSection(suggestingSection === section.key ? null : section.key)}
+                            aria-expanded={suggestingSection === section.key}
+                            aria-label={`Suggest a change to ${section.title}`}
+                            className="touch:min-h-11 text-sm text-blue-700 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Suggest a change
+                          </button>
+                        )}
                         {canManage && isEditable && !isEditing && (
                           <>
                             <button
@@ -1138,12 +1167,25 @@ export const MinutesDetailPage: React.FC = () => {
                               setEditingSection(section.key);
                               setSectionValue('');
                             }}
-                            className="text-blue-600 hover:underline"
+                            className="text-blue-700 underline hover:no-underline dark:text-blue-400"
                           >
                             Add content
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {canSuggest && suggestingSection === section.key && (
+                      <SuggestChangeForm
+                        minutesId={minutes.id}
+                        sectionKey={section.key}
+                        subject={section.title}
+                        onSent={async () => {
+                          setSuggestingSection(null);
+                          await suggestions.reload();
+                        }}
+                        onCancel={() => setSuggestingSection(null)}
+                      />
                     )}
                   </div>
                 );
@@ -1152,19 +1194,24 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {/* Motions */}
-        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary text-lg font-semibold">Motions ({minutes.motions.length})</h3>
-            {canManage && isEditable && (
+        <PanelDisclosure
+          id="motions-heading"
+          icon={<Gavel className="h-5 w-5" aria-hidden="true" />}
+          title="Motions"
+          count={minutes.motions.length}
+          defaultOpen={false}
+          actions={
+            canManage &&
+            isEditable && (
               <button
                 onClick={() => setShowMotionForm(!showMotionForm)}
                 className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
               >
                 {showMotionForm ? 'Cancel' : 'Add Motion'}
               </button>
-            )}
-          </div>
-
+            )
+          }
+        >
           {showMotionForm && (
             <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add motion">
               <label htmlFor="motion-text" className="sr-only">
@@ -1402,28 +1449,33 @@ export const MinutesDetailPage: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </PanelDisclosure>
 
         <ClosedSessionsPanel
           minutesId={minutes.id}
           canEdit={Boolean(canManage && isEditable)}
           attendees={minutes.attendees ?? []}
           motions={minutes.motions}
+          defaultOpen={false}
         />
 
         <ElectionResultsPanel
           minutesId={minutes.id}
           canFile={canManage}
           canRemoveDrafted={Boolean(canManage && isEditable)}
+          defaultOpen={false}
         />
 
         {/* Action Items */}
-        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary text-lg font-semibold">
-              Action Items ({minutes.action_items.length})
-            </h3>
-            {canManage && isEditable && (
+        <PanelDisclosure
+          id="action-items-heading"
+          icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
+          title="Action Items"
+          count={minutes.action_items.length}
+          defaultOpen={false}
+          actions={
+            canManage &&
+            isEditable && (
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -1439,9 +1491,9 @@ export const MinutesDetailPage: React.FC = () => {
                   {showActionForm ? 'Cancel' : 'Add Action Item'}
                 </button>
               </div>
-            )}
-          </div>
-
+            )
+          }
+        >
           {showActionForm && (
             <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add action item">
               <label htmlFor="action-description" className="sr-only">
@@ -1586,11 +1638,16 @@ export const MinutesDetailPage: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </PanelDisclosure>
 
-        <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} />
+        <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} defaultOpen={false} />
 
-        <RevisionsPanel minutesId={minutes.id} status={minutes.status} version={minutes.updated_at} />
+        <RevisionsPanel
+          minutesId={minutes.id}
+          status={minutes.status}
+          version={minutes.updated_at}
+          defaultOpen={false}
+        />
 
         <AdoptDialog
           isOpen={showAdopt}

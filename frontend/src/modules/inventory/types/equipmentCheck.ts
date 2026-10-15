@@ -311,6 +311,8 @@ export interface InventoryMatchSuggestion {
    */
   score: number;
   confidence: 'exact' | 'strong' | 'weak';
+  /** The "also called" name that produced this match, when the item's own name did not. */
+  matchedAlias?: string | null;
 }
 
 export interface InventoryMatch {

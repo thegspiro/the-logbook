@@ -14,6 +14,7 @@ import { History, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { minutesService } from '../services/api';
+import { PanelDisclosure } from './PanelDisclosure';
 import type { MinutesRevision, MinutesStatus, MinutesVerification } from '../types/minutes';
 
 const CHANGED_LABELS: Record<string, string> = {
@@ -41,9 +42,11 @@ interface RevisionsPanelProps {
   status: MinutesStatus;
   /** Changes whenever the minutes are reloaded, so a state change refreshes this. */
   version: string;
+  /** Whether the panel starts unfolded. The minutes page folds it; the default keeps it open. */
+  defaultOpen?: boolean;
 }
 
-export const RevisionsPanel: React.FC<RevisionsPanelProps> = ({ minutesId, status, version }) => {
+export const RevisionsPanel: React.FC<RevisionsPanelProps> = ({ minutesId, status, version, defaultOpen = true }) => {
   const tz = useTimezone();
   const [revisions, setRevisions] = useState<MinutesRevision[]>([]);
   const [verification, setVerification] = useState<MinutesVerification | null>(null);
@@ -75,15 +78,14 @@ export const RevisionsPanel: React.FC<RevisionsPanelProps> = ({ minutesId, statu
   if (!loaded || (revisions.length === 0 && status !== 'approved')) return null;
 
   return (
-    <section
-      className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs"
-      aria-labelledby="revisions-heading"
+    <PanelDisclosure
+      id="revisions-heading"
+      icon={<History className="h-5 w-5" aria-hidden="true" />}
+      title="Approved versions"
+      count={revisions.length}
+      defaultOpen={defaultOpen}
+      attention={verification !== null && !verification.verified}
     >
-      <h2 id="revisions-heading" className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-        <History className="h-5 w-5" aria-hidden="true" />
-        Approved versions
-      </h2>
-
       {verification && (
         <div
           className={`mt-3 flex items-start gap-2 rounded-lg p-3 text-sm ${verification.verified ? 'alert-success' : 'alert-warning'}`}
@@ -151,7 +153,7 @@ export const RevisionsPanel: React.FC<RevisionsPanelProps> = ({ minutesId, statu
           ))}
         </ol>
       )}
-    </section>
+    </PanelDisclosure>
   );
 };
 

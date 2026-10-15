@@ -641,6 +641,7 @@ async def list_items(
     group_by: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    fuzzy: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -724,6 +725,7 @@ async def list_items(
         group_by=grouping,
         skip=skip,
         limit=limit,
+        fuzzy=fuzzy,
     )
 
     # Counted over the whole filtered set rather than the page above, so a
@@ -1164,6 +1166,212 @@ async def export_items_csv(
     )
 
 
+_IMPORT_TEMPLATE_HEADER = [
+    "Name",
+    "Category",
+    "Item Type",
+    "Serial Number",
+    "Asset Tag",
+    "Status",
+    "Condition",
+    "Tracking Type",
+    "Quantity",
+    "Manufacturer",
+    "Model Number",
+    "Purchase Date",
+    "Purchase Price",
+    "Purchase Order",
+    "Vendor",
+    "Warranty Expiration",
+    "Storage Location",
+    "Station",
+    "Size",
+    "Color",
+    "Description",
+    "Notes",
+]
+
+
+def _medical_template_row(
+    name: str,
+    category: str,
+    quantity: str,
+    description: str,
+    *,
+    size: str = "",
+    notes: str = "",
+    storage: str = "Medical Cabinet",
+) -> Dict[str, str]:
+    """A counted (pool) medical supply row, with the columns that never vary."""
+    return {
+        "Name": name,
+        "Category": category,
+        "Item Type": "medical",
+        "Status": "available",
+        "Condition": "good",
+        "Tracking Type": "pool",
+        "Quantity": quantity,
+        "Storage Location": storage,
+        "Station": "Station 1",
+        "Size": size,
+        "Description": description,
+        "Notes": notes,
+    }
+
+
+# The "Category" cells below are NAMES, matched case-insensitively against the
+# categories a department has already created; an unmatched name imports the
+# row with no category, and an uncategorized item reads as gear, not medical.
+# The medical rows use generic names a department can rename in the file to
+# match its own. No medications: those vary by protocol and include controlled
+# substances, so a sample is the wrong place for them.
+_IMPORT_TEMPLATE_ROWS: List[Dict[str, str]] = [
+    {
+        "Name": "Motorola APX 8000",
+        "Category": "Portable Radios",
+        "Item Type": "electronics",
+        "Serial Number": "SN-88432",
+        "Asset Tag": "AT-1001",
+        "Status": "available",
+        "Condition": "good",
+        "Tracking Type": "individual",
+        "Quantity": "1",
+        "Manufacturer": "Motorola",
+        "Model Number": "APX 8000",
+        "Purchase Date": "2024-06-15",
+        "Purchase Price": "5500.00",
+        "Purchase Order": "PO-2024-0042",
+        "Vendor": "Radio Systems Inc",
+        "Warranty Expiration": "2027-06-15",
+        "Storage Location": "Apparatus Bay - Rack A",
+        "Station": "Station 1",
+        "Color": "Black",
+        "Description": "VHF/UHF portable radio",
+    },
+    {
+        "Name": "Nitrile Gloves (Box)",
+        "Category": "Infection Control",
+        "Item Type": "medical",
+        "Status": "available",
+        "Condition": "good",
+        "Tracking Type": "pool",
+        "Quantity": "50",
+        "Manufacturer": "Kimberly-Clark",
+        "Model Number": "KC-200L",
+        "Purchase Date": "2025-01-10",
+        "Purchase Price": "12.99",
+        "Vendor": "MedSupply Co",
+        "Storage Location": "EMS Room - Cabinet B",
+        "Station": "Station 1",
+        "Size": "Large",
+        "Color": "Blue",
+        "Description": "Box of 200 nitrile exam gloves",
+        "Notes": "Reorder when below 10 boxes",
+    },
+    _medical_template_row(
+        "Bag Valve Mask, Adult",
+        "Airway & Breathing",
+        "2",
+        "Adult BVM with reservoir and mask",
+        size="Adult",
+        storage="Airway Bag",
+    ),
+    _medical_template_row(
+        "Oropharyngeal Airway Set",
+        "Airway & Breathing",
+        "2",
+        "OPA, assorted sizes",
+        size="Assorted",
+        storage="Airway Bag",
+    ),
+    _medical_template_row(
+        "Nasopharyngeal Airway Set",
+        "Airway & Breathing",
+        "2",
+        "NPA, assorted sizes",
+        size="Assorted",
+        storage="Airway Bag",
+    ),
+    _medical_template_row(
+        "Oxygen Mask, Non-Rebreather",
+        "Airway & Breathing",
+        "10",
+        "Adult non-rebreather mask with tubing",
+        size="Adult",
+    ),
+    _medical_template_row(
+        "Nasal Cannula",
+        "Airway & Breathing",
+        "10",
+        "Adult nasal cannula with tubing",
+        size="Adult",
+    ),
+    _medical_template_row(
+        "Tourniquet",
+        "Bleeding Control & Trauma",
+        "6",
+        "Windlass-style tourniquet",
+        storage="Trauma Bag",
+    ),
+    _medical_template_row(
+        "Trauma Shears",
+        "Bleeding Control & Trauma",
+        "4",
+        "Bandage and clothing shears",
+        storage="Trauma Bag",
+    ),
+    _medical_template_row(
+        "Cervical Collar, Adjustable",
+        "Bleeding Control & Trauma",
+        "4",
+        "Adjustable extrication collar",
+        size="Adult",
+    ),
+    _medical_template_row(
+        "Gauze Pads, 4x4 Sterile",
+        "Dressings & Bandages",
+        "50",
+        "Sterile 4x4 inch gauze pads",
+        storage="Trauma Bag",
+    ),
+    _medical_template_row(
+        "Trauma Dressing",
+        "Dressings & Bandages",
+        "6",
+        "Multi-trauma dressing, 10 x 30 inch",
+        storage="Trauma Bag",
+    ),
+    {
+        "Name": "Pulse Oximeter",
+        "Category": "Diagnostics",
+        "Item Type": "medical",
+        "Serial Number": "SN-PO-1001",
+        "Asset Tag": "AT-2001",
+        "Status": "available",
+        "Condition": "good",
+        "Tracking Type": "individual",
+        "Quantity": "1",
+        "Storage Location": "Medical Cabinet",
+        "Station": "Station 1",
+        "Description": "Fingertip pulse oximeter",
+        "Notes": "Tracked one by one because it has a serial number",
+    },
+    _medical_template_row(
+        "Glucometer Test Strips",
+        "Diagnostics",
+        "4",
+        "Box of 50 test strips",
+        notes="Lot numbers and expiration dates are added after import",
+    ),
+    _medical_template_row(
+        "Biohazard Waste Bags",
+        "Infection Control",
+        "20",
+        "Red biohazard bags",
+    ),
+]
+
+
 @router.get("/items/import-template")
 async def download_import_template(
     current_user: User = Depends(require_permission("inventory.manage")),
@@ -1177,85 +1385,9 @@ async def download_import_template(
 
     output = io.StringIO()
     writer = SafeCsvWriter(output)
-    writer.writerow(
-        [
-            "Name",
-            "Category",
-            "Item Type",
-            "Serial Number",
-            "Asset Tag",
-            "Status",
-            "Condition",
-            "Tracking Type",
-            "Quantity",
-            "Manufacturer",
-            "Model Number",
-            "Purchase Date",
-            "Purchase Price",
-            "Purchase Order",
-            "Vendor",
-            "Warranty Expiration",
-            "Storage Location",
-            "Station",
-            "Size",
-            "Color",
-            "Description",
-            "Notes",
-        ]
-    )
-    # Example rows
-    writer.writerow(
-        [
-            "Motorola APX 8000",
-            "Portable Radios",
-            "electronics",
-            "SN-88432",
-            "AT-1001",
-            "available",
-            "good",
-            "individual",
-            "1",
-            "Motorola",
-            "APX 8000",
-            "2024-06-15",
-            "5500.00",
-            "PO-2024-0042",
-            "Radio Systems Inc",
-            "2027-06-15",
-            "Apparatus Bay - Rack A",
-            "Station 1",
-            "",
-            "Black",
-            "VHF/UHF portable radio",
-            "",
-        ]
-    )
-    writer.writerow(
-        [
-            "Nitrile Gloves (Box)",
-            "Medical Supplies",
-            "consumable",
-            "",
-            "",
-            "available",
-            "good",
-            "pool",
-            "50",
-            "Kimberly-Clark",
-            "KC-200L",
-            "2025-01-10",
-            "12.99",
-            "",
-            "MedSupply Co",
-            "",
-            "EMS Room - Cabinet B",
-            "Station 1",
-            "Large",
-            "Blue",
-            "Box of 200 nitrile exam gloves",
-            "Reorder when below 10 boxes",
-        ]
-    )
+    writer.writerow(_IMPORT_TEMPLATE_HEADER)
+    for row in _IMPORT_TEMPLATE_ROWS:
+        writer.writerow([row.get(column, "") for column in _IMPORT_TEMPLATE_HEADER])
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -1343,6 +1475,7 @@ _VALID_ITEM_TYPES = {
     "electronics",
     "consumable",
     "other",
+    "medical",
 }
 
 

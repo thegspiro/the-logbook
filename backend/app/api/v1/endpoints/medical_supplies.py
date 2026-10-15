@@ -328,6 +328,7 @@ async def list_medical_items(
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    fuzzy: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -378,6 +379,7 @@ async def list_medical_items(
         sort_order=sort_order,
         skip=skip,
         limit=limit,
+        fuzzy=fuzzy,
     )
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
 
