@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3265](https://github.com/thegspiro/the-logbook/pull/3265)**: branch
+`claude/security-review-documents-legal`, Feature 10 (Documents & legal),
+pass 9. 0 code fixes, 0 flagged, 0 new security findings. All 22 routes
+re-enumerated by AST walk, unchanged from pass 8. DOC-8 (the feature's last
+standing finding) re-confirmed still fixed. The real delta since pass 8
+was two owner-direct commits (PR #3108, `docs/FILE_STORAGE_HARDENING.md`
+decisions 28/29 — folder positions stored by id instead of slug, and an
+admin-only-folder save confirmation) plus a Meetings & Minutes change to
+the shared `document_service.py`; all three read in full and verified to
+introduce no regression of this feature's own invariants, and credited to
+their owning work rather than to this rotation. See
+`DOC-10-documents-legal.md`'s **Pass 9** section. Row 10 → ✅ (pending this
+PR's merge); next is Feature 11 (Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 9, PR #3256, merged clean — 0 code fixes, 2 doc-mirror fixes, 0 new security findings; rotation row 09 marked ✅ as part of that PR), preserved for history</summary>
+
 **PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256)**: branch
 `claude/security-review-medical-screening`, Feature 09 (Medical screening,
 PHI), pass 9. 0 code fixes, 2 doc-mirror fixes, 0 new security findings.
@@ -29,6 +46,8 @@ unenforced; `get_compliance_status` not 404ing an unknown subject) were
 and MS-17 this pass. See `MS-09-medical-screening.md`'s **Pass 9** section.
 Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
 legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3255's merge, Feature 08, Membership pipeline, pass 10 — the state this pass's PR opened from), preserved for history</summary>
