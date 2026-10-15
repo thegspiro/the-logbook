@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250)**: branch
+`claude/security-review-users-organizations`, Feature 07 (Users &
+organizations), pass 9. 0 fixed, 0 new findings; `ea4d2b18`'s already-landed
+colleague-profile-write fix (`users.edit` alone no longer reaches a
+colleague's `/profile`/`/contact-info` write) re-verified end to end rather
+than taken on its commit message's word. USR-5 and USR-8 re-confirmed
+open/accepted, unchanged; USR-10a re-confirmed resolved. Also carries the
+prior commit (`023d39c2`) clearing the stale Open PR row for merged PR
+#3248. See `USR-07-users-organizations.md`'s **Pass 9** section. Row 07 → ✅
+(pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3248's merge, Feature 06, Elections & ballots, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**None, as of this commit.** PR #3248 (Feature 06, Elections & ballots, pass 9) merged 2026-10-14T20:55:44Z — docs-only (`ELEC-06-elections-ballots.md` +
+`PROGRESS.md` only; confirmed via the PR's own file list, no application
+code changed), already fully recorded in that PR's own Open PR note below,
+so there is nothing further to add here. Rotation row 06 stays ✅. This
+iteration (no `claude/security-review-*` PR open, confirmed via
+`search_pull_requests`) picks up Feature 07 (Users & organizations).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 9, PR #3248, merged 2026-10-14), preserved for history</summary>
+
 **PR [#3248](https://github.com/thegspiro/the-logbook/pull/3248)**: branch
 `claude/security-review-elections-ballots-p9`, Feature 06 (Elections &
 ballots), pass 9. 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected
@@ -23,6 +49,8 @@ to RESOLVED (pass 7/8 had re-cited pre-fix code — see the Log). ELEC-12,
 ELEC-16 and ELEC-40 re-confirmed open/flagged, unchanged. See
 `ELEC-06-elections-ballots.md`'s **Pass 9** section. Row 06 → ✅ (pending
 this PR's merge); next is Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 9, PR #3225, merged 2026-10-14), preserved for history</summary>
@@ -19099,7 +19127,7 @@ here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -19134,6 +19162,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-14 — Feature 07 (Users & organizations, pass 9) — 0 fixed, 0 new findings; `ea4d2b18`'s already-landed colleague-profile-write fix re-verified end to end
+
+**Step 0** (orchestrator, prior to this iteration): confirmed via
+`search_pull_requests` that no `claude/security-review-*` PR was open; PR
+#3248 (Feature 06, Elections & ballots, pass 9) had merged, naming Feature 07
+as next. The Open PR row was cleared and rotation row 07 set 🔄 in a prior
+commit on this same branch (`023d39c2`).
+
+**Review.** Baseline `8f1855a3` (pass 8's head) to `80d92def` (head at the
+start of this iteration). 344 commits landed in the window; only 3 touch one
+of this feature's twelve declared files: `c926b687` and `51c77a9c`
+(mypy-only — type narrowings and `db.execute`-result variable renames to stop
+one call's result from shadowing another's, confirmed by reading both diffs
+in full; the one `schemas/user.py` change splits `UserBase` so a response
+can declare `email: Optional[EmailStr]`, matching what the existing
+visibility redaction already nulled at runtime) and `ea4d2b18`
+(`fix(users): editing a colleague's profile needs members.manage`) — a real
+security fix, but one that had already landed on `main` before this pass
+began, outside this rotation. Re-verified end to end rather than taken on
+its commit message's word: `PATCH /users/{user_id}/profile` and
+`/contact-info` previously accepted `users.edit` **or** `members.manage` for
+a write to someone else's record (the UI already hid the forms from a
+`users.edit`-only holder, but the API still took the write from anyone
+calling it directly); both routes now accept only the subject or a
+`members.manage` holder, confirmed by reading the current file, and the
+now-unreachable write-time redaction wrapper was correctly removed rather
+than left as dead code. No seeded position loses anything — the five
+positions carrying `users.edit` all also carry `members.manage`, confirmed
+by reading `DEFAULT_POSITIONS` directly. Its own regression tests
+(`test_user_profile_permissions.py`, `test_pii_exposure.py`) re-run
+directly: 70 passed. All 77 routes across the four principal files
+re-enumerated mechanically (unchanged counts from pass 8); the two standing
+accepted findings (USR-5, USR-8) re-confirmed unchanged at their current
+line numbers; USR-10a re-confirmed still recorded resolved. Also skimmed
+`docs/module-audit/orgs-roles-users.md` / `docs/app-review/orgs-roles-users.md`
+per Step 2 — every module-audit item is already fixed, and the one open
+app-review item (`ORU-7c`, mass-editing the org-wide `member` role) is
+`roles.py` territory (Feature 02, not this feature's four declared files)
+and was already accepted by its own pass as intended behavior, not a defect.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean over
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (594
+revisions, single head `252c7517d80a`); `check_route_permissions.py
+--strict` passed (269 routes, 0 errors/warnings); scoped backend tests
+(the same `-k` filter pass 8 used, plus the fix's own two test files run
+separately) 1,537 passed + 70 passed, 1 pre-existing skip (`py_vapid`), 0
+failed; `cd frontend && npm run typecheck` 0 errors; `cd frontend && npm run
+lint` 0 errors/warnings; scoped frontend suite (`MemberProfilePage`,
+`Members`, `AddMember`, `UserSettingsPage`) 143 passed.
+
+Findings doc:
+[`USR-07-users-organizations.md`](./USR-07-users-organizations.md)'s **Pass
+9** section. No `KNOWN_LIMITATIONS.md` change — USR-5/USR-8/USR-10a's
+entries there are unchanged and already accurate. Rotation row 07 → ✅
+(pending this PR's merge). Next: Feature 08 (Membership pipeline).
+
+---
 
 ### 2026-10-14 — Feature 06 (Elections & ballots, pass 9) — 0 fixed, 0 new findings; ELEC-28/W50-10/W50-11 corrected to RESOLVED (watchdog pickup)
 
