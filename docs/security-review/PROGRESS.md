@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3289](https://github.com/thegspiro/the-logbook/pull/3289)**: branch
+`claude/security-review-apparatus-nfc-p16` (suffixed rather than the bare
+`claude/security-review-apparatus-nfc`, since that name's own PR — #3185 —
+has already merged — CLAUDE.md Pitfall #24), Feature 13 (Apparatus & NFC),
+pass 16. Watchdog pickup. 0 code fixes, 0 new findings. The real delta since
+pass 15 (`4e923164`, 3 commits in the feature's own scope files, all read in
+full, part of a repo-wide mypy-typing sweep): two are mechanical
+(`models/apparatus.py`, `services/apparatus_service.py`); the third
+(`services/evoc_level_service.py`) already shipped a genuine, already-tested
+fail-closed fix for a dangling `required_evoc_level_id` — the sibling case to
+the standing AP2-4 flag, which stays unchanged/owner-accepted. All 99 routes
+(94 + 5) re-enumerated fresh by AST walk, 99/99 carrying a permission
+dependency. AP-19 stays fixed. See `AP-13-apparatus-nfc.md`'s **Pass 16**
+section. Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment
+check & shifts).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3288, Feature 12, Facilities, pass 9, before it merged), preserved for history</summary>
+
 **PR [#3288](https://github.com/thegspiro/the-logbook/pull/3288)**: branch
 `claude/security-review-facilities-p9` (suffixed rather than the bare
 `claude/security-review-facilities`, since that name's own PR — most
@@ -35,6 +54,8 @@ carrying a permission dependency. FAC-30 re-verified still open/
 owner-accepted, unchanged; FAC-13 stays closed; FAC-41/FAC-44 stay fixed.
 See `FAC-12-facilities.md`'s **Pass 9** section. Row 12 → ✅ (pending this
 PR's merge); next is Feature 13 (Apparatus & NFC).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3272, Feature 11, Inventory, pass 9, merged — the state this pass's PR opened from), preserved for history</summary>
@@ -19305,7 +19326,7 @@ here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -19334,6 +19355,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 13 (Apparatus & NFC, pass 16) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (state=open) returned
+0 PRs with a head branch starting `claude/security-review-`. PR #3288
+(Feature 12, Facilities, pass 9) had already merged, confirmed via
+`pull_request_read` (`merged: true`, `merged_at: 2026-10-15T19:48:50Z`),
+docs-only (`FAC-12-facilities.md` + this file's table/Log) — nothing further
+to record per the "docs-only PR is not a recordable event" rule. Row 12 was
+already ✅ and row 13 (Apparatus & NFC) the first `⬜`.
+
+**Review.** Baseline `4e923164` (pass 15's merge, PR #3185) to current
+`main` — after catching the clone was shallow again (`git fetch
+--unshallow`), 3 non-merge commits touched this feature's scope files, all
+part of a repo-wide mypy-typing sweep (batches 3–5). Two of the three
+(`models/apparatus.py`, `services/apparatus_service.py`) are confirmed
+mechanical by reading every hunk. The third
+(`services/evoc_level_service.py`) carries one genuine, already-fixed-and-
+tested behavior change: `check_driver_evoc_eligibility` now fails closed
+when an apparatus's `required_evoc_level_id` points at a deleted EVOC level
+row, instead of raising an unhandled `AttributeError`. This is the sibling
+case to the standing `AP2-4` flag (which is about the _apparatus_ itself
+failing to resolve, and remains open/owner-accepted, unchanged) — confirmed
+the fix's own comment cross-references AP2-4 and does not touch that branch.
+Route inventory re-enumerated fresh (94 + 5 = 99 routes, unchanged from pass
+15), all carrying an auth dependency. No new findings; AP-19 (fixed pass 15)
+re-confirmed intact.
+
+**Gate.** Hit two environment issues unrelated to this feature, both fixed
+without a source change: `frontend/node_modules` was missing `@tiptap/*`
+(fixed by `npm ci` from the repo root), and the local test database was
+missing a column from a migration landed after it was last migrated (fixed
+by `alembic upgrade head`). Full gate green afterward — see
+`AP-13-apparatus-nfc.md`'s **Pass 16** section.
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check &
+shifts).
 
 ### 2026-10-15 — Feature 12 (Facilities, pass 9) — watchdog pickup, 0 fixes, 0 new findings
 
