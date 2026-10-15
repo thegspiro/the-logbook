@@ -15,6 +15,10 @@
  *   mode left it readable behind the message.
  * - **Dialog panels** over the modal scrim, which showed the page through
  *   the dialog body.
+ * - **Floating dropdowns and badges** (`absolute`). The item pickers' result
+ *   lists were `card absolute`, so the checklist rows beneath them read
+ *   straight through the list; a category badge laid over a product photo had
+ *   the same fill.
  *
  * Use `surface-opaque` / `surface-secondary-opaque` for an element on the
  * page that must hide what passes behind it, and `bg-theme-surface-modal`
@@ -33,11 +37,25 @@ import { fileURLToPath } from 'node:url';
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const STYLESHEET = path.join(SRC, 'styles', 'index.css');
 
-/** A translucent surface fill as the element's base background, not a `hover:` or `dark:` variant. */
-const TRANSLUCENT = /(?<![\w:/-])bg-theme-surface(?:-secondary|-hover)?(?:\/\d+)?(?![\w/-])/;
+/**
+ * A translucent surface fill as the element's base background, not a `hover:`
+ * or `dark:` variant. The `card` utilities are included because they apply
+ * `bg-theme-surface` / `bg-theme-surface-secondary` themselves: a dropdown
+ * written `card absolute` is as see-through as one written
+ * `bg-theme-surface absolute`, and was missed for exactly that reason.
+ */
+const TRANSLUCENT =
+  /(?<![\w:/-])(?:bg-theme-surface(?:-secondary|-hover)?(?:\/\d+)?|card(?:-hover|-secondary)?)(?![\w/-])/;
 
-/** The element is pinned to the viewport or its scroll container. */
-const PINNED = /(?<![\w:-])(?:fixed|sticky)(?![\w-])/;
+/**
+ * The element is pinned to the viewport or its scroll container. `.` is excluded
+ * from the lookbehind because a template literal's `${metric.fixed ? …}` is
+ * source text, not a class.
+ */
+const PINNED = /(?<![\w:.-])(?:fixed|sticky)(?![\w-])/;
+
+/** The element is taken out of flow and painted over its neighbours. */
+const FLOATING = /(?<![\w:.-])absolute(?![\w-])/;
 
 /** The element is a dialog panel by its own utility. */
 const DIALOG_PANEL = /(?<![\w:-])modal-panel(?:-scroll)?(?![\w-])/;
@@ -85,6 +103,18 @@ describe('opaque surface integrity', () => {
     expect(
       offenders,
       'A sticky or fixed element must hide what passes under it — use surface-opaque / surface-secondary-opaque, or bg-theme-surface-modal inside a dialog'
+    ).toEqual([]);
+  });
+
+  it('paints floating elements with an opaque surface', () => {
+    const offenders = files.flatMap(({ name, literals }) =>
+      literals
+        .filter(({ value }) => FLOATING.test(value) && TRANSLUCENT.test(value))
+        .map(({ line }) => `${name}:${line}`)
+    );
+    expect(
+      offenders,
+      'An absolutely positioned element paints over what is beneath it — use popover-panel for a dropdown or menu, surface-opaque for a badge or overlay'
     ).toEqual([]);
   });
 
