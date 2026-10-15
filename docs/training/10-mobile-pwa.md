@@ -1,8 +1,11 @@
 # Mobile & PWA Usage
 
-The Logbook is a Progressive Web App (PWA), which means it works in any modern web browser but can also be installed to your phone or tablet's home screen for a native app-like experience. No app store download is required.
+The Logbook works in any modern web browser. You can also install it on your
+phone or tablet's home screen, so it opens like an app. There is no app store
+download.
 
-This guide covers installing the app, understanding offline behavior, using mobile-friendly features, and troubleshooting common mobile issues.
+This guide covers installing the app, getting around on a phone, what works
+without a signal, push notifications, scanning, and fixing common problems.
 
 ---
 
@@ -13,167 +16,179 @@ This guide covers installing the app, understanding offline behavior, using mobi
 3. [Installing on Android (Chrome)](#installing-on-android-chrome)
 4. [Installing on Desktop (Chrome / Edge)](#installing-on-desktop-chrome--edge)
 5. [The Installed App Experience](#the-installed-app-experience)
-6. [Offline Behavior and Limitations](#offline-behavior-and-limitations)
-7. [Push Notifications on Mobile](#push-notifications-on-mobile)
-8. [Mobile-Optimized Features](#mobile-optimized-features)
-9. [Tips for Mobile Use](#tips-for-mobile-use)
-10. [Check Your Understanding](#check-your-understanding)
-11. [Troubleshooting](#troubleshooting)
+6. [Getting Around on a Phone](#getting-around-on-a-phone)
+7. [How Screens Fit a Phone or Tablet](#how-screens-fit-a-phone-or-tablet)
+8. [Keeping the App Up to Date](#keeping-the-app-up-to-date)
+9. [Offline Behavior and Limitations](#offline-behavior-and-limitations)
+10. [Push Notifications on Mobile](#push-notifications-on-mobile)
+11. [Mobile-Optimized Features](#mobile-optimized-features)
+12. [Tips for Mobile Use](#tips-for-mobile-use)
+13. [Check Your Understanding](#check-your-understanding)
+14. [Troubleshooting](#troubleshooting)
+15. [Realistic Example](#realistic-example-mobile-workflow--event-check-in-equipment-scan--offline-queue)
+16. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## What Is a PWA?
 
-A Progressive Web App is a website that can be installed on your device and behaves like a native app:
+A [progressive web app (PWA)](./GLOSSARY.md) is a website you can install on
+your device. Once installed, it behaves like an ordinary app:
 
-| Feature                 | Browser                      | Installed PWA                                   |
-| ----------------------- | ---------------------------- | ----------------------------------------------- |
-| Access from home screen | No (open browser, type URL)  | Yes (tap icon)                                  |
-| Full-screen experience  | No (browser toolbar visible) | Yes (standalone, no browser UI)                 |
-| Works without internet  | Limited                      | Cached pages load, but data requires connection |
-| Automatic updates       | Yes                          | Yes (updates silently in background)            |
-| App store required      | No                           | No                                              |
+| Feature                 | In the browser                  | Installed                                      |
+| ----------------------- | ------------------------------- | ---------------------------------------------- |
+| Open from home screen   | No (open browser, type address) | Yes (tap the icon)                             |
+| Full screen             | No (browser toolbar visible)    | Yes (no browser toolbar)                       |
+| Works without a signal  | Limited                         | Screens open, but information needs a signal   |
+| Updates                 | Automatic                       | Automatic                                      |
+| App store needed        | No                              | No                                             |
 
-The Logbook uses the **autoUpdate** strategy — when a new version is deployed, it is automatically downloaded in the background and applied the next time you open the app.
+New versions download in the background. See
+[Keeping the App Up to Date](#keeping-the-app-up-to-date).
 
 ---
 
 ## Installing on iPhone / iPad (Safari)
 
-iOS requires using **Safari** to install PWAs. Other browsers (Chrome, Firefox) on iOS cannot install PWAs to the home screen.
+On an iPhone or iPad, only **Safari** can add The Logbook to the home screen.
+Chrome, Firefox and other browsers on iOS cannot.
 
-1. Open **Safari** and navigate to your department's Logbook URL.
-2. Log in to verify the site loads correctly.
-3. Tap the **Share** button (the square with an upward arrow, at the bottom of the screen on iPhone or top on iPad).
-4. Scroll down in the share sheet and tap **Add to Home Screen**.
-5. The name will default to "The Logbook" — you can change it if you wish.
-6. Tap **Add** in the upper right corner.
+1. Open **Safari** and go to your department's Logbook address.
+2. Sign in, to check the site loads correctly.
+3. Select the **Share** button (a square with an upward arrow). It is at the
+   bottom of the screen on an iPhone and at the top on an iPad.
+4. Scroll down the share sheet and select **Add to Home Screen**.
+5. The name defaults to "The Logbook". You can change it if you like.
+6. Select **Add** in the upper-right corner.
 
-> **Corrected 2026-08-12.** The retired placeholder asked for **Safari's own
-> share sheet**. That is iOS system UI, not a screen this application draws,
-> so the screenshot pipeline has nothing to capture — the steps above are the
-> documentation.
+The Logbook icon appears on your home screen. Selecting it opens the app full
+screen, without the Safari toolbar.
 
-The Logbook icon now appears on your home screen. Tapping it opens the app in standalone mode (no Safari toolbar).
-
-> **Hint:** If you don't see "Add to Home Screen" in the share sheet, make sure you are using Safari (not Chrome or another browser) and that you are on the actual Logbook page (not a redirect or login page from a different domain).
+> **Hint:** No "Add to Home Screen" in the share sheet? Make sure you are in
+> Safari, not another browser. Also make sure you are on the real Logbook page,
+> not a redirect or a sign-in page from a different site.
 
 ---
 
 ## Installing on Android (Chrome)
 
-1. Open **Chrome** and navigate to your department's Logbook URL.
-2. Log in to verify the site loads correctly.
-3. Chrome will show a banner at the bottom: **"Add The Logbook to Home screen"** — tap **Install**.
-4. If the banner does not appear, tap the **three-dot menu** (top right) and select **Install app** or **Add to Home screen**.
-5. Confirm by tapping **Install**.
+1. Open **Chrome** and go to your department's Logbook address.
+2. Sign in, to check the site loads correctly.
+3. Chrome may show a banner at the bottom offering to install the app. Select
+   **Install**.
+4. No banner? Select the **three-dot menu** (top right), then **Install app**
+   or **Add to Home screen**.
+5. Confirm by selecting **Install**.
 
-> **Corrected 2026-08-12.** Same as the iOS step above: Chrome's install
-> banner is browser UI, drawn by Chrome and not by this application.
+The Logbook icon appears on your home screen and in your app drawer. It opens
+full screen.
 
-The Logbook icon appears on your home screen and in your app drawer. It opens in standalone mode.
-
-> **Hint:** Some Android devices also support installing from Firefox or Samsung Internet. The process is similar — look for "Install" or "Add to Home screen" in the browser menu.
+> **Hint:** Some Android phones can also install from Firefox or Samsung
+> Internet. Look for "Install" or "Add to Home screen" in that browser's menu.
 
 ---
 
 ## Installing on Desktop (Chrome / Edge)
 
-1. Open **Chrome** or **Edge** and navigate to your department's Logbook URL.
-2. Look for the **install icon** in the address bar (a monitor with a down arrow, or a "+" icon).
-3. Click it and confirm **Install**.
-4. The app opens in its own window and appears in your system's application launcher.
+1. Open **Chrome** or **Edge** and go to your department's Logbook address.
+2. Look for the **install icon** in the address bar (a monitor with a down
+   arrow, or a "+").
+3. Select it and confirm **Install**.
+4. The app opens in its own window and appears with your other programs.
 
-Alternatively, use the browser menu: **three-dot menu > Install The Logbook** (Chrome) or **Settings > Apps > Install this site as an app** (Edge).
+You can also use the browser menu: **three-dot menu > Install The Logbook**
+(Chrome) or **Settings > Apps > Install this site as an app** (Edge).
 
 ---
 
 ## The Installed App Experience
 
-Once installed, The Logbook runs in **standalone** mode:
+Once installed, The Logbook runs on its own, outside the browser:
 
-- **No browser toolbar** — the app uses the full screen, with the status bar showing your department's theme color (dark red by default)
-- **Own task/window** — it appears as a separate app in your task switcher, not as a browser tab
-- **Persistent login** — your session persists between app launches (subject to your department's session timeout policy)
-- **App icon** — your **department's own logo** _(2026-09-17)_, if one is uploaded under Settings → Organization → Profile; otherwise the Logbook icon. See [Your department's logo as the app icon](#your-departments-logo-as-the-app-icon-2026-09-17)
-- **PWA shortcuts** — long-press the app icon to see quick shortcuts to Dashboard, Events, and Scheduling (supported on Android and some desktop platforms)
-- **Bottom tab bar** _(2026-08-07)_ — on phones, **Home**, two tabs you choose,
-  the round **Add** button and **More** sit within thumb reach at the bottom of
-  the screen. See [Getting Around on a Phone](#getting-around-on-a-phone-2026-08-07)
-  and [Choose your own bottom-bar tabs](#choose-your-own-bottom-bar-tabs-2026-10-02).
-- **Launches straight to your dashboard** _(2026-08-07)_ — the app used to open
-  on the onboarding welcome splash and then redirect, which cost an extra hop
-  every launch and, offline while signed out, showed a "Get Started" screen that
-  read as though the department had never been set up.
-- **A proper launch screen on iOS** _(2026-08-07)_ — iOS does not derive one from
-  the app manifest, so the installed app used to flash blank white on every cold
-  start. Launch images now cover iPhone SE through 16 Pro Max and the iPad sizes.
+- **No browser toolbar.** The app uses the whole screen. The phone's status bar
+  takes the app's dark red colour.
+- **Its own window.** It shows as a separate app in your app switcher, not as a
+  browser tab.
+- **You stay signed in** between launches, within your department's sign-in
+  time limit.
+- **App icon.** Your department's logo, if one has been uploaded. Otherwise the
+  standard Logbook icon. See
+  [Your Department's Logo as the App Icon](#your-departments-logo-as-the-app-icon).
+- **Shortcuts.** Press and hold the app icon for shortcuts to **My Schedule**,
+  **Dashboard** and **Members**. This works on Android and some desktops.
+- **Opens on your dashboard.** The app starts on your dashboard, not on a
+  welcome page.
+- **A launch screen on iPhone and iPad.** While the app starts, iOS shows a
+  launch screen sized for your device, instead of a blank white flash.
+- **Bottom bar on phones.** See
+  [Getting Around on a Phone](#getting-around-on-a-phone).
 
-### Your department's logo as the app icon _(2026-09-17)_
+### Your Department's Logo as the App Icon
 
-When a member installs The Logbook — **Add to Home Screen** on an iPhone,
-**Install** on Android or in Chrome/Edge on a desktop — the icon they get is
-**your department's logo**, and on an iPhone the launch screen shown while the
-app starts carries it too. The server draws the logo into every size and shape
-the phone asks for; there is nothing to configure beyond uploading the logo.
+When a member installs The Logbook, the icon is **your department's logo**. On
+an iPhone the launch screen carries it too. The Logbook sizes the logo for
+every icon shape a phone asks for. There is nothing to set up beyond uploading
+the logo in **Organization Settings → General → Profile**.
 
-Four things worth knowing:
+Things worth knowing:
 
-- **Anyone who installed before keeps the old icon.** A phone reads the icon
-  once, at install, and never looks again. To get the logo, remove the app from
-  the home screen and add it again. The same applies after you **change** the
-  logo.
-- **No logo uploaded means the stock Logbook icon**, exactly as before.
-- **A logo set as a link to an image elsewhere is not used** — only an
-  uploaded image is. The settings screen and onboarding both upload, so this
-  only affects a logo someone put in by other means.
-- **On Android the logo can look smaller than you expect.** Android trims the
-  icon to a circle, squircle or rounded square of the phone maker's choosing,
-  so the logo is fitted inside the area every one of those shapes keeps, on a
-  solid background. That is deliberate — fitting it larger would cut the
-  corners off a crest on some phones.
+- **Anyone who installed earlier keeps the old icon.** A phone reads the icon
+  once, when the app is installed. To get the logo, remove the app from the
+  home screen and add it again. The same applies after you **change** the logo.
+- **No logo uploaded means the standard Logbook icon.**
+- **Only an uploaded logo is used.** A logo entered as a link to a picture
+  elsewhere is not. The settings screen and the setup wizard both upload, so
+  this only affects a logo added some other way.
+- **On Android the logo can look smaller than you expect.** Android trims icons
+  to a circle, rounded square or other shape chosen by the phone maker. The
+  logo is fitted inside the area every one of those shapes keeps, on a solid
+  background. Fitting it larger would cut the corners off a crest on some
+  phones.
 
 ![An illustration built from the server's real icons, not a device capture: an iPhone home screen with the demo department's crest as The Logbook icon, corners rounded, and an Android home screen with the maskable icon trimmed to a circle, each beside ordinary apps for scale](./images/10-22-installed-app-icon.png)
 
-_An illustration, not a photo of a phone. Both icons are exactly what the
-server sends a phone at install, made from a demo crest; the home screens
-around them are drawn. On the right you can see the Android point above: the
-crest sits well inside the circle._
+_An illustration, not a photo of a phone. Both icons are exactly what a phone
+receives at install, made from a demo crest; the home screens around them are
+drawn. On the right you can see the Android point above: the crest sits well
+inside the circle._
 
-### Getting Around on a Phone _(2026-08-07)_
+---
 
-Every destination used to sit behind the hamburger drawer in the **top-left**
-corner — two taps to reach anything, from the corner of the screen hardest to
-reach one-handed, across 59 navigation entries.
+## Getting Around on a Phone
 
-On phones there is now a **bottom tab bar** within thumb reach. Tap **More** to
-open the full navigation drawer.
+On a phone, The Logbook has a **bar along the bottom of the screen**, within
+reach of your thumb. On a tablet or computer (768 pixels wide or more) the bar
+does not appear: the side or top menu is already on screen there.
 
-> **Since 2026-09-01 the bar is Home, two tabs, the round Add button, and More**
-> (see [Quick Add](#quick-add-two-taps-from-anywhere-2026-09-01)), and **since
-> 2026-10-02 you choose the two tabs** yourself (see
-> [Choose your own bottom-bar tabs](#choose-your-own-bottom-bar-tabs-2026-10-02)).
-> The paragraph below describes the August 2026 bar.
+### The Bottom Bar
 
-- The tabs are filtered by the modules your department has enabled. If your
-  department has scheduling switched off, you get a different tab rather than a
-  gap.
-- Five items is the ceiling — labels stop fitting on a 320px phone beyond
-  that.
+From left to right, the bar holds five items:
+
+| Item               | What it does                                                         |
+| ------------------ | -------------------------------------------------------------------- |
+| **Home**           | Opens your dashboard                                                 |
+| A tab you choose   | See [Choosing Your Bottom-Bar Tabs](#choosing-your-bottom-bar-tabs)  |
+| **Add** (round)    | Opens [Quick Add](#quick-add)                                        |
+| A tab you choose   | See [Choosing Your Bottom-Bar Tabs](#choosing-your-bottom-bar-tabs)  |
+| **More**           | Opens the full navigation menu                                       |
+
+- Five items is the limit. More than that and the labels stop fitting on a
+  small phone.
 - The bar **hides while the on-screen keyboard is up**, so it never covers the
-  field you are typing into.
-- On tablets and desktop it does not appear at all: the side or top navigation is
-  already visible there, so the bar would be redundant.
+  field you are typing in.
+- The bar **hides while a dialog, drawer or bottom sheet is open**, so it never
+  covers a dialog's buttons. It comes back when the dialog closes.
 
 ![Bottom navigation bar as it appears on a phone](./images/10-12-mobile-bottom-nav.png)
 
-> **The header menu button moved to the left edge** _(2026-08-12)_. The ☰
-> button in the top bar — which opens the full navigation drawer — now sits at
-> the **top-left**, with your department name beside it, instead of the far
-> right. The drawer slides in from the left, so the button now sits on the
-> edge the drawer comes from. This is the same header on every signed-in page,
-> so if you built the muscle memory for the top-right corner, that is what
-> moved. Sign-in and public pages have no such header and are unchanged.
+![The phone bottom bar at 390px as an ordinary member: Home and Events on the left, the round Add button in the centre, and Schedule and More on the right](./images/10-24-bottom-bar-add.png)
+
+### The Top Bar and the Menu
+
+The bar at the top of a phone screen shows your department's logo and name.
+Selecting it takes you to your dashboard. **There is no menu button in the top
+bar.** To open the full navigation menu, select **More** on the bottom bar.
+Tap outside the menu to close it.
 
 ![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
 
@@ -181,323 +196,514 @@ open the full navigation drawer.
 _[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
 -->
 
-### Everything Is Thumb-Sized Now _(2026-08-08)_
+A long menu does not always look long on a phone, because phones hide
+scrollbars until you scroll. When there are more items below, the bottom of
+the menu fades and a small **More** button with a down arrow appears. Select it
+to scroll the list down. On a computer the side menu has an ordinary
+scrollbar instead.
 
-Every tappable control in the app now meets the **44-pixel touch minimum** on a
-phone — the size a fingertip actually needs. Across all 29 screens the count of
-undersized targets is zero, and a test enforces that, so a new control cannot
-quietly reintroduce one.
+<!-- Screenshot needed:
+_[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
+-->
 
-What you will notice in practice:
+### Notification Badges on a Phone
 
-- **Text boxes, dropdowns and buttons are taller on a phone.** Forms that were
-  fiddly — training submission and inventory in particular — are now tappable
-  without aiming.
-- **Checkboxes are easier to hit without looking bigger.** The box is still the
-  same size, so nothing on the page moved; the area that responds to your thumb
-  around it grew.
-- **Small icon buttons grew.** These are the ones that previously needed a
-  careful, deliberate tap.
+The unread notification count is in a different place on a phone than on a
+computer:
 
-**Nothing changed on a desktop or laptop.** All of it is scoped to screens under
-768 pixels wide — a mouse pointer does not need the target a fingertip does, and
-widening everything would have loosened desktop forms for no benefit.
+- **Computer:** the **Notifications** link in the side menu carries the count.
+- **Phone:** the count is on the **Notifications** entry **inside the menu**.
+  The top bar has no bell. Select **More** to see the count.
+- The app stops checking for new notifications while it is in the background,
+  to save battery.
+
+![The phone menu open, with the unread count on the Notifications entry](./images/10-15-mobile-menu-notifications.png)
+
+A member told to "watch for the red badge" will not see one on a phone until
+they open the menu.
+
+### Quick Add
+
+The round **Add** button in the middle of the bottom bar opens a short list of
+the things members log most. Each row opens the screen that already handles
+that entry. Quick Add has no forms of its own.
+
+| Row                      | Who sees it                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| **Log training hours**   | Everyone, when Training is turned on                         |
+| **Start a rig check**    | Everyone, when Inventory is turned on                        |
+| **Add an action item**   | Everyone                                                     |
+| **Clock in**             | Everyone                                                     |
+| **Check into a shift**   | Everyone, when Scheduling is turned on                       |
+| **Scan a member ID**     | Members who can view the member list or manage members       |
+| **Log a shift report**   | Officers who can manage training records                     |
+| **Request equipment**    | Officers who can manage inventory                             |
+| **Create an event**      | Officers who can manage all events                            |
+| **Add a member**         | Officers who can manage member profiles                       |
+
+A row only appears if you can actually open the page behind it. You never get
+a row that leads to an "Access Denied" page.
+
+![At 390px as an ordinary member: the Quick Add sheet opened from the centre Add button of the bottom bar, listing the entry rows a member can use and none of the officer-only rows](./images/10-23-quick-add-sheet.png)
+
+### Choosing Your Bottom-Bar Tabs
+
+You choose the two tabs either side of **Add**:
+
+1. Open **My Account → Appearance**.
+2. Find **Phone navigation bar**.
+3. Pick a tab in **Left of Add** and in **Right of Add**.
+
+Your choice saves the moment you make it. It is _"Saved to your account, so
+they follow you to every device."_ To go back to the standard tabs, select
+**Use the default tabs**.
+
+The lists offer only places you can open: Events, Store, Schedule, Training,
+Members, Documents, Learning and Settings. They depend on which parts of The
+Logbook your department has turned on and on your permissions. **Home** is
+always first, so it is not in the lists.
+
+- **Never chosen?** You get the standard tabs. A member gets **Events** and
+  **Schedule**. An administrator (anyone who can manage all settings) gets
+  **Events** and **Settings**. If your department has Scheduling turned off, a
+  member gets a different tab in its place rather than a gap.
+- **A tab you can no longer open** (its part of The Logbook turned off, or a
+  permission removed) is replaced by the next standard tab. Your choice is
+  kept, and comes back when you can open that tab again.
+- **The Settings tab opens My Account**, your own settings. It does not open
+  the department's Organization Settings. Officers who manage those reach them
+  from **More**.
+
+<!-- Screenshot needed:
+_[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
+-->
+
+---
+
+## How Screens Fit a Phone or Tablet
+
+### Controls Are Sized for a Fingertip
+
+On a phone, and on any touch screen such as a tablet, every button, box and
+link is at least **44 pixels** tall. That is the size a fingertip needs. A test
+checks this, so a new control cannot be too small.
+
+- **Text boxes, dropdowns and buttons are taller** on a phone or tablet.
+- **Checkboxes look the same size**, but the area around them that responds to
+  your thumb is bigger.
+- **Small icon buttons are bigger.**
+
+On a computer with a mouse, controls keep their desktop size. A mouse pointer
+does not need the target a fingertip does.
 
 ![The Submit Training form at 375px — full-width text fields, a certification checkbox whose whole row is the tap target, and the edit and delete icon buttons on the submission below it, all sized for a fingertip](./images/10-20-submit-training-touch-targets.png)
 
-_Measured on that screen rather than drawn on it, which is the more useful form
-of the same claim: of its **52 interactive controls, 50 are already 44px or
-taller**. The two that are not are the painted 18×18 checkbox indicator and a
-1×1 hidden file input — and each sits inside a label that takes the tap. The
-certification label above measures **44×317**, so anywhere on that row toggles
-it; the attach-certificate label is 46px tall. The "before" state cannot be
-photographed — it no longer exists in any running build — but nothing needs to
-be drawn on to check this one: open the form on a phone and try it._
+_The Submit Training form on a phone. Almost every control on it is 44 pixels
+or taller. The two that are not — the drawn checkbox square and a hidden file
+picker — each sit inside a label that takes the tap. The whole certification
+row is one tap target, so selecting anywhere on it ticks the box. To check this
+yourself, open the form on a phone and try it._
 
-### Nothing Is Too Small to Read _(2026-08-08)_
+### Text Size on a Phone
 
-No ordinary interface text renders below **12 pixels** on a phone. The worst
-offenders were the ones you saw on every single screen: the bottom navigation
-labels, the footer tagline, the notification count badge, and the "3 hours ago"
-style timestamps. One of them was outright backwards — the dashboard timestamps
-were set to render _smaller_ on a phone than on a desktop.
+On a phone, ordinary text is never smaller than **12 pixels**. That includes
+the bottom-bar labels, the notification count and the "3 hours ago" times on
+the dashboard.
 
-This is a readability change aimed at who actually uses the app: volunteer
-members across a wide age range, the same reason the app ships a high-contrast
-theme.
-
-**Some very small text is intentionally exempt** and stays as it is: chart axis
-labels, the day cells in the shift-pattern month grid, and the simulated barcode
-on the label-print preview. These are dense fixed-size layouts where enlarging
-the text would break the grid rather than help anyone read it.
+A few dense, fixed-size layouts keep smaller text on purpose, because larger
+text would break them: chart axis labels, the day cells in the shift-pattern
+month grid, and the sample barcode on the label-print preview.
 
 ![Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum](./images/10-10-mobile-minimum-text.png)
 
-### The Rest of the App Fits a Phone Now _(2026-08-11)_
+### Layouts on a Phone
 
-Roughly 115 pages that still overflowed sideways at phone width — training
-admin tabs, elections, events, finance, grants, facilities, minutes,
-onboarding, and more — were reworked so nothing forces horizontal scrolling:
-page headers stack their title and buttons, tab strips scroll sideways within
-themselves instead of wrapping to two lines, two-column form grids collapse to
-one, and long badge/filter rows wrap. Two pages changed at every width, not
-just phones: the Member Training Status page gained the standard page margins
-it had been missing, and a facility's section list stacks above its content on
-a phone instead of squeezing beside it.
+Nothing in The Logbook should make you scroll sideways on a phone. Here is how
+screens adapt:
 
-Nothing moved on desktop beyond those two; this is the same
-scoped-under-768px approach as the touch-target work above.
+- **Page headers** stack the title above the buttons.
+- **Tab rows** scroll sideways inside themselves instead of wrapping onto two
+  lines.
+- **Two-column forms** become one column.
+- **Long rows of badges or filters** wrap onto the next line.
+- **Tables** (documents, training, audit and check-in, among others) turn into
+  stacked cards. Every value keeps its column heading beside it, so you never
+  need to remember a header row that has scrolled away.
+- **Stat tiles** (Finance, Grants and the administration hubs) wrap their labels
+  instead of cutting them off.
+- **Date and time pickers** fit a narrow phone and show their values.
+- **Dialogs** never grow taller than the screen. A tall dialog scrolls inside
+  itself, so its buttons can always be reached. **Shift Details** opens as a
+  window in the middle of the screen, inset from the edges on a phone.
 
-### Phones and Tablets: Layout Pass of 2026-10-03/04
+![One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
 
-- **Settings screens use the full phone width.** Scheduling and the other
-  settings screens stacked four layers of padding at 320px, leaving a row about
-  185px wide so a label such as _Require end-of-shift equipment checks_ wrapped
-  one word per line. They now sit on the same 16px margin as Members and the
-  Dashboard; the **RECOMMENDED** badge wraps under its label. Desktop is unchanged.
-- **Training Setup and the compliance rules page** no longer scroll sideways at
-  320px; their wizard steps, tabs and **Save** buttons are 44px, and a
-  malformed response (a hotel Wi-Fi sign-in page, say) shows the load-error
-  state instead of _"Compliant: >= undefined%"_.
-- **Event roster controls are thumb-sized.** **Check In**, **Edit Times**,
-  **Remove** and the **Yes / No** confirmation were about 16px tall; they are
-  44px on a phone and unchanged on desktop.
-- **On a tablet, edit/delete/download buttons are visible.** They used to be
-  hidden until hover by screen width, so on an iPad the controls on 26 screens
-  never appeared. They now hide only on devices with a mouse.
-- **Tablet fixes:** icons and labels on small buttons sit side by side (the
-  Store's Edit/Archive/New item, and 25 other places); the Reports date inputs no
-  longer push the page sideways; Kits and Variant Groups keep their title room;
-  document, room and address names wrap rather than being cut off.
-- **Selected tabs and filters are red.** Eight screens drew the selected state
-  in blue; they now match the rest of the app (Members Admin, Admin Hours,
-  Eligibility Roster, Supply Expiring, My Checklists, Check Log, Compliance
-  Requirements and Elections).
-- **Cards look the same everywhere.** The event detail page, member profile
-  sections, minutes and member edit page now share one bordered card, where some
-  sections previously had no border.
+![The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files](./images/10-19-training-table-desktop.png)
 
-> **Screenshots:** every phone and tablet shot of the screens above predates
-> this pass — see [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
+_The same page and the same three records, on a phone and at desktop width.
+On the phone every value keeps the column heading that named it, and there is
+nothing to scroll sideways._
 
-### Dark Mode Now Works on Public Pages _(2026-08-08)_
+![A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable](./images/10-17-tall-dialog-action-row.png)
 
-If you had dark mode on, three pages rendered as **white-on-white and were
-effectively unreadable**:
+The dashboard stacks its panels into a single column:
 
-- The public form page (`/f/<form>`)
-- The ballot voting page
-- The application status page an applicant checks
+![Dashboard on a phone in portrait orientation with stacked widget cards](./images/10-04-mobile-dashboard.png)
 
-These three sit outside the signed-in app shell, and the dark theme's surface
-colors are designed to be translucent — meant to sit over the app's own
-background. With no app background behind them, they composited over the
-browser's plain white page: white labels on a white card, with dark input boxes.
+The inventory items list shows cards instead of table rows. On the inventory
+items page, **officers who can manage inventory** also get a round floating
+button in the bottom-right corner on a phone. It opens two actions: **Add Item**
+and **Distribute Items**. Members without that permission do not see the
+button.
 
-The page background is now painted by the app itself, so no page can render over
-the browser's bare canvas. **Printing is unaffected** — printed output has always
-forced a white background and still does.
+![Inventory items list on a phone, rendered as cards instead of table rows](./images/10-05-mobile-inventory.png)
+
+![Inventory admin hub on a phone with grouped card sections stacked vertically](./images/10-06-mobile-inventory-admin.png)
+
+### Settings Screens on a Phone
+
+Organization, Scheduling, Elections, Events, Email Templates, Checklist
+Settings, My Account and the other settings screens share one layout:
+
+- The **sections** run across the top as a row of buttons. On a phone the row
+  scrolls sideways, and each button is 44 pixels tall. A keyboard can reach
+  every one.
+- A section's **pages** sit in a list on the left on a computer. On a phone the
+  list becomes a sideways-scrolling row under the sections.
+- The screen uses the same 16-pixel side margin as the rest of the app, so a
+  long setting name has room. A **RECOMMENDED** badge wraps under its label.
+
+### Administration Hubs on a Phone
+
+The Members, Events, Training, Scheduling, Inventory and Store hubs sit on the
+same page margin as every other page. On a phone, a hub's sections are a
+**sideways-scrolling row of chips**, with the chosen section's description
+beneath. A fade and a round arrow at an edge show there is more. Select the
+arrow to move along. See _Administration hubs_ in
+[08 — Admin & Reports](./08-admin-reports.md).
+
+### The Checklist Builder on a Phone
+
+The equipment-check template builder fits a phone:
+
+- Only the back arrow, the template name, **Publish** and the to-fix badge stay
+  pinned at the top. The status, **Details / Tools / Save** and the
+  **Applies to** chips scroll away with the page.
+- A row's menu opens as a titled sheet from the bottom of the screen.
+- A location's header takes two lines.
+- An empty location shows one full-width **Add items** button.
+
+### The Schedule on a Phone
+
+The Schedule tab is a **board** on a phone too: a grid of the month, a day
+sheet that opens beneath it when you select a day, and a confirmation screen
+for claiming a seat. A shift's chip says whether it still needs people, and one
+button claims the first open seat you are cleared for. The day cells in the
+grid are 44 pixels tall.
+
+![The Schedule tab on a phone: the month header with the All shifts / Needs staffing / My shifts filter, the days-this-week-still-need-people warning, and the top of the bar grid above the bottom navigation](./images/19-35-schedule-board-phone.png)
+
+The chips, the claim button and the reasons it can be missing are described in
+[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts).
+
+### On a Tablet
+
+- **Edit, delete and download buttons are always visible.** On a computer with
+  a mouse, some of these appear only when you hover over a card. A tablet
+  cannot hover, so on a touch screen they stay on screen.
+- **Card lists fit their space.** With the side menu open, a list shows two
+  roomy columns rather than three cramped ones.
+- **Small buttons keep their icon beside the label.**
+- **Names wrap** rather than being cut off.
+
+### The Check-In Station on a Tablet
+
+**Members → Check-In Station** is meant to be left running on a tablet by a
+door. On Chrome for Android over a secure (HTTPS) address it reads ID cards
+itself, using the tablet's [NFC](./GLOSSARY.md). With a USB card reader, it
+listens to the **whole page** rather than one box. A tablet at a door loses
+focus to the first stray tap, and a station that has quietly stopped reading
+is worse than one that was never switched on.
+
+![The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it](./images/10-21-check-in-station-tablet.png)
+
+### Dark Mode on Public Pages
+
+Pages people reach without signing in — a public form, the ballot voting page
+and an applicant's status page — follow dark mode like the rest of the app.
 
 ![The public form page in dark mode, readable on the themed background](./images/10-11-public-form-dark.png)
 
-The themed background also covers the **scrollbar gutter** — the strip the
-browser reserves at the right edge of the window — so a dark page runs to the
-window's edge, on public pages and inside the app alike. One exception is a
-browser constraint rather than a defect: a dialog's dimmed backdrop cannot
-reach that strip, so on a **light** page under an open dialog the gutter stays
-light beside the dimmed page. When you reuse an older dark-mode screenshot or
-handout, check its right edge for a bright strip.
+The dark background reaches the right edge of the window, including the strip
+the browser keeps for a scrollbar. One exception comes from the browser: an
+open dialog's dimmed backdrop cannot reach that strip. So on a **light** page
+with a dialog open, that strip stays light beside the dimmed page.
 
-Printing with the browser's **Background graphics** option switched on still
-prints no themed background, in light or dark mode — printed output is white.
+Printed pages are always white, in light or dark mode, even with the browser's
+**Background graphics** option switched on.
 
 ![A public form in dark mode at full window width, the themed gradient reaching the window edges](./images/19-11-dark-scrollbar-gutter.png)
 
+### Browser Tabs
+
+Each browser tab shows the name of the page in it, so you can tell several
+Logbook tabs apart. While a page loads, its tab reads **The Logbook**. It takes
+the page's name once the page's heading appears.
+
+---
+
+## Keeping the App Up to Date
+
 ### Automatic Updates
 
-The app uses an **autoUpdate** service worker strategy:
+The Logbook checks for a new version when you open it, when you come back to
+it, and every few minutes while it is open. When it finds one:
 
-1. Each time you open the app, it checks for updates in the background
-2. If a new version is available, it downloads silently
-3. The update is applied the next time you close and reopen the app
-4. You do not need to take any action — updates happen automatically
+1. The new version downloads in the background.
+2. A blue bar says **"A new version of The Logbook is available."** On a phone
+   the bar sits at the bottom of the screen, just above the bottom bar. On a
+   tablet or computer it sits at the top.
+3. Select **Reload now**. The app waits for the new version to be ready, then
+   reloads **once** onto it.
 
-In addition, the app includes a **proactive version detection** system
-_(reworked 2026-08-12 so updates land on installed PWAs in one reload)_:
+Select the **X** on the bar to be reminded again in an hour.
 
-1. A build timestamp is embedded in the app at build time
-2. The `useAppUpdate` hook periodically checks if a newer version has been
-   deployed; the service worker is also re-checked when you return to the app
-   (and on a 30-minute fallback interval), not just on rare full navigations
-3. If a new version is detected, an **Update Available** notification bar appears
-   — at the **top** of the screen on desktop and tablet, and at the **bottom** on
-   phones _(2026-08-07)_ — and the new service worker is fetched in the
-   background so it is usually ready before you tap
-4. Tap **Reload now**: the app waits for the fresh worker to take control and
-   then reloads **once** with the new version. Previously the reload was often
-   served by the old worker's cached shell, so the update appeared to do
-   nothing until a second reload
+If the device cannot install the update by itself, the bar says **"A new
+version is available, but this device could not install it automatically."**
+and offers **Force refresh**. See below.
 
-> **Hint:** If you don't see the update notification and suspect you're on an
-> old version, use **Settings → App** (below) rather than guessing. Since
-> 2026-08-12 a stale-chunk load after a deployment also self-heals through the
-> same one-reload path instead of landing on the error page.
+If a page fails to load just after an update, the app recovers by itself
+through the same single reload, rather than showing an error page.
 
-### Checking and Forcing an Update Yourself _(2026-08-16)_
+> **Hint:** Think you are on an old version but see no bar? Use
+> **My Account → App** (below) rather than guessing.
 
-Everything above is automatic, but an installed app has no address bar and no
-`Ctrl+Shift+R` — so when a device _does_ get stuck on an old build, there was
-previously nothing to press. **Settings → App** is that button. It shows:
+### Checking and Forcing an Update Yourself
 
-- **Installed version** — the build this device is actually running. Read it
-  out when you report a problem; it tells whoever is helping exactly which
-  version you are seeing, which is otherwise guesswork.
-- **Check for updates** — asks the server whether a newer version has been
-  released. If one has, the app swaps in the new version and reloads onto it.
-  If not, it says so, which is itself useful: it rules the app out.
-- **Force refresh** — the escape hatch. It deletes every stored copy of the app
-  on this device (the offline app shell and every cached screen) and reloads it
-  from the server.
+An installed app has no address bar and no reload button. When a device is
+stuck on an old version, **My Account → App** is the place to go. It shows:
 
-Reach for **Force refresh** when the app still looks out of date after an
-update, or when it shows an old department name or logo — that branding is
-stored on the device the first time you open the app and is otherwise never
-re-read, so a department that renames itself or changes its logo can leave
-existing phones showing the old one indefinitely.
+- **Installed version.** The version this device is running, and when it was
+  released. Read it out when you report a problem. It tells whoever is helping
+  exactly which version you are seeing.
+- **Check for updates.** Asks The Logbook whether a newer version has been
+  released. If one has, the app updates and reloads onto it. If not, it says
+  **"You're on the latest version."** That is useful too: it rules the app out.
+- **Force refresh.** The last resort. It deletes every stored copy of the app on
+  this device, then reloads it fresh. You confirm first, in a
+  **"Force refresh this device?"** dialog.
 
-**It needs a working connection.** A force refresh throws away this device's
-offline copy of the app and downloads a replacement, so doing it with no signal
-would leave you with neither. The app checks before it clears anything: if it
-cannot reach the server it refuses, tells you so, and leaves the device exactly
+Use **Force refresh** when:
+
+- the app still looks out of date after an update, or
+- it shows an old department name or logo. The device stores the department's
+  branding the first time you open the app. If your department renames itself
+  or changes its logo, a phone can keep showing the old one until you force a
+  refresh.
+
+**Force refresh needs a working connection.** It throws away this device's
+offline copy of the app and downloads a new one. With no signal, you would be
+left with neither. So the app checks first. If it cannot reach The Logbook, it
+says **"Cannot reach the server — nothing was cleared."** and leaves the device
 as it was. Get back in signal and try again.
 
-Note it checks by actually reaching The Logbook, not just by asking the phone
-whether it has a connection — station Wi-Fi behind a captive portal reports a
-perfectly good connection while answering every request with a login page.
+The check really reaches The Logbook; it does not just ask the phone whether it
+is connected. Station Wi-Fi with a sign-in page (a captive portal) looks
+connected to the phone but answers every request with its own page.
 
 Otherwise a force refresh is safe:
 
 - **You stay signed in.** It is a refresh, not a sign-out.
-- **Offline work is kept.** Anything saved offline but not yet synced is left
-  untouched — a force refresh will never be the thing that loses a shift report.
-- **Push notifications keep working.** This device's notification subscription
-  is deliberately left alone, so you do not have to re-enable it afterwards.
+- **Offline work is kept.** Anything saved offline but not yet sent is left
+  alone. A force refresh never loses a shift report.
+- **Push notifications keep working.** You do not have to turn them on again.
 
-The only cost is speed: the next few screens load a little slower while the app
-re-downloads what it just discarded.
-
-> **Fixed 2026-08-07:** on a phone the update banner was rendered _behind_ the
-> fixed mobile header and was therefore invisible. For an installed app that
-> stays open for weeks, that banner is the primary update channel — so if your
-> phone has been running a stale version for a while, that is why. It is now
-> pinned to the bottom of the viewport, clear of the hamburger menu.
+The only cost is speed: the next few screens load a little slower while the
+app downloads them again.
 
 ---
 
 ## Offline Behavior and Limitations
 
-The Logbook is designed as an **online-first** application. The PWA caches the app shell (HTML, CSS, JavaScript) for fast loading, but **data operations require an internet connection**.
+The Logbook is built to work **online**. It stores its own screens on your
+device so it opens quickly, but **the information on them needs a
+connection**.
 
 ### What Works Offline
 
-- **App shell loads** — the navigation, layout, and UI framework display even without a connection
-- **Previously viewed pages** may show cached content (depending on what you last viewed)
-- **Barcode scanning** works on a cold offline start — it is deliberately kept
-  available, because scanning in a bay with no signal is a real workflow
-
-> **Changed 2026-08-07 — a page you have never opened online is no longer
-> available offline.** Installing the app used to download _every_ screen up
-> front, including finance, grants, elections and onboarding, which most members
-> never open: 275 files and 6.1 MB over whatever rural cellular connection the
-> install happened on. It is now 15 files and 1.8 MB — the shell, which carries
-> login and the dashboard — and each other screen is stored the first time you
-> visit it.
->
-> **What this means in practice:** if you know you will be somewhere with no
-> signal, open the screens you will need **once** while you still have a
-> connection. After that they are cached like before.
+- **The app opens** and its screens, menus and layout appear, even with no
+  connection.
+- **Barcode scanning opens** on a device that starts with no signal, because
+  scanning in a bay with no signal is a real job. Looking up what was scanned
+  still needs a connection.
+- **Seven things are saved on the device and sent later** instead of failing:
+  equipment checks (with their photos), shift reports, training submissions,
+  event RSVPs, skills-test evaluations, NFC put-aways and shelf audits. See
+  [What Happens When You Lose Connection](#what-happens-when-you-lose-connection).
 
 ### What Requires a Connection
 
-- **All data operations** — viewing member lists, submitting forms, checking in, RSVPing, logging training, etc.
-- **API calls** — the service worker is configured with a **NetworkOnly** strategy for all `/api` routes, so no data is ever stored in or served from the service worker's cache, and nothing loads without a connection
+- **Everything that shows or changes information:** member lists, forms,
+  check-ins, training records and so on.
+- **A form must be opened while you have signal.** Once it is open, you can
+  fill it in and submit it with no signal. A form you try to open with no
+  signal shows an error instead.
+- The Logbook does not keep member lists, profiles or records on the device
+  for browsing offline. With no connection, a screen opens but shows nothing
+  new.
 
-Inside an open tab, the app keeps a short-lived **in-memory** copy of recent
-responses so moving between screens does not refetch everything: a response up
-to 30 seconds old is reused as is, and one up to 90 seconds old is shown while
-a fresh copy loads behind it. Anything you save clears the related entries.
-Member-level data — profiles and the roster, scheduling, individual training
-records, medical and emergency-contact information, notifications and the like
-— is excluded from it entirely and always fetched fresh. The copy lives only in
-memory: it is gone when the tab closes, and it is cleared when anyone signs in
-or out.
+**Some work is kept on the device on purpose**, so that it is not lost when the
+signal drops. It can hold member names, results and remarks:
 
-This is a deliberate design decision for data integrity and HIPAA compliance — serving stale or cached member data could lead to incorrect records or privacy issues.
+- the seven kinds of offline item, while they wait to be sent;
+- shift-report drafts and equipment checks you started but did not finish;
+- for skills-test examiners: each evaluation you are examining that you have
+  opened on this device, the published score sheets, and the names of up to
+  50 members you have recently examined.
+
+Each of these belongs to the member who saved it. They are cleared when
+someone signs out (see
+[Signing Out Clears Queued Work](#signing-out-clears-queued-work)).
+
+> **What if I need to score a skills evaluation where there is no signal?**
+> Open it on that device once while you still have signal. An evaluation never
+> opened there cannot be opened offline; the app says so. See
+> [Scoring with no signal](./09-skills-testing.md#scoring-with-no-signal).
+
+Inside an open app or tab, The Logbook keeps what you just looked at for a
+minute or so, so moving between screens does not reload everything. Anything
+you save clears the related copies. Member-level information — profiles, the
+roster, scheduling, individual training records, medical and emergency-contact
+details, notifications and the like — is never kept this way and is always
+loaded fresh. The short-term copy disappears when you close the tab, and when
+anyone signs in or out.
+
+This is deliberate, for accuracy and for the privacy of health information.
+Showing old member information could lead to wrong records or privacy
+problems.
 
 ### What Happens When You Lose Connection
 
-- The UI remains responsive; you just cannot load new data
-- Most actions that require the server show an error message (typically "Network error" or "Unable to connect")
-- **Four things are queued for later** instead of failing: equipment checks
-  (including photos), shift reports, training submissions, and event RSVPs.
-  You get a "Queued for sync" toast, and the app sends them automatically when
-  the device is back online — see the walkthrough in
-  [Realistic Example: Mobile Workflow](#realistic-example-mobile-workflow--event-check-in-equipment-scan--offline-queue).
-- **Only genuine connection failures queue** _(2026-08-16)_. If the server
-  actually **rejects** an equipment check — validation failure, revoked
-  permission, shift already checked — you now see the real error instead of a
-  false "queued for sync". Previously a rejected check was reported as queued,
-  the draft was deleted, and the queue re-sent the same doomed submission on
-  every reconnect forever (the pending pill never cleared). A queued check that
-  keeps failing is now abandoned after a retry limit **and the app tells you it
-  was lost**, including photos that failed to upload, rather than dropping it
-  silently.
+- The app still responds; it just cannot load new information.
+- Most actions that need a connection show an error such as "Network error" or
+  "Unable to connect".
+- **The seven offline items** (see above) are saved on the device instead. An
+  equipment check shows **"Connection lost — check queued for sync"**. A
+  training submission shows its usual receipt.
+- **Open the menu to see what is waiting.** With no connection, the bottom of
+  the menu shows **Offline · 2 pending** (or however many). The count covers
+  all seven kinds of item. Once you are back online with items still waiting,
+  it shows **2 pending sync — retry**.
+- **Items send by themselves** when the device is back online. Training
+  submissions, RSVPs, NFC put-aways and shelf audits then report **"Synced 2
+  pending items"** (or **"Synced 1 pending item"**). Skills-test evaluations
+  report **"Synced 1 skills evaluation"**.
+- **Equipment checks and shift reports send from their own page.** They go
+  when you open an equipment check, or the **Shift Reports** tab in
+  Scheduling, with a connection. Equipment checks report **"Synced 2 queued
+  check(s)"**; shift reports **"Synced 2 offline reports"**.
+- **What pending sync — retry does.** Selecting it sends training
+  submissions, RSVPs, NFC put-aways and shelf audits straight away. It does
+  not send equipment checks or shift reports: open their page instead.
+  Skills-test evaluations send by themselves.
+- **Only real connection failures are saved for later.** If The Logbook
+  **rejects** an equipment check — a missing answer, a permission you no longer
+  have, a shift already checked — you see the real error straight away.
 
-> **Hint:** If you are attending an event at a location with poor cell coverage, check in or RSVP before you arrive while you still have signal. QR code check-in also works — the scan happens on the device and the check-in is submitted when the device has connectivity.
+**What happens to an item The Logbook keeps rejecting** depends on its kind:
 
-### Signing Out Clears Queued Work _(2026-08-01)_
+| Kind of item                                                     | What happens                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training submission, RSVP, NFC put-away, shelf audit             | After five rejections it is deleted, and the app says so: **"1 pending item failed permanently and was discarded"**. Re-enter it by hand.                                                                                                                                                         |
+| Equipment check                                                  | After five rejections it is deleted: **"1 queued check(s) were rejected repeatedly and have been discarded"**. Re-enter it by hand.                                                                                                                                                                 |
+| Shift report                                                     | It is never deleted. It stays waiting and is tried again each time you open the **Shift Reports** tab with a connection.                                                                                                                                                                          |
+| Skills-test evaluation                                           | It is never deleted. You see **"Not accepted:"** with the test and candidate, and the reason. A red banner on the test repeats it. The scoring stays on the device until **you** choose **Discard from this device**. See [Scoring with no signal](./09-skills-testing.md#scoring-with-no-signal). |
 
-Station computers are shared: whoever is on duty signs in on the same browser.
-Anything left on the device is readable by the next person to sit down, so
-**signing out erases everything held locally** — queued equipment checks and
-their photos, queued shift reports, queued training submissions and RSVPs,
-saved shift-report drafts, and **in-progress equipment-check drafts**
-_(added 2026-08-16; previously these drafts survived logout, so the next
-person at the terminal could read apparatus results and notes — flagged and
-fixed as red-team finding RT-08)_. The sweep also removes draft entries the
-app has lost track of, so a draft whose bookkeeping entry went missing is not
-left behind.
+Attempts that never reached The Logbook (a dropped signal) do not count
+towards the five.
 
-**If you have queued work, get back online and let it sync before you sign
-out.** Anything still waiting is discarded. The app is not silent about it: if
-signing out threw away unsent items, the login page tells you how many.
+> **Hint:** At an event with poor coverage, check in or RSVP before you arrive,
+> while you still have signal. A QR code check-in reads the code on your phone,
+> but the check-in itself needs a connection.
+
+> **What if I attach a certificate while offline?** The training submission is
+> saved for later, but the file is not. You see **"Saved offline — attach the
+> certificate once you are back online."** Open the submission when you are
+> back in signal and attach it then.
+
+### Signing Out Clears Queued Work
+
+Station computers are shared. Whoever is on duty signs in on the same browser,
+and anything left on the device can be read by the next person. So **signing
+out clears the work stored on the device**:
+
+- queued equipment checks and their photos,
+- queued shift reports,
+- queued training submissions, RSVPs, NFC put-aways and shelf audits,
+- saved shift-report drafts,
+- equipment checks you started but did not finish, and
+- skills-test evaluations and the copies kept for scoring offline.
+
+The clean-up is **best effort**. If the device's storage does not respond
+within a few seconds, sign-out finishes anyway, so that nobody is left stuck
+signed in on a shared terminal. Something may then be left behind on that
+device.
+
+**If you have queued work, get back online and let it send before you sign
+out.** Anything still waiting is deleted. Unsent skills evaluations are the
+one exception that asks first: **Sign Out** tries to send them, and if it
+cannot, it warns you and offers **Stay signed in**. The app tells you what was
+lost: if signing out threw away unsent items, the sign-in page says how many,
+for example _"2 unsent items were cleared from this device at sign-out to
+protect your privacy on a shared computer. Re-enter them after signing back
+in."_
+
+The device is also cleared **without you selecting Sign Out**, and without
+that message, in two cases:
+
+- **Your session has expired** and The Logbook cannot renew it. The app
+  returns you to the sign-in page, and unsent work on the device is deleted.
+- **A different member signs in** on the same device. Whatever the previous
+  member left is deleted first.
+
+So do not leave unsent work on a device you are walking away from. Let it send
+first.
+
+Two things that might look like a sign-out do **not** clear the device:
+
+- **A weak or dropped connection** while the app loads your profile. Your
+  drafts and queued work stay.
+- **A wrong or expired two-factor sign-in code.** The app asks you to try the
+  code again; it does not clear the device or send you back to the sign-in
+  page.
 
 On your own phone this rarely matters, because you stay signed in. It matters
-on the shared terminal in the bay, which is exactly where somebody is most
-likely to sign out mid-shift.
+on the shared terminal in the bay — exactly where someone is most likely to
+sign out mid-shift.
 
-### Queued Work Is Sent Only by the Member Who Saved It _(2026-10-05)_
+### Queued Work Is Sent Only by the Member Who Saved It
 
-Every queued equipment check, shift report, training submission, RSVP and NFC
-put-away or shelf audit now records **who saved it**, and the app sends only the
-items belonging to the member who is signed in. Another member's items stay on
-the device and do not hold up yours; the pending count shows only your own.
-Before this, if the browser could not clear a previous member's queue at
-sign-in, the next member's connection sent it under their name.
+Every queued equipment check, shift report, training submission, RSVP, NFC
+put-away and shelf audit records **who saved it**. The app sends only the items
+that belong to the member signed in. Another member's items stay on the device
+and do not hold up yours. The pending count shows only your own.
 
-Items saved **before** this change have no recorded owner. They are held rather
-than sent, and a yellow notice appears across the top of the app:
-_"3 offline items are on hold"_, saying they were saved before the device
-recorded who saved them and have not been sent. Choose one of two buttons, each
-behind a confirmation:
+Skills-test evaluations follow the same rule. Each one, and each saved copy of
+a test, belongs to the member who saved it. Only that member's evaluations are
+sent, and a saved copy opens only for them.
+
+Some older items may have no recorded owner. They are held, not sent, and a
+yellow notice appears at the top of the app: _"3 offline items are on hold"_.
+It explains that they were saved before the device recorded who saved them.
+There are two buttons, each with a confirmation:
 
 - **Send as me** (_"Send these as yours?"_) sends them under your name. Do this
-  only if you saved them yourself: the device cannot tell, and if another
-  member did, their work is recorded as yours. Equipment checks and shift
+  only if you saved them yourself. The device cannot tell; if another member
+  saved them, their work is recorded as yours. Equipment checks and shift
   reports go the next time you open their page with a connection.
 - **Discard** (_"Discard held items?"_) deletes them from the device for good.
   Whoever saved them is not told.
-- **Keep on hold** in either dialog leaves things as they are.
+- **Keep on hold**, in either confirmation, leaves things as they are.
 
 <!-- Screenshot needed:
 _[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
@@ -507,190 +713,264 @@ _[Member signed in on a device with two or three held offline items (seed untagg
 
 ## Push Notifications on Mobile
 
-The Logbook delivers notifications three ways:
+The Logbook reaches you three ways:
 
-- **Push notifications** _(2026-08-07)_ — reach your phone's **lock screen** even
-  when the app is closed. This is the one an installed app is actually for.
-- **Email notifications** work as configured in your notification preferences
-  (event reminders, training expiry, schedule changes)
-- **In-app notifications** appear when you open the app — a badge count shows
-  unread notifications
+- **Email** is the main channel. You choose which emails you get in **My
+  Account → Notifications**. Some always arrive.
+- **In-app notifications** appear in The Logbook, with a count of unread ones.
+- **Push notifications** reach your phone's **lock screen**, even when the app
+  is closed. This is what an installed app is most useful for.
+
+Push and in-app notices are added on top of email. Turning one off never leaves
+you without the notice itself.
 
 ### Enabling Notifications
 
-1. Navigate to **My Account > Notifications** (or the Notifications page in the sidebar)
-2. Toggle notification preferences for each category:
-   - Event reminders
-   - Training expiration warnings
-   - Schedule changes
-   - Form submission alerts
-3. Choose delivery method: **Email**, **In-App**, or **Both**
+Open **My Account → Notifications**. The screen has:
 
-> **Hint:** For time-sensitive alerts (shift changes, urgent messages), enable email delivery so you receive them even when the app is not open.
+| Setting                                | What it does                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Push Notifications on This Device**  | Lock-screen alerts on this device. Only shown where push can work (see below)                           |
+| **Email Notifications**                | Turns off every email you can choose below. The ones listed as always emailed still arrive              |
+| **Urgent Text Messages**               | Adds a text when an officer marks a department message urgent. Needs a mobile number on the Account tab |
+| **Emails you can turn off**            | One switch each, such as **Event reminders**, **Training and certification reminders** and **Shift notices** |
+| **Always emailed to you**              | Emails the department must be able to show you received. You cannot turn these off                      |
 
-### Turning On Push _(2026-08-07)_
+Select **Save Preferences** to save the email choices. The push and text
+switches save as soon as you change them.
 
-1. Open **My Account > Notifications**.
-2. Switch on **Push notifications**.
+> **Hint:** For anything time-sensitive, keep the emails on and add push. Email
+> reaches you whether or not the app is open.
+
+### Turning On Push
+
+1. Open **My Account → Notifications**.
+2. Switch on **Push Notifications on This Device**.
 3. Accept your device's permission prompt.
 
-**Every existing notification source is covered.** Event reminders, training
-expiry, schedule changes, apparatus maintenance due, election notices — all of
-them. Nothing had to be enabled per category, because push hooks in where
-notifications are recorded rather than at each source.
+**Every in-app notification is also pushed**: event reminders, training expiry,
+schedule changes, apparatus maintenance due, election notices and the rest.
+You do not turn it on per type.
 
-**Push is per device, not per account.** If you have the app on both your phone
-and the station tablet, turn it on in both — and you will be reached on both.
+**Push is per device, not per account.** If you use the app on your phone and on
+the station tablet, turn it on in both, and you will be reached on both.
 
 ### Edge Cases Worth Knowing
 
-- **iPhone/iPad: you must install the app first.** Web Push on iOS (16.4 and
-  later) only exists for a PWA that has been added to the home screen. If you are
-  browsing the site in Safari, **the toggle will not appear at all** — that is
-  correct, not a bug. Install the app (see
-  [Installing on iPhone / iPad](#installing-on-iphone--ipad-safari)), open it from
-  your home screen, then look again.
-- **No toggle on any platform?** Your department may not have push enabled on its
-  deployment. It is off by default and an administrator has to turn it on. The
-  app deliberately hides the control rather than offering something that would
-  fail when you tapped it.
-- **Uninstalling the app, or clearing site data, stops push.** There is no
-  callback to tell the server, so the subscription is cleaned up the first time a
-  notification cannot be delivered to that device. Re-installing means turning the
-  toggle on again.
-- **A push failure never blocks the thing that triggered it.** If the push
-  service is down, the notification is still recorded and still reaches you
-  in-app and by email.
+- **iPhone/iPad: install the app first.** On iOS (16.4 and later), push only
+  works for The Logbook added to the home screen. In Safari, **the switch does
+  not appear at all**. That is expected. Install the app (see
+  [Installing on iPhone / iPad](#installing-on-iphone--ipad-safari)), open it
+  from your home screen, and look again.
+- **No switch on any device?** Your department may not have push turned on. It
+  is off until an administrator sets it up. The app hides the switch rather than
+  offer something that would fail.
+- **Uninstalling the app, or clearing the site's data, stops push.** The
+  Logbook only finds out the next time a notification cannot be delivered. After
+  re-installing, turn the switch on again.
+- **A push failure never blocks what caused it.** If the push service is down,
+  the notification is still recorded and still reaches you in the app and by
+  email.
 
-> **For administrators:** push requires `PUSH_ENABLED=true` plus VAPID keys —
-> see [Configuration-Environment](../../wiki/Configuration-Environment.md) and
-> the IT guide.
+> **For administrators:** push is switched on in the server's configuration,
+> with a set of push keys. See
+> [Configuration-Environment](../../wiki/Configuration-Environment.md) and the
+> IT guide. Creating new push keys means every member must turn push on again
+> on every device.
 
 ---
 
 ## Mobile-Optimized Features
 
-Several features are specifically designed for mobile use:
-
 ### QR Code Check-In (Events & Shifts)
 
-1. An officer displays the event's QR code on a screen or printout
-2. On your phone, scan the QR code with your camera app
-3. Your phone opens The Logbook's check-in page
-4. Tap **Confirm Check-In**
-5. Scan again when leaving to check out
+1. An officer shows the event's QR code on a screen or printout.
+2. Scan the QR code with your phone's camera app.
+3. Your phone opens The Logbook's check-in page.
+4. Select **Check In to This Event** (for a shift, **Check In**).
+5. To check out of an event, scan the code again and select **Check Out of
+   This Event**.
 
-This is the most common mobile interaction — members scan QR codes at events and shift changes.
+This is the most common thing members do on a phone.
 
-### NFC Tag Check-In (Android only) _(2026-08-18)_
+### NFC Tag Check-In (Android Only)
 
-Where a station has mounted an NFC tag, you can check in by holding your phone
-near it instead of scanning anything. No camera, which matters in a dark bay or
-with gloves on.
+Where your department has mounted an NFC tag, you can check in by holding your
+phone near it. There is no camera involved, which helps in a dark bay or with
+gloves on.
 
-1. Hold the back of your phone against the tag
-2. Android opens The Logbook's check-in page
-3. Tap **Confirm Check-In**
+1. Hold the back of your phone against the tag.
+2. Android opens The Logbook's check-in page.
+3. Confirm on that page, as you would after scanning a QR code.
 
-**If the app is already open on screen, that will not happen** — Android only
-hands a tag off to the browser when the app is not in the foreground. Use **Tap
-Tag** in the app instead: it is on the Events page, My Admin Hours, and the
-scheduling calendar. Press it, then hold the phone to the tag.
+**If The Logbook is already open on screen, this does not happen.** Android
+only passes a tag to the browser when the app is not in front. Use **Tap Tag**
+instead. It is on the **Events** page (an NFC icon on a phone) and on **My
+Admin Hours** (**Tap a tag to clock in**). Select it, then hold the phone to
+the tag.
 
-Tags exist for three things today: **event check-in**, **admin hours clock-in**,
-and **shift check-in** on an apparatus.
+Tags can be set up for:
 
-**Not pictured.** This one needs a physical tag held against a physical
-phone, and the screenshot harness drives headless Chromium over
-`http://localhost` — where, per the paragraph below, Web NFC does not exist at
-all. There is no staging of it that would be honest: a composite would be two
-pictures of something the tooling cannot do.
+- **event check-in**,
+- **room check-in** — checks you in to whichever event is open for check-in in
+  that room,
+- **admin hours clock-in**,
+- **shift check-in** on an apparatus, and
+- **inventory items**.
 
-What lands when it works is not special, which is the reassuring part — it is
-the ordinary shift check-in page for that apparatus, naming the unit, the date
-and the hours, exactly as it looks when reached by scanning the QR code or by
-tapping through the app.
+The page you land on is the ordinary check-in page, exactly as when you scan
+the QR code.
 
 **Check the shift named on that page before you confirm.** An apparatus tag
-does not name a shift: it resolves when tapped, to the truck's earliest
-not-yet-finalized shift dated today. On a day the truck runs two shifts, that
-is the earlier one even once it is over and the second is under way, so a crew
-checking in to the later shift may be shown the wrong one.
+does not name a shift. When tapped, it picks:
 
-**This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
-it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
-do it. A department running on plain `http://` over the LAN cannot do it — the
-browser only exposes NFC on a secure connection. Where NFC is unavailable the
-buttons simply are not there, and the QR code is the way in.
+1. the truck's shift that is running now, or else
+2. one that ended in the last two hours (for a late check-in), or else
+3. the next one to start.
 
-**An unrecognized tag will not take you anywhere.** The app only follows links
-that point back at your own Logbook, and only to check-in pages it recognizes.
-A tag somebody else wrote leaves the scan waiting with a message rather than
-opening whatever it says.
+Cancelled and closed-out shifts are never picked.
 
-### Member ID Scanning (Inventory Checkout)
+**This is Chrome on Android, over a secure (HTTPS) address, and nothing else.**
 
-1. Navigate to **Inventory > Members** on your phone
-2. Tap the **Scan Member ID** button in the toolbar
-3. Your phone's camera activates
-4. Point at the member's QR code or barcode ID card
-5. The member is instantly selected and their inventory loads — from here you can assign or return items
+- An iPhone cannot do it. No iOS browser supports NFC tags.
+- A computer cannot do it.
+- A department using a plain `http://` address on its own network cannot do it.
+  The browser only allows NFC on a secure address.
 
-This is especially useful at equipment distribution events where you need to process many members quickly.
+Where NFC is not available, the **Tap Tag** button does not appear. Use the QR
+code instead.
+
+**An unrecognized tag takes you nowhere.** The app only follows links back to
+your own Logbook, and only to check-in pages it knows. A tag written by someone
+else leaves the scan waiting, with a message.
+
+### Member ID Scanning (Inventory)
+
+For **officers who can manage inventory**:
+
+1. Open **Inventory Admin → Members** (the **Member Equipment** page).
+2. Select **Scan Member ID** (on a phone the button reads **Scan**).
+3. Your camera turns on. Point it at the member's ID card.
+4. The **Distribute Items** dialog opens for that member, ready for you to
+   scan or search for the items you are handing out.
+
+This is especially useful at equipment handouts, where you process many
+members quickly.
+
+To look someone up from their card outside inventory, use **Members → Scan
+Member ID**. It opens the member's profile.
 
 ### Barcode Scanning (Inventory)
 
-1. Navigate to **Inventory** on your phone (or desktop)
-2. Tap the **Scan** button
-3. Your device camera activates as a barcode reader
-4. Point at the equipment barcode or QR code
-5. The item details load immediately — from here you can check out, return, or view details
+Item barcodes are scanned inside the **Distribute Items** dialog, which
+officers open for a member:
 
-Camera scanning works on **all modern browsers** — Chrome, Edge, Firefox, and Safari. On Chrome/Edge, the scanner uses the native BarcodeDetector API for fastest performance. On Firefox and Safari, it falls back to the html5-qrcode library automatically.
+1. In the dialog, select **Start Camera**.
+2. Point the camera at the item's barcode or QR code. The item is added to the
+   list.
+3. Or type in the search box: **"Search by name, barcode, serial, or asset
+   tag..."**.
+4. For a handout, choose the **Intended duration**: **Ongoing assignment**,
+   **Temporary assignment** or **Temporary loan**. The last two need an
+   expected return date.
+5. Select **Review** (for example **Review 2 Items**), then confirm.
 
-On **desktop computers** with only a front-facing webcam, the scanner automatically falls back from the rear camera to the front camera. Hold the barcode or QR code in front of your webcam.
+Camera scanning works in Chrome, Edge, Firefox and Safari. On a computer with
+only a front webcam, the scanner switches to it by itself. Hold the code up to
+the webcam.
 
-> **Corrected 2026-08-12.** A live camera feed cannot be captured here: the
-> screenshot pipeline drives a headless browser with no camera attached, so
-> the scanner renders its no-camera error rather than a viewfinder. What that
-> error looks like _is_ pictured, under
-> [Camera Error Handling](#camera-error-handling).
+If the camera does not work on any device, the search box always works. A
+failed camera slows the job down; it does not stop it.
+
+**Returns do not use the camera.** On the **Member Equipment** page, select
+**Return** on a member's row (it appears only when they hold items). The
+**Return Items** dialog lists everything the member holds. Select the items
+coming back, or use **Select All**. Set each item's **Condition**, and for
+items issued in a quantity, how many are coming back. Then select **Return**
+(for example **Return 2 Items**).
+
+> **Edge case:** On an iPhone or iPad, the camera only works on a secure
+> (HTTPS) address. If your department uses a plain `http://` address on its own
+> network, camera scanning will not work. Type the code in the search box
+> instead.
+
+### Camera Error Handling
+
+When the camera fails, The Logbook tells you **which** problem you have,
+because the fix differs:
+
+| What went wrong              | What you are told                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Permission blocked           | "Camera access was blocked. Allow camera permission for this site in your browser settings, then try again." |
+| No camera on the device      | "No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand."        |
+| Camera held by another app   | "The camera is in use by another app. Close anything else using it, then try again."                         |
+| Page not on a secure address | "Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan."                   |
+
+The difference between the first two matters. Only a blocked permission has
+something to switch on, so a device with no camera is not sent to browser
+settings to look for a switch that is not there.
+
+The message stays on screen until you try again, so you have time to read it.
+
+![Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered](./images/10-14-scan-camera-denied.png)
+
+On the **Scan Member ID** page, the message replaces nothing. **Start
+Scanning** stays where it was, so retrying is the same tap, and the "How to
+use" steps stay underneath. There is no separate "Try Again" button and no
+manual member lookup on that page. To find a member without a camera, use the
+search on **Members**.
+
+If you switch to another app in the middle of a scan, the scanner lets go of
+the camera, and picks it up again when you come back.
 
 ### Form Submission
 
-Forms are fully responsive and work well on mobile:
+Forms work well on a phone:
 
-- Signature fields use touch input — sign with your finger
-- Date/time pickers use the device's native controls
-- File upload uses the device's camera or photo library
-- Checkbox fields are sized for touch targets
+- Signature fields take your finger.
+- Date and time fields use your phone's own pickers.
+- File uploads can use the camera or your photo library.
+- Fields for user names, serial numbers, VINs and searches do not
+  autocorrect or capitalize what you type.
+- Buttons along the bottom of a screen, such as **Save** in an equipment check,
+  sit above the on-screen keyboard rather than behind it.
 
 ### Event RSVP
 
-Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** without opening the full event detail page.
+RSVP straight from the events list: select **Going** or **Not Going** on the
+event's card, without opening the event. To change your answer, select
+**Change RSVP**.
+
+### Pull to Refresh
+
+Pull down from the top of a page to refresh it. Inside a dialog or panel that
+scrolls, pulling down scrolls that panel instead, so you never lose what you
+had open.
 
 ---
 
 ## Tips for Mobile Use
 
-1. **Install the app** — using the browser is fine, but the installed PWA gives you a better experience (full screen, home screen icon, faster launch).
-
-2. **Use landscape mode for tables** — member directories, compliance matrices, and report tables are easier to read in landscape orientation on a phone.
-
-3. **Use the search** — on small screens, search is faster than scrolling through long lists. The member directory, inventory, and course library all have search bars.
-
-4. **Check in early** — if the event location has poor cell reception, check in while you still have signal. The system records the check-in time when the server receives it.
-
-5. **Keep your session active** — if your department has a short session timeout, you may need to log in frequently on mobile. Consider asking your IT Manager about the timeout configuration.
-
-6. **Clear the app cache if things look wrong** — if the app seems stuck on an old version or displays incorrectly, see the troubleshooting section below.
+1. **Install the app.** The browser is fine, but the installed app is full
+   screen, on your home screen and quicker to open.
+2. **Turn the phone sideways for wide pages.** Compliance matrices and report
+   tables are easier to read in landscape.
+3. **Use search.** On a small screen, search is quicker than scrolling. The
+   member list, inventory and course library all have a search box.
+4. **Check in early.** If the event location has poor signal, check in while
+   you still have one. The check-in time is the time The Logbook receives it.
+5. **Signed out too often?** Your department sets how long you stay signed in.
+   Ask your IT manager if it seems too short.
+6. **Use My Account → App if things look wrong.** If the app seems stuck on an
+   old version or looks broken, see
+   [Checking and Forcing an Update Yourself](#checking-and-forcing-an-update-yourself).
 
 ---
 
 ## Check Your Understanding
 
-1. You tap Submit on a training record while offline. What proves that the
-   server eventually received it?
+1. You select Submit on a training record while offline. What proves that The
+   Logbook eventually received it?
 2. The camera permission is denied during a scan. What is the safe recovery
    path?
 3. Why should you avoid assuming that every browser shows the same installation
@@ -699,15 +979,17 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 <details>
 <summary>Check your answers</summary>
 
-1. The offline indicator proves only that the device queued it. Wait for the
-   queue to synchronize after connectivity returns, then verify that the record
-   appears in Training with its durable **Pending Review** status.
-2. Allow camera access in browser or operating-system settings and retry. Use
-   the provided manual-entry/search option if permission cannot be granted; do
-   not work around it with an unapproved scanning app.
-3. Installation is controlled partly by the operating system and browser. iOS,
-   Android, Chrome, Safari, and Firefox expose different menus and prompts, so
-   follow the instructions for the device actually in use.
+1. The receipt and the pending count prove only that the device saved it. Wait
+   for **"Synced … pending items"** after your connection returns. Then check
+   that the record appears in Training with its **Pending Review** status (or
+   approved, if your department approves automatically).
+2. Allow camera access in the browser or phone settings and try again. If you
+   cannot, use the search box in the inventory dialog, or the search on
+   **Members**, instead of the camera. Do not work around it with an unapproved
+   scanning app.
+3. Installing is controlled partly by the phone and the browser. iOS, Android,
+   Chrome, Safari and Firefox have different menus and prompts, so follow the
+   steps for the device actually in use.
 
 </details>
 
@@ -715,487 +997,172 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 
 ## Troubleshooting
 
-| Issue                                                               | Solution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Add to Home Screen" not appearing (iOS)                            | You must use **Safari**. Chrome, Firefox, and other browsers on iOS cannot install PWAs. Also verify you are on the actual Logbook URL, not a redirect page.                                                                                                                                                                                                                                                                                                                            |
-| "Add to Home Screen" not appearing (Android)                        | Ensure you are using Chrome. The option may be in the three-dot menu under "Install app" or "Add to Home screen." Some browsers use different wording.                                                                                                                                                                                                                                                                                                                                  |
-| App shows blank screen after install                                | Close the app completely and reopen. If it persists, uninstall from home screen, clear browser cache for the site, and reinstall.                                                                                                                                                                                                                                                                                                                                                       |
-| App stuck on old version                                            | **Settings > App > Force refresh** _(2026-08-16)_. It clears every stored copy of the app on this device and reloads from the server, while keeping you signed in, keeping unsynced offline work, and keeping push enabled. The same screen shows the build you are actually running, so you can confirm the refresh worked rather than assuming it did.                                                                                                                                |
-| QR code scan not opening the app                                    | On iOS, the camera app opens QR links in Safari, not the installed PWA. This is an iOS limitation. The check-in still works — it just opens in Safari instead.                                                                                                                                                                                                                                                                                                                          |
-| Member ID scan not finding member                                   | Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook. Fall back to name search if scanning fails.                                                                                                                                                                                                                                                                                                                                          |
-| Barcode scanner not activating                                      | Your browser needs camera permission. Go to your phone's Settings > Privacy > Camera and ensure the browser (or the PWA) has camera access. On desktop, verify your webcam is not in use by another app.                                                                                                                                                                                                                                                                                |
-| Scanner not working on Firefox/Safari                               | The scanner automatically falls back to the html5-qrcode library when the native BarcodeDetector API is unavailable. Ensure camera permissions are granted.                                                                                                                                                                                                                                                                                                                             |
-| Desktop scan shows rear camera error then recovers                  | This is expected — the scanner tries the rear camera first, then falls back to the front-facing webcam. The brief error is normal on desktop.                                                                                                                                                                                                                                                                                                                                           |
-| Login session expires too quickly on mobile                         | Session timeout is configured by your department administrator. Ask your IT Manager to review the session duration in Settings > Security.                                                                                                                                                                                                                                                                                                                                              |
-| Notifications not appearing                                         | Check your preferences in My Account > Notifications. If you expected a **lock-screen** notification, see the push section above — push must be enabled by your department, switched on per device, and on iPhone/iPad the app must be installed to the home screen before the toggle even appears.                                                                                                                                                                                     |
-| No "Push notifications" toggle at all                               | On iPhone/iPad: you are browsing in Safari rather than running the installed app — install it first. On any platform: your department may not have push enabled on its deployment.                                                                                                                                                                                                                                                                                                      |
-| Push stopped after reinstalling the app                             | Subscriptions are tied to the app install on that device. Turn the toggle back on.                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Page not loading — "Network error"                                  | The app requires an internet connection for all data operations. Check your Wi-Fi or cellular signal. Try refreshing the page.                                                                                                                                                                                                                                                                                                                                                          |
-| Form submission did not synchronize                                 | Training submissions and event RSVPs queue in IndexedDB while offline. Restore connectivity, use the sync indicator to retry if needed, and verify the durable result in Training or Events. Other forms may still require connectivity; preserve the entered values and follow the error shown by that form.                                                                                                                                                                           |
-| App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                                                                                            |
-| Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                                                                                                    |
-| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, open **Settings > App > Check for updates** — it answers the question directly instead of leaving you to guess, and reloads onto the new version if there is one.                                                                                                                                                                                                                                   |
-| Layout looks wrong on mobile                                        | Mobile responsiveness has been significantly improved (major updates 2026-03-22 and 2026-08-07). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables.                                                                                                                                                                                                                                                                                      |
-| Login page shows "Too many attempts"                                | Rate limiting is active. Wait for the countdown timer to expire before trying again.                                                                                                                                                                                                                                                                                                                                                                                                    |
-| A page went blank / "Something went wrong"                          | Fixed 2026-08-07/08. An unexpected response from the server used to take a whole screen down instead of showing an empty list — most often on station Wi-Fi behind a captive portal or a carrier interception page, which answer with a web page where the app expects data. If it still happens, note the page and report it; those failures are now recorded on the Error Monitoring page for your IT manager.                                                                        |
-| Camera stayed frozen after switching apps mid-scan                  | Fixed 2026-08-07. The scanner used to keep the camera held when the app was backgrounded — iOS suspends it without resuming, so you came back to a frozen preview with the camera indicator still lit. It now releases the camera when you leave and resumes when you return.                                                                                                                                                                                                           |
-| Save button hidden behind the keyboard                              | Fixed 2026-08-07 (iOS). Bottom action bars — including Save in the equipment-check and skill-test flows — stayed pinned behind the software keyboard. They now sit above it.                                                                                                                                                                                                                                                                                                            |
-| Pull-to-refresh fired while scrolling inside a dialog               | Fixed 2026-08-07. Dragging down inside an already-scrolled panel or modal used to refresh the page and discard whatever was open. The gesture now yields to the scrollable area under your finger.                                                                                                                                                                                                                                                                                      |
-| iOS changed what I typed into a username / serial / VIN             | Fixed 2026-08-07. iOS applies autocapitalisation and autocorrect to text fields by default, which was rewriting identifiers and mangling member surnames mid-search. Identifier and search fields now opt out.                                                                                                                                                                                                                                                                          |
-| Header or progress bar hidden under the status bar (notched iPhone) | Fixed 2026-08-07. Safe-area insets were applied to the page body, which does nothing for fixed elements.                                                                                                                                                                                                                                                                                                                                                                                |
-| A button is too small to hit reliably                               | **Resolved 2026-08-08.** Every tappable control on every screen now meets the 44px minimum on phones, and a test enforces it. If you find one that does not, report it — it is a regression, not a known gap.                                                                                                                                                                                                                                                                           |
-| Text on a page is too small to read on my phone                     | **Resolved 2026-08-08.** No ordinary interface text renders below 12px on a phone. Chart axis labels, the shift-pattern month grid and the label-print barcode preview are deliberately exempt — those are dense fixed-size layouts where larger text would break the grid.                                                                                                                                                                                                             |
-| A public form / ballot / status page is white-on-white in dark mode | **Fixed 2026-08-08.** The public form page, ballot voting page and application-status page rendered over the browser's plain white background instead of the app's themed one. Hard-refresh to pick up the fix.                                                                                                                                                                                                                                                                         |
-| Push was switched on but nothing ever arrives                       | Ask your IT manager to check the deployment's VAPID keypair. Until 2026-08-08 the documented command for generating it did not actually run, and a keypair in the wrong encoding is accepted by the browser and then **silently rejected** by the push service — the subscription looks healthy and no notification is ever delivered. The fix is `backend/scripts/generate_vapid_keys.py`; note that regenerating the keypair requires every member to re-enable push on every device. |
-
----
-
-## Mobile Responsiveness Updates (2026-03-22)
-
-A comprehensive mobile responsiveness pass was applied across the entire application. The following areas received significant improvements:
-
-### Dashboard
-
-The main dashboard now adapts to phone and tablet screens:
-
-- Stacked card layout on small screens (single column)
-- Collapsible sections for shift, event, and notification widgets
-- Touch-friendly buttons and controls sized for finger taps
-- Notification cards include clear/dismiss buttons directly on the dashboard
-
-![Dashboard on a phone in portrait orientation with stacked widget cards](./images/10-04-mobile-dashboard.png)
-
-### Inventory Module
-
-All inventory pages received responsive design improvements:
-
-- **Items list**: Card layout instead of table rows on mobile
-- **Admin hub**: Grouped card sections stack vertically on narrow screens
-- **Member equipment**: Collapsible member rows with equipment counts
-- **Floating Action Button (FAB)**: Quick-access button for common actions on mobile
-  - Non-admin users see "Assign Items" action
-  - Admin users see additional actions (Add Item, Scan Barcode, Import CSV)
-
-![Inventory items list on a phone, rendered as cards instead of table rows](./images/10-05-mobile-inventory.png)
-
-![Inventory admin hub on a phone with grouped card sections stacked vertically](./images/10-06-mobile-inventory-admin.png)
-
-### Other Pages
-
-- **Scheduling**: Calendar and shift views optimized for mobile touch interaction
-- **Events**: Event cards and RSVP buttons sized for touch
-- **Members**: Directory uses card layout on mobile
-- **Settings**: All settings pages use responsive layouts
-
-### Desktop Camera Scanning
-
-Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers in addition to mobile:
-
-- Automatic fallback to user-facing camera when no environment-facing camera is available
-- Shared scanner infrastructure across all scanning features (inventory, member ID, event check-in)
-- Works in Chrome, Edge, Firefox, and Safari
-
-> **Corrected 2026-08-12.** Same reason as the inventory scanner above — a
-> headless browser has no camera, so there is no viewfinder to photograph.
-
-> **Edge case:** Desktop browsers require explicit camera permission. If the user denies camera access, the scanner shows a clear error message and the user can fall back to manual text entry.
-
----
-
-## Camera Scanning Improvements (2026-03-24)
-
-### Camera Error Handling
-
-Camera scanning across the app tells you **which** camera problem you have,
-because the fix differs:
-
-| What went wrong            | What you are told                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Permission blocked         | "Camera access was blocked. Allow camera permission for this site in your browser settings, then try again." |
-| No camera on the device    | "No camera was found on this device. Use a phone or tablet with a camera, or enter the code by hand."        |
-| Camera held by another app | "The camera is in use by another app. Close anything else using it, then try again."                         |
-| Page not served over HTTPS | "Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan."                   |
-
-The distinction that matters is between the first two. Only a blocked
-permission has anything to grant, so a device with no camera is deliberately
-**not** sent to browser settings to look for a switch that will not be there.
-
-Error messages **stay visible** until you dismiss them (no auto-dismiss), giving you time to read and act on the message.
-
-![Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered](./images/10-14-scan-camera-denied.png)
-
-The banner replaces nothing: **Start Scanning** stays where it was, so
-retrying is the same tap it always was, and the "How to use" steps stay on
-screen underneath. There is no separate "Try Again" button and no manual member
-lookup on this page — to find a member without a camera, use the search on
-**Members**.
-
-### Inventory Scan Modal
-
-The inventory scanner reports the same four camera states, and on any browser
-where the camera fails the manual barcode/serial-number input is always
-available as a fallback — so a failed camera slows the job down rather than
-stopping it.
-
-> **Edge case:** On iOS Safari, camera access requires the page to be served over HTTPS. If your department uses HTTP for local network access, camera scanning will not work — use the manual entry fallback.
-
-### Notification Badges on Mobile
-
-The unread count reaches you on a phone as well as on a desktop, but **not in
-the same place**:
-
-- **Desktop side navigation** — the Notifications link carries the badge
-- **Phone** — the count is on the Notifications entry **inside the menu**. The
-  collapsed top bar is the department logo, the department name and the
-  hamburger: no page title, and no bell. Tap the hamburger to see the count
-- **Smart polling** — polling pauses when the app or tab is in the background,
-  preserving battery
-
-![The phone menu open, with the unread count on the Notifications entry](./images/10-15-mobile-menu-notifications.png)
-
-This is worth knowing before you go looking: a member told to "watch for the
-red badge" will not find one on a phone until they open the menu.
+| Problem                                                          | What to do                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Add to Home Screen" missing (iOS)                               | Use **Safari**. Other browsers on iOS cannot install apps. Also check you are on the real Logbook address, not a redirect page.                                                                                                  |
+| "Add to Home Screen" missing (Android)                           | Use Chrome. Look in the three-dot menu for "Install app" or "Add to Home screen". Other browsers use different wording.                                                                                                          |
+| Blank screen after installing                                    | Close the app completely and reopen it. If it persists, remove it from the home screen, clear the browser's stored data for the site, and install again.                                                                         |
+| App stuck on an old version                                      | **My Account → App → Force refresh**. It reloads the app fresh while keeping you signed in, keeping unsent offline work and keeping push on. The same screen shows the version you are running, so you can confirm it worked. |
+| Scanning a QR code does not open the installed app               | On iOS, the camera app opens QR links in Safari, not in the installed app. Check-in still works; it just opens in Safari.                                                                                                        |
+| Member ID scan says "No member found"                            | The card must be one The Logbook issued. Older cards scan only while **Accept old badges** is on (on the ID card printing page). Otherwise, use the search on **Members**.                                                       |
+| Camera does not turn on                                          | Allow camera access for the browser (or the app) in your phone's settings. On a computer, check no other program is using the webcam. The on-screen message names the problem; see [Camera Error Handling](#camera-error-handling). |
+| Scanner tries the rear camera, shows an error, then works        | Expected on a computer: the scanner tries a rear camera first, then switches to the front webcam.                                                                                                                                |
+| Signed out too often on a phone                                  | How long you stay signed in is set by whoever runs your department's server, not on a settings screen. Ask your IT manager.                                                                                                     |
+| Notifications not appearing                                      | Check **My Account → Notifications**. For **lock-screen** alerts, see [Push Notifications on Mobile](#push-notifications-on-mobile): your department must have push on, you switch it on per device, and on iPhone/iPad the app must be installed first. |
+| No "Push Notifications on This Device" switch                    | On iPhone/iPad: you are in Safari, not the installed app. Install it first. On any device: your department may not have push turned on.                                                                                         |
+| Push stopped after reinstalling the app                          | Push belongs to that installation on that device. Switch it on again.                                                                                                                                                             |
+| Push is on but nothing ever arrives                              | Ask your IT manager to check the department's push keys. Keys made the wrong way are accepted by the phone but rejected by the push service, so nothing arrives and nothing looks wrong.                                         |
+| "Network error" on a page                                        | Everything that shows or changes information needs a connection. Check your Wi-Fi or mobile signal and try again.                                                                                                                |
+| Offline work did not send | Get back online, open **More**, and select **pending sync — retry**. That sends training submissions, RSVPs, NFC put-aways and shelf audits. For equipment checks, open an equipment check; for shift reports, open **Scheduling → Shift Reports**. A skills evaluation that was not accepted shows a red banner on the test with the reason. Then check the result where it belongs. Only seven kinds of item are saved offline; anything else must be re-entered. |
+| App icon disappeared from the home screen                        | Some phones remove app icons after a system update or storage clean-up. Install it again.                                                                                                                                        |
+| Dark mode not as expected                                        | Choose **Light**, **Dark**, **System** or **High Contrast** in **My Account → Appearance**. **System** follows your phone's setting. The choice is stored on each device separately.                                            |
+| No "new version" bar appears                                     | Open **My Account → App → Check for updates**. It answers the question directly, and reloads onto the new version if there is one.                                                                                              |
+| A page looks wrong on a phone                                    | Use **My Account → App → Force refresh** to load the latest version. For wide tables, turn the phone sideways. If it still scrolls sideways, report the page.                                                                   |
+| Sign-in page says "Too many failed attempts"                     | Wait for the countdown to finish before trying again.                                                                                                                                                                            |
+| A page shows "could not load" or "Something went wrong"          | Often station Wi-Fi with a sign-in page, or a carrier page, answering instead of The Logbook. Get a proper connection and select retry. If it keeps happening, note the page and report it; your IT manager can see these failures on the **Error Monitor** page. |
+| A button is hard to hit, or text is too small, on a phone        | Every control should be at least 44 pixels on a phone or tablet, and ordinary text at least 12 pixels. If you find one that is not, report it — it is a fault, not a known gap.                                                 |
+| The camera preview froze after switching apps                    | The scanner releases the camera when you leave and resumes when you return. If it stays frozen, close and reopen the scanner, and report it.                                                                                    |
 
 ---
 
 ## Realistic Example: Mobile Workflow — Event Check-In, Equipment Scan & Offline Queue
 
-Follow **FF Sarah Chen** using the PWA on her phone during a busy training day.
+Follow **FF Sarah Chen** using The Logbook on her phone during a busy training
+day.
 
 ### Part 1: Event QR Check-In (Morning)
 
-Sarah arrives at the station for a training event. She pulls out her phone and opens The Logbook from the home screen icon (she installed the PWA last month). She navigates to **Events** and sees today's event at the top: "Q2 Hazmat Refresher."
+Sarah arrives at the station for "Q2 Hazmat Refresher". A QR code is posted on
+the training room door. She points her phone's camera at it, and The Logbook's
+check-in page opens. She selects **Check In to This Event**.
 
-Sarah taps the event to open the detail page, then taps the **Check In** button. Her phone's camera opens in the barcode scanner view. She points it at the QR code posted on the training room door — the scanner reads it instantly and displays a confirmation: "Checked in at 08:02 AM."
+> **Edge case:** The QR code at Door B is water-damaged and will not scan.
+> Sarah asks the event's officer, who opens the event in The Logbook, selects
+> **Check In** and checks her in from the list.
 
-> **Edge case:** The QR code printout at Door B is water-damaged and unreadable. Sarah taps **Manual Check-In** below the scanner. She enters her membership number (OFD-0047) and taps Submit. The system confirms: "Checked in at 08:04 AM — manual entry."
+> **Edge case:** Sarah uses an iPhone. The camera app opens the check-in page
+> in Safari rather than the installed app. The check-in still works.
 
-> **Corrected 2026-08-12.** This asked for a photograph of a phone pointed at
-> a door — a picture of the world, not of a screen. Nothing in the capture
-> pipeline can produce it.
+### Part 2: Equipment Handout (Mid-Morning)
 
-### Part 2: Equipment Barcode Scan (Mid-Morning)
+During a break, Sarah needs a portable gas monitor. She goes to the
+quartermaster, Lt. Ruiz.
 
-During a break between training modules, Sarah needs to check out a portable gas monitor from the equipment room. She opens **Inventory** and taps the **Scan** button in the toolbar. Her camera activates in barcode scanning mode.
+Lt. Ruiz opens **Inventory Admin → Members** on his phone, selects **Scan**,
+and scans Sarah's ID card. The **Distribute Items** dialog opens for Sarah. He
+selects **Start Camera** and scans the barcode on the monitor: **MSA Altair
+5X**, serial **INV-000234**. He chooses **Temporary loan**, sets today as the
+expected return date, selects **Review 1 Item**, and confirms.
 
-She points the camera at the barcode label on the gas monitor. The scanner reads it and the item detail card loads: **MSA Altair 5X**, serial number **INV-000234**, condition **Good**, status **Available**.
+> **Edge case:** A sticker covers part of the barcode on a second monitor, and
+> the camera cannot read it. Lt. Ruiz types `INV-000234` in the search box
+> instead, and the item is found straight away.
 
-Sarah taps **Check Out**, selects herself as the borrower (her name is pre-filled since she is logged in), sets the expected return date to today, and confirms. The item status changes to "Checked Out" with her name shown as the current holder.
-
-> **Edge case:** The barcode on a second gas monitor is partially obscured by a sticker. The camera scan fails after a few seconds. Sarah taps the manual entry field below the scanner, types `INV-000234` in the search box, and the item is found immediately.
+Sarah can see the monitor's details on its item page. That page shows the
+item's status and condition, with **Back**, **Print Barcode** and (for a
+manager) **Edit**. It has no checkout button: items go out through the
+**Distribute Items** dialog, as above.
 
 ![An inventory item's detail page on a phone — the status and condition badges under the name, with the Basic Info and Location cards stacked](./images/10-16-mobile-item-detail.png)
 
-> **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
-> Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
-> made against a _member_, from **Inventory Admin > Members > Assign** — which
-> is why the walkthrough above has Sarah select herself as the borrower.
-
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
 
-The morning Hazmat Refresher ends at noon. Sarah drives to a remote training site in a rural area for an afternoon practical exercise. Cell coverage drops to zero.
+The refresher ends at noon. Sarah is driving to a rural training site for an
+afternoon exercise, where she knows there is no signal. Before she leaves the
+station, while she still has signal, she opens **Training > Submit Training**
+and leaves the app on that screen. The form needs a connection to open, but
+once it is open it works with no signal.
 
-After the practical, Sarah opens **Training > Submit Training** and fills out the form: course name "Hazmat Refresher," duration 4 hours, date today, and selects "Completed" status. She taps **Submit**.
+At the site her phone loses all signal. After the exercise, she fills in the
+form she left open: course "Hazmat Refresher", 4 hours, today's date. She
+selects **Submit**. The form shows its usual receipt; the submission is saved
+on the phone, waiting to be sent.
 
-The app detects no network connectivity and shows a toast notification: "Queued for sync — your submission will be sent when connectivity is restored." The submission is stored in the browser's IndexedDB offline queue.
+On the drive back, she passes through a patch of signal and opens **Events**.
+The event list loads just before the signal drops again. With no signal, she
+selects **Going** for next week's "Q3 Ladder Operations Drill". That RSVP is
+saved on the phone too.
 
-While still offline, Sarah also navigates to **Events** and RSVPs "Going" to next week's event, "Q3 Ladder Operations Drill." That RSVP is also queued with a similar toast message.
+> **Edge case:** Had Sarah opened **Submit Training** or **Events** with no
+> signal, the screen would have shown an error instead of the form or the
+> event list. Open the screen you need while you still have signal, and do not
+> move away from it until you are done.
 
-> **Edge case:** Sarah force-closes the app and reopens it 30 minutes later. She navigates to the sync queue indicator and sees both items still listed — queued items are persisted in IndexedDB, not held in memory, so they survive app restarts.
+She selects **More**. The bottom of the menu reads **Offline · 2 pending**.
+
+> **Edge case:** Sarah closes the app completely and reopens it 30 minutes
+> later. The menu still reads **Offline · 2 pending**. Saved items are kept on
+> the device, so closing the app does not lose them.
 
 ### Part 4: Back Online (Evening)
 
-Sarah drives back toward town. As her phone regains cell signal, the app detects connectivity in the background. The offline queue begins syncing automatically:
+On the drive home her phone gets signal again. The Logbook sends both items by
+itself and shows **"Synced 2 pending items"**.
 
-1. **Training submission** — synced successfully. The record enters **Pending Review** status, waiting for an officer to approve it.
-2. **Event RSVP** — synced successfully. Sarah's RSVP to "Q3 Ladder Operations Drill" is confirmed as "Going."
+Sarah checks: her training submission shows **Pending Review** in Training,
+waiting for an officer. Her RSVP shows **Going** on the event.
 
-A notification appears: "2 queued items synced successfully." Sarah taps it to verify — her training submission shows "Pending Review" in Training, and her RSVP shows "Going" on the event page.
+> **Edge case:** Suppose The Logbook had rejected the training submission —
+> for example, because of a problem with what was entered. The app tries again
+> each time it reconnects. After five rejections it deletes the item and shows
+> **"1 pending item failed permanently and was discarded"**. Sarah would then
+> enter the training again by hand. Lost signal during a send does not count as
+> a rejection.
 
-> **Edge case:** If one of the queued items had failed during sync (for example, if someone else had already submitted an identical training record creating a duplicate conflict), the sync would show an error toast with the specific failure reason: "Training submission failed: A record for this course on this date already exists." The failed item remains in the queue with an error badge. Sarah can tap it to edit and retry, or dismiss it if the duplicate was submitted by someone else on her behalf.
+---
 
-> **Corrected 2026-08-12.** The sync toast appears only on the transition
-> from offline to online with a populated IndexedDB queue. The capture
-> pipeline drives an online browser against a live API, so the queue is always
-> empty and the toast never fires; producing it would mean scripting a network
-> outage mid-session rather than photographing a screen.
+## If You Learned an Older Version
+
+If you are following older notes, an older recording or an SOP, these things
+have moved, been renamed or work differently.
+
+### Renamed or moved
+
+- **There is no menu button (☰) in the top bar on a phone.** Use **More** on
+  the bottom bar. Earlier versions had the button in the top-right, then the
+  top-left corner.
+- **The update and Force refresh screen is My Account → App**, not
+  "Settings → App".
+- **The bottom bar is Home, two tabs, Add and More.** Earlier bars had three
+  configurable tabs and no **Add** button.
+- **The Settings tab on the bottom bar opens My Account**, not Organization
+  Settings.
+- **Shift Details opens as a window in the middle of the screen**, not as a
+  drawer from the right edge.
+- **Settings screens** show their sections as a row across the top, scrolling
+  sideways on a phone, not as a sidebar.
+- **Selected tabs and filters are red**, and primary buttons are the app's red,
+  on screens that used to show them in blue.
+
+### Works differently now
+
+- **Every screen opens offline after install**, not only the ones you visited
+  while online. The information on them still needs a connection.
+- **A rejected equipment check shows its real error.** Older versions reported
+  it as queued, deleted the draft, and kept re-sending it.
+- **Signing out also clears unfinished equipment-check drafts**, not only
+  queued work.
+- **Queued items record who saved them**, and are sent only for that member.
+  Older items with no owner are held; see
+  [Queued Work Is Sent Only by the Member Who Saved It](#queued-work-is-sent-only-by-the-member-who-saved-it).
+- **The app updates in Brave** without clearing the browser's stored data by
+  hand.
+- **Controls on a touch tablet** are full fingertip size, and hover-only
+  buttons stay visible there.
+
+### Things to check if your department has used The Logbook for a while
+
+- **Members who installed before the logo was uploaded** still have the old
+  icon. They must remove the app and add it again.
+- **A phone that has run for weeks without an update** may be on an old
+  version. Older versions sometimes hid the update bar behind the top bar.
+  Use **My Account → App → Check for updates**.
+- **Push keys made with an older, broken set of instructions** are accepted by
+  phones but never deliver. If push is on and nothing arrives, ask your IT
+  manager to make new keys; every member then switches push on again.
+- **Brave users** told to clear their browser data after every release no
+  longer need to.
 
 ---
 
 **Previous:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | **Next:** Return to [Training Guide Index](./README.md)
-
-## August 19–23, 2026 update — dialogs are tappable again
-
-If members have reported that a dialog's buttons "do nothing" on a phone, this
-release fixes it.
-
-The bottom navigation bar was painting **over** open dialogs. The buttons were
-not merely hidden — they were **untappable**, and the tap went to the
-navigation bar underneath, carrying the member out of the page they were
-working in. On a tall dialog the action row sat about 40px behind the bar; on a
-notched phone even a dialog sized to the viewport lost around 32px.
-
-The bar now hides while a dialog, drawer or bottom sheet is open, and returns
-when it closes.
-
-![A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable](./images/10-17-tall-dialog-action-row.png)
-
-### Also improved on phones this week
-
-- The **events page** was cut down to what actually fits on a phone.
-- **Equipment template actions** and the **checklist builder** are reachable
-  without sideways scrolling.
-- **Calendar month navigation** is responsive.
-- The **documents, training, audit and check-in tables** reflow into stacked
-  cards instead of scrolling sideways.
-- **Icon-only controls are named**, so a screen reader announces them.
-- Toast notifications are positioned and announced correctly on a phone.
-
-![One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
-
-![The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files](./images/10-19-training-table-desktop.png)
-
-_The same page, the same three records, at 390px and at desktop width. On the
-phone every value keeps the column heading that named it, so nothing has to be
-remembered from a header row that is no longer on screen — and there is no
-sideways scroll to discover._
-
-### Browser tabs
-
-Each tab now carries the page name rather than a generic app title, so several
-Logbook tabs open at once are finally distinguishable. Nothing to configure.
-
-A tab never keeps the previous page's name while the next one loads: it reads
-**The Logbook** until the new page's heading appears, then takes that
-heading's name.
-
-## August 23–24, 2026 update
-
-### The app now updates in Brave
-
-**The app never picked up a new version in Brave until the browser cache was
-cleared by hand.** If you have been telling Brave users to clear their cache
-after every release, you can stop.
-
-### The schedule on a phone
-
-The Schedule tab is a **board** on a phone too: a bar grid of the month, a day
-sheet that opens beneath it when you tap a day, and a confirmation screen for
-claiming a seat. A shift's chip says whether it still needs people, and one
-button claims the first open seat you are cleared for.
-
-**The month grid's touch targets are back to 44px.**
-
-![The Schedule tab on a phone: the month header with the All shifts / Needs staffing / My shifts filter, the days-this-week-still-need-people warning, and the top of the bar grid above the bottom navigation](./images/19-35-schedule-board-phone.png)
-
-The chips, the claim button and the reasons it can be missing are described in
-[The Schedule Board and Standing Shifts](./03-scheduling.md#the-schedule-board-and-standing-shifts).
-
-### Settings on a phone
-
-The nine settings screens that moved onto the shared shell show their section
-list as a **scrollable tab strip** on a phone rather than a sidebar. No setting
-moved; the navigation is the same on all of them now.
-
-**[SCREENSHOT — REPLACE any phone capture of a settings screen.** The idiom
-they show no longer exists.**]**
-
-### The check-in station on a tablet
-
-`/members/check-in-station` is meant to be left running on a tablet at a door.
-On Chrome for Android over HTTPS it reads cards itself (Web NFC); with a USB
-reader it captures keystrokes **page-wide** rather than into a focused box,
-because a kiosk loses focus to the first stray tap on the screen and a station
-that has silently stopped reading is worse than one that was never armed.
-
-![The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it](./images/10-21-check-in-station-tablet.png)
-
-## Quick Add: two taps from anywhere _(2026-09-01)_
-
-**The centre of the phone bottom bar is an Add button.** It opens a short list of
-the things a member actually logs:
-
-- Training hours
-- A rig check
-- An action item
-- A shift report
-- Clocking in
-- Checking into a shift
-- Scanning a member ID
-- And for officers: requesting equipment, creating an event, adding a member
-
-Before this, every one of them was reached the same way: tap **More**, wait for
-the drawer, find the module, find the page, find its button. **Four taps and two
-page loads before the first field.**
-
-![The phone bottom bar at 390px as an ordinary member: Home and Events on the left, the round Add button in the centre, and Schedule and More on the right](./images/10-24-bottom-bar-add.png)
-
-![At 390px as an ordinary member: the Quick Add sheet opened from the centre Add button of the bottom bar, listing the entry rows a member can use and none of the officer-only rows](./images/10-23-quick-add-sheet.png)
-
-**Quick Add adds no forms of its own.** Each row goes to the screen that already
-owns that entry, so there is no second path for the same data to drift down and
-nothing that can fall behind a form's own validation rules.
-
-**Rows appear only where the page behind them would actually open.** A row gated
-more widely than its route is a link to Access Denied placed there by the app
-itself, so every row is resolved against the real route definition: the route
-must exist, the row's permissions must be a subset of what the route accepts,
-and a route's module gate must be repeated on the row.
-
-### The bar keeps five items; configurable slots go from three to two
-
-Six items on a 390px phone is 65px each, and it puts the action at an edge
-rather than under the thumb.
-
-~~A bar layout saved before this keeps its first two destinations.~~
-**Corrected 2026-10-02:** nothing in the app could ever save a bar layout — the
-bar read a browser setting no screen wrote — so every member had their role's
-defaults. The bar no longer reads that setting at all; choosing tabs is now an
-account setting, below.
-
-## Choose your own bottom-bar tabs _(2026-10-02)_
-
-**My Account → Appearance → Phone navigation bar** sets the two tabs either side
-of **Add**: **Left of Add** and **Right of Add**. _"Saved to your account, so
-they follow you to every device."_ Each list offers the destinations you can
-actually open — Events, Store, Schedule, Training, Members, Documents,
-Learning, Settings — filtered by your department's modules and your
-permissions; **Home** is always first and is not offered. A choice saves the
-moment you make it, and **Use the default tabs** puts the role defaults back.
-
-- **Never chosen?** You keep the defaults: Events and Schedule for a member;
-  Events and Settings for an administrator (anyone with `settings.manage`).
-  Upgrading changes nobody's bar.
-- **A chosen tab you can no longer open** — its module switched off, a
-  permission removed — falls back to the next default rather than leaving a
-  dead button. Your choice is kept, and returns when the tab is usable again.
-- **The Settings tab opens your own account** (`/account`), not Organization
-  Settings. It used to open `/settings`, which needs `settings.manage`, so for
-  most members the tab could only show Access Denied — and was therefore only
-  ever offered to administrators. An officer who manages the department's
-  settings reaches them from **More**.
-
-<!-- Screenshot needed:
-_[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
--->
-
-**[SCREENSHOT — CHECK `10-12-mobile-bottom-nav.png`.** If the frame shows an administrator's bar with a **Settings** tab, that tab now opens My Account; the frame itself is unchanged unless it predates the 2026-09-01 Add button.**]**
-
-## The navigation drawer shows when there is more below _(2026-09-29)_
-
-Phones draw scrollbars only once you start scrolling, so a long navigation
-drawer cut off on a whole item looked complete. The drawer now fades at the
-edge that hides items and shows a small **More** chevron at the bottom;
-tapping it scrolls the list down. On desktop the sidebar keeps its permanent
-scrollbar and shows no chevron _(2026-09-30)_ — there it only covered the last
-rows.
-
-<!-- Screenshot needed:
-_[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
--->
-
-## Tablets and phones: layout fixes _(2026-10-03 → 10-04)_
-
-- **Hover-only buttons show on touch tablets.** Edit, delete and download
-  controls that appear when a mouse hovers a card were hidden by screen width,
-  so on an iPad — which cannot hover — they were invisible on 26 screens. They
-  are now hidden only on devices with a mouse.
-- **Card lists size to their own width.** On a tablet with the sidebar open, a
-  card list shows two roomy columns instead of three cramped ones.
-- **Small buttons keep their icon beside the label** from 768px up; the icon
-  used to stack above it (the store catalog's Edit / Archive / New item, and 25
-  other places).
-- **Reports' date fields** no longer push the page sideways on a tablet.
-- **Settings screens get their width back on phones** _(2026-10-04)_. Four
-  layers of side padding left a setting's label about 185px wide at 320px, so
-  "Require end-of-shift equipment checks" wrapped one word per line. Settings
-  screens now sit on the same 16px gutter as the member pages, and a
-  **RECOMMENDED** badge wraps under its label.
-- **Radio buttons stay round and checkboxes square** _(2026-10-03)_ beside a
-  label that wraps — they were squeezed into ovals.
-
-## Layout, contrast and button colour: second pass _(2026-10-04 → 10-05)_
-
-- **Administration hubs sit on the normal page margin.** The Members, Events,
-  Training, Scheduling, Inventory and Store hubs, and the tabs that only appear
-  inside them, added their own side padding on top of the app's, so a hub's
-  heading started 32px from the edge on a phone (64px on a desktop) while every
-  other page started at 16px (32px). They now line up with the rest of the app.
-  Nothing changed in how wide a hub can grow.
-- **Date and time pickers fit at 320px.** The date no longer cuts off as
-  "mm/c", and the hour, minute and AM/PM boxes show their values.
-- **Stat tiles wrap their labels** on a phone instead of cutting them off
-  ("Total B…", "NEEDS ATTENT…") — Finance, Grants and the hub metric tiles.
-- **Training Administration tabs fit a phone**: the compliance matrix, expiring
-  certifications, past events, review submissions, waivers and the officer
-  dashboard no longer run past the screen edge.
-- **Alert text is darker in the light theme** (info, success, warning, purple and
-  danger notices now meet the AAA contrast level). The success notice was the
-  weakest, at barely above the AA minimum.
-- **Primary actions that were blue are the app's red.** About forty buttons
-  (message history, scheduled email, finance request actions, the equipment
-  checklist builder and others), the Suggestion Board vote and filter pills and
-  the IP Security tabs now match every other primary action. Blue stays where it
-  means something different: the info variant of a confirm dialog, **Start Skill
-  Test** in practice mode, and two chart colours.
-- **The weekly expiring-supplies email fits a phone.** (Retitled **Supplies to Replace** with a **Status** column on 2026-10-05; four more emails fit a phone the same day — see [Inventory](./05-inventory.md#what-the-alert-emails-say-now-2026-10-05).) Three columns — Item,
-  Expires, Ready stock / Qty — with the apparatus and compartment (or lot) under
-  the item and the days left under the date. It used to run past the edge, and
-  an empty cell printed the text "&mdash;" instead of a dash.
-- **A bad response no longer blanks the screen.** If the server returns
-  something unexpected (a captive portal or proxy error page), four Inventory
-  administration pages and sixteen hub tabs show a "could not load" message with
-  a retry instead of the generic error page.
-- **Card lists on a desktop with a mouse** keep a sensible maximum width; edit and
-  delete buttons stay clear of long names (Apparatus) and badges wrap under the
-  title (Integrations).
-
-**[SCREENSHOT — REPLACE]** Any Administration hub frame in this guide taken
-before 2026-10-05 shows the doubled margin. See
-[`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md) for the list.
-
-## Settings screens are usable on a phone _(2026-08-31)_
-
-- The section row across the top of every settings screen — Organization,
-  Scheduling, Elections, Events, Email Templates, Checklist Settings and your own
-  account — rendered its pills at **36px tall**, under the 44px a finger reliably
-  hits. They grow to 44px on phones now.
-- On a screen with enough sections to overflow a phone (Organization Settings
-  has six), **the last pill sat off the right edge with no way to reach it.** The
-  row scrolled sideways, but nothing told the browser it was a scroll region, so
-  a keyboard could not reach it and the overflow read as a layout fault rather
-  than a strip. Both the section row and the sub-page rail beneath it now declare
-  themselves scrollable and are keyboard-reachable.
-- Organization Settings' **"Upload logo"** button was a 20px-tall text link.
-
-## Dialogs: Shift Details is now a centred modal _(2026-09-05)_
-
-The Shift Details surface was a right-edge drawer, full-bleed on phones. It is a
-**centred dialog** now — a 1rem-inset box on a phone, scrolling within itself,
-and 56rem on a laptop.
-
-Any existing capture or walkthrough showing it slide in from the right edge is
-wrong, not merely stale.
-
-## Offline drafts are no longer discarded on a bad connection _(2026-08-31)_
-
-- **Loading your profile after an offline or interrupted connection could
-  silently discard unsynced shift-report drafts and equipment-check
-  submissions.** Only a confirmed sign-out clears local data now.
-- **Entering a wrong or expired MFA code was treated as an expired session**:
-  the app purged local data and hard-redirected to the login screen instead of
-  showing "invalid code, try again."
-
-## Admin hubs and the checklist builder on a phone _(2026-10-11)_
-
-- **Hub sections are a sideways-scrolling row of chips** on a phone, with the
-  chosen section's description beneath. A fade and a round arrow on an edge show
-  there is more; tap the arrow to page along. See _Administration hubs_ in
-  [08 — Admin & Reports](./08-admin-reports.md).
-- **The equipment-check template builder fits a phone.** Only the back arrow,
-  the template name, **Publish** and the to-fix badge stay pinned; status,
-  **Details / Tools / Save** and the **Applies to** chips scroll away with the
-  page. A row's overflow menu opens as a titled bottom sheet (the bottom
-  navigation hides while it is open), a location's header stacks onto two lines,
-  and an empty location shows one full-width **Add items** button.
-
