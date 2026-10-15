@@ -1126,23 +1126,24 @@ Assistants_.
 > answers nothing until an IT administrator issues a service key.** Both steps
 > are deliberate and separate.
 
-![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule and member sign-in switches all off, as shipped](./images/16-08-mcp-connect-form.png)
+![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule, medical supply inventory and member sign-in switches all off, as shipped](./images/16-08-mcp-connect-form.png)
 
 ![The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one](./images/16-09-mcp-service-key.png)
 
 ### What it can reach
 
-**51 read tools** over the roster, events, shifts, training and certifications,
+**52 read tools** over the roster, events, shifts, training and certifications,
 inventory, apparatus, facilities, meetings and published minutes, documents in
 unrestricted folders, and elections.
 
-**Three areas sit behind their own switches, all off by default:**
+**Four areas sit behind their own switches, all off by default:**
 
-| Switch   | What it adds                                                                                                                        |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Finance  | Finance totals                                                                                                                      |
-| Medical  | Medical-screening **status** only                                                                                                   |
-| Schedule | The full duty schedule. Without it, the shift tools list only shifts open to all members — what any eligible member can already see |
+| Switch           | What it adds                                                                                                                                                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Finance          | Finance totals                                                                                                                                                                                                                   |
+| Medical          | Medical-screening **status** only                                                                                                                                                                                                |
+| Schedule         | The full duty schedule. Without it, the shift tools list only shifts open to all members — what any eligible member can already see                                                                                              |
+| Medical supplies | Medical stock: counts, items below their reorder point, and lots expiring or already expired. Read-only — Claude still cannot request a reorder of a medical item. A member's own connection also needs medical inventory access |
 
 **Three write tools** — draft an event, add a meeting action item, raise a
 reorder request — sit behind a read/write switch, also off by default.

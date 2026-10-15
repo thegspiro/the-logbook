@@ -1,5 +1,19 @@
 # Screenshot currency
 
+## Medical supply inventory switch, re-shot 2026-10-15
+
+The Claude (MCP) connect and settings forms gained a fifth switch, **Share
+medical supply inventory**, between the duty-schedule and member sign-in
+switches. Both images that show the whole form were re-shot from the build
+that adds it; the viewport went from 1500px to 1600px to keep the action row
+in frame.
+
+| Image | Notes |
+| ----- | ----- |
+| `16-08-mcp-connect-form` (re-shot) | Alt text names the fifth switch. Opened unsaved, every switch off |
+| `16-15-mcp-settings` (re-shot) | As before: member sign-in ticked in the browser, Save never pressed |
+| `16-10-mcp-member-signin-switch` | **CURRENT** — clipped to the one control, which did not change |
+
 ## Moved out of 04-events-meetings.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden

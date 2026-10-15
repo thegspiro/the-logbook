@@ -1380,6 +1380,7 @@ export interface McpStatus {
   expose_finance: boolean;
   expose_medical_screening: boolean;
   expose_full_schedule: boolean;
+  expose_medical_supplies: boolean;
   active_key: McpServiceKey | null;
 }
 
