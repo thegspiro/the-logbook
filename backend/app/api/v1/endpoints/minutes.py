@@ -36,6 +36,7 @@ from app.schemas.minute import (
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
+    MinutesReminderSettingsResponse,
     MinutesReopen,
     MinutesResponse,
     MinutesSearchResult,
@@ -53,6 +54,7 @@ from app.schemas.minute import (
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
+from app.utils.minutes_settings import load_minutes_reminder_settings
 from app.utils.rich_text import normalize_format
 
 router = APIRouter()
@@ -141,6 +143,31 @@ async def get_minutes_stats(
     service = MinuteService(db)
     return await service.get_stats(
         current_user.organization_id, restricted=not can_manage
+    )
+
+
+@router.get("/settings", response_model=MinutesReminderSettingsResponse)
+async def get_minutes_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    The department's action item reminder settings, as the server applies them.
+
+    Written through `PATCH /organization/settings` (`minutes` section), which
+    needs `settings.manage`.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    resolved = await load_minutes_reminder_settings(
+        db, str(current_user.organization_id)
+    )
+    return MinutesReminderSettingsResponse(
+        action_item_reminders=resolved.reminders_enabled,
+        reminder_days_before_due=resolved.days_before_due,
+        overdue_repeat_days=resolved.overdue_repeat_days,
+        open_items_digest=resolved.digest_enabled,
     )
 
 

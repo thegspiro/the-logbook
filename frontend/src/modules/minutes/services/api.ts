@@ -14,6 +14,7 @@ import type {
   ActionItemAssignee,
   ActionItemCreate,
   MinutesStats,
+  MinutesReminderSettings,
   MinutesSearchResult,
   MinutesListItem,
   AttendanceSuggestions,
@@ -147,6 +148,14 @@ export const minutesService = {
       null,
       templateId ? { params: { template_id: templateId } } : {}
     );
+    return response.data;
+  },
+
+  // ── Reminder settings ──
+
+  /** What the daily reminder task will do for this department. Written through the organization settings. */
+  async getReminderSettings(): Promise<MinutesReminderSettings> {
+    const response = await api.get<MinutesReminderSettings>('/minutes-records/settings');
     return response.data;
   },
 
