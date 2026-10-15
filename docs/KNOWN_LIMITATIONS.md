@@ -4563,6 +4563,50 @@ not an enterprise table. Found in
 `docs/security-review/MS-09-medical-screening.md` (feature 09, pass 8,
 MS-15).
 
+## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15)
+
+`screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
+have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
+a "Not enforced yet" notice beside it — but `_grade()`/`get_compliance_status`
+(`medical_screening_service.py`) never reads either: compliance is a hard
+`expiration_date >= today` with no grace, and a requirement scoped to
+`["emt"]` still grades every member and prospect in the org. `frequency_months`
+is in the same position — written on create, read nowhere — but was
+deliberately left out of the dedicated guard test's scope (a separate,
+considered edit for a future pass, not an oversight).
+
+**Correcting this file, not just adding to it.** Every pass of
+`docs/security-review/MS-09-medical-screening.md` since pass 3 (2026-09-02)
+described this as "already in `KNOWN_LIMITATIONS.md`" — it never was; each
+pass repeated the prior pass's claim rather than grep-ing this file to check
+it. The notices on the form, and `test_medical_screening_requirement_fields_
+are_unwired.py`'s guard against a silent reader appearing without the notice
+being removed, are both real and have been since pass 4 — only the mirror
+into this file was missing. Not fixed here: wiring either field changes who
+counts as non-compliant (and for `applies_to_roles`, which requirements apply
+to whom) for any organization already holding a non-default value, which is
+a product decision, not a same-day patch.
+
+## MS-17 — `GET /medical-screening/compliance/{user_id}` Returns 200 For a Nonexistent Subject (2026-08-25)
+
+The route does not validate `user_id` is a real, in-org member before
+grading it — `get_compliance_status` just filters records and resolves a
+name, both already org-scoped, so a made-up or out-of-org id simply resolves
+no records and no name. The response reads as `subject_name: ""`,
+`subject_type: "user"`, and **non-compliant against every active
+requirement** — and for an org with no active requirements,
+`is_fully_compliant` comes back `true` for a member who does not exist.
+
+**Not an IDOR or an enumeration channel** (re-confirmed each pass since
+pass 1): no cross-org data is returned either way, so there is nothing a
+caller learns about another organization or a real member by probing ids.
+It is a contract looseness — a 404 would be the clearer response — left open
+because it is a behavior change on a PHI read path with no safety upside,
+not because fixing it is risky. `assert_in_org` is already imported in this
+service (MS-3's fix) if this is picked up. Found in
+`docs/security-review/MS-09-medical-screening.md` (feature 09, pass 1, and
+re-confirmed every pass since).
+
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
 ✅ **Resolved 2026-10-11 (owner decision: a new "any facilities access" tier,
