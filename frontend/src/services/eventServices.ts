@@ -971,6 +971,8 @@ export interface InventoryItem {
   description?: string;
   manufacturer?: string;
   model_number?: string;
+  /** Other names the item goes by ("BVM" for "Bag Valve Mask"); the checklist matcher looks through them. */
+  also_called?: string[] | null;
   serial_number?: string;
   asset_tag?: string;
   barcode?: string;
@@ -1336,6 +1338,8 @@ export interface InventoryItemCreate {
   description?: string | null | undefined;
   manufacturer?: string | null | undefined;
   model_number?: string | null | undefined;
+  /** `[]` clears on update; omit on create when empty. */
+  also_called?: string[] | null | undefined;
   serial_number?: string | null | undefined;
   asset_tag?: string | null | undefined;
   barcode?: string | null | undefined;

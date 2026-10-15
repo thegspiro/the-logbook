@@ -18,6 +18,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
 import { minutesService } from '../services/api';
+import { PanelDisclosure } from './PanelDisclosure';
 import type { AttachmentCategory, MinutesAttachment, MinutesStatus } from '../types/minutes';
 import { formatBytes } from '../utils/formatBytes';
 
@@ -39,9 +40,16 @@ interface AttachmentsPanelProps {
   minutesId: string;
   status: MinutesStatus;
   canManage: boolean;
+  /** Whether the panel starts unfolded. The minutes page folds it; the default keeps it open. */
+  defaultOpen?: boolean;
 }
 
-export const AttachmentsPanel: React.FC<AttachmentsPanelProps> = ({ minutesId, status, canManage }) => {
+export const AttachmentsPanel: React.FC<AttachmentsPanelProps> = ({
+  minutesId,
+  status,
+  canManage,
+  defaultOpen = true,
+}) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -133,15 +141,13 @@ export const AttachmentsPanel: React.FC<AttachmentsPanelProps> = ({ minutesId, s
   if (!loaded || (attachments.length === 0 && !canUpload)) return null;
 
   return (
-    <section
-      className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs"
-      aria-labelledby="attachments-heading"
+    <PanelDisclosure
+      id="attachments-heading"
+      icon={<Paperclip className="h-5 w-5" aria-hidden="true" />}
+      title="Attachments"
+      count={attachments.length}
+      defaultOpen={defaultOpen}
     >
-      <h2 id="attachments-heading" className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-        <Paperclip className="h-5 w-5" aria-hidden="true" />
-        Attachments ({attachments.length})
-      </h2>
-
       {attachments.length === 0 ? (
         <p className="text-theme-text-muted mt-2 text-xs italic">
           No files attached. Reports and handouts the meeting worked from belong here.
@@ -261,7 +267,7 @@ export const AttachmentsPanel: React.FC<AttachmentsPanelProps> = ({ minutesId, s
           </div>
         </form>
       )}
-    </section>
+    </PanelDisclosure>
   );
 };
 

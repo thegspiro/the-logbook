@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { minutesService } from '../services/api';
+import { PanelDisclosure } from './PanelDisclosure';
 import type {
   FiledCandidateResult,
   ImportableElection,
@@ -34,6 +35,8 @@ interface ElectionResultsPanelProps {
   canFile: boolean;
   /** The minutes are still a draft, so a result filed on it can be taken back. */
   canRemoveDrafted: boolean;
+  /** Whether the panel starts unfolded. The minutes page folds it; the default keeps it open. */
+  defaultOpen?: boolean;
 }
 
 const CandidateTable: React.FC<{ label: string | null; candidates: FiledCandidateResult[] }> = ({
@@ -86,7 +89,12 @@ const CandidateTable: React.FC<{ label: string | null; candidates: FiledCandidat
   </div>
 );
 
-export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({ minutesId, canFile, canRemoveDrafted }) => {
+export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
+  minutesId,
+  canFile,
+  canRemoveDrafted,
+  defaultOpen = true,
+}) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [results, setResults] = useState<MinutesElectionResult[]>([]);
@@ -154,19 +162,14 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({ minu
   if (!loaded || (results.length === 0 && !canFile)) return null;
 
   return (
-    <section
-      className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs"
-      aria-labelledby="election-results-heading"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h2
-          id="election-results-heading"
-          className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold"
-        >
-          <Trophy className="h-5 w-5" aria-hidden="true" />
-          Election results
-        </h2>
-        {canFile && (
+    <PanelDisclosure
+      id="election-results-heading"
+      icon={<Trophy className="h-5 w-5" aria-hidden="true" />}
+      title="Election results"
+      count={results.length}
+      defaultOpen={defaultOpen}
+      actions={
+        canFile && (
           <button
             type="button"
             onClick={() => {
@@ -176,9 +179,9 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({ minu
           >
             File an election result
           </button>
-        )}
-      </div>
-
+        )
+      }
+    >
       {results.length === 0 && (
         <p className="text-theme-text-muted mt-2 text-xs italic">
           No election results filed. An election held at this meeting belongs here once it closes, even if it runs past
@@ -313,7 +316,7 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({ minu
           </ul>
         )}
       </Modal>
-    </section>
+    </PanelDisclosure>
   );
 };
 

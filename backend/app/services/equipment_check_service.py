@@ -4435,12 +4435,16 @@ class EquipmentCheckService:
             return {"coverage": coverage, "matches": []}
 
         catalog = await self.db.execute(
-            select(InventoryItem.id, InventoryItem.name).where(
+            select(
+                InventoryItem.id, InventoryItem.name, InventoryItem.also_called
+            ).where(
                 InventoryItem.organization_id == organization_id,
                 InventoryItem.active.is_(True),
             )
         )
-        candidates = [(cid, cname) for cid, cname in catalog.all() if cname]
+        candidates = [
+            (cid, cname, aliases) for cid, cname, aliases in catalog.all() if cname
+        ]
 
         matches: List[Dict[str, Any]] = []
         for item in unlinked:
@@ -4631,12 +4635,16 @@ class EquipmentCheckService:
             counts[display] = counts.get(display, 0) + 1
 
         catalog = await self.db.execute(
-            select(InventoryItem.id, InventoryItem.name).where(
+            select(
+                InventoryItem.id, InventoryItem.name, InventoryItem.also_called
+            ).where(
                 InventoryItem.organization_id == organization_id,
                 InventoryItem.active.is_(True),
             )
         )
-        candidates = [(cid, cname) for cid, cname in catalog.all() if cname]
+        candidates = [
+            (cid, cname, aliases) for cid, cname, aliases in catalog.all() if cname
+        ]
 
         result: List[Dict[str, Any]] = []
         for key, group in groups.items():
