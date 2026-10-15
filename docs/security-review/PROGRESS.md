@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3288](https://github.com/thegspiro/the-logbook/pull/3288)**: branch
+`claude/security-review-facilities-p9` (suffixed rather than the bare
+`claude/security-review-facilities`, since that name's own PR — most
+recently #3169 — has already merged 8 times over this feature's prior
+passes — CLAUDE.md Pitfall #24), Feature 12 (Facilities), pass 9. Watchdog
+pickup. 0 code fixes, 0 new findings. The real delta since pass 8
+(`8d2e4d7a`, 4 commits in the feature's own scope files plus 5 more in
+shared dependencies, all read in full): the only feature-shaped change was a
+new admin-only-confirm guard on the generic document-folder create/update
+path (decision 29), confirmed **not** to reach facility folders — their
+sub-folder creators build `DocumentFolder` rows directly and facility
+folders have no admin-editable access form for that guard to protect.
+Everything else was frontend-only UI (dialog portal, required-field
+marking, due-date display) or mypy-narrowing commits confirmed
+behavior-neutral. All 98 routes re-enumerated fresh by AST walk, 98/98
+carrying a permission dependency. FAC-30 re-verified still open/
+owner-accepted, unchanged; FAC-13 stays closed; FAC-41/FAC-44 stay fixed.
+See `FAC-12-facilities.md`'s **Pass 9** section. Row 12 → ✅ (pending this
+PR's merge); next is Feature 13 (Apparatus & NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3272, Feature 11, Inventory, pass 9, merged — the state this pass's PR opened from), preserved for history</summary>
+
 **PR [#3272](https://github.com/thegspiro/the-logbook/pull/3272)**: branch
 `claude/security-review-inventory-p9` (suffixed rather than the bare
 `claude/security-review-inventory` pass 8 used, since that branch's own PR
@@ -35,6 +58,8 @@ All 190 routes across the feature's five endpoint files enumerated for an
 auth dependency, not spot-checked. INV-22 re-verified still open/
 owner-accepted, unchanged. See `INV-11-inventory.md`'s **Pass 9** section.
 Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3262's merge, Feature 10, Documents & legal, pass 9 — the state this pass's PR opened from), preserved for history</summary>
