@@ -314,7 +314,7 @@ describe('Grants dashboard deadlines (W68)', () => {
         pendingApplications: 0,
         totalGrantFunding: 17000,
         totalRaisedYtd: 0,
-        totalRaised12mo: 0,
+        totalRaised12Mo: 0,
         activeCampaignsCount: 0,
         activeCampaigns: [],
         recentDonations: [],

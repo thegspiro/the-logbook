@@ -164,6 +164,10 @@ class FundraisingService:
         if campaign.is_restricted and not (campaign.restriction_purpose or "").strip():
             raise ValueError("A restricted fund needs the purpose it is for.")
         await self.db.flush()
+        # W69: onupdate expires updated_at at the flush; without the reload the
+        # response model's lazy read raised MissingGreenlet — a 500 that rolled
+        # the edit back. The same holds for every update below.
+        await self.db.refresh(campaign)
         return campaign
 
     async def delete_campaign(self, campaign_id: str, organization_id: str) -> bool:
@@ -245,6 +249,7 @@ class FundraisingService:
             return None
         apply_updates(donor, data, skip={"organization_id", "id"})
         await self.db.flush()
+        await self.db.refresh(donor)
         return donor
 
     # ------------------------------------------------------------------
@@ -416,6 +421,7 @@ class FundraisingService:
         for did in {d for d in (old_donor_id, donation.donor_id) if d is not None}:
             await self._update_donor_stats(did, organization_id)
 
+        await self.db.refresh(donation)
         return donation
 
     async def _lock_campaign(self, campaign_id: str, organization_id: str) -> None:
@@ -596,6 +602,7 @@ class FundraisingService:
         await self._validate_pledge_fks(data, organization_id)
         apply_updates(pledge, data, skip={"organization_id", "id"})
         await self.db.flush()
+        await self.db.refresh(pledge)
         return pledge
 
     # ------------------------------------------------------------------
@@ -681,6 +688,7 @@ class FundraisingService:
         await self._validate_fundraising_event_fks(data, organization_id)
         apply_updates(event, data, skip={"organization_id", "id"})
         await self.db.flush()
+        await self.db.refresh(event)
         return event
 
     # ------------------------------------------------------------------

@@ -374,7 +374,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
                     </span>
                     <Link
                       to={`/grants/applications/${task.applicationId}`}
-                      className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                      className="touch:min-h-11 touch:inline-flex touch:items-center text-xs text-red-600 hover:text-red-700 hover:underline"
                     >
                       View Grant
                     </Link>
@@ -482,7 +482,10 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
                     // list) — link there rather than to a route that
                     // doesn't exist, which previously matched the app's
                     // catch-all and silently redirected to `/`.
-                    <Link to="/grants/campaigns" className="text-red-600 hover:text-red-700 hover:underline">
+                    <Link
+                      to="/grants/campaigns"
+                      className="touch:min-h-11 touch:inline-flex touch:items-center text-red-600 hover:text-red-700 hover:underline"
+                    >
                       View Campaign
                     </Link>
                   ) : (
@@ -555,7 +558,7 @@ const GrantsDashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Link
               to="/grants/applications/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
             >
               <FileText className="h-4 w-4" />
               New Application
@@ -629,7 +632,7 @@ const GrantsDashboardPage: React.FC = () => {
         />
         <KpiCard
           label="Total Raised (12mo)"
-          value={formatCurrencyWhole(dashboard?.totalRaised12mo ?? 0)}
+          value={formatCurrencyWhole(dashboard?.totalRaised12Mo ?? 0)}
           icon={<BarChart3 className="h-5 w-5 text-teal-600" />}
           iconBgClass="bg-teal-100 dark:bg-teal-500/20"
         />

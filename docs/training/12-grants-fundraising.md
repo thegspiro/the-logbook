@@ -432,11 +432,11 @@ did not give for a stated purpose."
 
 ### Edge Cases
 
-| Situation                                  | What happens                                                                                                                               |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                                                                   |
-| A campaign's status needs to change        | You choose the status only when you create the campaign. The campaigns page has no control to change it afterwards, so choose it with care |
-| A donation is not linked to a campaign     | It does not count toward any campaign's total                                                                                              |
+| Situation                                  | What happens                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                   |
+| A campaign's status needs to change        | Use the **Status** list on the campaign's card (managers only). Nothing moves it by itself |
+| A donation is not linked to a campaign     | It does not count toward any campaign's total                                              |
 
 ---
 

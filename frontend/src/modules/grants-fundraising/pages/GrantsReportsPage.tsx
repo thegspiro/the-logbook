@@ -25,7 +25,7 @@ import { COMPLIANCE_STATUS_COLORS } from '../types';
 import { budgetItemCategoryLabel } from '../utils/labels';
 
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
-import { getTodayLocalDate } from '@/utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
 const formatPercent = (value: number): string =>
@@ -254,7 +254,7 @@ const GrantsReportsPage: React.FC = () => {
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+            className={`touch:min-h-11 flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.id
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -464,7 +464,12 @@ const GrantsReportsPage: React.FC = () => {
                       <tbody>
                         {monthlyTotals.map((row) => (
                           <tr key={row.month} className="border-theme-surface-border border-b last:border-0">
-                            <td className="text-theme-text-primary py-2">{row.month}</td>
+                            <td className="text-theme-text-primary py-2">
+                              {/* "2026-10" is a calendar month, not an instant (W69). */}
+                              {/^\d{4}-\d{2}$/.test(row.month)
+                                ? formatCalendarDate(`${row.month}-01`, { year: 'numeric', month: 'long' })
+                                : row.month}
+                            </td>
                             <td className="text-theme-text-primary py-2 text-right font-medium">
                               {formatCurrencyWhole(row.total)}
                             </td>

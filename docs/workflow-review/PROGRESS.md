@@ -127,7 +127,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ✅     |
 | W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ✅     |
 | W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ✅     |
-| W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ⬜     |
+| W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ✅     |
 
 ## Tier 10 — Everything else
 
@@ -208,16 +208,53 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
-- **W69** — the fundraising updates (`campaigns`, `donors`, `donations`,
-  `pledges`, `fundraising-events`) share the grants service's pattern; W68-3
-  found three grant update paths that 500 after the write because
-  `updated_at` was not refreshed. Check each fundraising edit saves and
-  returns.
+- **Fundraising, a later pass** — the Donations list has a Receipt column
+  but nothing sends a receipt or marks one sent, and donors, donations and
+  campaigns (beyond status and restriction) have no edit control though
+  their `PUT`s now work (W69).
 - **Grants, a later pass** — budget lines and expenditures have update and
   delete endpoints but no control on the detail page, and a compliance task
   cannot be given an assignee when it is created (W68).
 
 ## Log
+
+### W69 — Fundraising: campaigns, donors, donations, reports — 2026-10-15
+
+Driven as:
+
+- `treasurer` creating campaigns, donors, donations, a pledge and its payment,
+  an event, then Reports and the dashboard;
+- `secretary` (view), `member` and `quartermaster` (none) for access, with an
+  anonymous gift on record;
+- 390×844 for every fundraising page.
+
+Held:
+
+- double-clicks record once;
+- donations move campaign totals and donor stats;
+- Chicago dates and times;
+- Reports' totals and method split;
+- access and anonymity, on screen and at the API.
+
+Fixed:
+
+- W69-1 (HIGH — every fundraising edit was a 500 and rolled back: campaign,
+  donor, donation, pledge, event; the W68 lead).
+- W69-2 (MED — a campaign could only ever be Draft: the create dropped the
+  status and nothing changed it after; no end date on the form).
+- W69-3 (MED — directory donors' gifts read "Unknown"; raw status; a failed
+  load read as an empty list).
+- W69-4 (MED — "Total Raised (12mo)" always $0: `totalRaised12Mo` on the
+  wire).
+- W69-5 (LOW — donor form labels, unnamed links and filters, "2026-10",
+  silent failure toasts, touch targets).
+
+Flagged: W69-6 (LOW — a business donor must be entered as a person).
+
+Gate: typecheck and lint are clean; 72 grants-fundraising frontend tests and
+821 fundraising and grant backend tests pass.
+
+Next: W70.
 
 ### W68 — Grants: an opportunity, then an application through to its report — 2026-10-15
 
