@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256)**: branch
+`claude/security-review-medical-screening`, Feature 09 (Medical screening,
+PHI), pass 9. 0 code fixes, 2 doc-mirror fixes, 0 new security findings.
+All 16 routes re-enumerated, unchanged from pass 8. MS-14/MS-15/MS2-7
+re-confirmed open/flagged, unchanged. The real delta since pass 8 was two
+mechanical mypy-typing commits, read in full and confirmed behavior-neutral.
+Also found and corrected: every pass since pass 3 had claimed two open
+findings (`grace_period_days`/`applies_to_roles`/`frequency_months`
+unenforced; `get_compliance_status` not 404ing an unknown subject) were
+"already in `KNOWN_LIMITATIONS.md`" when neither ever was — added as MS-16
+and MS-17 this pass. See `MS-09-medical-screening.md`'s **Pass 9** section.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3255's merge, Feature 08, Membership pipeline, pass 10 — the state this pass's PR opened from), preserved for history</summary>
+
 **None, as of this commit.** PR #3255 (Feature 08, Membership pipeline,
 pass 10) merged 2026-10-15T03:47:09Z — docs-only
 (`MP-08-membership-pipeline.md` and `PROGRESS.md` only; confirmed via the
@@ -24,7 +41,9 @@ recorded in that PR's own Open PR note below, so there is nothing further
 to add here. Rotation row 08 stays ✅. This iteration (confirmed via
 `search_pull_requests`, `is:open head:claude/security-review-`, 0 results,
 that no other security-review PR is open) picked up Feature 09 (Medical
-screening, PHI, pass 1).
+screening, PHI, pass 9).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 10, PR #3255, merged clean — 0 fixed, 0 new findings; rotation row 08 marked ✅ as part of that PR), preserved for history</summary>
