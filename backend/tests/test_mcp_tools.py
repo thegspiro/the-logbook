@@ -4914,6 +4914,10 @@ class TestMedicalSupplies:
                 )
         await db_session.flush()
 
+    # The refusal is audited through the tools' own session; pointing that
+    # at the rolled-back test session keeps its row out of the shared table,
+    # where it would surface as an extra row in another file's audit counts.
+    @pytest.mark.usefixtures("_use_test_session")
     async def test_hidden_and_refused_while_the_switch_is_off(
         self, server, org_with_members
     ):
