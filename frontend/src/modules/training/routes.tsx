@@ -14,6 +14,7 @@ import { Route, Navigate } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import { CourseLibraryRoute } from './components/CourseLibraryRoute';
+import { SkillsTestingRoute } from './components/SkillsTestingRoute';
 
 // Training Module - Member-facing
 const MyTrainingPage = lazyWithRetry(() => import('../../pages/MyTrainingPage'));
@@ -275,7 +276,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
-            <SkillsTestingPage />
+            <SkillsTestingRoute>
+              <SkillsTestingPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -283,7 +286,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/templates/new"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
-            <SkillTemplateBuilderPage />
+            <SkillsTestingRoute>
+              <SkillTemplateBuilderPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -291,7 +296,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/templates/:id"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
-            <SkillTemplateBuilderPage />
+            <SkillsTestingRoute>
+              <SkillTemplateBuilderPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -299,7 +306,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/templates/:id/edit"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
-            <SkillTemplateBuilderPage />
+            <SkillsTestingRoute>
+              <SkillTemplateBuilderPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -307,7 +316,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/test/new"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
-            <StartSkillTestPage />
+            <SkillsTestingRoute>
+              <StartSkillTestPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -315,7 +326,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/test/:testId"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
-            <ActiveSkillTestPage />
+            <SkillsTestingRoute>
+              <ActiveSkillTestPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -323,7 +336,9 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/test/:testId/active"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
-            <ActiveSkillTestPage />
+            <SkillsTestingRoute>
+              <ActiveSkillTestPage />
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
@@ -371,9 +386,11 @@ export const getTrainingRoutes = () => {
         path="/training/skills-testing/print/template"
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training">
-            <React.Suspense fallback={null}>
-              <SkillSheetPrintPage />
-            </React.Suspense>
+            <SkillsTestingRoute>
+              <React.Suspense fallback={null}>
+                <SkillSheetPrintPage />
+              </React.Suspense>
+            </SkillsTestingRoute>
           </ProtectedRoute>
         }
       />
