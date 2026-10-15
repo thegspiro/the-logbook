@@ -15,6 +15,8 @@ export interface SectionEntry {
   key: string;
   title: string;
   content: string;
+  /** 'html' is the rich-text subset; absent or 'text' is plain text, as written before the editor. */
+  format?: 'text' | 'html' | undefined;
   /** From the outline: a required section needs text before minutes circulate. */
   required?: boolean;
 }
@@ -24,6 +26,7 @@ export interface TemplateSectionEntry {
   key: string;
   title: string;
   default_content: string;
+  format?: 'text' | 'html' | undefined;
   required: boolean;
 }
 

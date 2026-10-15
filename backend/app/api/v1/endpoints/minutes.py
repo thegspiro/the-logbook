@@ -53,6 +53,7 @@ from app.schemas.minute import (
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
+from app.utils.rich_text import normalize_format
 
 router = APIRouter()
 
@@ -934,6 +935,7 @@ def _build_template_response(tpl) -> TemplateResponse:
             key=s.get("key", ""),
             title=s.get("title", ""),
             default_content=s.get("default_content", ""),
+            format=normalize_format(s.get("format")),
             required=s.get("required", False),
         )
         for s in (tpl.sections or [])
@@ -972,6 +974,7 @@ def _build_response(minutes) -> MinutesResponse:
             key=s.get("key", ""),
             title=s.get("title", ""),
             content=s.get("content", ""),
+            format=normalize_format(s.get("format")),
             required=bool(s.get("required", False)),
         )
         for s in raw_sections

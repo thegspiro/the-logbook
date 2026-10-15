@@ -635,6 +635,40 @@ footer settings, and one outline per meeting type is the default.
   renumbered. The editor will not save an outline with no sections; the API
   still accepts an empty list, as it always has.
 
+### Rich text sections _(2026-10-14)_
+
+A section's text can be written in a rich-text editor (TipTap). The editor
+offers bold, italic, underline, two heading levels, bulleted and numbered
+lists, block quotes and links — the set the server stores and the PDF can print
+— and nothing else (no tables, images, colors or code blocks).
+
+- **Format marker.** A section carries `format`: `"text"` (the default, what
+  every section was before the editor) or `"html"`. Nothing was converted:
+  existing sections stay plain text, shown exactly as typed with `<` and `&`
+  untouched, until someone edits them. Editing opens the text as paragraphs and
+  saves it as `html`. The same marker is on an outline section's
+  `default_content`.
+- **Sanitized on write, and again on output.** `app/utils/rich_text.py` is the
+  one definition of the allowed subset. The schemas clean `html` content with
+  `nh3` (an allowlist sanitizer) on every write path; links keep only
+  `http`, `https` and `mailto` and get `rel="noopener noreferrer"`; `script` and
+  `style` lose their content too. The published Documents copy cleans it again,
+  and the browser cleans it with DOMPurify before rendering. A section may hold
+  up to 100,000 characters of HTML. The allowlists in
+  `app/utils/rich_text.py`, `frontend/src/utils/richText.ts` and the editor's
+  extension list are one decision; change them together.
+- **Blank means no words.** An empty `<p></p>` does not satisfy a required
+  section: the circulation check, outline merging and the PDF all measure the
+  text, not the markup.
+- **Approved versions.** The snapshot records `format` only for rich sections,
+  so a version approved before the editor existed still verifies byte for byte.
+  A rich section is hashed as stored (already cleaned).
+- **Outputs.** The PDF prints headings, lists, quotes, bold, italic, underline
+  and links; the published Documents copy renders the cleaned HTML; the MCP
+  minutes tools return rich sections as plain text.
+- **Not rich text:** members' suggestions (comment and suggested wording),
+  closed-session summaries, motion text and action items stay plain text.
+
 ### Endpoints added
 
 | Method   | Path                                      | Permission       | Description                                                     |

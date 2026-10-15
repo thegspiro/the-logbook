@@ -19,6 +19,7 @@ from pydantic import (
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCResponseBase
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
+from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -48,6 +49,17 @@ def _validate_minutes_meeting_type(value: Optional[str]) -> Optional[str]:
 # ============================================
 
 
+def _clean_rich_text(value: str, what: str) -> str:
+    """Sanitized rich text, refused when it is longer than a section may be.
+
+    The check follows the cleaning, so it measures what would be stored.
+    """
+    cleaned = sanitize_html(value)
+    if len(cleaned) > MAX_HTML_LENGTH:
+        raise ValueError(f"{what} text is too long")
+    return cleaned
+
+
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
@@ -57,11 +69,22 @@ class SectionEntry(BaseModel):
     )
     title: str = Field(..., min_length=1, max_length=200, description="Display title")
     content: str = Field(default="", description="Section content (minutes only)")
+    format: Literal["text", "html"] = Field(
+        default="text",
+        description="'text' is plain text, as every section was before the "
+        "editor; 'html' is the rich-text subset in app/utils/rich_text.py",
+    )
     required: bool = Field(
         default=False,
         description="Copied from the outline; a required section needs content "
         "before the minutes can be circulated",
     )
+
+    @model_validator(mode="after")
+    def _settle_rich_text(self):
+        if self.format == "html":
+            self.content = _clean_rich_text(self.content, "Section")
+        return self
 
 
 class TemplateSectionEntry(BaseModel):
@@ -71,7 +94,16 @@ class TemplateSectionEntry(BaseModel):
     key: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=200)
     default_content: str = Field(default="", description="Default content to pre-fill")
+    format: Literal["text", "html"] = Field(
+        default="text", description="How default_content is written: text or html"
+    )
     required: bool = Field(default=False, description="Whether the section is required")
+
+    @model_validator(mode="after")
+    def _settle_rich_text(self):
+        if self.format == "html":
+            self.default_content = _clean_rich_text(self.default_content, "Outline")
+        return self
 
 
 # ============================================

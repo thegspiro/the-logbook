@@ -831,6 +831,13 @@ made these choices where nothing had been decided. Each is easy to reverse.
 - **A suggestion changes nothing by itself.** Accepting one marks it and makes
   the adoption default to "as amended"; the secretary recalls the minutes to
   draft to work the change in and circulates again.
+- **Rich text covers section text only (owner decision 2026-10-14).** Sections
+  and an outline's starting text use the editor; suggestions, closed-session
+  summaries, motions and action items stay plain text. The editor has no tables,
+  images or colors, because the PDF cannot print them faithfully and
+  attachments already carry files. Sections written before the editor stay
+  plain text until edited, and a pasted section from Word keeps only the
+  allowed subset (headings, lists, bold, italic, underline, links, quotes).
 - **Outline changes do not reach minutes already written.** Deleting or editing
   an outline affects only minutes started from it afterwards, or an outline
   applied to a draft.
