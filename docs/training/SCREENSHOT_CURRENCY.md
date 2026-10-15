@@ -1,5 +1,28 @@
 # Screenshot currency
 
+## Moved out of 05-inventory.md by the plain-language rewrite, 2026-10-14
+
+The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
+`<!-- Screenshot needed … -->` placeholders, image file names and alt text are
+unchanged. Two visible placeholders (the builder's medical picker and clone
+dialog, and Catalog Links) became hidden `<!-- Screenshot needed: … -->`
+blocks with the same wording.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `05-05-item-form-modal.png` | **REPLACE** | The form has a help line under **Tracking Type** that follows the choice ("Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number." / "Pool: one record for a stock of identical items, such as gloves or T-shirts, counted by quantity and handed out a few at a time."). Re-shoot with an Individual item in a category that requires serial numbers and maintenance, so **Serial #** and **Inspection Interval (days)** carry their required markers |
+| `05-68-equipment-request-states.png` | **REPLACE** | The status badges and the filter read **Awaiting review**, **Approved**, **Issued** and **Declined** (was Pending / Approved / Fulfilled / Denied), and the filter starts on **Awaiting review**. Re-shoot with **All** selected so one request in each of Awaiting review, Approved (carrying **Fulfill**) and Issued is in frame |
+| `05-57-assign-scan-modal.png` | **REPLACE** | The dialog's intro reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue." line |
+| `05-66-my-equipment.png` | **REPLACE** | The header carries "The department equipment you are responsible for, and your requests for more.", and the third tile reads **Pending requests** (was **Pending**). Re-shoot as an ordinary member holding at least one item, with one open return notice so the tile is non-zero |
+| `05-36-storage-areas.png` | **REPLACE** | The page has **Scan shelf label**, **Put away**, **Put Away by NFC** and **Print _N_ labels** in its toolbar and a print action on each row, and its subtitle reads "Racks, shelves, and bins inside each room. Nest one inside another as needed." Leaf areas show no expand toggle. Re-shoot with one area expanded to its item list |
+| `05-87-gear-request-size.png` | **REPLACE** | The "Your size on file" line ends "(from your profile).", and a size the department never carries reads **not stocked** rather than **none on hand**. Re-shoot the size step with **XXL** (stocked, none on hand) selected so the notice box is in frame: "None in XXL on hand right now. — You can still submit the request. The quartermaster will decide whether to reorder, offer a substitute, or decline." |
+| Item detail, return-request review and transfer captures | **REPLACE** | The vocabulary changed and the transfer screen lost its "Transfer is immediate" checkbox |
+| Template builder (readiness panel, unpublished banner); failed-item note prompt | **NEW** | Neither is pictured in the guide |
+| Camera viewfinder shots (scanning, member ID scan) | **NOT POSSIBLE** | The capture harness has no camera, and a synthetic video stream shows a test pattern rather than a scannable code. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12) |
+| `05-25-admin-hub.png`, `05-60-admin-hub-groups.png`, `05-54-admin-hub-assign.png` | **CHECK** | The guide describes the hub from its card registry: Supply lines, Catalog, Issuance & Members, Requests & Approvals, Readiness & Compliance, Department Store, Setup & Tools. Older frames showing Items / Members / Checkouts headline cards or an Import / Export card are out of date |
+| `05-02-inventory-dashboard.png` | **CHECK** | The guide places it under Low Stock Alerts. Confirm the frame shows the current **Needs attention** list rather than the older summary cards |
+| `05-04-variant-group-form.png`, `05-49-variant-stock-matrix.png` | **CHECK** | The stock matrix lists sizes down the side and colours across the top, red at zero and green otherwise; the alt text of `05-04` says "size and colour matrix" on a form |
+
 ## Moved out of 04-events-meetings.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden

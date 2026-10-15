@@ -2345,7 +2345,7 @@ the gear — that answer is the whole record.
 After that, a mark clears itself whenever the value the label encodes changes
 (barcode, else asset tag, else serial number), so an item whose barcode is
 edited goes back to needing a label. Details in
-[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23).
+[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label).
 
 ### Suggestion boxes, and a new permission on five seeded positions (2026-09-23)
 
