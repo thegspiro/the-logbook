@@ -76,7 +76,7 @@ async def bench(db_session):
         folder_id=f.id,
         name="Doc",
         description="x",
-        status=list(DocumentStatus)[0],
+        status=DocumentStatus.ACTIVE,
     )
     db_session.add(d)
     await db_session.flush()
