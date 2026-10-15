@@ -23,6 +23,14 @@ blocks with the same wording.
 | `05-02-inventory-dashboard.png` | **CHECK** | The guide places it under Low Stock Alerts. Confirm the frame shows the current **Needs attention** list rather than the older summary cards |
 | `05-04-variant-group-form.png`, `05-49-variant-stock-matrix.png` | **CHECK** | The stock matrix lists sizes down the side and colours across the top, red at zero and green otherwise; the alt text of `05-04` says "size and colour matrix" on a form |
 
+## Moved out of 09-skills-testing.md by the plain-language rewrite, 2026-10-14
+
+The guide carried no inline `[SCREENSHOT — …]` notes, so nothing was moved.
+Its image file names and alt text are unchanged. The rewrite corrected the
+guide's navigation to **Training Admin > Evaluations > Skills Test Templates**
+and **Skills Test Records**; any image showing a "Skills Testing" section with
+**Templates / Tests / Summary** tabs is stale and should be re-shot when found.
+
 ## Moved out of 06-apparatus-facilities.md by the plain-language rewrite, 2026-10-14
 
 The guide no longer carries inline `[SCREENSHOT — …]` notes. Its hidden
