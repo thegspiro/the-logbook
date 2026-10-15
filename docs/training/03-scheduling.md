@@ -2345,10 +2345,10 @@ This section is in three parts:
 
 The full list of checklist screens and who can open each one is in the
 Inventory guide, under
-[Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Equipment Checklists](./05-inventory.md#equipment-checklists).
 The settings that decide when crews are prompted, and how early or late a
 member may check in, are under
-[Checklist Settings](./05-inventory.md#checklist-settings-moved-here-2026-08-31).
+[Checklist Settings](./05-inventory.md#checklist-settings).
 
 ---
 
@@ -2838,7 +2838,7 @@ officers who can open them.
 
 > **Important.** Editing a published checklist takes it **off every shift**
 > until you publish it again. A banner says so, with **Publish now**. See
-> [Inventory → What changed in the builder](./05-inventory.md#what-changed-in-the-builder-2026-09-30--2026-10-04)
+> [Inventory → Building a checklist](./05-inventory.md#building-a-checklist)
 > for the full behaviour.
 
 #### Which checklists a shift gets

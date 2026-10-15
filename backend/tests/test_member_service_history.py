@@ -329,6 +329,62 @@ class TestLifecycleHooks:
             "retired",
         )
 
+    async def test_an_officer_dated_separation_before_the_stint_is_refused(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        member = await _user(db_session, org, hire_date=date(2015, 4, 1))
+        db_session.add(
+            MemberServicePeriod(
+                organization_id=org.id, user_id=member.id, start_date=date(2022, 1, 1)
+            )
+        )
+        await db_session.flush()
+        svc = MemberServiceHistoryService(db_session)
+
+        with pytest.raises(ValueError, match="current service began"):
+            await svc.record_separation(
+                member,
+                UserStatus.RETIRED,
+                date(2021, 12, 31),
+                None,
+                officer_dated=True,
+            )
+        [stint] = await _stints(db_session, member)
+        assert stint.end_date is None
+
+    async def test_an_officer_dated_separation_before_hire_is_refused(self, db_session):
+        org = await _org(db_session)
+        member = await _user(db_session, org, hire_date=date(2015, 4, 1))
+
+        with pytest.raises(ValueError, match="hire date"):
+            await MemberServiceHistoryService(db_session).record_separation(
+                member,
+                UserStatus.DROPPED_VOLUNTARY,
+                date(2015, 3, 31),
+                None,
+                officer_dated=True,
+            )
+        assert await _stints(db_session, member) == []
+
+    async def test_a_default_date_before_the_stint_is_still_clamped(self, db_session):
+        org = await _org(db_session)
+        member = await _user(db_session, org, hire_date=date(2015, 4, 1))
+        db_session.add(
+            MemberServicePeriod(
+                organization_id=org.id, user_id=member.id, start_date=date(2022, 1, 1)
+            )
+        )
+        await db_session.flush()
+
+        await MemberServiceHistoryService(db_session).record_separation(
+            member, UserStatus.RETIRED, date(2021, 12, 31), None
+        )
+        await db_session.flush()
+
+        [stint] = await _stints(db_session, member)
+        assert stint.end_date == date(2022, 1, 1)
+
     async def test_rejoin_continuing_keeps_earlier_service(self, db_session):
         org = await _org(db_session)
         member = await _user(
@@ -734,6 +790,112 @@ class TestStatusChangeWritesStints:
         assert (current.start_date, current.end_date) == (today, None)
         await db_session.refresh(member)
         assert member.status == UserStatus.ACTIVE
+
+    async def test_a_back_dated_retirement_closes_the_stint_on_that_date(
+        self, db_session
+    ):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+        left_on = org_today(org) - timedelta(days=21)
+        before = datetime.now(timezone.utc)
+
+        result = await change_member_status(
+            member.id,
+            MemberStatusChangeRequest(new_status="retired", separation_date=left_on),
+            BackgroundTasks(),
+            db=db_session,
+            current_user=_caller(org, officer.id),
+        )
+
+        assert result.new_status == "retired"
+        [closed] = await _stints(db_session, member)
+        assert (closed.end_date, closed.separation_status) == (left_on, "retired")
+        # The change itself is still dated now, so the undo-drop window and
+        # property-return reminders count from when the officer acted.
+        await db_session.refresh(member)
+        changed = member.status_changed_at
+        if changed.tzinfo is None:
+            changed = changed.replace(tzinfo=timezone.utc)
+        assert changed >= before.replace(microsecond=0)
+
+    async def test_a_future_effective_date_is_refused(self, db_session):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+
+        with pytest.raises(HTTPException) as exc:
+            await change_member_status(
+                member.id,
+                MemberStatusChangeRequest(
+                    new_status="retired",
+                    separation_date=org_today(org) + timedelta(days=1),
+                ),
+                BackgroundTasks(),
+                db=db_session,
+                current_user=_caller(org, officer.id),
+            )
+        assert exc.value.status_code == 400
+        assert "future" in exc.value.detail
+        assert await _stints(db_session, member) == []
+        await db_session.refresh(member)
+        assert member.status == UserStatus.ACTIVE
+
+    async def test_an_effective_date_before_hire_is_refused(self, db_session):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+
+        with pytest.raises(HTTPException) as exc:
+            await change_member_status(
+                member.id,
+                MemberStatusChangeRequest(
+                    new_status="retired", separation_date=date(2011, 12, 31)
+                ),
+                BackgroundTasks(),
+                db=db_session,
+                current_user=_caller(org, officer.id),
+            )
+        assert exc.value.status_code == 400
+        assert "hire date" in exc.value.detail
+        await db_session.refresh(member)
+        assert member.status == UserStatus.ACTIVE
+
+    async def test_an_effective_date_is_ignored_within_membership(self, db_session):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+
+        await change_member_status(
+            member.id,
+            MemberStatusChangeRequest(
+                new_status="leave", separation_date=org_today(org) + timedelta(days=5)
+            ),
+            BackgroundTasks(),
+            db=db_session,
+            current_user=_caller(org, officer.id),
+        )
+        assert await _stints(db_session, member) == []
 
     async def test_a_change_within_membership_writes_nothing(self, db_session):
         from app.api.v1.endpoints.member_status import (

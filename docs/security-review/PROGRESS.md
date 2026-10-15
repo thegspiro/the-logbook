@@ -16,6 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3272](https://github.com/thegspiro/the-logbook/pull/3272)**: branch
+`claude/security-review-inventory-p9` (suffixed rather than the bare
+`claude/security-review-inventory` pass 8 used, since that branch's own PR
+#3166 already merged — CLAUDE.md Pitfall #24), Feature 11 (Inventory),
+pass 9. Watchdog pickup. 0 code fixes, 0 new findings, 1 doc-only correction
+(pass 8's recorded route count for `inventory.py` was 149; both an AST walk
+and a direct grep return 148 at pass 8's own merge commit and at current
+head alike — a one-off miscount, not a removed route). The real delta since
+pass 8 (`6d177fea`, 15 commits, all read in full): a new fuzzy
+catalog-matching feature plus an "also called" item-aliases column (fails
+closed if the query builder's org-scope clause is ever absent, capped at
+5000 candidate rows, additive/idempotent migration), a new hard-delete for
+medical supply categories (org- and domain-validated, lock-ordered to avoid
+deadlock), a CSV-import sample/validation addition that cannot spoof an
+item's domain, and five mypy-narrowing batches confirmed behavior-neutral.
+All 190 routes across the feature's five endpoint files enumerated for an
+auth dependency, not spot-checked. INV-22 re-verified still open/
+owner-accepted, unchanged. See `INV-11-inventory.md`'s **Pass 9** section.
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3262's merge, Feature 10, Documents & legal, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
+**Watchdog pickup, 2026-10-15: PR #3262 merged, rotation continues with
+Feature 11 (Inventory).** PR #3262 (Feature 10, Documents & legal, pass 9)
+merged 2026-10-15T12:20:31Z — the "watchdog tend" note below (and #3262's own
+Changes section) already fully recorded its disposition (0 code fixes, 0 new
+findings), so there is nothing further to add here. Rotation row 10 stays ✅.
+This session is itself a second watchdog pickup: the dedicated
+`/loop 30m /security-review` session appeared stalled (no new
+`claude/security-review-*` PR had opened in the ~2 hours since #3262 merged,
+while unrelated PRs kept merging normally in that window). Confirmed via
+`list_pull_requests` (state=open) that no `claude/security-review-*` PR is
+open — PR #3265 (the duplicate #3262 superseded) was already closed by the
+time this pass started. Per the Rotation table, row 11 (Inventory) is the
+first `⬜`, so this pass continues that feature (pass 9 for Inventory). See
+`INV-11-inventory.md`'s **Pass 9** section.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 9, PR #3262, merged; rotation forked and re-resolved during this same tend), preserved for history</summary>
+
 **PR [#3262](https://github.com/thegspiro/the-logbook/pull/3262)**: branch
 `claude/security-review-documents-legal-p9`, Feature 10 (Documents & legal),
 pass 9. 0 code fixes, 0 new findings. All 22 routes re-enumerated, unchanged
@@ -45,6 +88,8 @@ actionable review comment (the two `chatgpt-codex-connector` comments on
 both PRs report a Codex _usage-limit_ failure, not a finding, on both
 PRs). Nothing else needed fixing this tend; next watchdog check should
 confirm CI finished green before the PR is left to merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 9, PR #3256, merged docs-only — 0 code fixes, 0 new findings; rotation row 09 marked ✅ as part of that PR), preserved for history</summary>
@@ -19233,7 +19278,7 @@ here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -19264,6 +19309,41 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 11 (Inventory, pass 9) — watchdog pickup, 0 fixes, 0 new findings
+
+**Step 0.** `list_pull_requests` (state=open) returned 0 PRs with a head
+branch starting `claude/security-review-`. PR #3262 (Feature 10, Documents &
+legal, pass 9) had merged 2026-10-15T12:20:31Z, already fully recorded in its
+own Open PR note; not a recordable event beyond that. Row 11 (Inventory) was
+the first `⬜`. This session is a watchdog pickup: the dedicated
+`/loop 30m /security-review` session appeared stalled (no new
+`claude/security-review-*` PR in the ~2 hours since #3262 merged, while
+unrelated PRs kept merging normally).
+
+**Review.** Baseline `6d177fea` (pass 8's merge, PR #3166) to current `HEAD`
+— confirmed a genuine ancestor via `git merge-base --is-ancestor`. The real
+delta is 15 commits, all read in full: a new fuzzy catalog-matching feature
+plus an "also called" aliases column (new nullable JSON column with an
+additive/idempotent migration, a capped-and-dedup'd write-path normalizer, and
+an opt-in `fuzzy=true` search whose candidate scan fails closed if the query
+builder's org-scope clause is ever absent and is capped at 5000 rows); a new
+hard-delete for medical supply categories (both source and destination
+category ids org- and domain-validated, rows locked in sorted id order,
+counts taken as locking reads); a CSV-import sample/validation addition
+("medical" accepted as an Item Type value but discarded — domain still comes
+from the resolved category, not the cell); and five mypy-narrowing batches,
+each confirmed to state a guarantee the code already had rather than change
+behavior. All 190 routes across the feature's five endpoint files
+enumerated (not spot-checked) for an auth dependency; all 20 using
+`get_current_user` alone read individually and confirmed self-scoped,
+module-scoped, or org-scoped-by-construction. No route added or removed
+(decorator diff empty). INV-22 re-verified still open/owner-accepted,
+unchanged. One doc-only correction: pass 8's recorded route count for
+`inventory.py` (149) was a miscount — the file has carried 148 routes since
+before pass 8 and still does. Gate green (1728 scoped backend tests,
+backend lint/format/isort/migrations/route-permissions all clean, frontend
+typecheck/lint/vitest clean).
 
 ### 2026-10-15 — Feature 10 (Documents & legal, pass 9) — 0 fixes, 0 new findings
 

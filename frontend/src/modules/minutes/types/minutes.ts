@@ -521,3 +521,11 @@ export interface AdoptionDetails {
   moved_by?: string | undefined;
   seconded_by?: string | undefined;
 }
+
+/** The department's action item reminder settings, as the server applies them. */
+export interface MinutesReminderSettings {
+  action_item_reminders: boolean;
+  reminder_days_before_due: number;
+  overdue_repeat_days: number;
+  open_items_digest: boolean;
+}
