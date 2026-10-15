@@ -19,6 +19,7 @@ const mockRecall = vi.fn();
 const mockApplyOutline = vi.fn();
 const mockAddMotion = vi.fn();
 const mockGetSuggestions = vi.fn();
+const mockAddSuggestion = vi.fn();
 const mockGetOutlines = vi.fn();
 const mockImportable = vi.fn();
 const authState = {
@@ -43,6 +44,7 @@ vi.mock('../services/api', () => ({
     applyOutline: (...a: unknown[]) => mockApplyOutline(...a) as unknown,
     addMotion: (...a: unknown[]) => mockAddMotion(...a) as unknown,
     getSuggestions: (...a: unknown[]) => mockGetSuggestions(...a) as unknown,
+    addSuggestion: (...a: unknown[]) => mockAddSuggestion(...a) as unknown,
     getOutlines: (...a: unknown[]) => mockGetOutlines(...a) as unknown,
     getImportableElections: (...a: unknown[]) => mockImportable(...a) as unknown,
     listAllMinutes: () => Promise.resolve([]),
@@ -92,6 +94,7 @@ describe('MinutesDetailPage review and adoption', () => {
       mockApplyOutline,
       mockAddMotion,
       mockGetSuggestions,
+      mockAddSuggestion,
       mockGetOutlines,
       mockImportable,
     ]) {
@@ -105,13 +108,69 @@ describe('MinutesDetailPage review and adoption', () => {
     authState.user = { id: CHIEF };
   });
 
-  it('lets a member who cannot manage minutes leave a suggestion while they circulate', async () => {
+  it('lets a member suggest a change from the section it is about, while they circulate', async () => {
     authState.checkPermission = (p: string) => p !== 'minutes.manage';
+    mockAddSuggestion.mockResolvedValue({});
+    const user = userEvent.setup();
     renderWithRouter(<MinutesDetailPage />);
 
-    expect(await screen.findByLabelText('What should change?')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Suggest a change to Old Business' }));
+    const form = await screen.findByRole('form', { name: 'Suggest a change to Old Business' });
+    await user.type(within(form).getByLabelText('What should change?'), 'Vendor B was $3,950');
+    await user.click(within(form).getByRole('button', { name: 'Send suggestion' }));
+
+    await waitFor(() =>
+      expect(mockAddSuggestion).toHaveBeenCalledWith(MINUTES_ID, {
+        section_key: 'old_business',
+        comment: 'Vendor B was $3,950',
+        proposed_text: undefined,
+      })
+    );
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Suggest a change to Old Business' })).toBeNull());
     expect(screen.queryByRole('button', { name: 'Adopt Minutes' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Recall to Draft' })).not.toBeInTheDocument();
+  });
+
+  it('gives the secretary no Suggest button on a section, but counts the open suggestions there', async () => {
+    mockGetSuggestions.mockResolvedValue([
+      {
+        id: 's1',
+        minutes_id: MINUTES_ID,
+        section_key: 'old_business',
+        comment: 'Fix it',
+        status: 'open',
+        created_at: '',
+      },
+      {
+        id: 's2',
+        minutes_id: MINUTES_ID,
+        section_key: 'old_business',
+        comment: 'Or this',
+        status: 'open',
+        created_at: '',
+      },
+      {
+        id: 's3',
+        minutes_id: MINUTES_ID,
+        section_key: 'old_business',
+        comment: 'Done',
+        status: 'accepted',
+        created_at: '',
+      },
+    ]);
+    renderWithRouter(<MinutesDetailPage />);
+
+    expect(await screen.findByText('2 open suggestions')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Suggest a change/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no section suggestion once the minutes are draft or adopted', async () => {
+    authState.checkPermission = (p: string) => p !== 'minutes.manage';
+    mockGetMinutes.mockResolvedValue({ ...base, status: 'approved' });
+    renderWithRouter(<MinutesDetailPage />);
+
+    await screen.findByText('October Business Meeting');
+    expect(screen.queryByRole('button', { name: /Suggest a change/ })).not.toBeInTheDocument();
   });
 
   it('adopts with the details entered in the dialog and then shows the adoption line', async () => {
@@ -227,8 +286,10 @@ describe('MinutesDetailPage review and adoption', () => {
         },
       ],
     });
+    const user = userEvent.setup();
     renderWithRouter(<MinutesDetailPage />);
 
+    await user.click(await screen.findByRole('button', { name: /^Motions/ }));
     expect(await screen.findByRole('link', { name: 'Budget vote' })).toHaveAttribute('href', '/elections/e1');
   });
 
@@ -246,6 +307,7 @@ describe('MinutesDetailPage review and adoption', () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesDetailPage />);
 
+    await user.click(await screen.findByRole('button', { name: /^Motions/ }));
     await user.click(await screen.findByRole('button', { name: 'Add Motion' }));
     await user.type(screen.getByLabelText('Motion text'), 'Approve the budget');
     await user.selectOptions(await screen.findByLabelText('Decided by ballot'), 'e1');
