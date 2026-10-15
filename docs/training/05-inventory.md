@@ -3046,8 +3046,10 @@ FF Garcia brings his gear to the station. Lt. Park resolves each line with
 **Station Boots:**
 
 - Worn out after 5 years.
-- **Written off**, with the note "Worn out, scheduled for disposal." She then
-  retires the boots on their own record.
+- **Written off**, with the note "Worn out, scheduled for disposal."
+- Written off leaves the boots assigned to FF Garcia, and **Retire** refuses an
+  assigned item. So Lt. Park opens the boots, selects **Unassign**, then
+  selects **Retire** on the boots' row in the item list.
 
 **Work Gloves (3 pairs, pool item):**
 
@@ -3116,13 +3118,14 @@ Capt. Torres goes to the item list and selects **Add Item** for each piece.
 
 **Turnout Coat:**
 
-| Field             | Value                         |
-| ----------------- | ----------------------------- |
-| **Name**          | Turnout Coat — Globe ATHLETIX |
-| **Category**      | PPE (NFPA tracking on)        |
-| **Serial Number** | GA-2026-00451                 |
-| **Asset Tag**     | PPE-2026-101                  |
-| **Condition**     | Excellent                     |
+| Field                          | Value                         |
+| ------------------------------ | ----------------------------- |
+| **Name**                       | Turnout Coat — Globe ATHLETIX |
+| **Category**                   | PPE (NFPA tracking on)        |
+| **Serial Number**              | GA-2026-00451                 |
+| **Asset Tag**                  | PPE-2026-101                  |
+| **Condition**                  | Excellent                     |
+| **Inspection Interval (days)** | 365                           |
 
 On the **NFPA Compliance** tab:
 
@@ -3155,7 +3158,8 @@ Record**. She chooses **Record inspection**:
 | **Task Description**    | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
 
 The inspection is added to the item's history. The next inspection due date is
-worked out from the category's inspection interval (usually a year).
+worked out from the coat's own **Inspection Interval (days)**: 365 days after
+the completion date. The interval is set on each item, not on the category.
 
 ---
 
@@ -3237,15 +3241,17 @@ do not know them.
 
 ### Label Generation
 
-| What happens                                                              | What it means                                                                                                                                       |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| None of the chosen items has a barcode, asset tag or serial number        | "No valid items found for label generation." An item needs one of these to have a label                                                             |
-| A code contains accented letters                                          | Those letters are left out of the printed barcode                                                                                                   |
-| A custom label is very small                                              | Bars below the minimum readable width may not scan. Use a larger label                                                                              |
-| More than 500 items are selected or matched                               | Refused before anything prints: "_N_ items match. A maximum of 500 inventory items can be printed in one batch — narrow the filters and try again." |
-| The filters match no active items                                         | "No active items match these filters.", with **Choose different items** back to the picker                                                          |
-| An item marked as labelled has its barcode changed                        | It goes back to **Needs a label**; the label on the gear no longer matches                                                                          |
-| An item with no barcode, asset tag or serial number is marked as labelled | It is skipped; it has nothing to print, so it is never marked                                                                                       |
+| What happens                                                              | What it means                                                                                                                     |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| None of the chosen items has a barcode, asset tag or serial number        | "No valid items found for label generation." An item needs one of these to have a label                                           |
+| A code contains accented letters                                          | Those letters are left out of the printed barcode                                                                                 |
+| A custom label is very small                                              | Bars below the minimum readable width may not scan. Use a larger label                                                            |
+| More than 500 items are picked one by one                                 | Refused before anything prints: "A maximum of 500 inventory items can be printed in one batch. Select fewer items and try again." |
+| More than 500 items match your filters                                    | The run prints in parts of at most 500 labels each. Print and confirm each part in turn                                           |
+| More than 5,000 items match your filters                                  | Refused before anything prints: "_N_ items match. One print run can hold up to 5,000 — narrow the filters and try again."         |
+| The filters match no active items                                         | "No active items match these filters.", with **Choose different items** back to the picker                                        |
+| An item marked as labelled has its barcode changed                        | It goes back to **Needs a label**; the label on the gear no longer matches                                                        |
+| An item with no barcode, asset tag or serial number is marked as labelled | It is skipped; it has nothing to print, so it is never marked                                                                     |
 
 ### Notifications
 
