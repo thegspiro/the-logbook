@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3294](https://github.com/thegspiro/the-logbook/pull/3294)**: branch
+`claude/security-review-events-requests-p8` (suffixed rather than the bare
+`claude/security-review-events-requests`, since that name's own PR history
+— #1848, #2972 — has already merged, as has the pass-6 variant
+`claude/security-review-ev-16-pass6` (#2630) — CLAUDE.md Pitfall #24),
+Feature 16 (Events & requests), pass 8. Watchdog pickup. 0 fixes needed,
+EV-23 confirmed resolved (owner decision, between pass 7 and this pass).
+Docs-only — no application code changed. See
+`EV-16-events-requests.md`'s **Pass 8** section for the full write-up.
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3291's merge, Feature 16, Events & requests, pass 8 — the state this pass's PR opened from), preserved for history</summary>
+
 **None, as of this commit.** PR #3291 (Feature 15, Scheduling, pass 8)
 merged 2026-10-15T18:22:09-04:00 — docs-only (`PROGRESS.md` +
 `SCH-15-scheduling.md` only, confirmed via `git show --stat` on the merge
@@ -25,6 +39,8 @@ Rotation row 15 stays ✅. This iteration (confirmed via
 `search_pull_requests`, `is:open head:claude/security-review-`, 0 results,
 that no other security-review PR is open) picks up Feature 16 (Events &
 requests).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3290, Feature 14, Equipment check & shifts, pass 9, before it merged), preserved for history</summary>
