@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3272](https://github.com/thegspiro/the-logbook/pull/3272)**: branch
+`claude/security-review-inventory-p9` (suffixed rather than the bare
+`claude/security-review-inventory` pass 8 used, since that branch's own PR
+#3166 already merged — CLAUDE.md Pitfall #24), Feature 11 (Inventory),
+pass 9. Watchdog pickup. 0 code fixes, 0 new findings, 1 doc-only correction
+(pass 8's recorded route count for `inventory.py` was 149; both an AST walk
+and a direct grep return 148 at pass 8's own merge commit and at current
+head alike — a one-off miscount, not a removed route). The real delta since
+pass 8 (`6d177fea`, 15 commits, all read in full): a new fuzzy
+catalog-matching feature plus an "also called" item-aliases column (fails
+closed if the query builder's org-scope clause is ever absent, capped at
+5000 candidate rows, additive/idempotent migration), a new hard-delete for
+medical supply categories (org- and domain-validated, lock-ordered to avoid
+deadlock), a CSV-import sample/validation addition that cannot spoof an
+item's domain, and five mypy-narrowing batches confirmed behavior-neutral.
+All 190 routes across the feature's five endpoint files enumerated for an
+auth dependency, not spot-checked. INV-22 re-verified still open/
+owner-accepted, unchanged. See `INV-11-inventory.md`'s **Pass 9** section.
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3262's merge, Feature 10, Documents & legal, pass 9 — the state this pass's PR opened from), preserved for history</summary>
+
 **Watchdog pickup, 2026-10-15: PR #3262 merged, rotation continues with
 Feature 11 (Inventory).** PR #3262 (Feature 10, Documents & legal, pass 9)
 merged 2026-10-15T12:20:31Z — the "watchdog tend" note below (and #3262's own
@@ -30,6 +53,8 @@ open — PR #3265 (the duplicate #3262 superseded) was already closed by the
 time this pass started. Per the Rotation table, row 11 (Inventory) is the
 first `⬜`, so this pass continues that feature (pass 9 for Inventory). See
 `INV-11-inventory.md`'s **Pass 9** section.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 9, PR #3262, merged; rotation forked and re-resolved during this same tend), preserved for history</summary>
