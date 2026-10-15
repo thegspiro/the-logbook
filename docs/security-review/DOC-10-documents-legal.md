@@ -1,6 +1,108 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), (this PR) (pass 8)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), (this PR) (pass 9)
+
+---
+
+## Pass 9 (2026-10-15)
+
+**Step 0.** No `claude/security-review-*` PR open (GitHub `pulls?state=open`,
+filtered on head ref, 0 results). PR #3256 (Feature 09, Medical screening,
+pass 9) merged docs-only — not a recordable event. Row 10 was the first `⬜`.
+
+**Baseline** `bb6f0a7d` (PR #3160's merge, pass 8). Delta by
+`git diff --numstat` against it:
+
+| File                                                                                                    | +/−      | What changed                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `endpoints/documents.py`                                                                                | +13/−5   | `confirm_admin_only` passthrough on folder create/update; `GET /folders/role-options` now also returns `Position.id`          |
+| `services/documents_service.py`                                                                         | +151/−21 | `allowed_roles` holds position **ids**, not slugs; `release_position_from_folders`; `_someone_but_admins_opens` (decision 29) |
+| `models/document.py`                                                                                    | +20/−3   | `allowed_roles` comment; `TYPE_CHECKING`-only display attributes (not mapped)                                                 |
+| `schemas/documents.py`                                                                                  | +6/−1    | `confirm_admin_only: bool = False` (not stored); `FolderRoleOption.id`                                                        |
+| `services/document_service.py`                                                                          | +255/−22 | Published-minutes HTML: roll-call statuses, closed sessions, filed election results, rich-text sections                       |
+| `pages/DocumentsPage.tsx`                                                                               | +18/−7   | Retries a create with `confirm_admin_only` after a `useConfirm()` dialog on error `LB-DOC-001`                                |
+| migration `5b2e9c7d4a18`                                                                                | new      | Converts stored slugs to ids per organization; reversible                                                                     |
+| `station_documents.py`, `legal_documents.py`, `legal_service.py`, `models/legal.py`, `schemas/legal.py` | 0        | unchanged since pass 8                                                                                                        |
+
+The large `minute_service.py` / `models/minute.py` / `schemas/minute.py`
+delta belongs to Feature 24 (Meetings & minutes) and is left to that row;
+only the part that reaches the documents library — the published HTML in
+`document_service.py` — is reviewed here.
+
+**Routes: 22, unchanged** (13 `documents.py`, 2 `station_documents.py`, 7
+`legal_documents.py`; decorator lists diffed line-for-line against the
+baseline, identical). Folder create/update/delete and role-options remain
+`documents.manage`.
+
+### Verified good ✅
+
+- **Positions by id close a real latent grant, and the migration fails
+  closed.** A slug outlived its position, so a new position reusing a deleted
+  one's slug silently inherited its folders. Ids are never reused.
+  `_settle_access_fields` (`documents_service.py:927-945`) validates every
+  supplied id against `Position.id` **in the caller's organization**
+  (`Position.organization_id == organization_id`), so a foreign org's position
+  id is a 400, not a stored cross-tenant reference (pitfall #14c).
+  Migration `5b2e9c7d4a18` looks slugs up per `(organization_id, slug)`; a
+  slug that matches no position is kept verbatim, and since a slug can never
+  equal a UUID it keeps the folder closed rather than emptying the list into
+  "no restriction". The frontend (`FolderAccessFields.tsx:72,147`) sends
+  `role.id`. No other writer of `allowed_roles` exists (`grep` over
+  `backend/app`; the MCP tool reads it only for truthiness).
+- **Deleting a position cannot open a folder.** `release_position_from_folders`
+  (`documents_service.py:212-260`) is org-scoped, locks the candidate folders
+  `FOR UPDATE`, and **refuses** the delete when the position is an
+  organization folder's only entry — emptying that list would open the folder
+  to the whole department. Otherwise it rebuilds the list (a new list, not an
+  in-place mutation — pitfall #12) and `RoleService.delete_role`
+  (`role_service.py:486-490`) records the affected folders in the
+  `role_deleted` audit event, in the same transaction as the delete.
+- **The admin-only confirmation is a warning, not an authorization step.**
+  `_someone_but_admins_opens` (`documents_service.py:816-863`) asks
+  `can_access_folder` itself for every active non-administrator in the org,
+  with ancestors resolved through the org-scoped `get_folder_by_id`, so it
+  cannot disagree with the real check (pitfall #29). `confirm_admin_only`
+  only skips that warning; the caller still needs `documents.manage`, and the
+  shut-out check (`require_write=True` on the acting user) runs first and
+  is not bypassable by it. On update the refusal rolls back before commit.
+  The 400 reveals only that nobody else satisfies the rule, which the
+  `documents.manage` holder could already derive from role-options and the
+  permission catalog.
+- **Published minutes HTML stays escaped.** Every new field interpolated in
+  `document_service.py` — attendee name/role/note, closed-session reason,
+  legal basis, summary, participant names and times, election title,
+  contest titles, candidate names, vote counts, percentages, ballot title —
+  passes through `html.escape`. Rich-text sections are re-cleaned on the way
+  out with `sanitize_html` (`app/utils/rich_text.py`: `nh3` with a tag
+  allowlist, only `a[href]` as an attribute, and `http`/`https`/`mailto` URL
+  schemes), so a stored `javascript:` link or `<script>` cannot reach the
+  documents viewer even if a write path skipped cleaning. The election-result
+  and closed-session rows are selected by `minutes_id` **and**
+  `organization_id`.
+- **Pass 8's invariants hold:** the ancestor-AND walk in `can_access_folder`,
+  the frozen access fields on personal folders, the General Documents filing,
+  and the DOC-8 draft cap (`legal_service.py:54,299`, untouched) were re-read
+  against current code.
+
+**0 findings, 0 fixes.** No standing OPEN finding for this feature.
+
+## Completion gate
+
+| Check                                                                                           | Result                                                                                                                   |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Code changes this pass                                                                          | none                                                                                                                     |
+| `flake8 app/ tests/ alembic/`                                                                   | clean                                                                                                                    |
+| `black --check app/ tests/ alembic/`                                                            | clean                                                                                                                    |
+| `isort --check-only app/ tests/ alembic/`                                                       | clean                                                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                               | 1 head, `1d65720bce34`                                                                                                   |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                               | 0 errors, 0 warnings                                                                                                     |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or role"` | 807 passed, 1 skipped, 0 failed                                                                                          |
+| `npm run typecheck` / `npm run lint` (frontend)                                                 | clean (first typecheck failed on a stale local `node_modules` missing `@tiptap/*`; `npm ci` fixed it — no source change) |
+| `vitest run src/pages/DocumentsPage.test.tsx src/components/documents`                          | 43 passed (2 files)                                                                                                      |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
