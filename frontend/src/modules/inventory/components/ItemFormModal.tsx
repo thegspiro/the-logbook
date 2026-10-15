@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { blankToNull, formCoercions } from '../../../utils/formValues';
+import { blankToNull, formatNameList, formCoercions, parseNameList } from '../../../utils/formValues';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
@@ -38,6 +38,8 @@ import {
 
 interface FD {
   name: string;
+  /** Comma-separated; becomes the item's `also_called` list. */
+  also_called: string;
   description: string;
   category_id: string;
   tracking_type: string;
@@ -72,6 +74,7 @@ interface FD {
 
 const EMPTY: FD = {
   name: '',
+  also_called: '',
   description: '',
   category_id: '',
   tracking_type: 'individual',
@@ -223,6 +226,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       const sizeCode = standardSizeCode(editItem.standard_size || editItem.size);
       setF({
         name: editItem.name,
+        also_called: formatNameList(editItem.also_called),
         description: editItem.description ?? '',
         category_id: editItem.category_id ?? '',
         tracking_type: editItem.tracking_type,
@@ -401,6 +405,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
       const p: InventoryItemCreate = {
         name: f.name.trim(),
+        // The list is sent whole on every save, and `[]` clears it on edit; on
+        // create it is omitted when empty so no empty array reaches the API.
+        also_called: isEdit || parseNameList(f.also_called).length ? parseNameList(f.also_called) : undefined,
         description: text(f.description),
         category_id: pick(f.category_id),
         serial_number: text(f.serial_number),
@@ -515,6 +522,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 onChange={(e) => up('name', e.target.value)}
                 required
               />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={lbl} htmlFor="item-also-called">
+                Also called
+              </label>
+              <input
+                id="item-also-called"
+                className={inp}
+                value={f.also_called}
+                onChange={(e) => up('also_called', e.target.value)}
+                placeholder="e.g. BVM, Ambu bag"
+                aria-describedby="item-also-called-help"
+              />
+              <p id="item-also-called-help" className="text-theme-text-muted mt-1 text-xs">
+                Other names for this item, separated by commas. Checklists use them to find it.
+              </p>
             </div>
             <div className="sm:col-span-2">
               <label className={lbl} htmlFor="item-description">
