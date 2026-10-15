@@ -2467,7 +2467,7 @@ by it.
 Members are judged the way the Training dashboard judges them. A member who has
 turned off training reminders in their own email settings is not sent these.
 Details are in
-[Training → Compliance Emails to Members](./02-training.md#compliance-emails-to-members-2026-10-11).
+[Training → Compliance Emails to Members](./02-training.md#compliance-emails-to-members).
 
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
 
