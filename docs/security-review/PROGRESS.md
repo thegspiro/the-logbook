@@ -16,10 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #3288 (Feature 12, Facilities, pass 9) merged 2026-10-15T19:48:50Z,
-docs-only (`FAC-12-facilities.md` + this file's table/Log) — nothing further
-to record per the "docs-only PR is not a recordable event" rule. Row 12 stays
-✅. Rotation continues with Feature 13 (Apparatus & NFC).
+**PR [#3289](https://github.com/thegspiro/the-logbook/pull/3289)**: branch
+`claude/security-review-apparatus-nfc-p16` (suffixed rather than the bare
+`claude/security-review-apparatus-nfc`, since that name's own PR — #3185 —
+has already merged — CLAUDE.md Pitfall #24), Feature 13 (Apparatus & NFC),
+pass 16. Watchdog pickup. 0 code fixes, 0 new findings. The real delta since
+pass 15 (`4e923164`, 3 commits in the feature's own scope files, all read in
+full, part of a repo-wide mypy-typing sweep): two are mechanical
+(`models/apparatus.py`, `services/apparatus_service.py`); the third
+(`services/evoc_level_service.py`) already shipped a genuine, already-tested
+fail-closed fix for a dangling `required_evoc_level_id` — the sibling case to
+the standing AP2-4 flag, which stays unchanged/owner-accepted. All 99 routes
+(94 + 5) re-enumerated fresh by AST walk, 99/99 carrying a permission
+dependency. AP-19 stays fixed. See `AP-13-apparatus-nfc.md`'s **Pass 16**
+section. Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment
+check & shifts).
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3288, Feature 12, Facilities, pass 9, before it merged), preserved for history</summary>
