@@ -19,7 +19,14 @@ fixed, 1 new scope-boundary item)
 `services/shift_eligibility_service.py` (1,491 L, up from ~1,200),
 `services/shift_completion_service.py` (shared with Feature 14),
 `services/integration_services/calcom_service.py` (zero diff since pass 6),
-`mcp/tools/scheduling.py`, `schemas/scheduling.py`, `models/call_tracking.py`
+`services/scheduling_widget_service.py` (185 L — in this pass's declared
+scope for the first time; a trivial mypy-narrowing diff, otherwise unchanged
+from the dashboard-widgets endpoint pass 1 already reviewed),
+`services/pre_shift_work_service.py` (714 L, **new this pass**),
+`mcp/tools/scheduling.py`, `schemas/scheduling.py`,
+`schemas/scheduling_module_config.py` (zero diff),
+`models/call_tracking.py`, `models/scheduling_module_config.py`,
+`utils/scheduling_dates.py` (zero diff)
 **Frontend:** `modules/scheduling`, `pages/scheduling`
 **Migrations:** `20260823_1400_e7a41b6d09c2_add_standing_shift_claims.py` (from
 an earlier pass); `84819ea78a79` (pass 7 window, seeds `training.view_analytics`
@@ -364,6 +371,46 @@ recognized auth dependency.**
 
 Rotation row 15 → ✅ (pending this PR's merge). Next: Feature 16 (Events &
 requests).
+
+## Pass 8 addendum (2026-10-15) — SCH-18 fixed, SCH-19 flagged (found after pass 8's own PR #3291 merged)
+
+A second, independently-launched watchdog iteration reviewed Feature 15 at
+the same time as the pass above (PR #3291) and surfaced one real gap pass 8
+did not catch, plus a sibling gap left open. Recorded as an addendum rather
+than a competing "Pass 8" section since #3291 already holds that pass's
+record; the rotation's own "next: Feature 16" pointer is unchanged by this
+addendum — it is a follow-up fix, not a new pass.
+
+**SCH-18 (LOW, fixed).** `ShiftFinalizeRequest.attach_call_ids` and
+`CloseoutCallsRequest.attach_call_ids`/`detach_call_ids` had no
+list-length bound. Each id costs the server a locking DB lookup in a loop
+(`CallTrackingService`'s attach/detach paths), so an authenticated
+`scheduling.manage`/shift-officer caller could submit an unbounded list of
+ids to inflate one request's DB cost — an abuse-resistance gap, not a
+tenant-isolation one (every id is still resolved through an org-scoped
+query). Fixed in `backend/app/schemas/scheduling.py` with
+`Field(default=None, max_length=200)`, matching
+`CallTrackingService.MAX_ATTACHABLE_CALLS` — the one legitimate source of
+these ids.
+
+**SCH-19 (LOW, flagged, not fixed).** Same shape of gap on
+`ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types`
+(a dict keyed by call type). Left open: unlike `attach_call_ids`, there is no
+existing ceiling to borrow for the call-type vocabulary, which is itself
+unbounded in org settings, so closing this needs an owner-picked cap rather
+than a guess. `responding_members`'s existing 100-entry cap is a plausible
+precedent for the list side. Mirrored to `KNOWN_LIMITATIONS.md`'s Scheduling
+Module table.
+
+**Gate** (independently re-run against CI's pinned tool versions —
+flake8==7.3.0, black==26.5.1, isort==9.0.1): `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors;
+`check_endpoint_permissions.py --strict` — 1,815 documented handlers, 0
+errors; `pytest tests/test_scheduling.py tests/test_scheduling_endpoints.py
+tests/test_xc1_scheduling_events.py -q` — 151 passed; `npm run typecheck` —
+0 errors; `npm run lint` — 0 errors/0 warnings.
 
 ---
 

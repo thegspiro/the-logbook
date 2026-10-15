@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3293](https://github.com/thegspiro/the-logbook/pull/3293)**:
+branch `claude/security-review-scheduling-p8` — **note:** this branch name
+collided with PR #3291's own branch of the same name (both independently
+derived the deterministic `claude/security-review-<feature>-p<pass>` name
+for the same feature/pass; CLAUDE.md Pitfall #24's back-association warning
+is exactly what made GitHub's checks tab show #3291's old CI runs under
+this PR at first). Feature 15 (Scheduling) — **not a new pass**: PR #3291
+(below) already completed and merged pass 8 while this PR's review was
+still running concurrently. This PR is a follow-up fix for one real gap
+pass 8's independent review missed: `attach_call_ids`/`detach_call_ids` on
+`ShiftFinalizeRequest`/`CloseoutCallsRequest` had no list-length bound (each
+id costs a locking DB query), fixed with `max_length=200` matching
+`CallTrackingService.MAX_ATTACHABLE_CALLS` (SCH-18). Same-shape gap on
+`member_call_counts`/`reported_call_types` flagged as SCH-19 (needs an
+owner-picked ceiling, mirrored to `KNOWN_LIMITATIONS.md`) rather than guessed
+at. Rebased onto #3291's merge and recorded as **Pass 8 addendum** in
+`SCH-15-scheduling.md`, not a duplicate **Pass 8** section. Rotation row 15
+was already ✅ from #3291's merge and is unchanged by this PR; so is the
+"next: Feature 16 (Events & requests)" pointer.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3291, Feature 15, Scheduling, pass 8, before it merged), preserved for history</summary>
+
 **PR [#3291](https://github.com/thegspiro/the-logbook/pull/3291)**: branch
 `claude/security-review-scheduling-p8` (suffixed
 rather than the bare `claude/security-review-scheduling`, since that name's
@@ -41,6 +64,8 @@ count: `scheduling.py` 107 (was 98); `scheduling_module_config.py` and
 `calcom_sync.py` unchanged. See `SCH-15-scheduling.md`'s **Pass 8** section.
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3290, Feature 14, Equipment check & shifts, pass 9, before it merged), preserved for history</summary>
@@ -32356,3 +32381,65 @@ Findings doc: [`EC-14-equipment-check-shifts.md`](./EC-14-equipment-check-shifts
 **Pass 9** section. No `KNOWN_LIMITATIONS.md` change needed — nothing new
 was found or fixed this pass. Rotation row 14 → ✅ (pending PR merge). Next:
 Feature 15 (Scheduling).
+
+### 2026-10-15 — Feature 15 (Scheduling) — concurrent-watchdog addendum: 1 fixed (SCH-18), 1 flagged (SCH-19), a branch-name collision caught and resolved
+
+**Step 0, as run at the time, and what actually happened.** `list_pull_requests`
+(state=open) returned 0 PRs with a head branch starting
+`claude/security-review-` right after PR #3290 (Feature 14) merged. That
+check was correct when made, but a **second, independent watchdog session
+picked up the same feature at essentially the same moment** and finished
+first: PR #3291 (Feature 15, Scheduling, pass 8) opened at 21:53 and merged
+at 22:22, entirely while this iteration's own review (launched beforehand)
+was still running. Both sessions derived the identical deterministic branch
+name `claude/security-review-scheduling-p8`, and both named their first new
+finding "SCH-17" — a genuine fork, caught only when this iteration went to
+open its own PR and found GitHub Actions showing check runs against commits
+and a commit message it never produced (CLAUDE.md Pitfall #24's
+back-association behavior, triggered by the branch-name collision rather
+than a literal reused branch).
+
+**Reconciliation, not a second pass.** #3291's review is the real pass 8 —
+its own log entry above (`### 2026-10-15 — Feature 13...` block two entries
+up is unrelated; see the pass-8 entry recorded by that merge itself) stands
+as written. This iteration's review found one thing pass 8's independent
+pass did not: `ShiftFinalizeRequest.attach_call_ids` and
+`CloseoutCallsRequest.attach_call_ids`/`detach_call_ids` had no list-length
+bound (each id costs a locking DB query in a loop, so an authenticated
+`scheduling.manage`/shift-officer caller could submit tens of thousands of
+ids to inflate one request's DB cost). Rather than discard that fix or ship
+a duplicate "Pass 8" writeup, this iteration merged `main` (now past #3291)
+into its branch, resolved the resulting conflicts in `SCH-15-scheduling.md`
+and this file by keeping #3291's content as the authoritative pass-8 record
+and recording its own, genuinely new finding as a **Pass 8 addendum**
+section instead — renumbered to **SCH-18** (fix) and **SCH-19** (flagged
+sibling gap) since #3291's own new finding had already claimed "SCH-17".
+The scope-boundary note this iteration also drew independently duplicated
+#3291's own SCH-17 exactly and was dropped rather than recorded twice.
+
+**SCH-18 (LOW, fixed).** Bound `attach_call_ids`/`detach_call_ids` to
+`max_length=200`, matching `CallTrackingService.MAX_ATTACHABLE_CALLS` — the
+one legitimate source of these ids.
+
+**SCH-19 (LOW, flagged, not fixed).** Same shape of gap on
+`member_call_counts` (list) and `reported_call_types` (dict), left open
+pending an owner-picked cap (no clean existing ceiling for the call-type
+vocabulary, which is itself unbounded in org settings). Mirrored to
+`KNOWN_LIMITATIONS.md`'s Scheduling Module table.
+
+**Gate**, re-run independently against CI's pinned tool versions
+(flake8==7.3.0, black==26.5.1, isort==9.0.1): `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors;
+`check_endpoint_permissions.py --strict` — 1,815 documented handlers, 0
+errors; `pytest tests/test_scheduling.py tests/test_scheduling_endpoints.py
+tests/test_xc1_scheduling_events.py -q` — 151 passed; frontend
+`npm run typecheck`/`npm run lint` both clean.
+
+Findings doc: [`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 8
+addendum** section (pass 8 itself is #3291's). `KNOWN_LIMITATIONS.md`
+updated (SCH-19 row added to the Scheduling Module table). Rotation row 15
+was already ✅ from #3291's merge; this addendum does not change it, nor the
+"next: Feature 16 (Events & requests)" pointer — the rotation does not
+advance again until this PR merges, per "one PR at a time."
