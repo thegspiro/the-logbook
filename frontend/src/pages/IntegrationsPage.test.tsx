@@ -890,4 +890,113 @@ describe('IntegrationsPage', () => {
       expect(within(filters).getByText('AI Assistants')).toBeInTheDocument();
     });
   });
+
+  describe('Google Workspace', () => {
+    const workspaceAvailable = {
+      id: 'gws-1',
+      organization_id: 'org-1',
+      integration_type: 'google-workspace',
+      name: 'Google Workspace',
+      description: 'Create a Google Workspace account for each new member',
+      category: 'Access Control',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const workspaceConnected = {
+      ...workspaceAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org'],
+      },
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockGetIntegrations.mockReset();
+      mockGetIntegrations.mockResolvedValue([workspaceAvailable]);
+      mockConnectIntegration.mockReset();
+      mockConnectIntegration.mockResolvedValue(workspaceConnected);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(workspaceConnected);
+    });
+
+    it('connects with the uploaded key, domain, org unit and groups', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+      await user.click(within(card).getByText('Connect'));
+
+      const key = new File(['{"type":"service_account"}'], 'key.json', { type: 'application/json' });
+      await user.upload(screen.getByLabelText('Service account key (JSON)'), key);
+      await screen.findByText(/Loaded key\.json/);
+      await user.type(screen.getByLabelText('Admin to act as'), 'admin@firedept.org');
+      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
+      await user.clear(screen.getByLabelText('Organizational unit'));
+      await user.type(screen.getByLabelText('Organizational unit'), '/Members');
+      await user.type(
+        screen.getByLabelText('Add new members to these groups (optional)'),
+        'members@firedept.org{enter}all@firedept.org'
+      );
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('gws-1', {
+        service_account_key: '{"type":"service_account"}',
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org', 'all@firedept.org'],
+      });
+    });
+
+    it('keeps the stored key when settings are saved without a new file', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+      renderPage();
+      await screen.findByText('Google Workspace');
+      await user.click(screen.getByRole('button', { name: 'Google Workspace settings' }));
+
+      expect(screen.getByLabelText('Domain')).toHaveValue('firedept.org');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('gws-1', {
+        service_account_key: undefined,
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org'],
+      });
+    });
+
+    it('leaves connecting to an organization administrator', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+
+      expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+      expect(within(card).getByText('An organization administrator connects this')).toBeInTheDocument();
+    });
+
+    it('offers a non-administrator no way to change or disconnect it', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+
+      expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
+      expect(within(card).queryByRole('button', { name: 'Google Workspace settings' })).not.toBeInTheDocument();
+      expect(within(card).getByText('Test')).toBeInTheDocument();
+    });
+  });
 });

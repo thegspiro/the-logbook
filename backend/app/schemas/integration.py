@@ -5,9 +5,11 @@ Request/response schemas for the integrations API.
 Includes per-integration-type config schemas with strict validation.
 """
 
+import json
+import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 # ============================================
@@ -259,6 +261,95 @@ class ClaudeMcpConfig(BaseModel):
     oauth_enabled: bool = False
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+)
+# A Google service-account key file is about 2.3 KB; anything far past that is
+# not one.
+_MAX_SERVICE_ACCOUNT_KEY_BYTES = 16 * 1024
+MAX_GOOGLE_WORKSPACE_GROUPS = 20
+
+
+def _normalize_email(value: str, field: str) -> str:
+    cleaned = value.strip().lower()
+    if len(cleaned) > 255 or not _EMAIL_RE.match(cleaned):
+        raise ValueError(f"{field} must be an email address")
+    return cleaned
+
+
+class GoogleWorkspaceConfig(BaseModel):
+    """Creates a Google Workspace account for each newly converted member.
+
+    The service account acts as ``admin_email`` through domain-wide
+    delegation; that admin needs the right to create users and, when
+    ``group_emails`` is set, to manage group membership.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    service_account_key: str = ""
+    admin_email: str
+    domain: str
+    org_unit_path: str = "/"
+    group_emails: List[str] = Field(default_factory=list)
+
+    @field_validator("service_account_key")
+    @classmethod
+    def _check_key(cls, value: str) -> str:
+        if not value:
+            return value
+        if len(value.encode("utf-8")) > _MAX_SERVICE_ACCOUNT_KEY_BYTES:
+            raise ValueError("service_account_key is too large to be a key file")
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            raise ValueError("service_account_key must be the JSON key file")
+        if not isinstance(parsed, dict) or parsed.get("type") != "service_account":
+            raise ValueError("service_account_key is not a service-account key file")
+        for required in ("client_email", "private_key", "token_uri"):
+            if not isinstance(parsed.get(required), str) or not parsed[required]:
+                raise ValueError(f"service_account_key is missing {required}")
+        return value
+
+    @field_validator("admin_email")
+    @classmethod
+    def _check_admin(cls, value: str) -> str:
+        return _normalize_email(value, "admin_email")
+
+    @field_validator("domain")
+    @classmethod
+    def _check_domain(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not _DOMAIN_RE.match(cleaned):
+            raise ValueError("domain must be a domain name such as firedept.org")
+        return cleaned
+
+    @field_validator("org_unit_path")
+    @classmethod
+    def _check_org_unit(cls, value: str) -> str:
+        cleaned = value.strip() or "/"
+        if not cleaned.startswith("/") or len(cleaned) > 512:
+            raise ValueError("org_unit_path must start with / (for example /Members)")
+        if any(ord(ch) < 32 for ch in cleaned):
+            raise ValueError("org_unit_path contains control characters")
+        return cleaned
+
+    @field_validator("group_emails")
+    @classmethod
+    def _check_groups(cls, value: List[str]) -> List[str]:
+        groups: List[str] = []
+        for raw in value:
+            email = _normalize_email(raw, "group_emails")
+            if email not in groups:
+                groups.append(email)
+        if len(groups) > MAX_GOOGLE_WORKSPACE_GROUPS:
+            raise ValueError(
+                f"at most {MAX_GOOGLE_WORKSPACE_GROUPS} groups can be configured"
+            )
+        return groups
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -278,6 +369,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "calcom": CalcomConfig,
     "paypal": PayPalConfig,
     "claude-mcp": ClaudeMcpConfig,
+    "google-workspace": GoogleWorkspaceConfig,
 }
 
 # Fields in config that contain secrets and should be stored encrypted
@@ -295,6 +387,7 @@ SECRET_CONFIG_KEYS = frozenset(
         "access_token",
         "api_token",
         "webhook_secret",
+        "service_account_key",
     }
 )
 

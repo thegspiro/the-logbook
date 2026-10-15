@@ -3022,6 +3022,12 @@ class MembershipPipelineService:
         approval they follow is already durable.
         """
         try:
+            # No welcome email to carry the Google password: the account is
+            # still created, and its password goes out on its own.
+            provision_google = transfer.get("_provision_google")
+            if provision_google is not None:
+                await provision_google()
+
             send = transfer.get("_send_welcome_email")
             if send is not None and await send():
                 return
@@ -4519,17 +4525,81 @@ class MembershipPipelineService:
             prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
+        # Staged in this transaction so the record outlives a crash between
+        # the commit and the Google call; the call itself runs only after the
+        # caller commits (see GoogleWorkspaceProvisioningService).
+        from app.services.google_workspace_provisioning_service import (
+            GoogleWorkspaceProvisioningService,
+        )
+
+        google_service = GoogleWorkspaceProvisioningService(self.db)
+        google_row = await google_service.stage_for_transfer(
+            organization_id=prospect.organization_id,
+            user_id=user_id,
+            department_email=department_email,
+            created_by=transferred_by,
+        )
+        google_provision_id: Optional[str] = None
+        if google_row is not None:
+            await self.db.flush()
+            google_provision_id = google_row.id
+
+        async def provision_google() -> Optional[str]:
+            if google_provision_id is None:
+                return None
+            try:
+                return await google_service.provision(
+                    google_provision_id, prospect.organization_id
+                )
+            except Exception:
+                logger.exception(
+                    f"Google Workspace provisioning crashed for user {user_id}"
+                )
+                # A rollback expires every loaded instance, and the welcome
+                # email that follows still reads the prospect.
+                await self.db.rollback()
+                await self.db.refresh(prospect)
+                return None
+
         # Send welcome email with temporary credentials if requested.
         # Use the primary (department) email so the new member receives
-        # credentials at the address they'll actually log in with.
+        # credentials at the address they'll actually log in with -- unless
+        # The Logbook is creating that mailbox now, in which case it cannot
+        # receive the password that opens it, and the personal address does.
+        welcome_recipient = primary_email
+        if google_provision_id is not None and personal_email:
+            welcome_recipient = personal_email
+
         async def send_welcome() -> bool:
-            return await self._send_transfer_welcome_email(
+            google_password = await provision_google()
+            sent = await self._send_transfer_welcome_email(
                 prospect=prospect,
                 username=username,
                 temp_password=temp_password,
                 organization_id=prospect.organization_id,
-                recipient_email=primary_email,
+                recipient_email=welcome_recipient,
+                google_account=(
+                    (primary_email, google_password) if google_password else None
+                ),
             )
+            if sent and google_password and google_provision_id is not None:
+                await google_service.mark_credentials_sent(
+                    google_provision_id, prospect.organization_id
+                )
+            return sent
+
+        async def provision_google_without_welcome() -> None:
+            google_password = await provision_google()
+            if google_password and google_provision_id is not None:
+                await google_service.send_credentials_email(
+                    google_provision_id, prospect.organization_id, google_password
+                )
+
+        # A Google account cannot be created before this transaction commits,
+        # so its credentials -- and a welcome email carrying them -- wait for
+        # the caller's commit too.
+        if google_provision_id is not None:
+            defer_welcome_email = True
 
         welcome_email_sent = False
         if send_welcome_email and not defer_welcome_email:
@@ -4546,9 +4616,16 @@ class MembershipPipelineService:
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
+            "google_account": (
+                {"status": google_row.status, "email": google_row.primary_email}
+                if google_row is not None
+                else None
+            ),
         }
         if send_welcome_email and defer_welcome_email:
             result["_send_welcome_email"] = send_welcome
+        elif google_provision_id is not None:
+            result["_provision_google"] = provision_google_without_welcome
         return result
 
     async def _auto_enroll_probationary(
@@ -5102,8 +5179,13 @@ class MembershipPipelineService:
         temp_password: str,
         organization_id: str,
         recipient_email: Optional[str] = None,
+        google_account: Optional[Tuple[str, str]] = None,
     ) -> bool:
-        """Send welcome email with credentials to a transferred member."""
+        """Send welcome email with credentials to a transferred member.
+
+        ``google_account`` is ``(address, temporary password)`` for a Google
+        Workspace account created for the member, added as its own card.
+        """
         try:
             from app.core.config import settings
             from app.services.email_service import EmailService
@@ -5123,6 +5205,15 @@ class MembershipPipelineService:
             )
 
             to_email = recipient_email or prospect.email
+            appended_html = appended_text = ""
+            if google_account is not None:
+                from app.services.google_workspace_provisioning_service import (
+                    google_credentials_html,
+                    google_credentials_text,
+                )
+
+                appended_html = google_credentials_html(*google_account)
+                appended_text = google_credentials_text(*google_account)
             email_svc = EmailService(org)
             sent = await email_svc.send_welcome_email(
                 to_email=to_email,
@@ -5133,6 +5224,8 @@ class MembershipPipelineService:
                 organization_name=org_name,
                 login_url=login_url,
                 organization_id=organization_id,
+                appended_html=appended_html,
+                appended_text=appended_text,
             )
             return bool(sent)
         except Exception as e:

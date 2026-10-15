@@ -156,6 +156,26 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
+## Google Workspace — Accounts Are Created, Never Retired (2026-10-15)
+
+The Google Workspace integration creates an account for each applicant
+converted to a member (`wiki/Integration-Google-Workspace.md`). The owner
+scoped it to creation only; each of these is a deliberate follow-up:
+
+- **No suspension on departure.** Deactivating, separating or archiving a
+  member leaves their Google account active, holding a license and their
+  mail. An administrator suspends it in the Google Admin console.
+- **No rename.** A member's name change in The Logbook does not reach Google.
+- **Members added any other way get no account.** Only conversion from the
+  prospective-members pipeline creates one; Add Member and roster import do
+  not.
+- **A delegated key is domain-wide.** The service account can manage every
+  user in the domain, not only members The Logbook created. That is why
+  changing the integration needs `admin.access`, and why the requested scopes
+  are limited to users and group membership.
+
+---
+
 ## Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)
 
 **The original limitation is resolved.** "claude.ai custom connectors need an

@@ -13,15 +13,16 @@ The Integrations module connects The Logbook to external services — calendar s
 5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
-8. [Calendar Integrations](#calendar-integrations)
-9. [Messaging Integrations](#messaging-integrations)
-10. [Weather Alerts](#weather-alerts)
-11. [EMS & Fire Reporting](#ems--fire-reporting)
-12. [Generic Webhooks](#generic-webhooks)
-13. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
-14. [Training Provider Integrations](#training-provider-integrations)
-15. [Monitoring Integration Health](#monitoring-integration-health)
-16. [Troubleshooting](#troubleshooting)
+8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+9. [Calendar Integrations](#calendar-integrations)
+10. [Messaging Integrations](#messaging-integrations)
+11. [Weather Alerts](#weather-alerts)
+12. [EMS & Fire Reporting](#ems--fire-reporting)
+13. [Generic Webhooks](#generic-webhooks)
+14. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+15. [Training Provider Integrations](#training-provider-integrations)
+16. [Monitoring Integration Health](#monitoring-integration-health)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -61,6 +62,7 @@ The integrations page shows:
 | **Data**           | Generic Webhooks   | Signed messages to any URL — only a test message is sent today               |
 | **Safety**         | NWS Weather Alerts | Checks your zone code against the weather service — alerts are not shown yet |
 | **Access Control** | NFC ID Cards       | Issue member ID cards with an NFC tag and check members in by tapping one    |
+| **Access Control** | Google Workspace   | Create a Google account for each applicant converted to a member             |
 
 ### Coming Soon
 
@@ -408,6 +410,30 @@ everything unresolved. For each entry:
 ![PayPal connect dialog with environment and credential fields](./images/16-06-paypal-connect.png)
 
 For the full store walkthrough, see [Department Store](./18-storefront.md).
+
+---
+
+## Google Workspace — Member Accounts
+
+**Google Workspace** gives each applicant the department converts to a member a Google account at their department email address. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
+
+### Configuration
+
+| Field                   | Description                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Service account key** | The JSON key of a Google Cloud service account with domain-wide delegation. Stored encrypted, never shown.          |
+| **Admin to act as**     | A Workspace admin allowed to create users and manage groups.                                                        |
+| **Domain**              | Must match **Organization Settings → Department Email**, which must be on. Accounts are created at those addresses. |
+| **Organizational unit** | Where new accounts go, for example `/Members`.                                                                      |
+| **Groups** _(optional)_ | Up to 20 group addresses each new member is added to.                                                               |
+
+Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`. Each account uses a Workspace license.
+
+### What Happens at Conversion
+
+The account is created **after** the conversion is saved, so a Google failure never undoes it. The temporary Google password goes to the member's **personal** email — in the welcome email when one is sent, otherwise on its own — and Google asks for a new one at first sign-in. The conversion result says what happened, and the member's profile shows the account with a **Retry** for anything unfinished. If the address already belongs to a Google account, The Logbook links to it and changes nothing.
+
+See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) for setup steps and account states.
 
 ---
 

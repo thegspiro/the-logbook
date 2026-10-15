@@ -171,6 +171,10 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
+from app.models.google_workspace import (
+    GoogleAccountProvision,
+    GoogleAccountStatus,
+)
 from app.models.grant import (
     ApplicationStatus,
     BudgetItemCategory,
@@ -522,6 +526,8 @@ __all__ = [
     "MessagePriority",
     "MessageTargetType",
     # Integration models
+    "GoogleAccountProvision",
+    "GoogleAccountStatus",
     "Integration",
     "IntegrationSyncLog",
     "McpServiceKey",
