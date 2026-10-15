@@ -75,6 +75,51 @@ backend_python() {
   fi
 }
 
+# Onboarding records encryption-key custody and refuses without a key, so a
+# backend started with none fails bootstrap_demo.py at that step — after the
+# organization and administrator already exist, which leaves a half-onboarded
+# database that cannot be resumed. When nothing configures the keys, a pair is
+# generated once and kept outside the repository, and reused on every later
+# run: data encrypted under one key is unreadable under the next, so a fresh
+# pair per run would break the database the previous run seeded.
+KEY_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/logbook-screenshots"
+KEY_FILE="$KEY_DIR/demo-keys.env"
+
+load_demo_keys() {
+  mkdir -p -- "$KEY_DIR" || return 1
+  if [[ -L "$KEY_DIR" || "$(stat -c %u -- "$KEY_DIR")" != "$(id -u)" ]]; then
+    echo "refusing unsafe key directory: $KEY_DIR" >&2
+    return 1
+  fi
+  chmod 700 -- "$KEY_DIR"
+  if [[ ! -e "$KEY_FILE" ]]; then
+    "$PYTHON" -c 'import secrets
+print("ENCRYPTION_KEY=" + secrets.token_hex(32))
+print("ENCRYPTION_SALT=" + secrets.token_hex(16))' >"$KEY_FILE" || return 1
+    chmod 600 -- "$KEY_FILE"
+    echo "generated demo encryption keys in $KEY_FILE" >&2
+  fi
+  if [[ -L "$KEY_FILE" || "$(stat -c %u -- "$KEY_FILE")" != "$(id -u)" ]]; then
+    echo "refusing unsafe key file: $KEY_FILE" >&2
+    return 1
+  fi
+  # Parsed, never sourced, and checked against the exact shape written above.
+  local key salt
+  key="$(sed -n 's/^ENCRYPTION_KEY=//p' "$KEY_FILE")"
+  salt="$(sed -n 's/^ENCRYPTION_SALT=//p' "$KEY_FILE")"
+  if [[ ! "$key" =~ ^[0-9a-f]{64}$ || ! "$salt" =~ ^[0-9a-f]{32}$ ]]; then
+    echo "malformed key file: $KEY_FILE (delete it to regenerate)" >&2
+    return 1
+  fi
+  export ENCRYPTION_KEY="$key" ENCRYPTION_SALT="$salt"
+}
+
+clamd_reachable() {
+  "$PYTHON" -c 'import socket, sys
+socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=2).close()' \
+    "$1" "$2" >/dev/null 2>&1
+}
+
 # setsid detaches these from the calling shell so they survive it exiting.
 if ! backend_up; then
   echo "starting backend..."
@@ -91,6 +136,31 @@ if ! backend_up; then
     tail -5 "$LOG_DIR/backend-import.log" >&2
     echo "run: pip install -r backend/requirements.txt" >&2
     exit 1
+  fi
+  # Read what the backend will actually see, .env included, rather than
+  # guessing from this shell's environment.
+  if ! read -r HAS_KEYS SCAN_ON SCAN_HOST SCAN_PORT < <(
+    "$PYTHON" -c 'from app.core.config import settings as s
+print(int(bool(s.ENCRYPTION_KEY and s.ENCRYPTION_SALT)), int(s.CLAMAV_ENABLED), s.CLAMAV_HOST, s.CLAMAV_PORT)' \
+      2>>"$LOG_DIR/backend-import.log"
+  ); then
+    echo "could not read the backend configuration; see $LOG_DIR/backend-import.log" >&2
+    exit 1
+  fi
+  if [[ "$HAS_KEYS" != "1" ]]; then
+    load_demo_keys || exit 1
+  fi
+  # Uploads fail closed without a reachable clamd, so on a host that does not
+  # run one every seeded document and attachment is refused with a 503. This
+  # stack is loopback-only and stores only the seeder's own fixture files, so
+  # scanning is turned off for it — but only when nobody chose otherwise: an
+  # explicit CLAMAV_ENABLED in the environment is always respected.
+  if [[ "$SCAN_ON" == "1" && -z "${CLAMAV_ENABLED+x}" ]] &&
+    ! clamd_reachable "$SCAN_HOST" "$SCAN_PORT"; then
+    echo "WARNING: no ClamAV daemon at $SCAN_HOST:$SCAN_PORT; starting the demo backend with" \
+      "CLAMAV_ENABLED=false, so uploads are accepted unscanned." >&2
+    echo "         Run clamd, or export CLAMAV_ENABLED=true to keep scanning on." >&2
+    export CLAMAV_ENABLED=false
   fi
   setsid nohup "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 3001 \
     >"$LOG_DIR/backend.log" 2>&1 </dev/null &
