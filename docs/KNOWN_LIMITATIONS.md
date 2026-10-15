@@ -5756,7 +5756,7 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   - Decision: whether members get a "My dues" view (and on what gate), and
     which dues reminders go out (email first, pitfall 18).
 
-## Department Store — The Cart Does Not Survive a Reload (2026-10-14)
+## Department Store — The Cart Does Not Survive a Reload (2026-10-15)
 
 Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
 
