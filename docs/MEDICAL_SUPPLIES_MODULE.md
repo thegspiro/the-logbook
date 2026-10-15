@@ -103,6 +103,13 @@ A matching **email-signature office** ships with the role.
 
 Writes on both pages require the corresponding `manage` permission.
 
+**Finding a supply by another name.** A supply has an **Also called** list
+(`also_called`, up to 10 names such as "BVM") on its add and edit form.
+`GET /items?search=…&fuzzy=true` returns the exact matches first, then supplies
+whose name or alternate names merely resemble the search; the checklist builder
+uses it so a rig's wording finds the catalog row instead of prompting a
+duplicate. It stays inside the medical domain like every other route here.
+
 **Deleting a category moves its supplies first.** A category can be deleted
 permanently (`DELETE /categories/{id}`), and the page asks where its supplies
 should go. This is not left to the database: an item's foreign key to its
@@ -156,6 +163,32 @@ so the area carries the category name and the gear language lives on the
 screens that are actually about gear. **Routes, permission keys and table names
 have never changed through any of this**, so no link, bookmark or integration
 breaks.
+
+### Importing supplies from a CSV
+
+A department can bring its existing stock in through the inventory CSV import
+(`/inventory/import`, which needs `inventory.manage`). Its downloadable sample
+includes common medical supplies — airway, bleeding control and trauma,
+dressings, diagnostics and infection control — as counted rows, plus one
+individually tracked, serial-numbered device. It deliberately has **no
+medications**: they vary by protocol and include controlled substances.
+
+Three things about the import decide where those rows land:
+
+- **The Category cell is a name, matched against categories you have already
+  created** (case-insensitively, among all of them, medical included). The
+  sample uses generic names — _Airway & Breathing_, _Bleeding Control & Trauma_,
+  _Dressings & Bandages_, _Diagnostics_, _Infection Control_ — so rename them in
+  the file to match your own. A name that matches nothing still imports the
+  row, **with no category**, and an uncategorized item reads as gear rather
+  than medical; the import lists each such row as a warning.
+- **"Item Type" is checked and then ignored.** An item's type comes from its
+  category, so writing `medical` there does not make a row medical by itself
+  (it is accepted, so it is not rejected).
+- **The import carries no lots.** Lot numbers and expiration dates are added
+  afterwards, for example through **Receive delivery**; a supply imported by
+  count shows its quantity but nothing is flagged as expiring until it has
+  dated lots.
 
 ---
 

@@ -592,12 +592,16 @@ Draft ──Circulate──> Circulated ──Adopt──> Adopted ──Reopen�
   send is logged without failing the circulation. Circulating again after a
   return or recall emails again.
 - **Suggestions.** While the minutes circulate, anyone who can view them may
-  suggest a change: an optional section, a comment, and optional proposed
-  wording. A member sees only their own; `minutes.manage` sees all. A manager
-  accepts or declines each (with a note) until adoption. Suggestions never edit
-  the minutes; the secretary works accepted ones in after **Recall to Draft**
-  (`POST /{id}/recall`, circulated → draft; suggestions are kept) and
-  circulates again.
+  suggest a change. A member does it **from the section it is about** — each
+  section card has a _Suggest a change_ button that opens a form under the text
+  (a comment, and optional suggested wording) — or, from the suggestions panel,
+  for the minutes as a whole. A member sees only their own suggestions;
+  `minutes.manage` sees all, with a count of open suggestions on each section,
+  and is offered Accept and Decline instead of a form (the secretary corrects
+  the minutes, not suggests to them). A manager accepts or declines each (with
+  a note) until adoption. Suggestions never edit the minutes; the secretary
+  works accepted ones in after **Recall to Draft** (`POST /{id}/recall`,
+  circulated → draft; suggestions are kept) and circulates again.
 - **Adoption.** `POST /{id}/approve` takes an optional body
   `{adopted_on, adopting_minutes_id, as_amended}`. `adopted_on` defaults to now;
   `adopting_minutes_id` is the minutes of the meeting at which the body voted
@@ -634,6 +638,17 @@ footer settings, and one outline per meeting type is the default.
 - Outline sections are validated on save: unique lowercase keys, order
   renumbered. The editor will not save an outline with no sections; the API
   still accepts an empty list, as it always has.
+
+### Page layout _(2026-10-15)_
+
+The detail page opens on the minutes themselves. Motions, closed sessions,
+election results, action items, attachments and approved versions are panels
+(`PanelDisclosure`) that start folded with their count in the heading ("Motions
+(3)"); a panel's buttons appear when it is open, and what was typed in a folded
+panel is kept. The approved-versions panel unfolds itself and says "Needs
+attention" when the record no longer matches the approved version, so a failed
+integrity check cannot be hidden behind a fold. Attendance, the suggestions
+panel and the sections stay open.
 
 ### Rich text sections _(2026-10-14)_
 

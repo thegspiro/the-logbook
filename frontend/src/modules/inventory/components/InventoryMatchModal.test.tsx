@@ -53,6 +53,27 @@ describe('InventoryMatchModal', () => {
   const open = () =>
     renderWithRouter(<InventoryMatchModal templateId="tmpl-1" isOpen onClose={onClose} onLinked={onLinked} />);
 
+  it('says which alias produced a match, so an unlike-looking item is explainable', async () => {
+    mockGetInventoryMatches.mockResolvedValue({
+      coverage: { linkable: 1, linked: 0, unlinked: 1 },
+      matches: [
+        match({
+          itemName: 'BVM',
+          suggestions: [
+            { id: 'inv-2', name: 'Bag Valve Mask', score: 0.95, confidence: 'strong', matchedAlias: 'BVM' },
+            { id: 'inv-3', name: 'Bag Valve Mask Adult', score: 0.5, confidence: 'weak' },
+          ],
+        }),
+      ],
+    });
+    open();
+
+    expect(await screen.findByText(/also called/)).toHaveTextContent('also called “BVM”');
+    // Only the alias match carries the note, and it is not pre-selected.
+    expect(screen.getAllByText(/also called/)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Link 0 items/ })).toBeDisabled();
+  });
+
   it('says how much of the checklist is tracked at all', async () => {
     open();
 
