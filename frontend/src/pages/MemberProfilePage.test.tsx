@@ -607,6 +607,42 @@ describe('MemberProfilePage membership and privacy', () => {
     );
   });
 
+  it('asks when a current member left, and sends the date given', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    // A change within membership closes no stint, so no date is asked.
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'New Status' }), UserStatus.RETIRED);
+    const effective = screen.getByLabelText('Effective date');
+    expect(effective).toHaveAttribute('min', '2019-03-02');
+    await user.clear(effective);
+    await user.type(effective, '2026-01-15');
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, {
+        new_status: UserStatus.RETIRED,
+        reason: undefined,
+        separation_date: '2026-01-15',
+      })
+    );
+  });
+
+  it('asks no effective date when a retired member is brought back', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    await user.selectOptions(await screen.findByRole('combobox'), UserStatus.DROPPED_VOLUNTARY);
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
+  });
+
   it('names both fields of the status dialog and sends the reason typed', async () => {
     const user = userEvent.setup();
     grantedPermissions = ['members.manage'];

@@ -8,7 +8,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 
 import copy
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -159,6 +159,16 @@ class MemberStatusChangeRequest(RejoinServiceOptions):
         ..., description="New status value (e.g. 'dropped_voluntary')"
     )
     reason: str | None = Field(None, description="Reason for the status change")
+    separation_date: date | None = Field(
+        None,
+        description=(
+            "The day the member left; defaults to today on the department's "
+            "calendar. Used only when the change takes a member out of "
+            "membership (to dropped or retired), where it closes their "
+            "service stint. It does not move status_changed_at, which records "
+            "when the change was made."
+        ),
+    )
     send_property_return_email: bool = Field(
         True, description="Email the property return report to the member"
     )
@@ -376,8 +386,26 @@ async def change_member_status(
     previous = UserStatus(previous_status)
     service_credit = None
     today = await resolve_org_today(db, current_user.organization_id)
+    separation_date = None
     if not is_separated(previous) and is_separated(new_status):
-        await history.record_separation(member, new_status, today, str(current_user.id))
+        separation_date = request.separation_date or today
+        if separation_date > today:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The effective date cannot be in the future.",
+            )
+        try:
+            await history.record_separation(
+                member,
+                new_status,
+                separation_date,
+                str(current_user.id),
+                officer_dated=request.separation_date is not None,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
     elif is_separated(previous) and not is_separated(new_status):
         service_credit = request.service_credit or await history.get_rejoin_default(
             str(current_user.organization_id)
@@ -396,7 +424,12 @@ async def change_member_status(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
 
-    # Update the status and record when it changed
+    # Update the status and record when it changed. status_changed_at stays
+    # the moment of the change even when the separation is back-dated: the
+    # undo-drop window and the property-return reminder schedule both count
+    # from it, and both are about when the department acted -- a back-dated
+    # drop must still be undoable, and must not open its return deadline
+    # already overdue.
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
@@ -416,6 +449,11 @@ async def change_member_status(
             "new_status": new_status.value,
             "reason": request.reason,
             **({"service_credit": service_credit.value} if service_credit else {}),
+            **(
+                {"separation_date": separation_date.isoformat()}
+                if separation_date
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
