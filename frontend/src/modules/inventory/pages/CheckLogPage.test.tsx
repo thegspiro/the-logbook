@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -274,6 +274,215 @@ describe('CheckLogPage', () => {
     );
     renderWithRouter(<CheckLogPage />);
     expect(await screen.findByText('—')).toBeInTheDocument();
+  });
+
+  describe('the summary line', () => {
+    beforeEach(() => {
+      mockGetCheckLog.mockReset();
+      mockGetCheckLog.mockResolvedValue(makeResponse());
+      window.history.replaceState({}, '', '/inventory/checklists/log');
+    });
+
+    afterEach(() => {
+      window.history.replaceState({}, '', '/');
+    });
+
+    const withProblems = () =>
+      makeResponse({
+        entries: [
+          makeEntry({ status: 'passed', templateName: 'Engine Daily Check' }),
+          withoutKeys(
+            makeEntry({ shiftId: 's-2', status: 'missed', templateName: 'Ladder Daily Check' }),
+            'checkId',
+            'checkedAt',
+            'checkedByName',
+            'totalItems',
+            'completedItems'
+          ),
+          // A finding under an outcome other than `failed` — the reason the
+          // chip filters on findings, not on the outcome.
+          makeEntry({
+            shiftId: 's-3',
+            status: 'out_of_service',
+            templateName: 'Tower Daily Check',
+            findingCount: 1,
+            findings: ['Aerial hydraulics'],
+          }),
+        ],
+        summary: { expected: 3, completed: 2, completionRate: 67, missed: 1, withFindings: 1, outOfServiceDays: 0 },
+      });
+
+    it('reads as one line, and offers no chip with nothing behind it', async () => {
+      renderWithRouter(<CheckLogPage />);
+      const line = await screen.findByTestId('check-log-summary');
+      expect(line).toHaveTextContent('100% completed · 1 expected');
+      expect(within(line).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('opens the log narrowed to missed checks, and clears on a second tap', async () => {
+      mockGetCheckLog.mockResolvedValue(withProblems());
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByRole('table');
+
+      const chip = screen.getByRole('button', { name: '1 missed' });
+      await userEvent.click(chip);
+
+      expect(window.location.search).toBe('?status=missed');
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.getByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.queryByText('Engine Daily Check')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 missed' })).toHaveAttribute('aria-pressed', 'true');
+
+      await userEvent.click(screen.getByRole('button', { name: '1 missed' }));
+
+      expect(window.location.search).toBe('');
+      // Clearing widens the list; it does not send the officer back to the grid.
+      expect(screen.getByText('Engine Daily Check')).toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    it('lists every check the found-a-problem count counted, whatever its outcome', async () => {
+      mockGetCheckLog.mockResolvedValue(withProblems());
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByRole('table');
+
+      await userEvent.click(screen.getByRole('button', { name: '1 found a problem' }));
+
+      expect(window.location.search).toBe('?findings=1');
+      expect(screen.getByText('Tower Daily Check')).toBeInTheDocument();
+      expect(screen.queryByText('Ladder Daily Check')).not.toBeInTheDocument();
+      const banner = screen.getByRole('status', { name: 'Active filter' });
+      expect(within(banner).getByText('checks that found a problem')).toBeInTheDocument();
+    });
+
+    it('swaps one chip for the other rather than stacking them', async () => {
+      mockGetCheckLog.mockResolvedValue(withProblems());
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=missed');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Ladder Daily Check');
+
+      await userEvent.click(screen.getByRole('button', { name: '1 found a problem' }));
+
+      expect(window.location.search).toBe('?findings=1');
+      expect(screen.getByRole('button', { name: '1 missed' })).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  describe('a day in the grid', () => {
+    beforeEach(() => {
+      mockGetCheckLog.mockReset();
+      mockGetCheckLog.mockResolvedValue(
+        makeResponse({
+          rows: [
+            {
+              apparatusId: 'a-1',
+              unitLabel: 'E-1',
+              cells: [
+                {
+                  date: '2026-08-15',
+                  status: 'failed',
+                  checks: [
+                    {
+                      checkId: 'chk-1',
+                      templateName: 'Engine Daily Check',
+                      checkTiming: 'start_of_shift',
+                      status: 'passed',
+                      findingCount: 0,
+                    },
+                    {
+                      checkId: 'chk-2',
+                      templateName: 'SCBA Check',
+                      checkTiming: 'end_of_shift',
+                      status: 'failed',
+                      findingCount: 2,
+                    },
+                  ],
+                },
+                { date: '2026-08-16', status: null, checks: [] },
+              ],
+              expected: 2,
+              completed: 2,
+              completionRate: 100,
+            },
+          ],
+        })
+      );
+    });
+
+    it('opens a sheet naming every check that day', async () => {
+      renderWithRouter(<CheckLogPage />);
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'E-1, Sat, Aug 15: Start passed, End found a problem' })
+      );
+
+      const sheet = screen.getByRole('dialog', { name: 'E-1 · Sat, Aug 15' });
+      const checks = within(sheet).getAllByRole('listitem');
+      expect(checks).toHaveLength(2);
+      expect(checks[0]).toHaveTextContent('Engine Daily Check');
+      expect(checks[0]).toHaveTextContent('Start of shift');
+      expect(checks[0]).toHaveTextContent('Passed');
+      expect(checks[1]).toHaveTextContent('SCBA Check');
+      expect(checks[1]).toHaveTextContent('End of shift');
+      expect(checks[1]).toHaveTextContent('Found a problem');
+      expect(checks[1]).toHaveTextContent('2 findings');
+      expect(within(sheet).getByRole('link', { name: /Open E-1/ })).toHaveAttribute(
+        'href',
+        '/inventory/checklists/apparatus/a-1'
+      );
+    });
+
+    it('offers nothing to tap on a day with no check scheduled', async () => {
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByRole('table');
+      expect(screen.queryByRole('button', { name: /Aug 16/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the log, by day', () => {
+    beforeEach(() => {
+      // Only Date is faked: "Today" depends on the clock, and faking timers
+      // would stall the promise-driven loads and userEvent.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-08-16T16:00:00Z'));
+      mockGetCheckLog.mockReset();
+      mockGetCheckLog.mockResolvedValue(
+        makeResponse({
+          scope: 'own',
+          rows: [],
+          entries: [
+            makeEntry({ shiftId: 's-3', shiftDate: '2026-08-16', templateName: 'Sunday Check' }),
+            makeEntry({ shiftId: 's-2', shiftDate: '2026-08-15', templateName: 'Saturday Check' }),
+            makeEntry({ shiftId: 's-1', shiftDate: '2026-08-13', templateName: 'Thursday Check' }),
+            makeEntry({ shiftId: 's-0', shiftDate: '2026-08-13', templateName: 'Thursday Second Check' }),
+          ],
+        })
+      );
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("heads each day once, in the viewer's own words for the recent ones", async () => {
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Sunday Check');
+
+      expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+        'Today',
+        'Yesterday',
+        'Thu, Aug 13',
+      ]);
+      const thursday = screen.getByRole('region', { name: 'Thu, Aug 13' });
+      expect(within(thursday).getByText('Thursday Check')).toBeInTheDocument();
+      expect(within(thursday).getByText('Thursday Second Check')).toBeInTheDocument();
+    });
+
+    it('leaves the date off each entry, which the heading already gives', async () => {
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Sunday Check');
+      expect(screen.queryByText('Aug 16')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Kelly Moreno')).toHaveLength(4);
+    });
   });
 
   /**
