@@ -1,6 +1,190 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), (this PR) (pass 8)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), (this PR) (pass 9)
+
+---
+
+## Pass 9 (2026-10-15)
+
+**Confirmed clear before starting.** `search_pull_requests` for
+`is:open head:claude/security-review-` returned 0 results, matching the
+orchestrating task's own fresh check — no concurrent security-review PR.
+Row 10 (Documents & legal) is the first ⬜ row in `PROGRESS.md`, confirmed by
+re-grep rather than trusted from the task description.
+
+**Baseline.** Pass 8's own PR is `bb6f0a7d` (PR #3160's merge,
+2026-10-13T07:31:53-04:00) — found directly from `git log --oneline --merges`
+rather than trusted from the findings doc's own PR table, and confirmed an
+ancestor of `HEAD` with `git merge-base --is-ancestor`. 286 commits landed on
+`main` in the window; a content diff (`git diff bb6f0a7d..HEAD --`) against
+every file this feature's scope and prior passes have declared — the three
+endpoint files, all four backing services, both models, both schema files,
+`api/public/legal.py`, `mcp/tools/documents.py`, and the four frontend files
+pass 5/7/8 named — is what this pass relies on, per the established
+practice of not trusting `git log` output alone on this repository (the
+documented squash/orphan-merge artifact pass 7/8 both hit again). Seven of
+those fourteen files are byte-identical to pass 8 (`station_documents.py`,
+`legal_documents.py`, `legal_service.py`, `print_document_service.py`,
+`models/legal.py`, `schemas/legal.py`, `api/public/legal.py`,
+`mcp/tools/documents.py`); seven have real diffs:
+
+| File                                                                                                                                                          | Diff size | What changed                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `documents.py`                                                                                                                                                | 18 lines  | `confirm_admin_only` threaded through create/update folder; `GET /folders/role-options` now returns `id` alongside `slug`/`name`                                                                                           |
+| `documents_service.py`                                                                                                                                        | 172 lines | `allowed_roles` now stores `Position.id` values, not slugs; new `release_position_from_folders` (wired into `RoleService.delete_role`); new `_someone_but_admins_opens` + `DOC_FOLDER_ADMIN_ONLY` refusal on create/update |
+| `document_service.py`                                                                                                                                         | 277 lines | Minutes-publish HTML gains closed-session and election-result sections, rich-text sanitized sections, and a roll-call-status attendance grouping — a Meetings & Minutes (Feature 24) feature, not this rotation's          |
+| `models/document.py`                                                                                                                                          | 23 lines  | `allowed_roles`'s doc-comment updated for the id change; two `TYPE_CHECKING`-only attribute declarations (`document_count`, `uploader_name`/`folder_name`) added for mypy — no new column, no migration needed             |
+| `schemas/documents.py`                                                                                                                                        | 7 lines   | `confirm_admin_only: bool = False` added to `DocumentFolderCreate`/`Update`; `FolderRoleOption.id: str` added                                                                                                              |
+| `frontend/.../DocumentsPage.tsx`                                                                                                                              | 25 lines  | Folder create flow catches `LB-DOC-001` and re-submits with `confirm_admin_only` after a `useConfirm()` dialog                                                                                                             |
+| `frontend/.../FolderManageDialog.tsx`, `FolderAccessFields.tsx`, `folderAccess.ts` (not separately scoped, found via the component tree the page diff led to) | —         | Same admin-only confirmation flow on update; role checkboxes keyed by position id; stale position ids (pointing at a deleted position) are visibly dropped once the department's live positions are known                  |
+
+All seven read in full against current code, not sampled against the diff.
+
+### Folder positions stored by id, and the admin-only-folder confirmation — both owner-direct, both verified sound
+
+Two owner-direct commits landed in this window, both from PR #3108
+(`claude/document-storage-access-pva3a7` — not a `security-review-*` branch,
+confirmed by `git log --merges` and `git branch --contains`), implementing
+`docs/FILE_STORAGE_HARDENING.md` decisions 28 and 29:
+
+- **Decision 28 (`0b91eef5`, 2026-10-13):** `DocumentFolder.allowed_roles`
+  now stores `Position.id` values instead of `Position.slug`. Migration
+  `5b2e9c7d4a18` converts every existing folder's slugs to the matching
+  position's id, org-scoped (`(organization_id, slug)` → `id` lookup table
+  built from the live `positions` table), table-existence-guarded
+  (`{"document_folders", "positions"} <= tables`), and reversible (the
+  downgrade maps ids back to slugs the same way). A slug/id that matches no
+  current position is left exactly as it is — read in full: this is the
+  correct fail-closed choice, since an unmatched value can never equal a
+  real position's id either, so the folder stays exactly as closed as it was
+  rather than silently opening when its list of (now-meaningless) strings
+  happens to end up empty. `release_position_from_folders`
+  (`documents_service.py:212-258`) is the write-side half: called from
+  `RoleService.delete_role` (`role_service.py:488-490`) **before** the
+  position row is deleted, it locks every folder in the org naming a
+  restriction (`_json_has_value(allowed_roles)`, `.with_for_update()`),
+  refuses the whole deletion with a descriptive `ValueError` (→ 400) if any
+  organization-visibility folder names this position **alone**, and
+  otherwise drops the id from each folder's list via a new-list assignment
+  (not an in-place `.append`/`.remove` — CLAUDE.md Pitfall #12's JSON-column
+  rule, correctly applied). Traced the whole sequence: a position can no
+  longer be deleted out from under a folder that depends on it, and a
+  position id is never reused, so (unlike the slug it replaces) a later
+  position of the same name can never silently inherit a deleted position's
+  folders.
+- **Decision 29 (`3a1a5f75`, 2026-10-14):** `create_folder`/`update_folder`
+  now refuse (`CodedValueError`, `DOC_FOLDER_ADMIN_ONLY` / `LB-DOC-001`, a 400) a folder-access change that would leave every active, non-admin
+  member unable to open it, unless the caller sends
+  `confirm_admin_only=true`. `_someone_but_admins_opens`
+  (`documents_service.py:844-886`) asks the real `can_access_folder` for
+  every active (`UserStatus.ACTIVE`, `deleted_at IS NULL`), non-full-admin
+  member in the org — not a re-derivation of the access rule, the same
+  function the read path uses — and is skipped entirely (treated as
+  satisfied) when the org has no non-admin active member at all, so a fresh
+  install with only its owner account is not nagged on every folder it
+  creates. Only triggers on an actual access-field or `parent_id` change
+  (`update_folder`), not on an unrelated edit to an already-admin-only
+  folder. This is a confirmation, not a security boundary — a
+  `documents.manage` holder could already create an admin-only folder by
+  deliberately choosing those settings — and it does not claim to be one:
+  it catches an accidental lock-out (the wrong permission typo'd, a position
+  picked that nobody currently holds), not a malicious one.
+
+Both are already recorded, resolved and dated in
+`docs/KNOWN_LIMITATIONS.md`'s "File Storage — Folder Rights Phase 3 Left
+Open" entry (2026-10-13 and 2026-10-14 respectively) — read and confirmed
+the dates match the commits' own timestamps; no correction needed there.
+Test coverage: `backend/tests/test_position_deletion_folders.py` and
+`backend/tests/test_folder_access_editor.py`, both passing (see Completion
+gate). Frontend: `isAdminOnlyRefusal`/`ADMIN_ONLY_CONFIRMATION`
+(`folderAccess.ts`) route the refusal through `useConfirm()` — never
+`window.confirm` (Pitfall #16) — and `FolderAccessFields.tsx`'s stale-id
+removal only fires once `roleOptions` has actually loaded and is non-empty,
+so a transient fetch failure can never be mistaken for "the department has
+no positions" and strip every selected role.
+
+**Not this rotation's fix, verified sound as delivered. 0 new findings
+from this change.**
+
+### Minutes HTML generation gaining sections — credited elsewhere, read for this feature's own invariants only
+
+`document_service.py`'s `_generate_minutes_html`/`publish_minutes` (used by
+the Meetings & Minutes module, Feature 24, still ⬜ in this rotation) gained
+closed-session and election-result sections, a roll-call-status attendance
+grouping, and rich-text section rendering. Read the full diff: every
+user-authored string reaching the HTML string goes through `html.escape()`,
+and the one path that renders pre-formatted rich text
+(`normalize_format(...) == FORMAT_HTML`) goes through `sanitize_html()`
+rather than being trusted as already clean — the same defense-in-depth
+posture `legal_service.py`'s own revision bodies use, re-read this pass for
+comparison. The new queries (`MinutesElectionResult`, `MinutesClosedSession`)
+both filter `organization_id` alongside `minutes_id`. No regression of this
+feature's own tenant-isolation or injection invariants; the feature itself
+belongs to, and will be reviewed in full by, Feature 24's own pass.
+
+### Everything re-verified good from pass 8, unchanged
+
+Re-read `documents.py`, `station_documents.py`, `legal_documents.py` in
+full, and `documents_service.py`'s every other method (not just the diff
+hunks), against current code:
+
+- **DOC-8 stays fixed** — `list_revisions_page`/`_assert_under_draft_cap`
+  unchanged since pass 8 (`legal_service.py` has a zero-line diff this
+  pass).
+- **Route count unchanged at 22** — re-walked all three endpoint files with
+  an AST parse (not grep) rather than trusting pass 8's table: 13 in
+  `documents.py`, 2 in `station_documents.py`, 7 in `legal_documents.py`.
+  No route added or removed. Every route's permission string re-checked
+  against `DEFAULT_POSITIONS["member"]`/`firefighter` — unchanged, none is
+  a baseline grant.
+- **Every by-id query still org-scoped** (XC-3) — the only new by-id-shaped
+  reads this pass (`_someone_but_admins_opens`'s ancestor walk,
+  `release_position_from_folders`'s folder scan) both filter
+  `organization_id` in the same query as the lookup, re-confirmed by
+  reading each call site.
+- **Upload hardening, download path containment, delete-removes-file,
+  folder-ACL ancestor walk, audit-payload content, `UNCACHEABLE_PREFIXES`
+  membership, no CSV export, `safe_error_detail()` on every exception
+  path** — all re-confirmed intact by direct read, none of their backing
+  code changed this pass (confirmed by the file-level diff above).
+- **`LIKE`/`ilike` escaping intact** — `get_documents`'s
+  `Document.name`/`.description`/`.tags` search (`documents_service.py:1436-1438`)
+  still passes `escape=LIKE_ESCAPE_CHAR` on all three; unchanged since pass
+  7/8 (the `FacilityDocument`/`FacilityPhoto.file_path` call site those
+  passes retired via FAC-41's `document_id` column match stays retired —
+  no `LIKE` there to escape).
+- **Every `SET NULL` FK is still nullable** — re-checked `models/document.py`
+  and `models/legal.py` in full: `DocumentFolder.owner_user_id`,
+  `Document.folder_id`, `LegalDocumentRevision.created_by`/`published_by`.
+  No FK added this pass.
+- **No `window.confirm`/`alert`/`prompt`, no click-outside dialog dismiss**
+  (Pitfall #31) introduced by the new confirmation flow — it reuses the
+  app-wide `useConfirm()`/`ConfirmProvider`, the same mechanism every other
+  dialog in this feature already uses.
+
+**0 new findings, 0 fixes needed, 0 code changes by this rotation.** No
+standing OPEN finding remains for this feature (same as pass 8's close).
+
+## Completion gate
+
+| Check                                                                                                                              | Result                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                                             | none — decisions 28/29 already fixed by owner-direct work (PR #3108) before this pass began; verified sound, not reopened                                                                      |
+| `flake8 app/ tests/ alembic/` (pinned `7.3.0`, matching CI)                                                                        | clean                                                                                                                                                                                          |
+| `black --check app/ tests/ alembic/` (pinned `26.5.1`, matching CI)                                                                | clean, 2315 files unchanged                                                                                                                                                                    |
+| `isort --check-only app/ tests/ alembic/` (pinned `9.0.1`, matching CI — a fresh sandbox has no isort by default)                  | clean                                                                                                                                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                  | 597 revisions, single head `1d65720bce34`                                                                                                                                                      |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                  | 270 routes, 0 errors, 0 warnings                                                                                                                                                               |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                  | up to date (no model-schema change this window)                                                                                                                                                |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or position_deletion_folders or folder_access_editor"` | 540 passed, 0 failed (first run failed on a local DB one migration behind — `inventory_items.also_called` — fixed with `alembic upgrade head`, same pre-existing-stale-DB shape as passes 7/8) |
+| `pytest tests/ -m "not integration and not slow and not docker"` (full backend unit suite)                                         | 14907 passed, 3 skipped (pre-existing, `nginx` not installed in this sandbox), 0 failed                                                                                                        |
+| `npm run typecheck` (frontend)                                                                                                     | clean                                                                                                                                                                                          |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                                                     | clean, exit 0                                                                                                                                                                                  |
+| Scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`, `legalDocumentsStore`, `FolderManageDialog`)                         | 66 passed (4 files, up from pass 8's 61 — the admin-only-confirmation and stale-position tests)                                                                                                |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

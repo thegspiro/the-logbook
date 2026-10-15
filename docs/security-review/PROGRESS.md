@@ -19197,7 +19197,7 @@ here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -19229,6 +19229,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 10 (Documents & legal, pass 9) — 0 code fixes, 0 flagged, 0 new security findings
+
+**Step 0.** `search_pull_requests` (`is:pr is:open
+head:claude/security-review-`, repo-scoped) returned 0 results — no
+concurrent security-review PR. PR #3256 (Feature 09, Medical screening,
+pass 9) had already merged before this iteration started, carrying its own
+Open PR note forward; row 10 (Documents & legal) was the first `⬜`.
+
+**Review.** Baseline `bb6f0a7d` (pass 8's merge, PR #3160), confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. Content-diffed
+(not `git log`-trusted) every file this feature's scope and prior passes
+declare: seven of fourteen are byte-identical to pass 8; seven have real
+diffs. The real delta is two owner-direct commits from PR #3108
+(`claude/document-storage-access-pva3a7`, not a security-review branch)
+implementing `docs/FILE_STORAGE_HARDENING.md` decisions 28 and 29 — folder
+`allowed_roles` now stores `Position.id` rather than slug (with a
+table-existence-guarded, reversible backfill migration and a
+`RoleService.delete_role` wiring that refuses to delete a position that
+alone opens a folder), and a `DOC_FOLDER_ADMIN_ONLY`/`LB-DOC-001`
+confirmation when a folder-access change would leave every active
+non-admin member unable to open it. Both read in full and independently
+verified sound (org-scoped, Pitfall #12-correct JSON mutation, fails
+closed, routed through `useConfirm()` on the frontend per Pitfall #16) —
+already recorded and dated in `docs/KNOWN_LIMITATIONS.md`, no correction
+needed there. A third change (`document_service.py`, Minutes-publish HTML
+gaining closed-session/election-result sections) belongs to Feature 24
+(Meetings & Minutes, still `⬜`); read for this feature's own invariants
+only — every user string is `html.escape()`d or `sanitize_html()`d, every
+new query is org-scoped — no regression, credited elsewhere. All 22
+routes re-enumerated by AST walk (unchanged from pass 8); every
+permission string re-checked against baseline grants (none present).
+DOC-8 (the feature's last standing finding, fixed before pass 8 began)
+re-confirmed still fixed. No standing OPEN finding remains.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean
+over `app/ tests/ alembic/` at CI's pinned versions (`7.3.0`/`26.5.1`/
+`9.0.1`, installed fresh in this sandbox rather than trusted from
+whatever was already present); `validate_migrations.py --strict` passed
+(597 revisions, single head `1d65720bce34`); `check_route_permissions.py
+--strict` passed (270 routes, 0 errors/warnings); `generate_schema_docs.py
+--check` up to date; scoped backend tests 540 passed (first run failed on
+a local DB one migration behind — `alembic upgrade head` applied it, then
+clean); full backend unit suite 14907 passed, 3 skipped (pre-existing,
+`nginx` not installed); frontend `npm run typecheck` and `npm run lint`
+both clean; scoped frontend suite (`DocumentsPage`, `LegalDocumentsPage`,
+`legalDocumentsStore`, `FolderManageDialog`) 66 passed.
+
+Findings doc: [`DOC-10-documents-legal.md`](./DOC-10-documents-legal.md)'s
+**Pass 9** section. No `KNOWN_LIMITATIONS.md` change needed — the two
+decisions this pass reviewed were already recorded there by the owner-direct
+work itself, with dates that match. Rotation row 10 → ✅ (pending PR merge).
+Next: Feature 11 (Inventory).
 
 ### 2026-10-15 — Feature 09 (Medical screening, pass 9) — 0 code fixes, 2 doc-mirror fixes, 3 re-confirmed findings flagged, 0 new security findings
 
