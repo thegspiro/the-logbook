@@ -67,6 +67,9 @@ from app.schemas.inventory import (
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
+    ItemBulkRetireFailure,
+    ItemBulkRetireRequest,
+    ItemBulkRetireResult,
     ItemRetireRequest,
     ItemsListResponse,
 )
@@ -1461,6 +1464,81 @@ async def retire_medical_item(
         username=current_user.username,
     )
     return {"message": "Item retired successfully"}
+
+
+@router.post("/items/bulk-retire", response_model=ItemBulkRetireResult)
+async def bulk_retire_medical_items(
+    data: ItemBulkRetireRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Retire several medical supply items at once
+
+    Each item is retired on its own, exactly as the single retire route does
+    it, so one that cannot go — checked out, assigned, or not a medical
+    supply — is reported and the rest still are. This is the opposite of a
+    received delivery, which is all or nothing: there a partial write leaves
+    stock nobody can reconcile, while here every item retired is retired
+    correctly, and the response names the ones that were not.
+
+    An id that is not a medical supply in the caller's department is
+    reported as not found, the same answer the single route gives.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    # Order kept, duplicates dropped: retiring the same row twice would
+    # report a spurious failure for the second attempt.
+    item_ids = list(dict.fromkeys(str(item_id) for item_id in data.item_ids))
+    in_domain = await service.items_in_domain(item_ids, org_id, MEDICAL_ITEM_TYPES)
+
+    retired: List[str] = []
+    failed: List[ItemBulkRetireFailure] = []
+    for item_id in item_ids:
+        if item_id not in in_domain:
+            failed.append(ItemBulkRetireFailure(item_id=item_id, error=_NOT_FOUND))
+            continue
+        # required_item_types repeats the domain check under the item's lock,
+        # as on the single route.
+        _, error = await service.retire_item(
+            item_id=UUID(item_id),
+            organization_id=current_user.organization_id,
+            notes=data.notes,
+            required_item_types=MEDICAL_ITEM_TYPES,
+        )
+        if error:
+            failed.append(
+                ItemBulkRetireFailure(
+                    item_id=item_id,
+                    error=(
+                        _NOT_FOUND
+                        if error == "Item not found"
+                        else sanitize_error_message(error)
+                    ),
+                )
+            )
+        else:
+            retired.append(item_id)
+
+    if retired:
+        await log_audit_event(
+            db=db,
+            event_type="medical_items_bulk_retired",
+            event_category="inventory",
+            severity="warning",
+            event_data={
+                "item_ids": retired,
+                "failed": len(failed),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return ItemBulkRetireResult(retired=retired, failed=failed)
 
 
 # ============================================

@@ -8,6 +8,7 @@ const mockGetItems = vi.fn();
 const mockGetCategories = vi.fn();
 const mockGetExpiringLots = vi.fn();
 const mockRetireItem = vi.fn();
+const mockBulkRetireItems = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
@@ -17,6 +18,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
     getExpiringLots: (...args: unknown[]) => mockGetExpiringLots(...args) as unknown,
     retireItem: (...args: unknown[]) => mockRetireItem(...args) as unknown,
+    bulkRetireItems: (...args: unknown[]) => mockBulkRetireItems(...args) as unknown,
   },
 }));
 
@@ -106,15 +108,22 @@ describe('MedicalSuppliesPage', () => {
     // but leaves implementations and queued *Once values in place, so an
     // unconsumed rejection from a failure-path test would be handed to
     // whichever test called the mock next (CLAUDE.md pitfall #28).
-    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots, mockRetireItem].forEach(
-      (mock) => mock.mockReset()
-    );
+    [
+      mockCheckPermission,
+      mockGetSummary,
+      mockGetItems,
+      mockGetCategories,
+      mockGetExpiringLots,
+      mockRetireItem,
+      mockBulkRetireItems,
+    ].forEach((mock) => mock.mockReset());
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
     mockGetCategories.mockResolvedValue([]);
     mockGetExpiringLots.mockResolvedValue([expiringLot()]);
     mockRetireItem.mockResolvedValue(undefined);
+    mockBulkRetireItems.mockResolvedValue({ retired: [], failed: [] });
   });
 
   /**
@@ -380,6 +389,108 @@ describe('MedicalSuppliesPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
 
     expect(await screen.findByRole('button', { name: 'Retire 4x4 Gauze' })).toBeInTheDocument();
+  });
+
+  describe('sorting and bulk retire', () => {
+    const twoItems = {
+      items: [
+        { id: 'item-1', name: '4x4 Gauze', quantity: 5 },
+        { id: 'item-2', name: 'Tourniquet', quantity: 3 },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+      mockGetItems.mockResolvedValue(twoItems);
+    });
+
+    const openStock = async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByText('Tourniquet');
+    };
+
+    const lastItemsQuery = (): Record<string, unknown> => {
+      const calls = mockGetItems.mock.calls as unknown[][];
+      return (calls[calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+    };
+
+    it('sorts on the server by the clicked column, ascending then descending', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('button', { name: /Category/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'category', sort_order: 'asc', skip: 0 }));
+
+      await userEvent.click(screen.getByRole('button', { name: /Category/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'category', sort_order: 'desc' }));
+    });
+
+    it('sorts by on-hand stock and by name', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('button', { name: /On hand/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'on_hand', sort_order: 'asc' }));
+
+      await userEvent.click(screen.getByRole('button', { name: /^Item/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'name', sort_order: 'asc' }));
+    });
+
+    it('retires the ticked supplies in one request after confirmation', async () => {
+      mockBulkRetireItems.mockResolvedValue({ retired: ['item-1', 'item-2'], failed: [] });
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select 4x4 Gauze' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select Tourniquet' }));
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Retire 2' }));
+
+      await waitFor(() => expect(mockBulkRetireItems).toHaveBeenCalledWith(['item-1', 'item-2']));
+    });
+
+    it('selects every supply on the page from the header checkbox', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /Select every supply on this page/i }));
+
+      expect(screen.getByRole('checkbox', { name: 'Select 4x4 Gauze' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
+    });
+
+    it('does nothing when the confirmation is declined', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select Tourniquet' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: /cancel|keep/i }));
+
+      expect(mockBulkRetireItems).not.toHaveBeenCalled();
+    });
+
+    it('keeps the ones that could not be retired ticked', async () => {
+      mockBulkRetireItems.mockResolvedValue({
+        retired: ['item-1'],
+        failed: [{ item_id: 'item-2', error: 'Cannot retire: item is currently assigned. Unassign it first.' }],
+      });
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /Select every supply on this page/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Retire 2' }));
+
+      expect(await screen.findByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
+    });
+
+    it('offers no selection to a member who can only view', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      await openStock();
+
+      expect(screen.queryByRole('checkbox', { name: 'Select Tourniquet' })).not.toBeInTheDocument();
+    });
   });
 
   it('retires a supply through the medical-domain route after confirmation', async () => {
