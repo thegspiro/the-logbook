@@ -1281,8 +1281,6 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   reordering is a business-hours decision made from an item table a text
   cannot hold.
 
-<a id="what-the-alert-emails-say-now-2026-10-05"></a>
-
 ### Other inventory alert emails
 
 | Email                                                      | What it shows                                                                                                                                       |
@@ -1296,8 +1294,6 @@ _[A test send, at phone width (390px), of the Supplies to Replace email from the
 -->
 
 ---
-
-<a id="dated-stock-lots-and-receiving-2026-08-10"></a>
 
 ## Dated Stock Lots and Receiving
 
@@ -2762,8 +2758,6 @@ cases surprise people:
   incomplete."
 
 ---
-
-<a id="equipment-checklists-moved-here-2026-08-31"></a>
 
 ## Equipment Checklists
 
