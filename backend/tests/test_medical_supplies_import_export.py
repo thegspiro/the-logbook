@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from app.api.v1.endpoints import medical_supplies as ms
 from app.models.inventory import (
@@ -30,7 +31,7 @@ from app.models.inventory import (
     ItemType,
     TrackingType,
 )
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 
 ORG = "org-1"
@@ -85,8 +86,13 @@ def _service():
         side_effect=lambda cid, org, types: str(cid) == MEDICAL_CAT
     )
     svc.create_item = AsyncMock(
-        side_effect=lambda **kw: (SimpleNamespace(id="i-new"), None)
+        side_effect=lambda **kw: (
+            SimpleNamespace(id="i-new", name=kw["item_data"]["name"]),
+            None,
+        )
     )
+    svc.pool_item_ids_by_name = AsyncMock(return_value={"gauze pads 4x4": "i-old"})
+    svc.add_lot = AsyncMock(side_effect=lambda **kw: SimpleNamespace(id="lot-1"))
     svc.create_category = AsyncMock(
         side_effect=lambda **kw: (
             SimpleNamespace(id="c-new", name=kw["category_data"]["name"]),
@@ -265,6 +271,129 @@ class TestMedicalImport:
         assert err.value.status_code == 400
 
 
+LOT_HEADER = ["Name", "Category", "Quantity", "Lot Number", "Expiration Date"]
+
+
+@pytest.mark.unit
+class TestMedicalLotImport:
+    async def test_a_new_supply_gets_its_first_lot(self, svc):
+        result = await _import(
+            _csv(LOT_HEADER, ["Tourniquet", "Airway", "6", "TQ-1", "2029-05-31"])
+        )
+
+        assert result["imported"] == 1
+        assert result["lots_added"] == 1
+        stored = svc.create_item.await_args.kwargs["item_data"]
+        assert stored["tracking_type"] == "pool"
+        # The count lives in the lot. Left in the column, add_lot would carry
+        # it forward into a second, undated lot and double the stock.
+        assert stored["quantity"] == 0
+        lot = svc.add_lot.await_args.kwargs
+        assert lot["item_id"] == "i-new"
+        assert lot["required_item_types"] == MEDICAL_ITEM_TYPES
+        assert lot["data"] == {
+            "quantity": 6,
+            "lot_number": "TQ-1",
+            "expiration_date": date(2029, 5, 31),
+        }
+
+    async def test_a_name_on_file_adds_a_lot_and_changes_nothing_else(self, svc):
+        """Matched through normalize_name, and no category is needed."""
+        result = await _import(
+            _csv(LOT_HEADER, ["Gauze Pads, 4x4", "", "40", "GZ-9", "2028-01-31"])
+        )
+
+        assert result == {
+            "imported": 0,
+            "lots_added": 1,
+            "failed": 0,
+            "total_rows": 1,
+            "categories_created": [],
+            "errors": [],
+            "warnings": [],
+        }
+        svc.create_item.assert_not_awaited()
+        assert svc.add_lot.await_args.kwargs["item_id"] == "i-old"
+        assert svc.add_lot.await_args.kwargs["data"]["quantity"] == 40
+
+    async def test_naming_a_new_supply_twice_records_two_lots_on_one(self, svc):
+        result = await _import(
+            _csv(
+                LOT_HEADER,
+                ["Trauma Dressing", "Airway", "6", "TD-1", "2028-01-31"],
+                ["Trauma Dressing", "Airway", "4", "TD-2", "2029-01-31"],
+            )
+        )
+
+        assert result["imported"] == 1
+        assert result["lots_added"] == 2
+        assert svc.create_item.await_count == 1
+        assert [c.kwargs["item_id"] for c in svc.add_lot.await_args_list] == [
+            "i-new",
+            "i-new",
+        ]
+
+    async def test_a_received_date_alone_is_lot_data(self, svc):
+        await _import(
+            _csv(
+                ["Name", "Category", "Quantity", "Received Date"],
+                ["Gauze Pads 4x4", "Airway", "10", "2026-10-01"],
+            )
+        )
+
+        assert svc.add_lot.await_args.kwargs["data"] == {
+            "quantity": 10,
+            "received_date": date(2026, 10, 1),
+        }
+
+    async def test_a_non_iso_date_fails_the_row(self, svc):
+        """03/04/2027 is a different day in different locales."""
+        result = await _import(
+            _csv(LOT_HEADER, ["Tourniquet", "Airway", "6", "TQ-1", "03/04/2027"])
+        )
+
+        assert result["failed"] == 1
+        assert "YYYY-MM-DD" in result["errors"][0]["error"]
+        svc.create_item.assert_not_awaited()
+        svc.add_lot.assert_not_awaited()
+
+    async def test_a_lot_row_needs_a_quantity(self, svc):
+        result = await _import(
+            _csv(LOT_HEADER, ["Gauze Pads 4x4", "Airway", "", "GZ-1", "2028-01-31"])
+        )
+
+        assert result["failed"] == 1
+        assert "Quantity of 1 or more" in result["errors"][0]["error"]
+        svc.add_lot.assert_not_awaited()
+
+    async def test_an_individual_row_with_a_lot_is_refused(self, svc):
+        result = await _import(
+            _csv(
+                LOT_HEADER + ["Tracking Type"],
+                ["Monitor", "Airway", "1", "M-1", "2028-01-31", "individual"],
+            )
+        )
+
+        assert result["failed"] == 1
+        assert "pool-tracked" in result["errors"][0]["error"]
+        svc.create_item.assert_not_awaited()
+
+    async def test_a_lot_that_cannot_be_added_is_reported(self, svc):
+        svc.add_lot = AsyncMock(return_value=None)
+
+        result = await _import(
+            _csv(LOT_HEADER, ["Gauze Pads 4x4", "", "5", "GZ-1", "2028-01-31"])
+        )
+
+        assert result["lots_added"] == 0
+        assert result["failed"] == 1
+
+    async def test_lots_added_is_audited(self, svc):
+        await _import(_csv(LOT_HEADER, ["Gauze Pads 4x4", "", "5", "GZ-1", ""]))
+
+        assert svc.audit.await_args.kwargs["event_data"]["lots_added"] == 1
+
+
 @pytest.mark.unit
 class TestMedicalExports:
     async def test_the_items_export_is_pinned_to_the_medical_domain(self, svc):
@@ -381,13 +510,19 @@ class TestMedicalExports:
         assert "Nitrile Gloves (Box)" in names
         assert "Motorola APX 8000" not in names
         assert all(row[1] for row in rows[1:]), "every sample row names a category"
+        lots = [
+            dict(zip(rows[0], row))
+            for row in rows[1:]
+            if row[0] == "Gauze Pads, 4x4 Sterile"
+        ]
+        # Named twice: the second row shows how to add another lot.
+        assert [lot["Lot Number"] for lot in lots] == ["GZ-24117", "GZ-25002"]
 
     def test_an_export_is_importable_column_for_column(self):
         """Every exported column but the two derived ones is read on import."""
-        assert set(ms._MEDICAL_TEMPLATE_HEADER) == set(ms._MEDICAL_EXPORT_COLUMNS) - {
-            "Ready Lot Stock",
-            "Barcode",
-        }
+        assert set(ms._MEDICAL_TEMPLATE_HEADER) == (
+            set(ms._MEDICAL_EXPORT_COLUMNS) - {"Ready Lot Stock", "Barcode"}
+        ) | set(ms._LOT_IMPORT_COLUMNS)
 
 
 @pytest.mark.integration
@@ -459,3 +594,74 @@ class TestLotExportQuery:
         assert [row[0].id for row in rows] == [early.id, late.id, undated.id]
         assert {row[1] for row in rows} == {"Gauze"}
         assert {row[2] for row in rows} == {cats[ItemType.MEDICAL].name}
+
+    async def test_pool_names_are_medical_pool_rows_only(self, db_session):
+        org, cats = await self._setup(db_session)
+        gauze = await self._item(
+            db_session, org, cats[ItemType.MEDICAL], "Gauze Pads, 4x4"
+        )
+        await self._item(
+            db_session, org, cats[ItemType.MEDICAL], "Retired Gauze", active=False
+        )
+        await self._item(db_session, org, cats[ItemType.EQUIPMENT], "Rope")
+        monitor = await self._item(db_session, org, cats[ItemType.MEDICAL], "Monitor")
+        monitor.tracking_type = TrackingType.INDIVIDUAL
+        await db_session.flush()
+
+        by_name = await InventoryService(db_session).pool_item_ids_by_name(
+            str(org.id), MEDICAL_ITEM_TYPES
+        )
+
+        assert by_name == {"gauze pads 4x4": gauze.id}
+
+    async def test_an_imported_lot_is_the_only_stock(self, db_session):
+        """The row's Quantity becomes one lot — never a lot plus an opening
+        balance carried forward from the column."""
+        org, cats = await self._setup(db_session)
+        existing = await self._item(
+            db_session, org, cats[ItemType.MEDICAL], "Gauze Pads, 4x4"
+        )
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            username=f"supply-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@example.test",
+            first_name="Pat",
+            last_name="Quinn",
+            password_hash="x",
+        )
+        db_session.add(user)
+        await db_session.flush()
+        text = _csv(
+            ["Name", "Category", "Quantity", "Lot Number", "Expiration Date"],
+            ["Tourniquet", cats[ItemType.MEDICAL].name, "6", "TQ-1", "2029-05-31"],
+            ["Tourniquet", "", "4", "TQ-2", "2030-05-31"],
+            ["gauze pads 4x4", "", "20", "GZ-1", "2028-01-31"],
+        )
+
+        async def read_limited(upload, _max):
+            return upload.data
+
+        with patch.object(ms, "reject_if_malicious", new=AsyncMock()), patch.object(
+            ms, "read_upload_limited", new=read_limited
+        ), patch.object(ms, "log_audit_event", new=AsyncMock()):
+            result = await ms.import_medical_items_csv(
+                file=_upload(text), db=db_session, current_user=user
+            )
+
+        assert result["imported"] == 1, result
+        assert result["lots_added"] == 3, result
+        lots = (
+            await db_session.execute(
+                select(InventoryLot, InventoryItem.name)
+                .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+                .where(InventoryLot.organization_id == org.id)
+            )
+        ).all()
+        by_item: dict[str, list[int]] = {}
+        for lot, name in lots:
+            by_item.setdefault(name, []).append(lot.quantity)
+        assert sorted(by_item["Tourniquet"]) == [4, 6]
+        # The existing item's column count (1) is carried into an opening
+        # balance, as a first delivery always does; the imported 20 is not.
+        assert sorted(by_item[existing.name]) == [1, 20]

@@ -23,6 +23,7 @@ hold ``inventory.manage`` and these routes accept it.
 import csv
 import io
 from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -78,6 +79,7 @@ from app.services.inventory_service import (
 )
 from app.services.upload_scanning import reject_if_malicious
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.name_matching import normalize_name
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
 
@@ -466,11 +468,34 @@ _MEDICAL_LOT_EXPORT_COLUMNS = [
     "Notes",
 ]
 
+# Read on import only. A row carrying any of them records a stock lot of the
+# row's Quantity; the item export has no lot columns because an item has many
+# lots, and the lot export is where they are listed.
+_LOT_IMPORT_COLUMNS = ["Lot Number", "Expiration Date", "Received Date"]
+
 _MEDICAL_TEMPLATE_HEADER = [
     column
     for column in _MEDICAL_EXPORT_COLUMNS
     if column not in ("Ready Lot Stock", "Barcode")
-]
+] + _LOT_IMPORT_COLUMNS
+
+# Sample lots for a few of the general template's medical rows, so the
+# template shows both shapes: a supply with its first lot, and the same supply
+# named again to add a second lot rather than a second supply.
+_TEMPLATE_LOT_ROWS: Dict[str, List[Dict[str, str]]] = {
+    "Gauze Pads, 4x4 Sterile": [
+        {"Lot Number": "GZ-24117", "Expiration Date": "2028-03-31"},
+        {"Lot Number": "GZ-25002", "Expiration Date": "2029-01-31", "Quantity": "25"},
+    ],
+    "Glucometer Test Strips": [
+        {
+            "Lot Number": "GS-0912",
+            "Expiration Date": "2027-06-30",
+            "Received Date": "2026-10-01",
+            "Notes": "",
+        },
+    ],
+}
 
 # Columns the shared parser does not know. Item Type is read only to refuse a
 # row that says it is something other than medical — a gear row pasted into
@@ -478,6 +503,22 @@ _MEDICAL_TEMPLATE_HEADER = [
 _REORDER_POINT_HEADERS = {"reorder point", "reorder_point", "reorderpoint"}
 _UNIT_HEADERS = {"unit of measure", "unit_of_measure", "unitofmeasure", "unit"}
 _ITEM_TYPE_HEADERS = {"item type", "item_type", "itemtype", "type"}
+_LOT_HEADERS = {
+    "lot number": "lot_number",
+    "lot_number": "lot_number",
+    "lotnumber": "lot_number",
+    "lot": "lot_number",
+    "lot #": "lot_number",
+    "expiration date": "expiration_date",
+    "expiration_date": "expiration_date",
+    "expirationdate": "expiration_date",
+    "expiration": "expiration_date",
+    "expires": "expiration_date",
+    "received date": "received_date",
+    "received_date": "received_date",
+    "receiveddate": "received_date",
+    "received": "received_date",
+}
 
 
 def _enum_text(value: Any) -> str:
@@ -549,6 +590,41 @@ def _parse_medical_extras(row: Dict[str, Any]) -> tuple[Dict[str, Any], Optional
                 return {}, "Unit of measure must be 50 characters or fewer"
             fields["unit_of_measure"] = value
     return fields, None
+
+
+def _parse_lot_columns(
+    row: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Read a row's lot columns.
+
+    Returns ``(lot_fields, error)``. ``lot_fields`` is ``None`` when the row
+    carries no lot data at all, which makes it a plain item row.
+    """
+    fields: Dict[str, Any] = {}
+    for raw_col, raw_value in row.items():
+        if raw_col is None or not raw_value or not str(raw_value).strip():
+            continue
+        field = _LOT_HEADERS.get(raw_col.strip().lower())
+        if field is None:
+            continue
+        value = str(raw_value).strip()
+        if field == "lot_number":
+            if len(value) > 100:
+                return None, "Lot number must be 100 characters or fewer"
+            fields[field] = value
+            continue
+        # ISO dates only. A spreadsheet's 03/04/2027 is the 3rd of April in
+        # one locale and the 4th of March in another, and guessing an
+        # expiration date wrong puts expired stock on a rig.
+        try:
+            fields[field] = date.fromisoformat(value)
+        except ValueError:
+            label = "expiration" if field == "expiration_date" else "received"
+            return None, (
+                f"Invalid {label} date: '{value}'. Use YYYY-MM-DD, "
+                "for example 2027-03-31"
+            )
+    return (fields or None), None
 
 
 @router.get("/items/export")
@@ -708,7 +784,7 @@ async def download_medical_import_template(
     Download a sample CSV for the medical supply import
 
     The sample rows are the general template's medical ones, so the two
-    templates cannot drift apart.
+    templates cannot drift apart, with sample lots added to a few of them.
 
     **Authentication required**
     **Requires permission: inventory.manage_medical or inventory.manage**
@@ -719,7 +795,11 @@ async def download_medical_import_template(
     for row in _IMPORT_TEMPLATE_ROWS:
         if row.get("Item Type") != "medical":
             continue
-        writer.writerow([row.get(column, "") for column in _MEDICAL_TEMPLATE_HEADER])
+        for lot in _TEMPLATE_LOT_ROWS.get(row["Name"], [{}]):
+            sample = {**row, **lot}
+            writer.writerow(
+                [sample.get(column, "") for column in _MEDICAL_TEMPLATE_HEADER]
+            )
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -742,7 +822,7 @@ async def import_medical_items_csv(
     """
     Import medical supply items from a CSV file
 
-    Every row creates a new item; nothing already on file is changed. The
+    A row creates a new item; nothing already on file is changed. The
     'Name' and 'Category' columns are required. A category is matched by name
     (case-insensitive) against the medical supply categories; a name that
     matches none is created as a new medical supply category, and the
@@ -750,6 +830,14 @@ async def import_medical_items_csv(
     uniform category is refused for that row rather than duplicated, since
     two categories of one name on different pages is a mistake nobody can
     see from either page.
+
+    A row that fills any of 'Lot Number', 'Expiration Date' or 'Received
+    Date' (YYYY-MM-DD) also records a stock lot of the row's Quantity. When
+    its Name matches an active pool-tracked medical supply — one on file, or
+    one an earlier row of the same file created — the lot is added to that
+    supply and the row's other columns are ignored, so naming a supply twice
+    records two lots rather than two supplies. Otherwise the supply is created
+    and the lot becomes its first stock. Lot rows are pool-tracked.
 
     **Authentication required**
     **Requires permission: inventory.manage_medical or inventory.manage**
@@ -832,7 +920,12 @@ async def import_medical_items_csv(
         )
     }
 
+    # Updated as rows create supplies, so a later row naming one adds a lot to
+    # it instead of creating a duplicate.
+    pool_by_name = await service.pool_item_ids_by_name(org_id, MEDICAL_ITEM_TYPES)
+
     imported = 0
+    lots_added = 0
     failed = 0
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
@@ -859,6 +952,59 @@ async def import_medical_items_csv(
             failed += 1
             continue
         item_data.update(extras)
+
+        lot_fields, lot_error = _parse_lot_columns(row)
+        if lot_error:
+            errors.append({"row": row_num, "error": lot_error})
+            failed += 1
+            continue
+        if lot_fields is not None:
+            if item_data.get("tracking_type") == "individual":
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            "Lots are recorded against pool-tracked supplies. "
+                            "Set Tracking Type to pool or clear the lot columns."
+                        ),
+                    }
+                )
+                failed += 1
+                continue
+            lot_quantity = item_data.get("quantity")
+            if not isinstance(lot_quantity, int) or lot_quantity < 1:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": "A row with lot data needs a Quantity of 1 or more",
+                    }
+                )
+                failed += 1
+                continue
+            item_data["tracking_type"] = "pool"
+            lot_data = InventoryLotCreate(
+                quantity=lot_quantity, **lot_fields
+            ).model_dump(exclude_unset=True)
+
+            existing_id = pool_by_name.get(normalize_name(item_data["name"]))
+            if existing_id is not None:
+                # Only the lot is written: the row names a supply already on
+                # file, and the import never edits one.
+                lot = await service.add_lot(
+                    item_id=existing_id,
+                    organization_id=org_id,
+                    data=lot_data,
+                    created_by=str(current_user.id),
+                    required_item_types=MEDICAL_ITEM_TYPES,
+                )
+                if lot is None:
+                    errors.append(
+                        {"row": row_num, "error": "The supply could not be found"}
+                    )
+                    failed += 1
+                else:
+                    lots_added += 1
+                continue
 
         category_key = (category_name_raw or "").strip().lower()
         if not category_key:
@@ -946,6 +1092,13 @@ async def import_medical_items_csv(
             else:
                 unmatched_key = vendor_raw.lower()
 
+        if lot_fields is not None:
+            # The row's count goes into the lot, not the column. add_lot
+            # carries a positive column count forward into an undated
+            # opening-balance lot, so leaving it there would count the same
+            # boxes twice.
+            item_data["quantity"] = 0
+
         new_item, error = await service.create_item(
             organization_id=org_id,
             item_data=item_data,
@@ -960,6 +1113,25 @@ async def import_medical_items_csv(
         imported += 1
         if unmatched_key:
             unmatched_vendors.setdefault(unmatched_key, vendor_raw)
+
+        if lot_fields is not None:
+            pool_by_name.setdefault(normalize_name(new_item.name), str(new_item.id))
+            lot = await service.add_lot(
+                item_id=str(new_item.id),
+                organization_id=org_id,
+                data=lot_data,
+                created_by=str(current_user.id),
+                required_item_types=MEDICAL_ITEM_TYPES,
+            )
+            if lot is None:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": "The supply was created but its lot was not",
+                    }
+                )
+            else:
+                lots_added += 1
 
     if created_categories:
         warnings.insert(
@@ -984,7 +1156,7 @@ async def import_medical_items_csv(
             f"were left as free text: {listed}."
         )
 
-    if imported > 0 or created_categories:
+    if imported > 0 or lots_added > 0 or created_categories:
         await log_audit_event(
             db=db,
             event_type="medical_items_imported",
@@ -992,6 +1164,7 @@ async def import_medical_items_csv(
             severity="info",
             event_data={
                 "imported": imported,
+                "lots_added": lots_added,
                 "failed": failed,
                 "total_rows": len(rows),
                 "categories_created": created_categories,
@@ -1002,6 +1175,7 @@ async def import_medical_items_csv(
 
     return {
         "imported": imported,
+        "lots_added": lots_added,
         "failed": failed,
         "total_rows": len(rows),
         "categories_created": created_categories,

@@ -4,7 +4,8 @@
  * Export comes in two files because an officer reaches for them for different
  * jobs: the supply list (one row per item, with reorder points and ready-lot
  * totals) for ordering, and the lot list (one row per dated lot) for an expiry
- * audit. Import creates new supplies only; nothing on file is overwritten.
+ * audit. Import creates supplies and records stock lots; it never edits a
+ * supply already on file, only adds lots to one.
  *
  * Every route behind this is pinned to the medical domain server-side, so a
  * row the import accepts always lands on this page — an unknown category is
@@ -40,6 +41,11 @@ const saveBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+const importSummary = (result: MedicalImportResult) =>
+  `${plural(result.imported, 'supply', 'supplies')} created, ${plural(result.lots_added, 'lot', 'lots')} added`;
+
 const secondaryButton =
   'mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50';
 
@@ -53,7 +59,7 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
   const filtered = Boolean(filters.search || filters.category_id);
 
   const handleClose = () => {
-    if (result && (result.imported > 0 || result.categories_created.length > 0)) onImported();
+    if (result && (result.imported > 0 || result.lots_added > 0 || result.categories_created.length > 0)) onImported();
     onClose();
   };
 
@@ -91,8 +97,8 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
     try {
       const imported = await medicalSuppliesService.importItemsCsv(file);
       setResult(imported);
-      if (imported.imported > 0) {
-        toast.success(`Imported ${imported.imported} suppl${imported.imported === 1 ? 'y' : 'ies'}`);
+      if (imported.imported > 0 || imported.lots_added > 0) {
+        toast.success(importSummary(imported));
       }
       if (imported.failed > 0) {
         toast.error(`${imported.failed} row${imported.failed === 1 ? '' : 's'} could not be imported`);
@@ -173,9 +179,10 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
             Import
           </h3>
           <p className="text-theme-text-muted text-sm">
-            Each row adds a new supply; nothing already on file is changed. Name and Category are required. A category
-            that does not exist yet is created as a medical supply category. Add lot numbers and expiration dates
-            afterwards with Receive delivery.
+            Each row adds a new supply. Name and Category are required, and a category that does not exist yet is
+            created as a medical supply category. To record stock with a lot, fill Lot Number, Expiration Date or
+            Received Date (YYYY-MM-DD): the row&apos;s Quantity becomes that lot. A row with lot columns whose Name
+            matches a supply already on file adds the lot to it instead, and changes nothing else about it.
           </p>
           <button
             type="button"
@@ -221,7 +228,7 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
             <div className="border-theme-surface-border space-y-2 rounded-md border p-3 text-sm" role="status">
               <p className="text-theme-text-primary flex items-center gap-2 font-medium">
                 <CheckCircle className="h-4 w-4" aria-hidden="true" />
-                {result.imported} of {result.total_rows} row{result.total_rows === 1 ? '' : 's'} imported
+                {result.total_rows} row{result.total_rows === 1 ? '' : 's'}: {importSummary(result)}
                 {result.failed > 0 ? `, ${result.failed} failed` : ''}
               </p>
               {result.warnings.length > 0 && (

@@ -39,6 +39,7 @@ const csvFile = (name = 'supplies.csv') => new File(['Name,Category\nGauze,Airwa
 
 const importResult = (overrides: Record<string, unknown> = {}) => ({
   imported: 1,
+  lots_added: 0,
   failed: 0,
   total_rows: 1,
   errors: [],
@@ -134,7 +135,7 @@ describe('MedicalImportExportModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
 
     await waitFor(() => expect(mockImport).toHaveBeenCalledWith(file));
-    expect(await screen.findByText(/1 of 2 rows imported, 1 failed/i)).toBeInTheDocument();
+    expect(await screen.findByText(/2 rows: 1 supply created, 0 lots added, 1 failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Created 1 new medical supply category/)).toBeInTheDocument();
     expect(screen.getByText('Row 3: Category is required')).toBeInTheDocument();
     // Cleared so a second tap cannot import (and duplicate) the same rows.
@@ -146,11 +147,24 @@ describe('MedicalImportExportModal', () => {
 
     await userEvent.upload(screen.getByLabelText(/csv file to import/i), csvFile());
     await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
-    await screen.findByText(/1 of 1 row imported/i);
+    await screen.findByText(/1 row: 1 supply created/i);
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(onImported).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports lots added to supplies already on file, and refreshes for them', async () => {
+    mockImport.mockResolvedValue(importResult({ imported: 0, lots_added: 2, total_rows: 2 }));
+    renderModal();
+
+    await userEvent.upload(screen.getByLabelText(/csv file to import/i), csvFile());
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
+
+    expect(await screen.findByText(/2 rows: 0 supplies created, 2 lots added/i)).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith('0 supplies created, 2 lots added');
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onImported).toHaveBeenCalledTimes(1);
   });
 
   it('closes without a refresh when nothing was imported', async () => {

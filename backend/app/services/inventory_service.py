@@ -9200,6 +9200,42 @@ class InventoryService:
         )
         return [(row[0], row[1]) for row in result.all()]
 
+    async def pool_item_ids_by_name(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Dict[str, str]:
+        """Active pool items in a domain, keyed by ``normalize_name``.
+
+        One query for a whole import, rather than ``_item_id_by_name`` per row
+        — that scans the org's entire catalog each call, and an import naming
+        two hundred lots would scan it two hundred times.
+
+        Pool rows only, for the reason ``create_item_if_absent`` gives: a pool
+        row is the definition of a supply and owns its lots, while two
+        individual rows sharing a name are two physical devices. Oldest first
+        wins a name collision, so an older record's lots are not split onto a
+        later duplicate.
+        """
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name)
+            .where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryItem.tracking_type == TrackingType.POOL,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(InventoryItem.created_at.asc(), InventoryItem.id.asc())
+        )
+        by_name: Dict[str, str] = {}
+        for item_id, name in result.all():
+            key = normalize_name(name or "")
+            if key:
+                by_name.setdefault(key, str(item_id))
+        return by_name
+
     async def get_lots_for_export(
         self,
         organization_id: str,

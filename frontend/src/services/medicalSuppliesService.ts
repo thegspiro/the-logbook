@@ -114,8 +114,13 @@ export interface MedicalItemFilters {
   limit?: number | undefined;
 }
 
-/** The general import's result, plus the medical categories the import created. */
+/**
+ * The general import's result, plus what only this import does. `imported`
+ * counts supplies created; `lots_added` counts stock lots recorded, whether on
+ * a supply the file created or on one already on file.
+ */
 export interface MedicalImportResult extends InventoryImportResult {
+  lots_added: number;
   categories_created: string[];
 }
 
@@ -253,7 +258,11 @@ export const medicalSuppliesService = {
     return response.data;
   },
 
-  /** Every row creates a new supply; an unknown category is created as a medical one. */
+  /**
+   * A row creates a new supply, or — when it carries lot columns and names a
+   * supply already on file — adds a stock lot to that supply. An unknown
+   * category is created as a medical one.
+   */
   async importItemsCsv(file: File): Promise<MedicalImportResult> {
     const formData = new FormData();
     formData.append('file', file);
