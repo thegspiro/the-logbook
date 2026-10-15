@@ -67,6 +67,37 @@ describe('MedicalItemFormModal', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  // The shared create schema defaults a missing quantity to 1, so omitting
+  // a blank box put one phantom unit on the shelf of a supply nobody had
+  // received.
+  const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.type(screen.getByLabelText(/^Name/), 'Oral airway kit');
+    await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+  };
+
+  it('sends a blank On hand as 0 on create', async () => {
+    renderWithRouter(
+      <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+    const user = userEvent.setup();
+    await fillRequired(user);
+    await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+    expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ quantity: 0 }));
+  });
+
+  it('sends a typed On hand as that number on create', async () => {
+    renderWithRouter(
+      <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+    const user = userEvent.setup();
+    await fillRequired(user);
+    await user.type(screen.getByLabelText(/^On hand/), '12');
+    await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+    expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ quantity: 12 }));
+  });
+
   describe('also called', () => {
     const baseItem = {
       id: 'item-1',
