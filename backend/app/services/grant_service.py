@@ -190,6 +190,9 @@ class GrantService:
             return None
         apply_updates(opportunity, data, skip={"organization_id", "id"})
         await self.db.flush()
+        # W68: onupdate expires updated_at at the flush, and the response model
+        # reading it lazily raised MissingGreenlet — a 500 after the write.
+        await self.db.refresh(opportunity)
         return opportunity
 
     async def delete_opportunity(
@@ -746,6 +749,7 @@ class GrantService:
             return None
         apply_updates(item, data, skip={"application_id", "id"})
         await self.db.flush()
+        await self.db.refresh(item)  # see update_opportunity (W68)
         return item
 
     async def delete_budget_item(self, item_id: str, organization_id: str) -> bool:
@@ -1143,6 +1147,7 @@ class GrantService:
             self.db.add(note)
 
         await self.db.flush()
+        await self.db.refresh(task)  # see update_opportunity (W68)
         return task
 
     async def delete_compliance_task(self, task_id: str, organization_id: str) -> bool:

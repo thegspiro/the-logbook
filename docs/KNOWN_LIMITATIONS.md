@@ -5769,6 +5769,23 @@ Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
   and how long it lasts, against an order window that closes.
 - **Decision:** whether to keep the cart, and where.
 
+## Grants — Key Contacts Are Free Text, and Opportunities Cannot Be Edited (2026-10-15)
+
+Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-9 and W68-10).
+
+- **Key contacts (W68-9):** `grant_applications.key_contacts` is a JSON
+  column typed as a list of contact objects, and the only screen edits it as
+  free text. Since W68 the API accepts either, so the text saves, but nothing
+  can list a grant's contacts by name, role or phone.
+  **Decision:** keep free text, or give contacts a structured editor (and
+  decide what to do with text already saved).
+- **Opportunities (W68-10):** `PUT` and `DELETE /grants/{opportunity_id}`
+  exist, but no control on the opportunities page reaches either, so a
+  mistyped deadline or a program that has closed stays as entered; the four
+  Federal Programs cards are fixed text with no way to start an application
+  from them. **Decision:** whether opportunities get edit and retire controls,
+  and whether the federal programs become real, seeded opportunities.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

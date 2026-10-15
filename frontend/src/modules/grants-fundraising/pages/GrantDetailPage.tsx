@@ -48,7 +48,10 @@ import {
   GrantPriority as GrantPriorityEnum,
 } from '../types';
 import { useGrantsStore } from '../store/grantsStore';
+import { BUDGET_ITEM_CATEGORY_LABELS, budgetItemCategoryLabel } from '../utils/labels';
+import { useMemberNames } from '../hooks/useMemberNames';
 import { formatDate } from '../../../utils/dateFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -206,6 +209,7 @@ export const GrantDetailPage: React.FC = () => {
   const { busy: expenditureBusy, run: runExpenditure } = useSubmitGuard();
   const { busy: complianceBusy, run: runCompliance } = useSubmitGuard();
   const tz = useTimezone();
+  const { nameOf } = useMemberNames();
   // Every mutation this page can trigger (edit, budget/expenditure/task
   // creation, task status changes, notes) requires fundraising.manage on the
   // backend — the route itself is gated only at fundraising.view so a viewer
@@ -276,9 +280,14 @@ export const GrantDetailPage: React.FC = () => {
   const complianceTasks = useMemo(() => application?.complianceTasks ?? [], [application?.complianceTasks]);
   const grantNotes = useMemo(() => application?.grantNotes ?? [], [application?.grantNotes]);
 
-  const budgetTotal = useMemo(() => budgetItems.reduce((sum, item) => sum + item.amountBudgeted, 0), [budgetItems]);
+  // The API serializes these Decimals as strings ("500.00"), whatever the type
+  // says, so a bare `+` concatenated them and the totals read "-" (W68).
+  const budgetTotal = useMemo(
+    () => budgetItems.reduce((sum, item) => sum + Number(item.amountBudgeted), 0),
+    [budgetItems]
+  );
 
-  const spentTotal = useMemo(() => budgetItems.reduce((sum, item) => sum + item.amountSpent, 0), [budgetItems]);
+  const spentTotal = useMemo(() => budgetItems.reduce((sum, item) => sum + Number(item.amountSpent), 0), [budgetItems]);
 
   const remainingTotal = budgetTotal - spentTotal;
 
@@ -322,8 +331,8 @@ export const GrantDetailPage: React.FC = () => {
         toast.success('Budget item added');
         resetBudgetForm();
         setShowBudgetModal(false);
-      } catch {
-        toast.error('Failed to add budget item');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add budget item'));
       }
     });
 
@@ -346,8 +355,8 @@ export const GrantDetailPage: React.FC = () => {
         }
         resetExpenditureForm();
         setShowExpenditureModal(false);
-      } catch {
-        toast.error('Failed to record expenditure');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to record expenditure'));
       }
     });
 
@@ -366,8 +375,8 @@ export const GrantDetailPage: React.FC = () => {
         toast.success('Compliance task added');
         resetComplianceForm();
         setShowComplianceModal(false);
-      } catch {
-        toast.error('Failed to add compliance task');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add compliance task'));
       }
     });
 
@@ -375,12 +384,13 @@ export const GrantDetailPage: React.FC = () => {
     if (!id) return;
     try {
       await updateComplianceTask(id, taskId, {
+        // The service stamps completed_date with the department's today (W68:
+        // the page sent a UTC instant, which a date field refuses).
         status: ComplianceTaskStatusEnum.COMPLETED,
-        completedDate: new Date().toISOString(),
       });
       toast.success('Task marked complete');
-    } catch {
-      toast.error('Failed to update task');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update task'));
     }
   };
 
@@ -389,8 +399,8 @@ export const GrantDetailPage: React.FC = () => {
     try {
       await updateComplianceTask(id, taskId, { status });
       toast.success('Task status updated');
-    } catch {
-      toast.error('Failed to update task status');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update task status'));
     }
   };
 
@@ -399,13 +409,14 @@ export const GrantDetailPage: React.FC = () => {
     setIsSubmittingNote(true);
     try {
       await addGrantNote(id, {
-        noteType: 'comment',
+        // 'comment' is not a note type the API accepts (W68).
+        noteType: 'general',
         content: newNoteContent.trim(),
       });
       toast.success('Note added');
       setNewNoteContent('');
-    } catch {
-      toast.error('Failed to add note');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add note'));
     } finally {
       setIsSubmittingNote(false);
     }
@@ -487,7 +498,7 @@ export const GrantDetailPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="text-theme-text-secondary hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1.5 text-sm transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Applications
@@ -515,7 +526,7 @@ export const GrantDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/grants/applications/${application.id}/edit`)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Edit className="h-4 w-4" />
                 Edit
@@ -600,7 +611,7 @@ export const GrantDetailPage: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+              className={`touch:min-h-11 flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:bg-theme-surface-secondary hover:text-theme-text-primary'
@@ -794,14 +805,16 @@ export const GrantDetailPage: React.FC = () => {
                     </thead>
                     <tbody className="divide-theme-surface-border divide-y">
                       {budgetItems.map((item) => {
-                        const remaining = item.amountBudgeted - item.amountSpent;
-                        const percent =
-                          item.amountBudgeted > 0 ? Math.min((item.amountSpent / item.amountBudgeted) * 100, 100) : 0;
-                        const isOver = item.amountSpent > item.amountBudgeted;
+                        // Strings on the wire: compared bare, "900.00" > "1000.00".
+                        const budgeted = Number(item.amountBudgeted);
+                        const spent = Number(item.amountSpent);
+                        const remaining = budgeted - spent;
+                        const percent = budgeted > 0 ? Math.min((spent / budgeted) * 100, 100) : 0;
+                        const isOver = spent > budgeted;
                         return (
                           <tr key={item.id}>
                             <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
-                              {item.category}
+                              {budgetItemCategoryLabel(item.category)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
                             <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
@@ -938,7 +951,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(exp.amount)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                              {linkedBudgetItem ? linkedBudgetItem.category : '--'}
+                              {linkedBudgetItem ? budgetItemCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
@@ -1023,7 +1036,7 @@ export const GrantDetailPage: React.FC = () => {
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
                           <span className={getDueDateClasses(task.dueDate)}>Due: {formatDate(task.dueDate, tz)}</span>
                           {task.assignedTo && (
-                            <span className="text-theme-text-secondary">Assigned: {task.assignedTo}</span>
+                            <span className="text-theme-text-secondary">Assigned: {nameOf(task.assignedTo)}</span>
                           )}
                         </div>
                       </div>
@@ -1172,15 +1185,11 @@ export const GrantDetailPage: React.FC = () => {
               className={selectClass}
             >
               <option value="">Select category...</option>
-              <option value="Personnel">Personnel</option>
-              <option value="Equipment">Equipment</option>
-              <option value="Supplies">Supplies</option>
-              <option value="Travel">Travel</option>
-              <option value="Training">Training</option>
-              <option value="Contractual">Contractual</option>
-              <option value="Construction">Construction</option>
-              <option value="Indirect Costs">Indirect Costs</option>
-              <option value="Other">Other</option>
+              {Object.entries(BUDGET_ITEM_CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -1325,7 +1334,7 @@ export const GrantDetailPage: React.FC = () => {
               <option value="">None</option>
               {budgetItems.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.category} - {item.description}
+                  {budgetItemCategoryLabel(item.category)} - {item.description}
                 </option>
               ))}
             </select>

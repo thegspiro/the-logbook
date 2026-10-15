@@ -368,6 +368,7 @@ class TestUpdateComplianceTaskHardening:
         db.execute = AsyncMock(side_effect=[_one(task)])  # assigned_to omitted
         db.add = MagicMock()
         db.flush = AsyncMock()
+        db.refresh = AsyncMock()  # the response needs the reloaded row (W68)
         out = await GrantService(db).update_compliance_task(
             "t1", {"status": "completed"}, "u1", "org-A"
         )

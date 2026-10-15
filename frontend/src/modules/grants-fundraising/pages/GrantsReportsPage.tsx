@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantReport, FundraisingReport } from '../types';
 import { COMPLIANCE_STATUS_COLORS } from '../types';
+import { budgetItemCategoryLabel } from '../utils/labels';
 
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { getTodayLocalDate } from '@/utils/dateFormatting';
@@ -181,7 +182,7 @@ const GrantsReportsPage: React.FC = () => {
   // Derived data for grant reports
   const spendingByCategory = grantReport?.spendingByCategory
     ? Object.entries(grantReport.spendingByCategory).map(([label, value]) => ({
-        label: label.charAt(0).toUpperCase() + label.slice(1),
+        label: budgetItemCategoryLabel(label),
         value,
       }))
     : [];

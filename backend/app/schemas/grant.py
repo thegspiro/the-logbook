@@ -7,7 +7,7 @@ donations, donors, pledges, and fundraising events.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import (
@@ -305,8 +305,11 @@ class GrantApplicationBase(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[Dict[str, Any]] = None
-    key_contacts: Optional[List[Dict[str, Any]]] = None
+    # W68: the application form edits both as free text, so a str is accepted
+    # beside the structured shapes; refusing it made every save with either
+    # field filled a 422. The JSON columns hold a JSON string without change.
+    budget_summary: Optional[Union[str, Dict[str, Any]]] = None
+    key_contacts: Optional[Union[str, List[Dict[str, Any]]]] = None
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
     performance_period_months: Optional[int] = Field(None, ge=0)
@@ -321,6 +324,8 @@ class GrantApplicationCreate(GrantApplicationBase):
     """Schema for creating a new grant application"""
 
     opportunity_id: Optional[UUID] = None
+    # W68: without this the form's "Assigned To" was silently dropped on create.
+    assigned_to: Optional[UUID] = None
 
 
 class GrantApplicationUpdate(BaseModel):
@@ -342,8 +347,8 @@ class GrantApplicationUpdate(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[Dict[str, Any]] = None
-    key_contacts: Optional[List[Dict[str, Any]]] = None
+    budget_summary: Optional[Union[str, Dict[str, Any]]] = None
+    key_contacts: Optional[Union[str, List[Dict[str, Any]]]] = None
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
     performance_period_months: Optional[int] = Field(None, ge=0)
@@ -436,7 +441,10 @@ class GrantBudgetItemBase(BaseModel):
 class GrantBudgetItemCreate(GrantBudgetItemBase):
     """Schema for creating a new grant budget item"""
 
-    application_id: UUID
+    # The route's path names the application and the endpoint discards this;
+    # it stays accepted for callers that send it, but is not required
+    # (W68: the detail page never sent it, so every add was a 422).
+    application_id: Optional[UUID] = None
 
 
 class GrantBudgetItemUpdate(BaseModel):
@@ -499,7 +507,10 @@ class GrantExpenditureBase(BaseModel):
 class GrantExpenditureCreate(GrantExpenditureBase):
     """Schema for creating a new grant expenditure"""
 
-    application_id: UUID
+    # The route's path names the application and the endpoint discards this;
+    # it stays accepted for callers that send it, but is not required
+    # (W68: the detail page never sent it, so every add was a 422).
+    application_id: Optional[UUID] = None
     budget_item_id: Optional[UUID] = None
 
 
@@ -568,7 +579,10 @@ class GrantComplianceTaskBase(BaseModel):
 class GrantComplianceTaskCreate(GrantComplianceTaskBase):
     """Schema for creating a new grant compliance task"""
 
-    application_id: UUID
+    # The route's path names the application and the endpoint discards this;
+    # it stays accepted for callers that send it, but is not required
+    # (W68: the detail page never sent it, so every add was a 422).
+    application_id: Optional[UUID] = None
 
 
 class GrantComplianceTaskUpdate(BaseModel):
@@ -618,7 +632,10 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
 class GrantNoteCreate(BaseModel):
     """Schema for creating a new grant note"""
 
-    application_id: UUID
+    # The route's path names the application and the endpoint discards this;
+    # it stays accepted for callers that send it, but is not required
+    # (W68: the detail page never sent it, so every add was a 422).
+    application_id: Optional[UUID] = None
     note_type: GrantNoteTypeLiteral = "general"
     content: str = Field(..., min_length=1)
     note_metadata: Optional[Dict[str, Any]] = Field(

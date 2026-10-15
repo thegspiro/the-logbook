@@ -17,6 +17,26 @@ export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
   [GrantCategory.OTHER]: 'Other',
 };
 
+/**
+ * A budget line's category, keyed by the code the API stores
+ * (`BudgetItemCategoryLiteral` in `schemas/grant.py`). W68: the add dialog
+ * sent these labels as the value, which the API refused.
+ */
+export const BUDGET_ITEM_CATEGORY_LABELS: Record<string, string> = {
+  personnel: 'Personnel',
+  equipment: 'Equipment',
+  supplies: 'Supplies',
+  travel: 'Travel',
+  training: 'Training',
+  contractual: 'Contractual',
+  construction: 'Construction',
+  indirect: 'Indirect Costs',
+  other: 'Other',
+};
+
+/** A stored category's label; an unknown code reads as itself. */
+export const budgetItemCategoryLabel = (category: string): string => BUDGET_ITEM_CATEGORY_LABELS[category] ?? category;
+
 /** A donor as the pickers and lists name them: person, then organization. */
 export const donorDisplayName = (donor: Donor): string => {
   const name = `${donor.firstName} ${donor.lastName}`.trim();

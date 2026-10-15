@@ -126,7 +126,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ✅     |
 | W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ✅     |
 | W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ✅     |
-| W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ⬜     |
+| W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ✅     |
 | W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ⬜     |
 
 ## Tier 10 — Everything else
@@ -208,7 +208,61 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
+- **W69** — the fundraising updates (`campaigns`, `donors`, `donations`,
+  `pledges`, `fundraising-events`) share the grants service's pattern; W68-3
+  found three grant update paths that 500 after the write because
+  `updated_at` was not refreshed. Check each fundraising edit saves and
+  returns.
+- **Grants, a later pass** — budget lines and expenditures have update and
+  delete endpoints but no control on the detail page, and a compliance task
+  cannot be given an assignee when it is created (W68).
+
 ## Log
+
+### W68 — Grants: an opportunity, then an application through to its report — 2026-10-15
+
+Driven as:
+
+- `treasurer` adding an opportunity, starting an application from it, and
+  working it through budget, the status lifecycle to Reporting, an
+  expenditure, a compliance task, a note, the dashboard and Reports;
+- `secretary` (view), `chief` (manage), `member` and `quartermaster` (none)
+  for access;
+- 390×844 for opportunities, the detail page, the form, the list and the
+  budget dialog.
+
+Held:
+
+- the status picker follows the lifecycle;
+- awarding creates the inventory task;
+- the overspend warning;
+- Reports' totals;
+- access, on screen and at the API.
+
+Fixed:
+
+- W68-1 (HIGH — no budget line, expenditure, compliance task or note could be
+  added: each create schema required a body `application_id` the page never
+  sent).
+- W68-2 (HIGH — budget categories sent as labels).
+- W68-3 (HIGH — Mark Complete, and budget-line and opportunity edits, 500ed
+  after the write).
+- W68-4 (HIGH — any save with Key Contacts or Budget Summary filled was a
+  422).
+- W68-5 (MED — "Assigned To" was free text for a member id: dropped on
+  create, refused on edit).
+- W68-6 (MED — no way to record the award, award date or report dates).
+- W68-7 (MED — budget totals read "-"; over-budget compared strings).
+- W68-8 (LOW — note type, silent failure toasts, a task due today read
+  Overdue, Start Application offered to view-only members, touch targets).
+
+Flagged: W68-9 (LOW — key contacts: text or structured), W68-10 (LOW —
+opportunities cannot be edited or retired from the screen).
+
+Gate: typecheck and lint are clean; 64 grants frontend tests and 761 grant
+backend tests pass.
+
+Next: W69.
 
 ### W67 — The department store — 2026-10-15
 

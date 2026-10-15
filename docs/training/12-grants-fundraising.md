@@ -158,7 +158,11 @@ schedule.
    - **Application Deadline** — when it must be submitted
    - **Project Description** — what the grant will pay for
    - **Priority** — Low, Medium, High or Critical
-   - **Assigned To** — the member managing the application
+   - **Assigned To** — the member managing the application, chosen from the
+     member list (the list needs permission to view members; without it the
+     field keeps whoever is already assigned)
+   - once decided, **Amount Awarded**, **Submitted** and **Award Date**, and
+     under **Reporting** the **Next Report Due** and **Final Report Due**
 3. Select **Create Application**. The application starts in **Researching**.
    When you edit it later, save with **Save Changes**.
 
@@ -279,11 +283,10 @@ bank. Instead:
   the amount awarded;
 - each overspend is written to the audit log.
 
-> **The amount awarded cannot be entered on the application form.** The form
-> has no field for it. Until an awarded amount is on record, the application
-> shows none, the over-award warning cannot appear, and the dashboard's **Total
-> Grant Funding** and the report's **Total Awarded** leave that grant out. The
-> budget-line warning still works.
+Record the award on the application form: **Edit**, then **Amount Awarded**
+and **Award Date**. Until an amount is on record the over-award warning cannot
+appear, and the dashboard's **Total Grant Funding** and the report's **Total
+Awarded** leave that grant out. The budget-line warning still works.
 
 ### Edge Cases
 

@@ -12,7 +12,8 @@ import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantApplication, GrantOpportunity } from '../types';
 import { ApplicationStatus, GrantPriority } from '../types';
-import { toAppError } from '@/utils/errorHandling';
+import { getErrorMessage, toAppError } from '@/utils/errorHandling';
+import { memberLabel, useMemberNames } from '../hooks/useMemberNames';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -52,9 +53,12 @@ interface FormData {
   opportunityId: string;
   applicationStatus: string;
   amountRequested: string;
+  amountAwarded: string;
   matchAmount: string;
   matchSource: string;
   applicationDeadline: string;
+  submittedDate: string;
+  awardDate: string;
   grantStartDate: string;
   grantEndDate: string;
   projectDescription: string;
@@ -64,6 +68,8 @@ interface FormData {
   federalAwardId: string;
   performancePeriodMonths: string;
   reportingFrequency: string;
+  nextReportDue: string;
+  finalReportDue: string;
   assignedTo: string;
   priority: string;
   notes: string;
@@ -75,9 +81,12 @@ const EMPTY_FORM: FormData = {
   opportunityId: '',
   applicationStatus: ApplicationStatus.RESEARCHING,
   amountRequested: '',
+  amountAwarded: '',
   matchAmount: '',
   matchSource: '',
   applicationDeadline: '',
+  submittedDate: '',
+  awardDate: '',
   grantStartDate: '',
   grantEndDate: '',
   projectDescription: '',
@@ -87,6 +96,8 @@ const EMPTY_FORM: FormData = {
   federalAwardId: '',
   performancePeriodMonths: '',
   reportingFrequency: '',
+  nextReportDue: '',
+  finalReportDue: '',
   assignedTo: '',
   priority: GrantPriority.MEDIUM,
   notes: '',
@@ -115,6 +126,9 @@ export const GrantApplicationFormPage: React.FC = () => {
     opportunityId: initialOpportunityIdRef.current,
   }));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
+  // W68: "Assigned To" was a free-text box, but the API stores a member's id —
+  // a typed name was dropped on create and refused on edit.
+  const { members } = useMemberNames();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -176,9 +190,12 @@ export const GrantApplicationFormPage: React.FC = () => {
             opportunityId: app.opportunityId ?? '',
             applicationStatus: app.applicationStatus,
             amountRequested: app.amountRequested != null ? String(app.amountRequested) : '',
+            amountAwarded: app.amountAwarded != null ? String(app.amountAwarded) : '',
             matchAmount: app.matchAmount != null ? String(app.matchAmount) : '',
             matchSource: app.matchSource ?? '',
             applicationDeadline: app.applicationDeadline?.split('T')[0] ?? '',
+            submittedDate: app.submittedDate?.split('T')[0] ?? '',
+            awardDate: app.awardDate?.split('T')[0] ?? '',
             grantStartDate: app.grantStartDate?.split('T')[0] ?? '',
             grantEndDate: app.grantEndDate?.split('T')[0] ?? '',
             projectDescription: app.projectDescription ?? '',
@@ -188,6 +205,8 @@ export const GrantApplicationFormPage: React.FC = () => {
             federalAwardId: app.federalAwardId ?? '',
             performancePeriodMonths: app.performancePeriodMonths != null ? String(app.performancePeriodMonths) : '',
             reportingFrequency: app.reportingFrequency ?? '',
+            nextReportDue: app.nextReportDue?.split('T')[0] ?? '',
+            finalReportDue: app.finalReportDue?.split('T')[0] ?? '',
             assignedTo: app.assignedTo ?? '',
             priority: app.priority,
             notes: app.notes ?? '',
@@ -240,9 +259,12 @@ export const GrantApplicationFormPage: React.FC = () => {
       opportunityId: formData.opportunityId || null,
       applicationStatus: formData.applicationStatus as GrantApplication['applicationStatus'],
       amountRequested: formData.amountRequested ? Number(formData.amountRequested) : null,
+      amountAwarded: formData.amountAwarded ? Number(formData.amountAwarded) : null,
       matchAmount: formData.matchAmount ? Number(formData.matchAmount) : null,
       matchSource: formData.matchSource || null,
       applicationDeadline: formData.applicationDeadline || null,
+      submittedDate: formData.submittedDate || null,
+      awardDate: formData.awardDate || null,
       grantStartDate: formData.grantStartDate || null,
       grantEndDate: formData.grantEndDate || null,
       projectDescription: formData.projectDescription || null,
@@ -252,6 +274,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       federalAwardId: formData.federalAwardId || null,
       performancePeriodMonths: formData.performancePeriodMonths ? Number(formData.performancePeriodMonths) : null,
       reportingFrequency: formData.reportingFrequency || null,
+      nextReportDue: formData.nextReportDue || null,
+      finalReportDue: formData.finalReportDue || null,
       assignedTo: formData.assignedTo || null,
       priority: formData.priority as GrantApplication['priority'],
       notes: formData.notes || null,
@@ -267,8 +291,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         toast.success('Application created.');
         void navigate(`/grants/applications/${created.id}`);
       }
-    } catch {
-      toast.error('Failed to save application. Try again.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save application. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -290,7 +314,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           type="button"
           aria-label="Back to applications"
           onClick={() => void navigate('/grants/applications')}
-          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-2 transition-colors"
+          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded-lg p-2 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -408,15 +432,25 @@ export const GrantApplicationFormPage: React.FC = () => {
               <label htmlFor="assignedTo" className={labelClass}>
                 Assigned To
               </label>
-              <input
+              <select
                 id="assignedTo"
                 name="assignedTo"
-                type="text"
                 value={formData.assignedTo}
                 onChange={handleChange}
-                className={inputClass}
-                placeholder="e.g. John Smith"
-              />
+                className={selectClass}
+              >
+                <option value="">Nobody</option>
+                {formData.assignedTo && !members?.some((m) => m.id === formData.assignedTo) && (
+                  // Keeps a saved assignee who is not in the list (archived, or the
+                  // list could not be loaded) rather than clearing them on save.
+                  <option value={formData.assignedTo}>Current assignee</option>
+                )}
+                {(members ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {memberLabel(m)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -436,6 +470,22 @@ export const GrantApplicationFormPage: React.FC = () => {
                 min="0"
                 step="0.01"
                 value={formData.amountRequested}
+                onChange={handleChange}
+                className={inputClass}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label htmlFor="amountAwarded" className={labelClass}>
+                Amount Awarded
+              </label>
+              <input
+                id="amountAwarded"
+                name="amountAwarded"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.amountAwarded}
                 onChange={handleChange}
                 className={inputClass}
                 placeholder="0.00"
@@ -491,7 +541,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         {/* Dates */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Dates</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label htmlFor="applicationDeadline" className={labelClass}>
                 Application Deadline
@@ -501,6 +551,32 @@ export const GrantApplicationFormPage: React.FC = () => {
                 name="applicationDeadline"
                 type="date"
                 value={formData.applicationDeadline}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="submittedDate" className={labelClass}>
+                Submitted
+              </label>
+              <input
+                id="submittedDate"
+                name="submittedDate"
+                type="date"
+                value={formData.submittedDate}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="awardDate" className={labelClass}>
+                Award Date
+              </label>
+              <input
+                id="awardDate"
+                name="awardDate"
+                type="date"
+                value={formData.awardDate}
                 onChange={handleChange}
                 className={inputClass}
               />
@@ -552,7 +628,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         {/* Reporting */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Reporting</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label htmlFor="reportingFrequency" className={labelClass}>
                 Reporting Frequency
@@ -571,6 +647,32 @@ export const GrantApplicationFormPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label htmlFor="nextReportDue" className={labelClass}>
+                Next Report Due
+              </label>
+              <input
+                id="nextReportDue"
+                name="nextReportDue"
+                type="date"
+                value={formData.nextReportDue}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="finalReportDue" className={labelClass}>
+                Final Report Due
+              </label>
+              <input
+                id="finalReportDue"
+                name="finalReportDue"
+                type="date"
+                value={formData.finalReportDue}
+                onChange={handleChange}
+                className={inputClass}
+              />
             </div>
           </div>
         </div>
@@ -657,7 +759,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors"
+            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface touch:min-h-11 inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors"
           >
             <X className="h-4 w-4" />
             Cancel
@@ -665,7 +767,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Application'}
