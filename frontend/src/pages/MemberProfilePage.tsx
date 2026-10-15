@@ -63,6 +63,7 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
@@ -1311,6 +1312,7 @@ export const MemberProfilePage: React.FC = () => {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    {userId && <StatusChangeReason userId={userId} tz={tz} refreshKey={user.status} />}
                     {user.status === UserStatus.ACTIVE && (
                       <p className="text-theme-text-muted mt-1 text-xs">
                         You see this because you manage members. Other members see a status only when it is not Active.
