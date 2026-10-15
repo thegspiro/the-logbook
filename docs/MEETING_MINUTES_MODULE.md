@@ -726,6 +726,39 @@ is not changed, and the flag is set on the Outlines screen.
   PDF's approval block and included in the sealed snapshot **only when
   recorded**, so a snapshot sealed earlier verifies exactly as it did.
 
+### Votes on motions _(2026-10-15)_
+
+A motion's vote is recorded as **totals** or as a **roll call**, and carries the
+**threshold** it needed.
+
+- **Threshold** (`meeting_motions.threshold`, NULL reads as the first):
+  `majority_cast` — more for than against, with abstentions and recusals not
+  counted and a tie failing; `majority_present` — more than half of the members
+  recorded present vote for, so abstentions and recusals count against;
+  `two_thirds` — at least two thirds of the votes cast. The rules live in
+  `app/utils/motion_votes.py`.
+- **Totals**: for, against, abstain and, new, **recused** (`votes_recused`).
+- **Roll call** (`roll_call`, JSON): the members recorded **present, late or
+  left early** vote yes, no, abstain or recuse. The server settles it against
+  the minutes' own roll — only those present, each once, the member id taken
+  from the roll and not the request — and **counts the totals from it**, so any
+  totals sent with a roll call are ignored and the two cannot disagree. Clearing
+  a roll call leaves the totals it produced. Entering the roll call before the
+  roll is taken, or for someone not on it, is refused with a 400.
+- **Suggested result**: every motion response carries `suggested_status`
+  (`passed`/`failed`, or null with no for-count), from the threshold and the
+  counts. It is a suggestion only: the recorded status is still the
+  secretary's, because a motion carried by voice or consent has no count. The
+  screen shows the server's reading, says so when it differs from the recorded
+  result, and offers to change it (CLAUDE.md pitfall #29: one definition, not
+  one on the screen).
+- **Who sees names**: how each member voted is shown in the app and sealed in the
+  adopted record (included in the snapshot only when recorded, so earlier
+  records verify unchanged). The **PDF and the published copy show totals, the
+  threshold when it is not the usual one, and the result — never names.**
+- It is recorded from the **Add Motion** form and from a section's **Motion**
+  card, which share one set of fields.
+
 ### Start and end times _(2026-10-15)_
 
 `called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
@@ -822,6 +855,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
 | `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 

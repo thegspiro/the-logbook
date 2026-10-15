@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**311 tables · 5138 columns · 1049 foreign keys**
+**311 tables · 5141 columns · 1049 foreign keys**
 
 ---
 
@@ -430,7 +430,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 45 | Meeting Minutes model |
-| [`meeting_motions`](#meeting_motions) | `Motion` | 16 | Motion model |
+| [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
@@ -6577,6 +6577,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `votes_for` | INTEGER | yes |  |  |  |
 | `votes_against` | INTEGER | yes |  |  |  |
 | `votes_abstain` | INTEGER | yes |  |  |  |
+| `votes_recused` | INTEGER | yes |  |  |  |
+| `threshold` | VARCHAR(20) | yes |  |  |  |
+| `roll_call` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 

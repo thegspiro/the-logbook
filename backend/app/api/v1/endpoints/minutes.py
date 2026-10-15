@@ -55,6 +55,7 @@ from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
 from app.utils.minutes_settings import load_minutes_reminder_settings
+from app.utils.motion_votes import members_present, suggested_status
 from app.utils.rich_text import normalize_format
 
 router = APIRouter()
@@ -598,7 +599,9 @@ async def add_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.put("/{minutes_id}/motions/{motion_id}", response_model=MotionResponse)
@@ -636,7 +639,9 @@ async def update_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.delete(
@@ -1061,7 +1066,10 @@ def _build_response(minutes) -> MinutesResponse:
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
-        motions=[_build_motion_response(m) for m in (minutes.motions or [])],
+        motions=[
+            _build_motion_response(m, members_present(minutes.attendees))
+            for m in (minutes.motions or [])
+        ],
         action_items=[
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
@@ -1097,8 +1105,18 @@ def _adopting_title(minutes) -> Optional[str]:
     return None if kind == "executive" else adopting.title
 
 
-def _build_motion_response(motion) -> MotionResponse:
-    """Build a MotionResponse from a Motion model"""
+async def _present_count(service, minutes_id: str, user) -> int:
+    """Members the minutes record as in the room, for a motion's suggested result."""
+    minutes = await service.get_minutes(minutes_id, user.organization_id)
+    return members_present(minutes.attendees) if minutes else 0
+
+
+def _build_motion_response(motion, present: int = 0) -> MotionResponse:
+    """Build a MotionResponse from a Motion model
+
+    ``present`` is how many members the minutes record as in the room, which
+    the majority-of-those-present threshold counts against.
+    """
     return MotionResponse(
         id=motion.id,
         minutes_id=motion.minutes_id,
@@ -1112,6 +1130,12 @@ def _build_motion_response(motion) -> MotionResponse:
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
+        votes_recused=motion.votes_recused,
+        threshold=motion.threshold,
+        roll_call=motion.roll_call,
+        suggested_status=suggested_status(
+            motion.threshold, motion.votes_for, motion.votes_against, present
+        ),
         election_id=motion.election_id,
         ballot_item_id=motion.ballot_item_id,
         election_title=_loaded(motion, "election", "title"),

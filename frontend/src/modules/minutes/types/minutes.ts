@@ -118,6 +118,16 @@ export interface AttendeeEntry {
   note?: string | null;
 }
 
+export type MotionThreshold = 'majority_cast' | 'majority_present' | 'two_thirds';
+export type RollCallVote = 'yes' | 'no' | 'abstain' | 'recuse';
+
+/** One member's vote in a roll call. The server fills in `user_id` from the minutes' roll. */
+export interface RollCallEntry {
+  name: string;
+  vote: RollCallVote;
+  user_id?: string | null;
+}
+
 export interface Motion {
   id: string;
   minutes_id: string;
@@ -132,6 +142,13 @@ export interface Motion {
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
+  votes_recused?: number | null;
+  /** What the motion needed to carry; a majority of the votes cast when absent. */
+  threshold?: MotionThreshold | null;
+  /** Each member's vote, when taken by roll call. */
+  roll_call?: RollCallEntry[] | null;
+  /** passed or failed when the counts and threshold decide it, as the server reads them. */
+  suggested_status?: 'passed' | 'failed' | null;
   /** The ballot that decided the motion, when it went to a ballot. */
   election_id?: string | null;
   ballot_item_id?: string | null;
@@ -267,6 +284,9 @@ export interface MotionCreate {
   votes_for?: number | undefined;
   votes_against?: number | undefined;
   votes_abstain?: number | undefined;
+  votes_recused?: number | undefined;
+  threshold?: MotionThreshold | undefined;
+  roll_call?: RollCallEntry[] | undefined;
   order?: number | undefined;
   election_id?: string | undefined;
   ballot_item_id?: string | undefined;
@@ -281,6 +301,9 @@ export interface MotionUpdate {
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
+  votes_recused?: number;
+  threshold?: MotionThreshold;
+  roll_call?: RollCallEntry[] | null;
   order?: number;
   election_id?: string | null;
   ballot_item_id?: string | null;
