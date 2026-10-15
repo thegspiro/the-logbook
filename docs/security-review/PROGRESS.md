@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None, as of this commit.** PR #3250 (Feature 07, Users & organizations,
+pass 9) merged 2026-10-15T01:47:53Z — docs-only (`USR-07-users-organizations.md`
+
+- `PROGRESS.md` only; confirmed via the PR's own Changes section, "No
+  application code changed."), already fully recorded in that PR's own Open PR
+  note below, so there is nothing further to add here. Rotation row 07 stays ✅.
+  This iteration (no `claude/security-review-*` PR open, confirmed via
+  `search_pull_requests`) picks up Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 9, PR #3250, merged 2026-10-15), preserved for history</summary>
+
 **PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250)**: branch
 `claude/security-review-users-organizations`, Feature 07 (Users &
 organizations), pass 9. 0 fixed, 0 new findings; `ea4d2b18`'s already-landed
@@ -26,6 +38,8 @@ open/accepted, unchanged; USR-10a re-confirmed resolved. Also carries the
 prior commit (`023d39c2`) clearing the stale Open PR row for merged PR
 #3248. See `USR-07-users-organizations.md`'s **Pass 9** section. Row 07 → ✅
 (pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3248's merge, Feature 06, Elections & ballots, pass 9 — the state this pass's PR opened from), preserved for history</summary>
@@ -19128,7 +19142,7 @@ here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -19162,6 +19176,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-15 — Feature 08 (Membership pipeline, pass 10) — 0 fixed, 0 new findings; MP-10 (creation half) and MP-26 confirmed resolved by owner commit landed between passes
+
+**Step 0.** PR #3250 (Feature 07, Users & organizations, pass 9) had
+already merged, docs-only (confirmed via its own PR body's Changes
+section — `USR-07-users-organizations.md` + `PROGRESS.md` only, "No
+application code changed."); not a recordable event. Independently
+confirmed via `search_pull_requests`
+(`repo:thegspiro/the-logbook is:pr is:open head:claude/security-review-`,
+0 results) and `list_pull_requests` (state=open, 9 results, none with a
+`claude/security-review-*` head) that no security-review PR was open
+before this iteration started. Open PR row cleared; rotation row 08
+(Membership pipeline) was the first `⬜`.
+
+**Review.** Baseline `a7a7c47d` (pass 9's merge, PR #3149,
+2026-10-13T06:47:15Z) to current `HEAD`. The declared scope's real delta
+is small (4 files, 104 insertions / 15 deletions) but substantive: a
+commit titled as an unrelated CSV-export streaming change
+(`e3f236d8`, author date 2026-10-11, merged into `main` after
+`a7a7c47d` — topologically in this window despite the earlier author
+timestamp) carries the owner's 2026-10-05/11/12 decision closing two
+items this feature's own findings doc still listed as open:
+**MP-10's creation half** (`create_election_package` now deletes the
+prospect's existing draft/ready election package in the same
+locked transaction as it inserts the replacement, closing the per-prospect
+unbounded growth; `list_election_packages`'s own lack of pagination is
+unaffected and stays open, narrower in practice) and **MP-26** (a pipeline
+with more than one `election_vote` stage, and no current-step or
+`step_id` match, now gets a 422 `ElectionStageAmbiguousError` naming the
+request as the thing to fix, instead of the old best-effort sort-order
+guess). Both were already correctly described as resolved in
+`docs/KNOWN_LIMITATIONS.md`; this feature's own `MP-08-membership-pipeline.md`
+had not yet been updated to match, since pass 9 (2026-10-13) reviewed the
+point in history before this commit reached `main`. Both re-derived from
+current code — locking order, tenant scoping, PII-free activity-log
+detail, caller-vs-system status sets — rather than copied from
+`KNOWN_LIMITATIONS.md`'s own account. All 53 routes re-enumerated with
+their permission strings individually checked; unchanged from pass 9. No
+new `.ilike()`/`.like()` without `escape=`, no raw `csv.writer`, no
+`window.confirm`/`alert`/`prompt`. MP-22 (file-then-row-delete ordering
+tradeoff) re-confirmed open/accepted, unchanged.
+
+**Gate:** backend `flake8`/`black --check`/`isort --check-only` clean
+(CI's pinned `flake8==7.3.0`/`black==26.5.1`/`isort==9.0.1` in a fresh
+virtualenv); `validate_migrations.py --strict` (596 revisions, single
+head `f2c5e55e7dda`); `check_route_permissions.py --strict` (270 routes, 0
+errors/warnings); cross-cutting guard tests (161 passed); scoped pytest
+(`-k "membership or prospect or pipeline or election"`, 1697 passed, 0
+failed); frontend `npm ci` (restored a missing `@tiptap/*` install, no
+manifest/lockfile edit), `npm run typecheck` (0 errors), `npm run lint`
+(0 errors/warnings), scoped `npx vitest run src/modules/prospective-members`
+(285 passed, 34 files).
+
+Full write-up: [`MP-08-membership-pipeline.md`](./MP-08-membership-pipeline.md)
+→ **Pass 10**. Row 08 → ✅ (pending this PR's merge); next is Feature 09
+(Medical screening, PHI).
 
 ### 2026-10-14 — Feature 07 (Users & organizations, pass 9) — 0 fixed, 0 new findings; `ea4d2b18`'s already-landed colleague-profile-write fix re-verified end to end
 
