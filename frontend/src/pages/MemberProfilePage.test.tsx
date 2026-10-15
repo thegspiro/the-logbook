@@ -60,6 +60,11 @@ const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
+// No recorded change by default, so the reason control stays out of the way of
+// tests that are not about it.
+const getStatusChange = vi.fn(() =>
+  Promise.resolve({ user_id: TARGET_ID, status: 'active', status_changed_at: null, status_change_reason: null })
+);
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
@@ -110,6 +115,8 @@ vi.mock('../services/api', () => ({
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
+    getStatusChange: (...args: unknown[]) => getStatusChange(...args) as unknown,
+    updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
   },
 }));
 
@@ -312,6 +319,35 @@ describe('MemberProfilePage membership and privacy', () => {
     getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
     changeStatus.mockReset();
     changeStatus.mockResolvedValue({ user_id: TARGET_ID, previous_status: 'retired', new_status: 'active' });
+    getStatusChange.mockReset();
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'active',
+      status_changed_at: null,
+      status_change_reason: null,
+    });
+  });
+
+  it('shows a members-manager the reason for the last status change', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'retired',
+      status_changed_at: '2026-10-01T15:00:00Z',
+      status_change_reason: 'Moved out of the district',
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Moved out of the district')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit status change reason' })).toBeInTheDocument();
+  });
+
+  it('does not ask a colleague for the status change reason', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Captain · Life member')).toBeInTheDocument();
+    expect(getStatusChange).not.toHaveBeenCalled();
   });
 
   it('describes a colleague by rank and member type, not employment status', async () => {

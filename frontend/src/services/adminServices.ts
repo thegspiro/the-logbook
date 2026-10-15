@@ -819,6 +819,23 @@ export const memberStatusService = {
     return response.data;
   },
 
+  async getStatusChange(userId: string): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.get<import('../types/user').StatusChangeRecord>(`/users/${userId}/status-change`);
+    return response.data;
+  },
+
+  /** Rewords the reason for the last status change; null clears it. Nothing else about the change moves. */
+  async updateStatusChangeReason(
+    userId: string,
+    reason: string | null
+  ): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.patch<import('../types/user').StatusChangeRecord>(
+      `/users/${userId}/status-change-reason`,
+      { reason }
+    );
+    return response.data;
+  },
+
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
     const response = await api.get<{ members: import('../types/user').ArchivedMember[] }>('/users/archived');
     return response.data;

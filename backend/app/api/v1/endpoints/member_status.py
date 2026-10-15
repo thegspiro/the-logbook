@@ -1029,6 +1029,106 @@ async def get_archived_members(
     }
 
 
+# ==================== Status Change Reason ====================
+
+
+class StatusChangeRecord(BaseModel):
+    """A member's most recent status change, as recorded on their account."""
+
+    user_id: str
+    status: str
+    status_changed_at: datetime | None = None
+    status_change_reason: str | None = None
+
+
+class StatusChangeReasonUpdate(BaseModel):
+    reason: str | None = Field(
+        None,
+        max_length=2000,
+        description="The corrected reason; blank or null clears it",
+    )
+
+
+def _status_change_record(member: User) -> StatusChangeRecord:
+    return StatusChangeRecord(
+        user_id=str(member.id),
+        status=getattr(member.status, "value", member.status),
+        status_changed_at=member.status_changed_at,
+        status_change_reason=member.status_change_reason,
+    )
+
+
+@router.get("/{user_id}/status-change", response_model=StatusChangeRecord)
+async def get_status_change(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    When this member's status last changed, and the reason recorded for it.
+
+    Requires `members.manage` permission.
+    """
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=False
+    )
+    return _status_change_record(member)
+
+
+@router.patch("/{user_id}/status-change-reason", response_model=StatusChangeRecord)
+async def update_status_change_reason(
+    user_id: UUID,
+    request: StatusChangeReasonUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Correct the reason recorded for this member's most recent status change.
+
+    Only the wording changes: the status, when it changed, and anything the
+    change set in motion (service history, the property return report, the
+    undo-drop window) are untouched. The reason as first written stays in the
+    audit log's original `member_status_changed` entry, and this edit is
+    logged alongside it with both versions.
+
+    Requires `members.manage` permission.
+    """
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=True
+    )
+    # A reason belongs to a change. With none on record there is nothing for
+    # it to explain, and storing one would read as though a change happened.
+    if member.status_changed_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This member has no recorded status change to give a reason for.",
+        )
+
+    previous_reason = member.status_change_reason
+    new_reason = (request.reason or "").strip() or None
+    if new_reason != previous_reason:
+        member.status_change_reason = new_reason
+        await db.commit()
+        await db.refresh(member)
+        await log_audit_event(
+            db=db,
+            event_type="member_status_reason_updated",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "target_user_id": str(member.id),
+                "member_name": member.full_name,
+                "status": getattr(member.status, "value", member.status),
+                "previous_reason": previous_reason,
+                "new_reason": new_reason,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return _status_change_record(member)
+
+
 # ==================== Membership Tier Management ====================
 
 

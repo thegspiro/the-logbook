@@ -317,6 +317,14 @@ export interface ArchivedMember {
   status_change_reason?: string;
 }
 
+/** `GET /users/{id}/status-change` — the member's most recent status change, as recorded. */
+export interface StatusChangeRecord {
+  user_id: string;
+  status: string;
+  status_changed_at: string | null;
+  status_change_reason: string | null;
+}
+
 /** `POST /users/{id}/reactivate` — the archived member restored to active. */
 export interface MemberReactivationResponse {
   user_id: string;
