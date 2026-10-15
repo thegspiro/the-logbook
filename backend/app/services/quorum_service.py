@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization, User, UserStatus
+from app.utils.minutes_attendance import counts_toward_quorum
 
 
 class QuorumService:
@@ -106,7 +107,7 @@ class QuorumService:
 
         # Count present attendees
         attendees = minutes.attendees or []
-        present_count = sum(1 for a in attendees if a.get("present", False))
+        present_count = sum(1 for a in attendees if counts_toward_quorum(a))
 
         # Calculate required count
         if q_type == "count":
