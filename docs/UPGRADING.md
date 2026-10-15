@@ -777,6 +777,30 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### Folders that lose everyone but administrators are listed (2026-10-15)
+
+Nothing here stops the stack from starting. Migration `c903fc771081` adds two
+nullable columns to `document_folders`, `admin_only_confirmed_at` and
+`admin_only_confirmed_by`, with no backfill. A folder can come to open to full
+administrators alone without being saved, for example when the last member
+holding its position leaves it. Full administrators now see those folders
+listed on the Documents page, each with **Change access** and **Keep for
+administrators only**.
+
+- **Folders confirmed before this upgrade are listed once.** The save-time
+  question from 2026-10-14 recorded nothing, so a folder confirmed then
+  appears on the list and needs **Keep for administrators only** a second
+  time.
+- **Probationary members now count** as members who open a folder, for this
+  list and for the save-time question. Sign-in already treats them as active,
+  and before this change a folder only probationary members could open was
+  reported as administrators-only.
+- **API:** `GET /documents/folders/admin-only` returns the list, and is empty
+  for anyone but a full administrator.
+  `POST /documents/folders/{id}/confirm-admin-only` records the confirmation.
+- **Downgrade** drops both columns, so the list shows every confirmed folder
+  again after the next upgrade.
+
 ### A folder only administrators could open is confirmed first (2026-10-14)
 
 Nothing here stops the stack from starting. Some folder saves now ask first:

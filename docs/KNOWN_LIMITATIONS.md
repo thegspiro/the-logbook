@@ -824,9 +824,15 @@ module folder on that module's rights.
   (decision 27).
 - **Resolved 2026-10-14: a folder nobody but full administrators can open is
   confirmed, not made by accident** (decision 29). The check runs when the
-  folder is saved. A member who later loses the permission, or leaves the
-  position, is not re-checked, so a folder can still become
-  administrators-only over time without anyone being asked.
+  folder is saved.
+- **Resolved 2026-10-15: a folder that becomes administrators-only later is
+  listed** (decision 30). Full administrators see it on the Documents page,
+  until they fix it or confirm it.
+  - A confirmation stands even after the folder regains an audience. If that
+    audience is later lost again, the folder is not listed again, because
+    someone already decided it may be administrators-only.
+  - Nobody is told until a full administrator opens Documents. Nothing
+    emails them.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.

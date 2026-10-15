@@ -54,6 +54,24 @@ async def org(db_session):
         ]
     )
     await db_session.flush()
+    # A row for the stand-in ADMIN, so a confirmation it records names a real
+    # member. Archived: the audience checks count active members, and this
+    # row holds no positions of its own, so active it would be a member who
+    # opens nothing.
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, "
+            "last_name, email, password_hash, status) VALUES (:id, :org, :un, "
+            "'Stand-in', 'Chief', :em, 'hashed', 'archived')"
+        ),
+        {
+            "id": ADMIN.id,
+            "org": str(org.id),
+            "un": f"admin-{ADMIN.id[:8]}",
+            "em": f"admin-{ADMIN.id[:8]}@example.org",
+        },
+    )
+    await db_session.flush()
     return org
 
 
@@ -435,3 +453,169 @@ class TestAFolderNobodyButAdministratorsCanOpen:
             current_user=caller,
         )
         assert created.required_permissions == ["training.manage"]
+
+
+async def _remove_positions(db_session, user_id):
+    await db_session.execute(user_roles.delete().where(user_roles.c.user_id == user_id))
+    await db_session.flush()
+
+
+async def _set_status(db_session, user_id, status):
+    await db_session.execute(
+        text("UPDATE users SET status = :status WHERE id = :id"),
+        {"status": status, "id": user_id},
+    )
+    await db_session.flush()
+
+
+async def _admin_only(db_session, org, viewer=ADMIN):
+    folders = await DocumentsService(db_session).admin_only_folders(org.id, viewer)
+    return [folder.name for folder in folders]
+
+
+class TestAFolderThatLosesItsAudience:
+    """Decision 30: a folder shut by a change to people, not to the folder, is
+    listed for administrators until it is fixed or confirmed."""
+
+    async def _quartermaster_folder(self, db_session, org):
+        # Someone besides the quartermaster, so the department is never
+        # administrators alone once the quartermaster goes.
+        await _active_member(db_session, org, "documents.view")
+        holder = await _active_member(db_session, org, position_id=QUARTERMASTER)
+        folder = await _create(
+            db_session, org, user=ADMIN, allowed_roles=[QUARTERMASTER]
+        )
+        return holder, folder
+
+    async def test_an_open_folder_is_not_listed(self, db_session, org):
+        await self._quartermaster_folder(db_session, org)
+        assert await _admin_only(db_session, org) == []
+
+    async def test_losing_the_last_holder_of_a_position_lists_it(self, db_session, org):
+        holder, _ = await self._quartermaster_folder(db_session, org)
+        await _remove_positions(db_session, holder)
+        assert await _admin_only(db_session, org) == ["Quartermaster files"]
+
+    async def test_archiving_the_last_holder_lists_it(self, db_session, org):
+        holder, _ = await self._quartermaster_folder(db_session, org)
+        await _set_status(db_session, holder, "archived")
+        assert await _admin_only(db_session, org) == ["Quartermaster files"]
+
+    async def test_a_probationary_holder_still_opens_it(self, db_session, org):
+        holder, _ = await self._quartermaster_folder(db_session, org)
+        await _set_status(db_session, holder, "probationary")
+        assert await _admin_only(db_session, org) == []
+
+    async def test_only_the_topmost_shut_folder_is_listed(self, db_session, org):
+        holder, folder = await self._quartermaster_folder(db_session, org)
+        await _create(db_session, org, user=ADMIN, name="Stores", parent_id=folder.id)
+        await _remove_positions(db_session, holder)
+        assert await _admin_only(db_session, org) == ["Quartermaster files"]
+
+    async def test_a_personal_folder_is_left_out(self, db_session, org):
+        await _active_member(db_session, org, "documents.view")
+        owner = await _active_member(db_session, org, "documents.view")
+        db_session.add(
+            DocumentFolder(
+                organization_id=org.id,
+                name="Member's own",
+                visibility=FolderVisibility.OWNER,
+                owner_user_id=owner,
+            )
+        )
+        await db_session.flush()
+        await _set_status(db_session, owner, "archived")
+        assert await _admin_only(db_session, org) == []
+
+    async def test_nobody_but_a_full_administrator_is_shown_the_list(
+        self, db_session, org
+    ):
+        holder, _ = await self._quartermaster_folder(db_session, org)
+        await _remove_positions(db_session, holder)
+        assert await _admin_only(db_session, org, viewer=LIBRARIAN) == []
+
+    async def test_a_confirmed_folder_is_not_listed(self, db_session, org):
+        holder, folder = await self._quartermaster_folder(db_session, org)
+        await _remove_positions(db_session, holder)
+
+        confirmed = await DocumentsService(db_session).confirm_admin_only(
+            folder.id, org.id, ADMIN
+        )
+        assert confirmed.admin_only_confirmed_at is not None
+        assert confirmed.admin_only_confirmed_by == ADMIN.id
+        assert await _admin_only(db_session, org) == []
+
+    async def test_confirming_a_folder_someone_else_opens_is_refused(
+        self, db_session, org
+    ):
+        _, folder = await self._quartermaster_folder(db_session, org)
+        with pytest.raises(ValueError, match="nothing to confirm"):
+            await DocumentsService(db_session).confirm_admin_only(
+                folder.id, org.id, ADMIN
+            )
+
+    async def test_confirming_at_save_is_recorded(self, db_session, org):
+        await _active_member(db_session, org, "documents.view")
+        folder = await DocumentsService(db_session).create_folder(
+            org.id,
+            {"name": "Command", "required_permissions": ["training.manage"]},
+            None,
+            acting_user=ADMIN,
+            confirm_admin_only=True,
+        )
+        assert folder.admin_only_confirmed_at is not None
+        assert await _admin_only(db_session, org) == []
+
+    async def test_opening_it_to_someone_clears_the_confirmation(self, db_session, org):
+        await _active_member(db_session, org, "documents.view", "inventory.view")
+        folder = await DocumentsService(db_session).create_folder(
+            org.id,
+            {"name": "Command", "required_permissions": ["training.manage"]},
+            None,
+            acting_user=ADMIN,
+            confirm_admin_only=True,
+        )
+        reopened = await _update(
+            db_session, org, folder, user=ADMIN, required_permissions=["inventory.view"]
+        )
+        assert reopened.admin_only_confirmed_at is None
+        assert reopened.admin_only_confirmed_by is None
+
+    async def test_the_endpoints_list_and_confirm(self, db_session, org):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.documents import (
+            confirm_admin_only_folder,
+            list_admin_only_folders,
+        )
+
+        holder, folder = await self._quartermaster_folder(db_session, org)
+        await _remove_positions(db_session, holder)
+        chief_id = await _active_member(db_session, org, "*")
+        chief = SimpleNamespace(
+            id=chief_id,
+            organization_id=org.id,
+            username="chief",
+            roles=ADMIN.roles,
+            rank=None,
+        )
+        librarian = SimpleNamespace(
+            id=LIBRARIAN.id,
+            organization_id=org.id,
+            username="librarian",
+            roles=LIBRARIAN.roles,
+            rank=None,
+        )
+
+        listed = await list_admin_only_folders(db=db_session, current_user=chief)
+        assert [f.name for f in listed] == ["Quartermaster files"]
+
+        # Closed to a documents manager who is not a full administrator.
+        with pytest.raises(HTTPException) as hidden:
+            await confirm_admin_only_folder(
+                folder.id, db=db_session, current_user=librarian
+            )
+        assert hidden.value.status_code == 404
+
+        await confirm_admin_only_folder(folder.id, db=db_session, current_user=chief)
+        assert await list_admin_only_folders(db=db_session, current_user=chief) == []

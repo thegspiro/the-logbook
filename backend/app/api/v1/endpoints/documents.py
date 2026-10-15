@@ -232,6 +232,70 @@ async def list_folder_role_options(
     ]
 
 
+@router.get("/folders/admin-only", response_model=list[DocumentFolderResponse])
+async def list_admin_only_folders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.manage")),
+):
+    """
+    Folders that no active member but a full administrator can open, and
+    that nobody has confirmed are meant that way (decision 30).
+
+    A folder can lose its audience without being saved: the last member
+    holding its permission or position loses it. Listed for full
+    administrators only; everyone else gets an empty list, since nobody else
+    can open these folders to fix them.
+
+    **Authentication required**
+    **Requires permission: documents.manage**
+    """
+    service = DocumentsService(db)
+    return await service.admin_only_folders(current_user.organization_id, current_user)
+
+
+@router.post(
+    "/folders/{folder_id}/confirm-admin-only", response_model=DocumentFolderResponse
+)
+async def confirm_admin_only_folder(
+    folder_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.manage")),
+):
+    """
+    Confirm a folder is meant for full administrators alone, so it is no
+    longer listed by ``GET /folders/admin-only``.
+
+    **Authentication required**
+    **Requires permission: documents.manage**
+    """
+    service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_folder_by_id(folder_id, current_user.organization_id),
+        "Folder",
+    )
+    # The same gate as update_folder: confirming is a change to the folder,
+    # and an administrators-only folder admits nobody else to make it.
+    if not await service.can_access_folder(
+        existing, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    async with handle_service_errors("Unable to confirm folder"):
+        confirmed = await service.confirm_admin_only(
+            folder_id, current_user.organization_id, current_user
+        )
+    result = ensure_found(confirmed, "Folder")
+    await log_audit_event(
+        db=db,
+        event_type="folder_admin_only_confirmed",
+        event_category="documents",
+        severity="info",
+        event_data={"folder_id": str(folder_id), "name": result.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 @router.patch("/folders/{folder_id}", response_model=DocumentFolderResponse)
 async def update_folder(
     folder_id: UUID,

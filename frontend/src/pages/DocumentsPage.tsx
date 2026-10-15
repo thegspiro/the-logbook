@@ -31,6 +31,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { asArray } from '../utils/asArray';
 import { FolderManageDialog } from '../components/documents/FolderManageDialog';
+import { AdminOnlyFoldersNotice } from '../components/documents/AdminOnlyFoldersNotice';
 import { DocumentCorrectionNotice } from '../components/documents/DocumentCorrectionNotice';
 import { FolderAccessFields } from '../components/documents/FolderAccessFields';
 import {
@@ -71,6 +72,8 @@ const DocumentsPage: React.FC = () => {
   const { confirm } = useConfirm();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
+  // Only a full administrator can open a folder the notice lists (decision 30).
+  const isFullAdmin = checkPermission('*');
   const tz = useTimezone();
 
   // Data state
@@ -105,6 +108,7 @@ const DocumentsPage: React.FC = () => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [managedFolder, setManagedFolder] = useState<DocFolder | null>(null);
+  const [adminOnlyRefresh, setAdminOnlyRefresh] = useState(0);
 
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
@@ -505,6 +509,8 @@ const DocumentsPage: React.FC = () => {
             </button>
           </div>
         )}
+
+        {isFullAdmin && <AdminOnlyFoldersNotice onManage={setManagedFolder} refreshKey={adminOnlyRefresh} />}
 
         {/* Summary Stats */}
         {summaryError && (
@@ -1136,6 +1142,7 @@ const DocumentsPage: React.FC = () => {
             onClose={() => setManagedFolder(null)}
             onChanged={(change) => {
               setManagedFolder(null);
+              setAdminOnlyRefresh((n) => n + 1);
               void fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
               void fetchSummary();
               if (change === 'deleted' && selectedFolder) void fetchDocuments(selectedFolder, debouncedSearch);
