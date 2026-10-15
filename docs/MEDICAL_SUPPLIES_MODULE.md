@@ -185,6 +185,12 @@ Three things about the import decide where those rows land:
 - **"Item Type" is checked and then ignored.** An item's type comes from its
   category, so writing `medical` there does not make a row medical by itself
   (it is accepted, so it is not rejected).
+- **"Also Called" carries alternate names.** Put them in one cell, separated by
+  semicolons or commas (`BVM; Ambu bag`); they become the item's "Also called"
+  names, which the checklist matcher looks through when linking a checklist
+  item to inventory. Blank and repeated names, and the item's own name, are
+  dropped. A row with more than 10 names, or a name over 100 characters, is
+  refused and reported rather than trimmed.
 - **The import carries no lots.** Lot numbers and expiration dates are added
   afterwards, for example through **Receive delivery**; a supply imported by
   count shows its quantity but nothing is flagged as expiring until it has
