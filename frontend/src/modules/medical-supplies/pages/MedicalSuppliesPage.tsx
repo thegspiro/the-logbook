@@ -974,6 +974,9 @@ const MedicalSuppliesPage: React.FC = () => {
                           )}
                           <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
                             {item.name}
+                            {item.size && (
+                              <span className="text-theme-text-secondary ml-1 text-xs font-normal">· {item.size}</span>
+                            )}
                             {item.unit_of_measure && (
                               <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
                             )}

@@ -1185,6 +1185,28 @@ class CrossTemplateLinkResponse(BaseModel):
     skipped_positions: List[SkippedLinkPosition] = Field(default_factory=list)
 
 
+class AutoLinkedGroup(BaseModel):
+    """One checklist name that was linked automatically, and what to."""
+
+    model_config = _camel_config
+
+    name: str
+    inventory_item_id: str
+    inventory_item_name: str
+    confidence: str
+    # Set when an "also called" name produced the match, so the screen can say
+    # why "BVM" was linked to "Bag Valve Mask".
+    matched_alias: Optional[str] = None
+    position_count: int
+
+
+class AutoLinkResponse(CrossTemplateLinkResponse):
+    """What the automatic pass linked, and how much it left for a person."""
+
+    left_for_review: int = 0
+    groups: List[AutoLinkedGroup] = Field(default_factory=list)
+
+
 # CheckTemplateItemResponse references DeployedLot, which is declared with the
 # supply schemas further down; bind the forward reference now that it exists.
 CheckTemplateItemResponse.model_rebuild()

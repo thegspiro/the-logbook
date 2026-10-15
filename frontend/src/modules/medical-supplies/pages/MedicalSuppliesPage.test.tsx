@@ -485,6 +485,19 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
     });
 
+    it("shows each supply's size beside its name", async () => {
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Oxygen Mask', size: 'Pediatric', quantity: 4 }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+      expect(await screen.findByText('· Pediatric')).toBeInTheDocument();
+    });
+
     it('offers no selection to a member who can only view', async () => {
       mockCheckPermission.mockReturnValue(false);
       await openStock();

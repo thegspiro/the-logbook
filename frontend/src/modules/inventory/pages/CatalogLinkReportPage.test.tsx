@@ -12,10 +12,12 @@ import { renderWithRouter } from '@/test/utils';
 
 const mockGetLinkReport = vi.fn();
 const mockLinkAcrossTemplates = vi.fn();
+const mockAutoLink = vi.fn();
 vi.mock('../services/equipmentCheckApi', () => ({
   equipmentCheckService: {
     getLinkReport: (...a: unknown[]) => mockGetLinkReport(...a) as unknown,
     linkAcrossTemplates: (...a: unknown[]) => mockLinkAcrossTemplates(...a) as unknown,
+    autoLinkAcrossTemplates: (...a: unknown[]) => mockAutoLink(...a) as unknown,
   },
 }));
 
@@ -91,10 +93,96 @@ describe('CatalogLinkReportPage', () => {
   beforeEach(() => {
     mockGetLinkReport.mockReset();
     mockLinkAcrossTemplates.mockReset();
+    mockAutoLink.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockGetLinkReport.mockResolvedValue(report());
     mockLinkAcrossTemplates.mockResolvedValue({ linked: 2, skipped: 0, skippedPositions: [] });
+    mockAutoLink.mockResolvedValue({
+      linked: 3,
+      skipped: 0,
+      skippedPositions: [],
+      leftForReview: 2,
+      groups: [
+        {
+          name: 'Gauze Pads 4x4',
+          inventoryItemId: 'inv-gauze',
+          inventoryItemName: 'Gauze Pads 4x4',
+          confidence: 'exact',
+          positionCount: 2,
+        },
+        {
+          name: 'Oxygen Mask',
+          inventoryItemId: 'inv-mask-adult',
+          inventoryItemName: 'Oxygen Mask Adult',
+          confidence: 'strong',
+          matchedAlias: null,
+          positionCount: 1,
+        },
+      ],
+    });
+  });
+
+  describe('linking automatically', () => {
+    it('links after confirmation, then lists what it linked and flags the close matches', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() => expect(mockAutoLink).toHaveBeenCalled());
+      const panel = await screen.findByRole('region', { name: /Linked 2 names automatically/ });
+      expect(panel).toHaveTextContent('Oxygen Mask → Oxygen Mask Adult');
+      expect(panel).toHaveTextContent('check this');
+      expect(mockToastSuccess).toHaveBeenCalledWith('Linked 3 positions; 2 left for you to review');
+      // The report is reloaded so the linked names drop off it.
+      expect(mockGetLinkReport).toHaveBeenCalledTimes(2);
+    });
+
+    it('sends nothing when the confirmation is declined', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: /cancel|keep/i }));
+
+      expect(mockAutoLink).not.toHaveBeenCalled();
+    });
+
+    it('says so when nothing was clear enough to link', async () => {
+      mockAutoLink.mockResolvedValue({ linked: 0, skipped: 0, skippedPositions: [], leftForReview: 5, groups: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() =>
+        expect(mockToastSuccess).toHaveBeenCalledWith('No lines had a clear enough match to link automatically')
+      );
+    });
+
+    it('reports a failure', async () => {
+      mockAutoLink.mockRejectedValue(new Error('Server unavailable'));
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Server unavailable'));
+    });
+
+    it('is not offered when no name has a catalog match', async () => {
+      const onlyUnmatched = report();
+      onlyUnmatched.groups = onlyUnmatched.groups.filter((g) => g.suggestions.length === 0);
+      mockGetLinkReport.mockResolvedValue(onlyUnmatched);
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await screen.findByText(/No catalog match/);
+      expect(screen.queryByRole('button', { name: /Link matches automatically/ })).not.toBeInTheDocument();
+    });
   });
 
   it('pre-selects exact matches only', async () => {

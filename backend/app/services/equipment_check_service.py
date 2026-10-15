@@ -50,7 +50,7 @@ from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import best_matches, normalize_name
+from app.utils.name_matching import EXACT, STRONG, best_matches, normalize_name
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import (
     local_day_start_utc,
@@ -4692,6 +4692,7 @@ class EquipmentCheckService:
         *,
         user_id: str,
         user_name: str,
+        source: str = "catalog_link_report",
     ) -> Dict[str, Any]:
         """Apply a reviewed set of links that may span many templates.
 
@@ -4787,7 +4788,7 @@ class EquipmentCheckService:
                 entity_name=item.name,
                 changes={
                     "inventory_item_id": {"old": None, "new": item.inventory_item_id},
-                    "source": "catalog_link_report",
+                    "source": source,
                 },
             )
             linked += 1
@@ -4818,6 +4819,84 @@ class EquipmentCheckService:
             "linked": linked,
             "skipped": len(skipped),
             "skipped_positions": skipped,
+        }
+
+    async def auto_link_report(
+        self,
+        organization_id: str,
+        *,
+        user_id: str,
+        user_name: str,
+    ) -> Dict[str, Any]:
+        """Link every unlinked position whose catalog match is clear enough.
+
+        Built on the department-wide report, so it links exactly what a person
+        would have seen suggested there. A name group is linked when its best
+        suggestion is ``exact`` or ``strong`` *and* beats the runner-up. Exact
+        and strong was the department's call: strong takes in "also called"
+        names and subset matches, which are usually right and occasionally
+        need fixing by hand.
+
+        The runner-up rule is what keeps "occasionally" from becoming a coin
+        toss. "Oxygen Mask" is a subset of both "Oxygen Mask Adult" and
+        "Oxygen Mask Pediatric" and scores the same against each; linking
+        either would be a guess, so a tied group is left on the report for a
+        person, together with everything weak or unmatched.
+
+        Writes through ``link_inventory_items_across_templates``, so it is all
+        or nothing and a position linked by hand in the meantime keeps its
+        link.
+        """
+        report = await self.get_link_report(organization_id, limit_per_group=2)
+
+        links: Dict[str, str] = {}
+        applied: List[Dict[str, Any]] = []
+        left_for_review = 0
+        for group in report["groups"]:
+            suggestions = group["suggestions"]
+            best = suggestions[0] if suggestions else None
+            runner_up = suggestions[1] if len(suggestions) > 1 else None
+            clear = (
+                best is not None
+                and best["confidence"] in (EXACT, STRONG)
+                and (runner_up is None or runner_up["score"] < best["score"])
+            )
+            if not clear or best is None:
+                left_for_review += group["position_count"]
+                continue
+            for position in group["positions"]:
+                links[str(position["template_item_id"])] = str(best["id"])
+            applied.append(
+                {
+                    "name": group["name"],
+                    "inventory_item_id": str(best["id"]),
+                    "inventory_item_name": best["name"],
+                    "confidence": best["confidence"],
+                    "matched_alias": best.get("matched_alias"),
+                    "position_count": group["position_count"],
+                }
+            )
+
+        if not links:
+            return {
+                "linked": 0,
+                "skipped": 0,
+                "skipped_positions": [],
+                "left_for_review": left_for_review,
+                "groups": [],
+            }
+
+        result = await self.link_inventory_items_across_templates(
+            organization_id,
+            links,
+            user_id=user_id,
+            user_name=user_name,
+            source="catalog_auto_link",
+        )
+        return {
+            **result,
+            "left_for_review": left_for_review,
+            "groups": applied,
         }
 
     # ------------------------------------------------------------------

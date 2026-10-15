@@ -69,6 +69,7 @@ export interface MedicalSupplySummary {
 export interface MedicalItemUpdate {
   name?: string;
   category_id?: string;
+  size?: string | null;
   description?: string | null;
   manufacturer?: string | null;
   also_called?: string[] | null;

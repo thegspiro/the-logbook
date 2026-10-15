@@ -14,6 +14,7 @@ import { medicalSuppliesService } from '../../../services/medicalSuppliesService
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { onHandQuantity } from '../../inventory/utils/onHand';
+import { supplyLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
@@ -86,7 +87,7 @@ const CategorySupplyList: React.FC<CategorySupplyListProps> = ({ categoryId, cat
       <ul className="divide-theme-surface-border divide-y text-sm" aria-label={`Supplies in ${categoryName}`}>
         {state.items.map((item) => (
           <li key={item.id} className="flex items-baseline justify-between gap-3 py-1.5">
-            <span className="text-theme-text-primary min-w-0 truncate">{item.name}</span>
+            <span className="text-theme-text-primary min-w-0 truncate">{supplyLabel(item)}</span>
             <span className="text-theme-text-muted shrink-0 tabular-nums">
               {formatNumber(onHandQuantity(item))} on hand
             </span>

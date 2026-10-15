@@ -170,4 +170,55 @@ describe('MedicalItemFormModal', () => {
       expect(mockUpdateItem).toHaveBeenCalledWith('item-1', expect.objectContaining({ also_called: [] }));
     });
   });
+
+  describe('size', () => {
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockUpdateItem.mockReset();
+      mockCreateItem.mockResolvedValue({ id: 'item-1' });
+      mockUpdateItem.mockResolvedValue({ id: 'item-1' });
+    });
+
+    it('sends the size on create, and omits a blank one', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      );
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/^Name/), 'Oxygen Mask');
+      await user.type(screen.getByLabelText('Size'), 'Pediatric');
+      await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+      expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ size: 'Pediatric' }));
+    });
+
+    it('shows the stored size, and clearing it sends null', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal
+          categories={[category]}
+          categoriesError={null}
+          item={
+            {
+              id: 'item-1',
+              name: 'Oxygen Mask',
+              size: 'Adult',
+              category_id: 'cat-bandages',
+              tracking_type: 'pool',
+              quantity: 2,
+            } as unknown as InventoryItem
+          }
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      );
+      const box = screen.getByLabelText('Size');
+      expect(box).toHaveValue('Adult');
+
+      const user = userEvent.setup();
+      await user.clear(box);
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(mockUpdateItem).toHaveBeenCalledWith('item-1', expect.objectContaining({ size: null }));
+    });
+  });
 });

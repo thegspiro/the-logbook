@@ -380,6 +380,23 @@ export interface CrossTemplateLinkResult {
   skippedPositions: SkippedLinkPosition[];
 }
 
+/** One checklist name the automatic pass linked, and what to. */
+export interface AutoLinkedGroup {
+  name: string;
+  inventoryItemId: string;
+  inventoryItemName: string;
+  confidence: 'exact' | 'strong';
+  /** The "also called" name that produced the match, when it was not the item's own name. */
+  matchedAlias?: string | null;
+  positionCount: number;
+}
+
+export interface AutoLinkResult extends CrossTemplateLinkResult {
+  /** Positions left on the report: ties, weak matches and names with no match. */
+  leftForReview: number;
+  groups: AutoLinkedGroup[];
+}
+
 export interface CheckTemplateItemCreate {
   name: string;
   description?: string | undefined;

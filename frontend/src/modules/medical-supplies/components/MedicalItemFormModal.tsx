@@ -1,10 +1,11 @@
 /**
  * MedicalItemFormModal — add or edit one medical supply.
  *
- * Deliberately shorter than the gear item form: a box of gauze has no size,
- * no style, no member assignment and no NFPA lifecycle. What it does have is
- * a count, a unit, and a floor to reorder at — dated stock arrives afterwards
- * as lots, through Receive delivery.
+ * Deliberately shorter than the gear item form: no style, no member assignment
+ * and no NFPA lifecycle. What it does have is a size where the supply comes in
+ * several (adult and pediatric masks, airway sets), a count, a unit, and a
+ * floor to reorder at — dated stock arrives afterwards as lots, through
+ * Receive delivery.
  */
 
 import React, { useState } from 'react';
@@ -39,6 +40,7 @@ interface FormState {
   /** Comma-separated; becomes the supply's `also_called` list. */
   also_called: string;
   category_id: string;
+  size: string;
   description: string;
   manufacturer: string;
   quantity: string;
@@ -53,6 +55,7 @@ function initialState(item?: InventoryItem): FormState {
     name: item?.name ?? '',
     also_called: formatNameList(item?.also_called),
     category_id: item?.category_id ?? '',
+    size: item?.size ?? '',
     description: item?.description ?? '',
     manufacturer: item?.manufacturer ?? '',
     quantity: item?.quantity !== undefined ? String(item.quantity) : '',
@@ -103,6 +106,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           // Sent whole every save; `[]` is how the box being emptied clears it.
           also_called: parseNameList(form.also_called),
           category_id: form.category_id,
+          size: blankToNull(form.size),
           description: blankToNull(form.description),
           manufacturer: blankToNull(form.manufacturer),
           ...(isLotStocked ? {} : { quantity: numberOrNull(form.quantity) }),
@@ -119,6 +123,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           name: form.name.trim(),
           also_called: parseNameList(form.also_called).length ? parseNameList(form.also_called) : undefined,
           category_id: form.category_id,
+          size: form.size.trim() || undefined,
           description: form.description.trim() || undefined,
           manufacturer: form.manufacturer.trim() || undefined,
           // 0, not omitted: the shared create schema defaults a missing
@@ -241,6 +246,20 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="ms-size" className="form-label">
+            Size
+          </label>
+          <input
+            id="ms-size"
+            className="form-input w-full"
+            value={form.size}
+            maxLength={50}
+            onChange={(e) => set('size', e.target.value)}
+            placeholder="e.g. Adult, Pediatric, Large"
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">

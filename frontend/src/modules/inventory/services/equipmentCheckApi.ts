@@ -35,6 +35,7 @@ import type {
   FailureLogResponse,
   FleetReadinessResponse,
   InventoryLinkResult,
+  AutoLinkResult,
   LinkReportResult,
   CrossTemplateLinkResult,
   InventoryMatchesResult,
@@ -320,6 +321,15 @@ export const equipmentCheckService = {
     return response.data;
   },
   /** Apply reviewed links that may span many templates. All or nothing. */
+  /**
+   * Link every unlinked position whose best match is exact or strong and
+   * beats the runner-up. Ties and weaker matches stay on the report.
+   */
+  async autoLinkAcrossTemplates(): Promise<AutoLinkResult> {
+    const response = await api.post<AutoLinkResult>('/equipment-checks/inventory-links/auto');
+    return response.data;
+  },
+
   async linkAcrossTemplates(links: Record<string, string>): Promise<CrossTemplateLinkResult> {
     const response = await api.post<CrossTemplateLinkResult>('/equipment-checks/inventory-links', { links });
     return response.data;

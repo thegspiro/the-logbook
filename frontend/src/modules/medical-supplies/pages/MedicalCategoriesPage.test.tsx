@@ -185,7 +185,7 @@ describe('MedicalCategoriesPage supplies per category', () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetItems.mockResolvedValue({
       items: [
-        { id: 'item-1', name: 'Bag Valve Mask', quantity: 2 },
+        { id: 'item-1', name: 'Bag Valve Mask', size: 'Adult', quantity: 2 },
         { id: 'item-2', name: 'Nasal Cannula', quantity: 0, is_lot_stocked: true, lot_stock: 12 },
       ],
       total: 2,
@@ -207,7 +207,7 @@ describe('MedicalCategoriesPage supplies per category', () => {
     await userEvent.click(toggles[0] ?? document.body);
 
     const list = await screen.findByRole('list', { name: 'Supplies in Airway' });
-    expect(list).toHaveTextContent('Bag Valve Mask');
+    expect(list).toHaveTextContent('Bag Valve Mask — Adult');
     // Lot-stocked: the lots are the stock, not the stale column.
     expect(list).toHaveTextContent('12 on hand');
     expect(mockGetItems).toHaveBeenCalledWith({
