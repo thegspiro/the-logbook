@@ -103,6 +103,13 @@ A matching **email-signature office** ships with the role.
 
 Writes on both pages require the corresponding `manage` permission.
 
+**Finding a supply by another name.** A supply has an **Also called** list
+(`also_called`, up to 10 names such as "BVM") on its add and edit form.
+`GET /items?search=…&fuzzy=true` returns the exact matches first, then supplies
+whose name or alternate names merely resemble the search; the checklist builder
+uses it so a rig's wording finds the catalog row instead of prompting a
+duplicate. It stays inside the medical domain like every other route here.
+
 **Deleting a category moves its supplies first.** A category can be deleted
 permanently (`DELETE /categories/{id}`), and the page asks where its supplies
 should go. This is not left to the database: an item's foreign key to its

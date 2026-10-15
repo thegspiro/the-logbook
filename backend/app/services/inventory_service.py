@@ -108,7 +108,7 @@ from app.utils.label_renderer import (
 )
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import normalize_name
+from app.utils.name_matching import best_matches, normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone
 from app.utils.sql_results import rows_affected
@@ -438,6 +438,13 @@ LABEL_HIDE_NAME = "no_name"
 _AREA_PATH_SEPARATOR = " > "
 
 _RETIRE_VIA_RETIRE_ACTION = "Use the item's retire action to deactivate it"
+
+
+# How many item names a fuzzy search will rank. Names are short and the scan is
+# one narrow SELECT, so this is generous; it exists so a catalog that grows far
+# past any realistic department cannot turn every keystroke into a full-table
+# read. Items past it are simply not considered, and a warning is logged.
+_FUZZY_CANDIDATE_CAP = 5000
 
 
 class ItemOutsideDomainError(LookupError):
@@ -2286,8 +2293,15 @@ class InventoryService:
         group_by: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        fuzzy: bool = False,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
+
+        ``fuzzy`` hands a first-page search to ``search_items_fuzzy``, which
+        appends near-name matches below the exact ones. It applies only to a
+        search with no grouping on page one; anything else is the plain list,
+        and sorting and pinning do not apply to a fuzzy result, which is ordered
+        by how well each item matches.
 
         ``unassigned_location`` restricts to items filed under no location at
         all — the population the location panel labels "Unassigned". It is
@@ -2316,6 +2330,29 @@ class InventoryService:
         a header tallying only the loaded page would be worse than no header,
         since "Class A Uniform (3)" reads as a total when 40 match.
         """
+        if fuzzy and search and skip == 0 and not group_by:
+            return await self.search_items_fuzzy(
+                organization_id,
+                search,
+                limit=limit,
+                category_id=category_id,
+                status=status,
+                condition=condition,
+                item_type=item_type,
+                item_types=item_types,
+                exclude_item_types=exclude_item_types,
+                assigned_to=assigned_to,
+                location_id=location_id,
+                unassigned_location=unassigned_location,
+                storage_area_id=storage_area_id,
+                vendor_id=vendor_id,
+                size=size,
+                color=color,
+                style=style,
+                active_only=active_only,
+                label_printed=label_printed,
+            )
+
         query = self._joined_items_query(
             organization_id=organization_id,
             group=self._group_spec(group_by) if group_by else None,
@@ -2355,6 +2392,97 @@ class InventoryService:
             limit=limit,
         )
         return items, total
+
+    async def search_items_fuzzy(
+        self,
+        organization_id: UUID | str,
+        search: str,
+        limit: int = 20,
+        **filters: Any,
+    ) -> Tuple[List[InventoryItem], int]:
+        """``get_items`` for a person who is looking a name up, not typing it exactly.
+
+        The substring matches ``get_items`` already finds come first, in the
+        order it returns them, so turning this on can only add results below
+        today's, never reorder or drop them. When that leaves room under
+        ``limit``, items whose *name* — or "also called" names — merely
+        resemble the search fill the rest, best match first: plurals,
+        "4 x 4" for "4x4", a near-spelling, "BVM" for "Bag Valve Mask". Only
+        names are compared; a manufacturer's or description's wording is not.
+
+        ``**filters`` are ``_build_items_query``'s, and are applied to both
+        halves, so the domain a caller is pinned to (medical or gear) bounds
+        the fuzzy results exactly as it bounds the exact ones. Always the first
+        page: ``total`` is the number returned and not a count of everything
+        that might resemble the search, because "resembles" has no natural
+        edge to count to.
+        """
+        exact, total = await self.get_items(
+            organization_id=organization_id,
+            search=search,
+            skip=0,
+            limit=limit,
+            **filters,
+        )
+        room = limit - len(exact)
+        if room <= 0:
+            return exact, total
+
+        criteria = self._build_items_query(
+            organization_id=organization_id, search=None, **filters
+        ).whereclause
+        if criteria is None:
+            # The builder always scopes to the organization. If that ever stops
+            # being true, a scan on its criteria would read every tenant's
+            # names, so refuse rather than run it.
+            raise RuntimeError("Fuzzy item search has no organization scope")
+        rows = (
+            await self.db.execute(
+                select(InventoryItem.id, InventoryItem.name, InventoryItem.also_called)
+                .where(criteria)
+                .order_by(InventoryItem.name)
+                .limit(_FUZZY_CANDIDATE_CAP)
+            )
+        ).all()
+        if len(rows) >= _FUZZY_CANDIDATE_CAP:
+            logger.warning(
+                f"Fuzzy item search scanned the {_FUZZY_CANDIDATE_CAP} item cap "
+                f"for organization {organization_id}; later names were not considered"
+            )
+
+        found = {str(item.id) for item in exact}
+        ranked = best_matches(
+            search,
+            [
+                (str(r.id), r.name, r.also_called)
+                for r in rows
+                if str(r.id) not in found
+            ],
+            limit=room,
+        )
+        if not ranked:
+            return exact, total
+
+        order = {str(match["id"]): rank for rank, match in enumerate(ranked)}
+        fuzzy_query = self._joined_items_query(
+            organization_id=organization_id,
+            group=None,
+            pinned_for_user_id=None,
+            search=None,
+            **filters,
+        ).where(InventoryItem.id.in_(list(order)))
+        fuzzy = await self._run_items_page(
+            fuzzy_query,
+            organization_id=organization_id,
+            group_by=None,
+            pinned_for_user_id=None,
+            sort_by=None,
+            sort_order=None,
+            skip=0,
+            limit=len(order),
+        )
+        fuzzy.sort(key=lambda item: order[str(item.id)])
+        return exact + fuzzy, total + len(fuzzy)
 
     async def get_items_page(
         self,
