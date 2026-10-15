@@ -35,6 +35,7 @@ from app.models.user import User
 from app.schemas.inventory import (
     ExpiringLotResponse,
     InventoryCategoryCreate,
+    InventoryCategoryDeleteResult,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
     InventoryItemCreate,
@@ -49,6 +50,7 @@ from app.schemas.inventory import (
     ItemsListResponse,
 )
 from app.services.inventory_service import (
+    CategoryHasItemsError,
     InventoryService,
     ItemNameTakenOutsideDomainError,
     ItemOutsideDomainError,
@@ -245,6 +247,69 @@ async def update_medical_category(
     return updated
 
 
+@router.delete(
+    "/categories/{category_id}", response_model=InventoryCategoryDeleteResult
+)
+async def delete_medical_category(
+    category_id: UUID,
+    move_items_to: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Permanently delete a medical supply category
+
+    A category that still holds supplies is refused (409) unless
+    ``move_items_to`` names another medical supply category, in which case its
+    supplies — retired ones included — are moved there first. A category with
+    subcategories is refused (400). This cannot be undone.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    await _require_medical_category(service, str(category_id), org_id)
+    if move_items_to:
+        await _require_medical_category(service, str(move_items_to), org_id)
+
+    try:
+        result = await service.delete_category_permanently(
+            category_id=category_id,
+            organization_id=org_id,
+            item_types=MEDICAL_ITEM_TYPES,
+            move_items_to=move_items_to,
+        )
+    except CategoryHasItemsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Medical supply category not found")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_category_deleted",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "category_id": str(category_id),
+            "category_name": result["category_name"],
+            "items_moved": result["items_moved"],
+            "moved_to_category_id": str(move_items_to) if move_items_to else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 # ============================================
 # Items
 # ============================================
@@ -263,6 +328,7 @@ async def list_medical_items(
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    fuzzy: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -313,6 +379,7 @@ async def list_medical_items(
         sort_order=sort_order,
         skip=skip,
         limit=limit,
+        fuzzy=fuzzy,
     )
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
 

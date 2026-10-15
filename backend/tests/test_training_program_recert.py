@@ -300,7 +300,6 @@ class TestNotifyRecertReset:
             organization_id="org-1",
             user_id="u1",
             next_recert_reset_at=date(2028, 3, 30),
-            mentor_id=None,
         )
         program = SimpleNamespace(id="prog-1", name="NREMT Paramedic")
         svc = TrainingProgramService(RecordingSession([_one(user)]))

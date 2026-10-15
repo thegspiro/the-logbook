@@ -2,6 +2,13 @@
 
 This document explains the different port configurations used by The Logbook depending on your deployment method.
 
+**The frontend never needs the backend's port.** `VITE_API_URL` is the relative
+path `/api/v1` in every deployment: the compose files pass it as a fixed build
+argument, and the browser sends API requests to the same origin it loaded the
+page from. The frontend's nginx (in Docker) or the Vite dev server's proxy
+(in native development) forwards `/api` to the backend. Changing a published
+port therefore needs no frontend change — only `.env` and `ALLOWED_ORIGINS`.
+
 ## Port Configurations
 
 ### 1. **Unraid Deployment** (Recommended for Unraid users)
@@ -18,9 +25,6 @@ This document explains the different port configurations used by The Logbook dep
 # In .env file
 FRONTEND_PORT=7880
 BACKEND_PORT=7881
-
-# In frontend/.env file
-VITE_API_URL=http://YOUR-UNRAID-IP:7881
 ```
 
 **Why these ports?**
@@ -45,10 +49,11 @@ VITE_API_URL=http://YOUR-UNRAID-IP:7881
 # In .env file
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
-
-# In frontend/.env file
-VITE_API_URL=http://localhost:3001
 ```
+
+With the production override (`docker-compose.prod.yml`), port 3001 is not
+published on the host; reach the API through the frontend at
+`http://localhost:3000/api/v1`.
 
 **Why these ports?**
 
@@ -62,20 +67,24 @@ VITE_API_URL=http://localhost:3001
 
 **Access Points:**
 
-- **Frontend (Vite Dev Server)**: http://localhost:**5173**
+- **Frontend (Vite Dev Server)**: http://localhost:**3000**
 - **Backend API**: http://localhost:**3001**
 - **API Documentation**: http://localhost:**3001/docs**
 
 **Configuration:**
 
 ```env
-# In frontend/.env file
-VITE_API_URL=http://localhost:3001
+# In frontend/.env file (the default from frontend/.env.example)
+VITE_API_URL=/api/v1
+# Where the Vite dev proxy forwards /api — only needed if the backend is not
+# at the default http://localhost:3001
+# VITE_BACKEND_URL=http://localhost:3001
 ```
 
 **Why these ports?**
 
-- Port 5173 is Vite's default development server port
+- Port 3000 is set in `frontend/vite.config.ts` (`server.port`), replacing
+  Vite's 5173 default
 - Port 3001 is the configured backend API port
 - These are used when running `npm run dev` and `uvicorn main:app --reload`
 
@@ -112,7 +121,7 @@ BACKEND_PORT=3001   # Internal only
 | ------------------ | ------------- | ------------ | ----------------------- |
 | **Unraid**         | **7880**      | **7881**     | http://unraid-ip:7880   |
 | Docker Compose     | 3000          | 3001         | http://localhost:3000   |
-| Native Dev         | 5173          | 3001         | http://localhost:5173   |
+| Native Dev         | 3000          | 3001         | http://localhost:3000   |
 | Production (Nginx) | 443           | 443          | https://your-domain.com |
 
 ---
@@ -140,8 +149,8 @@ BACKEND_PORT=3001   # Internal only
 
 1. Edit `.env` in project root
 2. Update `FRONTEND_PORT` and `BACKEND_PORT`
-3. Update `frontend/.env` with new `VITE_API_URL`
-4. Restart: `docker-compose restart`
+3. Update `ALLOWED_ORIGINS` (and `FRONTEND_URL`) if the frontend port changed
+4. Apply: `docker compose up -d` (a `restart` keeps the old port mappings)
 
 ### For Native Development:
 
@@ -150,7 +159,8 @@ BACKEND_PORT=3001   # Internal only
    ```bash
    uvicorn main:app --reload --port 8000
    ```
-3. Update `frontend/.env` with new API URL
+3. If the backend port changed, set `VITE_BACKEND_URL` in `frontend/.env` so the
+   Vite dev proxy forwards `/api` to it
 
 ---
 
@@ -197,20 +207,22 @@ These are typically **internal only** (not exposed to host):
 - ✅ Containers are running: `docker ps`
 - ✅ Correct ports in `.env` files
 - ✅ Firewall allows the ports
-- ✅ Frontend `.env` has correct `VITE_API_URL`
+- ✅ `ALLOWED_ORIGINS` names the address you open the frontend at
 - ✅ Using correct IP (localhost vs server IP)
 
 ### Unraid: Cannot Access from Other Devices
 
 1. **Check Unraid IP**: Go to Settings → Network Settings
-2. **Update frontend `.env`**:
+2. **Update `ALLOWED_ORIGINS`** in `/mnt/user/appdata/the-logbook/.env` to the
+   address the other devices open (no frontend rebuild is needed — the frontend
+   calls the API on its own origin):
    ```env
-   VITE_API_URL=http://UNRAID-IP:7881
+   ALLOWED_ORIGINS=http://UNRAID-IP:7880
    ```
-3. **Rebuild frontend**:
+3. **Apply it**:
    ```bash
    cd /mnt/user/appdata/the-logbook
-   docker-compose up -d --build frontend
+   docker compose up -d
    ```
 
 ---
@@ -229,7 +241,7 @@ ALLOWED_ORIGINS=["http://YOUR-UNRAID-IP:7880"]
 ALLOWED_ORIGINS=["http://localhost:3000"]
 
 # For development
-ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+ALLOWED_ORIGINS=["http://localhost:3000"]
 
 # For production
 ALLOWED_ORIGINS=["https://your-domain.com"]
@@ -242,9 +254,8 @@ ALLOWED_ORIGINS=["https://your-domain.com"]
 ### Development (.env.development)
 
 ```env
-FRONTEND_PORT=5173
+FRONTEND_PORT=3000
 BACKEND_PORT=3001
-VITE_API_URL=http://localhost:3001
 ```
 
 ### Staging (.env.staging)
@@ -252,7 +263,6 @@ VITE_API_URL=http://localhost:3001
 ```env
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
-VITE_API_URL=https://staging-api.your-domain.com
 ```
 
 ### Production (.env.production)
@@ -260,7 +270,6 @@ VITE_API_URL=https://staging-api.your-domain.com
 ```env
 NGINX_HTTP_PORT=80
 NGINX_HTTPS_PORT=443
-VITE_API_URL=https://api.your-domain.com
 ```
 
 ### Unraid (.env.unraid)
@@ -268,7 +277,6 @@ VITE_API_URL=https://api.your-domain.com
 ```env
 FRONTEND_PORT=7880
 BACKEND_PORT=7881
-VITE_API_URL=http://YOUR-UNRAID-IP:7881
 ```
 
 ---
@@ -277,11 +285,7 @@ VITE_API_URL=http://YOUR-UNRAID-IP:7881
 
 - **Unraid**: Use ports **7880** (frontend) and **7881** (backend)
 - **Docker Compose**: Use ports **3000** (frontend) and **3001** (backend)
-- **Native Dev**: Use ports **5173** (frontend) and **3001** (backend)
+- **Native Dev**: Use ports **3000** (frontend) and **3001** (backend)
 - **Production**: Use ports **80/443** with Nginx reverse proxy
 
-Always update **both** `.env` and `frontend/.env` when changing ports!
-
----
-
-**Last Updated**: January 22, 2026
+When changing ports, update `.env` and `ALLOWED_ORIGINS`; `VITE_API_URL` stays `/api/v1`.

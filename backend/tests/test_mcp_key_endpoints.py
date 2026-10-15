@@ -150,7 +150,10 @@ class TestCreate:
         )
         entry = (
             await db_session.execute(
-                select(AuditLog).where(AuditLog.event_type == "integration.connected")
+                select(AuditLog).where(
+                    AuditLog.event_type == "integration.connected",
+                    AuditLog.organization_id == org_id,
+                )
             )
         ).scalar_one()
         assert entry.organization_id == org_id
@@ -184,7 +187,10 @@ class TestCreate:
         revoked = (
             (
                 await db_session.execute(
-                    select(AuditLog).where(AuditLog.event_type == "mcp.key_revoked")
+                    select(AuditLog).where(
+                        AuditLog.event_type == "mcp.key_revoked",
+                        AuditLog.organization_id == org_id,
+                    )
                 )
             )
             .scalars()
@@ -238,7 +244,10 @@ class TestCreate:
         revoked = (
             (
                 await db_session.execute(
-                    select(AuditLog).where(AuditLog.event_type == "mcp.key_revoked")
+                    select(AuditLog).where(
+                        AuditLog.event_type == "mcp.key_revoked",
+                        AuditLog.organization_id == org_id,
+                    )
                 )
             )
             .scalars()
@@ -335,7 +344,10 @@ class TestCreate:
         assert updated["config"]["access_mode"] == "read_write"
         entry = (
             await db_session.execute(
-                select(AuditLog).where(AuditLog.event_type == "integration.updated")
+                select(AuditLog).where(
+                    AuditLog.event_type == "integration.updated",
+                    AuditLog.organization_id == org_id,
+                )
             )
         ).scalar_one()
         assert entry.organization_id == org_id

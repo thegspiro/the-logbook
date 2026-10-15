@@ -92,7 +92,7 @@ See [API Reference → Administration Page Frame](API-Reference#administration-p
 ## Data
 
 `admin_hub_metric_preferences` — see
-[Database Schema](Database-Schema#recent-schema-changes-2026-08-23--08-24).
+the [generated schema reference](https://github.com/thegspiro/the-logbook/blob/main/docs/DATABASE_SCHEMA.md#admin_hub_metric_preferences).
 
 ## Breadcrumbs _(2026-09-05)_
 

@@ -94,7 +94,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
           </span>
         ) : (
           offer.category && (
-            <span className="bg-theme-surface border-theme-surface-border text-theme-text-secondary absolute top-2.5 left-2.5 rounded-full border px-2.5 py-[3px] text-[11px] font-semibold">
+            <span className="surface-opaque border-theme-surface-border text-theme-text-secondary absolute top-2.5 left-2.5 rounded-full border px-2.5 py-[3px] text-[11px] font-semibold">
               {offer.category}
             </span>
           )

@@ -398,18 +398,22 @@ class FundraisingService:
         # reason create_donation locks them before its insert.
         new_campaign_id = data.get("campaign_id", old_campaign_id)
         new_donor_id = data.get("donor_id", old_donor_id)
-        for cid in {old_campaign_id, new_campaign_id} - {None}:
-            await self._lock_campaign(cid, organization_id)
-        for did in {old_donor_id, new_donor_id} - {None}:
-            await self._lock_donor(did, organization_id)
+        for cid in {old_campaign_id, new_campaign_id}:
+            if cid is not None:
+                await self._lock_campaign(cid, organization_id)
+        for did in {old_donor_id, new_donor_id}:
+            if did is not None:
+                await self._lock_donor(did, organization_id)
 
         apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
 
         # Recalculate aggregates for both the old and new campaign/donor.
-        for cid in {old_campaign_id, donation.campaign_id} - {None}:
+        for cid in {
+            c for c in (old_campaign_id, donation.campaign_id) if c is not None
+        }:
             await self._update_campaign_total(cid, organization_id)
-        for did in {old_donor_id, donation.donor_id} - {None}:
+        for did in {d for d in (old_donor_id, donation.donor_id) if d is not None}:
             await self._update_donor_stats(did, organization_id)
 
         return donation
@@ -479,7 +483,7 @@ class FundraisingService:
             )
             .with_for_update()
         )
-        campaign.current_amount = result.scalar()
+        campaign.current_amount = result.scalar() or Decimal(0)
 
     async def _update_donor_stats(self, donor_id: str, organization_id: str) -> None:
         """Recalculate a donor's lifetime stats from their donations.

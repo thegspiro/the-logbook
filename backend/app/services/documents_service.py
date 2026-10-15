@@ -1234,7 +1234,9 @@ class DocumentsService:
             )
             .with_for_update()
         )
-        items: List[Tuple[str, Optional[str]]] = rows.all()
+        items: List[Tuple[str, Optional[str]]] = [
+            (row[0], row[1]) for row in rows.all()
+        ]
         return items
 
     async def _delete_facility_document_references(
@@ -1439,7 +1441,7 @@ class DocumentsService:
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Paginated results
         # The id breaks ties between documents updated at one instant, so
@@ -1452,7 +1454,7 @@ class DocumentsService:
         if defer_content:
             query = query.options(defer(Document.content_html))
         result = await self.db.execute(query)
-        documents = result.scalars().all()
+        documents = list(result.scalars().all())
 
         return documents, total
 
@@ -1518,13 +1520,13 @@ class DocumentsService:
 
         folder_names: Dict[str, str] = {}
         if folder_ids:
-            rows = await self.db.execute(
+            folder_rows = await self.db.execute(
                 select(DocumentFolder.id, DocumentFolder.name).where(
                     DocumentFolder.id.in_(folder_ids),
                     DocumentFolder.organization_id == str(organization_id),
                 )
             )
-            folder_names = {fid: fname for fid, fname in rows.all()}
+            folder_names = {fid: fname for fid, fname in folder_rows.all()}
 
         for d in documents:
             d.uploader_name = (

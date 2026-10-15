@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { InventoryCategory } from '../../../services/eventServices';
+import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 
 const mockCreateItem = vi.fn();
 const mockUpdateItem = vi.fn();
@@ -96,5 +96,78 @@ describe('MedicalItemFormModal', () => {
     await user.click(screen.getByRole('button', { name: 'Add supply' }));
 
     expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ quantity: 12 }));
+  });
+
+  describe('also called', () => {
+    const baseItem = {
+      id: 'item-1',
+      organization_id: 'org-1',
+      name: 'Bag Valve Mask',
+      category_id: 'cat-bandages',
+      condition: 'good',
+      status: 'available',
+      tracking_type: 'pool',
+      quantity: 2,
+      quantity_issued: 0,
+      active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as unknown as InventoryItem;
+
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockUpdateItem.mockReset();
+      mockCreateItem.mockResolvedValue({ id: 'item-1' });
+      mockUpdateItem.mockResolvedValue({ id: 'item-1' });
+    });
+
+    it('sends the names as a list on create', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      );
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/^Name/), 'Bag Valve Mask');
+      await user.type(screen.getByLabelText('Also called'), 'BVM, Ambu bag');
+      await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+      expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ also_called: ['BVM', 'Ambu bag'] }));
+    });
+
+    it('omits it on create when left empty', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      );
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/^Name/), 'Gauze pads');
+      await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+      const payload = mockCreateItem.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload['also_called']).toBeUndefined();
+    });
+
+    it('fills the box from the stored list, and an emptied box sends an empty list', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal
+          categories={[category]}
+          categoriesError={null}
+          item={{ ...baseItem, also_called: ['BVM', 'Ambu bag'] }}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      );
+
+      const box = screen.getByLabelText('Also called');
+      expect(box).toHaveValue('BVM, Ambu bag');
+
+      const user = userEvent.setup();
+      await user.clear(box);
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(mockUpdateItem).toHaveBeenCalledWith('item-1', expect.objectContaining({ also_called: [] }));
+    });
   });
 });

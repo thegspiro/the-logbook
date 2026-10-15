@@ -62,6 +62,7 @@ Choose option:
 - **1** - Fresh Installation (recommended for first time)
 - **2** - Update Existing Installation
 - **3** - Clean Install (removes all data)
+- **4** - Uninstall / Remove Application
 
 ### 4. Access Application
 
@@ -279,8 +280,11 @@ cd /mnt/user/appdata/the-logbook/unraid
 ```bash
 cd /mnt/user/appdata/the-logbook
 
-# Pull latest code
-git pull
+# docker-compose.yml is a copy of the Unraid template over a tracked file;
+# restore the tracked file so the pull cannot conflict, then re-copy it
+git checkout -- docker-compose.yml
+git pull origin main
+cp unraid/docker-compose-unraid.yml docker-compose.yml
 
 # Repair the build contexts if a pulled Dockerfile outgrew them
 ./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
@@ -291,8 +295,12 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-> `./unraid/update.sh` does all of this — plus a verified database dump and
-> rollback instructions — in one command. Prefer it over the manual sequence.
+> `./unraid/update.sh` (a verified database dump plus rollback instructions)
+> applies only to the build-from-source layout, where
+> `unraid/docker-compose-build-from-source.yml` was copied to
+> `docker-compose.yml`. It refuses to run on an install made by
+> `unraid-setup.sh` — use the setup script's option 2 or the manual sequence
+> above for those.
 
 ---
 
@@ -381,7 +389,7 @@ cd /mnt/user/appdata/the-logbook && docker compose logs -f
 cd /mnt/user/appdata/the-logbook && docker compose restart
 
 # Update
-cd /mnt/user/appdata/the-logbook && git pull && docker compose build --no-cache && docker compose up -d
+cd /mnt/user/appdata/the-logbook/unraid && ./unraid-setup.sh   # choose option 2
 
 # Stop
 cd /mnt/user/appdata/the-logbook && docker compose down
@@ -399,7 +407,7 @@ cd /mnt/user/appdata/the-logbook && docker compose down --remove-orphans && dock
 
 After installation, verify:
 
-- [ ] All 5 containers running (frontend, backend, db, redis, backup): `docker compose ps`
+- [ ] All 6 containers running (frontend, backend, db, redis, backup, clamav): `docker compose ps`
 - [ ] Frontend accessible: `http://YOUR-IP:7880`
 - [ ] Backend healthy: `curl http://localhost:7881/health`
 - [ ] API docs are OFF by default (`/docs` disabled in production; see Security Note)

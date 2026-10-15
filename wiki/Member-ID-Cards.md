@@ -218,4 +218,4 @@ See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-car
 ## Data
 
 `nfc_tags` — see
-[Database Schema](Database-Schema#recent-schema-changes-2026-08-23--08-24).
+the [generated schema reference](https://github.com/thegspiro/the-logbook/blob/main/docs/DATABASE_SCHEMA.md#nfc_tags).

@@ -14,19 +14,19 @@ The Compliance Requirements Configuration module allows organizations to define 
 
 | Type           | Description                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------ |
-| `PERCENTAGE`   | Compliance based on percentage of requirements met (e.g., 80% of requirements = compliant) |
-| `ALL_REQUIRED` | Every requirement must be met for compliance                                               |
+| `percentage`   | Compliance based on percentage of requirements met (e.g., 80% of requirements = compliant) |
+| `all_required` | Every requirement must be met for compliance                                               |
 
 ### Organization Config Settings
 
 | Setting                        | Default       | Description                                                                                                                                                                                                                                                                           |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `threshold_type`               | `PERCENTAGE`  | How compliance is measured                                                                                                                                                                                                                                                            |
+| `threshold_type`               | `percentage`  | How compliance is measured                                                                                                                                                                                                                                                            |
 | `compliant_threshold`          | `100.0`       | Percentage at or above which a member is compliant                                                                                                                                                                                                                                    |
 | `at_risk_threshold`            | `75.0`        | Percentage below which a member is at-risk                                                                                                                                                                                                                                            |
 | `grace_period_days`            | `0`           | Days after deadline before marking non-compliant                                                                                                                                                                                                                                      |
 | `include_current_month`        | `true`        | Evaluation-period boundary. `true` counts the in-progress current month; `false` evaluates as of the **end of the previous month** so members are not flagged non-compliant mid-month before they have had a chance to train. See "Evaluation Period (`include_current_month`)" below |
-| `auto_report_frequency`        | `NONE`        | Automatic report scheduling: `MONTHLY`, `QUARTERLY`, `YEARLY`, `NONE`                                                                                                                                                                                                                 |
+| `auto_report_frequency`        | `none`        | Automatic report scheduling: `monthly`, `quarterly`, `yearly`, `none`                                                                                                                                                                                                                 |
 | `report_email_recipients`      | `[]`          | JSON array of email addresses for report delivery                                                                                                                                                                                                                                     |
 | `report_day_of_month`          | `1`           | Day of month for scheduled reports                                                                                                                                                                                                                                                    |
 | `notify_non_compliant_members` | `false`       | Email a member when their standing becomes `non_compliant`, listing what is unmet (daily `compliance_member_notices` task; once per unmet set)                                                                                                                                        |
@@ -152,10 +152,10 @@ profile see no change.
 
 | Status       | Description                                    |
 | ------------ | ---------------------------------------------- |
-| `PENDING`    | Report generation requested                    |
-| `GENERATING` | Report is being generated                      |
-| `COMPLETED`  | Report generated successfully                  |
-| `FAILED`     | Report generation failed (see `error_message`) |
+| `pending`    | Report generation requested                    |
+| `generating` | Report is being generated                      |
+| `completed`  | Report generated successfully                  |
+| `failed`     | Report generation failed (see `error_message`) |
 
 ### Report Data
 
@@ -203,12 +203,12 @@ Each report stores:
 | ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `id`                           | `String(36)`              | UUID primary key                                                                                                      |
 | `organization_id`              | `String(36)`              | FK to organizations (unique)                                                                                          |
-| `threshold_type`               | `ComplianceThresholdType` | PERCENTAGE or ALL_REQUIRED                                                                                            |
+| `threshold_type`               | `ComplianceThresholdType` | `percentage` or `all_required`                                                                                        |
 | `compliant_threshold`          | `Float`                   | Default: 100.0                                                                                                        |
 | `at_risk_threshold`            | `Float`                   | Default: 75.0                                                                                                         |
 | `grace_period_days`            | `Integer`                 | Default: 0                                                                                                            |
 | `include_current_month`        | `Boolean`                 | NOT NULL, default `true`. When `false`, evaluation stops at the end of the previous month (migration `20260503_0001`) |
-| `auto_report_frequency`        | `ReportFrequency`         | MONTHLY, QUARTERLY, YEARLY, NONE                                                                                      |
+| `auto_report_frequency`        | `ReportFrequency`         | `monthly`, `quarterly`, `yearly`, `none`                                                                              |
 | `report_email_recipients`      | `JSON`                    | Array of email addresses                                                                                              |
 | `report_day_of_month`          | `Integer`                 | 1-28                                                                                                                  |
 | `notify_non_compliant_members` | `Boolean`                 | Default: false                                                                                                        |
@@ -233,18 +233,18 @@ Each report stores:
 
 ### `compliance_reports` Table
 
-| Column                   | Type           | Description                               |
-| ------------------------ | -------------- | ----------------------------------------- |
-| `id`                     | `String(36)`   | UUID primary key                          |
-| `organization_id`        | `String(36)`   | FK to organizations                       |
-| `report_type`            | `String(50)`   | monthly or annual (validated server-side) |
-| `period_label`           | `String(50)`   | Human-readable period label               |
-| `status`                 | `ReportStatus` | PENDING, GENERATING, COMPLETED, FAILED    |
-| `report_data`            | `JSON`         | Full compliance data                      |
-| `summary`                | `JSON`         | Aggregated statistics                     |
-| `error_message`          | `Text`         | Error details if FAILED                   |
-| `generated_by`           | `String(36)`   | FK to users                               |
-| `generation_duration_ms` | `Integer`      | Processing time                           |
+| Column                   | Type           | Description                                    |
+| ------------------------ | -------------- | ---------------------------------------------- |
+| `id`                     | `String(36)`   | UUID primary key                               |
+| `organization_id`        | `String(36)`   | FK to organizations                            |
+| `report_type`            | `String(50)`   | monthly or annual (validated server-side)      |
+| `period_label`           | `String(50)`   | Human-readable period label                    |
+| `status`                 | `ReportStatus` | `pending`, `generating`, `completed`, `failed` |
+| `report_data`            | `JSON`         | Full compliance data                           |
+| `summary`                | `JSON`         | Aggregated statistics                          |
+| `error_message`          | `Text`         | Error details if `failed`                      |
+| `generated_by`           | `String(36)`   | FK to users                                    |
+| `generation_duration_ms` | `Integer`      | Processing time                                |
 
 ---
 
@@ -255,7 +255,7 @@ Each report stores:
 | First-time initialization via `/config/initialize` when config exists     | Returns error — use `PUT /config` for updates                                                                                                     |
 | Member matches multiple compliance profiles                               | Resolved by `priority` ordering (lower number = higher priority)                                                                                  |
 | Profile threshold override is null                                        | Uses organization-level default threshold                                                                                                         |
-| Report generation failure                                                 | Status set to `FAILED` with `error_message`; can be regenerated                                                                                   |
+| Report generation failure                                                 | Status set to `failed` with `error_message`; can be regenerated                                                                                   |
 | Grace period applied                                                      | Members remain compliant during grace period after deadline                                                                                       |
 | `notify_days_before_deadline` empty array                                 | No pre-deadline notifications sent                                                                                                                |
 | Organization has no compliance config                                     | Compliance calculations use hardcoded defaults until config is created; the in-progress current month **is** included (legacy behavior preserved) |
@@ -267,7 +267,7 @@ Each report stores:
 
 ## Frontend Page
 
-**URL**: `/training/compliance-config` (the screen calls `GET`/`PUT /compliance/config`, which is the API path, not the page — corrected 2026-10-04)
+**URL**: `/training/compliance-config` (the screen calls `GET`/`PUT /api/v1/compliance/config`)
 **Permission**: `compliance.manage` **or** `settings.manage`
 
 The `ComplianceRequirementsConfigPage` provides:

@@ -103,6 +103,31 @@ A matching **email-signature office** ships with the role.
 
 Writes on both pages require the corresponding `manage` permission.
 
+**Finding a supply by another name.** A supply has an **Also called** list
+(`also_called`, up to 10 names such as "BVM") on its add and edit form.
+`GET /items?search=…&fuzzy=true` returns the exact matches first, then supplies
+whose name or alternate names merely resemble the search; the checklist builder
+uses it so a rig's wording finds the catalog row instead of prompting a
+duplicate. It stays inside the medical domain like every other route here.
+
+**Deleting a category moves its supplies first.** A category can be deleted
+permanently (`DELETE /categories/{id}`), and the page asks where its supplies
+should go. This is not left to the database: an item's foreign key to its
+category is `SET NULL`, and an item with no category reads as **gear** — a
+bare delete would carry every supply in it off this page and into the uniform
+closet. So the route refuses (409) while the category holds supplies unless
+`?move_items_to=<medical category id>` names a destination, and then moves
+them, **retired supplies included**, before deleting. A category with
+subcategories is refused (400). A supply's low-stock threshold comes from its
+category, so a moved supply takes on the new category's. Both ids must be
+medical categories in the caller's organization, so a gear category can be
+neither deleted nor chosen as the destination here. The delete is recorded in
+the audit log as `medical_category_deleted`, with the count moved.
+
+Rows in other tables that point at a category (issuance allowances, variant
+groups, kit items, reorder and equipment requests) are gear features and are
+not moved; the database clears or removes them as their own foreign keys say.
+
 **The page opens on the expiring tab, not the catalog.** For a consumable with
 a shelf life, "what am I about to lose" is the question that brings someone to
 the page; "what do we stock" is the reference behind it.
@@ -138,6 +163,38 @@ so the area carries the category name and the gear language lives on the
 screens that are actually about gear. **Routes, permission keys and table names
 have never changed through any of this**, so no link, bookmark or integration
 breaks.
+
+### Importing supplies from a CSV
+
+A department can bring its existing stock in through the inventory CSV import
+(`/inventory/import`, which needs `inventory.manage`). Its downloadable sample
+includes common medical supplies — airway, bleeding control and trauma,
+dressings, diagnostics and infection control — as counted rows, plus one
+individually tracked, serial-numbered device. It deliberately has **no
+medications**: they vary by protocol and include controlled substances.
+
+Three things about the import decide where those rows land:
+
+- **The Category cell is a name, matched against categories you have already
+  created** (case-insensitively, among all of them, medical included). The
+  sample uses generic names — _Airway & Breathing_, _Bleeding Control & Trauma_,
+  _Dressings & Bandages_, _Diagnostics_, _Infection Control_ — so rename them in
+  the file to match your own. A name that matches nothing still imports the
+  row, **with no category**, and an uncategorized item reads as gear rather
+  than medical; the import lists each such row as a warning.
+- **"Item Type" is checked and then ignored.** An item's type comes from its
+  category, so writing `medical` there does not make a row medical by itself
+  (it is accepted, so it is not rejected).
+- **"Also Called" carries alternate names.** Put them in one cell, separated by
+  semicolons or commas (`BVM; Ambu bag`); they become the item's "Also called"
+  names, which the checklist matcher looks through when linking a checklist
+  item to inventory. Blank and repeated names, and the item's own name, are
+  dropped. A row with more than 10 names, or a name over 100 characters, is
+  refused and reported rather than trimmed.
+- **The import carries no lots.** Lot numbers and expiration dates are added
+  afterwards, for example through **Receive delivery**; a supply imported by
+  count shows its quantity but nothing is flagged as expiring until it has
+  dated lots.
 
 ---
 
@@ -373,6 +430,7 @@ permission **or** the broad equivalent.
 | `GET`    | `/categories`               | view       |
 | `POST`   | `/categories`               | manage     |
 | `PATCH`  | `/categories/{category_id}` | manage     |
+| `DELETE` | `/categories/{category_id}` | manage     |
 | `GET`    | `/items`                    | view       |
 | `GET`    | `/items/{item_id}`          | view       |
 | `POST`   | `/items`                    | manage     |

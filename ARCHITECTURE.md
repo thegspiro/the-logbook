@@ -386,7 +386,6 @@ All services in `backend/app/services/`:
 | `role_service.py`         | RoleService                               | Role               | get_roles, create_role, update_role, delete_role, clone_role, assign_roles                                                                                       |
 | `organization_service.py` | OrganizationService                       | Organization       | get_settings, update_settings, get_enabled_modules, update_modules                                                                                               |
 | `onboarding.py`           | OnboardingService                         | Organization, User | create_organization, create_system_owner, configure_modules, complete_onboarding                                                                                 |
-| `onboarding_session.py`   | OnboardingSessionService                  | —                  | save_session_data, get_session_data (Redis-backed)                                                                                                               |
 
 ### Module Services
 
@@ -430,11 +429,11 @@ All services in `backend/app/services/`:
 
 ### Integration Services (`backend/app/services/integration_services/`)
 
-| Service File                 | Class                  | Purpose                                                                                               |
-| ---------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `salesforce_service.py`      | SalesforceService      | Salesforce REST API client (OAuth 2.0, SOQL queries, CRUD operations)                                 |
-| `salesforce_sync_service.py` | SalesforceSyncService  | Bidirectional sync with configurable field mappings (members↔contacts, training→tasks, events→events) |
-| `notification_dispatcher.py` | NotificationDispatcher | Cross-integration notification routing                                                                |
+| Service File                 | Class                 | Purpose                                                                                               |
+| ---------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `salesforce_service.py`      | SalesforceService     | Salesforce REST API client (OAuth 2.0, SOQL queries, CRUD operations)                                 |
+| `salesforce_sync_service.py` | SalesforceSyncService | Bidirectional sync with configurable field mappings (members↔contacts, training→tasks, events→events) |
+| `notification_dispatch.py`   | — (module functions)  | Fans domain events out to enabled chat integrations (Slack, Discord, Teams); best-effort              |
 
 ### Specialized Services (No Direct Frontend Exposure)
 
@@ -442,7 +441,7 @@ All services in `backend/app/services/`:
 | ------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `competency_matrix_service.py`        | CompetencyMatrixService       | Skills/competency tracking matrix computation                                                                                                                                                                                                 |
 | `cert_alert_service.py`               | CertAlertService              | Certification expiry alerting logic (tiered: 90/60/30/7 days + expired escalation)                                                                                                                                                            |
-| `recertification_service.py`          | RecertificationService        | Automated recertification pathway generation and reminders                                                                                                                                                                                    |
+| `training_enhancement_service.py`     | RecertificationService        | Automated recertification pathway generation and reminders                                                                                                                                                                                    |
 | `struggling_member_service.py`        | StrugglingMemberService       | Detects members at risk of disengagement                                                                                                                                                                                                      |
 | `departure_clearance_service.py`      | DepartureClearanceService     | Exit procedure checklists                                                                                                                                                                                                                     |
 | `property_return_service.py`          | PropertyReturnService         | Department property return tracking                                                                                                                                                                                                           |
@@ -792,17 +791,17 @@ Creates axios instances with:
 
 ### Module-Specific Services
 
-| Module              | Service File                                  | API Prefix             |
-| ------------------- | --------------------------------------------- | ---------------------- |
-| admin-hours         | `modules/admin-hours/services/api.ts`         | `/admin-hours`         |
-| apparatus           | `modules/apparatus/services/api.ts`           | `/apparatus`           |
-| communications      | `modules/communications/services/api.ts`      | `/email-templates`     |
-| prospective-members | `modules/prospective-members/services/api.ts` | `/prospective-members` |
-| public-portal       | `modules/public-portal/services/api.ts`       | `/public-portal`       |
-| scheduling          | `modules/scheduling/services/api.ts`          | `/scheduling`          |
-| reports             | `modules/reports/services/api.ts`             | `/reports`             |
-| grants-fundraising  | `modules/grants-fundraising/services/api.ts`  | `/grants`              |
-| onboarding          | `modules/onboarding/services/api-client.ts`   | `/onboarding`          |
+| Module              | Service File                                            | API Prefix             |
+| ------------------- | ------------------------------------------------------- | ---------------------- |
+| admin-hours         | `modules/admin-hours/services/api.ts`                   | `/admin-hours`         |
+| apparatus           | `modules/apparatus/services/api.ts`                     | `/apparatus`           |
+| communications      | `modules/communications/services/suggestionsService.ts` | `/suggestions`         |
+| prospective-members | `modules/prospective-members/services/api.ts`           | `/prospective-members` |
+| public-portal       | `modules/public-portal/services/publicPortalApi.ts`     | `/public-portal`       |
+| scheduling          | `modules/scheduling/services/api.ts`                    | `/scheduling`          |
+| reports             | `modules/reports/services/api.ts`                       | `/reports`             |
+| grants-fundraising  | `modules/grants-fundraising/services/api.ts`            | `/grants`              |
+| onboarding          | `modules/onboarding/services/api-client.ts`             | `/onboarding`          |
 
 ---
 
@@ -845,11 +844,8 @@ Creates axios instances with:
 | `role.ts`              | Role, Permission, PermissionCategory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `event.ts`             | Event, EventRSVP, EventTemplate, EventSettings, ExternalAttendee                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `training.ts`          | TrainingRecord, TrainingCourse, CourseClass, CourseCohort, CourseCohortClass, CourseCohortMember, CohortSchedulePreviewResponse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport, ShiftCompletionReport, ShiftCompletionReportCreate, TraineeShiftStats, MonthlyShiftData, OfficerShiftAnalytics, OfficerAnalyticsTrainee, SkillObservation, TaskPerformed |
-| `scanner.ts`           | MemberIdPayload, isMemberIdPayload                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `scheduling.ts`        | Shift, ShiftTemplate, ShiftPattern, ShiftAssignment, SwapRequest, TimeOff                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `election.ts`          | Election, Candidate, Vote, ElectionResults, BallotItem, ElectionReportResponse, VoteReceiptResponse                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `document.ts`          | Document, DocumentFolder                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `minutes.ts`           | MeetingMinutes, Motion, ActionItem, MinutesTemplate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `skillsTesting.ts`     | SkillTemplate, SkillTest, SkillItem, TestResult                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `modules.ts`           | ModuleInfo, AVAILABLE_MODULES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `platformAnalytics.ts` | PlatformAnalytics, UsageMetrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -1193,7 +1189,6 @@ MemberIdScannerModal / MemberScanPage:
 Shared Infrastructure:
   constants/camera.ts → QR_SCAN_CONFIG, BARCODE_SCAN_CONFIG, HAS_BARCODE_DETECTOR
   hooks/useHtml5Scanner.ts → camera lifecycle, environment→user fallback
-  types/scanner.ts → MemberIdPayload, isMemberIdPayload type guard
 ```
 
 ### Reporting Data Sources
@@ -1377,7 +1372,7 @@ All permissions follow dot notation: `resource.action`
 | `security.py`               | JWT creation/verification, password hashing (Argon2), TOTP                                                                                                                              |
 | `security_middleware.py`    | CSRF verification, rate limiting middleware                                                                                                                                             |
 | `permissions.py`            | `require_permission()`, `require_all_permissions()` dependency factories                                                                                                                |
-| `audit.py`                  | `log_audit_event()` — tamper-proof SHA-256 hash chain                                                                                                                                   |
+| `audit.py`                  | `log_audit_event()` — tamper-evident keyed HMAC-SHA256 hash chain                                                                                                                       |
 | `cache.py`                  | Redis-backed caching utilities                                                                                                                                                          |
 | `constants.py`              | Application constants                                                                                                                                                                   |
 | `encrypted_types.py`        | SQLAlchemy encrypted column types (AES-256)                                                                                                                                             |
@@ -1385,7 +1380,6 @@ All permissions follow dot notation: `resource.action`
 | `geoip_sync.py`             | Cross-worker GeoIP invalidation: `publish_geoip_invalidation()` + `GeoIPInvalidationListener` (Redis pub/sub channel `geoip:invalidate`) so every worker re-syncs blocked-country rules |
 | `logging.py`                | Loguru configuration                                                                                                                                                                    |
 | `seed.py`                   | Database seeding (roles, permissions, demo data)                                                                                                                                        |
-| `seed_training.py`          | Training module seeding                                                                                                                                                                 |
 | `utils.py`                  | `safe_error_detail()`, `generate_uuid()`, misc utilities                                                                                                                                |
 | `websocket_manager.py`      | WebSocket connection management                                                                                                                                                         |
 | `public_portal_security.py` | API key validation for public portal                                                                                                                                                    |
@@ -1409,7 +1403,7 @@ All permissions follow dot notation: `resource.action`
 | `components/ux/PromptDialog.tsx`         | Single-value in-app prompt replacing `window.prompt`, with validation shown rather than swallowed                                                                                                                                                                                                                                      |
 | `hooks/useEmailListInput.ts`             | Shared email list input hook with validation, add/remove, and state management                                                                                                                                                                                                                                                         |
 | `hooks/useHtml5Scanner.ts`               | Reusable HTML5 QR/barcode scanner hook with camera fallback logic                                                                                                                                                                                                                                                                      |
-| `hooks/useNotificationPoller.ts`         | Smart notification polling with Page Visibility API pause/resume                                                                                                                                                                                                                                                                       |
+| `hooks/useNotificationCount.ts`          | Unread-notification count polling (60s) with Page Visibility API pause/resume                                                                                                                                                                                                                                                          |
 | `constants/config.ts`                    | `API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, etc.                                                                                                                                                                                                                                                                                            |
 | `constants/enums.ts`                     | All `as const` enum objects + status badge colors                                                                                                                                                                                                                                                                                      |
 | `contexts/ThemeContext.tsx`              | Dark mode / high-contrast theme management                                                                                                                                                                                                                                                                                             |

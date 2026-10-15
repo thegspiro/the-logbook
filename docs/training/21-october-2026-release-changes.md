@@ -26,7 +26,7 @@
 | End-of-shift summary retried; Flagged view while review is off                                                                                                             | [03 — Scheduling](./03-scheduling.md)                                                                                                             |
 | Prospects: checklist ticks in the drawer; Automatic Transfer to Membership; stale-stage repair                                                                             | [15 — Prospective Members](./15-prospective-members.md), [01 — Membership](./01-membership.md)                                                    |
 | Held offline items (Send as me / Discard); queued work belongs to its member                                                                                               | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                                                                           |
-| Sign-out could not be confirmed; two tabs refreshing no longer end your sessions                                                                                           | [00 — Getting Started](./00-getting-started.md) (Login & Session Edge Cases)                                                                      |
+| Sign-out could not be confirmed; two tabs refreshing no longer end your sessions                                                                                           | [00 — Getting Started](./00-getting-started.md) (Sign-In and Session Problems)                                                                    |
 | Scheduled-task failures in Error Monitoring; proxy limits sized for a department; rank list as vocabulary                                                                  | [08 — Admin & Reports](./08-admin-reports.md)                                                                                                     |
 | Alert emails reworded; Supplies to Replace; five emails fit a phone                                                                                                        | [05 — Inventory](./05-inventory.md) (What the alert emails say now), [03 — Scheduling](./03-scheduling.md) (Alerts)                               |
 | Integration address checks; Google Calendar response cap                                                                                                                   | [16 — Integrations](./16-integrations.md)                                                                                                         |
@@ -127,6 +127,22 @@ Screenshots to create or replace are in
 | Give everyone all calls at close-out                                        | [03 — Scheduling](./03-scheduling.md)                          |
 
 ---
+
+# October 13–15, 2026 workflow updates
+
+Index for the seventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                                       | Now in                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Minutes: circulate, member suggestions, adopt, closed sessions, roll call, attachments, outlines, rich text | [04 — Events & Meetings](./04-events-meetings.md#circulating-and-adopting-minutes)                      |
+| "Also called" names and near-match search for checklist items; CSV "Also Called" column                     | [05 — Inventory](./05-inventory.md)                                                                     |
+| Delete a medical supply category (supplies move first)                                                      | [05 — Inventory](./05-inventory.md)                                                                     |
+| Start from last year skips retired categories                                                               | [11 — Finance](./11-finance.md)                                                                         |
+| Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
+| Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
 
 # October 12–13, 2026 workflow updates
 

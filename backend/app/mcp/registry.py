@@ -160,7 +160,10 @@ def logbook_tool(
                     raise ToolError(module_message(module or ""))
                 if not principal.member_allows(permissions):
                     raise ToolError(MEMBER_PERMISSION_MESSAGE)
-                if not gate_allows(principal, gate):
+                # The full argument list, not just the gate: gate_allows also
+                # checks the member's permissions, and called without them it
+                # fails closed for every OAuth connection.
+                if not gate_allows(principal, gate, module, permissions):
                     raise ToolError(GATE_MESSAGES[gate or ""])
                 check_argument_sizes(kwargs)
             except ToolError as exc:

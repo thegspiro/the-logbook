@@ -181,6 +181,10 @@ batch scanner is titled **Distribute Items**.
   agree. Negative quantities and purchase prices are refused per row. An
   import whose `Vendor` cell names an unknown supplier still imports the row
   and lists the name for attaching afterwards (see [Vendors](Module-Inventory-Developer#vendors))
+  The downloadable sample includes common medical supplies (no medications);
+  its `Category` cells are names matched against categories you have already
+  created, and a row that matches none imports uncategorized, which reads as gear
+  (see [Importing supplies from a CSV](Module-Medical-Supplies#importing-supplies-from-a-csv))
 - **CSV Export** — export of the filtered list to CSV (see
   [Item Management](Module-Inventory-Developer#item-management))
 - **Variant Groups, sizes and styles** — see
@@ -474,6 +478,36 @@ resolves by apparatus.
 - **Reports** attribute a check to the shift's apparatus
   (`shifts.apparatus_id`), falling back to the check's own column only for a
   standalone check.
+
+### Matching checklist items to the catalog
+
+A checklist is typed by hand, so the name on the rig and the name in the
+catalog rarely agree — "4 x 4 gauze" against "Gauze Pads, 4x4 Sterile", or "BVM"
+against "Bag Valve Mask". Both ways of linking a position to an inventory item
+are tolerant of that:
+
+- **The picker** (searching the catalog from a checklist row) asks for fuzzy
+  results: the exact substring matches come first, as they always did, and
+  near-name matches follow. Plurals, a dimension spaced differently and a
+  near-spelling all count; only the **name** (and "Also called" names) is
+  compared, not the manufacturer or description.
+- **The review screens** (**Link to inventory** in the builder, and the
+  catalog-links report) propose a catalog item per position with a confidence.
+  Only an identical-words match is pre-selected; anything fuzzier is offered for
+  a person to confirm.
+- **Also called.** An item carries up to 10 alternate names ("BVM", "Ambu bag"),
+  entered as a comma-separated list on the item form for gear and for medical
+  supplies. Both of the above look through them, and a suggestion made through
+  one says so. An alias match is never pre-selected, because two items can share
+  an alias and a person typed it.
+- **What stays apart.** A word containing a number or size must match exactly
+  ("4x4" never matches "4x8", "Size 3" never "Size 4"), and "Adult" does not
+  match "Pediatric".
+
+Fuzzy search is opt-in per request (`fuzzy=true` on `GET /inventory/items` and
+`GET /medical-supplies/items`), runs inside the same organization and
+medical/gear bounds as the exact search, and is only a first-page feature:
+results beyond the exact ones are ordered by match quality.
 
 ### Checklist settings
 

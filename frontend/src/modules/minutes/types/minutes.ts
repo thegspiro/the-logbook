@@ -15,6 +15,14 @@ export interface SectionEntry {
   key: string;
   title: string;
   content: string;
+  /** 'html' is the rich-text subset; absent or 'text' is plain text, as written before the editor. */
+  format?: 'text' | 'html' | undefined;
+  /** From the outline: a required section needs text before minutes circulate. */
+  required?: boolean;
+  /** From the outline: the body moves and seconds this section, as to adopt minutes or adjourn. */
+  needs_motion?: boolean | undefined;
+  /** From the outline: the wording the section's motion starts with. */
+  motion_text?: string | undefined;
 }
 
 export interface TemplateSectionEntry {
@@ -22,7 +30,10 @@ export interface TemplateSectionEntry {
   key: string;
   title: string;
   default_content: string;
+  format?: 'text' | 'html' | undefined;
   required: boolean;
+  needs_motion?: boolean | undefined;
+  motion_text?: string | undefined;
 }
 
 // ── Header / Footer Config ──
@@ -30,7 +41,7 @@ export interface TemplateSectionEntry {
 export interface HeaderConfig {
   org_name?: string;
   logo_url?: string;
-  subtitle?: string;
+  subtitle?: string | null | undefined;
   show_date?: boolean;
   show_meeting_type?: boolean;
 }
@@ -40,7 +51,7 @@ export interface FooterConfig {
   center_text?: string;
   right_text?: string;
   show_page_numbers?: boolean;
-  confidentiality_notice?: string;
+  confidentiality_notice?: string | null | undefined;
 }
 
 // ── Template Types ──
@@ -49,7 +60,7 @@ export interface MinutesTemplate {
   id: string;
   organization_id: string;
   name: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type: MeetingType;
   is_default: boolean;
   sections: TemplateSectionEntry[];
@@ -71,7 +82,7 @@ export interface TemplateListItem {
 
 export interface TemplateCreate {
   name: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type: MeetingType;
   is_default?: boolean;
   sections: TemplateSectionEntry[];
@@ -81,7 +92,7 @@ export interface TemplateCreate {
 
 export interface TemplateUpdate {
   name?: string;
-  description?: string;
+  description?: string | null | undefined;
   meeting_type?: MeetingType;
   is_default?: boolean;
   sections?: TemplateSectionEntry[];
@@ -91,11 +102,20 @@ export interface TemplateUpdate {
 
 // ── Existing types (unchanged) ──
 
+export type AttendanceStatus = 'present' | 'late' | 'left_early' | 'excused' | 'absent' | 'guest';
+
+/**
+ * One line of the roll call. `status` is the record; `present` is derived from
+ * it by the server and means "counted toward quorum" (present, late, left
+ * early). Rows saved before statuses existed have no `status`.
+ */
 export interface AttendeeEntry {
-  user_id?: string;
+  user_id?: string | null;
   name: string;
-  role?: string;
+  role?: string | null;
+  status?: AttendanceStatus;
   present: boolean;
+  note?: string | null;
 }
 
 export interface Motion {
@@ -105,11 +125,17 @@ export interface Motion {
   motion_text: string;
   moved_by?: string;
   seconded_by?: string;
+  /** The outline section the motion was made from, when it was made from one. */
+  section_key?: string | null;
   discussion_notes?: string;
   status: MotionStatus;
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
+  /** The ballot that decided the motion, when it went to a ballot. */
+  election_id?: string | null;
+  ballot_item_id?: string | null;
+  election_title?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,8 +151,25 @@ export interface ActionItem {
   status: ActionItemStatus;
   completed_at?: string;
   completion_notes?: string;
+  /** The earlier item this one continues, when it was carried forward. */
+  carried_from_id?: string | null;
+  /** Set on the original once it has been carried into later minutes. */
+  carried_forward_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An open item from an earlier meeting, offered for carry-forward. */
+export interface OpenActionItem extends ActionItem {
+  minutes_title: string;
+  meeting_date: string;
+}
+
+/** An item assigned to the caller, with the minutes it came from. */
+export interface MyActionItem extends ActionItem {
+  minutes_title: string;
+  meeting_date: string;
+  minutes_status: MinutesStatus;
 }
 
 export interface MeetingMinutes {
@@ -156,6 +199,13 @@ export interface MeetingMinutes {
   rejected_at?: string;
   rejected_by?: string;
   rejection_reason?: string;
+  /** When the body voted to adopt, as presented or as amended, and where. */
+  adopted_on?: string | null;
+  adopted_as_amended?: boolean | null;
+  adoption_moved_by?: string | null;
+  adoption_seconded_by?: string | null;
+  adopting_minutes_id?: string | null;
+  adopting_minutes_title?: string | null;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -211,12 +261,15 @@ export interface MotionCreate {
   motion_text: string;
   moved_by?: string | undefined;
   seconded_by?: string | undefined;
+  section_key?: string | undefined;
   discussion_notes?: string | undefined;
   status?: MotionStatus | undefined;
   votes_for?: number | undefined;
   votes_against?: number | undefined;
   votes_abstain?: number | undefined;
   order?: number | undefined;
+  election_id?: string | undefined;
+  ballot_item_id?: string | undefined;
 }
 
 export interface MotionUpdate {
@@ -229,6 +282,8 @@ export interface MotionUpdate {
   votes_against?: number;
   votes_abstain?: number;
   order?: number;
+  election_id?: string | null;
+  ballot_item_id?: string | null;
 }
 
 /** A member an action item may be assigned to (W52-6). */
@@ -270,4 +325,199 @@ export interface MinutesSearchResult {
   status: MinutesStatus;
   snippet: string;
   match_field: string;
+}
+
+// ── Roll call suggestions ──
+
+export interface AttendanceSuggestions {
+  source: 'event' | 'roster';
+  event_title?: string | null;
+  entries: AttendeeEntry[];
+}
+
+// ── Election results ──
+
+export interface BallotItemRef {
+  id: string;
+  title: string;
+}
+
+export interface ImportableElection {
+  id: string;
+  title: string;
+  election_type?: string | null;
+  closed_at?: string | null;
+  positions?: string[] | null;
+  already_imported: boolean;
+  /** Held at this meeting's event or recorded against its meeting record. */
+  linked_to_meeting?: boolean;
+  ballot_items?: BallotItemRef[];
+}
+
+export interface FiledCandidateResult {
+  candidate_name: string;
+  vote_count: number;
+  percentage: number;
+  is_winner: boolean;
+  is_tied?: boolean;
+}
+
+export interface FiledPositionResult {
+  position: string;
+  label?: string | null;
+  total_votes: number;
+  candidates: FiledCandidateResult[];
+}
+
+/** The ElectionResults dump frozen into the minutes. */
+export interface ElectionResultSnapshot {
+  election_title?: string;
+  total_votes?: number;
+  total_eligible_voters?: number;
+  voter_turnout_percentage?: number;
+  quorum_met?: boolean | null;
+  quorum_detail?: string | null;
+  results_by_position?: FiledPositionResult[];
+  overall_results?: FiledCandidateResult[];
+}
+
+export interface MinutesElectionResult {
+  id: string;
+  minutes_id: string;
+  election_id?: string | null;
+  election_title: string;
+  election_closed_at?: string | null;
+  snapshot: ElectionResultSnapshot;
+  /** Filed after the minutes were circulated: permanent, outside the adopted text. */
+  is_addendum?: boolean;
+  captured_by?: string | null;
+  captured_by_name?: string | null;
+  created_at: string;
+}
+
+// ── Attachments ──
+
+export type AttachmentCategory = 'signed_copy' | 'report' | 'agenda' | 'handout' | 'correspondence' | 'other';
+
+export interface MinutesAttachment {
+  id: string;
+  minutes_id: string;
+  title: string;
+  category: AttachmentCategory;
+  description?: string | null;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  uploaded_by?: string | null;
+  uploaded_by_name?: string | null;
+  uploaded_at: string;
+}
+
+// ── Approved versions ──
+
+export interface MinutesRevision {
+  id: string;
+  minutes_id: string;
+  version: number;
+  content_hash: string;
+  submitted_by?: string | null;
+  submitted_by_name?: string | null;
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at: string;
+  superseded_at?: string | null;
+  superseded_by?: string | null;
+  superseded_by_name?: string | null;
+  superseded_reason?: string | null;
+}
+
+export interface MinutesVerification {
+  verified: boolean;
+  version?: number | null;
+  content_hash?: string | null;
+  current_hash?: string | null;
+  changed: string[];
+  detail: string;
+}
+
+// ── Closed sessions ──
+
+export interface ClosedSessionParticipant {
+  user_id?: string | null;
+  name: string;
+  joined_at?: string | null;
+  left_at?: string | null;
+}
+
+export interface ClosedSession {
+  id: string;
+  minutes_id: string;
+  motion_id?: string | null;
+  reason: string;
+  legal_basis?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  participants: ClosedSessionParticipant[];
+  summary?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClosedSessionInput {
+  reason: string;
+  legal_basis: string | null;
+  started_at: string;
+  ended_at: string | null;
+  motion_id: string | null;
+  participants: ClosedSessionParticipant[];
+  summary: string | null;
+}
+
+// ── Review ──
+
+export type SuggestionStatus = 'open' | 'accepted' | 'declined';
+
+export type ChangeKind = 'replace' | 'insert' | 'delete' | 'format';
+export type ChangeDecision = 'open' | 'accepted' | 'rejected';
+
+/** One tracked change in a suggestion: the words removed and added, with context. */
+export interface SuggestionChange {
+  id: string;
+  kind: ChangeKind;
+  deleted: string;
+  inserted: string;
+  before: string;
+  after: string;
+  decision: ChangeDecision;
+}
+
+export interface MinutesSuggestion {
+  id: string;
+  minutes_id: string;
+  section_key?: string | null;
+  comment: string;
+  proposed_text?: string | null;
+  /** The section as the reviewer saw it, and their edited copy (tracked changes only). */
+  base_content?: string | null;
+  proposed_content?: string | null;
+  changes?: SuggestionChange[];
+  /** The section has been edited since the reviewer saw it. */
+  section_changed?: boolean;
+  applied_at?: string | null;
+  status: SuggestionStatus;
+  resolution_note?: string | null;
+  resolved_by_name?: string | null;
+  resolved_at?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+}
+
+export interface AdoptionDetails {
+  adopted_on?: string | undefined;
+  adopting_minutes_id?: string | undefined;
+  as_amended?: boolean | undefined;
+  moved_by?: string | undefined;
+  seconded_by?: string | undefined;
 }

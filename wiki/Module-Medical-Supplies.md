@@ -76,7 +76,7 @@ gained the `equipment_check.*` set its description had always promised.
 | Page                      | Route                          | Opens on                                                                                        |
 | ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
 | Medical Supplies          | `/medical-supplies`            | **What is expiring** — with an all-supplies tab, an add-supply form and a receive-delivery form |
-| Medical Supply Categories | `/medical-supplies/categories` | Category management                                                                             |
+| Medical Supply Categories | `/medical-supplies/categories` | Category management — add, edit, and delete (supplies in a deleted category are moved first)    |
 
 The page opens on the expiring tab rather than the catalog because, for a
 consumable with a shelf life, _"what am I about to lose"_ is the question that
@@ -98,6 +98,32 @@ add stock to a lot-tracked item.
 the whole delivery.
 
 Each line is labelled **Line 1**, **Line 2**… for screen readers _(2026-09-30)_.
+
+### Importing supplies from a CSV
+
+The inventory CSV import (`/inventory/import`, needs `inventory.manage`) has a
+downloadable sample that includes common medical supplies — airway, bleeding
+control and trauma, dressings, diagnostics and infection control — and
+deliberately **no medications**, which vary by protocol and include controlled
+substances.
+
+- **The Category cell is a name**, matched against categories you have already
+  created. The sample uses generic names (_Airway & Breathing_, _Bleeding
+  Control & Trauma_, _Dressings & Bandages_, _Diagnostics_, _Infection
+  Control_); rename them in the file to match yours. A name that matches nothing
+  still imports the row **with no category**, and an uncategorized item reads as
+  gear rather than medical. Each such row is listed as a warning.
+- **"Item Type" is checked and then ignored** — an item's type comes from its
+  category.
+- **"Also Called" carries alternate names.** Put them in one cell, separated by
+  semicolons or commas (`BVM; Ambu bag`); they become the item's "Also called"
+  names, which the checklist matcher looks through when linking a checklist
+  item to inventory. Blank and repeated names, and the item's own name, are
+  dropped. A row with more than 10 names, or a name over 100 characters, is
+  refused and reported rather than trimmed.
+- **The import carries no lots.** Add lot numbers and expiration dates afterwards
+  (for example through **Receive delivery**); nothing is flagged as expiring
+  until a supply has dated lots.
 
 ## On-hand comes from the lots
 

@@ -444,7 +444,7 @@ class FacilitiesService:
             .where(Facility.facility_type_id == type_id)
             .where(Facility.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(f"Cannot delete type. {count} facilities use this type.")
 
@@ -596,7 +596,7 @@ class FacilitiesService:
             .where(Facility.status_id == status_id)
             .where(Facility.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(
                 f"Cannot delete status. {count} facilities use this status."
@@ -646,7 +646,7 @@ class FacilitiesService:
         # Count query
         count_query = select(func.count(Facility.id)).where(and_(*conditions))
         count_result = await self.db.execute(count_query)
-        total = count_result.scalar()
+        total = count_result.scalar() or 0
 
         # Main query
         # The id breaks ties between facilities sharing a name, so an
@@ -1386,7 +1386,7 @@ class FacilitiesService:
             .where(FacilityMaintenance.maintenance_type_id == type_id)
             .where(FacilityMaintenance.organization_id == str(organization_id))
         )
-        count = result.scalar()
+        count = result.scalar() or 0
         if count > 0:
             raise ValueError(
                 f"Cannot delete type. {count} maintenance records use this type."

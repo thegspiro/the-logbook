@@ -348,6 +348,37 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
         return (False, original_errors + [f"Repair attempt failed: {repair_err}"])
 
 
+def _missing_column_ddl(table_name, col, dialect):
+    """Build the ``ALTER TABLE … ADD COLUMN`` statement for a missing column.
+
+    The column's ``server_default`` is always carried over, and ``NOT NULL``
+    only when a default exists. MySQL fills every existing row with that
+    default, so the repaired column holds what the model says it holds. Adding
+    it as a bare ``NULL`` left every pre-existing row ``NULL`` in a column the
+    model declares ``NOT NULL`` — which is how ``allow_self_checkout`` took the
+    medical-supply categories page down with a 500: the response schema needs a
+    boolean, and the later Alembic migration skips a column that already exists
+    so it never tightened it.
+
+    A ``NOT NULL`` column with no default stays ``NULL``: forcing ``NOT NULL``
+    there makes MySQL fill existing rows with ``''`` or ``0``, which for a
+    foreign key is a reference to a row that does not exist.
+    """
+    col_type = col.type.compile(dialect)
+    default = dialect.ddl_compiler(dialect, None).get_column_default_string(col)
+    default_clause = "" if default is None else " DEFAULT %s" % default
+    nullability = "NOT NULL" if not col.nullable and default is not None else "NULL"
+    # get_column_default_string() already doubles a literal % for DDL(), which
+    # applies %-formatting to its text; escaping it again here stores "50%%".
+    return "ALTER TABLE `%s` ADD COLUMN `%s` %s%s %s" % (
+        table_name.replace("`", "``"),
+        col.name.replace("`", "``"),
+        col_type,
+        default_clause,
+        nullability,
+    )
+
+
 def _add_missing_model_columns(engine):
     """
     Detect and add columns that exist in SQLAlchemy models but are missing
@@ -380,20 +411,11 @@ def _add_missing_model_columns(engine):
                 if col.name in existing_cols:
                     continue
 
-                col_type = col.type.compile(engine.dialect)
-                # Use individually parameterized DDL; table/column names come
-                # from SQLAlchemy metadata (trusted), not user input, but we
-                # still avoid bare f-string interpolation for defence-in-depth.
+                # Table/column names and defaults come from SQLAlchemy
+                # metadata (trusted), not user input.
                 from sqlalchemy import DDL
 
-                stmt = DDL(
-                    "ALTER TABLE `%s` ADD COLUMN `%s` %s NULL"
-                    % (
-                        table_name.replace("`", "``"),
-                        col.name.replace("`", "``"),
-                        col_type,
-                    )
-                )
+                stmt = DDL(_missing_column_ddl(table_name, col, engine.dialect))
                 try:
                     conn.execute(stmt)
                     added.append(f"{table_name}.{col.name}")

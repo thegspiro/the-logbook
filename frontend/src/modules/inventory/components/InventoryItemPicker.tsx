@@ -290,7 +290,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
         {loading && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
       </div>
       {open && typed && (
-        <div className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg">
+        <div className="popover-panel absolute z-20 mt-1 max-h-56 w-full overflow-auto">
           {results.map((r) => (
             <button
               key={r.id}

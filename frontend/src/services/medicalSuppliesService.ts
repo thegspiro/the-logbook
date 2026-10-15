@@ -70,6 +70,7 @@ export interface MedicalItemUpdate {
   category_id?: string;
   description?: string | null;
   manufacturer?: string | null;
+  also_called?: string[] | null;
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
@@ -82,6 +83,12 @@ export interface MedicalCategoryUpdate {
   name?: string;
   description?: string | null;
   low_stock_threshold?: number | null;
+}
+
+export interface MedicalCategoryDeleteResult {
+  category_name: string;
+  items_moved: number;
+  moved_to_name: string | null;
 }
 
 /**
@@ -97,6 +104,8 @@ export interface MedicalItemFilters {
   location_id?: string | undefined;
   storage_area_id?: string | undefined;
   search?: string | undefined;
+  /** With `search`, also return supplies whose name or "also called" names merely resemble it, below the exact matches. */
+  fuzzy?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;
@@ -128,6 +137,18 @@ export const medicalSuppliesService = {
 
   async updateCategory(categoryId: string, data: MedicalCategoryUpdate): Promise<InventoryCategory> {
     const response = await api.patch<InventoryCategory>(`/medical-supplies/categories/${categoryId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Permanently deletes a category. One that still holds supplies is refused
+   * (409) unless `moveItemsTo` names the category to move them to — a deleted
+   * category would otherwise leave them with none, which files them as gear.
+   */
+  async deleteCategory(categoryId: string, moveItemsTo?: string): Promise<MedicalCategoryDeleteResult> {
+    const response = await api.delete<MedicalCategoryDeleteResult>(`/medical-supplies/categories/${categoryId}`, {
+      params: moveItemsTo ? { move_items_to: moveItemsTo } : undefined,
+    });
     return response.data;
   },
 

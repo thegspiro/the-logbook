@@ -2,188 +2,13 @@
 
 > **Published copy — not the canonical source.** The maintained original is
 > [`SECURITY.md`](https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md)
-> in the repository root, and this page may lag behind it. Make content changes
-> there first, then mirror them here.
+> in the repository root. Make content changes there first, then mirror them
+> here. The Security Monitoring, Intrusion Detection, Data Exfiltration
+> Prevention and Network Edge Controls sections are published here only.
 
 ## Overview
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
-
-### Zero-Trust Review (2026-07-27)
-
-A whole-stack zero-trust pass ("never trust, always verify" — nothing trusted by
-network location, client header, session state, or internal origin) confirmed a
-strong foundation and closed the remaining implicit-trust gaps:
-
-- **Deployment posture:** the base `docker-compose.yml` is a _development_
-  config and had hardcoded `ENVIRONMENT: development`, so the documented
-  `docker compose up -d` path booted in dev mode and skipped the startup
-  security gate. Production now layers `docker-compose.prod.yml` (the installer
-  pins `COMPOSE_FILE` in `.env`); the base file honors `.env`.
-- **Host header:** emailed ballot links were built from the client-controlled
-  `Host` — now from `FRONTEND_URL`, plus a `TrustedHostMiddleware`
-  (`TRUSTED_HOSTS`) that rejects spoofed `Host` headers.
-- **Reverse-proxy trust:** `TRUSTED_PROXY_IPS` now supports CIDR ranges and the
-  production override sets a safe default, so geo-blocking and per-client rate
-  limiting work behind the bundled proxy (previously silently disabled).
-- **Revocable sessions:** the inventory WebSocket now authenticates through
-  `AuthService` (token-type + server-side session store), so logout /
-  password-change / refresh-rotation revoke it immediately.
-- **Multi-tenant isolation:** a shared fail-closed `assert_in_org` helper plus
-  fixes for confirmed cross-tenant leaks (elections meeting/event/candidate,
-  apparatus operators, membership-pipeline forms, inventory category).
-- **Injection:** the NFIRS and annual-compliance CSV exporters now use the
-  formula-safe writers.
-- **TLS:** startup warns when `DB_SSL`/`REDIS_SSL` is enabled without a CA
-  (encrypted but the server certificate is unverified).
-
-### Elections Security Review (2026-07-28)
-
-A dedicated review of the elections module (findings R-1…R-10 in
-[`docs/module-audit/elections.md`](../docs/module-audit/elections.md)) closed
-the remaining voting-integrity gaps:
-
-- **Eligibility enforced at the ballot box:** per-item voter-type and
-  attendance restrictions are snapshotted on each voting token and enforced
-  when votes are submitted (previously only checked at email-send time — any
-  token holder could vote on restricted items).
-- **Roster leak closed:** the public ballot endpoint no longer returns
-  attendee names, eligible-voter lists, or email recipients to token holders.
-- **Test ballots isolated:** test-ballot votes are flagged and excluded from
-  all tallies, and never consume the sender's real vote.
-- **Double-voting hardening:** approval/ranked-choice voting now works with
-  method-aware dedup (single-vote dedup unchanged); reopening a closed
-  anonymous election with votes is refused (the destroyed anonymity salt would
-  otherwise allow undetected re-voting); runoffs trigger on early closes.
-- **Verifiable votes:** receipt hashes are returned to voters, making the
-  public receipt-verification endpoint usable end-to-end.
-- **Runoff anonymity restored (follow-up):** auto-created runoff elections
-  previously had **no anonymity salt** — their voter hashes were keyed with an
-  empty string and thus pre-computable from user ids, defeating ballot
-  secrecy for every runoff round — and dropped the parent's quorum and
-  position-eligibility rules. Runoffs now generate a fresh per-election salt
-  and inherit the parent's full rule set.
-
-- **Tokens hashed at rest (follow-up):** voting tokens are now stored as
-  SHA-256 — the raw credential exists only in the emailed ballot link, so
-  database read access no longer yields live ballots (in-place migration
-  keeps in-flight links working).
-- **IP metadata purged at close (follow-up):** anonymous elections erase
-  per-vote IP/user-agent when they close (alongside the anonymity salt), and
-  forensics exposes only a thresholded suspicious-IP set instead of the full
-  per-IP vote map. Residual: per-event IPs in the audit log (tracked in
-  KNOWN_LIMITATIONS).
-
-Remaining residual items are tracked in
-[`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
-
-### Module-by-Module Security Audit (2026-07)
-
-A rotating, module-by-module security audit covered all 27 modules/domains
-(medical-screening through the shared frontend layer), building on the July
-red-team review. Each module was checked for tenant isolation (IDOR/BOLA),
-broken access control, injection, and correctness; per-module findings and the
-applied vs. flagged status live under [`docs/module-audit/`](../docs/module-audit/PROGRESS.md).
-Highlights of the applied fixes: closed a privilege-escalation path in member
-creation and org-settings updates; closed multiple cross-tenant write/read paths
-(finance budgets, skills-test and dues PHI, module-seed bleed); fixed two
-availability bugs (the onboarding factory-reset FK order and the public-API-key
-auth crash); neutralized spreadsheet-formula injection across six exporters and
-an ICS calendar-injection vector; and stopped cross-user cached-PII leakage on
-shared devices. Follow-up hardening (2026-07) migrated field encryption to **AES-256-GCM**,
-made the audit hash chain a **keyed HMAC-SHA256** and gated its rehash recovery
-op behind `AUDIT_ALLOW_CHAIN_REHASH` (fails closed on a keyed mismatch),
-**org-scoped the `security_alerts` table**, and added a configurable
-`GEOIP_FAIL_CLOSED` posture. Open items that still need an owner decision or a
-schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
-`audit_logs.organization_id` column) are tracked in
-[`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
-
-### Security Changes of 2026-10-05
-
-- **Member badges.** A badge used to encode the membership number or a short
-  member id, both readable in the directory, so anyone could make a badge that
-  scans as a colleague, and the inventory scanner trusted the member id inside a
-  QR code. Badges now carry a random server-issued code (`users.badge_code`),
-  shown only to the member and to `members.manage` / `members.manage_id_cards`
-  holders and never in rosters, exports or anonymized records; both scanners
-  resolve through `POST /member-badges/resolve` (org-scoped, rate limited);
-  **Reissue badge** cancels a lost one. Old badges keep resolving until an officer
-  turns off **Accept old badges**. See [Member ID cards](Member-ID-Cards).
-- **Integration SSRF: DNS pinning (SCH-10).** `assert_outbound_url_safe()`
-  resolved a host and then the request resolved it again, so a DNS-rebinding host
-  could pass with a public address and connect to an internal one. The shared
-  integration client now resolves once, refuses unless every answer is a global,
-  non-multicast address, and connects to that address with the original hostname
-  kept for Host and TLS SNI. It covers teams, webhook, slack, discord, calcom,
-  documenso and audit shipping (`AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` lifts only
-  the public-address rule; a metadata address is still refused). Proxy mounts are
-  not pinned (the proxy resolves; recorded in `docs/KNOWN_LIMITATIONS.md`).
-- **Google Calendar responses (INT-9)** are capped at 10 MB on the wire and
-  decompressed, with 5 s connect and 10 s socket timeouts, because it reaches
-  Google through httplib2 rather than the bounded httpx client.
-- **Refresh race (AUTH-21).** A refresh that loses a rotation race returns 409
-  `LB-AUTH-012` and revokes nothing; it is no longer audited as token theft. See
-  [Authentication](Security-Authentication).
-- **Sign-out and offline queues (FE3-34).** A failed sign-out is retried and then
-  blocks the screen until confirmed; queued offline items are owned by the member
-  who queued them and pre-upgrade entries are held until that member decides.
-- **Finance approvals** are limited to each step's named approver, with an audited
-  override for approvals administrators.
-- **Self-report certificate retention** is department-set (default keep).
-- **Proxy limits** are sized per station address; sign-in limits are unchanged.
-
-### Onboarding Session Storage (2026-08-15)
-
-The onboarding session identifier moved from `localStorage` to **`sessionStorage`**
-(`onboarding_session_id`). It is a bearer credential: presented as the
-`X-Session-ID` header, it authorizes the setup mutations that create the
-organization, its stations and apparatus, the IT team, and the first System
-Owner. In `localStorage` it survived browser restarts indefinitely and was
-readable from every tab on the origin — on a shared or station-kiosk machine,
-that is a standing grant to finish somebody else's installation.
-
-- Identifiers written by older clients are deleted on load **and** on clear, so a
-  browser carrying a stale one drops it rather than presenting it.
-- The CSRF companion (`onboarding_csrf_token`, `SameSite=Strict` cookie) and the
-  server's 30-minute sliding session expiry are unchanged.
-- No endpoint, schema, model, migration, or permission changed.
-- **Operational consequence:** onboarding must be completed in one tab and one
-  sitting. A second tab starts a new session; a browser restart ends the run with
-  `ONBD_SESSION_INVALID` at the next saving step. The wizard's non-sensitive
-  answers still persist in `localStorage`, so the form can repaint over a dead
-  session — the recovery is to restart the wizard, not to re-type.
-
-### Comprehensive Security Audit & Remediation (2026-03-07)
-
-- **25-issue security audit**: Full audit report identifying critical, high, medium, and low severity issues across backend, frontend, infrastructure, and deployment (`SECURITY_AUDIT.md`)
-- **Critical fixes**: (1) Database SSL enforcement — rate limiter now respects `REDIS_SSL` setting; (2) Redis TLS enforcement via `rediss://` scheme; (3) Insecure defaults blocked in production/staging with `RuntimeError` on startup
-- **High-priority fixes**: JWT algorithm restricted to HS256 only; session invalidation on password change; file upload path traversal blocked with `secure_filename()` + UUID prefix; Jinja2 auto-escaping with `SandboxedEnvironment`; CORS exact-match origin validation; parameterized LIKE queries via `escape_like()`; rate limiter thread safety with `asyncio.Lock`
-- **Medium fixes**: HTTPS enforcement upgraded to CRITICAL; scheduling module migrated to shared `createApiClient()`; onboarding CSRF token moved from localStorage to SameSite=Strict cookie; auto-clear deprecated sessionStorage keys; strict regex for table names in startup DROP TABLE; `/health` endpoint minimized
-- **Low fixes**: Removed DEBUG exposure in health endpoint; added `Referrer-Policy: strict-origin-when-cross-origin` and `X-Permitted-Cross-Domain-Policies: none` headers
-- **Magic byte file validation**: All upload endpoints validate file content against magic bytes (JPEG, PNG, GIF, WebP, PDF, CSV, DOCX, XLSX)
-- **SecurityMonitoringMiddleware fix**: `UnboundLocalError` for `actual_receive` fixed — variable initialization moved before conditional block
-- **SecurityHeaders/IPLogging converted to pure ASGI**: Prevents `BaseHTTPMiddleware` from stripping `Set-Cookie` headers
-- **Unbounded memory growth capped**: All in-memory tracking dicts have size limits and periodic eviction
-
-### Recent Security Updates (2026-02-28)
-
-- **Brute-force protection**: Progressive rate limiting on login with IP-based and per-user lockout, exponential backoff, frontend rate limiting on login/forgot-password pages
-- **IDOR fixes**: Organization-scoped validation on documents and training endpoints prevents cross-org data access
-- **Open redirect prevention**: API response interceptor validates redirect URLs against allowed origins
-- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status _(2026-07: now includes `organization_id` — alerts are org-scoped; an org admin only sees/acknowledges/resolves their own department's alerts)_
-- **Audit log export**: New endpoint for exporting audit logs with date range filters _(2026-07: scoped to the caller's org and redacts `session_id` to a non-reversible fingerprint)_
-- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity _(2026-07: the `rehash_chain` op is now break-glass — gated by `AUDIT_ALLOW_CHAIN_REHASH`, repairs legacy rows only, and fails closed with 409 on a keyed-row mismatch rather than rebuilding over a tamper)_
-- **Audit deletion logging**: All audit log deletions are themselves logged for accountability
-- **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
-- **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organization/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
-- **Shared API client factory**: Module API services use `createApiClient()` with consistent interceptors, eliminating ~300 lines of duplicated security config
-- **Encryption at rest**: AES-256-GCM authenticated encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables (legacy Fernet values still readable)
-- **Docker hardening**: Read-only root filesystems, `no-new-privileges` security option, dropped capabilities, explicit tmpfs mounts
-- **Content Security Policy**: Tightened CSP with strict `script-src` and `style-src` policies; removed `upgrade-insecure-requests` directive
-- **Redis ACL**: Redis now uses ACL-based authentication with restricted command access, bound to container network only
-- **XSS fix**: User-supplied values in email templates are HTML-escaped before rendering
-- **HIPAA language**: Replaced self-declared "HIPAA compliant" claims with accurate language throughout the codebase
 
 ## Table of Contents
 
@@ -191,15 +16,19 @@ that is a standing grant to finish somebody else's installation.
 2. [Security Monitoring](#security-monitoring)
 3. [Intrusion Detection](#intrusion-detection)
 4. [Data Exfiltration Prevention](#data-exfiltration-prevention)
-5. [HIPAA Security Features](#hipaa-security-features)
-6. [Section 508 Accessibility](#section-508-accessibility)
-7. [Password Security](#password-security)
-8. [Data Encryption](#data-encryption)
-9. [Audit Logging](#audit-logging)
-10. [Authentication & Authorization](#authentication--authorization)
-11. [Vulnerability Reporting](#vulnerability-reporting)
-12. [Security Best Practices](#security-best-practices)
-13. [Incident Response](#incident-response)
+5. [Network Edge Controls](#network-edge-controls)
+6. [HIPAA Security Features](#hipaa-security-features)
+7. [Section 508 Accessibility](#section-508-accessibility)
+8. [Password Security](#password-security)
+9. [Data Encryption](#data-encryption)
+10. [Audit Logging](#audit-logging)
+11. [Authentication & Authorization](#authentication--authorization)
+12. [Privacy & Data Subject Rights](#privacy--data-subject-rights)
+13. [Records Retention](#records-retention)
+14. [Supply Chain Security](#supply-chain-security)
+15. [Vulnerability Reporting](#vulnerability-reporting)
+16. [Security Best Practices](#security-best-practices)
+17. [Incident Response](#incident-response)
 
 ---
 
@@ -209,28 +38,14 @@ that is a standing grant to finish somebody else's installation.
 
 ✅ **Password Hashing**: Argon2id algorithm (OWASP recommended)
 ✅ **Data Encryption**: AES-256-GCM authenticated encryption for sensitive data at rest (legacy Fernet values still readable)
-✅ **Transport Security**: TLS 1.3 for data in transit
-✅ **Tamper-Evident Logging**: Blockchain-inspired keyed HMAC-SHA256 hash chain for audit logs
+✅ **Transport Security**: TLS 1.2 or 1.3 for data in transit (the bundled nginx accepts both)
+✅ **Tamper-Proof Logging**: Blockchain-inspired hash chain for audit logs
 ✅ **Multi-Factor Authentication**: TOTP-based 2FA support
 ✅ **Role-Based Access Control**: Granular permission system
 ✅ **Session Management**: Secure token-based authentication with JWT
 ✅ **Rate Limiting**: Protection against brute force attacks
 ✅ **Input Sanitization**: XSS and injection attack prevention
 ✅ **Security Headers**: CSP, HSTS, X-Frame-Options, etc.
-✅ **Member Privacy Rights**: personal-data export, consent tracking, and anonymization of departed members _(2026-07-31)_
-✅ **Records Retention**: per-department schedules with safety floors, enforced daily _(2026-07-31)_
-✅ **Key Rotation**: encryption keys rotate with no downtime via a legacy-key ring _(2026-07-31)_
-✅ **Vulnerability Disclosure**: RFC 9116 `/.well-known/security.txt` _(2026-07-31)_
-✅ **Supply-Chain Scanning**: Dependabot, blocking dependency audits, secret scanning, SPDX SBOM _(2026-07-31)_
-✅ **Intrusion Detection**: Real-time anomaly and threat detection
-✅ **Data Exfiltration Monitoring**: Detection of unauthorized data transfers
-✅ **Session Hijacking Detection**: IP/session correlation monitoring
-✅ **Brute Force Protection**: Automated detection and lockout
-✅ **Row-Level Locking**: SELECT FOR UPDATE on concurrent-mutation inventory operations
-✅ **Multi-Tenant Isolation**: Org-scoped unique constraints on inventory codes
-✅ **IDOR Prevention**: Clearance ID validation on line item resolution
-✅ **LIKE Injection Prevention**: Wildcard escaping in search queries
-✅ **Field Whitelisting**: Kwargs injection prevention in maintenance records
 
 ---
 
@@ -288,7 +103,6 @@ Security monitoring thresholds can be configured:
 | `failed_logins_per_user` | 5       | Max failed logins per user per hour |
 | `api_calls_per_minute`   | 60      | Max API calls per minute            |
 | `large_data_export_mb`   | 50      | Alert threshold for data exports    |
-| `concurrent_sessions`    | 3       | Max concurrent sessions per user    |
 | `session_ip_changes`     | 2       | Max IP changes per session          |
 
 ---
@@ -383,6 +197,53 @@ When data exfiltration is detected:
 
 ---
 
+## Network Edge Controls
+
+### Client IP Resolution
+
+`get_client_ip()` reads `X-Forwarded-For` only when the request arrives from
+a proxy listed in `TRUSTED_PROXY_IPS` (CIDR ranges allowed), so a client
+cannot spoof its address. Rate limits, geo-blocking and the IP recorded in
+audit events all use it — behind a reverse proxy, set `TRUSTED_PROXY_IPS` or
+every request appears to come from the proxy.
+
+### Geo-Blocking (Platform-Edge Control)
+
+GeoIP-based country blocking is a **platform-edge control**: it runs in
+middleware before any tenant/authentication context exists, against one shared
+MaxMind database and one global blocked-country set, so it applies
+deployment-wide rather than per-organization:
+
+- The blocklist is set at deploy time via `BLOCKED_COUNTRIES`. Runtime
+  block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`,
+  overlaid onto `CountryBlockRule` rows) is **disabled by default** and enabled
+  only when the operator sets `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=true` —
+  because a change affects every tenant
+- Approved IP exceptions are recorded but **not** read by enforcement — the
+  middleware passes an empty allowlist, because it runs before any tenant
+  context exists and one organization's exception would otherwise relax the
+  block for every tenant — so an approved address is still blocked if its
+  country is
+- **Fail-open by default, or fail-closed via `GEOIP_FAIL_CLOSED`**: when set,
+  an IP whose country can't be resolved (including a missing/corrupt MaxMind
+  DB) is blocked; private/reserved IPs are always allowed so an internal
+  operator can recover
+
+### Outbound Requests (SSRF)
+
+Integrations reach only global, non-multicast addresses. The shared
+integration client (`app/utils/ssrf_transport.py`) resolves a hostname once,
+refuses unless every answer is a public address, and connects to that address
+with the original hostname kept for the Host header and TLS SNI — so a
+DNS-rebinding host cannot pass the check with a public address and connect to
+an internal one. It covers Teams, webhook, Slack, Discord, Cal.com, Documenso
+and audit shipping. `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` lifts only the
+public-address rule for the audit collector; a cloud metadata address is
+still refused. Requests sent through a configured proxy are not pinned,
+because the proxy does the resolving (see `docs/KNOWN_LIMITATIONS.md`).
+
+---
+
 ## HIPAA Security Features
 
 ### Overview
@@ -420,7 +281,7 @@ The Logbook includes security features designed with HIPAA requirements in mind 
 
 #### Transmission Security (§ 164.312(e)(1))
 
-- ✅ **TLS 1.3**: Encrypted data in transit
+- ✅ **TLS 1.2+**: Encrypted data in transit (the bundled nginx accepts TLS 1.2 and 1.3)
 - ✅ **Integrity Controls**: Hash verification for transmitted data
 - ✅ **End-to-End Encryption**: For sensitive communications
 
@@ -472,7 +333,7 @@ If you use third-party services (cloud hosting, email, SMS), ensure you have BAA
 #### Initial Setup
 
 - [ ] Change all default passwords
-- [ ] Generate strong SECRET_KEY and ENCRYPTION_KEY
+- [ ] Generate strong SECRET_KEY, ENCRYPTION_KEY, and ENCRYPTION_SALT
 - [ ] Enable HTTPS/TLS in production
 - [ ] Configure automatic session timeout
 - [ ] Set up secure backup procedures
@@ -556,141 +417,6 @@ Regular testing should include:
 - High contrast mode support
 - Text resize support (up to 200%)
 
-### Implementation Details
-
-The following specific accessibility implementations have been made:
-
-#### Skip Links
-
-Skip-to-content links are provided on every page to allow keyboard users to bypass repetitive navigation:
-
-```tsx
-// Located in AppLayout.tsx
-<a href="#main-content" className="sr-only focus:not-sr-only ...">
-  Skip to main content
-</a>
-<a href="#navigation" className="sr-only focus:not-sr-only ...">
-  Skip to navigation
-</a>
-```
-
-#### Semantic HTML Structure
-
-All pages use proper semantic HTML5 elements:
-
-- `<main id="main-content">` - Main content area
-- `<nav role="navigation">` - Navigation regions
-- `<header>` / `<footer>` - Page structure
-- `<aside>` - Sidebar navigation
-- `<button>` instead of `<div>` for clickable elements
-
-#### ARIA Attributes
-
-Comprehensive ARIA support for screen readers:
-
-| Attribute             | Usage                                            |
-| --------------------- | ------------------------------------------------ |
-| `aria-label`          | Labels for icon-only buttons, navigation regions |
-| `aria-describedby`    | Links form inputs to their error messages        |
-| `aria-invalid`        | Indicates form validation state                  |
-| `aria-expanded`       | Toggle state for dropdowns and mobile menus      |
-| `aria-controls`       | Associates buttons with controlled elements      |
-| `aria-current="page"` | Indicates current page in navigation             |
-| `aria-hidden="true"`  | Hides decorative icons from screen readers       |
-| `role="alert"`        | Announces error messages immediately             |
-| `role="region"`       | Defines landmark regions                         |
-
-#### Form Accessibility
-
-Form inputs include complete accessibility support:
-
-```tsx
-<input
-  id="email"
-  aria-invalid={errors.email ? "true" : "false"}
-  aria-describedby={errors.email ? "email-error" : undefined}
-/>;
-{
-  errors.email && (
-    <p id="email-error" role="alert" className="text-red-500">
-      {errors.email}
-    </p>
-  );
-}
-```
-
-#### Color Contrast
-
-All text meets WCAG 2.1 AA contrast requirements:
-
-| Element        | Before           | After            | Contrast Ratio |
-| -------------- | ---------------- | ---------------- | -------------- |
-| Secondary text | `text-slate-400` | `text-slate-300` | 4.5:1+         |
-| Error text     | `text-red-400`   | `text-red-400`   | 4.5:1+         |
-| Links          | `text-red-500`   | `text-red-500`   | 4.5:1+         |
-
-#### Keyboard Navigation
-
-All interactive elements are keyboard accessible:
-
-- **Tab order**: Logical, follows visual order
-- **Focus indicators**: Visible ring on focus (`focus:ring-2 focus:ring-red-500`)
-- **Button elements**: All clickable elements use `<button>` with proper roles
-- **Escape key**: Closes modals and dropdowns
-- **Arrow keys**: Navigate within menus and dropdowns
-
-#### Heading Hierarchy
-
-Proper heading structure maintained across all pages:
-
-```
-h1 - Page title (one per page)
-  h2 - Major sections
-    h3 - Subsections
-      h4 - Details (if needed)
-```
-
-#### Mobile Navigation Accessibility
-
-Mobile menu includes full accessibility:
-
-```tsx
-<button
-  aria-expanded={mobileMenuOpen}
-  aria-controls="mobile-menu"
-  aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
->
-  {/* Icon */}
-</button>
-<nav id="mobile-menu" role="navigation" aria-label="Mobile navigation">
-  {/* Menu items */}
-</nav>
-```
-
-### Accessibility Verification
-
-Use these tools to verify accessibility compliance:
-
-**Automated Testing:**
-
-- axe DevTools browser extension
-- Lighthouse accessibility audit
-- WAVE evaluation tool
-
-**Manual Testing:**
-
-- Keyboard-only navigation (no mouse)
-- Screen reader testing (NVDA, JAWS, VoiceOver)
-- High contrast mode
-- 200% browser zoom
-
-**Command Line:**
-
-```bash
-# Run Lighthouse accessibility audit
-npx lighthouse http://localhost:3000 --only-categories=accessibility --output=html
-```
-
 ---
 
 ## Password Security
@@ -712,13 +438,15 @@ npx lighthouse http://localhost:3000 --only-categories=accessibility --output=ht
 - **Salt**: Automatically generated unique salt per password
 - **Work Factor**: Configured for ~500ms hash time
 - **No Plain Text**: Passwords are NEVER stored in plain text
+- **No Passwords in Logs**: Temporary passwords are never written to application logs
+- **Onboarding Encryption**: Email passwords and API keys entered during onboarding are encrypted (AES-256-GCM) before database storage
 
 ### Password Policies
 
 - **History**: Last 12 passwords remembered
 - **Age**: Maximum 90 days between changes (configurable)
 - **Complexity**: Enforced on client and server side
-- **Lockout**: 5 failed attempts = 15-minute lockout by default (both configurable); wrong two-factor codes count toward it
+- **Lockout**: 5 consecutive failed attempts (`MAX_LOGIN_ATTEMPTS`) lock the account for 15 minutes (`ACCOUNT_LOCKOUT_DURATION_MINUTES`). The sign-in screen keeps showing the generic "Incorrect username or password" unless `ACCOUNT_LOCKOUT_REVEAL` is enabled, so it never confirms an account exists
 - **Reset**: Secure password reset with time-limited tokens
 
 ### Best Practices for Users
@@ -735,47 +463,47 @@ npx lighthouse http://localhost:3000 --only-categories=accessibility --output=ht
 
 ### Encryption at Rest
 
-**Algorithm**: AES-256-GCM (authenticated encryption). Each value carries a
-random 96-bit nonce and an authentication tag, so a tampered ciphertext fails to
-decrypt (fails closed) rather than returning garbage. Values written before the
-migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
-`backend/scripts/reencrypt_to_aesgcm.py` backfills them to GCM (see the
-[backfill runbook](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)).
+**Algorithm**: AES-256-GCM (authenticated encryption — confidentiality plus an integrity tag, fresh random 96-bit nonce per value). Data written before the AES-256-GCM migration used Fernet (AES-128-CBC + HMAC-SHA256) and remains readable; `backend/scripts/reencrypt_to_aesgcm.py` (dry-run by default) re-encrypts it to AES-256-GCM — see the operator runbook `docs/AES256_GCM_BACKFILL_RUNBOOK.md`.
 
 **What is Encrypted:**
 
-- User passwords (Argon2id hashing)
-- Sensitive PHI fields
-- File uploads containing sensitive data
-- Backup files
-- Database columns marked as sensitive
+- Medical-screening PHI (`screening_records`: provider, result summary, structured results, notes)
+- Officer evaluation narrative on shift completion reports
+- MFA secrets and recovery codes, applicant status tokens
+- Integration, external-training-provider, email, file-storage and OAuth secrets
+- Every uploaded file stored under the uploads root (per-file AES-256-GCM key)
+
+Passwords are not encrypted but hashed (Argon2id). Other member data — names,
+contact details, dates of birth — is protected by access control, not field
+encryption. The full list is in
+[Encryption → What Is Encrypted](Security-Encryption#what-is-encrypted).
 
 **Key Management:**
 
 - Encryption keys stored in environment variables
-- Never committed to version control
+- Never committed to version control (`.env` files are in `.gitignore`)
 - Rotated regularly (recommended: every 90 days)
 - Consider using a key management service (AWS KMS, Azure Key Vault, HashiCorp Vault)
 
+**Onboarding Session Encryption:**
+
+- Email configuration (SMTP passwords, OAuth secrets) encrypted before storage
+- File storage configuration (AWS keys, Azure keys) encrypted before storage
+- Only platform type identifiers are stored in plain text
+- Encrypted data uses the same AES-256-GCM cipher as field-level encryption
+
 ### Encryption in Transit
 
-**TLS 1.3** for all network communications:
+**TLS** for all network communications (the bundled nginx accepts TLS 1.2 and 1.3):
 
 - HTTPS for web traffic
-- TLS for database connections
+- TLS for database and Redis connections (`DB_SSL` / `REDIS_SSL`). In
+  production and staging, startup refuses to boot with either off unless
+  `SECURITY_REQUIRE_TLS=false` records the accepted risk, and refuses to boot
+  with either on but no CA (`DB_SSL_CA` / `REDIS_SSL_CA`, so the server
+  certificate would go unverified) unless `SECURITY_ALLOW_UNVERIFIED_TLS=true`
 - Encrypted email (STARTTLS)
 - VPN for admin access to servers
-
-### Field-Level Encryption
-
-Sensitive fields that can be encrypted:
-
-- Social Security Numbers
-- Driver's License Numbers
-- Medical Record Numbers
-- Bank Account Information
-- Credit Card Numbers
-- Date of Birth (if PHI)
 
 ---
 
@@ -791,29 +519,17 @@ Log Entry 2: Hash = HMAC-SHA256(key, Data2 + Hash1)
 Log Entry 3: Hash = HMAC-SHA256(key, Data3 + Hash2)
 ```
 
-The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling
-back to `SECRET_KEY`), so forging a valid chain requires the key — not merely
-database write access. Rows written before the keyed upgrade are verified under
-the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later
-unkeyed row after any keyed row. This makes it impossible to modify historical
-logs without detection.
-
-Each row records a fingerprint of the key that signed it and is verified only
-against that key. Rows signed with `SECRET_KEY` before a dedicated
-`AUDIT_LOG_SIGNING_KEY` took effect keep verifying, but only up to the first
-row signed with the dedicated key — `SECRET_KEY` is never a standing second
-key. Ballot signatures (`VOTE_SIGNING_KEY`) are handled the same way.
+The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging it requires the key, not merely database write access. Pre-upgrade rows verify under the legacy unkeyed SHA-256 scheme. The `rehash_chain` recovery op is break-glass (gated by `AUDIT_ALLOW_CHAIN_REHASH`), repairs only legacy rows, and fails closed on a keyed-row mismatch. This makes it impossible to modify historical logs without detection.
 
 ### What is Logged
 
 #### Authentication Events
 
-- Login attempts (success and failure)
-- Logout events
-- Password changes
+- Sign-in (success and failure), including OAuth
+- Sign-out
+- Password resets (a self-service password change is not audited)
 - MFA enable/disable
-- Account lockouts
-- Session creation/termination
+- Account lockouts and unlocks
 
 #### Data Access
 
@@ -841,18 +557,9 @@ key. Ballot signatures (`VOTE_SIGNING_KEY`) are handled the same way.
 ### Log Retention
 
 - **Minimum**: 7 years (exceeds HIPAA 6-year minimum)
-- **Enforced**, not merely configured _(2026-07-31)_ — a weekly job exports
-  expired rows to signed gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) and then
-  purges them. Purges are checkpoint-aligned, refuse to run against a chain
-  that fails verification, and record a keyed attestation of the boundary so
-  the surviving chain still verifies while unsanctioned deletions still fail.
-- **Off-host copy** _(2026-07-31)_ — set `AUDIT_SHIP_WEBHOOK_URL` to stream new
-  entries to a SIEM as HMAC-signed NDJSON. The hash chain detects tampering;
-  only an off-host copy survives deletion of the table itself.
 - **Format**: Immutable, tamper-evident
-- **Storage**: Encrypted at rest
-- **Backup**: Included in disaster recovery — **include `AUDIT_ARCHIVE_DIR`;
-  after a purge it is the only copy of the oldest audit history**
+- **Storage**: Hash-chained in the database; rows past retention are exported to `AUDIT_ARCHIVE_DIR` (owner-only file permissions) before purge
+- **Backup**: Included in disaster recovery
 - **Access**: Restricted to authorized personnel
 
 ### Log Monitoring
@@ -881,68 +588,356 @@ Automated monitoring for:
    - TOTP (Time-based One-Time Password) via any authenticator app
    - QR code (`otpauth://`) enrollment, confirmed with a 6-digit code
    - One-time recovery codes (shown once, stored hashed)
-   - Login challenge before session issuance for MFA-enabled accounts
-   - Self-enrollment; admins can require MFA org-wide (server-enforced)
+   - Login challenge: MFA-enabled accounts receive a short-lived `mfa_token`
+     and must complete `POST /auth/mfa/login` before session cookies are issued
+   - Self-enrollment from Settings → Security; admins can require MFA org-wide
+     (Settings → Authentication), enforced server-side in `get_current_user`
+   - Secret and recovery codes encrypted at rest
 
 3. **OAuth 2.0 / SSO (OIDC)**
    - Microsoft Azure AD
    - Google Workspace
-   - SAML and LDAP/Active Directory are **not implemented** _(clarified
-     2026-07-31 — the unused `pysaml2`/`python-ldap` dependencies were
-     removed; the `LDAP_*` settings are inert placeholders)_
+   - SAML and LDAP/Active Directory are **not currently implemented**
+     (planned; the `LDAP_*` settings in `.env.example.full` are inert
+     placeholders until then)
 
 ### Session Management
 
 - **Token Type**: JWT (JSON Web Tokens)
-- **Access Token Lifetime**: 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`; `.env.example.full` and the Unraid compose file set 480)
-- **Refresh Token Lifetime**: 7 days (configurable)
+- **Access Token Lifetime**: 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`; the refresh flow renews it silently)
+- **Refresh Token Lifetime**: 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)
 - **Automatic Logout**: 15 minutes inactivity (configurable, aligned with HIPAA recommendation)
-- **Concurrent Sessions**: Configurable limit
-- **Session Revocation**: Manual logout or admin revoke
+- **Session Revocation**: Manual logout or admin revoke; a password change signs the member out of every session
 
 ### Role-Based Access Control (RBAC)
 
-#### Default Roles
+#### Default Positions
 
-1. **Super Admin**
-   - Full system access
-   - User management
-   - System configuration
-
-2. **Admin**
-   - Organization management
-   - User management within org
-   - Module configuration
-
-3. **Chief/Officer**
-   - Department oversight
-   - Approvals
-   - Report access
-
-4. **Member**
-   - Standard access
-   - Own data management
-   - Limited module access
-
-5. **Probationary**
-   - Restricted access
-   - Supervised permissions
+31 system positions are seeded (`DEFAULT_POSITIONS` in
+`backend/app/core/permissions.py`) — command ranks (Chief through
+Lieutenant), operational ranks (Engineer / Driver Operator, Firefighter, EMT),
+administrative officers (President, Secretary, Treasurer, Board of Directors,
+IT Manager and others), functional coordinators (Training Officer,
+Quartermaster, Membership Coordinator, Safety Officer, Scheduling Officer and
+others), and **Member**, the baseline every member holds. Departments can
+edit them and add their own.
 
 #### Permission Granularity
 
-Permissions are structured as: `module.resource.action`
+Permissions are dot-notation strings, `module.action`, with module-level
+(`module.*`) and global (`*`) wildcards. Examples:
 
-Examples:
+- `apparatus.view`
+- `members.manage`
+- `settings.manage`
+- `audit.view`
+- `audit.export`
 
-- `users.profile.view`
-- `users.profile.edit`
-- `documents.sensitive.view`
-- `training.records.approve`
-- `inventory.equipment.checkout`
+---
+
+## Public Form Security
+
+### Overview
+
+The Logbook supports public-facing forms that can be accessed without authentication via unique URL slugs (`/f/:slug`). These forms require additional security measures since they are exposed to the public internet.
+
+### Protection Layers
+
+#### Input Sanitization
+
+- All submitted values are HTML-escaped before storage (prevents stored XSS)
+- Null bytes are stripped from all input
+- Per-field length limits enforced (5,000 chars for text, 50,000 for textarea, 254 for email)
+- Submitter name and email are independently sanitized
+
+#### Type-Specific Validation
+
+- **Email fields**: Format validation + header injection prevention (rejects newlines/carriage returns)
+- **Phone fields**: Character whitelist (digits, +, -, parentheses, spaces only)
+- **Number fields**: Range validation against configured min/max values
+- **Select/Radio/Checkbox fields**: Values validated against the form's allowed options (prevents arbitrary value injection)
+- **Regex patterns**: Optional custom validation patterns per field
+
+#### Rate Limiting
+
+- **Form views**: 60 requests per minute per IP (5-minute lockout)
+- **Form submissions**: 10 requests per minute per IP (10-minute lockout)
+- Uses the application's existing in-memory rate limiter infrastructure
+
+#### Bot Detection
+
+- **Honeypot field**: A hidden `website` field is included in public forms
+- Real users never see or fill this field (positioned off-screen, `aria-hidden`, `tabIndex=-1`)
+- Bots that auto-fill all fields will populate it, triggering silent rejection
+- Rejected submissions receive a fake success response to avoid tipping off the bot
+
+#### Slug Validation
+
+- Form slugs are validated against a strict regex pattern (`^[a-f0-9]{12}$`)
+- Invalid slugs are rejected with a 404 before any database query executes
+- Prevents path traversal, SQL injection, and other injection attacks via the URL
+
+#### Frontend Defense-in-Depth
+
+- All server-provided text (form names, descriptions, field labels, help text) is sanitized through DOMPurify before display
+- DOMPurify strips all HTML tags and attributes, complementing React's built-in JSX escaping
+- Public form page uses a separate React component with no access to authenticated application state
+
+#### Data Isolation
+
+- Public form submissions are marked with `is_public_submission = true`
+- IP address and user agent are captured for audit purposes
+- `member_lookup` field types are excluded from public form display
+- Internal field IDs (UUIDs) are exposed but contain no sensitive information
+
+---
+
+## Guest Event Check-In Security
+
+### Overview
+
+`Event.allow_guest_check_in` opts a single event into a **second, unauthenticated
+write path**: `POST /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in`,
+reached by scanning a guest QR code on a room display. It exists so a visitor at a
+volunteer interest night can record their own attendance without an account.
+
+**It is off by default, and opt-in per event, precisely because turning it on
+exposes a write path to anyone who can reach that QR code.** It belongs on
+outreach events and must stay off for business meetings and training sessions,
+whose attendance drives records that only apply to members.
+
+### Protection Layers
+
+#### Tenant Resolution — the important one
+
+- The organization is resolved from the **room's display code**, never from
+  anything in the request body. An anonymous caller cannot name the organization
+  it writes to.
+- The event must actually be **held in that room**, so a valid display code
+  cannot be used to sign people in to an event elsewhere.
+- The event must have `allow_guest_check_in` set. Anything else is a `404`.
+
+#### Rate Limiting
+
+- Per-IP limiting on both the read and the write, reusing the display endpoint's
+  existing limiter.
+- **Per-event daily ceiling** — `GUEST_CHECK_IN_DAILY_LIMIT`, default `300`, `0`
+  disables it. Per-IP limiting alone cannot stop a distributed flood, and each
+  sign-in can create a pipeline record, which is a far more expensive side effect
+  than a page view. Exceeded → `429`.
+
+#### Bot Detection
+
+- Hidden `hp_website` honeypot field, named to look attractive to a form-filler.
+- A populated honeypot is answered with a **plausible `201` success** and nothing
+  is written — the same pattern the public forms endpoint uses. A bot that
+  receives a rejection learns which field to stop filling; one that receives a
+  confirmation has no signal to adapt to.
+
+#### Input Constraints
+
+- `first_name` / `last_name`: 1–100 chars, trimmed, blank-after-trim rejected.
+- `email`: validated `EmailStr`, normalized to lowercase before matching.
+- `phone` ≤ 50, `organization_name` ≤ 255, `interest_reason` ≤ 2000.
+- Nothing richer is accepted. A walk-in is asked for the minimum needed to follow
+  up, not for a membership application.
+
+#### Timing
+
+- Guests are held to the organizer's configured check-in window **minus the
+  early-arrival grace members get**. A member checking in early is identifiable
+  and correctable; an anonymous early write is neither, so the gate stays shut
+  until the window the organizer actually chose. Outside the window → `400`.
+
+#### Information Disclosure
+
+- The `GET` companion exposes only what a visitor standing in the room can
+  already see: event name, type, start/end, room, department name, and whether
+  sign-in is open. **The event description is withheld**, matching the kiosk
+  display.
+- The department timezone is returned so an unauthenticated tablet renders local
+  times rather than falling back to the device's zone.
+
+#### Failure Containment
+
+- Pipeline creation failures are **logged and swallowed** — they never cost a
+  guest their attendance, and they never surface an internal error to an
+  anonymous caller.
+- `event_external_attendees.prospect_id` is `ON DELETE SET NULL`, so purging a
+  prospect (retention, withdrawal) never destroys the record of who was in the
+  room.
+
+### QR Code Access
+
+Public forms support QR code generation for physical distribution:
+
+- QR codes encode the full public URL including the form slug
+- Downloadable as PNG or SVG for printing
+- Error correction level "H" (high) for reliability when scanned from printed materials
+- Designed for placement in physical locations (inventory rooms, station entrances, etc.)
+
+---
+
+## Election & Voting Security
+
+### Double-Voting Prevention
+
+The election system uses database-level constraints to prevent double-voting:
+
+- **4 Partial Unique Indexes**: Unique indexes on the votes table enforce one vote per user per ballot at the database level — prevents race conditions and direct database manipulation
+- **IntegrityError Handling**: `cast_vote()` catches constraint violations and returns a user-friendly error message instead of a 500 error
+- **Anonymous Voting**: Votes are linked to users via HMAC-SHA256 hashed identifiers, preventing direct association between votes and voters while still enforcing uniqueness
+
+### Election Results Timing
+
+- Results require both `status=CLOSED` AND `end_date` to have passed before vote counts are revealed
+- During active elections, only aggregate ballot statistics (turnout, total votes cast) are visible
+- Prevents premature result leaks that could influence remaining voters
+
+### Authentication & Token Security
+
+- **Token Storage**: Auth tokens live in **httpOnly cookies** set by the backend and are never readable by JavaScript. Only a non-sensitive `has_session` flag is kept in localStorage, to decide whether a page refresh should attempt to restore the session. CSRF is handled by double-submit (`csrf_token` cookie echoed as an `X-CSRF-Token` header on state-changing requests)
+- **Onboarding session storage**: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](../docs/ONBOARDING_FLOW.md)
+- **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
+- **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
+- **Session Revocation**: Logout properly invalidates the server-side session record
+
+For a comprehensive security review of this module, see
+[`docs/module-audit/elections.md`](../docs/module-audit/elections.md).
+
+---
+
+## Error Handling & Information Disclosure Prevention
+
+### API Error Responses
+
+All API endpoints follow a strict policy of **never exposing internal details** in error responses:
+
+- **500 errors**: Return generic messages (e.g., `"Please check the server logs for details."`) instead of raw exception strings that could reveal database queries, file paths, or system configuration
+- **Validation errors (400/422)**: Return controlled validation messages from the application's business logic, not raw framework errors
+- **Health endpoint**: Reports service status (`"connected"`, `"disconnected"`, `"error"`) without including raw error messages from database or Redis connection failures
+
+### Logging Security
+
+- **No passwords in logs**: Temporary passwords are never logged. User creation only logs that a welcome email was requested.
+- **Uniform authentication failures**: Login failure logs do not distinguish between "user not found", "invalid password", or "no password set", preventing username enumeration via log analysis. All failures log as `"Authentication failed for login attempt"`.
+- **Account lockout events**: These are the exception — they include the username because they are security incidents that require investigation.
+- **Request body sanitization**: The security monitoring middleware reads request bodies for threat detection, but sensitive fields are not persisted to logs.
+
+### Frontend Security
+
+- **Production console logging**: Error details (error context, user information) are only logged to the browser console in development mode. Production builds log only the step name and error message.
+- **Per-session obfuscation keys**: The frontend obfuscation utility generates a random key per browser session instead of using a hardcoded default, ensuring each session has a unique key.
+- **VITE\_\* variable safety**: Only non-secret values (API URLs, feature flags) are exposed via Vite environment variables. Secrets must never use the `VITE_` prefix.
+
+### Environment & Configuration
+
+- **`.env` files excluded from git**: `.gitignore` includes `.env`, `.env.local`, and `.env.*.local` to prevent accidental secret commits
+- **`.env.example` files**: Contain only placeholder text (`CHANGE_ME_GENERATE_WITH_STEP_2_ABOVE`), never real secrets
+- **Security key validation**: Startup checks flag any `SECRET_KEY` or `ENCRYPTION_KEY` containing `"INSECURE_DEFAULT"` as a critical issue
+
+---
+
+## Privacy & Data Subject Rights
+
+Aligned with ISO/IEC 27701 and the HIPAA right of access. See
+[docs/COMPLIANCE.md](../docs/COMPLIANCE.md) for the full control inventory.
+
+### Personal data export (portability)
+
+Members download everything the system holds about them from
+**Settings → Security → Your Data** (`GET /users/me/data-export`): profile and
+emergency contacts, training and certifications, attendance, admin hours,
+leaves, medical screening records, skill tests, dues, equipment custody,
+consents, and evaluations written about them. The export is self-scoped by
+construction — there is no route to another member's data — rate limited to
+3/hour, and audited. Credentials, MFA secrets, and unguessable tokens are
+never exported; audit history is summarized rather than dumped.
+
+### Anonymization (right to erasure)
+
+`POST /users/{id}/anonymize` (requires `members.manage`, refused for active
+members and for self) irreversibly scrubs a departed member's identity while
+preserving the operational history a department must keep:
+
+| Scrubbed                                                                                                           | Retained                                                               |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Names, username, email (replaced with per-member tokens), phone, address, date of birth, photo, emergency contacts | Training completions, certifications, attendance counts, service hours |
+| Credentials, MFA secrets, OAuth linkage, calendar/reset tokens; sessions and password history deleted              | Property custody and departure clearance records                       |
+| Medical screening content (results, notes, provider)                                                               | Screening status and dates, as compliance proof                        |
+| Free-text reasons on leaves, waivers, time-off, meeting waivers; RSVP dietary/accessibility notes                  | Leave types and date ranges (compliance denominators)                  |
+| Body measurements; the applicant-era prospect record, its interview notes and uploaded documents                   | Dues and financial records                                             |
+
+**Never touched:** audit logs (append-only and hash-chained — rewriting them
+is tampering; the anonymization event itself records only the user id, never
+the name) and election records (ballot integrity signatures).
+
+### Consent
+
+Optional processing is consent-gated: photo use, public roster listing, and
+SMS notifications (TCPA requires express consent for text messaging). Members
+manage these at **Settings → Security → Privacy Choices**. Current state lives
+in `user_consents`; every change is written to the tamper-evident audit log as
+`consent_updated`, which serves as the immutable consent ledger. **A member who
+was never asked is treated exactly like one who refused** — consumers of a
+consent must fail closed.
+
+---
+
+## Records Retention
+
+Retention is configurable per organization rather than hardcoded, because
+statutory retention for fire-service records varies by state (ISO 15489).
+
+- **Business records** — each managed record class (message history,
+  notification logs, error logs, form submissions, guest check-ins, practice
+  skills tests) has a safe default and a **minimum floor** that a typo cannot
+  go below; the floor is re-applied at enforcement time so settings edited
+  outside the API cannot bypass it. Read with
+  `GET /organization/retention-policy`, set one class at a time with
+  `PUT /organization/retention-policy/{record_class}` (audited), enforced
+  daily. The full table is in
+  [Privacy & Data Protection](Security-Privacy#records-retention).
+- **Documents and meeting minutes are deliberately excluded** from automatic
+  deletion. Destroying official records on a timer is a department decision
+  belonging in its own retention schedule, executed by a human.
+- **Audit records** — retained 7 years (`HIPAA_AUDIT_RETENTION_DAYS`).
+  Expired rows are exported to signed archives before purging; the purge is
+  checkpoint-aligned, refuses to run on a chain that fails verification, and
+  records a keyed attestation so the surviving chain still verifies while
+  unsanctioned deletions still fail. **Include `AUDIT_ARCHIVE_DIR` in your
+  backups — after a purge it is the only copy of the oldest audit history.**
+- **Platform telemetry** — blocked-access attempts (IP + user agent) age out
+  per `RETENTION_BLOCKED_ATTEMPTS_DAYS` (default 365).
+
+---
+
+## Supply Chain Security
+
+Continuous, and blocking where a fix exists (ISO/IEC 27001 A.8.8):
+
+| Control               | Tool       | Behavior                                                            |
+| --------------------- | ---------- | ------------------------------------------------------------------- |
+| Python SAST           | Bandit     | Reported in CI, artifact uploaded                                   |
+| Python dependencies   | pip-audit  | **Blocking**; documented deferrals only                             |
+| Frontend dependencies | npm audit  | **Blocking at high severity**                                       |
+| Cross-ecosystem sweep | Trivy      | **Blocking** on HIGH/CRITICAL with a fix available; weekly schedule |
+| Secret scanning       | gitleaks   | Full history, weekly + per-PR                                       |
+| Dependency updates    | Dependabot | Weekly PRs (pip, npm, actions, docker)                              |
+| Bill of materials     | Syft       | SPDX SBOM published as a CI artifact each run                       |
 
 ---
 
 ## Vulnerability Reporting
+
+### Discovering our contact (RFC 9116)
+
+Every deployment serves a machine-readable disclosure pointer at
+`/.well-known/security.txt`, listing the department's security contact, this
+policy, and an expiry date. Departments set their own contact with
+`SECURITY_TXT_CONTACT` (an email address or a reporting URL); unset, it points
+researchers at the upstream project's GitHub security-advisory intake. This
+follows ISO/IEC 29147 (vulnerability disclosure).
 
 ### Responsible Disclosure
 
@@ -950,7 +945,8 @@ We take security seriously. If you discover a security vulnerability:
 
 1. **DO NOT** open a public GitHub issue
 2. **DO NOT** discuss publicly before fix is deployed
-3. Email security reports to: security@yourfiredept.org
+3. Email security reports to the address in `/.well-known/security.txt`
+   (default upstream: a GitHub security advisory)
 4. Provide detailed information:
    - Description of vulnerability
    - Steps to reproduce
@@ -1177,72 +1173,6 @@ Organizations may pursue:
 - ISO 27001
 - HITRUST CSF
 - PCI DSS (if processing payments)
-
-## Recent Security Hardening (2026-05 — 2026-06)
-
-### IDOR (Insecure Direct Object Reference) Fixes
-
-Multiple cross-organization IDOR vulnerabilities were identified and fixed:
-
-| Module                | Vulnerability                                                                                  | Fix                                                   |
-| --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Training submissions  | Any same-org member could read other members' submissions                                      | Org boundary check + owner-or-`training.manage` gate  |
-| Grant notes           | Cross-org read/write on grant notes                                                            | Org-scoped query                                      |
-| Grant budget items    | Cross-org access to budget items, expenditures, compliance tasks                               | Org-scoped queries on all paths                       |
-| Finance approvals     | Cross-org approve/deny on approval steps                                                       | Org-scope check in approval handler                   |
-| Documents             | Folder-less document listing bypassed access control; by-id fetch bypassed folder restrictions | Enforce folder access on all document queries         |
-| Equipment requests    | Double-issue race in fulfillment                                                               | Row-level locking during fulfillment                  |
-| IP exception approval | Cross-org IDOR in IP exception workflow                                                        | Org-scoped query + 404 for missing/foreign exceptions |
-| Shift reports         | Any authenticated user could read any report by ID                                             | Trainee/officer/`training.manage` gate                |
-
-### IP Spoofing Protection
-
-`get_client_ip()` was rewritten to be **spoof-proof**:
-
-- Reads `X-Forwarded-For` only when behind a trusted reverse proxy
-- Validates the proxy's own IP against a trusted list
-- Supports multi-worker environments with synchronized state
-- Warnings logged for untrusted proxy headers
-
-### Geo-Blocking (Platform-Edge Control)
-
-GeoIP-based country blocking is a **platform-edge control**: it runs in
-middleware before any tenant/authentication context exists, against one shared
-MaxMind database and one global blocked-country set, so it applies deployment-wide
-rather than per-organization:
-
-- The blocklist is normally set at deploy time via `BLOCKED_COUNTRIES`. Runtime
-  block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`,
-  overlaid onto `CountryBlockRule` rows) is **disabled by default** and enabled
-  only when the operator sets `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=true` — because
-  a change affects every tenant
-- Applied in real time by the blocking middleware. Approved IP exceptions are
-  recorded but **not** read by enforcement — the middleware passes an empty
-  allowlist, because it runs before any tenant context exists and one
-  organization's exception would otherwise relax the block for every tenant —
-  so an approved address is still blocked if its country is
-- **Fail-open by default, or fail-closed via `GEOIP_FAIL_CLOSED`**: when set, an
-  IP whose country can't be resolved (including a missing/corrupt MaxMind DB) is
-  blocked; private/reserved IPs are always allowed so an internal operator can
-  recover
-
-### Scheduled Task Auto-Run
-
-Five scheduled tasks that previously required an external cron job to fire are now auto-run by the built-in asyncio task runner:
-
-- `process_inactivity_warnings` (prospect pipeline)
-- `expire_old_exceptions` (IP security)
-- `refresh_overdue_checkouts` (inventory)
-- `auto_close_stale_sessions` (admin hours)
-- `mark_overdue_dues` (membership)
-
-### Server-Side Enforcement
-
-- `must_change_password` is now enforced server-side in `get_current_user` (previously only the frontend honored this flag)
-- Public event-request endpoint uses real client IP for abuse tracking with per-IP rate limiting (10/min)
-- Unauthenticated v1 endpoint guard prevents accidental exposure of new endpoints
-
----
 
 ## Security Resources
 

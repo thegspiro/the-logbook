@@ -40,7 +40,10 @@ export async function searchChecklistCatalog(
   scope: CatalogSearchScope,
   limit: number
 ): Promise<CatalogSearchResult> {
-  const params = { search: query, limit, active_only: true };
+  // `fuzzy`: the name on the rig and the name in the catalog are rarely spelled
+  // alike ("4 x 4 gauze", "BVM"), and a missed match here is how a second,
+  // duplicate catalog row gets created. Exact matches still come first.
+  const params = { search: query, limit, active_only: true, fuzzy: true };
   const [medical, gear] = await Promise.allSettled([
     scope.medical ? medicalSuppliesService.getItems(params) : Promise.resolve(null),
     scope.gear ? inventoryService.getItems(params) : Promise.resolve(null),

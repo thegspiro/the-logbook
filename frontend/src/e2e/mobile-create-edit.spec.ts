@@ -96,7 +96,11 @@ test.describe('mobile create and edit surfaces', () => {
 
   test('inventory create form remains usable and releases the page mask', async ({ page }, testInfo) => {
     await page.goto('/inventory/items');
-    await expect(page.getByRole('heading', { name: 'Inventory Items' })).toBeVisible();
+    // Exact, because the mocked list is empty and its empty state's heading,
+    // "Your department has no inventory items yet", also contains this name:
+    // a substring match turns into a strict-mode violation whenever the
+    // empty state renders before this assertion first polls.
+    await expect(page.getByRole('heading', { name: 'Inventory Items', exact: true })).toBeVisible();
 
     const addItem = await visibleButton(page, 'Add Item');
     await addItem.click();

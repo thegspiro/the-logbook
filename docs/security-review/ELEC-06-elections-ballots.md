@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), pass 8 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), pass 9 (this PR)
 
 ---
 
@@ -109,6 +109,162 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 9 (2026-10-14)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(state=open) and `search_pull_requests` (`is:open head:claude/security-review-`)
+both returned no `claude/security-review-*` branch. PR #3225 (Feature 05,
+Finance & approvals, pass 9) had merged (`pull_request_read`: `merged: true`,
+2026-10-14T19:27:15Z); `PROGRESS.md`'s rotation table already showed row 05
+✅, so nothing to clear beyond the Open PR row, which rides into this PR's own
+commit. Proceeded to Feature 06, the next `⬜` row.
+
+**Baseline and delta.** Pass 8 merged as `66c7ceb9` (PR #3142,
+2026-10-13T01:40:06Z; confirmed an ancestor of current `origin/main` via
+`git merge-base`, so the shallow clone's history reaches it). `git diff
+--stat 66c7ceb9..origin/main` across the feature's established domain
+(`elections.py`, `election_service.py`, `quorum_service.py`,
+`models/election.py`, `schemas/election.py`, `utils/election_ballot_pdf.py`,
+`mcp/tools/elections.py`, the frontend elections surface, every election-table
+migration) found **no new election-table migration** and exactly 4 files with
+a real (non-migration) diff: `elections.py` (+4/-2), `schemas/election.py`
+(+65/-0), `election_service.py` (+39/-32), `quorum_service.py` (+1/-1,
+Meetings & Minutes' own MM-17 fix — unrelated to elections; it only shares
+this feature's file list via a `populate_existing` comment cross-reference in
+`election_service.py`, confirmed by grep that nothing in `election_service.py`
+or `elections.py` actually calls `QuorumService`). The frontend elections
+surface (`ElectionBallot.tsx`, `ElectionDetailPage.tsx`,
+`BallotVotingPage.tsx`, `electionService.ts`, `types/election.ts`,
+`electionHelpers.ts`) has **zero diff** in this window.
+
+**The whole backend delta is PR #3247 ("Fix the last mypy errors and set the
+ratchet baseline to zero, batch 6"), read in full rather than trusted from its
+title:**
+
+- `elections.py`: `update_election`'s orphaned-position check gains `p is not
+None` before comparing — a defensive null-filter, not a behavior change
+  (`nominated` already excludes `None` upstream in every path read).
+- `election_service.py`: every change is type-narrowing or an
+  `Optional`/`Sequence` annotation (`org: Optional[Organization]`,
+  `recipient_user_ids: Optional[Sequence[UUID | str]]`,
+  `rollback_record: Dict[str, Any]`, …), or threading an already-computed
+  value instead of re-reading it off the ORM object a line later
+  (`_apply_vote_signature` now returns the signature string it just set on
+  `vote.vote_signature`/`vote.signing_key_id`, and all 5 call sites use the
+  return value instead of re-reading `vote.vote_signature` — `str(x)` of the
+  same value either way, confirmed by reading `_sign_vote`'s return type).
+  Two spots add a filter the SQL already guarantees
+  (`_recorded_paper_ballot_counts`'s dict comp re-excludes `None` counts after
+  a `.is_not(None)` WHERE; `totals_by_batch` skips a `None` batch id) — belt
+  and suspenders for mypy, not a behavior change. `candidate_id = str(UUID(choice))`
+  (the plain-candidate-UUID branch) was previously a bare `UUID` object while
+  the sibling Approve/Deny branches set a `str` (`Candidate.id`) — mypy caught
+  a real type inconsistency, but it was functionally inert: both feed
+  `_dedup_discriminator`'s f-string and `_create_token_vote`'s string column,
+  and `str(uuid_obj) == str(UUID(choice))` for the same input. `
+positions_voted` building changed from a list comprehension that could
+  append `None` (an absent `ballot_item_id`) to a loop that skips it — the
+  one line with a real, if narrow, behavioral delta in this pass, and it
+  only removes a `None` that had no legitimate source to begin with (every
+  vote dict in `votes` is built from `ballot_item.get("id")` earlier in the
+  same function, never literally absent).
+- `schemas/election.py`: **new code, not a mypy fix** — `_refuse_cleared()`
+  plus `ELECTION_UPDATE_REQUIRED_FIELDS` / `CANDIDATE_UPDATE_REQUIRED_FIELDS`
+  reject an explicit `null` on a PATCH for any field whose `elections`/
+  `candidates` column is `NOT NULL`, answering 422 before the write reaches
+  the database instead of a 500 (`IntegrityError`) or a `TypeError` from
+  comparing a null date. This is this codebase's general Pitfall #1
+  corollary (explicit `null` vs. omitted key on an update path) applied to
+  this feature's own NOT NULL columns; the field lists are kept in sync with
+  the model by `test_election_update_null_columns_integration.py` (confirmed
+  present and passing — see Completion gate). No new exposure or scoping
+  surface: this only narrows what an existing, already-permission-gated PATCH
+  will accept.
+
+**Route count unchanged at 69** — this window's diff touches zero route
+decorators; re-confirmed by `check_route_permissions.py --strict` below
+(269 application-wide, elections' own share unchanged from pass 8's count).
+No new migration in this feature's domain (the 20+ new migration files in the
+repo-wide diff are all other features — training submissions, RSVP history,
+locations grants, event waitlist, public-portal org-nullability, facility
+folders, audit-chain sealing, document corrections, expense/budget/restricted
+funds, QuickBooks export, skill templates, cash advances — none touch
+`elections`/`candidates`/`votes`/`voting_tokens`/`manual_ballot_batches`,
+confirmed by grepping each new migration body for those table names).
+
+**ELEC-28 — RESOLVED, correcting pass 7 and pass 8.** Both prior passes
+re-cited `ElectionBallot.tsx:60-78`'s `getPositions()`/
+`getCandidatesForPosition()` as unchanged. Reading the file directly this
+pass: those functions do not exist. The component's own docstring states
+the fix in the past tense ("It used to be built from `election.positions`
+alone... (W50-10, ELEC-28)") and the body reads `ballot_items` off
+`GET /elections/{id}/ballot`'s response, rendering through the shared
+`BallotItemCard` — the same component the emailed ballot uses
+(`BallotItemCard.tsx`'s own docstring: "Rendered by both the emailed ballot
+and the in-app Cast Vote tab"). `BallotItemCard.tsx` caps a multi-select at
+`settings.max_votes_per_position` (`ballotChoices.ts:87`) and names the seat
+count when `seats_per_position > 1` (`BallotItemCard.tsx:129`) — the exact
+two gaps W50-10/W50-11 and ELEC-28 described. This is not a pass-9 fix: it
+was already landed, and already correctly recorded as fixed in this file's
+own **Owner decisions applied (2026-10-05)** section ("ELEC-28 / W50-10 ...
+fixed: one ballot model") — the same date pass 7 ran. Pass 7 and pass 8 each
+re-asserted the pre-fix state without re-reading the current file, a gap this
+pass closes by adding an inline correction to both their findings blocks
+(above) rather than rewriting history. **ELEC-28/W50-10/W50-11 move to
+RESOLVED**, closing this file's one remaining OPEN item from the §-rendering
+class (ELEC-12 and ELEC-16 are FLAGGED/accepted, not OPEN, and ELEC-40 is
+FLAGGED).
+
+**Standing items re-verified, unchanged:**
+
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) — untouched by
+  this window's diff; still bounded in practice by the unchanged 200/org
+  creation cap.
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) — `election_service.py`'s
+  `list_manual_ballot_batches` (line 5196) is outside every hunk this
+  window's diff touches; accepted as-is per the Owner Decisions section.
+- **ELEC-40** (pre-ELEC-34 dedup collision-avoidance edge case) —
+  `_dedup_position_key`/`_dedup_scoped_item_aliases` (`election_service.py:286,353`)
+  are outside every hunk this window's diff touches.
+
+**0 new findings; 0 code fixed by this pass** — ELEC-28's resolution was
+discovered, not made, by this pass; the mypy/null-safety delta needed no
+further fix; the new `_refuse_cleared` hardening was already landed and
+tested by the PR that added it.
+
+## Schema & migration notes (pass 9)
+
+No election-table migration landed since pass 8's baseline (confirmed above
+by grepping every new migration body added in this window for the feature's
+five table names — none matched).
+
+## Guard tests added (pass 9)
+
+None. `test_election_update_null_columns_integration.py` already guards the
+new `_refuse_cleared` validators (added by the PR that introduced them, not
+this pass); ELEC-28's resolution is already guarded by
+`tests/test_ballot_convergence.py` (cited in the Owner Decisions section)
+and the frontend's `ElectionBallot.w50-receipt.test.tsx` / ballot component
+tests — adding a duplicate here would test the same invariant twice.
+
+## Completion gate (pass 9)
+
+| Check                                                                      | Result                                              |
+| -------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                              | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/`                                       | ✅ 2292 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/`                                  | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 594 revisions, single head `252c7517d80a`        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)          | ✅ 269 routes, 0 errors, 0 warnings                 |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or proxy"` | ✅ 976 passed, 1 skipped (pre-existing, `py_vapid`) |
+
+No application code was changed this pass — the gate confirms the mypy-driven
+delta since pass 8 left the codebase clean; `npm run typecheck`/`npm run lint`
+were not re-run since the frontend elections surface has zero diff in this
+window (per CLAUDE.md's "Match the Verification to the Change").
+
+---
 
 ## Pass 8 (2026-10-12)
 
@@ -243,6 +399,13 @@ so nothing to remove there.
   Converges with W50-10/W50-11; W50-11's half (seat count) is now fixed in
   the tally (see above), but the in-app tab's rendering gap itself is
   unchanged and still awaits the owner's rewrite-or-hide decision.
+  **Correction (pass 9, 2026-10-14): this bullet was wrong when written.**
+  `ElectionBallot.tsx` had already been rewritten onto the shared
+  `ballot_items` model earlier in this same window — it is exactly the "one
+  ballot model" fix this file's own **Owner decisions applied (2026-10-05)**
+  section records as fixed, above. The `getPositions()`/
+  `getCandidatesForPosition()` functions this bullet cites did not exist in
+  the code this pass was reviewing; see Pass 9 below.
 - **ELEC-40** (pre-ELEC-34 dedup collision-avoidance edge case) —
   `_dedup_position_key`/`_dedup_scoped_item_aliases` (`election_service.py:286-375`,
   shifted from pass 7's `146-240`) are unchanged by this window's diff;
@@ -447,6 +610,15 @@ model or hide it when the election has ballot items/a seat cap > 1. This
 pass treats ELEC-28 and W50-10/W50-11 as **one gap, not three** — the
 root cause and fix are identical — and defers to the owner decision W50-10
 already asked for rather than re-asking it under a different id.
+
+**Correction (pass 9, 2026-10-14): this entry was already stale when pass 7
+wrote it.** The owner decided this exact item on 2026-10-05 — see this
+file's **Owner decisions applied (2026-10-05)** section, "ELEC-28 / W50-10
+... fixed: one ballot model" — the same date pass 7 ran. `ElectionBallot.tsx`
+had already been rewritten around `GET /elections/{id}/ballot` and the
+shared `BallotItemCard`, with no `getPositions()`/`getCandidatesForPosition()`
+left to find; pass 7 and pass 8 each re-cited the pre-fix function names
+without re-reading the file. See **Pass 9** for the resolution.
 
 ### ELEC-40 — P1 — Pre-ELEC-34 vote dedup collision-avoidance edge case — 🚩 FLAGGED (re-verified, pass 7)
 

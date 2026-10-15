@@ -32,10 +32,10 @@ The Forms module allows organizations to create custom forms for both internal w
 | Enum                | Values                                                                                                                                                                           |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FormStatus`        | `draft`, `published`, `archived`                                                                                                                                                 |
-| `FormCategory`      | `Operations`, `Membership`, `Training`, `Compliance`, `Events`, `HR`, `Finance`, `Custom`                                                                                        |
+| `FormCategory`      | `safety`, `operations`, `administration`, `training`, `other`                                                                                                                    |
 | `FieldType`         | `text`, `textarea`, `number`, `email`, `phone`, `date`, `time`, `datetime`, `select`, `multiselect`, `checkbox`, `radio`, `file`, `signature`, `section_header`, `member_lookup` |
-| `IntegrationTarget` | `membership`, `inventory`                                                                                                                                                        |
-| `IntegrationType`   | `membership_interest`, `equipment_assignment`                                                                                                                                    |
+| `IntegrationTarget` | `membership`, `inventory`, `events`                                                                                                                                              |
+| `IntegrationType`   | `membership_interest`, `equipment_assignment`, `event_registration`, `event_request`                                                                                             |
 
 ### Key Files
 
@@ -412,24 +412,25 @@ Public form submission requires no permissions or authentication.
 
 ### Integration Health Dashboard
 
-The FormsPage includes an integration health view that shows:
-
-- Processing status per submission (success, failed, pending)
-- Error details for failed integrations
-- **Reprocess** button to retry failed integration processing
+The integration modal on FormsPage summarizes integration health: total
+submissions, how many were processed, and how many succeeded or failed. There is
+no health endpoint — the page computes the counts from the form's submissions
+(`GET /api/v1/forms/{id}/submissions`, up to 500), reading each submission's
+`integration_processed` and `integration_result`. The submission viewer shows
+each submission's result and offers **Reprocess** to retry it.
 
 ### API Endpoints
 
-| Method | Path                                             | Permission     | Description                    |
-| ------ | ------------------------------------------------ | -------------- | ------------------------------ |
-| `GET`  | `/api/v1/forms/{id}/integrations/health`         | `forms.manage` | Get integration health status  |
-| `POST` | `/api/v1/forms/{id}/submissions/{sid}/reprocess` | `forms.manage` | Reprocess a failed integration |
+| Method | Path                                             | Permission     | Description                                 |
+| ------ | ------------------------------------------------ | -------------- | ------------------------------------------- |
+| `GET`  | `/api/v1/forms/{id}/submissions`                 | `forms.manage` | Submissions, with their integration results |
+| `POST` | `/api/v1/forms/{id}/submissions/{sid}/reprocess` | `forms.manage` | Reprocess a submission's integrations       |
 
 ### Field Mapping UI
 
 Integration configuration includes a visual field mapping interface:
 
-1. Select the target module (Membership or Inventory)
+1. Select the target module (Membership, Inventory or Events)
 2. Choose the integration type
 3. Map form fields to target module fields using dropdown selectors
 4. Save the mapping — submissions are automatically processed against the mapping

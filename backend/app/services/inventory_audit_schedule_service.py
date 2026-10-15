@@ -163,7 +163,9 @@ class InventoryAuditScheduleService:
                 {
                     "storage_area_id": area.id,
                     "storage_area_name": area.name,
-                    "location_name": locations.get(area.location_id),
+                    "location_name": (
+                        locations.get(area.location_id) if area.location_id else None
+                    ),
                     "audit_frequency": frequency,
                     "last_audited_at": last_at,
                     # Null while never audited: due now, with no date to show.

@@ -159,7 +159,7 @@ class DashboardWidgetService:
             "overdue_dues": overdue or 0,
             "cash_in": paid,
             "cash_out": expenses,
-            "net_cash_flow": Decimal(paid) - Decimal(expenses),
+            "net_cash_flow": Decimal(paid or 0) - Decimal(expenses or 0),
             "budgeted": budget[0],
             "spent": budget[1],
             "encumbered": budget[2],

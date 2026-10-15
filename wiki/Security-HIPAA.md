@@ -19,23 +19,23 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Audit Controls (§ 164.312(b))
 
-| HIPAA Requirement                  | Feature                                                                                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Audit log recording                | All access to PHI is logged with user, timestamp, and action                                                                         |
-| Tamper-proof storage               | Keyed HMAC-SHA256 hash chain prevents modification                                                                                   |
-| Log retention                      | 7-year retention (2555 days), exceeds 6-year HIPAA minimum                                                                           |
-| Periodic verification              | Daily integrity checkpoints                                                                                                          |
-| Export capability                  | JSON export for compliance reporting                                                                                                 |
-| Retention of audit records         | 7 years, **enforced** — expired entries are exported to signed archives before purge, with an attested chain hand-off _(2026-07-31)_ |
-| Protection against log destruction | Optional off-host shipping of every entry to an external collector/SIEM as HMAC-signed batches _(2026-07-31)_                        |
+| HIPAA Requirement                  | Feature                                                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Audit log recording                | All access to PHI is logged with user, timestamp, and action                                                          |
+| Tamper-proof storage               | Keyed HMAC-SHA256 hash chain prevents modification                                                                    |
+| Log retention                      | 7-year retention (2555 days), exceeds 6-year HIPAA minimum                                                            |
+| Periodic verification              | Weekly integrity checkpoints (`audit_log_archival`), plus on-demand chain verification                                |
+| Export capability                  | JSON export for compliance reporting                                                                                  |
+| Retention of audit records         | 7 years, **enforced** — expired entries are exported to signed archives before purge, with an attested chain hand-off |
+| Protection against log destruction | Optional off-host shipping of every entry to an external collector/SIEM as HMAC-signed batches                        |
 
 ### Integrity (§ 164.312(c))
 
-| HIPAA Requirement      | Feature                                   |
-| ---------------------- | ----------------------------------------- |
-| Data integrity         | Hash chain verification for audit logs    |
-| Transmission integrity | TLS 1.3 for all data in transit           |
-| Modification tracking  | Before/after values recorded in audit log |
+| HIPAA Requirement      | Feature                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
+| Data integrity         | Hash chain verification for audit logs                                  |
+| Transmission integrity | TLS 1.2 or 1.3 for all data in transit (the bundled nginx accepts both) |
+| Modification tracking  | Before/after values recorded in audit log                               |
 
 ### Person or Entity Authentication (§ 164.312(d))
 
@@ -48,10 +48,10 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Transmission Security (§ 164.312(e))
 
-| HIPAA Requirement  | Feature                            |
-| ------------------ | ---------------------------------- |
-| Encryption         | TLS 1.3 required in production     |
-| Integrity controls | Message authentication codes (MAC) |
+| HIPAA Requirement  | Feature                                                               |
+| ------------------ | --------------------------------------------------------------------- |
+| Encryption         | TLS required in production; the bundled nginx accepts TLS 1.2 and 1.3 |
+| Integrity controls | Message authentication codes (MAC)                                    |
 
 ---
 
@@ -66,7 +66,7 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 ### Workforce Security
 
 - Role-Based Access Control (RBAC) with granular permissions
-- 16 system roles with principle of least privilege
+- 31 built-in system positions with principle of least privilege
 - Audit trail for all permission changes
 
 ### Security Awareness Training
@@ -140,7 +140,7 @@ For self-hosted deployments (Unraid, on-premises), the BAA requirement applies t
 
 ---
 
-## Individual Rights (Privacy Rule) _(2026-07-31)_
+## Individual Rights (Privacy Rule)
 
 | Right                           | Implementation                                                                                                               |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
