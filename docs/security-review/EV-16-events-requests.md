@@ -1,23 +1,27 @@
 # Security Review 16 — Events & Requests
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
-2026-09-17 (pass 6), 2026-10-06 (pass 7) · **PR:**
+2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8) · **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
 [#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
-fixed, EV-26 confirmed fixed)
+fixed, EV-26 confirmed fixed),
+pass 8 PR (0 fixes needed this pass — see below)
 
-**Backend:** `api/v1/endpoints/events.py` (58 routes, up from 55),
+**Backend:** `api/v1/endpoints/events.py` (58 routes, unchanged),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
 public outreach event-request intake pipeline),
 `services/event_service.py`,
 `services/event_request_service.py`,
-`api/v1/endpoints/event_attendance_petitions.py`,
+`api/v1/endpoints/event_attendance_petitions.py` (7 routes, up from 5),
 `services/event_attendance_petition_service.py`,
-`services/event_organizer_service.py` (three files added to scope this
-pass — see Pass 7 below)
-**Frontend:** `modules/events`
-**Migrations:** none this iteration (no schema change)
+`services/event_organizer_service.py`,
+`models/event.py`, `models/event_request.py` (model files read this pass
+for the `Mapped[]`/`mapped_column()` rewrite — see Pass 8 below)
+**Frontend:** `modules/events`, plus `pages/AttendanceRequestsPage.tsx`
+(reachable from `modules/events/routes.tsx`, reviewed this pass)
+**Migrations:** none introduced by this pass's review; one real migration
+(`a0b34c886658`) landed in the window and is reviewed below
 
 ---
 
@@ -31,6 +35,248 @@ into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
 branch confirms against the list and retries with `override=true`. Tests:
 `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
 `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
+## Pass 8 (2026-10-15) — real delta (36 commits), 0 fixes needed, file-storage hardening + two new attendance-petition routes reviewed clean
+
+**Watchdog pickup.** PR #3291 (Feature 15, Scheduling, pass 8) had merged
+touching only `PROGRESS.md` and its own findings file (docs-only, confirmed
+via `git show --stat` on the merge commit, `dbe9abc3c`), so per
+`PROGRESS.md`'s own rule it was not independently recordable. No
+`claude/security-review-*` PR was open (`search_pull_requests`,
+`is:open head:claude/security-review-`, 0 results); rotation row 16
+(Events & requests) was the first `⬜`.
+
+### Scope
+
+**Confirmed a complete clone before trusting any commit count** —
+`git rev-parse --is-shallow-repository` → `false`; no truncation risk.
+Since pass 7's merge (`b48425bea`, PR #2972, 2026-10-06): **36 non-merge
+commits** touch this feature's declared files (32 across the 7 backend
+`.py` files below the model layer, plus the 2 model files and 1 frontend
+file, counted separately) — another genuinely active window, not a
+near-zero-delta one.
+
+**No scope gap this pass.** `guest_check_in_service.py` and
+`attendance_dashboard_service.py` (named in the XC-1 commit message below
+as already-validated callees) were checked for their own changes in this
+window: `guest_check_in_service.py` picked up only a mypy-typing commit
+(`de96f2367`, no behavior change); `attendance_dashboard_service.py` is
+Users/Membership-domain code (meeting attendance, voting eligibility), not
+Events', and already belongs to a different rotation slot. Neither needed
+adding to this feature's declared scope, unlike pass 7's petition/organizer
+files.
+
+### Re-verified standing items
+
+- **EV-23 — now resolved**, between pass 7 and this pass (owner decision,
+  2026-10-11). `e78ffd4f2` ("feat(events): warn on every ahead-of-phase
+  session in a series RSVP (EV-23)") adds `SeriesPhaseGateWarning` and an
+  `override` parameter to `rsvp_to_series` (`event_service.py:2404`+):
+  a **going** series RSVP now evaluates `_evaluate_session_phase_warning`
+  for every future occurrence before writing anything, and if any are
+  ahead of the member's training phase, raises a 409 `phase_gate` with the
+  full list of occurrences rather than silently overriding, as it did when
+  pass 3/4/6/7 left this open. `useRSVPForm`'s series branch confirms
+  against the list and retries with `override=true`. Tests:
+  `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
+  `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts` —
+  all present and passing in this pass's own gate run. `KNOWN_LIMITATIONS.md`'s
+  EV-23 entry already carries the `✅ Resolved` banner — re-read and
+  accurate, not re-asserted. **Closed.**
+- **EV-26 — still fixed, unregressed.** The per-department
+  `organization_locks` upsert-before-event-lock mechanism pass 7 confirmed
+  fixed is untouched in this window (`check_overlapping_events` call sites
+  in `event_service.py::create_event`/`update_event` and
+  `event_requests.py::schedule_request` all still route through it — grepped
+  at their current line numbers, same shape as pass 7). `KNOWN_LIMITATIONS.md`'s
+  EV-26 entry (the accepted cross-department residual) re-read and still
+  accurate.
+- **`check_request_status`'s 256-bit token, still unrated-limited by
+  design** — `generate_status_token()` (`models/event_request.py:41`)
+  still `secrets.token_urlsafe(32)`, confirmed unchanged by direct read
+  (the model file's diff this pass is the `Mapped[]`/`mapped_column()`
+  rewrite only — see below — no change to the function body). Neither
+  `GET /status/{token}` nor `POST /status/{token}/cancel` carries a
+  rate-limit dependency; same conclusion as every prior pass — brute-forcing
+  a 256-bit token is not the threat a per-IP limiter addresses, and both
+  routes require possessing the token. `POST /status/{token}/cancel` does
+  still carry its own `check_ip_rate_limit` (mutation + email amplification
+  guard), unchanged.
+- **`ondelete="SET NULL"` nullability** — every FK in `models/event.py` and
+  `models/event_request.py` re-checked line-by-line against the full model
+  diff (both files were rewritten this window from `Column(...)` to
+  `Mapped[T] = mapped_column(...)` for mypy — see below); every `SET NULL`
+  FK (`Event.organizer_id`/`alternate_organizer_id`/`last_modified_by`,
+  `EventRSVP.overridden_by`, `EventAttendancePetition.reviewed_by`,
+  `EventRequest.assigned_to`/`event_id`/`shift_id`, the prospect-link
+  fields) still pairs with `nullable=True`. No regression from the rewrite.
+
+### Real commits reviewed
+
+- **`7835d0bb5`** ("Confine stored upload files to their organization and
+  close file-access gaps") — Phase 1 of a repo-wide file-storage hardening
+  pass. Its `events.py` hunk (84 lines) is a genuine security hardening fix,
+  already landed and tested, not something this pass needed to apply:
+  `GET /{event_id}/attachments` and `GET /{event_id}/attachments/{id}`
+  previously required only `get_current_user` (any authenticated member of
+  _some_ org — org-scoped by the query, but with no permission check at
+  all) and now require `events.view` or `events.manage` via
+  `_load_event_for_attachment_read`, which also 404s a draft event's
+  attachments for a non-manager (same response as "doesn't exist", per the
+  no-403-oracle pattern this feature uses elsewhere). The upload path also
+  gained an extension/detected-MIME agreement check and started storing/
+  trusting only the detected MIME type, and downloads now serve a stored
+  `file_type` as `application/octet-stream` unless it is in
+  `ALLOWED_ATTACHMENT_MIME_TYPES` — closing a path where the `attachments`
+  JSON column, being writable through the generic event update payload,
+  could otherwise get an attacker-chosen `Content-Type` echoed back at
+  download time. Read in full; no gap found in the new code.
+- **`1a2aae0d7`** ("fix(events): validate client-supplied foreign keys are
+  in-org (XC-1)") — `PATCH /events/settings`'s
+  `request_pipeline.default_assignee_id` is now checked with
+  `assert_in_org` before being persisted (`events.py:945`+), closing a gap
+  where a foreign org's user id was stored (though never actioned, since
+  `apply_default_assignee` already re-checked at read time). Already
+  landed with its own test (`test_xc1_scheduling_events.py`); re-verified
+  by direct read, not re-derived.
+- **`9069e0674`/`dd7f2dae9`/`2b07517ed`/`02227688c`** — the attendance-
+  petition withdraw/pending-list feature, the two new routes in
+  `event_attendance_petitions.py`:
+  - `GET /attendance-petitions/pending?scope={mine,all}` —
+    `list_pending_for_reviewer` raises `PermissionError` (→ 403) for
+    `scope=all` unless the caller holds `events.manage`
+    (`event_attendance_petition_service.py:249`); `scope=mine` (the
+    default) is further restricted in the query itself to events the
+    caller organizes or is alternate for
+    (`Event.organizer_id == reviewer.id OR Event.alternate_organizer_id
+== reviewer.id`), and the join on `Event` carries
+    `Event.organization_id == organization_id` so no cross-tenant read is
+    possible regardless of scope. The caller's own petitions are excluded
+    either way (separation of duties, `pending_petition_criteria`).
+  - `DELETE /{event_id}/attendance-petitions/mine` — `withdraw()` takes
+    `.with_for_update()` on the petition row before checking/incrementing
+    `withdrawal_count`, closing the same race `create_or_update_rsvp`
+    already guards against (Pitfall #27); capped at
+    `MAX_PETITION_WITHDRAWALS` (2) so the request cannot be cycled to
+    re-notify reviewers indefinitely; a decided (non-pending) petition
+    cannot be withdrawn.
+  - The frontend route, `/events/attendance-requests`
+    (`pages/AttendanceRequestsPage.tsx`, wired in
+    `modules/events/routes.tsx`), is reachable by **any** authenticated
+    member with no client-side permission gate — correct, since the
+    server decides the visible set per the scope rules above and a route
+    gate would only lock out organizers who hold no `events.manage`.
+    Registered in all three route registries (`APPLICATION_PAGES.md:296`,
+    `testingRegistry.ts:319`, `mobile-route-inventory.ts:274`) —
+    `check_route_permissions.py --strict` confirms 0 errors against the
+    current 270-route count.
+  - The companion migration, `a0b34c886658`, adds the `withdrawn` enum
+    value and `withdrawal_count` column; both guarded with `_has_table`/
+    `_has_column` checks for a `create_all`-built install (Pitfall/
+    Checklist #26), and the downgrade deletes `withdrawn` rows before
+    narrowing the enum back. Reviewed clean.
+  - Reviewer-facing emails in `_notify_reviewers` still run `name`/`title`/
+    `petition.reason` through `html.escape` (confirmed at
+    `event_attendance_petition_service.py:759` and the surrounding HTML
+    template) before interpolating into the HTML body; the new
+    finalized-event notice text added alongside is static, not
+    user-supplied.
+- **`da31be810`** ("fix(events): a finalized event can be edited from the
+  edit form") — business-rule correctness fix (an attendance-finalized
+  event's edit form could not save even an unrelated field, e.g. a title
+  typo); `update_event`/`update_future_events` now compare each
+  attendance-sensitive field against its _stored_ value rather than
+  refusing on mere presence in the payload. No tenancy or auth surface;
+  the attendance lock itself (which fields are refused when actually
+  changed) is unweakened — re-read the full diff to confirm the refusal
+  condition narrowed correctly rather than being dropped.
+- **`3cdbef61f`** (W21-6) — `get_analytics_summary`'s "Avg Attendance
+  Rate" changed from a pooled ratio (which counted an upcoming event's
+  not-yet-checked-in Going RSVPs as no-shows) to a mean of each _past_
+  event's own checked-in/Going ratio. Math correctness, still
+  `organization_id`-scoped on every query touched, no new unbounded query.
+- **`bd89a18a5`/`4cc9d4ae8`** (W19-1/W19-3) — waitlist promotion now also
+  emails the promoted member (through `member_receives_email`/
+  `EmailKind.EVENT_WAITLIST`, respecting the member's own notification
+  preference and the department's required-kinds policy — Pitfall #18
+  compliant) and records the promotion in `RSVPHistory` with
+  `is_automatic=True`, so an automatic promotion cannot be misread as the
+  member's own status change. Both non-fatal (wrapped in
+  `try/except Exception: logger.error(...)`), matching this feature's
+  existing discipline for best-effort side effects.
+- **`9aca4fb41`** ("Fix mypy errors under app/api … and five real bugs")
+  — two of the "five real bugs" land in this feature's files:
+  `get_outreach_type_labels` (public, no-auth) no longer does a
+  module-level circular import of `EVENT_SETTINGS_DEFAULTS` from
+  `events.py` (replaced with `get_outreach_types(None)`, same output);
+  `update_event`/`check_in_attendee`/`manager_add_attendee`/
+  `override_rsvp_attendance`/`record_actual_times`/`reopen_attendance`/
+  `get_qr_check_in_data` all previously tested only `if error:` against a
+  `(obj, error)` tuple that can legitimately be `(None, None)` for a
+  truthy-but-empty case — a real 500-instead-of-404 bug on an unknown
+  event id with a significant change, now fixed to `if error or obj is
+None` with a regression test (`test_update_event_unknown_id.py`).
+  Correctness, not a security finding, but read in full since it touches
+  every error-handling branch in the file.
+- **`265a26be3`/`51c77a9ce`/`0d4d7c5a0`/`99a573420`/`d59c4cfda`/
+  `197bdc9fe`/`ce50c5c6b`/`435c97cd2`/`73d2aedb9`/`0adb6353d`/`1a883bd8d`/
+  `04ed11ca9`/`6cd9c199f`/`c5c761220`/`f81e769a5`/`1a7abb5d8`/`a1dfe82e3`/
+  `010012f06`/`b893e01ff`/`1e61e28a6`/`4ccd5daa6`** — remaining merges,
+  mypy-typing/`Mapped[]` narrowing passes, display-only text changes
+  (resend-count wording, finalized-event reviewer notice), and the
+  repo-wide upload-storage/encryption-at-rest phase 2
+  (`ce50c5c6b`/`197bdc9fe`) whose touch on this feature's files is limited
+  to the same attachment path already covered under `7835d0bb5` above.
+  Spot-checked each for a new unscoped by-id query or a dropped
+  `nullable=True`; none found.
+
+### Route inventory
+
+**`events.py`: 58 routes, unchanged** — confirmed via
+`git diff b48425bea..HEAD -- events.py | grep -E '^[+-]@router\.'`
+showing only the pre-existing `/{event_id}/attachments` list route (its
+dependency strengthened, not replaced — see `7835d0bb5` above), and via a
+fresh `grep -c '^@router\.'` count. **`event_requests.py`: 23 routes,
+unchanged** — zero `@router` decorator diff lines.
+**`event_attendance_petitions.py`: 7 routes, up from 5** — the two new
+routes reviewed above, confirmed via the same diff method.
+
+### Verified good ✅ (pass 8)
+
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation (the one JSON-column
+  write touched, `custom_fields`, now goes through the new
+  `_with_own_lifecycle_markers` helper, which `copy.deepcopy()`s both the
+  event's own lifecycle keys and the incoming payload before merging —
+  stronger than the shallow-copy-and-reassign pattern Pitfall #12 warns
+  against), no new seeded-grant change without a migration, no new
+  unauthenticated route in this feature's own files.
+- Every `SET NULL` FK still `nullable=True` after the `Mapped[]` rewrite
+  of both model files (checked line-by-line, see above).
+- The two new attendance-petition routes are clean on every checklist
+  dimension (auth, permission/separation-of-duties, tenant isolation, row
+  locking, output escaping), detailed above.
+- The file-storage hardening commit's touch on this feature
+  (`7835d0bb5`) is a genuine, already-fixed security hardening of the
+  attachment list/download/upload paths — reviewed in full, no residual
+  gap.
+
+### Completion gate
+
+| Check                                                 | Result                                            |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                  | ✅ clean (2334 files unchanged)                   |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head `c903fc771081`, 601 revisions      |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 270 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "event"` (python3.13)               | ✅ 1345 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                   | ✅ clean                                          |
+| `npm run lint`                                        | ✅ clean (exit 0)                                 |
+
+Rotation row 16 → ✅ (pending PR merge). Next: Feature 17 (Training core).
 
 ---
 
