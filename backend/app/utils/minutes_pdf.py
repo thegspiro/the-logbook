@@ -433,6 +433,16 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                     body_style,
                 )
             )
+            movers = [
+                f"{label} {approval[key]}"
+                for label, key in (
+                    ("Moved by", "moved_by"),
+                    ("seconded by", "seconded_by"),
+                )
+                if approval.get(key)
+            ]
+            if movers:
+                sign.append(Paragraph(_esc(", ".join(movers)) + ".", body_style))
     else:
         sign.append(
             Paragraph(

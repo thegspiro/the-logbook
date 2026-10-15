@@ -14,13 +14,16 @@ import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { minutesService } from '../services/api';
-import type { AdoptionDetails, MinutesListItem } from '../types/minutes';
+import { PersonPicker } from './PersonPicker';
+import type { AdoptionDetails, AttendeeEntry, MinutesListItem } from '../types/minutes';
 
 interface AdoptDialogProps {
   isOpen: boolean;
   minutesId: string;
   /** Whether a suggestion was accepted, which sets the default for "as amended". */
   hasAcceptedSuggestions: boolean;
+  /** The roll of these minutes, which the mover and seconder are chosen from. */
+  attendees: AttendeeEntry[];
   busy: boolean;
   onClose: () => void;
   onAdopt: (details: AdoptionDetails) => void;
@@ -30,6 +33,7 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
   isOpen,
   minutesId,
   hasAcceptedSuggestions,
+  attendees,
   busy,
   onClose,
   onAdopt,
@@ -39,12 +43,18 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
   const [meetingId, setMeetingId] = useState('');
   const [asAmended, setAsAmended] = useState(hasAcceptedSuggestions);
   const [meetings, setMeetings] = useState<MinutesListItem[]>([]);
+  const [movedBy, setMovedBy] = useState('');
+  const [secondedBy, setSecondedBy] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setVotedAt(formatForDateTimeInput(new Date().toISOString(), tz));
     setMeetingId('');
     setAsAmended(hasAcceptedSuggestions);
+    setMovedBy('');
+    setSecondedBy('');
+    setError(null);
     minutesService
       .listAllMinutes()
       .then((all) => setMeetings(all.filter((m) => m.id !== minutesId)))
@@ -59,10 +69,19 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
       size="md"
       onSubmit={(e) => {
         e.preventDefault();
+        const mover = movedBy.trim();
+        const seconder = secondedBy.trim();
+        if (mover && mover.toLowerCase() === seconder.toLowerCase()) {
+          setError('The person who moved cannot also second.');
+          return;
+        }
+        setError(null);
         onAdopt({
           adopted_on: votedAt ? localToUTC(votedAt, tz) : undefined,
           adopting_minutes_id: meetingId || undefined,
           as_amended: asAmended,
+          moved_by: mover || undefined,
+          seconded_by: seconder || undefined,
         });
       }}
       footer={
@@ -80,6 +99,11 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
         Once adopted, these minutes are locked. A correction after that means reopening them, and they must be
         circulated and adopted again.
       </p>
+      {error && (
+        <p className="alert-danger mb-3 text-sm" role="alert">
+          {error}
+        </p>
+      )}
       <div className="space-y-3">
         <div>
           <span className="form-label">When the body voted</span>
@@ -119,6 +143,29 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
             </p>
           )}
         </fieldset>
+        <div className="card-secondary space-y-3 p-3">
+          <p className="text-theme-text-primary text-sm">
+            <span className="font-semibold">Motion: </span>
+            {asAmended ? 'To adopt the minutes as amended.' : 'To adopt the minutes as presented.'}
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <PersonPicker
+              id="adopt-moved-by"
+              label="Moved by"
+              value={movedBy}
+              onChange={setMovedBy}
+              attendees={attendees}
+            />
+            <PersonPicker
+              id="adopt-seconded-by"
+              label="Seconded by"
+              value={secondedBy}
+              onChange={setSecondedBy}
+              attendees={attendees}
+              exclude={movedBy}
+            />
+          </div>
+        </div>
       </div>
     </Modal>
   );

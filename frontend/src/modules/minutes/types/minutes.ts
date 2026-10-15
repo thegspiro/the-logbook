@@ -19,6 +19,10 @@ export interface SectionEntry {
   format?: 'text' | 'html' | undefined;
   /** From the outline: a required section needs text before minutes circulate. */
   required?: boolean;
+  /** From the outline: the body moves and seconds this section, as to adopt minutes or adjourn. */
+  needs_motion?: boolean | undefined;
+  /** From the outline: the wording the section's motion starts with. */
+  motion_text?: string | undefined;
 }
 
 export interface TemplateSectionEntry {
@@ -28,6 +32,8 @@ export interface TemplateSectionEntry {
   default_content: string;
   format?: 'text' | 'html' | undefined;
   required: boolean;
+  needs_motion?: boolean | undefined;
+  motion_text?: string | undefined;
 }
 
 // ── Header / Footer Config ──
@@ -119,6 +125,8 @@ export interface Motion {
   motion_text: string;
   moved_by?: string;
   seconded_by?: string;
+  /** The outline section the motion was made from, when it was made from one. */
+  section_key?: string | null;
   discussion_notes?: string;
   status: MotionStatus;
   votes_for?: number;
@@ -194,6 +202,8 @@ export interface MeetingMinutes {
   /** When the body voted to adopt, as presented or as amended, and where. */
   adopted_on?: string | null;
   adopted_as_amended?: boolean | null;
+  adoption_moved_by?: string | null;
+  adoption_seconded_by?: string | null;
   adopting_minutes_id?: string | null;
   adopting_minutes_title?: string | null;
   created_by?: string;
@@ -251,6 +261,7 @@ export interface MotionCreate {
   motion_text: string;
   moved_by?: string | undefined;
   seconded_by?: string | undefined;
+  section_key?: string | undefined;
   discussion_notes?: string | undefined;
   status?: MotionStatus | undefined;
   votes_for?: number | undefined;
@@ -507,4 +518,6 @@ export interface AdoptionDetails {
   adopted_on?: string | undefined;
   adopting_minutes_id?: string | undefined;
   as_amended?: boolean | undefined;
+  moved_by?: string | undefined;
+  seconded_by?: string | undefined;
 }

@@ -24,6 +24,10 @@ from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
 
 _response_config = ConfigDict(from_attributes=True)
 
+# The wording a section's motion starts with becomes a motion's text, which is
+# capped at this length.
+MAX_MOTION_TEXT = 2000
+
 # MeetingMinutes.meeting_type / MinutesTemplate.meeting_type are strict MySQL
 # ENUMs; SQLAlchemy doesn't validate the string on bind, so an out-of-set value
 # reaches MySQL and 500s. Validate at the request schema (MM2-2, the B1
@@ -80,6 +84,15 @@ class SectionEntry(BaseModel):
         description="Copied from the outline; a required section needs content "
         "before the minutes can be circulated",
     )
+    needs_motion: bool = Field(
+        default=False,
+        description="Copied from the outline; the section is moved and seconded",
+    )
+    motion_text: str = Field(
+        default="",
+        max_length=MAX_MOTION_TEXT,
+        description="Copied from the outline; the wording the motion starts with",
+    )
 
     @model_validator(mode="after")
     def _settle_rich_text(self):
@@ -99,6 +112,16 @@ class TemplateSectionEntry(BaseModel):
         default="text", description="How default_content is written: text or html"
     )
     required: bool = Field(default=False, description="Whether the section is required")
+    needs_motion: bool = Field(
+        default=False,
+        description="Whether the body moves and seconds this section, as it does "
+        "to adopt minutes or adjourn",
+    )
+    motion_text: str = Field(
+        default="",
+        max_length=MAX_MOTION_TEXT,
+        description="The wording the motion starts with",
+    )
 
     @model_validator(mode="after")
     def _settle_rich_text(self):
@@ -266,6 +289,9 @@ class MotionBase(BaseModel):
         None, max_length=200, description="Name of person who seconded"
     )
     discussion_notes: Optional[str] = None
+    section_key: Optional[str] = Field(
+        None, max_length=100, description="The outline section this motion belongs to"
+    )
     status: str = Field(
         default="passed", description="Motion result: passed, failed, tabled, withdrawn"
     )
@@ -299,6 +325,7 @@ class MotionUpdate(BaseModel):
     moved_by: Optional[str] = Field(None, max_length=200)
     seconded_by: Optional[str] = Field(None, max_length=200)
     discussion_notes: Optional[str] = None
+    section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
@@ -582,6 +609,8 @@ class MinutesResponse(UTCResponseBase):
     rejection_reason: Optional[str] = None
     adopted_on: Optional[datetime] = None
     adopted_as_amended: Optional[bool] = None
+    adoption_moved_by: Optional[str] = None
+    adoption_seconded_by: Optional[str] = None
     adopting_minutes_id: Optional[str] = None
     adopting_minutes_title: Optional[str] = None
     created_by: Optional[str] = None
@@ -631,6 +660,17 @@ class MinutesAdopt(BaseModel):
         description="Adopted as amended; defaults to whether any suggestion "
         "was accepted",
     )
+    moved_by: Optional[str] = Field(
+        None, max_length=200, description="Who moved the adoption"
+    )
+    seconded_by: Optional[str] = Field(
+        None, max_length=200, description="Who seconded the adoption"
+    )
+
+    @field_validator("moved_by", "seconded_by")
+    @classmethod
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
 
 class ApplyOutline(BaseModel):

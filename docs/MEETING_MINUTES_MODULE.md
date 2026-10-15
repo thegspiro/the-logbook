@@ -658,6 +658,34 @@ footer settings, and one outline per meeting type is the default.
   renumbered. The editor will not save an outline with no sections; the API
   still accepts an empty list, as it always has.
 
+### Motions on sections _(2026-10-15)_
+
+Some business is only done by a motion and a second: approving the previous
+minutes and adjourning, in the built-in outlines. An outline marks such a
+section **Needs a motion and a second** and carries the wording the motion
+starts with (`needs_motion`, `motion_text` on each outline and minutes section,
+inside the sections' JSON — no column). The built-in outlines mark
+`approval_of_previous` and `adjournment`; an outline a department already saved
+is not changed, and the flag is set on the Outlines screen.
+
+- On the minutes, a flagged section shows a **Motion** card with the wording
+  written, **Moved by** and **Seconded by** drop-downs, and a result. Recording
+  it creates an ordinary motion with `section_key` set to the section
+  (`meeting_motions.section_key`, nullable, validated against the minutes' own
+  sections). A section with no motion shows a reminder; nothing is blocked,
+  because a body sometimes acts by consent.
+- The drop-downs list the people recorded **present, late or left early** on the
+  roll, each name once. **Someone else (type a name)** is always offered, so a
+  guest can move or second as an honorary act. The value is the name as typed
+  (up to 200 characters), not a user id. The seconder list leaves out the
+  mover, and the form refuses the same name twice.
+- The same pickers are used on the general **Add Motion** form and in the
+  **Adopt** dialog. The adoption motion's mover and seconder are stored on the
+  minutes (`adoption_moved_by`, `adoption_seconded_by`), sent in
+  `POST /{id}/approve`, cleared when the minutes are reopened, printed on the
+  PDF's approval block and included in the sealed snapshot **only when
+  recorded**, so a snapshot sealed earlier verifies exactly as it did.
+
 ### Page layout _(2026-10-15)_
 
 The detail page opens on the minutes themselves. Motions, closed sessions,
@@ -705,23 +733,24 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 ### Endpoints added
 
-| Method   | Path                                      | Permission       | Description                                                     |
-| -------- | ----------------------------------------- | ---------------- | --------------------------------------------------------------- |
-| `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended}` |
-| `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                              |
-| `GET`    | `/{id}/suggestions`                       | `minutes.view`   | All for a manager; the caller's own otherwise                   |
-| `POST`   | `/{id}/suggestions`                       | `minutes.view`   | Suggest a change (circulated minutes only)                      |
-| `PUT`    | `/{id}/suggestions/{suggestion_id}`       | `minutes.manage` | Accept or decline, with a note                                  |
-| `GET`    | `/{id}/closed-sessions`                   | `minutes.view`   | Closed sessions                                                 |
-| `POST`   | `/{id}/closed-sessions`                   | `minutes.manage` | Record one (draft/rejected)                                     |
-| `PUT`    | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Edit                                                            |
-| `DELETE` | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Remove                                                          |
-| `POST`   | `/{id}/apply-outline`                     | `minutes.manage` | Lay an outline over a draft                                     |
-| `POST`   | `/from-meeting/{meeting_id}?template_id=` | `minutes.manage` | Create minutes from a meeting, optionally from an outline       |
-| `GET`    | `/templates`, `/templates/{id}`           | `minutes.view`   | Outlines                                                        |
-| `POST`   | `/templates`                              | `minutes.manage` | Create an outline                                               |
-| `PUT`    | `/templates/{id}`                         | `minutes.manage` | Edit an outline, or make it the default                         |
-| `DELETE` | `/templates/{id}`                         | `minutes.manage` | Delete an outline (minutes already written are unchanged)       |
+| Method   | Path                                      | Permission       | Description                                                                            |
+| -------- | ----------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
+| `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
+| `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
+| `GET`    | `/{id}/suggestions`                       | `minutes.view`   | All for a manager; the caller's own otherwise                                          |
+| `POST`   | `/{id}/suggestions`                       | `minutes.view`   | Suggest a change (circulated minutes only)                                             |
+| `PUT`    | `/{id}/suggestions/{suggestion_id}`       | `minutes.manage` | Accept or decline, with a note                                                         |
+| `GET`    | `/{id}/closed-sessions`                   | `minutes.view`   | Closed sessions                                                                        |
+| `POST`   | `/{id}/closed-sessions`                   | `minutes.manage` | Record one (draft/rejected)                                                            |
+| `PUT`    | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Edit                                                                                   |
+| `DELETE` | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Remove                                                                                 |
+| `POST`   | `/{id}/apply-outline`                     | `minutes.manage` | Lay an outline over a draft                                                            |
+| `POST`   | `/from-meeting/{meeting_id}?template_id=` | `minutes.manage` | Create minutes from a meeting, optionally from an outline                              |
+| `GET`    | `/templates`, `/templates/{id}`           | `minutes.view`   | Outlines                                                                               |
+| `POST`   | `/templates`                              | `minutes.manage` | Create an outline                                                                      |
+| `PUT`    | `/templates/{id}`                         | `minutes.manage` | Edit an outline, or make it the default                                                |
+| `DELETE` | `/templates/{id}`                         | `minutes.manage` | Delete an outline (minutes already written are unchanged)                              |
 
 ---
 
@@ -735,6 +764,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain
 

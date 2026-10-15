@@ -1104,6 +1104,8 @@ async def download_minutes_pdf(
             ),
             "adopted_on_display": local(minutes.adopted_on, "%B %d, %Y"),
             "as_amended": minutes.adopted_as_amended,
+            "moved_by": minutes.adoption_moved_by,
+            "seconded_by": minutes.adoption_seconded_by,
             "adopting_title": _adopting_title(minutes),
             "version": current_revision.version if current_revision else None,
             "content_hash": current_revision.content_hash if current_revision else None,

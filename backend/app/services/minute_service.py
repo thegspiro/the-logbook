@@ -157,6 +157,8 @@ class MinuteService:
                 "content": s.get("default_content") or s.get("content") or "",
                 "format": normalize_format(s.get("format")),
                 "required": bool(s.get("required", False)),
+                "needs_motion": bool(s.get("needs_motion", False)),
+                "motion_text": s.get("motion_text") or "",
             }
             for index, s in enumerate(sections)
         ]
@@ -193,6 +195,14 @@ class MinuteService:
         }
         if str(ballot_item_id) not in known:
             raise ValueError("That item is not on the election's ballot")
+
+    @staticmethod
+    def _check_motion_section(minutes: MeetingMinutes, section_key) -> None:
+        """A motion's section must be one of these minutes' own sections."""
+        if section_key and section_key not in {
+            s.get("key") for s in minutes.get_sections()
+        }:
+            raise ValueError("That section is not part of these minutes")
 
     async def apply_outline(
         self, minutes_id: str, organization_id: UUID | str, template_id: str
@@ -815,6 +825,8 @@ class MinuteService:
             else approved_at
         )
         minutes.adopted_as_amended = as_amended
+        minutes.adoption_moved_by = adoption.moved_by
+        minutes.adoption_seconded_by = adoption.seconded_by
         minutes.adopting_minutes_id = (
             str(adoption.adopting_minutes_id) if adoption.adopting_minutes_id else None
         )
@@ -916,6 +928,8 @@ class MinuteService:
         minutes.approved_by = None
         minutes.adopted_on = None
         minutes.adopted_as_amended = None
+        minutes.adoption_moved_by = None
+        minutes.adoption_seconded_by = None
         minutes.adopting_minutes_id = None
         minutes.submitted_at = None
         minutes.submitted_by = None
@@ -963,6 +977,7 @@ class MinuteService:
         ):
             raise ValueError("Can only add motions to draft or rejected minutes")
 
+        self._check_motion_section(minutes, data.section_key)
         await self._check_motion_ballot(
             data.election_id, data.ballot_item_id, organization_id
         )
@@ -972,6 +987,7 @@ class MinuteService:
             motion_text=data.motion_text,
             moved_by=data.moved_by,
             seconded_by=data.seconded_by,
+            section_key=data.section_key,
             discussion_notes=data.discussion_notes,
             status=MotionStatus(data.status),
             votes_for=data.votes_for,
@@ -1015,6 +1031,7 @@ class MinuteService:
         update_data = data.model_dump(exclude_unset=True)
         if "status" in update_data:
             update_data["status"] = MotionStatus(update_data["status"])
+        self._check_motion_section(minutes, update_data.get("section_key"))
 
         if "election_id" in update_data or "ballot_item_id" in update_data:
             election_id = update_data.get("election_id", motion.election_id)
