@@ -41,10 +41,15 @@ settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
 
 Two permissions control the module. The Role Management screen lists them as:
 
-| Permission                | What it allows                                                                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **View fundraising data** | Open every page: the dashboard, opportunities, applications, campaigns, donors, donations, pledges, events and reports                                             |
-| **Manage fundraising**    | Everything above, plus adding and changing opportunities, applications, budget items, expenditures, tasks, notes, campaigns, donors, donations, pledges and events |
+| Permission                | What it allows                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **View fundraising data** | Open every page: the dashboard, opportunities, applications, campaigns, donors, donations, pledges, events and reports                      |
+| **Manage fundraising**    | Adding and changing opportunities, applications, budget items, expenditures, tasks, notes, campaigns, donors, donations, pledges and events |
+
+The two permissions are separate. **Manage fundraising** does not include
+viewing. An officer who has only **Manage fundraising** cannot open the
+dashboard, the lists or the reports. Give officers who run fundraising **both**
+permissions.
 
 Members with view access only do not see the add and edit buttons — **New
 Campaign**, **Add Donor**, **New Application**, **Add Budget Item**, **Record
@@ -254,8 +259,9 @@ it.
 On the **Expenditures** tab, record spending against the budget:
 
 1. Select **Record Expenditure**.
-2. Enter the **Amount** and **Date**. **Description**, **Vendor (optional)** and
-   **Invoice / PO Number (optional)** can be added too.
+2. Enter the **Description**, **Amount** and **Date**. All three are required.
+   **Vendor (optional)** and **Invoice / PO Number (optional)** can be added
+   too.
 3. Optionally choose a line under **Budget Item (optional)**. **None** leaves it
    unlinked.
 4. Save with **Record Expenditure**.
@@ -332,8 +338,10 @@ compliance tasks for you:
   start date; the last falls on or before the end date.
 - **Grant Closeout Report** — due 90 days after the grant end date, if one is
   set.
-- **Grant-Funded Equipment Inventory** — due on the grant end date, if the
-  application is linked to an opportunity in the Equipment or Vehicles category.
+- **Grant-Funded Equipment Inventory** — if the application is linked to an
+  opportunity in the Equipment or Vehicles category. It is due on the grant end
+  date. If no end date is set, it is still created, due on the day of the award
+  (the department's date).
 
 The Activity Log notes how many tasks were created. This happens only once per
 application, even if it moves to Awarded again. Set the reporting frequency and
@@ -421,10 +429,11 @@ did not give for a stated purpose."
 
 ### Edge Cases
 
-| Situation                              | What happens                                                   |
-| -------------------------------------- | -------------------------------------------------------------- |
-| A campaign passes its goal             | Nothing changes by itself; set the status to Completed by hand |
-| A donation is not linked to a campaign | It does not count toward any campaign's total                  |
+| Situation                                  | What happens                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                                                                   |
+| A campaign's status needs to change        | You choose the status only when you create the campaign. The campaigns page has no control to change it afterwards, so choose it with care |
+| A donation is not linked to a campaign     | It does not count toward any campaign's total                                                                                              |
 
 ---
 

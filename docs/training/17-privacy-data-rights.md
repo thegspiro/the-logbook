@@ -369,9 +369,19 @@ prospective-members pipeline has its own **Auto-Purge** setting instead:
 
 - **Auto-Purge on:** an application that has stayed **Inactive** for the
   pipeline's grace period (30 to 1,095 days) is permanently deleted, with its
-  uploaded documents. The check runs once a day. Membership coordinators get an
-  email seven days before, listing the application and its deletion date.
+  uploaded documents. The check runs once a day. Membership coordinators
+  usually get an email seven days before, listing the application and its
+  deletion date.
 - **Auto-Purge off** (the default): nothing is deleted automatically.
+
+> **Important.** The seven-day email is a courtesy, not a safeguard. The
+> deletion goes ahead whether or not the email was sent or read. An application
+> that is already past the grace period gets no email at all. This happens when
+> you turn Auto-Purge on, or shorten the grace period. For example, cutting the
+> period from 180 to 30 days deletes an application inactive for 45 days on the
+> next daily run, with no warning. Before you turn Auto-Purge on or shorten its
+> period, check **Prospective Members → Inactive Applications** and reactivate
+> anyone worth keeping.
 
 A coordinator can also purge applications by hand:
 
