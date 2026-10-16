@@ -50,7 +50,8 @@ import {
   TIMING_SHORT,
   formatRate,
 } from '../../../modules/inventory/utils/checkOutcome';
-import { calendarDaysFromToday, formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
+import { dayHeading } from '../../../modules/inventory/utils/dayHeading';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
@@ -430,14 +431,6 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
       <DaySheet day={openDay} tz={tz} onClose={() => setOpenDay(null)} />
     </div>
   );
-};
-
-/** `Today`, `Yesterday`, else `Mon, Oct 13` — the viewer's calendar, not UTC. */
-const dayHeading = (day: string, tz: string): string => {
-  const offset = calendarDaysFromToday(day, tz);
-  if (offset === 0) return 'Today';
-  if (offset === -1) return 'Yesterday';
-  return formatCalendarDate(day, { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
 const CHIP_TONES = {
