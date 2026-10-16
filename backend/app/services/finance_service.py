@@ -2486,12 +2486,44 @@ class FinanceService:
                     "email address."
                 )
 
-    async def delete_approval_chain(self, chain_id: str, org_id: str) -> None:
+    async def _requests_routed_through(
+        self, chain_id: str, step_id: Optional[str] = None
+    ) -> int:
+        """How many requests hold approval records on this chain (or step).
+
+        ``ApprovalStepRecord`` carries no ``organization_id``; callers resolve
+        the chain through the org-scoped ``get_approval_chain`` first and this
+        constrains the records by that chain (Pitfall 14, parent resolution).
+        """
+        query = select(func.count(func.distinct(ApprovalStepRecord.entity_id))).where(
+            ApprovalStepRecord.chain_id == chain_id
+        )
+        if step_id is not None:
+            query = query.where(ApprovalStepRecord.step_id == step_id)
+        return int((await self.db.execute(query)).scalar_one())
+
+    async def delete_approval_chain(self, chain_id: str, org_id: str) -> str:
+        """Delete a chain no request has used; returns its name for the audit."""
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        # A request's approval history (who approved or denied each step, and
+        # their notes) lives in ApprovalStepRecord rows that cascade with the
+        # chain, so deleting a chain any request has used would erase that
+        # history. Turning the chain off keeps it and stops new routing.
+        used_by = await self._requests_routed_through(chain_id)
+        if used_by:
+            noun = "request has" if used_by == 1 else "requests have"
+            raise ValueError(
+                f"This approval chain can't be deleted: {used_by} {noun} been "
+                "routed through it, and deleting it would erase their approval "
+                "history. Turn the chain off instead (edit it and clear "
+                "Active) so nothing new is routed through it."
+            )
+        name = chain.name
         await self.db.delete(chain)
         await self.db.flush()
+        return name
 
     async def add_chain_step(
         self, chain_id: str, org_id: str, **kwargs
@@ -2528,7 +2560,8 @@ class FinanceService:
         await self.db.flush()
         return step
 
-    async def delete_chain_step(self, step_id: str, chain_id: str, org_id: str) -> None:
+    async def delete_chain_step(self, step_id: str, chain_id: str, org_id: str) -> str:
+        """Delete a step no request has used; returns its name for the audit."""
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
@@ -2541,8 +2574,21 @@ class FinanceService:
         step = result.scalar_one_or_none()
         if not step:
             raise ValueError("Approval chain step not found")
+        # Same reason as delete_approval_chain: the step's records cascade
+        # with it, and nothing re-evaluates a request left waiting on it.
+        used_by = await self._requests_routed_through(chain_id, step_id)
+        if used_by:
+            noun = "request has" if used_by == 1 else "requests have"
+            raise ValueError(
+                f"This step can't be deleted: {used_by} {noun} been routed "
+                "through it, and deleting it would erase who approved or "
+                "denied it. To change who approves future requests, edit the "
+                "step, or set up a new chain and turn this one off."
+            )
+        name = step.name
         await self.db.delete(step)
         await self.db.flush()
+        return name
 
     async def resolve_approval_chain(
         self,
