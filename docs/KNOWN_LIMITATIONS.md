@@ -2397,10 +2397,11 @@ TypeScript) fixes it honestly. Pulling that thread needs its own change.
 
 Two related facts worth carrying:
 
-- **The lockfile must be regenerated with npm 11** — the version
-  `frontend/package.json` requires and both Dockerfile stages install. npm 10
-  and npm 11 hoist this tree differently, so a lock built by npm 10 installs a
-  different tree under the npm 11 that actually runs in CI and in the image.
+- **Two npm majors install from this one lockfile.** CI's `setup-node` jobs
+  run the npm 10 bundled with Node 22, and both `frontend/Dockerfile` stages
+  install npm 11.9.0; the `engines` floor in both manifests is npm 10. `npm ci`
+  installs the tree the lock records under either, so a regenerated lock must
+  be checked with `npm ci` under both before it is trusted.
 - **npm keeps a per-workspace copy of each declared range inside the lock and
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
