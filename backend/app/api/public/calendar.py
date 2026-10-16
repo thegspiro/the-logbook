@@ -1,25 +1,37 @@
 """
-Public Calendar (ICS) Feed Endpoint
+Public Calendar (ICS) Feed Endpoints
 
-Serves a member's personal read-only shift calendar as an RFC 5545 ICS feed,
-so it can be subscribed to from Google/Apple Calendar/Outlook. Those clients
-cannot authenticate with cookies, so the feed is protected by an unguessable
-per-user token embedded in the URL instead of a login.
+Two read-only RFC 5545 ICS feeds, so they can be subscribed to from
+Google/Apple Calendar/Outlook. Those clients cannot authenticate with cookies,
+so each feed is protected by an unguessable token embedded in the URL instead
+of a login.
 
-Only the member's own shift times/notes are exposed — no other members' data.
+- ``/{token}.ics`` — a member's personal shifts. Only the member's own shift
+  times/notes are exposed — no other members' data.
+- ``/org/{token}.ics`` — the department's published events, behind the
+  ``ical`` integration. Only the fields in ``_org_feed_event`` are exposed:
+  no descriptions, attendees, RSVP answers, custom fields or organizer.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.models.event import Event, EventType
+from app.models.integration import Integration
 from app.models.user import Organization
-from app.services.integration_services.ical_service import generate_ical_feed
+from app.services.integration_services.ical_service import (
+    ICAL_INTEGRATION_TYPE,
+    generate_ical_feed,
+    org_feed_token_matches,
+)
 from app.services.scheduling_service import SchedulingService
 from app.utils.org_timezone import org_today
 
@@ -29,6 +41,12 @@ router = APIRouter(prefix="/public/v1/calendar", tags=["public-calendar"])
 # window keeps the payload small while staying useful.
 FEED_PAST_DAYS = 60
 FEED_FUTURE_DAYS = 365
+
+# The department events feed's window, and a ceiling on how many events one
+# poll can make the server load and serialize.
+ORG_FEED_PAST_DAYS = 30
+ORG_FEED_FUTURE_DAYS = 365
+ORG_FEED_MAX_EVENTS = 2000
 
 
 def _shift_title(shift) -> str:
@@ -52,25 +70,29 @@ async def _rate_limit_feed(request: Request) -> None:
         )
 
 
+def _feed_not_found() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feed not found")
+
+
+def _plausible_token(token: str) -> bool:
+    # Tokens are base64url from secrets.token_urlsafe(48); reject anything that
+    # can't be one before touching the DB.
+    return bool(token) and 32 <= len(token) <= 64
+
+
 @router.get("/{token}.ics", dependencies=[Depends(_rate_limit_feed)])
 async def get_personal_calendar_feed(
     token: str,
     db: AsyncSession = Depends(get_db),
 ):
     """Return the member's shifts as an ICS feed (public, token-protected)."""
-    # Token is base64url from secrets.token_urlsafe(48); reject anything that
-    # can't be one before touching the DB.
-    if not token or len(token) < 32 or len(token) > 64:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Feed not found"
-        )
+    if not _plausible_token(token):
+        raise _feed_not_found()
 
     service = SchedulingService(db)
     user = await service.get_user_by_calendar_token(token)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Feed not found"
-        )
+        raise _feed_not_found()
 
     org = (
         await db.execute(
@@ -104,6 +126,116 @@ async def get_personal_calendar_feed(
         media_type="text/calendar",
         headers={
             "Content-Disposition": 'inline; filename="shifts.ics"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+def _event_type_label(event: Event) -> str:
+    raw = getattr(event.event_type, "value", event.event_type)
+    return str(raw).replace("_", " ").title() if raw else "Event"
+
+
+def _org_feed_event(event: Event, frontend_url: str) -> dict:
+    """The only event fields the department feed publishes.
+
+    The feed URL is a bearer link that ends up in shared calendars, so this is
+    an allowlist: title, times, location name, type and a link back. The
+    description, attendees and RSVPs, custom fields, attachments, cancellation
+    reason and organizer are never included.
+    """
+    location = event.location_obj.name if event.location_obj else event.location
+    return {
+        "id": event.id,
+        "title": event.title,
+        "start_time": event.start_datetime,
+        "end_time": event.end_datetime,
+        "location": location or "",
+        "categories": _event_type_label(event),
+        "url": f"{frontend_url}/events/{event.id}" if frontend_url else "",
+    }
+
+
+async def _integration_for_org_feed_token(
+    db: AsyncSession, token: str
+) -> Integration | None:
+    # The digest is compared in constant time against each connected feed
+    # rather than looked up by value; there is at most one per department.
+    rows = (
+        (
+            await db.execute(
+                select(Integration).where(
+                    Integration.integration_type == ICAL_INTEGRATION_TYPE,
+                    Integration.status == "connected",
+                    Integration.enabled.is_(True),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    match = None
+    for row in rows:
+        if org_feed_token_matches(row.config, token):
+            match = row
+    return match
+
+
+@router.get("/org/{token}.ics", dependencies=[Depends(_rate_limit_feed)])
+async def get_department_events_feed(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the department's published events as an ICS feed (public, token-protected)."""
+    if not _plausible_token(token):
+        raise _feed_not_found()
+
+    integration = await _integration_for_org_feed_token(db, token)
+    if not integration:
+        raise _feed_not_found()
+    organization_id = str(integration.organization_id)
+
+    org = (
+        await db.execute(select(Organization).where(Organization.id == organization_id))
+    ).scalar_one_or_none()
+    org_name = org.name if org and org.name else "The Logbook"
+    tz_name = org.timezone if org and org.timezone else "UTC"
+
+    now = datetime.now(timezone.utc)
+    query = (
+        select(Event)
+        .options(selectinload(Event.location_obj))
+        .where(
+            Event.organization_id == organization_id,
+            or_(Event.is_draft.is_(False), Event.is_draft.is_(None)),
+            Event.is_cancelled.is_(False),
+            Event.end_datetime >= now - timedelta(days=ORG_FEED_PAST_DAYS),
+            Event.start_datetime <= now + timedelta(days=ORG_FEED_FUTURE_DAYS),
+        )
+        .order_by(Event.start_datetime)
+        .limit(ORG_FEED_MAX_EVENTS)
+    )
+    included_types = (integration.config or {}).get("included_event_types") or []
+    if isinstance(included_types, list) and included_types:
+        # Free-form stored config: an unknown name selects nothing rather than
+        # reaching the Enum column and failing the whole feed.
+        known = {t.value: t for t in EventType}
+        query = query.where(
+            Event.event_type.in_([known[t] for t in included_types if t in known])
+        )
+    events = (await db.execute(query)).scalars().all()
+
+    frontend_url = (settings.FRONTEND_URL or "").rstrip("/")
+    ics = generate_ical_feed(
+        [_org_feed_event(e, frontend_url) for e in events],
+        org_name=org_name,
+        timezone_name=tz_name,
+    )
+    return Response(
+        content=ics,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": 'inline; filename="events.ics"',
             "Cache-Control": "private, max-age=300",
         },
     )

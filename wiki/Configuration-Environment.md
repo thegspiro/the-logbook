@@ -130,6 +130,16 @@ Flow** enabled with a dedicated least-privilege **Run As** user. The Logbook
 stores no Salesforce user password. See [Salesforce CRM
 Integration](Integration-Salesforce#service-account-client-credentials).
 
+### Calendar Publishing
+
+| Variable                | Description                                                                                                 | Default |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------- |
+| `CALENDAR_SYNC_ENABLED` | Lets the Google Calendar and Microsoft Outlook integration cards be connected; off, both read "Coming Soon" | `false` |
+
+One-way publishing of events to those calendars is not built yet, so turning
+this on only makes the two cards connectable; leave it off. The department
+iCalendar (ICS) feed does not depend on it.
+
 ---
 
 ## Port Configuration

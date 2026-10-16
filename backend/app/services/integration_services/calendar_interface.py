@@ -1,9 +1,9 @@
 """
 Calendar Sync Interface
 
-Abstract base class for calendar integration services (Google, Outlook).
-Allows the event service to sync to all connected calendars through a
-single interface.
+Abstract base class for calendar integration services (Google, Outlook):
+one-way publishing of events to an external calendar through a single
+interface. No caller uses it yet.
 """
 
 from abc import ABC, abstractmethod
