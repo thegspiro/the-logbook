@@ -394,4 +394,84 @@ describe('MedicalItemFormModal', () => {
       expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ storage_location: 'Top drawer' }));
     });
   });
+
+  describe('kept on apparatus only', () => {
+    const lucas = {
+      id: 'item-lucas',
+      organization_id: 'org-1',
+      name: 'LUCAS device',
+      category_id: 'cat-bandages',
+      tracking_type: 'pool',
+      quantity: 3,
+      quantity_issued: 0,
+      storage_area_id: 'area-cabinet',
+      location_id: 'room-supply',
+      active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as unknown as InventoryItem;
+
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockUpdateItem.mockReset();
+      mockGetStorageOptions.mockReset();
+      mockCreateItem.mockResolvedValue({ id: 'item-1' });
+      mockUpdateItem.mockResolvedValue({ id: 'item-1' });
+      mockGetStorageOptions.mockResolvedValue(storageOptions);
+    });
+
+    it('hides the shelf count and storage fields once ticked, and sends the flag on create', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      );
+
+      await user.type(screen.getByLabelText(/^Name/), 'LUCAS device');
+      await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+      await user.click(screen.getByRole('checkbox', { name: 'Kept on apparatus only' }));
+
+      expect(screen.queryByLabelText('On hand')).not.toBeInTheDocument();
+      expect(screen.getByText('Counted on the apparatus checklists.')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Where it is kept' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+      expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ apparatus_only: true }));
+    });
+
+    it('sends false on create when left unticked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      );
+      await user.type(screen.getByLabelText(/^Name/), 'Gauze Pads');
+      await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+      expect(mockCreateItem).toHaveBeenCalledWith(expect.objectContaining({ apparatus_only: false }));
+    });
+
+    it('shows the stored setting, and unticking it on an edit sends false and keeps the stored place', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <MedicalItemFormModal
+          categories={[category]}
+          categoriesError={null}
+          item={{ ...lucas, apparatus_only: true }}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      );
+
+      const box = screen.getByRole('checkbox', { name: 'Kept on apparatus only' });
+      expect(box).toBeChecked();
+      await user.click(box);
+      expect(await screen.findByLabelText('On hand')).toHaveValue(3);
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(mockUpdateItem).toHaveBeenCalledWith(
+        'item-lucas',
+        expect.objectContaining({ apparatus_only: false, storage_area_id: 'area-cabinet', location_id: 'room-supply' })
+      );
+    });
+  });
 });

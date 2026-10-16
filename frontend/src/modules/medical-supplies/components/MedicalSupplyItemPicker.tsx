@@ -108,7 +108,10 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       return;
     }
     void medicalSuppliesService
-      .getItems({ search: trimmed, active_only: true, skip, limit: PAGE })
+      // Filtered on the server, not here, so the paging below still counts
+      // what the server returned. A supply kept on the apparatus only has no
+      // shelf for a delivery to land on.
+      .getItems({ search: trimmed, active_only: true, exclude_apparatus_only: true, skip, limit: PAGE })
       .then((response) => {
         if (request !== requestRef.current) return;
 

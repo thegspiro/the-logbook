@@ -25,13 +25,14 @@ import {
   Search,
   Stethoscope,
   Tag,
+  Package,
   TrendingDown,
   Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { MedicalSupplySummary } from '../../../services/medicalSuppliesService';
-import type { ExpiringLot, InventoryCategory, InventoryItem } from '../../../services/eventServices';
+import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { useAuthStore } from '../../../stores/authStore';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -47,7 +48,7 @@ import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { EXPIRY_WINDOW_DAYS, storageNote, supplyLabel } from '../types';
-import type { MedicalStorageOptions } from '../types';
+import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
@@ -108,12 +109,15 @@ const PLACES_SHOWN = 2;
  * supply's dialog, which lists them all with what is aboard.
  */
 const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
-  const note = storageNote(item);
+  // A supply kept on the apparatus only has no shelf, so a room or note left
+  // over from before it was marked would point somewhere it is not.
+  const shelved = !item.apparatus_only;
+  const note = shelved ? storageNote(item) : null;
   const places = item.apparatus_places ?? [];
   const hidden = places.length - PLACES_SHOWN;
   return (
     <div className="space-y-1">
-      {item.storage_path ? (
+      {shelved && item.storage_path ? (
         <div className="text-theme-text-primary">{item.storage_path}</div>
       ) : (
         !note && places.length === 0 && <div>—</div>
@@ -207,12 +211,14 @@ interface StatTileProps {
   onSelect: () => void;
   /** Spoken name, since the number and its caption read as two fragments. */
   actionLabel: string;
+  /** A second line under the caption, e.g. how the figure splits shelf / trucks. */
+  detail?: string | undefined;
 }
 
 // Buttons, not cards: a tile with a count on it reads as a way into the
 // things it counts, and one that ignored the tap left the officer scrolling
 // a full list to find the two low items it had just announced.
-const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone, onSelect, actionLabel }) => (
+const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone, onSelect, actionLabel, detail }) => (
   <button
     type="button"
     onClick={onSelect}
@@ -223,9 +229,16 @@ const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone, onSelect,
     <div className="min-w-0">
       <p className="text-theme-text-primary text-xl font-semibold tabular-nums">{formatNumber(value)}</p>
       <p className="text-theme-text-muted truncate text-xs">{label}</p>
+      {detail && <p className="text-theme-text-secondary truncate text-xs">{detail}</p>}
     </div>
   </button>
 );
+
+/** "3 shelf · 2 on trucks", or nothing when the trucks hold none of it. */
+function splitDetail(shelf: number, aboard: number): string | undefined {
+  if (aboard <= 0) return undefined;
+  return `${formatNumber(shelf)} shelf · ${formatNumber(aboard)} on trucks`;
+}
 
 const MedicalSuppliesPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -243,7 +256,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [summary, setSummary] = useState<MedicalSupplySummary | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
-  const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
+  const [expiring, setExpiring] = useState<MedicalExpiringStockRow[]>([]);
   const [loading, setLoading] = useState<Record<Section, boolean>>({
     summary: true,
     items: true,
@@ -385,7 +398,7 @@ const MedicalSuppliesPage: React.FC = () => {
             { ...base, ...(controller ? { signal: controller.signal } : {}) }
           ),
         categories: () => medicalSuppliesService.getCategories(true, base),
-        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS, base),
+        expiring: () => medicalSuppliesService.getExpiringStock(EXPIRY_WINDOW_DAYS, base),
       };
 
       // Settled per section, not through one Promise.all or allSettled. Those
@@ -478,7 +491,7 @@ const MedicalSuppliesPage: React.FC = () => {
               setItemsFilterKey(requestedFilterKey);
             }
             if (section === 'categories') setCategories(value as InventoryCategory[]);
-            if (section === 'expiring') setExpiring(value as ExpiringLot[]);
+            if (section === 'expiring') setExpiring(value as MedicalExpiringStockRow[]);
           } catch (reason: unknown) {
             if (superseded()) return;
             if (section === 'items' && controller?.signal.aborted) return;
@@ -651,6 +664,10 @@ const MedicalSuppliesPage: React.FC = () => {
 
   // The summary's total, not the items page: the items list is filtered and
   // paged, so its length cannot say whether the catalog itself is empty.
+  // The tiles count the same rows the Expiring tab lists: shelf lots plus
+  // truck stock, which the summary reports apart so each tile can show both.
+  const expiringTotal = (summary?.expiring_soon ?? 0) + (summary?.expiring_soon_on_apparatus ?? 0);
+  const expiredTotal = (summary?.expired ?? 0) + (summary?.expired_on_apparatus ?? 0);
   const noSuppliesYet = loaded.summary && summary?.total_items === 0;
   const emptyCatalogHint = !canManage
     ? 'Nothing has been added to the medical catalog yet.'
@@ -811,17 +828,19 @@ const MedicalSuppliesPage: React.FC = () => {
           <StatTile
             icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
             label={`Expiring within ${summary.expiring_within_days} days`}
-            value={summary.expiring_soon}
+            value={expiringTotal}
             tone="bg-amber-500/10"
-            actionLabel={`Show ${summary.expiring_soon} lots expiring within ${summary.expiring_within_days} days`}
+            actionLabel={`Show ${expiringTotal} lots expiring within ${summary.expiring_within_days} days`}
+            detail={splitDetail(summary.expiring_soon, summary.expiring_soon_on_apparatus ?? 0)}
             onSelect={() => setTab('expiring')}
           />
           <StatTile
             icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
             label="Already expired"
-            value={summary.expired}
+            value={expiredTotal}
             tone="bg-red-500/10"
-            actionLabel={`Show ${summary.expired} expired lots`}
+            actionLabel={`Show ${expiredTotal} expired lots`}
+            detail={splitDetail(summary.expired, summary.expired_on_apparatus ?? 0)}
             onSelect={() => setTab('expiring')}
           />
           <StatTile
@@ -909,7 +928,7 @@ const MedicalSuppliesPage: React.FC = () => {
               <EmptyState
                 icon={CalendarClock}
                 title="Nothing expiring"
-                description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
+                description={`Nothing on the shelves or the apparatus expires within ${EXPIRY_WINDOW_DAYS} days.`}
               />
             ) : (
               <div className="card overflow-x-auto p-0">
@@ -918,6 +937,9 @@ const MedicalSuppliesPage: React.FC = () => {
                     <tr className="border-theme-surface-border border-b">
                       <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
                         Item
+                      </th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Where
                       </th>
                       <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
                       <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
@@ -933,9 +955,21 @@ const MedicalSuppliesPage: React.FC = () => {
                   </thead>
                   <tbody>
                     {expiring.map((lot) => (
-                      <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
+                      <tr key={lot.key} className="border-theme-surface-border border-b last:border-0">
                         <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
                           {lot.item_name ? supplyLabel({ name: lot.item_name, size: lot.item_size }) : '—'}
+                        </td>
+                        <td data-label="Where" className="text-theme-text-secondary px-4 py-3">
+                          <span className="inline-flex items-start gap-1">
+                            {lot.location === 'apparatus' ? (
+                              <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-label="On an apparatus" />
+                            ) : (
+                              <Package className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-label="In storage" />
+                            )}
+                            <span>
+                              {lot.where || (lot.location === 'apparatus' ? 'On an apparatus' : 'In storage')}
+                            </span>
+                          </span>
                         </td>
                         <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
                           {lot.lot_number || '—'}
@@ -948,9 +982,9 @@ const MedicalSuppliesPage: React.FC = () => {
                         </td>
                         <td
                           data-label="Status"
-                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
+                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration ?? undefined)}`}
                         >
-                          {expiryLabel(lot.days_until_expiration)}
+                          {expiryLabel(lot.days_until_expiration ?? undefined)}
                         </td>
                       </tr>
                     ))}
@@ -1187,10 +1221,16 @@ const MedicalSuppliesPage: React.FC = () => {
                     </thead>
                     <tbody>
                       {items.map((item) => {
+                        // The server's call, on shelf plus trucks — the figure the
+                        // Low stock tile counts. The local test is only a fallback
+                        // for a response without it. `!= null`: an unset reorder
+                        // point arrives as null, and the strict check flagged
+                        // every empty supply as Low.
                         const isLow =
-                          // `!= null`: an unset reorder point arrives as null, and
-                          // the strict check flagged every empty supply as Low.
-                          item.reorder_point != null && onHandQuantity(item) <= item.reorder_point;
+                          item.is_low_stock ??
+                          (item.reorder_point != null && onHandQuantity(item) <= item.reorder_point);
+                        const aboard = item.apparatus_stock ?? 0;
+                        const uncounted = item.apparatus_uncounted ?? 0;
                         return (
                           <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
                             {canManage && (
@@ -1227,8 +1267,30 @@ const MedicalSuppliesPage: React.FC = () => {
                                 isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
                               }`}
                             >
-                              {formatNumber(onHandQuantity(item))}
-                              {isLow && <span className="ml-1 text-xs"> Low</span>}
+                              {item.apparatus_only ? (
+                                // No shelf: the count is what the trucks carry.
+                                <>
+                                  {formatNumber(aboard)}
+                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                  <span className="text-theme-text-secondary block text-xs font-normal">
+                                    on {formatNumber(item.apparatus_count ?? 0)} apparatus
+                                    {uncounted > 0 &&
+                                      ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  {formatNumber(onHandQuantity(item))}
+                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                </>
+                              )}
+                              {!item.apparatus_only && aboard > 0 && (
+                                <span className="text-theme-text-secondary block text-xs font-normal">
+                                  +{formatNumber(aboard)} on trucks
+                                  {uncounted > 0 &&
+                                    ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
+                                </span>
+                              )}
                             </td>
                             <td
                               data-label="Reorder at"
@@ -1259,8 +1321,12 @@ const MedicalSuppliesPage: React.FC = () => {
                                 type="button"
                                 onClick={() => setLotsItem(item)}
                                 className="btn-icon"
-                                aria-label={`Lots for ${supplyLabel(item)}`}
-                                title="Stock lots"
+                                aria-label={
+                                  item.apparatus_only
+                                    ? `Where ${supplyLabel(item)} is carried`
+                                    : `Lots for ${supplyLabel(item)}`
+                                }
+                                title={item.apparatus_only ? 'Where it is carried' : 'Stock lots'}
                               >
                                 <Layers className="h-4 w-4" />
                               </button>

@@ -4809,13 +4809,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         """Build the table body for one audience's rows."""
         items_html = ""
         any_from_lots = False
+        any_medical = False
         for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
             # Name the ledger the figure came from. For a lot-stocked item it
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
-            source = "in-date lots" if from_lots else "on hand"
+            # A medical supply is counted across the stock room and the trucks
+            # (InventoryService.stock_breakdown), and says so.
+            medical = _row_domain(item) == DOMAIN_MEDICAL
+            any_medical = any_medical or medical
+            source = (
+                "shelf + apparatus"
+                if medical
+                else "in-date lots" if from_lots else "on hand"
+            )
             # The category rides under the item name rather than taking a
             # fourth column, which ran the table past a phone-width card.
             items_html += (
@@ -4841,7 +4850,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        return table_html, any_from_lots
+        return table_html, any_from_lots, any_medical
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         from app.services.email_service import wrap_email_body
@@ -4870,7 +4879,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not rows or not emails:
                 continue
 
-            table_html, any_from_lots = _render(rows)
+            table_html, any_from_lots, any_medical = _render(rows)
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -4883,6 +4892,14 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     "cannot be issued or swapped onto an apparatus, so they do not "
                     "count as stock on hand.</p>"
                     if any_from_lots
+                    else ""
+                )
+                + (
+                    "<p style='color:#6b7280;font-size:13px;'>Medical supplies are "
+                    "counted across the stock room and the apparatus together, "
+                    "including truck positions not yet counted at their target "
+                    "quantity.</p>"
+                    if any_medical
                     else ""
                 )
                 + "<p>Please review and reorder as needed.</p>",

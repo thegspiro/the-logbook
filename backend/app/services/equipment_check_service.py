@@ -34,7 +34,7 @@ from app.models.apparatus import (
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
-from app.models.inventory import InventoryItem, InventoryLot
+from app.models.inventory import InventoryCategory, InventoryItem, InventoryLot
 from app.models.training import (
     AssignmentStatus,
     Shift,
@@ -91,6 +91,11 @@ class EquipmentCheckService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Catalog items whose truck count a crew changed in this request. A
+        # medical supply is judged low on shelf plus trucks, so a lower count
+        # can make it low; these are checked for a reorder once the change
+        # has committed (see _reorder_after_counts).
+        self._counted_inventory_ids: Set[str] = set()
 
     @staticmethod
     def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
@@ -1594,6 +1599,9 @@ class EquipmentCheckService:
         """
         if normalize_check_type(template_item.check_type) != COUNT:
             return
+        linked = getattr(template_item, "inventory_item_id", None)
+        if linked:
+            self._counted_inventory_ids.add(str(linked))
         # Where lots are aboard the total has to be reconciled against them;
         # writing the scalar alone would be discarded, since their sum is what
         # every reader uses.
@@ -2297,6 +2305,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def submit_standalone_check(
@@ -2401,6 +2410,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def complete_incomplete_check(
@@ -2591,6 +2601,7 @@ class EquipmentCheckService:
             check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def get_checks_for_shift(
@@ -3574,8 +3585,12 @@ class EquipmentCheckService:
                 "quantity_on_truck": item.quantity_on_truck,
             },
         )
+        state = self._restock_state(item)
+        if quantity_used and item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
-        return self._restock_state(item)
+        await self._reorder_after_counts(organization_id, str(user.id))
+        return state
 
     @staticmethod
     def _retire_replaced_units(
@@ -3797,7 +3812,10 @@ class EquipmentCheckService:
             action="counted",
             changes={"from": previous, "to": quantity},
         )
+        if item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, str(user.id))
         return self._restock_state(item)
 
     async def clear_item_restock(
@@ -4028,6 +4046,137 @@ class EquipmentCheckService:
                 current = parent
             paths[cid] = list(reversed(chain))
         return paths
+
+    async def apparatus_expiring_stock(
+        self,
+        organization_id: str,
+        item_types: Sequence[Any],
+        *,
+        days_ahead: int,
+        today: date,
+    ) -> List[Dict[str, Any]]:
+        """Stock on the trucks that expires within ``days_ahead``, or has.
+
+        One row per dated lot aboard a position (a position carrying three
+        boxes from two lots expires twice), and one per position with no lot
+        recorded whose own date falls in the window, carrying the position's
+        count. Only active templates, and only positions linked to an item of
+        ``item_types`` — the Medical Supplies page asks for its own domain.
+
+        Each row names where the units are, as the checklist does: the
+        apparatus (or "Any <type>", or the template) and the compartment path.
+        """
+        horizon = today + timedelta(days=days_ahead)
+        positions = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem,
+                    InventoryItem.name,
+                    InventoryItem.size,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .join(
+                    InventoryItem,
+                    InventoryItem.id == CheckTemplateItem.inventory_item_id,
+                )
+                .join(
+                    InventoryCategory,
+                    InventoryCategory.id == InventoryItem.category_id,
+                )
+                .where(
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                    InventoryItem.organization_id == organization_id,
+                    InventoryCategory.item_type.in_(list(item_types)),
+                )
+            )
+        ).all()
+        if not positions:
+            return []
+        paths = await self._compartment_paths({str(r[3]) for r in positions})
+        apparatus_ids = {r[5] for r in positions if r[5]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        rows: List[Dict[str, Any]] = []
+        for (
+            item,
+            item_name,
+            item_size,
+            tmpl_id,
+            tmpl_name,
+            app_id,
+            app_type,
+        ) in positions:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            where = " › ".join(
+                [carrier or "Checklist", *paths.get(str(item.compartment_id), [])]
+            )
+            base = {
+                "location": "apparatus",
+                "inventory_item_id": str(item.inventory_item_id),
+                "item_name": item_name,
+                "item_size": item_size,
+                "template_item_id": str(item.id),
+                "where": where,
+            }
+            lots = self._deployed_lots(item)
+            if lots:
+                for lot in lots:
+                    when = lot.expiration_date
+                    if when is None or when > horizon:
+                        continue
+                    rows.append(
+                        {
+                            **base,
+                            "key": f"deployed:{lot.id}",
+                            "lot_number": lot.lot_number,
+                            "expiration_date": when,
+                            "quantity": lot.quantity,
+                            "days_until_expiration": (when - today).days,
+                        }
+                    )
+                continue
+            when = item.expiration_date if item.has_expiration else None
+            if when is None or when > horizon:
+                continue
+            rows.append(
+                {
+                    **base,
+                    "key": f"position:{item.id}",
+                    "lot_number": item.lot_number,
+                    "expiration_date": when,
+                    "quantity": self._on_truck(item) or 0,
+                    "days_until_expiration": (when - today).days,
+                }
+            )
+        rows.sort(
+            key=lambda r: (r["expiration_date"], r["item_name"] or "", r["where"])
+        )
+        return rows
 
     async def apparatus_places_for_items(
         self, organization_id: str, inventory_item_ids: List[str]
@@ -4442,10 +4591,48 @@ class EquipmentCheckService:
         )
         return result
 
+    async def _reorder_after_counts(
+        self, organization_id: str, requested_by: Optional[str]
+    ) -> None:
+        """File reorders for medical supplies a committed recount left low.
+
+        A medical supply is low on its department-wide total — shelf plus
+        trucks (InventoryService.stock_breakdown) — so stock used off a truck
+        lowers it as surely as a swap lowers the shelf, and usage only shows up
+        when a crew records a lower count. Gear is still judged on the shelf
+        alone, which a truck count cannot move, so it is left out and its
+        reorders keep coming from swaps only.
+
+        One open request per item (AutoReorderService), so checking an item
+        that was already low, or already ordered, files nothing.
+        """
+        ids = sorted(self._counted_inventory_ids)
+        self._counted_inventory_ids = set()
+        if not ids:
+            return
+        try:
+            medical = await InventoryService(self.db)._medical_item_ids(
+                organization_id, ids
+            )
+        except Exception as exc:
+            logger.error(
+                "Auto reorder lookup after a count in org {} failed: {}",
+                organization_id,
+                exc,
+            )
+            return
+        for inventory_item_id in sorted(medical):
+            await self._raise_low_stock_reorder(
+                organization_id, inventory_item_id, requested_by
+            )
+
     async def _raise_low_stock_reorder(
         self, organization_id: str, inventory_item_id: str, requested_by: Optional[str]
     ) -> None:
-        """File a reorder if the swap left shelf stock at its reorder point.
+        """File a reorder if the item's ready stock is at its reorder point.
+
+        Ready stock is the shelf, plus the trucks for a medical supply (see
+        InventoryService.stock_breakdown).
 
         Runs in a session of its own. ``rollback()`` expires every object a
         session holds regardless of ``expire_on_commit``, so rolling back the

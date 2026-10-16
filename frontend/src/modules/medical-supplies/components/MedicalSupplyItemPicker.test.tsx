@@ -56,14 +56,26 @@ describe('MedicalSupplyItemPicker', () => {
 
     expect(await screen.findByRole('option', { name: 'Gauze 0' })).toBeInTheDocument();
     expect(await screen.findByText('Show more (20 of 45)')).toBeInTheDocument();
-    expect(mockGetItems).toHaveBeenLastCalledWith({ search: 'gauze', active_only: true, skip: 0, limit: 20 });
+    expect(mockGetItems).toHaveBeenLastCalledWith({
+      search: 'gauze',
+      active_only: true,
+      exclude_apparatus_only: true,
+      skip: 0,
+      limit: 20,
+    });
 
     mockGetItems.mockResolvedValue(page(20, 20, 45));
     await user.click(screen.getByText('Show more (20 of 45)'));
 
     // The second page is requested at an offset, and the limit never grows.
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith({ search: 'gauze', active_only: true, skip: 20, limit: 20 })
+      expect(mockGetItems).toHaveBeenLastCalledWith({
+        search: 'gauze',
+        active_only: true,
+        exclude_apparatus_only: true,
+        skip: 20,
+        limit: 20,
+      })
     );
     // ...and it is appended, so the first page's matches stay selectable.
     expect(await screen.findByRole('option', { name: 'Gauze 20' })).toBeInTheDocument();
@@ -103,7 +115,13 @@ describe('MedicalSupplyItemPicker', () => {
     // 39 unique rows held, 40 read -- so the next page starts at 40.
     await user.click(await screen.findByText(/Show more/));
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith({ search: 'gauze', active_only: true, skip: 40, limit: 20 })
+      expect(mockGetItems).toHaveBeenLastCalledWith({
+        search: 'gauze',
+        active_only: true,
+        exclude_apparatus_only: true,
+        skip: 40,
+        limit: 20,
+      })
     );
 
     // Everything the server has is now read, so the control retires rather
