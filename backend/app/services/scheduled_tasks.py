@@ -1615,15 +1615,22 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
 async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send a notification to event organizers after their event ends,
-    asking them to validate attendance records and event timing.
+    Ask an event's organizers, after it ends, to validate its attendance
+    records and timing.
 
     Runs every 30 minutes. Looks for events that ended within the last
-    2 hours and haven't already had a validation notification sent.
-    Sends an in-app notification (and optionally email) to the event
-    creator with a link to the event detail page.
+    2 hours and haven't already had a validation notification sent or
+    their attendance finalized. The prompt goes to the event's organizer
+    and alternate organizer — whoever runs the event now, which after a
+    handover is not whoever created it — and falls back to the creator
+    only when neither is an eligible member. Each recipient gets an in-app
+    notification with a link to the event, plus an email if their own
+    event-duties email preference allows it.
 
-    Tracks sent status in custom_fields.validation_notification_sent.
+    Tracks sent status in custom_fields.validation_notification_sent. The
+    marker is set even when nobody is left to tell, so an event whose
+    organizers and creator have all left is not re-examined on every run;
+    either way an event is prompted at most once.
     """
     from datetime import timedelta
     from datetime import timezone as dt_timezone
@@ -1634,8 +1641,8 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.core.utils import generate_uuid
     from app.models.event import Event
     from app.models.notification import NotificationChannel, NotificationLog
-    from app.models.user import User
     from app.services.email_service import EmailService
+    from app.services.event_organizer_service import EventOrganizerService
 
     now = datetime.now(dt_timezone.utc)
     # Look back 2 hours for recently ended events
@@ -1662,9 +1669,10 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Event.is_cancelled == False)  # noqa: E712
                 .where(Event.end_datetime <= now)
                 .where(Event.end_datetime >= lookback)
-                .where(Event.created_by.isnot(None))
             )
             events = list(events_result.scalars().all())
+            organizer_service = EventOrganizerService(db)
+            required_kinds = department_required_kinds(org)
 
             for event in events:
                 custom = event.custom_fields or {}
@@ -1677,16 +1685,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 ):
                     continue
 
-                # Find the event creator
-                creator_result = await db.execute(
-                    select(User).where(
-                        User.id == event.created_by,
-                        User.is_active == True,  # noqa: E712
-                    )
-                )
-                creator = creator_result.scalar_one_or_none()
-                if not creator:
-                    # Mark as sent to avoid retrying for deleted/inactive users
+                recipients = await organizer_service.organizer_duty_recipients(event)
+                if not recipients:
+                    # Nobody left to ask; mark it so later runs skip it.
                     event.custom_fields = {
                         **custom,
                         "validation_notification_sent": True,
@@ -1705,75 +1706,78 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                     f"event timing before finalizing."
                 )
 
-                # In-app notification
-                try:
-                    in_app_log = NotificationLog(
-                        id=generate_uuid(),
-                        organization_id=str(org.id),
-                        recipient_id=str(creator.id),
-                        channel=NotificationChannel.IN_APP,
-                        category="event_validation",
-                        subject=subject,
-                        message=message,
-                        action_url=event_url,
-                        notification_metadata={"event_id": str(event.id)},
-                        delivered=True,
-                    )
-                    db.add(in_app_log)
-                    org_notifications += 1
-                except Exception as e:
-                    logger.error(
-                        f"Failed to create post-event validation notification "
-                        f"for user {creator.id}, event {event.id}: {e}"
-                    )
-
-                # Email notification (if user has email prefs enabled)
-                if creator.email and member_receives_email(
-                    creator.notification_preferences,
-                    EmailKind.EVENT_DUTIES,
-                    department_required_kinds(org),
-                ):
+                for recipient in recipients:
+                    # In-app notification
                     try:
-                        from app.services.email_service import wrap_email_body
-
-                        full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-                        e_first = _html.escape(
-                            creator.preferred_name or creator.first_name or ""
-                        )
-                        e_title = _html.escape(event.title or "")
-                        email_service = EmailService(organization=org)
-                        sent_count, _ = await email_service.send_email(
-                            to_emails=[creator.email],
+                        in_app_log = NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=str(recipient.id),
+                            channel=NotificationChannel.IN_APP,
+                            category="event_validation",
                             subject=subject,
-                            html_body=wrap_email_body(
-                                org,
-                                "Please Validate Attendance",
-                                f"<p>Hello {e_first},</p>"
-                                f'<p>Your event "<strong>{e_title}</strong>" has ended. '
-                                f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
-                                f"<p>Please review and confirm the attendance records and "
-                                f"event timing before finalizing.</p>"
-                                f'<p style="text-align: center;">'
-                                f'<a href="{_html.escape(full_event_url)}" class="button" role="link">'
-                                f"Review Event</a></p>",
-                            ),
-                            text_body=(
-                                f"Hi {creator.preferred_name or creator.first_name},\n\n"
-                                f'Your event "{event.title}" has ended. '
-                                f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
-                                f"Please review and confirm the attendance records and "
-                                f"event timing before finalizing.\n\n"
-                                f"Review Event: {full_event_url}"
-                            ),
+                            message=message,
+                            action_url=event_url,
+                            notification_metadata={"event_id": str(event.id)},
+                            delivered=True,
                         )
-                        if sent_count > 0:
-                            org_emails += 1
+                        db.add(in_app_log)
+                        org_notifications += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send post-event validation email to {}: {}",
-                            _redact_email(creator.email),
-                            e,
+                            f"Failed to create post-event validation notification "
+                            f"for user {recipient.id}, event {event.id}: {e}"
                         )
+
+                    # Email notification (if user has email prefs enabled)
+                    if recipient.email and member_receives_email(
+                        recipient.notification_preferences,
+                        EmailKind.EVENT_DUTIES,
+                        required_kinds,
+                    ):
+                        try:
+                            from app.services.email_service import wrap_email_body
+
+                            full_event_url = (
+                                f"{settings.FRONTEND_URL}/events/{event.id}"
+                            )
+                            e_first = _html.escape(
+                                recipient.preferred_name or recipient.first_name or ""
+                            )
+                            e_title = _html.escape(event.title or "")
+                            email_service = EmailService(organization=org)
+                            sent_count, _ = await email_service.send_email(
+                                to_emails=[recipient.email],
+                                subject=subject,
+                                html_body=wrap_email_body(
+                                    org,
+                                    "Please Validate Attendance",
+                                    f"<p>Hello {e_first},</p>"
+                                    f'<p>Your event "<strong>{e_title}</strong>" has ended. '
+                                    f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
+                                    f"<p>Please review and confirm the attendance records and "
+                                    f"event timing before finalizing.</p>"
+                                    f'<p style="text-align: center;">'
+                                    f'<a href="{_html.escape(full_event_url)}" class="button" role="link">'
+                                    f"Review Event</a></p>",
+                                ),
+                                text_body=(
+                                    f"Hi {recipient.preferred_name or recipient.first_name},\n\n"
+                                    f'Your event "{event.title}" has ended. '
+                                    f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
+                                    f"Please review and confirm the attendance records and "
+                                    f"event timing before finalizing.\n\n"
+                                    f"Review Event: {full_event_url}"
+                                ),
+                            )
+                            if sent_count > 0:
+                                org_emails += 1
+                        except Exception as e:
+                            logger.error(
+                                "Failed to send post-event validation email to {}: {}",
+                                _redact_email(recipient.email),
+                                e,
+                            )
 
                 # Mark as sent
                 event.custom_fields = {**custom, "validation_notification_sent": True}
@@ -4814,13 +4818,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         """Build the table body for one audience's rows."""
         items_html = ""
         any_from_lots = False
+        any_medical = False
         for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
             # Name the ledger the figure came from. For a lot-stocked item it
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
-            source = "in-date lots" if from_lots else "on hand"
+            # A medical supply is counted across the stock room and the trucks
+            # (InventoryService.stock_breakdown), and says so.
+            medical = _row_domain(item) == DOMAIN_MEDICAL
+            any_medical = any_medical or medical
+            source = (
+                "shelf + apparatus"
+                if medical
+                else "in-date lots" if from_lots else "on hand"
+            )
             # The category rides under the item name rather than taking a
             # fourth column, which ran the table past a phone-width card.
             items_html += (
@@ -4846,7 +4859,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        return table_html, any_from_lots
+        return table_html, any_from_lots, any_medical
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         from app.services.email_service import wrap_email_body
@@ -4875,7 +4888,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not rows or not emails:
                 continue
 
-            table_html, any_from_lots = _render(rows)
+            table_html, any_from_lots, any_medical = _render(rows)
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -4888,6 +4901,14 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     "cannot be issued or swapped onto an apparatus, so they do not "
                     "count as stock on hand.</p>"
                     if any_from_lots
+                    else ""
+                )
+                + (
+                    "<p style='color:#6b7280;font-size:13px;'>Medical supplies are "
+                    "counted across the stock room and the apparatus together, "
+                    "including truck positions not yet counted at their target "
+                    "quantity.</p>"
+                    if any_medical
                     else ""
                 )
                 + "<p>Please review and reorder as needed.</p>",
@@ -5768,7 +5789,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # The organizer and alternate run the series now; whoever
                 # created it may have handed it over long ago.
-                recipients = await organizer_service.series_reminder_recipients(event)
+                recipients = await organizer_service.organizer_duty_recipients(event)
                 if not recipients:
                     continue
 

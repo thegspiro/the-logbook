@@ -17,6 +17,13 @@ import userEvent from '@testing-library/user-event';
 import type { ApparatusOperator } from '../types';
 
 const mockGetUsers = vi.fn();
+let grantedPermissions = new Set<string>();
+
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { checkPermission: (permission: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (permission) => grantedPermissions.has(permission) }),
+}));
+
 vi.mock('../../../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown },
 }));
@@ -71,6 +78,9 @@ const renderTab = (operators: ApparatusOperator[]) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The operator endpoints all require apparatus.manage; blocks that test the
+  // read-only view narrow this themselves.
+  grantedPermissions = new Set(['apparatus.manage']);
   mockGetUsers.mockResolvedValue([
     { id: 'u-1', first_name: 'Marcus', last_name: 'Bell' },
     { id: 'u-2', first_name: 'Nadia', last_name: 'Belhaj' },
@@ -92,6 +102,36 @@ describe('OperatorsTab', () => {
     // Better a uuid than an empty row — but only as a fallback.
     renderTab([operator({ userName: null })]);
     expect(screen.getByText('a8c2c854-7bb9-458c-bba4-dd99d88e5167')).toBeInTheDocument();
+  });
+});
+
+describe('OperatorsTab controls', () => {
+  it('offers add, edit and remove to an apparatus manager', () => {
+    renderTab([operator()]);
+    expect(screen.getByRole('button', { name: 'Add Operator' })).toBeInTheDocument();
+    expect(screen.getByTitle('Edit operator')).toBeInTheDocument();
+    expect(screen.getByTitle('Remove operator')).toBeInTheDocument();
+  });
+
+  it.each([[[]], [['apparatus.view']], [['apparatus.edit']]])(
+    'shows the roster without controls to a member holding %j',
+    (permissions: string[]) => {
+      // The backend refuses create, update and delete without apparatus.manage,
+      // so each of these buttons would only lead to a 403.
+      grantedPermissions = new Set(permissions);
+      renderTab([operator()]);
+      expect(screen.getByText('Marcus Bell')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add Operator' })).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Edit operator')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Remove operator')).not.toBeInTheDocument();
+    }
+  );
+
+  it('does not tell a viewer to select a button they do not have', () => {
+    grantedPermissions = new Set(['apparatus.view']);
+    renderTab([]);
+    expect(screen.getByText(/No operators yet\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Select Add Operator/)).not.toBeInTheDocument();
   });
 });
 

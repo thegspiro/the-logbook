@@ -816,6 +816,25 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### Facility files upload in one step (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. The
+facility Files section now uploads through two new endpoints:
+
+- `POST /facilities/{facility_id}/photos/upload`: an image, with an optional
+  `caption`.
+- `POST /facilities/{facility_id}/documents/upload`: any document type the
+  Documents library accepts, with an optional `document_type` (default
+  `facility_record`) and `description`.
+
+Both take `facilities.create`, `facilities.edit` or `facilities.manage`, and
+no Documents permission. Before this, a facilities manager without
+`documents.manage` was refused. The file is stored straight into the
+facility's Photos or Facility Documents folder.
+
+The old two-step path still works: `POST /documents/upload`, then
+`POST /facilities/photos` or `POST /facilities/documents`.
+
 ### Full administrators get a weekly email of admin-only folders (2026-10-16)
 
 Nothing here stops the stack from starting, and there is no migration. A new

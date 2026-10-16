@@ -747,19 +747,19 @@ What the dialog says about approvers is the rule The Logbook applies:
 The dialog has no notification-email, email-template or required settings.
 Nothing would act on them, so they are not offered.
 
-**Deleting a step is not a tidy-up.** The confirmation says what it does: the
-step is removed from every request routed through the chain, including the
-record of who approved or denied it and their notes. A request waiting on that
-step moves to the next one — and an Email approver on that next step is **not**
-sent a link — and a request with no later step is left waiting with nothing to
-approve. It cannot be undone. When requests are in flight, turn the chain off
-(**Edit chain**, untick **Active**) and build a new one instead.
+**Only a step or chain no request has used can be deleted.** Every request
+routed through a chain carries a record of each of its steps — who approved or
+denied it, and their notes — and deleting the step or chain would erase those
+records. So The Logbook refuses: _"This approval chain can't be deleted: 2
+requests have been routed through it, and deleting it would erase their approval
+history. Turn the chain off instead (edit it and clear Active) so nothing new is
+routed through it."_ A step gets the same answer. A chain nobody has used yet,
+or a step added since the chain was last used, deletes as normal.
 
-**Deleting a whole chain goes further.** Its confirmation says requests that
-went through the chain keep their approval history. They do not: deleting the
-chain removes its steps, and with them every request's approval records for
-those steps, exactly as deleting each step would. Turn the chain off instead of
-deleting it.
+To retire a chain, turn it off (**Edit chain**, untick **Active**); to change
+who approves future requests, edit the step, or build a new chain and turn the
+old one off. Every chain and step change — create, edit, delete — is recorded in
+the audit log.
 
 <!-- Screenshot needed:
 _[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
@@ -770,7 +770,7 @@ _[Treasurer or admin holding finance.configure_approvals and positions.view, /fi
 -->
 
 <!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
+_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing that only a step no request has used can be deleted, and the Delete step / Keep it buttons. Never confirm.]_
 -->
 
 ### Steps nobody can act on
@@ -1960,7 +1960,7 @@ The Treasurer regularly:
 | "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                                                                   |
 | "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                                                                     |
 | "Deleting a category removed its budgets"                             | That is what deleting does: a category's budgets in every fiscal year are deleted with it, and requests charged to them lose their budget. It cannot be undone. To retire a category and keep its history, leave it in place and stop adding lines to it.                                                                                                       |
-| "Should I delete an old approval chain?"                              | No. Deleting a chain also deletes the approval records of every request that went through it. Turn it off instead: **Edit chain**, untick **Active**.                                                                                                                                                                                                           |
+| "Should I delete an old approval chain?"                              | Turn it off instead: **Edit chain**, untick **Active**. A chain any request has been routed through cannot be deleted, because that would erase those requests' approval history.                                                                                                                                                                               |
 | "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                                                              |
 | "Late fee not applied"                                                | The Logbook does not charge late fees. If your department charges one, record it outside The Logbook.                                                                                                                                                                                                                                                           |
 | "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically.                                       |

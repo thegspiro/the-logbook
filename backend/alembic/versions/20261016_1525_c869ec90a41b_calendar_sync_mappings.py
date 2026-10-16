@@ -20,7 +20,7 @@ deterministic event ids and Graph's transactionId keep that from creating
 duplicates for events the providers still hold.
 
 Revision ID: c869ec90a41b
-Revises: f236c56b1b49
+Revises: 0bbf263a5ff0
 Create Date: 2026-10-16 15:25:24.128209
 
 """
@@ -32,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c869ec90a41b"
-down_revision: Union[str, None] = "f236c56b1b49"
+down_revision: Union[str, None] = "0bbf263a5ff0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

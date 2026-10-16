@@ -37,6 +37,16 @@ describe('canOpenAdministrationSection', () => {
     expect(canOpenAdministrationSection(checkerFor('inventory.check_manage'))).toBe(true);
   });
 
+  it('opens for members.check_in only while the Check-In Station row exists', () => {
+    // members.check_in is not administrative, and the station row is built
+    // only when NFC ID cards are connected; without it the section would open
+    // onto nothing.
+    expect(hasAdministrationAccess(checkerFor('members.check_in'))).toBe(false);
+    expect(canOpenAdministrationSection(checkerFor('members.check_in'), { checkInStationOn: true })).toBe(true);
+    expect(canOpenAdministrationSection(checkerFor('members.check_in'), { checkInStationOn: false })).toBe(false);
+    expect(canOpenAdministrationSection(checkerFor('members.check_in'))).toBe(false);
+  });
+
   it('stays closed with no relevant grants', () => {
     expect(canOpenAdministrationSection(checkerFor('forms.view'))).toBe(false);
     expect(canOpenAdministrationSection(checkerFor())).toBe(false);

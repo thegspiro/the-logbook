@@ -30,9 +30,24 @@ export const ADMIN_NAVIGATION_PERMISSIONS = [
 export const hasAdministrationAccess = (checkPermission: (permission: string) => boolean): boolean =>
   ADMIN_NAVIGATION_PERMISSIONS.some(checkPermission);
 
+interface AdministrationSectionOptions {
+  /** Whether the NFC ID-cards integration is connected, which is what puts the Check-In Station row in the section. */
+  checkInStationOn?: boolean;
+}
+
 // users.view alone also opens the Administration section: the member ID
 // scanner lives there, and validating a scanned card only needs users.view
 // (see /members/scan) — but users.view is not itself an administrative grant,
 // so it stays out of ADMIN_NAVIGATION_PERMISSIONS.
-export const canOpenAdministrationSection = (checkPermission: (permission: string) => boolean): boolean =>
-  checkPermission('users.view') || hasAdministrationAccess(checkPermission);
+//
+// members.check_in opens it for the same reason, but only while the
+// Check-In Station row exists: that row is built only when the department has
+// connected NFC ID cards, and opening the section for a holder with nothing
+// inside it is an empty heading rather than a way to their page.
+export const canOpenAdministrationSection = (
+  checkPermission: (permission: string) => boolean,
+  { checkInStationOn = false }: AdministrationSectionOptions = {}
+): boolean =>
+  checkPermission('users.view') ||
+  (checkInStationOn && checkPermission('members.check_in')) ||
+  hasAdministrationAccess(checkPermission);

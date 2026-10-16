@@ -794,7 +794,8 @@ Members choose how they are reached under **Settings → Notifications**:
   off. Off stops all of them at once.
 - **Emails you can turn off** — one switch for each optional email: **Event
   reminders**, **Off the waitlist** (a place opened on an event you were
-  waitlisted for), **Training and certification reminders**, **Shift
+  waitlisted for), **Event changes and cancellations** (an event you said
+  Going or Maybe to was cancelled or moved), **Training and certification reminders**, **Shift
   notices**, **Equipment and inventory updates**, **Store announcements**,
   **Volunteer calls**, **Election notices** and **Suggestion box**. Members
   with an officer role also see the emails for their duties (events,
@@ -806,7 +807,7 @@ Members choose how they are reached under **Settings → Notifications**:
   optional email the department has made required is listed here too.
 - **Urgent Text Messages** — get a text for urgent messages. It needs a mobile
   number on file, text messaging set up by the department, **and** your express
-  consent under **My Account → Security → Privacy Choices**. Turning texts off,
+  consent under **My Account → Privacy → Privacy Choices**. Turning texts off,
   or never consenting, never stops the email.
 
 The in-app notification always arrives, whatever these settings say.
